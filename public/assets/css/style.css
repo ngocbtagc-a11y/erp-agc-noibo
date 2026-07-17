@@ -212,6 +212,23 @@ button { cursor: pointer; border: none; background: none; }
 .btn-primary:hover { background: var(--sage-dark); }
 .btn-primary:active { transform: translateY(1px); }
 
+.field label .goi-y {
+  font-weight: 400;
+  color: var(--text-mute);
+}
+
+.mk-nhac {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-mute);
+  background: var(--sage-wash);
+  border-radius: var(--r-sm);
+  padding: 10px 13px;
+  margin: 4px 0 2px;
+}
+
+.mk-nhac b { color: var(--ink-soft); }
+
 .login-note {
   margin-top: 22px;
   padding: 12px 14px;

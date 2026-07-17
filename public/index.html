@@ -69,14 +69,20 @@
         </div>
 
         <div class="field">
-          <label for="mkMoi">Mật khẩu mới <span style="font-weight:400;color:var(--text-mute)">— từ 10 ký tự</span></label>
-          <input type="password" id="mkMoi" autocomplete="new-password" minlength="10" required>
+          <label for="mkMoi">Mật khẩu mới <span class="goi-y" id="goiYDoDai">— từ 6 ký tự</span></label>
+          <input type="password" id="mkMoi" autocomplete="new-password" minlength="6" required>
         </div>
 
         <div class="field">
           <label for="mkMoi2">Gõ lại mật khẩu mới</label>
-          <input type="password" id="mkMoi2" autocomplete="new-password" minlength="10" required>
+          <input type="password" id="mkMoi2" autocomplete="new-password" minlength="6" required>
         </div>
+
+        <p class="mk-nhac">
+          Đừng dùng mật khẩu dễ đoán như <b>123456</b>, tên mình hay ngày sinh —
+          hệ thống sẽ không nhận. Mật khẩu ngắn mà lộn xộn còn chắc hơn mật khẩu
+          dài mà dễ đoán.
+        </p>
 
         <button type="submit" class="btn-primary">Đổi mật khẩu</button>
       </form>
@@ -94,15 +100,22 @@ const $ = s => document.querySelector(s);
 function baoLoi(o, msg) { o.textContent = msg; o.classList.add('show'); }
 function xoaLoi(o) { o.classList.remove('show'); }
 
-function hienKhoiDoiMatKhau() {
+function hienKhoiDoiMatKhau(doDaiToiThieu) {
   $('#khoiDangNhap').hidden = true;
   $('#khoiDoiMatKhau').hidden = false;
+
+  // Lấy độ dài tối thiểu từ máy chủ, khỏi ghi cứng ở hai nơi rồi lệch nhau
+  if (doDaiToiThieu) {
+    $('#goiYDoDai').textContent = `— từ ${doDaiToiThieu} ký tự`;
+    $('#mkMoi').minLength = doDaiToiThieu;
+    $('#mkMoi2').minLength = doDaiToiThieu;
+  }
 }
 
 /* Đã đăng nhập sẵn thì vào thẳng, khỏi bắt gõ lại */
 try {
   const toi = await API.toiLaAi();
-  if (toi && toi.phai_doi_mk) hienKhoiDoiMatKhau();
+  if (toi && toi.phai_doi_mk) hienKhoiDoiMatKhau(toi.mat_khau_dai_toi_thieu);
   else if (toi) window.location.replace('app.html');
 } catch { /* chưa đăng nhập — bình thường, hiện form */ }
 
@@ -120,7 +133,7 @@ $('#formDangNhap').addEventListener('submit', async e => {
     const toi = await API.toiLaAi();
 
     if (toi.phai_doi_mk) {
-      hienKhoiDoiMatKhau();
+      hienKhoiDoiMatKhau(toi.mat_khau_dai_toi_thieu);
       $('#mkCu').value = $('#matKhau').value;
       $('#mkMoi').focus();
     } else {

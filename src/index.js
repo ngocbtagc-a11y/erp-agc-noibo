@@ -13,6 +13,7 @@ import {
 } from './auth.js';
 
 import { quyenCua, duocXemTab, duocXemLuong, TEN_VAI_TRO } from './quyen.js';
+import { kiemTraMatKhauDat, DAI_TOI_THIEU } from './mat-khau.js';
 
 /* ---- Trả lời dạng JSON -------------------------------------------------- */
 
@@ -98,7 +99,9 @@ async function toiLaAi(req, env) {
     vai_tro: phien.vai_tro,
     phai_doi_mk: !!phien.phai_doi_mk,
     quyen: q.tab,
-    xem_luong: q.xem_luong
+    xem_luong: q.xem_luong,
+    // Để giao diện khỏi ghi cứng con số, sau này đổi một chỗ là xong
+    mat_khau_dai_toi_thieu: DAI_TOI_THIEU
   });
 }
 
@@ -112,8 +115,12 @@ async function doiMatKhau(req, env) {
   const cu  = String(body.mat_khau_cu || '');
   const moi = String(body.mat_khau_moi || '');
 
-  if (moi.length < 10) return loi('Mật khẩu mới phải từ 10 ký tự trở lên');
-  if (moi === cu)      return loi('Mật khẩu mới phải khác mật khẩu cũ');
+  if (moi === cu) return loi('Mật khẩu mới phải khác mật khẩu cũ');
+
+  // Không ép mật khẩu phải dài — chặn mật khẩu dễ đoán hiệu quả hơn nhiều.
+  // Xem src/mat-khau.js.
+  const loiDat = kiemTraMatKhauDat(moi, phien.ten_dang_nhap, phien.ho_ten);
+  if (loiDat) return loi(loiDat);
 
   const tk = await env.DB.prepare('SELECT mat_khau_hash FROM tai_khoan WHERE id = ?')
                          .bind(phien.tai_khoan_id).first();
