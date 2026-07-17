@@ -1,0 +1,20 @@
+name = "crm-agc"
+main = "src/index.js"
+compatibility_date = "2026-06-10"
+
+# Giao diện tĩnh nằm trong public/.
+# binding = "ASSETS" để trong Worker gọi được env.ASSETS.fetch() cho các
+# đường dẫn không khớp file nào.
+[assets]
+directory = "public"
+binding = "ASSETS"
+
+# Database D1 — gói miễn phí: 5GB, 5 triệu lượt đọc/ngày
+# (Chạy `npm run tao-db` để tạo, rồi dán database_id Cloudflare trả về vào đây)
+[[d1_databases]]
+binding = "DB"
+database_name = "crm-agc"
+database_id = "CHUA_CO_ID_CHAY_LENH_TAO_DB"
+
+[observability]
+enabled = true

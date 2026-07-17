@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#3f4d33">
+<meta name="robots" content="noindex, nofollow">
+<title>Đăng nhập — CRM Alpha Green Commerce</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body class="login-page">
+
+<main class="login-shell">
+
+  <section class="login-hero">
+    <div class="hero-mark">
+      <span>A</span>
+      <span>Alpha Green Commerce</span>
+    </div>
+    <div class="hero-word">Alpha</div>
+    <p class="hero-foot">
+      Hệ thống quản trị nội bộ — <strong>Danh bạ · Nhân sự · Kinh doanh · Kho vận · Kế toán</strong>
+    </p>
+  </section>
+
+  <section class="login-panel">
+
+    <!-- ---- Đăng nhập ---- -->
+    <div id="khoiDangNhap">
+      <h1>Đăng nhập</h1>
+      <p class="sub">Hệ thống quản trị nội bộ. Vui lòng dùng tài khoản được cấp.</p>
+
+      <div class="login-error" id="loi"></div>
+
+      <form id="formDangNhap" autocomplete="on">
+        <div class="field">
+          <label for="tenDangNhap">Tên đăng nhập</label>
+          <input type="text" id="tenDangNhap" name="username"
+                 autocomplete="username" autocapitalize="none" spellcheck="false" required>
+        </div>
+
+        <div class="field">
+          <label for="matKhau">Mật khẩu</label>
+          <input type="password" id="matKhau" name="password"
+                 autocomplete="current-password" required>
+        </div>
+
+        <button type="submit" class="btn-primary" id="nutDangNhap">Đăng nhập</button>
+      </form>
+    </div>
+
+    <!-- ---- Bắt buộc đổi mật khẩu lần đầu ---- -->
+    <div id="khoiDoiMatKhau" hidden>
+      <h1>Đổi mật khẩu</h1>
+      <p class="sub">Đây là lần đăng nhập đầu tiên. Vui lòng đặt mật khẩu riêng — người cấp tài khoản sẽ không biết mật khẩu mới này.</p>
+
+      <div class="login-error" id="loiDoi"></div>
+
+      <form id="formDoiMatKhau" autocomplete="off">
+        <div class="field">
+          <label for="mkCu">Mật khẩu hiện tại</label>
+          <input type="password" id="mkCu" autocomplete="current-password" required>
+        </div>
+
+        <div class="field">
+          <label for="mkMoi">Mật khẩu mới <span style="font-weight:400;color:var(--text-mute)">— từ 10 ký tự</span></label>
+          <input type="password" id="mkMoi" autocomplete="new-password" minlength="10" required>
+        </div>
+
+        <div class="field">
+          <label for="mkMoi2">Gõ lại mật khẩu mới</label>
+          <input type="password" id="mkMoi2" autocomplete="new-password" minlength="10" required>
+        </div>
+
+        <button type="submit" class="btn-primary">Đổi mật khẩu</button>
+      </form>
+    </div>
+
+  </section>
+
+</main>
+
+<script type="module">
+import { API } from './assets/js/api.js';
+
+const $ = s => document.querySelector(s);
+
+function baoLoi(o, msg) { o.textContent = msg; o.classList.add('show'); }
+function xoaLoi(o) { o.classList.remove('show'); }
+
+function hienKhoiDoiMatKhau() {
+  $('#khoiDangNhap').hidden = true;
+  $('#khoiDoiMatKhau').hidden = false;
+}
+
+/* Đã đăng nhập sẵn thì vào thẳng, khỏi bắt gõ lại */
+try {
+  const toi = await API.toiLaAi();
+  if (toi && toi.phai_doi_mk) hienKhoiDoiMatKhau();
+  else if (toi) window.location.replace('app.html');
+} catch { /* chưa đăng nhập — bình thường, hiện form */ }
+
+/* ---- Đăng nhập ---- */
+$('#formDangNhap').addEventListener('submit', async e => {
+  e.preventDefault();
+  xoaLoi($('#loi'));
+
+  const nut = $('#nutDangNhap');
+  nut.disabled = true;
+  nut.textContent = 'Đang kiểm tra…';
+
+  try {
+    await API.dangNhap($('#tenDangNhap').value.trim(), $('#matKhau').value);
+    const toi = await API.toiLaAi();
+
+    if (toi.phai_doi_mk) {
+      hienKhoiDoiMatKhau();
+      $('#mkCu').value = $('#matKhau').value;
+      $('#mkMoi').focus();
+    } else {
+      window.location.replace('app.html');
+    }
+  } catch (err) {
+    baoLoi($('#loi'), err.message);
+  } finally {
+    nut.disabled = false;
+    nut.textContent = 'Đăng nhập';
+  }
+});
+
+/* ---- Đổi mật khẩu lần đầu ---- */
+$('#formDoiMatKhau').addEventListener('submit', async e => {
+  e.preventDefault();
+  xoaLoi($('#loiDoi'));
+
+  if ($('#mkMoi').value !== $('#mkMoi2').value) {
+    baoLoi($('#loiDoi'), 'Hai lần gõ mật khẩu mới không giống nhau');
+    return;
+  }
+
+  try {
+    await API.doiMatKhau($('#mkCu').value, $('#mkMoi').value);
+    // Đổi xong, máy chủ huỷ hết phiên cũ → đăng nhập lại bằng mật khẩu mới
+    await API.dangNhap($('#tenDangNhap').value.trim(), $('#mkMoi').value);
+    window.location.replace('app.html');
+  } catch (err) {
+    baoLoi($('#loiDoi'), err.message);
+  }
+});
+</script>
+
+</body>
+</html>

@@ -1,56 +1,18 @@
 /* ==========================================================================
    DỮ LIỆU MẪU — CRM Alpha Green Commerce
    ---------------------------------------------------------------------------
-   TOÀN BỘ SỐ LIỆU TRONG FILE NÀY LÀ DỮ LIỆU GIẢ, dùng để xem trước giao diện.
-   Không có số liệu thật nào của công ty nằm ở đây.
-   Khi nối database thật, file này sẽ được thay bằng lời gọi API tới máy chủ.
+   TOÀN BỘ SỐ LIỆU TRONG FILE NÀY LÀ DỮ LIỆU GIẢ, chỉ để xem trước giao diện
+   của các tab CHƯA nối máy chủ: Tổng quan, Kinh doanh, Kho vận, Kế toán.
+
+   Danh bạ, danh sách nhân sự, lương và tài khoản ĐÃ CHUYỂN SANG MÁY CHỦ
+   (xem src/index.js) nên không còn nằm ở đây nữa.
+
+   ⚠️ File này trình duyệt tải về được nên AI CŨNG ĐỌC ĐƯỢC HẾT.
+   Tuyệt đối không thay số thật (doanh thu, công nợ, giá vốn) vào đây.
+   Muốn dùng số thật thì phải chuyển tab đó sang máy chủ trước.
    ========================================================================== */
 
 const DB = {
-
-  /* ---- Tài khoản đăng nhập (GIẢ — chỉ để xem trước giao diện) ----------
-     Mật khẩu ở đây là chữ thường, nằm công khai trong mã nguồn.
-     Đây KHÔNG phải cơ chế đăng nhập thật và không bảo vệ được gì cả.
-     Đăng nhập thật sẽ do máy chủ kiểm tra, mật khẩu được mã hoá một chiều.
-  --------------------------------------------------------------------- */
-  taiKhoan: [
-    {
-      id: 'phong', ten: 'Nguyễn Duy Phong', matKhau: 'demo',
-      chucVu: 'Giám đốc', vietTat: 'NP',
-      quyen: ['tongquan', 'danhba', 'nhansu', 'kinhdoanh', 'khovan', 'ketoan'],
-      xemLuong: true
-    },
-    {
-      id: 'ngoc', ten: 'Bùi Thị Ngọc', matKhau: 'demo',
-      chucVu: 'Phó Giám đốc', vietTat: 'BN',
-      quyen: ['tongquan', 'danhba', 'nhansu', 'kinhdoanh', 'khovan', 'ketoan'],
-      xemLuong: true
-    },
-    {
-      id: 'duy', ten: 'Phạm Khương Duy', matKhau: 'demo',
-      chucVu: 'Quản lý kho', vietTat: 'PD',
-      quyen: ['tongquan', 'danhba', 'khovan', 'nhansu'],
-      xemLuong: false
-    },
-    {
-      id: 'hang', ten: 'Phan Thị Hằng', matKhau: 'demo',
-      chucVu: 'Kế toán trưởng', vietTat: 'PH',
-      quyen: ['tongquan', 'danhba', 'ketoan'],
-      xemLuong: true
-    },
-    {
-      id: 'huong', ten: 'Vũ Lan Hương', matKhau: 'demo',
-      chucVu: 'Hành chính nhân sự', vietTat: 'VH',
-      quyen: ['tongquan', 'danhba', 'nhansu'],
-      xemLuong: false
-    },
-    {
-      id: 'huyen', ten: 'Nguyễn Thị Huyền', matKhau: 'demo',
-      chucVu: 'Vận hành sàn', vietTat: 'NH',
-      quyen: ['tongquan', 'danhba', 'kinhdoanh'],
-      xemLuong: false
-    }
-  ],
 
   /* ---- Tổng quan ---------------------------------------------------- */
   tongQuan: {
@@ -79,26 +41,6 @@ const DB = {
     ]
   },
 
-  /* ---- Danh bạ nội bộ ------------------------------------------------
-     Mọi nhân sự đăng nhập đều tra được. Chỉ để thông tin liên lạc phục vụ
-     công việc — KHÔNG để địa chỉ nhà, số căn cước, ngày sinh, lương.
-     (Số điện thoại và email dưới đây là GIẢ, dùng để xem trước giao diện.)
-  --------------------------------------------------------------------- */
-  danhBa: [
-    { id: 'ns01', ten: 'Nguyễn Duy Phong',  vt: 'NP', cv: 'Giám đốc',            bp: 'Ban giám đốc', sdt: '0900 000 001', email: 'phong@alphagreen.vn',  ql: '—' },
-    { id: 'ns02', ten: 'Bùi Thị Ngọc',      vt: 'BN', cv: 'Phó Giám đốc',        bp: 'Ban giám đốc', sdt: '0900 000 002', email: 'ngoc@alphagreen.vn',   ql: '—' },
-    { id: 'ns03', ten: 'Phạm Khương Duy',   vt: 'PD', cv: 'Quản lý kho',         bp: 'Kho vận',      sdt: '0900 000 003', email: 'duy@alphagreen.vn',    ql: 'Bùi Thị Ngọc' },
-    { id: 'ns04', ten: 'Phan Thị Hằng',     vt: 'PH', cv: 'Kế toán trưởng',      bp: 'Kế toán',      sdt: '0900 000 004', email: 'hang@alphagreen.vn',   ql: 'Bùi Thị Ngọc' },
-    { id: 'ns05', ten: 'Vũ Lan Hương',      vt: 'VH', cv: 'Hành chính nhân sự',  bp: 'HCNS',         sdt: '0900 000 005', email: 'huong@alphagreen.vn',  ql: 'Bùi Thị Ngọc' },
-    { id: 'ns06', ten: 'Nguyễn Thị Huyền',  vt: 'NH', cv: 'Vận hành sàn',        bp: 'Kinh doanh',   sdt: '0900 000 006', email: 'huyen@alphagreen.vn',  ql: 'Nguyễn Duy Phong' },
-    { id: 'ns07', ten: 'Trần Văn Nam',      vt: 'TN', cv: 'Nhân viên kho',       bp: 'Kho vận',      sdt: '0900 000 007', email: 'nam@alphagreen.vn',    ql: 'Phạm Khương Duy' },
-    { id: 'ns08', ten: 'Lê Thị Mai',        vt: 'LM', cv: 'Đóng gói',            bp: 'Kho vận',      sdt: '0900 000 008', email: 'mai@alphagreen.vn',    ql: 'Phạm Khương Duy' },
-    { id: 'ns09', ten: 'Hoàng Minh Tuấn',   vt: 'HT', cv: 'Nhân viên kho',       bp: 'Kho vận',      sdt: '0900 000 009', email: 'tuan@alphagreen.vn',   ql: 'Phạm Khương Duy' },
-    { id: 'ns10', ten: 'Đỗ Thu Trang',      vt: 'ĐT', cv: 'Kế toán công nợ',     bp: 'Kế toán',      sdt: '0900 000 010', email: 'trang@alphagreen.vn',  ql: 'Phan Thị Hằng' },
-    { id: 'ns11', ten: 'Ngô Quang Hải',     vt: 'NQ', cv: 'CSKH',                bp: 'Kinh doanh',   sdt: '0900 000 011', email: 'hai@alphagreen.vn',    ql: 'Nguyễn Thị Huyền' },
-    { id: 'ns12', ten: 'Vương Thị Yến',     vt: 'VY', cv: 'Đóng gói (parttime)', bp: 'Kho vận',      sdt: '0900 000 012', email: 'yen@alphagreen.vn',    ql: 'Phạm Khương Duy' }
-  ],
-
   /* ---- Nhân sự ------------------------------------------------------ */
   nhanSu: {
     the: [
@@ -107,31 +49,6 @@ const DB = {
       { k: 'Đang thử việc',      v: '3',  d: '1 người hết hạn tuần này' },
       { k: 'Tỷ lệ đi làm T7',    v: '96%', d: '+2% so tháng trước', dir: 'up' }
     ],
-    danhSach: [
-      { id: 'ns03', ten: 'Phạm Khương Duy',  vt: 'PD', cv: 'Quản lý kho',        bp: 'Kho vận',   pn: 'Công ty', tt: 'ok',   ttx: 'Đã ký HĐ', vao: '03/2025' },
-      { id: 'ns04', ten: 'Phan Thị Hằng',    vt: 'PH', cv: 'Kế toán trưởng',     bp: 'Kế toán',   pn: 'Công ty', tt: 'ok',   ttx: 'Đã ký HĐ', vao: '01/2025' },
-      { id: 'ns05', ten: 'Vũ Lan Hương',     vt: 'VH', cv: 'Hành chính nhân sự', bp: 'HCNS',      pn: 'Công ty', tt: 'warn', ttx: 'Thử việc', vao: '05/2026' },
-      { id: 'ns06', ten: 'Nguyễn Thị Huyền', vt: 'NH', cv: 'Vận hành sàn',       bp: 'Kinh doanh',pn: 'Công ty', tt: 'ok',   ttx: 'Đã ký HĐ', vao: '08/2025' },
-      { id: 'ns07', ten: 'Trần Văn Nam',     vt: 'TN', cv: 'Nhân viên kho',      bp: 'Kho vận',   pn: 'HKD',     tt: 'warn', ttx: 'Chờ ký',   vao: '06/2024' },
-      { id: 'ns08', ten: 'Lê Thị Mai',       vt: 'LM', cv: 'Đóng gói',           bp: 'Kho vận',   pn: 'HKD',     tt: 'warn', ttx: 'Chờ ký',   vao: '09/2024' },
-      { id: 'ns09', ten: 'Hoàng Minh Tuấn',  vt: 'HT', cv: 'Nhân viên kho',      bp: 'Kho vận',   pn: 'HKD',     tt: 'danger', ttx: 'Cần trao đổi', vao: '02/2025' },
-      { id: 'ns10', ten: 'Đỗ Thu Trang',     vt: 'ĐT', cv: 'Kế toán công nợ',    bp: 'Kế toán',   pn: 'Công ty', tt: 'ok',   ttx: 'Đã ký HĐ', vao: '04/2025' },
-      { id: 'ns11', ten: 'Ngô Quang Hải',    vt: 'NQ', cv: 'CSKH',               bp: 'Kinh doanh',pn: 'HKD',     tt: 'warn', ttx: 'Chờ ký',   vao: '11/2025' },
-      { id: 'ns12', ten: 'Vương Thị Yến',    vt: 'VY', cv: 'Đóng gói (PT)',      bp: 'Kho vận',   pn: 'HKD',     tt: 'mute', ttx: 'Parttime', vao: '03/2026' }
-    ],
-
-    /* -- Lương: để RIÊNG, không trộn vào danh sách trên -----------------
-       Tách ra đây để khi nối máy chủ, phần này thành một cửa riêng có khoá
-       riêng: máy chủ chỉ trả về nếu người hỏi là Giám đốc / Phó Giám đốc /
-       Kế toán trưởng. Trong bản xem trước hiện tại, tách như thế này VẪN
-       CHƯA bảo mật — ai mở F12 cũng đọc được. Số dưới đây là GIẢ.
-    ------------------------------------------------------------------- */
-    luong: {
-      ns03: '22.000.000', ns04: '25.000.000', ns05: '11.000.000',
-      ns06: '14.000.000', ns07: '9.500.000',  ns08: '8.500.000',
-      ns09: '9.000.000',  ns10: '12.000.000', ns11: '10.000.000',
-      ns12: '—'
-    },
     chuyenDoi: [
       { b: 'Nhóm Giữ & Đầu tư',        pct: 100, note: '8 người — đã ký hợp đồng công ty' },
       { b: 'Nhóm Quan sát thêm',       pct: 50,  note: '6 người — đang trong buổi 1:1 vòng 2' },

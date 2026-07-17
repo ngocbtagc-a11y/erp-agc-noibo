@@ -8,6 +8,11 @@ node_modules/
 *.pem
 config.local.*
 secrets.*
+.dev.vars
+
+# seed.sql chứa hash mật khẩu của nhân sự — không đẩy lên
+# (chạy `npm run tao-tai-khoan` để sinh lại khi cần)
+seed.sql
 
 # Hệ điều hành
 Thumbs.db
