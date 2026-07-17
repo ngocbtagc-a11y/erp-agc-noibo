@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#3f4d33">
+<meta name="robots" content="noindex, nofollow">
+<title>CRM — Alpha Green Commerce</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+
+<div class="overlay" id="lopPhu"></div>
+
+<div class="app">
+
+  <!-- ==================== THANH BÊN ==================== -->
+  <aside class="sidebar" id="thanhBen">
+    <div class="sb-brand">
+      <div class="dot">A</div>
+      <div class="txt">
+        <b>Alpha Green</b>
+        <span>Commerce</span>
+      </div>
+    </div>
+
+    <div class="sb-label">Quản trị</div>
+    <nav class="sb-nav" id="dieuHuong"></nav>
+
+    <div class="sb-foot">
+      <div class="sb-user">
+        <div class="av" id="uAv">··</div>
+        <div class="meta">
+          <b id="uTen">—</b>
+          <span id="uChucVu">—</span>
+        </div>
+      </div>
+      <button class="sb-logout" id="nutThoat">Đăng xuất</button>
+    </div>
+  </aside>
+
+  <!-- ==================== NỘI DUNG ==================== -->
+  <div class="main">
+
+    <header class="topbar">
+      <button class="burger" id="nutMenu" aria-label="Mở menu">
+        <svg class="ico" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <path d="M3 6h18M3 12h18M3 18h18"/>
+        </svg>
+      </button>
+      <h2 id="tieuDe">Tổng quan</h2>
+      <div class="date" id="ngayHomNay"></div>
+    </header>
+
+    <!-- ---------- Tổng quan ---------- -->
+    <section class="view" id="v-tongquan">
+      <div class="demo-note">
+        <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>
+        </svg>
+        <div>
+          <b>Bản xem trước giao diện.</b> Toàn bộ số liệu trên màn hình là dữ liệu giả để Sếp hình dung bố cục.
+          Khi nối database thật, các con số này sẽ được lấy từ máy chủ công ty.
+        </div>
+      </div>
+
+      <div class="view-head">
+        <h3>Tổng quan công ty</h3>
+        <p>Bức tranh chung của Alpha Green Commerce — doanh thu, tiến độ mục tiêu và những việc cần chú ý.</p>
+      </div>
+
+      <div class="stats" id="tq-the"></div>
+
+      <div class="grid-2">
+        <div class="panel">
+          <div class="panel-head">
+            <h4>Doanh thu 6 tháng gần nhất</h4>
+            <span class="hint">Đơn vị: tỷ đồng</span>
+          </div>
+          <div class="panel-body"><div class="chart" id="tq-chart"></div></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <h4>Tiến độ mục tiêu Q3/2026</h4>
+            <span class="hint">Hợp nhất pháp nhân</span>
+          </div>
+          <div class="panel-body"><div id="tq-muctieu"></div></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h4>Việc cần chú ý</h4>
+          <span class="hint">Tổng hợp từ 4 mảng</span>
+        </div>
+        <div class="panel-body"><div class="list" id="tq-canhbao"></div></div>
+      </div>
+    </section>
+
+    <!-- ---------- Nhân sự ---------- -->
+    <section class="view" id="v-nhansu" hidden>
+      <div class="view-head">
+        <h3>Nhân sự</h3>
+        <p>Danh sách nhân sự, tiến độ chuyển đổi từ HKD Onfod lên Công ty TNHH và lịch làm việc 1:1.</p>
+      </div>
+
+      <div class="stats" id="ns-the"></div>
+
+      <div class="grid-2">
+        <div class="panel">
+          <div class="panel-head">
+            <h4>Tiến độ chuyển đổi pháp nhân</h4>
+            <span class="hint">Mục tiêu Q3/2026</span>
+          </div>
+          <div class="panel-body"><div id="ns-chuyendoi"></div></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <h4>Lịch & mốc quan trọng</h4>
+          </div>
+          <div class="panel-body"><div class="list" id="ns-lich"></div></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h4>Danh sách nhân sự</h4>
+          <span class="hint" id="ns-hint"></span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Nhân sự</th>
+                <th>Bộ phận</th>
+                <th>Pháp nhân</th>
+                <th>Trạng thái</th>
+                <th>Vào làm</th>
+                <th class="num" id="ns-thLuong">Lương</th>
+              </tr>
+            </thead>
+            <tbody id="ns-bang"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ---------- Kinh doanh ---------- -->
+    <section class="view" id="v-kinhdoanh" hidden>
+      <div class="view-head">
+        <h3>Kinh doanh</h3>
+        <p>Doanh thu theo kênh bán, hiệu quả từng sản phẩm và động thái của đối thủ.</p>
+      </div>
+
+      <div class="stats" id="kd-the"></div>
+
+      <div class="grid-2">
+        <div class="panel">
+          <div class="panel-head">
+            <h4>Doanh thu theo kênh</h4>
+            <span class="hint">Tháng 7 · tỷ đồng</span>
+          </div>
+          <div class="panel-body"><div class="chart" id="kd-chart"></div></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <h4>Động thái đối thủ</h4>
+            <span class="hint">Cập nhật thủ công</span>
+          </div>
+          <div class="panel-body"><div class="list" id="kd-doithu"></div></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h4>Sản phẩm bán chạy — tháng 7</h4>
+          <span class="hint">So với kế hoạch tháng</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Sản phẩm</th>
+                <th>Danh mục</th>
+                <th class="num">Đơn hàng</th>
+                <th class="num">Doanh thu (đ)</th>
+                <th>So kế hoạch</th>
+              </tr>
+            </thead>
+            <tbody id="kd-bang"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ---------- Kho vận ---------- -->
+    <section class="view" id="v-khovan" hidden>
+      <div class="view-head">
+        <h3>Kho vận</h3>
+        <p>Tồn kho, số ngày bán còn lại của từng mã hàng và lịch hàng về kho.</p>
+      </div>
+
+      <div class="stats" id="kv-the"></div>
+
+      <div class="grid-2">
+        <div class="panel">
+          <div class="panel-head">
+            <h4>Đơn hàng theo ngày</h4>
+            <span class="hint">Tuần này</span>
+          </div>
+          <div class="panel-body"><div class="chart" id="kv-chart"></div></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <h4>Hàng đang về</h4>
+            <span class="hint">Theo nhà cung cấp</span>
+          </div>
+          <div class="panel-body"><div class="list" id="kv-nhap"></div></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h4>Tồn kho theo mã hàng</h4>
+          <span class="hint">Số ngày bán còn lại tính theo tốc độ bán trung bình</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Sản phẩm</th>
+                <th>Mã hàng</th>
+                <th class="num">Tồn</th>
+                <th class="num">Ngày bán còn lại</th>
+                <th>Trạng thái</th>
+              </tr>
+            </thead>
+            <tbody id="kv-bang"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ---------- Kế toán ---------- -->
+    <section class="view" id="v-ketoan" hidden>
+      <div class="view-head">
+        <h3>Kế toán</h3>
+        <p>Công nợ phải thu — phải trả, cơ cấu chi phí và tình trạng nghĩa vụ thuế.</p>
+      </div>
+
+      <div class="stats" id="kt-the"></div>
+
+      <div class="grid-2">
+        <div class="panel">
+          <div class="panel-head">
+            <h4>Cơ cấu chi phí tháng 7</h4>
+            <span class="hint">Đơn vị: tỷ đồng</span>
+          </div>
+          <div class="panel-body"><div class="chart" id="kt-chart"></div></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <h4>Nghĩa vụ thuế</h4>
+          </div>
+          <div class="panel-body"><div class="list" id="kt-thue"></div></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h4>Công nợ</h4>
+          <span class="hint">Phải thu và phải trả</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Đối tác</th>
+                <th>Loại</th>
+                <th class="num">Số tiền (đ)</th>
+                <th>Hạn</th>
+                <th>Trạng thái</th>
+              </tr>
+            </thead>
+            <tbody id="kt-bang"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</div>
+
+<script src="assets/js/data.js"></script>
+<script src="assets/js/app.js"></script>
+</body>
+</html>

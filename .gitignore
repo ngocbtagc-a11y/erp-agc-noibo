@@ -1,0 +1,26 @@
+# Phụ thuộc
+node_modules/
+
+# Cấu hình bí mật — TUYỆT ĐỐI không đưa lên GitHub
+.env
+.env.*
+*.key
+*.pem
+config.local.*
+secrets.*
+
+# Hệ điều hành
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# Trình soạn thảo
+.vscode/
+.idea/
+
+# Nhật ký
+*.log
+npm-debug.log*
+
+# Cloudflare
+.wrangler/

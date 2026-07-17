@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#3f4d33">
+<meta name="robots" content="noindex, nofollow">
+<title>Đăng nhập — CRM Alpha Green Commerce</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body class="login-page">
+
+<main class="login-shell">
+
+  <!-- Cột trái: khối thương hiệu -->
+  <section class="login-hero">
+    <div class="hero-mark">
+      <span>A</span>
+      <span>Alpha Green Commerce</span>
+    </div>
+    <div class="hero-word">Alpha</div>
+    <p class="hero-foot">
+      Hệ thống quản trị nội bộ — <strong>Nhân sự · Kinh doanh · Kho vận · Kế toán</strong>
+    </p>
+  </section>
+
+  <!-- Cột phải: biểu mẫu -->
+  <section class="login-panel">
+    <h1>Đăng nhập</h1>
+    <p class="sub">Hệ thống quản trị nội bộ. Vui lòng dùng tài khoản được cấp.</p>
+
+    <div class="login-error" id="loi"></div>
+
+    <form id="formDangNhap" autocomplete="off">
+      <div class="field">
+        <label for="nguoiDung">Người dùng</label>
+        <select id="nguoiDung" required>
+          <option value="">— Chọn tài khoản —</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="matKhau">Mật khẩu</label>
+        <input type="password" id="matKhau" placeholder="Nhập mật khẩu" required>
+      </div>
+
+      <button type="submit" class="btn-primary">Đăng nhập</button>
+    </form>
+
+    <div class="login-note">
+      <b>Đây là bản xem trước giao diện.</b> Toàn bộ số liệu bên trong là dữ liệu giả.
+      Đăng nhập chỉ chạy trên trình duyệt, chưa có máy chủ kiểm tra — chưa bảo mật thật.
+      Mật khẩu dùng thử cho mọi tài khoản: <b>demo</b>
+    </div>
+  </section>
+
+</main>
+
+<script src="assets/js/data.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var chon = document.getElementById('nguoiDung');
+  var form = document.getElementById('formDangNhap');
+  var oLoi = document.getElementById('loi');
+
+  // Đổ danh sách tài khoản vào ô chọn
+  DB.taiKhoan.forEach(function (u) {
+    var o = document.createElement('option');
+    o.value = u.id;
+    o.textContent = u.ten + ' — ' + u.chucVu;
+    chon.appendChild(o);
+  });
+
+  function baoLoi(msg) {
+    oLoi.textContent = msg;
+    oLoi.classList.add('show');
+  }
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    oLoi.classList.remove('show');
+
+    var id = chon.value;
+    var mk = document.getElementById('matKhau').value;
+    var u = DB.taiKhoan.find(function (x) { return x.id === id; });
+
+    if (!u) { baoLoi('Vui lòng chọn tài khoản.'); return; }
+    if (mk !== u.matKhau) { baoLoi('Mật khẩu không đúng. Bản demo dùng mật khẩu: demo'); return; }
+
+    // Bản demo: chỉ ghi nhớ id người dùng trong phiên trình duyệt.
+    // Bản thật: máy chủ cấp phiên đăng nhập qua cookie HttpOnly.
+    sessionStorage.setItem('agc_user', u.id);
+    window.location.href = 'app.html';
+  });
+})();
+</script>
+
+</body>
+</html>
