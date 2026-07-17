@@ -10,11 +10,11 @@ directory = "public"
 binding = "ASSETS"
 
 # Database D1 — gói miễn phí: 5GB, 5 triệu lượt đọc/ngày
-# (Chạy `npm run tao-db` để tạo, rồi dán database_id Cloudflare trả về vào đây)
+# database_id do `npm run cai-dat` tự điền, không cần sửa tay.
 [[d1_databases]]
 binding = "DB"
 database_name = "crm-agc"
-database_id = "CHUA_CO_ID_CHAY_LENH_TAO_DB"
+database_id = "0575dabe-5bdc-4146-ba5d-6f21e9d1cdc0"
 
 [observability]
 enabled = true

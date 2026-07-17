@@ -58,27 +58,43 @@ không địa chỉ nhà, không căn cước, không ngày sinh.
 npm install
 npx wrangler login          # mở trình duyệt, đăng nhập Cloudflare
 
-npm run tao-db              # tạo database D1
-# → chép database_id Cloudflare in ra, dán vào wrangler.toml
-
+npm run cai-dat             # tạo database D1 + tự điền mã vào wrangler.toml
 npm run tao-tai-khoan       # sinh mật khẩu ngẫu nhiên + ghi seed.sql
-# → mật khẩu CHỈ HIỆN MỘT LẦN. Chép ra, gửi riêng từng người, rồi đóng cửa sổ.
-
-npm run nap-db-may          # nạp database ở máy (để chạy thử)
-npm run chay                # chạy thử → http://localhost:4400
+npm run nap-db              # nạp database lên Cloudflare
+npm run dua-len             # đưa web lên mạng
 ```
 
-Đưa lên mạng:
+Xong sẽ hiện địa chỉ dạng `crm-agc.<tài-khoản>.workers.dev` — vào được từ mọi
+máy tính và điện thoại, có sẵn HTTPS, không cần mua tên miền.
+
+Chạy thử ở máy trước khi đưa lên mạng:
 
 ```bash
-npm run nap-db              # nạp database thật trên Cloudflare
-npm run dua-len             # deploy
+npm run nap-db-may          # nạp database ở máy
+npm run chay                # → http://localhost:4400
 ```
 
-> `seed.sql` chứa hash mật khẩu nên **đã bị chặn không cho lên GitHub**
-> (xem `.gitignore`). Cần thì chạy lại `npm run tao-tai-khoan`.
+### ⚠ Về mật khẩu
 
-Ai cũng bị bắt đổi mật khẩu ở lần đăng nhập đầu tiên, tối thiểu 10 ký tự.
+`npm run tao-tai-khoan` in mật khẩu ra màn hình **một lần duy nhất**, không ghi
+vào file nào. Chép ra, gửi riêng cho từng người, rồi đóng cửa sổ.
+**Đừng gửi vào nhóm chat chung.** Ai cũng bị bắt đổi mật khẩu ở lần đăng nhập
+đầu tiên, tối thiểu 10 ký tự.
+
+Lệnh này phải do **người quản trị tự chạy trên máy mình** — không chạy qua trợ
+lý AI hay công cụ nào ghi lại màn hình, vì mật khẩu sẽ nằm lại trong lịch sử đó.
+
+`seed.sql` chứa hash mật khẩu nên **đã bị chặn không cho lên GitHub**
+(xem `.gitignore`). Cần thì chạy lại `npm run tao-tai-khoan`.
+
+### Về tên miền
+
+Không bắt buộc. Địa chỉ `workers.dev` dùng được ngay, miễn phí, vào từ mọi nơi.
+
+Nhưng tài liệu Cloudflare ghi rõ `workers.dev` "dành cho dự án cá nhân hoặc
+nghiệp dư, không phải việc quan trọng của doanh nghiệp", và khuyến nghị chạy
+thật nên dùng tên miền riêng. Khi công ty có tên miền, gắn vào **không tốn thêm
+phí Cloudflare** — chỉ cần trỏ tên miền về Cloudflare rồi thêm Custom Domain.
 
 ---
 
