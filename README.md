@@ -1,6 +1,6 @@
 # CRM nội bộ — Công ty TNHH Alpha Green Commerce
 
-Hệ thống quản trị nội bộ: **Nhân sự · Kinh doanh · Kho vận · Kế toán**.
+Hệ thống quản trị nội bộ: **Danh bạ · Nhân sự · Kinh doanh · Kho vận · Kế toán**.
 Dùng được trên cả máy tính và điện thoại.
 
 ---
@@ -16,9 +16,25 @@ Dùng được trên cả máy tính và điện thoại.
 | Phân quyền | Ẩn tab trên trình duyệt | Máy chủ kiểm tra quyền trước khi trả dữ liệu |
 | Nhập liệu | Chưa có | Thêm/sửa/xoá qua biểu mẫu |
 
-**Không được đưa dữ liệu thật của công ty vào bản này.** Phần ẩn/hiện theo vai trò
-hiện chỉ là ẩn trên giao diện — người biết kỹ thuật vẫn mở được mã nguồn trang và
-đọc toàn bộ nội dung trong `data.js`. Bảo mật thật chỉ có khi máy chủ tự kiểm tra quyền.
+### Lương KHÔNG được bảo mật trong bản này
+
+Việc ẩn cột lương với người không có quyền **chỉ là che trên màn hình, không phải khoá**.
+Bất kỳ ai đăng nhập, bấm F12 và gõ `DB.nhanSu.luong` là đọc được lương của tất cả mọi
+người — kể cả mật khẩu mọi tài khoản trong `DB.taiKhoan`. Đã kiểm chứng thực tế.
+
+Lý do: đây là web tĩnh, **mọi thứ gửi xuống trình duyệt thì người dùng đọc được hết**.
+Không có mẹo lập trình nào che được. Lương chỉ thật sự kín khi nằm ở máy chủ và máy chủ
+tự kiểm tra người hỏi là ai trước khi trả về.
+
+👉 **Vì vậy: tuyệt đối không thay số lương thật, mật khẩu thật hay công nợ thật vào
+`data.js` chừng nào chưa có máy chủ.**
+
+| Dữ liệu | Đưa vào bản tĩnh này? |
+|---|---|
+| Danh bạ (tên, SĐT, email công việc) | Được — vốn dĩ mọi nhân sự đều xem |
+| Lương, đánh giá nhân sự | **Không** — phải chờ có máy chủ |
+| Công nợ, giá vốn, doanh thu thật | **Không** — phải chờ có máy chủ |
+| Địa chỉ nhà, căn cước, ngày sinh | **Không** — không cần cho công việc |
 
 ---
 
@@ -32,14 +48,16 @@ Mở trình duyệt vào `http://localhost:4400`.
 
 Tài khoản dùng thử — mật khẩu đều là `demo`:
 
-| Tài khoản | Chức vụ | Xem được |
-|---|---|---|
-| Nguyễn Duy Phong | Giám đốc | Toàn bộ + lương |
-| Bùi Thị Ngọc | Phó Giám đốc | Toàn bộ + lương |
-| Phạm Khương Duy | Quản lý kho | Tổng quan, Kho vận, Nhân sự (không lương) |
-| Phan Thị Hằng | Kế toán trưởng | Tổng quan, Kế toán + lương |
-| Vũ Lan Hương | Hành chính nhân sự | Tổng quan, Nhân sự (không lương) |
-| Nguyễn Thị Huyền | Vận hành sàn | Tổng quan, Kinh doanh |
+Danh bạ mở cho tất cả. Các tab còn lại theo chức vụ:
+
+| Tài khoản | Chức vụ | Xem được | Lương |
+|---|---|---|---|
+| Nguyễn Duy Phong | Giám đốc | Toàn bộ | ✅ |
+| Bùi Thị Ngọc | Phó Giám đốc | Toàn bộ | ✅ |
+| Phan Thị Hằng | Kế toán trưởng | Danh bạ, Kế toán | ✅ |
+| Phạm Khương Duy | Quản lý kho | Danh bạ, Kho vận, Nhân sự | ❌ |
+| Vũ Lan Hương | Hành chính nhân sự | Danh bạ, Nhân sự | ❌ |
+| Nguyễn Thị Huyền | Vận hành sàn | Danh bạ, Kinh doanh | ❌ |
 
 ---
 
@@ -48,7 +66,7 @@ Tài khoản dùng thử — mật khẩu đều là `demo`:
 ```
 crm-agc/
 ├── index.html              Màn hình đăng nhập
-├── app.html                Trang CRM chính (4 tab)
+├── app.html                Trang CRM chính (5 tab)
 └── assets/
     ├── css/style.css       Toàn bộ giao diện
     └── js/
@@ -61,8 +79,12 @@ crm-agc/
 ## Sửa nội dung
 
 Mọi số liệu nằm trong `assets/js/data.js`, đã chia sẵn theo từng tab
-(`tongQuan`, `nhanSu`, `kinhDoanh`, `khoVan`, `keToan`). Sửa file này là
+(`danhBa`, `tongQuan`, `nhanSu`, `kinhDoanh`, `khoVan`, `keToan`). Sửa file này là
 giao diện đổi theo, không cần đụng vào chỗ khác.
+
+Riêng lương để tách ở `DB.nhanSu.luong`, tra theo `id` nhân sự — tách sẵn như vậy để
+sau này nó thành một endpoint riêng có kiểm tra quyền ở máy chủ, không phải sửa lại
+cấu trúc dữ liệu.
 
 ---
 
