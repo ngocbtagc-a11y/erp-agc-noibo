@@ -1,63 +1,84 @@
 # CRM nội bộ — Công ty TNHH Alpha Green Commerce
 
-Hệ thống quản trị nội bộ: **Danh bạ · Nhân sự · Kinh doanh · Kho vận · Kế toán**.
+Hệ thống quản trị nội bộ: **Tổng quan · Danh bạ · Nhân sự · Kinh doanh · Kho vận · Kế toán**.
 Dùng được trên cả máy tính và điện thoại.
 
+Chạy trên Cloudflare Workers + D1 (gói miễn phí).
+
 ---
 
-## ⚠️ Trạng thái hiện tại: BẢN XEM TRƯỚC GIAO DIỆN
+## Trạng thái từng phần
 
-Đây **chưa phải** hệ thống chạy thật. Cụ thể:
-
-| Hạng mục | Hiện tại | Cần làm để chạy thật |
+| Phần | Trạng thái | Được dùng dữ liệu thật? |
 |---|---|---|
-| Số liệu | Dữ liệu giả trong `assets/js/data.js` | Nối database (MySQL/PostgreSQL) |
-| Đăng nhập | Kiểm tra trên trình duyệt, mật khẩu `demo` | Máy chủ kiểm tra, mật khẩu mã hoá một chiều |
-| Phân quyền | Ẩn tab trên trình duyệt | Máy chủ kiểm tra quyền trước khi trả dữ liệu |
-| Nhập liệu | Chưa có | Thêm/sửa/xoá qua biểu mẫu |
+| Đăng nhập, phân quyền | ✅ Máy chủ thật | Có |
+| **Danh bạ** | ✅ Máy chủ thật (D1) | Có |
+| **Nhân sự** (gồm lương) | ✅ Máy chủ thật (D1) | Có |
+| Tổng quan | ⚠️ Dữ liệu mẫu | **Chưa** |
+| Kinh doanh | ⚠️ Dữ liệu mẫu — chờ nối Shopee API | **Chưa** |
+| Kho vận | ⚠️ Dữ liệu mẫu | **Chưa** |
+| Kế toán | ⚠️ Dữ liệu mẫu | **Chưa** |
 
-### Lương KHÔNG được bảo mật trong bản này
-
-Việc ẩn cột lương với người không có quyền **chỉ là che trên màn hình, không phải khoá**.
-Bất kỳ ai đăng nhập, bấm F12 và gõ `DB.nhanSu.luong` là đọc được lương của tất cả mọi
-người — kể cả mật khẩu mọi tài khoản trong `DB.taiKhoan`. Đã kiểm chứng thực tế.
-
-Lý do: đây là web tĩnh, **mọi thứ gửi xuống trình duyệt thì người dùng đọc được hết**.
-Không có mẹo lập trình nào che được. Lương chỉ thật sự kín khi nằm ở máy chủ và máy chủ
-tự kiểm tra người hỏi là ai trước khi trả về.
-
-👉 **Vì vậy: tuyệt đối không thay số lương thật, mật khẩu thật hay công nợ thật vào
-`data.js` chừng nào chưa có máy chủ.**
-
-| Dữ liệu | Đưa vào bản tĩnh này? |
-|---|---|
-| Danh bạ (tên, SĐT, email công việc) | Được — vốn dĩ mọi nhân sự đều xem |
-| Lương, đánh giá nhân sự | **Không** — phải chờ có máy chủ |
-| Công nợ, giá vốn, doanh thu thật | **Không** — phải chờ có máy chủ |
-| Địa chỉ nhà, căn cước, ngày sinh | **Không** — không cần cho công việc |
+⚠️ Bốn tab còn lại vẫn đọc từ `public/assets/js/data.js` — file này trình duyệt tải
+về được nên **ai đăng nhập cũng đọc hết**. Đừng thay doanh thu, công nợ hay giá vốn
+thật vào đó. Muốn dùng số thật thì phải chuyển tab đó sang máy chủ trước.
 
 ---
 
-## Chạy thử trên máy
+## Bảo mật đang có
+
+| Thứ | Cách làm |
+|---|---|
+| Mật khẩu | PBKDF2-SHA256, 210.000 vòng, mỗi người một salt riêng. Không ai đọc được mật khẩu nhân viên — kể cả Giám đốc, chỉ đặt lại được. |
+| Phiên đăng nhập | Cookie HttpOnly + Secure + SameSite=Lax, hạn 12 tiếng. JavaScript trong trang không đọc được cookie. Database chỉ lưu **hash** của token. |
+| Dò mật khẩu | Sai 5 lần → khoá 15 phút. |
+| Dò tên đăng nhập | Sai tên và sai mật khẩu trả về cùng một câu, thời gian trả lời như nhau. |
+| Phân quyền | Máy chủ kiểm tra (`src/quyen.js`). Gõ thẳng API không có quyền → 403. |
+| **Lương** | Người không có quyền thì câu `SELECT` **không lấy cột lương ra khỏi database** — không phải "lấy ra rồi ẩn đi". |
+
+Ai xem được gì:
+
+| Chức vụ | Tab | Lương |
+|---|---|---|
+| Giám đốc — Nguyễn Duy Phong | Toàn bộ | ✅ |
+| Phó Giám đốc — Bùi Thị Ngọc | Toàn bộ | ✅ |
+| Kế toán trưởng — Phan Thị Hằng | Tổng quan, Danh bạ, Kế toán | ✅ |
+| Quản lý kho — Phạm Khương Duy | Tổng quan, Danh bạ, Kho vận, Nhân sự | ❌ |
+| Hành chính nhân sự — Vũ Lan Hương | Tổng quan, Danh bạ, Nhân sự | ❌ |
+| Vận hành sàn — Nguyễn Thị Huyền | Tổng quan, Danh bạ, Kinh doanh | ❌ |
+
+Danh bạ mở cho tất cả — chỉ có thông tin liên lạc phục vụ công việc, không lương,
+không địa chỉ nhà, không căn cước, không ngày sinh.
+
+---
+
+## Cài lần đầu
 
 ```bash
-npx serve -p 4400 .
+npm install
+npx wrangler login          # mở trình duyệt, đăng nhập Cloudflare
+
+npm run tao-db              # tạo database D1
+# → chép database_id Cloudflare in ra, dán vào wrangler.toml
+
+npm run tao-tai-khoan       # sinh mật khẩu ngẫu nhiên + ghi seed.sql
+# → mật khẩu CHỈ HIỆN MỘT LẦN. Chép ra, gửi riêng từng người, rồi đóng cửa sổ.
+
+npm run nap-db-may          # nạp database ở máy (để chạy thử)
+npm run chay                # chạy thử → http://localhost:4400
 ```
 
-Mở trình duyệt vào `http://localhost:4400`.
+Đưa lên mạng:
 
-Tài khoản dùng thử — mật khẩu đều là `demo`:
+```bash
+npm run nap-db              # nạp database thật trên Cloudflare
+npm run dua-len             # deploy
+```
 
-Danh bạ mở cho tất cả. Các tab còn lại theo chức vụ:
+> `seed.sql` chứa hash mật khẩu nên **đã bị chặn không cho lên GitHub**
+> (xem `.gitignore`). Cần thì chạy lại `npm run tao-tai-khoan`.
 
-| Tài khoản | Chức vụ | Xem được | Lương |
-|---|---|---|---|
-| Nguyễn Duy Phong | Giám đốc | Toàn bộ | ✅ |
-| Bùi Thị Ngọc | Phó Giám đốc | Toàn bộ | ✅ |
-| Phan Thị Hằng | Kế toán trưởng | Danh bạ, Kế toán | ✅ |
-| Phạm Khương Duy | Quản lý kho | Danh bạ, Kho vận, Nhân sự | ❌ |
-| Vũ Lan Hương | Hành chính nhân sự | Danh bạ, Nhân sự | ❌ |
-| Nguyễn Thị Huyền | Vận hành sàn | Danh bạ, Kinh doanh | ❌ |
+Ai cũng bị bắt đổi mật khẩu ở lần đăng nhập đầu tiên, tối thiểu 10 ký tự.
 
 ---
 
@@ -65,32 +86,42 @@ Danh bạ mở cho tất cả. Các tab còn lại theo chức vụ:
 
 ```
 crm-agc/
-├── index.html              Màn hình đăng nhập
-├── app.html                Trang CRM chính (5 tab)
-└── assets/
-    ├── css/style.css       Toàn bộ giao diện
-    └── js/
-        ├── data.js         Dữ liệu giả — sau này thay bằng gọi API
-        └── app.js          Dựng giao diện + chuyển tab + phân quyền
+├── wrangler.toml              Cấu hình Cloudflare
+├── schema.sql                 Cấu trúc database
+├── src/                       ⬅ CHẠY TRÊN MÁY CHỦ (trình duyệt không đọc được)
+│   ├── index.js               Định tuyến API + kiểm tra quyền từng đầu việc
+│   ├── auth.js                Băm mật khẩu, phiên, chặn dò mật khẩu
+│   └── quyen.js               Bảng phân quyền — nơi duy nhất quyết định ai xem gì
+├── scripts/
+│   └── tao-tai-khoan.mjs      Sinh mật khẩu ban đầu
+└── public/                    ⬅ TRÌNH DUYỆT TẢI VỀ ĐƯỢC (coi như công khai)
+    ├── index.html             Đăng nhập + đổi mật khẩu lần đầu
+    ├── app.html               Trang CRM chính
+    └── assets/
+        ├── css/style.css
+        └── js/
+            ├── api.js         Gọi máy chủ
+            ├── app.js         Dựng giao diện
+            └── data.js        Dữ liệu mẫu của 4 tab chưa nối máy chủ
 ```
 
----
-
-## Sửa nội dung
-
-Mọi số liệu nằm trong `assets/js/data.js`, đã chia sẵn theo từng tab
-(`danhBa`, `tongQuan`, `nhanSu`, `kinhDoanh`, `khoVan`, `keToan`). Sửa file này là
-giao diện đổi theo, không cần đụng vào chỗ khác.
-
-Riêng lương để tách ở `DB.nhanSu.luong`, tra theo `id` nhân sự — tách sẵn như vậy để
-sau này nó thành một endpoint riêng có kiểm tra quyền ở máy chủ, không phải sửa lại
-cấu trúc dữ liệu.
+Ranh giới quan trọng nhất: **`src/` là bí mật, `public/` là công khai.**
+Đừng bao giờ đặt dữ liệu nhạy cảm hay chìa khoá vào `public/`.
 
 ---
 
 ## Bước tiếp theo
 
-1. Sếp duyệt giao diện, góp ý bố cục và các chỉ số cần thêm/bớt.
-2. Chọn hosting có chạy được máy chủ (Hostinger shared PHP hoặc VPS).
-3. Dựng database + đăng nhập thật + phân quyền phía máy chủ.
-4. Thêm chức năng nhập liệu, rồi mới đưa dữ liệu thật vào.
+1. Chuyển tab Kinh doanh sang máy chủ, nối **Shopee Open Platform API**.
+   Sếp cần đăng ký tại `open.shopee.com` trước — Shopee duyệt 3–5 ngày làm việc
+   (có nguồn nói tối đa 2 tuần).
+   - `partner_key` là chìa khoá bí mật → lưu bằng `wrangler secret put`,
+     **không bao giờ** để trong `public/` hay commit lên GitHub.
+   - `access_token` hết hạn 4 tiếng, `refresh_token` 30 ngày → cần Cron Trigger
+     tự làm mới. Ngừng chạy quá 30 ngày là phải cấp quyền lại bằng tay.
+   - Doanh thu thật phải lấy từ nhóm API thanh toán/đối soát (escrow), không
+     phải tổng giá đơn — tổng giá đơn chưa trừ phí sàn, voucher, phí vận chuyển.
+   - Hai pháp nhân (Công ty + HKD) = hai shop → cấp quyền riêng, lưu token riêng.
+2. Chuyển Kho vận và Kế toán sang máy chủ.
+3. Thêm chức năng nhập liệu (thêm/sửa nhân sự, cập nhật lương).
+4. TikTok Shop có cổng API riêng, làm sau.
