@@ -13,6 +13,7 @@
   /* ---- Danh mục tab ------------------------------------------------- */
   var TAB = [
     { id: 'tongquan',  ten: 'Tổng quan',  icon: 'M3 12l9-9 9 9M5 10v10h14V10' },
+    { id: 'danhba',    ten: 'Danh bạ',    icon: 'M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8' },
     { id: 'nhansu',    ten: 'Nhân sự',    icon: 'M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75' },
     { id: 'kinhdoanh', ten: 'Kinh doanh', icon: 'M23 6l-9.5 9.5-5-5L1 18M17 6h6v6' },
     { id: 'khovan',    ten: 'Kho vận',    icon: 'M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16zM3.27 6.96L12 12.01l8.73-5.05M12 22.08V12' },
@@ -194,6 +195,40 @@
   veTienDo('#tq-muctieu', DB.tongQuan.mucTieuQuy);
   veDanhSach('#tq-canhbao', DB.tongQuan.cannBaoDong);
 
+  /* -- Danh bạ -- */
+  if (U.quyen.indexOf('danhba') !== -1) {
+    // Bỏ dấu để gõ "ke toan" cũng tìm ra "Kế toán"
+    function boDau(s) {
+      return s.normalize('NFD').replace(/[̀-ͯ]/g, '')
+              .replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase();
+    }
+
+    function veDanhBa(tuKhoa) {
+      var k = boDau((tuKhoa || '').trim());
+      var ds = DB.danhBa.filter(function (n) {
+        if (!k) return true;
+        return boDau(n.ten + ' ' + n.cv + ' ' + n.bp + ' ' + n.sdt + ' ' + n.email).indexOf(k) !== -1;
+      });
+
+      veBang('#db-bang', ds, function (n) {
+        return '' +
+          '<td><div class="person"><div class="av">' + esc(n.vt) + '</div>' +
+            '<div><div class="nm">' + esc(n.ten) + '</div>' +
+            '<div class="sm">' + esc(n.cv) + '</div></div></div></td>' +
+          '<td>' + esc(n.bp) + '</td>' +
+          '<td><a class="lnk" href="tel:' + esc(n.sdt.replace(/\s/g, '')) + '">' + esc(n.sdt) + '</a></td>' +
+          '<td><a class="lnk" href="mailto:' + esc(n.email) + '">' + esc(n.email) + '</a></td>' +
+          '<td class="sm">' + esc(n.ql) + '</td>';
+      });
+
+      $('#db-trong').hidden = ds.length > 0;
+      $('#db-dem').textContent = ds.length + '/' + DB.danhBa.length + ' người';
+    }
+
+    veDanhBa('');
+    $('#db-tim').addEventListener('input', function (e) { veDanhBa(e.target.value); });
+  }
+
   /* -- Nhân sự -- */
   if (U.quyen.indexOf('nhansu') !== -1) {
     veThe('#ns-the', DB.nhanSu.the);
@@ -215,7 +250,7 @@
         '<td><span class="tag ' + (r.pn === 'Công ty' ? 'sage' : 'mute') + '">' + esc(r.pn) + '</span></td>' +
         '<td><span class="tag ' + esc(r.tt) + '">' + esc(r.ttx) + '</span></td>' +
         '<td class="sm">' + esc(r.vao) + '</td>' +
-        (U.xemLuong ? '<td class="num">' + esc(r.luong) + '</td>' : '');
+        (U.xemLuong ? '<td class="num">' + esc(DB.nhanSu.luong[r.id] || '—') + '</td>' : '');
     });
   }
 

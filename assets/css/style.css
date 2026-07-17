@@ -560,6 +560,7 @@ tbody td {
   border-bottom: 1px solid var(--line);
   font-size: 13.5px;
   vertical-align: middle;
+  white-space: nowrap;
 }
 
 tbody tr:last-child td { border-bottom: none; }
@@ -568,8 +569,10 @@ tbody tr:hover { background: var(--sage-wash); }
 
 td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 th.num { text-align: right; }
-td .nm { font-weight: 600; color: var(--ink); }
-td .sm { font-size: 12px; color: var(--text-mute); }
+/* Tên và chức vụ giữ trên một dòng — thà để bảng cuộn ngang còn hơn
+   bóp chữ xuống nhiều dòng, trên điện thoại sẽ rất khó đọc */
+td .nm { font-weight: 600; color: var(--ink); white-space: nowrap; }
+td .sm { font-size: 12px; color: var(--text-mute); white-space: nowrap; }
 
 .person { display: flex; align-items: center; gap: 10px; }
 
@@ -583,6 +586,60 @@ td .sm { font-size: 12px; color: var(--text-mute); }
   font-weight: 700;
   flex-shrink: 0;
 }
+
+/* ==========================================================================
+   Ô TÌM KIẾM
+   ========================================================================== */
+
+.search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.search .ico {
+  position: absolute;
+  left: 13px;
+  color: var(--text-mute);
+  pointer-events: none;
+}
+
+.search input {
+  width: 100%;
+  padding: 11px 14px 11px 38px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  transition: border-color .16s, box-shadow .16s, background .16s;
+}
+
+.search input:focus {
+  outline: none;
+  background: var(--white);
+  border-color: var(--sage);
+  box-shadow: 0 0 0 3px rgba(154,171,134,.22);
+}
+
+.search input::placeholder { color: var(--text-mute); }
+
+.empty {
+  padding: 34px 20px;
+  text-align: center;
+  color: var(--text-mute);
+  font-size: 13.5px;
+}
+
+/* Liên kết gọi / gửi thư trong danh bạ */
+.lnk {
+  color: var(--ink-soft);
+  font-weight: 500;
+  border-bottom: 1px solid var(--sage-pale);
+  transition: color .14s, border-color .14s;
+  white-space: nowrap;
+}
+
+.lnk:hover { color: var(--ink); border-color: var(--sage); }
 
 /* ==========================================================================
    NHÃN TRẠNG THÁI
