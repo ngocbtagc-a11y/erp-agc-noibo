@@ -54,18 +54,27 @@ không địa chỉ nhà, không căn cước, không ngày sinh.
 
 ## Cài lần đầu
 
+**Trước hết**, mở `scripts/tao-tai-khoan.mjs`, sửa khối `ADMIN` ở đầu file —
+đổi `so_dien_thoai` thành **số điện thoại thật** của người làm admin (số này
+chính là tên đăng nhập).
+
 ```bash
 npm install
 npx wrangler login          # mở trình duyệt, đăng nhập Cloudflare
 
 npm run cai-dat             # tạo database D1 + tự điền mã vào wrangler.toml
-npm run tao-tai-khoan       # sinh mật khẩu ngẫu nhiên + ghi seed.sql
+npm run tao-tai-khoan       # tạo 1 tài khoản admin + in mật khẩu (một lần)
 npm run nap-db              # nạp database lên Cloudflare
 npm run dua-len             # đưa web lên mạng
 ```
 
 Xong sẽ hiện địa chỉ dạng `crm-agc.<tài-khoản>.workers.dev` — vào được từ mọi
 máy tính và điện thoại, có sẵn HTTPS, không cần mua tên miền.
+
+**Chỉ có 1 tài khoản admin lúc đầu.** Đăng nhập bằng số điện thoại + mật khẩu
+vừa in, đổi mật khẩu, rồi vào tab **Quản trị** để thêm mọi nhân sự khác và tạo
+tài khoản cho họ (tên đăng nhập = số điện thoại của từng người). Không cần chạy
+lại lệnh nào — thêm người bằng vài cú bấm trên web.
 
 Chạy thử ở máy trước khi đưa lên mạng:
 
@@ -76,11 +85,13 @@ npm run chay                # → http://localhost:4400
 
 ### ⚠ Về mật khẩu
 
-`npm run tao-tai-khoan` in mật khẩu ra màn hình **một lần duy nhất**, không ghi
-vào file nào. Chép ra, gửi riêng cho từng người, rồi đóng cửa sổ.
-**Đừng gửi vào nhóm chat chung.** Ai cũng bị bắt đổi mật khẩu ở lần đăng nhập
-đầu tiên, tối thiểu 6 ký tự — hệ thống tự chặn các mật khẩu dễ đoán
-(`123456`, tên mình, ngày sinh…), xem `src/mat-khau.js`.
+`npm run tao-tai-khoan` in mật khẩu admin ra màn hình **một lần duy nhất**, không
+ghi vào file nào. Chép ra, cất kỹ, rồi đóng cửa sổ. Admin bị bắt đổi mật khẩu ở
+lần đăng nhập đầu. Mật khẩu tối thiểu 6 ký tự (web nội bộ nên không khắt khe,
+xem `src/mat-khau.js`).
+
+Khi admin tạo tài khoản cho nhân viên trong tab Quản trị, hệ thống cũng sinh mật
+khẩu tạm hiện **một lần** — chép gửi riêng cho nhân viên, họ sẽ đổi khi đăng nhập.
 
 Lệnh này phải do **người quản trị tự chạy trên máy mình** — không chạy qua trợ
 lý AI hay công cụ nào ghi lại màn hình, vì mật khẩu sẽ nằm lại trong lịch sử đó.

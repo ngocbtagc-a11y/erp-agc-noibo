@@ -49,7 +49,8 @@ async function dangNhap(req, env) {
   let body;
   try { body = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
 
-  const ten = String(body.ten_dang_nhap || '').trim().toLowerCase();
+  // Bỏ mọi khoảng trắng để "0912 345 678" khớp với "0912345678"
+  const ten = String(body.ten_dang_nhap || '').replace(/\s+/g, '').toLowerCase();
   const mk  = String(body.mat_khau || '');
 
   if (!ten || !mk) return loi('Thiếu tên đăng nhập hoặc mật khẩu');
@@ -276,12 +277,13 @@ async function qtTaoTaiKhoan(req, env) {
   try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
 
   const nhanSuId = String(b.nhan_su_id || '').trim();
-  const ten = String(b.ten_dang_nhap || '').trim().toLowerCase();
+  // Bỏ khoảng trắng — tên đăng nhập thường là số điện thoại
+  const ten = String(b.ten_dang_nhap || '').replace(/\s+/g, '').toLowerCase();
   const vaiTro = String(b.vai_tro || '').trim();
 
   if (!nhanSuId) return loi('Thiếu nhân sự');
   if (!/^[a-z0-9._-]{3,20}$/.test(ten)) {
-    return loi('Tên đăng nhập 3–20 ký tự, chỉ gồm chữ thường không dấu, số, dấu . _ -');
+    return loi('Tên đăng nhập (số điện thoại) 3–20 ký tự, chỉ gồm số, chữ thường không dấu, dấu . _ -');
   }
   if (!VAI_TRO_HOP_LE.includes(vaiTro)) return loi('Vai trò không hợp lệ');
 

@@ -362,7 +362,9 @@ if (TOI.quyen.includes('quantri') && TOI.la_admin) {
       // Cột thao tác
       let thaoTac;
       if (!coTK) {
-        thaoTac = `<button class="btn-nho btn-primary" data-tao="${esc(n.id)}" data-ten-goi-y="${esc(goiYTenDangNhap(n.ho_ten))}">Tạo tài khoản</button>`;
+        // Gợi ý tên đăng nhập = số điện thoại (chỉ chữ số); nếu chưa có SĐT thì để trống
+        const goiY = String(n.sdt || '').replace(/\D/g, '');
+        thaoTac = `<button class="btn-nho btn-primary" data-tao="${esc(n.id)}" data-ten-goi-y="${esc(goiY)}">Tạo tài khoản</button>`;
       } else {
         thaoTac =
           `<button class="btn-nho btn-phu" data-datlai="${n.tai_khoan_id}">Đặt lại MK</button> ` +
@@ -380,12 +382,6 @@ if (TOI.quyen.includes('quantri') && TOI.la_admin) {
         `<td class="sm">${esc(tenVaiTro || '—')}</td>` +
         `<td class="qt-thaotac">${thaoTac}</td>`;
     });
-  }
-
-  // Gợi ý tên đăng nhập từ tên: "Trần Văn Nam" -> "nam"
-  function goiYTenDangNhap(hoTen) {
-    const tu = boDau(String(hoTen).trim()).split(/\s+/).filter(Boolean);
-    return (tu[tu.length - 1] || '').replace(/[^a-z0-9]/g, '');
   }
 
   // Thêm nhân sự
@@ -442,7 +438,7 @@ if (TOI.quyen.includes('quantri') && TOI.la_admin) {
 
   // Hộp tạo tài khoản: hỏi tên đăng nhập + vai trò
   function moHopTaoTaiKhoan(nhanSuId, tenGoiY) {
-    const ten = prompt('Tên đăng nhập cho nhân viên này\n(chữ thường không dấu, ví dụ: nam, trang.kt):', tenGoiY || '');
+    const ten = prompt('Tên đăng nhập cho nhân viên này\n(dùng số điện thoại của họ):', tenGoiY || '');
     if (ten === null) return;
 
     const dsMa = DS_VAI_TRO.map((v, i) => `${i + 1}. ${v.ten}`).join('\n');
