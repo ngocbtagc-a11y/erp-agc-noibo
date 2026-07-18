@@ -42,6 +42,14 @@ function bangNhauAnToan(a, b) {
 
 /* ---- Mật khẩu ----------------------------------------------------------- */
 
+/* Sinh mật khẩu tạm cho tài khoản mới / khi đặt lại.
+   Bỏ các ký tự dễ nhìn nhầm (0/O, 1/l/I) để đọc qua điện thoại không sai. */
+export function sinhMatKhauTam(doDai = 10) {
+  const bang = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+  const b = crypto.getRandomValues(new Uint8Array(doDai));
+  return Array.from(b, x => bang[x % bang.length]).join('');
+}
+
 export async function bamMatKhau(matKhau) {
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const hash = await pbkdf2(matKhau, salt, SO_VONG);

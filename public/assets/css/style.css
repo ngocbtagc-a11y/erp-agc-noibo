@@ -875,3 +875,136 @@ td .sm { font-size: 12px; color: var(--text-mute); white-space: nowrap; }
     transition-duration: .01ms !important;
   }
 }
+
+/* ==========================================================================
+   QUẢN TRỊ — form thêm nhân sự, nút thao tác, hộp mật khẩu tạm
+   ========================================================================== */
+
+.form-luoi {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 14px 16px;
+  align-items: end;
+}
+
+.field-nut { display: flex; align-items: flex-end; }
+.field-nut .btn-primary { width: 100%; }
+
+.form-loi {
+  display: none;
+  margin-top: 14px;
+  padding: 10px 13px;
+  background: var(--danger-wash);
+  border-radius: var(--r-sm);
+  font-size: 13px;
+  color: var(--danger);
+  font-weight: 500;
+}
+.form-loi.show { display: block; }
+
+/* Nút phụ (viền, nền nhạt) */
+.btn-phu {
+  padding: 9px 15px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: var(--white);
+  font-weight: 600;
+  font-size: 13.5px;
+  color: var(--ink-soft);
+  transition: border-color .14s, background .14s;
+}
+.btn-phu:hover { border-color: var(--sage); background: var(--sage-wash); }
+
+/* Nút nhỏ trong bảng */
+.btn-nho {
+  padding: 6px 12px;
+  border-radius: var(--r-pill);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.btn-nho.btn-primary { padding: 6px 13px; width: auto; }
+
+.qt-thaotac { white-space: nowrap; }
+.qt-thaotac button { margin: 2px 0; }
+
+/* Hộp hiện mật khẩu tạm */
+.modal-nen {
+  position: fixed;
+  inset: 0;
+  background: rgba(63,77,51,.5);
+  backdrop-filter: blur(3px);
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  z-index: 60;
+}
+
+/* display:grid ở trên đè mất thuộc tính hidden của HTML (hidden chỉ là
+   display:none từ trình duyệt, thua mọi luật display). Phải nói rõ hidden
+   thắng, không thì hộp hiện ngay khi tải trang. */
+.modal-nen[hidden] { display: none; }
+
+.modal {
+  width: 100%;
+  max-width: 440px;
+  background: var(--card);
+  border-radius: var(--r-lg);
+  padding: 26px;
+  box-shadow: var(--shadow-lg);
+}
+
+.modal h4 {
+  font-family: var(--serif);
+  font-size: 22px;
+  color: var(--ink);
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.modal-nhac {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text);
+  background: var(--warn-wash);
+  border-radius: var(--r-sm);
+  padding: 11px 13px;
+  margin-bottom: 18px;
+}
+.modal-nhac b { color: #6d5325; }
+
+.mk-hien { display: grid; gap: 12px; margin-bottom: 20px; }
+
+.mk-nhan {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--text-mute);
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.mk-gt {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  padding: 10px 13px;
+  word-break: break-all;
+}
+
+.mk-gt-mk {
+  font-family: 'Courier New', monospace;
+  font-size: 19px;
+  letter-spacing: .04em;
+  color: var(--sage-dark);
+}
+
+.modal-nut { display: flex; gap: 10px; }
+.modal-nut .btn-primary { flex: 1; width: auto; }
+
+@media (max-width: 780px) {
+  .modal { padding: 20px; }
+  .qt-thaotac button { display: block; width: 100%; }
+}

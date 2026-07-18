@@ -19,7 +19,8 @@ const TAB = [
   { id: 'nhansu',    ten: 'Nhân sự',    icon: 'M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75' },
   { id: 'kinhdoanh', ten: 'Kinh doanh', icon: 'M23 6l-9.5 9.5-5-5L1 18M17 6h6v6' },
   { id: 'khovan',    ten: 'Kho vận',    icon: 'M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16zM3.27 6.96L12 12.01l8.73-5.05M12 22.08V12' },
-  { id: 'ketoan',    ten: 'Kế toán',    icon: 'M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6' }
+  { id: 'ketoan',    ten: 'Kế toán',    icon: 'M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6' },
+  { id: 'quantri',   ten: 'Quản trị',   icon: 'M12 15a3 3 0 100-6 3 3 0 000 6zM19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-2.82 1.17V21a2 2 0 01-4 0v-.09A1.65 1.65 0 006 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.6 14a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 7.6a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z' }
 ];
 
 /* Mã trạng thái trong database → chữ hiển thị + màu nhãn */
@@ -319,6 +320,161 @@ if (TOI.quyen.includes('ketoan')) {
     `<td class="num">${esc(r.st)}</td>` +
     `<td class="sm">${esc(r.han)}</td>` +
     `<td><span class="tag ${esc(r.tt)}">${esc(r.ttx)}</span></td>`);
+}
+
+/* -- Quản trị (chỉ admin) -- */
+if (TOI.quyen.includes('quantri') && TOI.la_admin) {
+  const TT_QT = {
+    da_ky: 'Đã ký HĐ', thu_viec: 'Thử việc', cho_ky: 'Chờ ký',
+    can_trao_doi: 'Cần trao đổi', parttime: 'Parttime'
+  };
+  let DS_VAI_TRO = [];
+
+  async function veQuanTri() {
+    const { nhan_su, vai_tro } = await API.qtDanhSach();
+    DS_VAI_TRO = vai_tro;
+
+    // Đổ ô "quản lý trực tiếp" và các ô chọn vai trò
+    const oQuanLy = $('#qtQuanLy');
+    oQuanLy.innerHTML = '<option value="">— Không —</option>' +
+      nhan_su.filter(n => n.dang_lam).map(n =>
+        `<option value="${esc(n.id)}">${esc(n.ho_ten)} — ${esc(n.chuc_vu || '')}</option>`).join('');
+
+    const optVaiTro = vai_tro.map(v => `<option value="${esc(v.ma)}">${esc(v.ten)}</option>`).join('');
+
+    $('#qtDem').textContent = `${nhan_su.length} nhân sự · ${nhan_su.filter(n => n.tai_khoan_id).length} có tài khoản`;
+
+    veBang('#qtBang', nhan_su, n => {
+      const coTK = !!n.tai_khoan_id;
+      const tenVaiTro = coTK ? (vai_tro.find(v => v.ma === n.vai_tro)?.ten || n.vai_tro) : '';
+
+      // Cột tài khoản
+      let cotTK;
+      if (!coTK) {
+        cotTK = '<span class="tag mute">Chưa có</span>';
+      } else if (!n.kich_hoat) {
+        cotTK = `<span class="tag danger">Đã khoá</span> <span class="sm">${esc(n.ten_dang_nhap)}</span>`;
+      } else {
+        cotTK = `<span class="nm">${esc(n.ten_dang_nhap)}</span>` +
+                (n.phai_doi_mk ? ' <span class="tag warn">chờ đổi MK</span>' : '');
+      }
+
+      // Cột thao tác
+      let thaoTac;
+      if (!coTK) {
+        thaoTac = `<button class="btn-nho btn-primary" data-tao="${esc(n.id)}" data-ten-goi-y="${esc(goiYTenDangNhap(n.ho_ten))}">Tạo tài khoản</button>`;
+      } else {
+        thaoTac =
+          `<button class="btn-nho btn-phu" data-datlai="${n.tai_khoan_id}">Đặt lại MK</button> ` +
+          (n.kich_hoat
+            ? `<button class="btn-nho btn-phu" data-khoa="${n.tai_khoan_id}" data-kh="0">Khoá</button>`
+            : `<button class="btn-nho btn-phu" data-khoa="${n.tai_khoan_id}" data-kh="1">Mở lại</button>`);
+      }
+
+      return '' +
+        `<td><div class="person"><div class="av">${esc(n.viet_tat)}</div>` +
+          `<div><div class="nm">${esc(n.ho_ten)}</div>` +
+          `<div class="sm">${esc(n.chuc_vu || TT_QT[n.trang_thai] || '')}</div></div></div></td>` +
+        `<td>${esc(n.bo_phan || '—')}</td>` +
+        `<td>${cotTK}</td>` +
+        `<td class="sm">${esc(tenVaiTro || '—')}</td>` +
+        `<td class="qt-thaotac">${thaoTac}</td>`;
+    });
+  }
+
+  // Gợi ý tên đăng nhập từ tên: "Trần Văn Nam" -> "nam"
+  function goiYTenDangNhap(hoTen) {
+    const tu = boDau(String(hoTen).trim()).split(/\s+/).filter(Boolean);
+    return (tu[tu.length - 1] || '').replace(/[^a-z0-9]/g, '');
+  }
+
+  // Thêm nhân sự
+  $('#qtFormThem').addEventListener('submit', async e => {
+    e.preventDefault();
+    const oLoi = $('#qtLoiThem');
+    oLoi.classList.remove('show');
+    const nut = $('#qtNutThem');
+    nut.disabled = true; nut.textContent = 'Đang lưu…';
+    try {
+      await API.qtThemNhanSu({
+        ho_ten: $('#qtHoTen').value,
+        chuc_vu: $('#qtChucVu').value,
+        bo_phan: $('#qtBoPhan').value,
+        sdt: $('#qtSdt').value,
+        email: $('#qtEmail').value,
+        phap_nhan: $('#qtPhapNhan').value,
+        quan_ly_id: $('#qtQuanLy').value,
+        luong: $('#qtLuong').value
+      });
+      $('#qtFormThem').reset();
+      await veQuanTri();
+    } catch (err) {
+      oLoi.textContent = err.message; oLoi.classList.add('show');
+    } finally {
+      nut.disabled = false; nut.textContent = 'Thêm nhân sự';
+    }
+  });
+
+  // Bấm nút trong bảng (tạo tài khoản / đặt lại / khoá) — gắn một lần, dùng nổi bọt
+  $('#qtBang').addEventListener('click', async e => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+
+    if (btn.dataset.tao) {
+      moHopTaoTaiKhoan(btn.dataset.tao, btn.dataset.tenGoiY);
+    } else if (btn.dataset.datlai) {
+      if (!confirm('Đặt lại mật khẩu cho tài khoản này? Mật khẩu cũ sẽ hết hiệu lực ngay.')) return;
+      btn.disabled = true;
+      try {
+        const kq = await API.qtDatLaiMatKhau(parseInt(btn.dataset.datlai, 10));
+        hienMatKhauTam('Đã đặt lại mật khẩu', kq.ten_dang_nhap, kq.mat_khau_tam);
+        await veQuanTri();
+      } catch (err) { alert(err.message); btn.disabled = false; }
+    } else if (btn.dataset.khoa) {
+      const kh = btn.dataset.kh === '1';
+      btn.disabled = true;
+      try {
+        await API.qtKhoaTaiKhoan(parseInt(btn.dataset.khoa, 10), kh);
+        await veQuanTri();
+      } catch (err) { alert(err.message); btn.disabled = false; }
+    }
+  });
+
+  // Hộp tạo tài khoản: hỏi tên đăng nhập + vai trò
+  function moHopTaoTaiKhoan(nhanSuId, tenGoiY) {
+    const ten = prompt('Tên đăng nhập cho nhân viên này\n(chữ thường không dấu, ví dụ: nam, trang.kt):', tenGoiY || '');
+    if (ten === null) return;
+
+    const dsMa = DS_VAI_TRO.map((v, i) => `${i + 1}. ${v.ten}`).join('\n');
+    const chon = prompt('Vai trò — gõ số:\n' + dsMa, '');
+    if (chon === null) return;
+    const idx = parseInt(chon, 10) - 1;
+    if (!(idx >= 0 && idx < DS_VAI_TRO.length)) { alert('Số vai trò không hợp lệ'); return; }
+
+    API.qtTaoTaiKhoan(nhanSuId, ten.trim(), DS_VAI_TRO[idx].ma)
+      .then(async kq => {
+        hienMatKhauTam('Đã tạo tài khoản', kq.ten_dang_nhap, kq.mat_khau_tam);
+        await veQuanTri();
+      })
+      .catch(err => alert(err.message));
+  }
+
+  // Hộp hiện mật khẩu tạm
+  const modalNen = $('#mkModalNen');
+  function hienMatKhauTam(tieuDe, ten, mk) {
+    $('#mkModalTieuDe').textContent = tieuDe;
+    $('#mkModalTen').textContent = ten;
+    $('#mkModalMk').textContent = mk;
+    modalNen.hidden = false;
+  }
+  $('#mkModalDong').addEventListener('click', () => { modalNen.hidden = true; });
+  $('#mkModalChep').addEventListener('click', async () => {
+    const txt = `Đăng nhập: ${$('#mkModalTen').textContent}\nMật khẩu: ${$('#mkModalMk').textContent}`;
+    try { await navigator.clipboard.writeText(txt); $('#mkModalChep').textContent = 'Đã chép ✓'; }
+    catch { $('#mkModalChep').textContent = 'Hãy chép thủ công'; }
+  });
+
+  veQuanTri();
 }
 
 /* ---- Mở tab đầu tiên người dùng được xem -------------------------------- */

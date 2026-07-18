@@ -48,5 +48,25 @@ export const API = {
 
   danhBa: () => goi('/api/danh-ba'),
 
-  nhanSu: () => goi('/api/nhan-su')
+  nhanSu: () => goi('/api/nhan-su'),
+
+  /* ---- Quản trị (chỉ admin) ---- */
+  qtDanhSach: () => goi('/api/quan-tri/danh-sach'),
+
+  qtThemNhanSu: (ns) => goi('/api/quan-tri/them-nhan-su', {
+    method: 'POST', body: JSON.stringify(ns)
+  }),
+
+  qtTaoTaiKhoan: (nhanSuId, tenDangNhap, vaiTro) => goi('/api/quan-tri/tao-tai-khoan', {
+    method: 'POST',
+    body: JSON.stringify({ nhan_su_id: nhanSuId, ten_dang_nhap: tenDangNhap, vai_tro: vaiTro })
+  }),
+
+  qtDatLaiMatKhau: (taiKhoanId) => goi('/api/quan-tri/dat-lai-mat-khau', {
+    method: 'POST', body: JSON.stringify({ tai_khoan_id: taiKhoanId })
+  }),
+
+  qtKhoaTaiKhoan: (taiKhoanId, kichHoat) => goi('/api/quan-tri/khoa-tai-khoan', {
+    method: 'POST', body: JSON.stringify({ tai_khoan_id: taiKhoanId, kich_hoat: kichHoat })
+  })
 };

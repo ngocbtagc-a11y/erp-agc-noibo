@@ -337,6 +337,109 @@
       </div>
     </section>
 
+    <!-- ---------- Quản trị (chỉ admin) ---------- -->
+    <section class="view" id="v-quantri" hidden>
+      <div class="view-head">
+        <h3>Quản trị</h3>
+        <p>Thêm nhân sự, tạo tài khoản đăng nhập và đặt lại mật khẩu. Chỉ Giám đốc và Phó Giám đốc thấy mục này.</p>
+      </div>
+
+      <!-- Thêm nhân sự -->
+      <div class="panel">
+        <div class="panel-head"><h4>Thêm nhân sự mới</h4></div>
+        <div class="panel-body">
+          <form id="qtFormThem" class="form-luoi" autocomplete="off">
+            <div class="field">
+              <label>Họ tên *</label>
+              <input type="text" id="qtHoTen" required placeholder="Ví dụ: Trần Văn Nam">
+            </div>
+            <div class="field">
+              <label>Chức vụ</label>
+              <input type="text" id="qtChucVu" placeholder="Nhân viên kho">
+            </div>
+            <div class="field">
+              <label>Bộ phận</label>
+              <input type="text" id="qtBoPhan" placeholder="Kho vận">
+            </div>
+            <div class="field">
+              <label>Số điện thoại</label>
+              <input type="text" id="qtSdt" placeholder="09xx xxx xxx">
+            </div>
+            <div class="field">
+              <label>Email</label>
+              <input type="text" id="qtEmail" placeholder="ten@alphagreen.vn">
+            </div>
+            <div class="field">
+              <label>Pháp nhân</label>
+              <select id="qtPhapNhan">
+                <option value="Công ty">Công ty</option>
+                <option value="HKD">HKD</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Quản lý trực tiếp</label>
+              <select id="qtQuanLy"><option value="">— Không —</option></select>
+            </div>
+            <div class="field">
+              <label>Lương (đồng/tháng)</label>
+              <input type="text" id="qtLuong" inputmode="numeric" placeholder="Để trống nếu chưa có">
+            </div>
+            <div class="field field-nut">
+              <button type="submit" class="btn-primary" id="qtNutThem">Thêm nhân sự</button>
+            </div>
+          </form>
+          <div class="form-loi" id="qtLoiThem"></div>
+        </div>
+      </div>
+
+      <!-- Danh sách nhân sự + tài khoản -->
+      <div class="panel">
+        <div class="panel-head">
+          <h4>Nhân sự &amp; tài khoản</h4>
+          <span class="hint" id="qtDem"></span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Nhân sự</th>
+                <th>Bộ phận</th>
+                <th>Tài khoản</th>
+                <th>Vai trò</th>
+                <th>Thao tác</th>
+              </tr>
+            </thead>
+            <tbody id="qtBang"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</div>
+
+<!-- Hộp hiện mật khẩu tạm (sau khi tạo tài khoản / đặt lại) -->
+<div class="modal-nen" id="mkModalNen" hidden>
+  <div class="modal">
+    <h4 id="mkModalTieuDe">Mật khẩu tạm</h4>
+    <p class="modal-nhac">
+      Chép mật khẩu này gửi riêng cho nhân viên. <b>Nó chỉ hiện một lần</b> —
+      đóng hộp này là không xem lại được. Nhân viên sẽ phải đổi khi đăng nhập lần đầu.
+    </p>
+    <div class="mk-hien">
+      <div>
+        <div class="mk-nhan">Tên đăng nhập</div>
+        <div class="mk-gt" id="mkModalTen">—</div>
+      </div>
+      <div>
+        <div class="mk-nhan">Mật khẩu tạm</div>
+        <div class="mk-gt mk-gt-mk" id="mkModalMk">—</div>
+      </div>
+    </div>
+    <div class="modal-nut">
+      <button class="btn-phu" id="mkModalChep">Chép cả hai</button>
+      <button class="btn-primary" id="mkModalDong">Đã chép, đóng lại</button>
+    </div>
   </div>
 </div>
 

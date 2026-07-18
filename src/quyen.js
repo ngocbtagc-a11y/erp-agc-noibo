@@ -7,18 +7,20 @@
    dữ liệu, nên dữ liệu người không có quyền KHÔNG BAO GIỜ rời khỏi máy chủ.
    ========================================================================== */
 
-/* Các mảng dữ liệu trong hệ thống */
-export const TAB = ['tongquan', 'danhba', 'nhansu', 'kinhdoanh', 'khovan', 'ketoan'];
+/* Các mảng dữ liệu trong hệ thống.
+   "quantri" = tab quản trị: thêm nhân sự, tạo tài khoản, đặt lại mật khẩu.
+   Chỉ admin (Giám đốc, Phó Giám đốc) thấy. */
+export const TAB = ['tongquan', 'danhba', 'nhansu', 'kinhdoanh', 'khovan', 'ketoan', 'quantri'];
 
 /* Vai trò → được xem mảng nào.
    Danh bạ mở cho tất cả (Sếp Ngọc yêu cầu: ai cũng tra được số liên hệ). */
 const QUYEN_THEO_VAI_TRO = {
-  giam_doc:        { tab: ['tongquan', 'danhba', 'nhansu', 'kinhdoanh', 'khovan', 'ketoan'], xem_luong: true  },
-  pho_giam_doc:    { tab: ['tongquan', 'danhba', 'nhansu', 'kinhdoanh', 'khovan', 'ketoan'], xem_luong: true  },
-  ke_toan_truong:  { tab: ['tongquan', 'danhba', 'ketoan'],                                   xem_luong: true  },
-  quan_ly_kho:     { tab: ['tongquan', 'danhba', 'khovan', 'nhansu'],                         xem_luong: false },
-  hcns:            { tab: ['tongquan', 'danhba', 'nhansu'],                                   xem_luong: false },
-  van_hanh_san:    { tab: ['tongquan', 'danhba', 'kinhdoanh'],                                xem_luong: false }
+  giam_doc:        { tab: ['tongquan', 'danhba', 'nhansu', 'kinhdoanh', 'khovan', 'ketoan', 'quantri'], xem_luong: true,  admin: true  },
+  pho_giam_doc:    { tab: ['tongquan', 'danhba', 'nhansu', 'kinhdoanh', 'khovan', 'ketoan', 'quantri'], xem_luong: true,  admin: true  },
+  ke_toan_truong:  { tab: ['tongquan', 'danhba', 'ketoan'],                                             xem_luong: true,  admin: false },
+  quan_ly_kho:     { tab: ['tongquan', 'danhba', 'khovan', 'nhansu'],                                   xem_luong: false, admin: false },
+  hcns:            { tab: ['tongquan', 'danhba', 'nhansu'],                                             xem_luong: false, admin: false },
+  van_hanh_san:    { tab: ['tongquan', 'danhba', 'kinhdoanh'],                                          xem_luong: false, admin: false }
 };
 
 /* Vai trò lạ (do gõ sai trong database) → không có quyền gì cả.
@@ -36,6 +38,15 @@ export function duocXemTab(vaiTro, tab) {
 export function duocXemLuong(vaiTro) {
   return quyenCua(vaiTro).xem_luong === true;
 }
+
+/* Admin = người được thêm nhân sự, tạo tài khoản, đặt lại mật khẩu.
+   Chỉ Giám đốc và Phó Giám đốc. */
+export function laAdmin(vaiTro) {
+  return quyenCua(vaiTro).admin === true;
+}
+
+/* Các vai trò hợp lệ để admin chọn khi tạo tài khoản mới */
+export const VAI_TRO_HOP_LE = Object.keys(QUYEN_THEO_VAI_TRO);
 
 /* Tên hiển thị của vai trò */
 export const TEN_VAI_TRO = {
