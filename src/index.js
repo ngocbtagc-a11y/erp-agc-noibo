@@ -182,10 +182,10 @@ async function layNhanSu(req, env) {
   // hai câu lệnh khác nhau tuỳ vai trò. Người không có quyền thì cột lương
   // không được chọn ra khỏi database — không phải "lấy ra rồi ẩn đi".
   const cauLenh = xemLuong
-    ? `SELECT id, ho_ten, viet_tat, chuc_vu, bo_phan, phap_nhan, trang_thai,
+    ? `SELECT id, ho_ten, viet_tat, chuc_vu, bo_phan, trang_thai,
               ngay_vao, luong
          FROM nhan_su WHERE dang_lam = 1 ORDER BY bo_phan, ho_ten`
-    : `SELECT id, ho_ten, viet_tat, chuc_vu, bo_phan, phap_nhan, trang_thai,
+    : `SELECT id, ho_ten, viet_tat, chuc_vu, bo_phan, trang_thai,
               ngay_vao
          FROM nhan_su WHERE dang_lam = 1 ORDER BY bo_phan, ho_ten`;
 
@@ -264,10 +264,11 @@ async function qtThemNhanSu(req, env) {
     ? ((b.luong === '' || b.luong == null) ? null : parseInt(String(b.luong).replace(/\D/g, ''), 10) || null)
     : null;
 
+  // phap_nhan luôn là 'Công ty' — công ty đang đóng HKD, không còn phân biệt.
   await env.DB.prepare(`
     INSERT INTO nhan_su (id, ho_ten, viet_tat, chuc_vu, bo_phan, sdt, email,
                          quan_ly_id, phap_nhan, trang_thai, ngay_vao, luong)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Công ty', ?, ?, ?)
   `).bind(
     id, hoTen, vietTatTen(hoTen),
     String(b.chuc_vu || '').trim(),
@@ -275,7 +276,6 @@ async function qtThemNhanSu(req, env) {
     String(b.sdt || '').trim() || null,
     String(b.email || '').trim() || null,
     String(b.quan_ly_id || '').trim() || null,
-    String(b.phap_nhan || 'Công ty').trim(),
     String(b.trang_thai || 'da_ky').trim(),
     String(b.ngay_vao || '').trim() || null,
     luong

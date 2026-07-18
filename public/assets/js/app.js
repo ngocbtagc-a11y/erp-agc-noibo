@@ -268,7 +268,6 @@ if (TOI.quyen.includes('nhansu')) {
         `<div><div class="nm">${esc(r.ho_ten)}</div>` +
         `<div class="sm">${esc(r.chuc_vu)}</div></div></div></td>` +
       `<td>${esc(r.bo_phan)}</td>` +
-      `<td><span class="tag ${r.phap_nhan === 'Công ty' ? 'sage' : 'mute'}">${esc(r.phap_nhan)}</span></td>` +
       `<td><span class="tag ${tt.mau}">${esc(tt.chu)}</span></td>` +
       `<td class="sm">${esc(r.ngay_vao)}</td>` +
       (xem_luong ? `<td class="num">${esc(tienVN(r.luong))}</td>` : '');
@@ -410,7 +409,6 @@ if (TOI.quyen.includes('quantri')) {
         bo_phan: $('#qtBoPhan').value,
         sdt: $('#qtSdt').value,
         email: $('#qtEmail').value,
-        phap_nhan: $('#qtPhapNhan').value,
         quan_ly_id: $('#qtQuanLy').value,
         luong: $('#qtLuong').value
       });

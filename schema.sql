@@ -18,7 +18,7 @@ CREATE TABLE nhan_su (
   sdt           TEXT,
   email         TEXT,
   quan_ly_id    TEXT REFERENCES nhan_su(id),
-  phap_nhan     TEXT NOT NULL DEFAULT 'HKD',      -- 'Công ty' | 'HKD'
+  phap_nhan     TEXT NOT NULL DEFAULT 'Công ty',  -- luôn 'Công ty' (đã bỏ HKD khỏi giao diện)
   trang_thai    TEXT NOT NULL DEFAULT 'cho_ky',   -- da_ky | thu_viec | cho_ky | can_trao_doi | parttime
   ngay_vao      TEXT,
   luong         INTEGER,                          -- đồng/tháng; NULL = chưa có
