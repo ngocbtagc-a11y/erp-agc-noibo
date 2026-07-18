@@ -272,35 +272,21 @@ button { cursor: pointer; border: none; background: none; }
 }
 
 .sb-brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 0 8px 22px;
+  padding: 0 4px 20px;
   border-bottom: 1px solid rgba(255,255,255,.11);
   margin-bottom: 16px;
 }
 
-/* Lá xanh/cam đủ tương phản trên nền thanh bên xanh đậm nên để trần,
-   không cần bọc đĩa trắng như ở màn đăng nhập */
-.sb-brand .dot {
-  width: 34px; height: 34px;
-  object-fit: contain;
-  flex-shrink: 0;
-}
-
-.sb-brand .txt b {
+/* Logo màu xanh đặt thẳng lên thanh bên xanh đậm sẽ chìm (đo được 2.53,
+   dưới ngưỡng 3.0). Lót nền trắng bo góc để logo đọc rõ và giữ nguyên màu
+   thương hiệu. */
+.sb-brand .sb-logo {
   display: block;
-  color: var(--white);
-  font-size: 14px;
-  font-weight: 600;
-  letter-spacing: .01em;
-}
-
-.sb-brand .txt span {
-  font-size: 10.5px;
-  color: rgba(255,255,255,.52);
-  letter-spacing: .08em;
-  text-transform: uppercase;
+  width: 100%;
+  height: auto;
+  background: #fff;
+  border-radius: var(--r-sm);
+  padding: 11px 14px;
 }
 
 .sb-label {

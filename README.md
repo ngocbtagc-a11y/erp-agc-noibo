@@ -79,7 +79,8 @@ npm run chay                # → http://localhost:4400
 `npm run tao-tai-khoan` in mật khẩu ra màn hình **một lần duy nhất**, không ghi
 vào file nào. Chép ra, gửi riêng cho từng người, rồi đóng cửa sổ.
 **Đừng gửi vào nhóm chat chung.** Ai cũng bị bắt đổi mật khẩu ở lần đăng nhập
-đầu tiên, tối thiểu 10 ký tự.
+đầu tiên, tối thiểu 6 ký tự — hệ thống tự chặn các mật khẩu dễ đoán
+(`123456`, tên mình, ngày sinh…), xem `src/mat-khau.js`.
 
 Lệnh này phải do **người quản trị tự chạy trên máy mình** — không chạy qua trợ
 lý AI hay công cụ nào ghi lại màn hình, vì mật khẩu sẽ nằm lại trong lịch sử đó.
@@ -98,6 +99,25 @@ phí Cloudflare** — chỉ cần trỏ tên miền về Cloudflare rồi thêm 
 
 ---
 
+## Dùng trên điện thoại + cài như một app
+
+Sau khi `npm run dua-len`, web chạy ở địa chỉ `workers.dev`. Vào được từ mọi
+điện thoại — chỉ cần mở trình duyệt và gõ địa chỉ đó. Không cần tải gì từ chợ ứng dụng.
+
+Muốn nó thành **app có icon trên màn hình chính** (PWA — không qua CH Play/App Store):
+
+- **iPhone (Safari):** mở địa chỉ → nút Chia sẻ ⬆️ → "Thêm vào MH chính".
+- **Android (Chrome):** mở địa chỉ → menu ⋮ → "Cài đặt ứng dụng" / "Thêm vào MH chính".
+
+Sau đó mở từ icon: chạy toàn màn hình như app thật, có logo lá, mở nhanh vì phần
+giao diện đã lưu sẵn trong máy.
+
+> **Bảo mật:** phần lưu trong máy (service worker) **chỉ lưu giao diện tĩnh**,
+> tuyệt đối không lưu dữ liệu lương/công nợ. Mỗi lần mở app vẫn phải hỏi máy chủ,
+> vẫn cần đăng nhập. Xem `public/sw.js`.
+
+---
+
 ## Cấu trúc
 
 ```
@@ -107,14 +127,19 @@ crm-agc/
 ├── src/                       ⬅ CHẠY TRÊN MÁY CHỦ (trình duyệt không đọc được)
 │   ├── index.js               Định tuyến API + kiểm tra quyền từng đầu việc
 │   ├── auth.js                Băm mật khẩu, phiên, chặn dò mật khẩu
+│   ├── mat-khau.js            Chặn mật khẩu dễ đoán
 │   └── quyen.js               Bảng phân quyền — nơi duy nhất quyết định ai xem gì
 ├── scripts/
-│   └── tao-tai-khoan.mjs      Sinh mật khẩu ban đầu
+│   ├── tao-tai-khoan.mjs      Sinh mật khẩu ban đầu
+│   └── tao-icon-app.ps1       Tạo icon cho app điện thoại
 └── public/                    ⬅ TRÌNH DUYỆT TẢI VỀ ĐƯỢC (coi như công khai)
     ├── index.html             Đăng nhập + đổi mật khẩu lần đầu
     ├── app.html               Trang CRM chính
+    ├── manifest.webmanifest   Khai báo app điện thoại (PWA)
+    ├── sw.js                  Service worker — CHỈ lưu giao diện, không lưu dữ liệu
     └── assets/
         ├── css/style.css
+        ├── img/               Logo + icon app
         └── js/
             ├── api.js         Gọi máy chủ
             ├── app.js         Dựng giao diện
