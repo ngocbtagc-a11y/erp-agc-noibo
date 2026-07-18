@@ -323,12 +323,21 @@ if (TOI.quyen.includes('ketoan')) {
 }
 
 /* -- Quản trị (chỉ admin) -- */
-if (TOI.quyen.includes('quantri') && TOI.la_admin) {
+if (TOI.quyen.includes('quantri')) {
   const TT_QT = {
     da_ky: 'Đã ký HĐ', thu_viec: 'Thử việc', cho_ky: 'Chờ ký',
     can_trao_doi: 'Cần trao đổi', parttime: 'Parttime'
   };
   let DS_VAI_TRO = [];
+
+  // HCNS thêm được nhân sự nhưng KHÔNG thấy/đặt lương và KHÔNG cấp tài khoản.
+  // Ẩn ô lương và cột thao tác cho người không phải admin. (Máy chủ vẫn tự
+  // chặn nữa — đây chỉ là cho gọn mắt.)
+  if (!TOI.la_admin) {
+    const oLuong = document.getElementById('qtFieldLuong');
+    if (oLuong) oLuong.remove();
+    $('#qtMoTa').textContent = 'Thêm nhân sự mới vào hồ sơ. Việc cấp tài khoản đăng nhập và lương do Giám đốc phụ trách.';
+  }
 
   async function veQuanTri() {
     const { nhan_su, vai_tro } = await API.qtDanhSach();
@@ -359,18 +368,21 @@ if (TOI.quyen.includes('quantri') && TOI.la_admin) {
                 (n.phai_doi_mk ? ' <span class="tag warn">chờ đổi MK</span>' : '');
       }
 
-      // Cột thao tác
-      let thaoTac;
-      if (!coTK) {
-        // Gợi ý tên đăng nhập = số điện thoại (chỉ chữ số); nếu chưa có SĐT thì để trống
-        const goiY = String(n.sdt || '').replace(/\D/g, '');
-        thaoTac = `<button class="btn-nho btn-primary" data-tao="${esc(n.id)}" data-ten-goi-y="${esc(goiY)}">Tạo tài khoản</button>`;
-      } else {
-        thaoTac =
-          `<button class="btn-nho btn-phu" data-datlai="${n.tai_khoan_id}">Đặt lại MK</button> ` +
-          (n.kich_hoat
-            ? `<button class="btn-nho btn-phu" data-khoa="${n.tai_khoan_id}" data-kh="0">Khoá</button>`
-            : `<button class="btn-nho btn-phu" data-khoa="${n.tai_khoan_id}" data-kh="1">Mở lại</button>`);
+      // Cột thao tác — chỉ admin mới cấp/khoá/đặt lại tài khoản.
+      // HCNS chỉ thấy dấu gạch (máy chủ cũng chặn nếu cố gọi).
+      let thaoTac = '<span class="sm">—</span>';
+      if (TOI.la_admin) {
+        if (!coTK) {
+          // Gợi ý tên đăng nhập = số điện thoại (chỉ chữ số); chưa có SĐT thì để trống
+          const goiY = String(n.sdt || '').replace(/\D/g, '');
+          thaoTac = `<button class="btn-nho btn-primary" data-tao="${esc(n.id)}" data-ten-goi-y="${esc(goiY)}">Tạo tài khoản</button>`;
+        } else {
+          thaoTac =
+            `<button class="btn-nho btn-phu" data-datlai="${n.tai_khoan_id}">Đặt lại MK</button> ` +
+            (n.kich_hoat
+              ? `<button class="btn-nho btn-phu" data-khoa="${n.tai_khoan_id}" data-kh="0">Khoá</button>`
+              : `<button class="btn-nho btn-phu" data-khoa="${n.tai_khoan_id}" data-kh="1">Mở lại</button>`);
+        }
       }
 
       return '' +

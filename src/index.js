@@ -13,7 +13,8 @@ import {
 } from './auth.js';
 
 import {
-  quyenCua, duocXemTab, duocXemLuong, laAdmin, TEN_VAI_TRO, VAI_TRO_HOP_LE
+  quyenCua, duocXemTab, duocXemLuong, laAdmin, duocThemNhanSu,
+  TEN_VAI_TRO, VAI_TRO_HOP_LE
 } from './quyen.js';
 import { kiemTraMatKhauDat, DAI_TOI_THIEU } from './mat-khau.js';
 
@@ -104,6 +105,7 @@ async function toiLaAi(req, env) {
     quyen: q.tab,
     xem_luong: q.xem_luong,
     la_admin: laAdmin(phien.vai_tro),
+    them_nhan_su: duocThemNhanSu(phien.vai_tro),
     // Để giao diện khỏi ghi cứng con số, sau này đổi một chỗ là xong
     mat_khau_dai_toi_thieu: DAI_TOI_THIEU
   });
@@ -202,7 +204,15 @@ async function layNhanSu(req, env) {
 async function batBuocAdmin(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return { loi: l };
-  if (!laAdmin(phien.vai_tro)) return { loi: loi('Chỉ Giám đốc và Phó Giám đốc mới được quản trị', 403) };
+  if (!laAdmin(phien.vai_tro)) return { loi: loi('Chỉ Giám đốc và Phó Giám đốc mới được cấp/khoá tài khoản', 403) };
+  return { phien };
+}
+
+/* Cho phép admin HOẶC HCNS (thêm nhân sự) */
+async function batBuocThemNhanSu(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return { loi: l };
+  if (!duocThemNhanSu(phien.vai_tro)) return { loi: loi('Bạn không có quyền quản lý nhân sự', 403) };
   return { phien };
 }
 
@@ -214,9 +224,10 @@ function vietTatTen(hoTen) {
   return lay.map(t => t[0].toUpperCase()).join('');
 }
 
-/* Danh sách nhân sự kèm tình trạng tài khoản — để admin quản lý */
+/* Danh sách nhân sự kèm tình trạng tài khoản — admin và HCNS đều xem được.
+   Câu lệnh này KHÔNG lấy cột lương, nên HCNS xem cũng không thấy lương. */
 async function qtDanhSach(req, env) {
-  const { phien, loi: l } = await batBuocAdmin(req, env);
+  const { phien, loi: l } = await batBuocThemNhanSu(req, env);
   if (l) return l;
 
   const { results } = await env.DB.prepare(`
@@ -234,9 +245,9 @@ async function qtDanhSach(req, env) {
   });
 }
 
-/* Thêm một nhân sự mới (chưa có tài khoản) */
+/* Thêm một nhân sự mới (chưa có tài khoản). Admin và HCNS đều thêm được. */
 async function qtThemNhanSu(req, env) {
-  const { loi: l } = await batBuocAdmin(req, env);
+  const { phien, loi: l } = await batBuocThemNhanSu(req, env);
   if (l) return l;
 
   let b;
@@ -246,7 +257,12 @@ async function qtThemNhanSu(req, env) {
   if (hoTen.length < 2) return loi('Vui lòng nhập họ tên');
 
   const id = 'ns_' + crypto.randomUUID().slice(0, 12);
-  const luong = (b.luong === '' || b.luong == null) ? null : parseInt(String(b.luong).replace(/\D/g, ''), 10) || null;
+
+  // RANH GIỚI LƯƠNG: chỉ admin mới được đặt lương. HCNS gửi lương lên cũng
+  // bị bỏ qua ở đây — máy chủ ép NULL, không tin giao diện.
+  const luong = laAdmin(phien.vai_tro)
+    ? ((b.luong === '' || b.luong == null) ? null : parseInt(String(b.luong).replace(/\D/g, ''), 10) || null)
+    : null;
 
   await env.DB.prepare(`
     INSERT INTO nhan_su (id, ho_ten, viet_tat, chuc_vu, bo_phan, sdt, email,
