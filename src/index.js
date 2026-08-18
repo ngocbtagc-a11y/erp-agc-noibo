@@ -14,7 +14,7 @@ import {
 
 import {
   quyenCua, duocXemTab, duocXemLuong, laAdmin, duocThemNhanSu,
-  quyenKho, quyenShopee, TEN_VAI_TRO, VAI_TRO_HOP_LE
+  quyenKho, quyenShopee, duocThaoTacKho, TEN_VAI_TRO, VAI_TRO_HOP_LE
 } from './quyen.js';
 import { kiemTraMatKhauDat, DAI_TOI_THIEU } from './mat-khau.js';
 import * as kho from './kho.js';
@@ -478,6 +478,69 @@ async function hoanDanhSach(req, env) {
   return shopee.apiDanhSach(env, phien);
 }
 
+/* Kho xác nhận đã nhận được kiện hàng hoàn → tắt đồng hồ đếm 12h cho đơn đó */
+async function hoanDaNhan(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  if (!duocThaoTacKho(phien.vai_tro)) return loi('Bạn không có quyền xác nhận nhận hàng', 403);
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  const rsn = (b.return_sn || '').trim();
+  if (!rsn) return loi('Thiếu mã đơn hoàn');
+  const r = await env.DB.prepare(`
+    UPDATE don_hoan
+       SET kho_nhan_luc = datetime('now','+7 hours'),
+           kho_nhan_boi = ?, da_canh_bao = 1
+     WHERE return_sn = ? AND kho_nhan_luc IS NULL
+  `).bind(phien.ho_ten || phien.ten_dang_nhap, rsn).run();
+  if (!r.meta.changes) return loi('Không tìm thấy đơn hoặc đã được nhận trước đó', 404);
+  return json({ ok: true, nguoi: phien.ho_ten || phien.ten_dang_nhap });
+}
+
+/* Gửi cảnh báo qua Telegram. Chưa cấu hình token/chat thì bỏ qua êm (trả false). */
+async function guiTelegram(env, text) {
+  const token = env.TELEGRAM_BOT_TOKEN, chatId = env.TELEGRAM_CHAT_ID;
+  if (!token || !chatId) return false;
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, text, disable_web_page_preview: true })
+    });
+    return res.ok;
+  } catch { return false; }
+}
+
+/* Quét đơn hoàn quá 12h kể từ khi sàn báo khách đã gửi về mà kho chưa bấm
+   "Đã nhận" → bắn Telegram cho vận hành sàn đi khiếu nại. Đã bắn thì đánh dấu
+   để không gửi lại. Mọi mốc thời gian đều theo giờ VN (+7). */
+async function kiemTraCanhBaoHoan(env) {
+  const { results } = await env.DB.prepare(`
+    SELECT return_sn, order_sn, ma_van_don, san_pham, nguon, cho_kho_nhan_tu
+      FROM don_hoan
+     WHERE cho_kho_nhan_tu IS NOT NULL AND kho_nhan_luc IS NULL AND da_canh_bao = 0
+       AND trang_thai NOT LIKE '%CANCEL%'
+       AND (julianday(datetime('now','+7 hours')) - julianday(cho_kho_nhan_tu)) * 24 >= 12
+  `).all();
+  for (const r of (results || [])) {
+    const nguon = r.nguon === 'tiktok' ? 'TikTok' : 'Shopee';
+    const sp = (r.san_pham || '—').slice(0, 90);
+    const text =
+      `⚠️ ĐƠN HOÀN QUÁ 12H CHƯA NHẬN — CẦN KIỂM TRA/KHIẾU NẠI\n\n` +
+      `Sàn: ${nguon}\n` +
+      `Mã đơn hoàn: ${r.return_sn}\n` +
+      `Đơn gốc: ${r.order_sn || '—'}\n` +
+      `Mã vận đơn: ${r.ma_van_don || '—'}\n` +
+      `Sản phẩm: ${sp}\n` +
+      `Sàn báo khách gửi về từ: ${r.cho_kho_nhan_tu} (giờ VN)\n\n` +
+      `→ Kho chưa xác nhận nhận hàng. Vận hành sàn tra vận đơn; nếu shipper đã quẹt giao mà kho không có hàng thì khiếu nại ngay.`;
+    const ok = await guiTelegram(env, text);
+    if (ok) {
+      await env.DB.prepare('UPDATE don_hoan SET da_canh_bao = 1 WHERE return_sn = ?')
+                  .bind(r.return_sn).run();
+    }
+  }
+}
+
 /* --- TikTok (song song Shopee, dùng chung tab Đơn hoàn) --- */
 async function tiktokTrangThai(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
@@ -542,6 +605,7 @@ const DUONG_DAN = {
   'GET  /api/shopee/callback':   shopeeCallback,
   'POST /api/hoan/dong-bo':      hoanDongBo,
   'GET  /api/hoan/danh-sach':    hoanDanhSach,
+  'POST /api/hoan/da-nhan':      hoanDaNhan,
   'GET  /api/tiktok/trang-thai': tiktokTrangThai,
   'GET  /api/tiktok/connect':    tiktokConnect,
   'GET  /api/tiktok/callback':   tiktokCallback,
@@ -555,12 +619,14 @@ export default {
      khi nó hết hạn (4h), để Sếp không bao giờ phải kết nối lại thủ công.
      Chưa cấu hình / chưa kết nối thì bỏ qua êm, không báo lỗi. */
   async scheduled(event, env, ctx) {
+    // Chạy mỗi 5 phút: tự đồng bộ đơn hoàn của cả 2 sàn về DB (gần realtime).
+    // dongBoNen tự bỏ qua nếu sàn chưa cấu hình/chưa kết nối, và tự làm mới
+    // token khi sắp hết hạn — nên Sếp không phải bấm tay, không phải nối lại.
     ctx.waitUntil((async () => {
-      try {
-        if (shopee.daCauHinh(env)) await shopee.lamMoiToken(env);
-      } catch (e) {
-        console.error('Cron làm mới token Shopee lỗi:', e.message);
-      }
+      try { await shopee.dongBoNen(env); } catch (e) { console.error('Cron Shopee:', e.message); }
+      try { await tiktok.dongBoNen(env); } catch (e) { console.error('Cron TikTok:', e.message); }
+      // Sau khi đồng bộ xong mới quét cảnh báo (mốc 12h đã được cập nhật)
+      try { await kiemTraCanhBaoHoan(env); } catch (e) { console.error('Cron cảnh báo:', e.message); }
     })());
   },
 

@@ -182,30 +182,26 @@ export async function apiCallback(env, urlObj) {
   }
 }
 
-export async function apiDongBo(env, phien) {
-  if (!duocXemDonHoan(phien.vai_tro)) return loi('Bạn không có quyền', 403);
-  if (!daCauHinh(env)) return loi('Chưa nạp khóa TikTok trên máy chủ', 409);
+/* Đồng bộ đơn hoàn TikTok về DB — dùng cho CẢ nút bấm lẫn lịch chạy nền.
+   Trả về số đơn cập nhật; null nếu chưa cấu hình/chưa kết nối; ném lỗi nếu API lỗi. */
+export async function dongBoNen(env) {
+  if (!daCauHinh(env)) return null;
   let kn = await ketNoiConHan(env);
-  if (!kn) return loi('Chưa kết nối shop TikTok. Hãy bấm “Kết nối TikTok” trước.', 409);
+  if (!kn) return null;
 
-  // Chưa có shop_cipher thì lấy ngay; lấy không được thì HIỆN đúng phản hồi
-  // của TikTok để biết vì sao (thường là do ký chữ ký hoặc thiếu quyền).
   if (!kn.shop_cipher) {
     const sc = await layShopCipher(env, kn.access_token);
-    if (!sc.cipher) {
-      return loi('Chưa lấy được mã shop từ TikTok: ' +
-        ((sc.raw && sc.raw.message) || JSON.stringify(sc.raw).slice(0, 200)), 502);
-    }
+    if (!sc.cipher) throw new Error('Chưa lấy được mã shop từ TikTok: ' +
+      ((sc.raw && sc.raw.message) || JSON.stringify(sc.raw).slice(0, 200)));
     await luuShopCipher(env, sc);
     kn = { ...kn, shop_cipher: sc.cipher };
   }
 
   const path = '/return_refund/202309/returns/search';
   const bodyStr = JSON.stringify({});
-  const ts = nowSec();
   const query = {
-    app_key: env.TIKTOK_APP_KEY, timestamp: String(ts),
-    shop_cipher: kn.shop_cipher || '', page_size: '50'
+    app_key: env.TIKTOK_APP_KEY, timestamp: String(nowSec()),
+    shop_cipher: kn.shop_cipher, page_size: '50'
   };
   const sign = await kyTikTok(env, path, query, bodyStr);
   const q = new URLSearchParams({ ...query, sign });
@@ -215,7 +211,7 @@ export async function apiDongBo(env, phien) {
     body: bodyStr
   });
   const kq = await res.json();
-  if (kq.code && kq.code !== 0) return loi('TikTok báo lỗi: ' + (kq.message || kq.code), 502);
+  if (kq.code && kq.code !== 0) throw new Error('TikTok báo lỗi: ' + (kq.message || kq.code));
 
   const ds = (kq.data && (kq.data.return_orders || kq.data.returns)) || [];
   let them = 0;
@@ -223,24 +219,55 @@ export async function apiDongBo(env, phien) {
     const returnId = r.return_id || r.return_sn || r.id;
     if (!returnId) continue;
     const soTien = r.refund_amount && (r.refund_amount.refund_total || r.refund_amount.total);
+    // Tên sản phẩm hoàn về (gộp nhiều dòng hàng) — để kho đối soát
+    const sp = (r.return_line_items || []).map(li => {
+      const ten = li.product_name || '';
+      const sku = li.seller_sku || li.sku || '';
+      const sl = li.quantity || li.return_quantity;
+      return ten + (sku ? ` [${sku}]` : '') + (sl && Number(sl) > 1 ? ` x${sl}` : '');
+    }).filter(Boolean).join(' | ') || null;
     await env.DB.prepare(`
-      INSERT INTO don_hoan (return_sn, order_sn, trang_thai, ly_do, so_tien, tien_te, nguoi_mua, tao_luc_shopee, cap_nhat_shopee, du_lieu_json, nguon, dong_bo_luc)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'tiktok', datetime('now','+7 hours'))
+      INSERT INTO don_hoan (return_sn, order_sn, trang_thai, ly_do, so_tien, tien_te, nguoi_mua, san_pham, ma_van_don, tao_luc_shopee, cap_nhat_shopee, du_lieu_json, nguon, dong_bo_luc)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'tiktok', datetime('now','+7 hours'))
       ON CONFLICT(return_sn) DO UPDATE SET
         trang_thai=excluded.trang_thai, ly_do=excluded.ly_do, so_tien=excluded.so_tien,
-        tien_te=excluded.tien_te, cap_nhat_shopee=excluded.cap_nhat_shopee,
-        du_lieu_json=excluded.du_lieu_json, nguon='tiktok', dong_bo_luc=datetime('now','+7 hours')
+        tien_te=excluded.tien_te, nguoi_mua=excluded.nguoi_mua, san_pham=excluded.san_pham,
+        ma_van_don=excluded.ma_van_don,
+        cap_nhat_shopee=excluded.cap_nhat_shopee, du_lieu_json=excluded.du_lieu_json,
+        nguon='tiktok', dong_bo_luc=datetime('now','+7 hours')
     `).bind(
       String(returnId), r.order_id || r.order_sn || null,
       r.return_status || r.status || null, r.return_reason || r.reason || null,
       soTien != null ? Math.round(Number(soTien) * 100000) || null : null,
       (r.refund_amount && r.refund_amount.currency) || r.currency || null,
       (r.buyer_info && r.buyer_info.username) || r.buyer_name || null,
+      sp,
+      r.return_tracking_number || r.tracking_number || null,
       r.create_time ? String(r.create_time) : null,
       r.update_time ? String(r.update_time) : null,
       JSON.stringify(r)
     ).run();
     them++;
   }
-  return json({ ok: true, so_don: them });
+  // Đặt mốc đếm 12h: đơn nào sàn báo "khách đã gửi hàng về" (BUYER_SHIPPED_ITEM)
+  // mà chưa có mốc và kho chưa nhận → ghi mốc = bây giờ (giờ VN). Chỉ ghi 1 lần.
+  await env.DB.prepare(`
+    UPDATE don_hoan SET cho_kho_nhan_tu = datetime('now','+7 hours')
+     WHERE nguon='tiktok' AND cho_kho_nhan_tu IS NULL AND kho_nhan_luc IS NULL
+       AND trang_thai='BUYER_SHIPPED_ITEM'
+  `).run();
+  return them;
+}
+
+export async function apiDongBo(env, phien) {
+  if (!duocXemDonHoan(phien.vai_tro)) return loi('Bạn không có quyền', 403);
+  if (!daCauHinh(env)) return loi('Chưa nạp khóa TikTok trên máy chủ', 409);
+  const co = await env.DB.prepare('SELECT shop_id FROM tiktok_ket_noi LIMIT 1').first();
+  if (!co) return loi('Chưa kết nối shop TikTok. Hãy bấm “Kết nối TikTok” trước.', 409);
+  try {
+    const so = await dongBoNen(env);
+    return json({ ok: true, so_don: so || 0 });
+  } catch (e) {
+    return loi(e.message, 502);
+  }
 }

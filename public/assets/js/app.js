@@ -209,7 +209,13 @@ function veBang(dich, ds, hang) {
   box.innerHTML = '';
   ds.forEach(r => {
     const tr = document.createElement('tr');
-    tr.innerHTML = hang(r);
+    const out = hang(r);
+    if (out && typeof out === 'object') {       // { html, cls } — cho phép tô màu hàng
+      tr.innerHTML = out.html;
+      if (out.cls) tr.className = out.cls;
+    } else {
+      tr.innerHTML = out;
+    }
     box.appendChild(tr);
   });
 }
@@ -582,37 +588,186 @@ async function khoiDongKho() {
    ĐƠN HOÀN — Shopee
    ========================================================================== */
 async function khoiDongDonHoan() {
+  // Nhãn trạng thái sàn → chữ Việt NGẮN + màu (liếc là biết). Gồm cả Shopee lẫn TikTok.
   const NHAN_TT = {
-    REQUESTED:  { chu: 'Chờ xử lý',    mau: 'warn'   },
-    PROCESSING: { chu: 'Đang xử lý',   mau: 'warn'   },
-    ACCEPTED:   { chu: 'Đã chấp nhận', mau: 'ok'     },
-    CANCELLED:  { chu: 'Đã huỷ',       mau: 'mute'   },
-    CLOSED:     { chu: 'Đã đóng',      mau: 'mute'   },
-    JUDGING:    { chu: 'Đang phân xử', mau: 'danger' }
+    // Shopee
+    REQUESTED:  { chu: 'Chờ xử lý',   mau: 'warn'   },
+    PROCESSING: { chu: 'Đang xử lý',  mau: 'warn'   },
+    ACCEPTED:   { chu: 'Đã duyệt',    mau: 'ok'     },
+    CANCELLED:  { chu: 'Đã huỷ',      mau: 'mute'   },
+    CLOSED:     { chu: 'Đã đóng',     mau: 'mute'   },
+    JUDGING:    { chu: 'Đang phân xử',mau: 'danger' },
+    // TikTok
+    RETURN_OR_REFUND_REQUEST_PENDING:  { chu: 'Chờ duyệt',      mau: 'warn'   },
+    RETURN_OR_REFUND_REQUEST_SUCCESS:  { chu: 'Đã duyệt',       mau: 'ok'     },
+    RETURN_OR_REFUND_REQUEST_COMPLETE: { chu: 'Hoàn tất',       mau: 'ok'     },
+    RETURN_OR_REFUND_REQUEST_CANCEL:   { chu: 'Đã huỷ',         mau: 'mute'   },
+    RETURN_OR_REFUND_REQUEST_REJECT:   { chu: 'Bị từ chối',     mau: 'danger' },
+    RETURN_OR_REFUND_PROCESSING:       { chu: 'Đang xử lý',     mau: 'warn'   },
+    RETURN_OR_REFUND_REQUEST_REFUND:   { chu: 'Đang hoàn tiền', mau: 'warn'   },
+    BUYER_SHIPPED_ITEM:                { chu: 'KH đang gửi về', mau: 'warn'   },
+    SELLER_REVIEW_RETURN:              { chu: 'Chờ shop duyệt', mau: 'warn'   },
+    COMPLETED:                         { chu: 'Hoàn tất',       mau: 'ok'     }
   };
 
-  /* Danh sách đơn hoàn dùng chung — có cột Nguồn (Shopee/TikTok) */
-  async function veDanhSach() {
-    const { don_hoan } = await API.hoanDanhSach();
-    veBang('#dh-bang', don_hoan, r => {
-      const tt = NHAN_TT[r.trang_thai] || { chu: r.trang_thai || '—', mau: 'mute' };
+  // Mã lạ chưa map → rút gọn cho dễ đọc (bỏ tiền tố, thay _ bằng khoảng trắng)
+  function nhanTrangThai(s) {
+    if (!s) return { chu: '—', mau: 'mute' };
+    if (NHAN_TT[s]) return NHAN_TT[s];
+    const g = String(s).replace(/^RETURN_OR_REFUND_/, '').replace(/^REQUEST_/, '')
+                       .replace(/_/g, ' ').toLowerCase();
+    return { chu: g.charAt(0).toUpperCase() + g.slice(1), mau: 'mute' };
+  }
+
+  // Lý do hoàn → chữ Việt ngắn. Mã lạ thì làm sạch + cắt ngắn (giữ text đầy đủ khi rê chuột).
+  const LY_DO = {
+    SELLER_SENT_WRONG_ITEM: 'Giao sai hàng',
+    WRONG_ITEM: 'Giao sai hàng',
+    ITEM_DAMAGED: 'Hàng hư hỏng',
+    DAMAGED_ITEM: 'Hàng hư hỏng',
+    ITEM_NOT_AS_DESCRIBED: 'Không đúng mô tả',
+    NOT_AS_DESCRIBED: 'Không đúng mô tả',
+    MISSING_ITEM: 'Thiếu hàng',
+    MISSING_PARTS: 'Thiếu phụ kiện',
+    CHANGE_OF_MIND: 'Đổi ý',
+    NO_LONGER_WANTED: 'Không muốn nữa',
+    WRONG_SIZE: 'Sai kích cỡ',
+    QUALITY_ISSUE: 'Lỗi chất lượng',
+    FAKE_ITEM: 'Hàng giả/nhái',
+    EXPIRED: 'Hết hạn dùng'
+  };
+  function nhanLyDo(s) {
+    if (!s) return '—';
+    if (LY_DO[s]) return LY_DO[s];
+    let g = String(s).replace(/_/g, ' ').toLowerCase();
+    g = g.charAt(0).toUpperCase() + g.slice(1);
+    return g.length > 34 ? g.slice(0, 34) + '…' : g;
+  }
+
+  /* Danh sách đơn hoàn dùng chung — Nguồn + mã vận đơn + tìm kiếm + quẹt QR */
+  let DS_DH = [];
+  function veBangDH(tuKhoa) {
+    const k = boDau((tuKhoa || '').trim());
+    const ds = DS_DH.filter(r => !k ||
+      boDau(`${r.return_sn} ${r.order_sn || ''} ${r.ma_van_don || ''} ${r.san_pham || ''} ${r.nguoi_mua || ''}`).includes(k));
+    veBang('#dh-bang', ds, r => {
+      const tt = nhanTrangThai(r.trang_thai);
       const tien = r.so_tien != null
         ? tienVN(Math.round(r.so_tien / 100000)) + ' ' + esc(r.tien_te || '')
         : '—';
       const ngTag = r.nguon === 'tiktok'
         ? '<span class="tag mute">TikTok</span>'
         : '<span class="tag sage">Shopee</span>';
-      return `<td>${ngTag}</td>` +
+
+      // Cột "Kho nhận": đã nhận → tick + người + giờ; chưa nhận → nút bấm.
+      // Quá 12h kể từ khi sàn báo khách gửi về mà chưa nhận → tô đỏ cả hàng.
+      let khoTd, cls = '';
+      if (r.kho_nhan_luc) {
+        khoTd = `<td class="sm"><span class="tag ok">✓ Đã nhận</span>` +
+                `<div class="phu">${esc(r.kho_nhan_boi || '')} · ${esc(r.kho_nhan_luc)}</div></td>`;
+      } else {
+        const qua12h = r.cho_kho_nhan_tu &&
+          (Date.now() - Date.parse(r.cho_kho_nhan_tu.replace(' ', 'T'))) / 3600000 >= 12;
+        if (qua12h) cls = 'canh-bao';
+        const nhac = qua12h ? '<div class="phu canh-bao-chu">Quá 12h!</div>' : '';
+        khoTd = `<td><button type="button" class="btn-nho" data-nhan="${esc(r.return_sn)}">Đã nhận</button>${nhac}</td>`;
+      }
+
+      const html = `<td>${ngTag}</td>` +
         `<td class="sm">${esc(r.return_sn)}</td>` +
         `<td class="sm">${esc(r.order_sn || '—')}</td>` +
-        `<td><span class="tag ${tt.mau}">${esc(tt.chu)}</span></td>` +
-        `<td class="sm">${esc(r.ly_do || '—')}</td>` +
+        `<td class="sm">${esc(r.ma_van_don || '—')}</td>` +
+        `<td class="sm" title="${esc(r.san_pham || '')}">${esc(r.san_pham || '—')}</td>` +
+        `<td><span class="tag ${tt.mau}" title="${esc(r.trang_thai || '')}">${esc(tt.chu)}</span></td>` +
         `<td class="num">${tien}</td>` +
-        `<td class="sm">${esc(r.nguoi_mua || '—')}</td>`;
+        `<td class="sm">${esc(r.nguoi_mua || '—')}</td>` +
+        khoTd;
+      return { html, cls };
     });
-    $('#dh-trong').hidden = don_hoan.length > 0;
-    $('#dh-dem').textContent = don_hoan.length ? don_hoan.length + ' đơn hoàn' : '';
+    $('#dh-trong').hidden = ds.length > 0;
+    $('#dh-dem').textContent = `${ds.length}/${DS_DH.length} đơn hoàn`;
   }
+  async function veDanhSach() {
+    const { don_hoan } = await API.hoanDanhSach();
+    DS_DH = don_hoan;
+    veBangDH($('#dh-tim').value);
+  }
+  $('#dh-tim').addEventListener('input', e => veBangDH(e.target.value));
+
+  /* Bấm "Đã nhận" — kho xác nhận đã nhận được kiện hàng hoàn */
+  $('#dh-bang').addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-nhan]');
+    if (!btn) return;
+    const rsn = btn.getAttribute('data-nhan');
+    btn.disabled = true;
+    const cu = btn.textContent;
+    btn.textContent = 'Đang lưu…';
+    try {
+      await API.hoanDaNhan(rsn);
+      await veDanhSach();               // tải lại để lấy đúng người + giờ nhận
+    } catch (err) {
+      btn.disabled = false;
+      btn.textContent = cu;
+      alert(err.message || 'Không xác nhận được, thử lại nhé.');
+    }
+  });
+
+  /* ---- Quẹt QR / mã vạch bằng camera điện thoại (Android + iPhone) ----
+     Dùng html5-qrcode — tự chọn bộ quét nhanh nhất của máy, đọc cả mã vạch
+     dài (1D) lẫn ô QR (2D). Thư viện chỉ nạp khi bấm nút cho nhẹ trang. */
+  const qrModal = $('#qrModalNen');
+  let qrDoc = null, qrDangChay = false, qrDaNap = null;
+
+  function napThuVienQR() {
+    if (qrDaNap) return qrDaNap;
+    qrDaNap = new Promise((ok, loi) => {
+      if (window.Html5Qrcode) return ok();
+      const s = document.createElement('script');
+      s.src = 'assets/js/html5-qrcode.min.js';
+      s.onload = () => ok();
+      s.onerror = () => loi(new Error('Không nạp được thư viện quẹt QR'));
+      document.head.appendChild(s);
+    });
+    return qrDaNap;
+  }
+
+  async function moQuetQR() {
+    try { await napThuVienQR(); }
+    catch { alert('Không nạp được bộ quẹt QR. Sếp gõ tay mã vào ô tìm kiếm bên cạnh nhé.'); return; }
+
+    qrModal.hidden = false;
+    try {
+      qrDoc = new Html5Qrcode('qrKhung', { verbose: false });
+      qrDangChay = true;
+      await qrDoc.start(
+        { facingMode: 'environment' },
+        { fps: 10, qrbox: { width: 240, height: 240 } },
+        (text) => {                    // quét trúng
+          $('#dh-tim').value = text;
+          veBangDH(text);
+          dongQuetQR();
+        },
+        () => { /* mỗi khung chưa thấy mã — bỏ qua */ }
+      );
+    } catch (e) {
+      dongQuetQR();
+      alert('Không mở được camera — kiểm tra đã cho phép quyền camera cho trang này chưa, hoặc gõ tay mã vào ô tìm kiếm.');
+    }
+  }
+
+  async function dongQuetQR() {
+    qrModal.hidden = true;
+    if (qrDoc && qrDangChay) {
+      qrDangChay = false;
+      try { await qrDoc.stop(); } catch {}
+      try { await qrDoc.clear(); } catch {}
+    }
+    qrDoc = null;
+  }
+
+  $('#dh-quetqr').addEventListener('click', moQuetQR);
+  $('#qrDong').addEventListener('click', dongQuetQR);
+  qrModal.addEventListener('click', e => { if (e.target === qrModal) dongQuetQR(); });
 
   /* Một khối kết nối sàn (dùng cho cả Shopee lẫn TikTok) */
   function dungSan(cfg) {

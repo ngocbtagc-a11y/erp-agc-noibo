@@ -173,32 +173,41 @@ export async function apiCallback(env, urlObj) {
   }
 }
 
-/* Đồng bộ đơn hoàn: kéo get_return_list về, lưu vào bảng don_hoan */
-export async function apiDongBo(env, phien) {
-  if (!duocXemDonHoan(phien.vai_tro)) return loi('Bạn không có quyền', 403);
-  if (!daCauHinh(env)) return loi('Chưa nạp khóa Shopee trên máy chủ', 409);
+/* Đồng bộ đơn hoàn Shopee về DB — dùng cho CẢ nút bấm lẫn lịch chạy nền.
+   Trả về số đơn; null nếu chưa cấu hình/chưa kết nối; ném lỗi nếu API lỗi. */
+export async function dongBoNen(env) {
+  if (!daCauHinh(env)) return null;
   const kn = await ketNoiConHan(env);
-  if (!kn) return loi('Chưa kết nối shop Shopee. Hãy bấm “Kết nối Shopee” trước.', 409);
+  if (!kn) return null;
 
   let pageNo = 0, them = 0, con = true;
   while (con && pageNo < 20) {                     // chặn trần 20 trang cho an toàn
     const kq = await goiTheoShop(env, '/api/v2/returns/get_return_list', kn, {
       page_no: String(pageNo), page_size: '50'
     });
-    if (kq.error) return loi('Shopee báo lỗi: ' + (kq.message || kq.error), 502);
+    if (kq.error) throw new Error('Shopee báo lỗi: ' + (kq.message || kq.error));
     const ds = (kq.response && kq.response.return) || [];
     for (const r of ds) {
+      const sp = (r.item || []).map(it => {
+        const ten = it.name || it.item_name || '';
+        const sku = it.item_sku || it.model_sku || '';
+        const sl = it.amount || it.quantity;
+        return ten + (sku ? ` [${sku}]` : '') + (sl && Number(sl) > 1 ? ` x${sl}` : '');
+      }).filter(Boolean).join(' | ') || null;
       await env.DB.prepare(`
-        INSERT INTO don_hoan (return_sn, order_sn, trang_thai, ly_do, so_tien, tien_te, nguoi_mua, tao_luc_shopee, cap_nhat_shopee, du_lieu_json, dong_bo_luc)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now','+7 hours'))
+        INSERT INTO don_hoan (return_sn, order_sn, trang_thai, ly_do, so_tien, tien_te, nguoi_mua, san_pham, ma_van_don, tao_luc_shopee, cap_nhat_shopee, du_lieu_json, dong_bo_luc)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now','+7 hours'))
         ON CONFLICT(return_sn) DO UPDATE SET
           trang_thai=excluded.trang_thai, ly_do=excluded.ly_do, so_tien=excluded.so_tien,
-          tien_te=excluded.tien_te, cap_nhat_shopee=excluded.cap_nhat_shopee,
-          du_lieu_json=excluded.du_lieu_json, dong_bo_luc=datetime('now','+7 hours')
+          tien_te=excluded.tien_te, nguoi_mua=excluded.nguoi_mua, san_pham=excluded.san_pham,
+          ma_van_don=excluded.ma_van_don,
+          cap_nhat_shopee=excluded.cap_nhat_shopee, du_lieu_json=excluded.du_lieu_json,
+          dong_bo_luc=datetime('now','+7 hours')
       `).bind(
         String(r.return_sn), r.order_sn || null, r.status || null, r.reason || null,
         Math.round((Number(r.refund_amount) || 0) * 100000) || null, r.currency || null,
-        (r.user && r.user.username) || null,
+        (r.user && r.user.username) || null, sp,
+        r.tracking_number || r.return_tracking_number || null,
         r.create_time ? String(r.create_time) : null,
         r.update_time ? String(r.update_time) : null,
         JSON.stringify(r)
@@ -208,7 +217,21 @@ export async function apiDongBo(env, phien) {
     con = !!(kq.response && kq.response.more);
     pageNo++;
   }
-  return json({ ok: true, so_don: them });
+  return them;
+}
+
+/* Đồng bộ đơn hoàn: kéo get_return_list về, lưu vào bảng don_hoan (nút bấm) */
+export async function apiDongBo(env, phien) {
+  if (!duocXemDonHoan(phien.vai_tro)) return loi('Bạn không có quyền', 403);
+  if (!daCauHinh(env)) return loi('Chưa nạp khóa Shopee trên máy chủ', 409);
+  const co = await env.DB.prepare('SELECT shop_id FROM shopee_ket_noi LIMIT 1').first();
+  if (!co) return loi('Chưa kết nối shop Shopee. Hãy bấm “Kết nối Shopee” trước.', 409);
+  try {
+    const so = await dongBoNen(env);
+    return json({ ok: true, so_don: so || 0 });
+  } catch (e) {
+    return loi(e.message, 502);
+  }
 }
 
 /* Danh sách đơn hoàn đã lưu (để tab hiển thị) */
@@ -216,7 +239,8 @@ export async function apiDanhSach(env, phien) {
   if (!duocXemDonHoan(phien.vai_tro)) return loi('Bạn không có quyền', 403);
   const { results } = await env.DB.prepare(`
     SELECT return_sn, order_sn, trang_thai, ly_do, so_tien, tien_te, nguoi_mua,
-           nguon, cap_nhat_shopee, dong_bo_luc
+           san_pham, ma_van_don, nguon, cap_nhat_shopee, dong_bo_luc,
+           kho_nhan_luc, kho_nhan_boi, cho_kho_nhan_tu
       FROM don_hoan ORDER BY dong_bo_luc DESC LIMIT 300
   `).all();
   return json({ don_hoan: results });

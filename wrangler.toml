@@ -29,11 +29,12 @@ binding = "AI"
 [vars]
 TIKTOK_APP_KEY = "6kvjhfjc9v709"
 TIKTOK_SERVICE_ID = "7674557494503769877"
+SHOPEE_PARTNER_ID = "1241414"
 
-# Lịch chạy nền: mỗi 3 giờ tự làm mới access_token Shopee (hết hạn sau 4h).
-# Chưa cấu hình Shopee thì cron vẫn chạy nhưng bỏ qua êm.
+# Lịch chạy nền: MỖI 5 PHÚT tự đồng bộ đơn hoàn Shopee + TikTok về DB
+# (gần realtime). Sàn nào chưa kết nối thì bỏ qua êm; token tự làm mới.
 [triggers]
-crons = ["0 */3 * * *"]
+crons = ["*/5 * * * *"]
 
 # ---- Shopee (BỎ COMMENT + điền khi đã có khóa) ---------------------------
 # partner_id KHÔNG bí mật → để ở [vars]. partner_key BÍ MẬT → đặt bằng lệnh:

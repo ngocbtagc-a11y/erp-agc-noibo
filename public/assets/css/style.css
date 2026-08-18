@@ -618,6 +618,25 @@ td .sm { font-size: 12px; color: var(--text-mute); white-space: nowrap; }
 
 .search input::placeholder { color: var(--text-mute); }
 
+/* Hàng tìm kiếm đơn hoàn: ô tìm + nút quẹt QR */
+.dh-timkiem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.dh-timkiem .search {
+  flex: 1;
+  margin-bottom: 0;
+}
+.dh-timkiem .btn-phu { white-space: nowrap; flex-shrink: 0; }
+
+/* Hàng đơn hoàn quá 12h chưa nhận — tô đỏ để kho/vận hành thấy ngay */
+tr.canh-bao > td { background: #fdecea; }
+tr.canh-bao:hover > td { background: #fbdbd6; }
+.phu { font-size: 11px; color: var(--text-mute); margin-top: 3px; line-height: 1.3; }
+.canh-bao-chu { color: #c0392b; font-weight: 700; }
+
 .empty {
   padding: 34px 20px;
   text-align: center;
