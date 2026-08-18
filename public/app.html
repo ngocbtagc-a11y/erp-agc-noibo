@@ -197,6 +197,36 @@
         <p>Doanh thu theo kênh bán, hiệu quả từng sản phẩm và động thái của đối thủ.</p>
       </div>
 
+      <!-- ---------- Vận hành sàn: đơn hoàn cần đối soát (quá 12h kho chưa nhận) ---------- -->
+      <div class="panel" id="kd-doisoat-panel" hidden>
+        <div class="panel-head">
+          <h4>Vận hành sàn — Cần đối soát với sàn</h4>
+          <span class="hint" id="kd-ds-dem"></span>
+        </div>
+        <div class="panel-body" style="padding-bottom:0; padding-top:0">
+          <p class="hint" style="margin:14px 0 0">Đơn hoàn sàn báo khách đã gửi về quá 12h mà kho chưa xác nhận nhận hàng — tra vận đơn và khiếu nại/đối soát trực tiếp với sàn, xong thì đánh dấu đã đối soát.</p>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Nguồn</th>
+                <th>Mã đơn hoàn</th>
+                <th>Đơn gốc</th>
+                <th>Mã vận đơn</th>
+                <th>Sản phẩm</th>
+                <th class="num">Số tiền</th>
+                <th>Người mua</th>
+                <th>Trễ</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="kd-ds-bang"></tbody>
+          </table>
+        </div>
+        <div class="empty" id="kd-ds-trong" hidden>Không có đơn hoàn nào cần đối soát — kho đang xử lý đúng hạn.</div>
+      </div>
+
       <div class="stats" id="kd-the"></div>
 
       <div class="grid-2">
@@ -442,11 +472,59 @@
       </div>
     </section>
 
-    <!-- ---------- Đơn hoàn (Shopee) ---------- -->
+    <!-- ---------- Kế toán ---------- -->
+    <section class="view" id="v-ketoan" hidden>
+      <div class="view-head">
+        <h3>Kế toán</h3>
+        <p>Công nợ phải thu — phải trả, cơ cấu chi phí và tình trạng nghĩa vụ thuế.</p>
+      </div>
+
+      <div class="stats" id="kt-the"></div>
+
+      <div class="grid-2">
+        <div class="panel">
+          <div class="panel-head">
+            <h4>Cơ cấu chi phí tháng 7</h4>
+            <span class="hint">Đơn vị: tỷ đồng</span>
+          </div>
+          <div class="panel-body"><div class="chart" id="kt-chart"></div></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <h4>Nghĩa vụ thuế</h4>
+          </div>
+          <div class="panel-body"><div class="list" id="kt-thue"></div></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h4>Công nợ</h4>
+          <span class="hint">Phải thu và phải trả</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Đối tác</th>
+                <th>Loại</th>
+                <th class="num">Số tiền (đ)</th>
+                <th>Hạn</th>
+                <th>Trạng thái</th>
+              </tr>
+            </thead>
+            <tbody id="kt-bang"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ---------- Kết nối sàn — Đơn hoàn (Shopee + TikTok) ---------- -->
     <section class="view" id="v-donhoan" hidden>
       <div class="view-head">
-        <h3>Đơn hoàn — Shopee</h3>
-        <p>Kéo đơn hoàn / hoàn tiền từ Shopee về để theo dõi và đối soát. Cần kết nối Shopee một lần; sau đó token tự làm mới, không phải nối lại.</p>
+        <h3>Kết nối sàn</h3>
+        <p>Kéo đơn hoàn / hoàn tiền từ Shopee & TikTok về để theo dõi và đối soát. Cần kết nối sàn một lần; sau đó token tự làm mới, không phải nối lại.</p>
       </div>
 
       <!-- Trạng thái kết nối -->
@@ -523,54 +601,6 @@
           </table>
         </div>
         <div class="empty" id="dh-trong" hidden>Chưa có đơn hoàn nào — hãy kết nối Shopee rồi bấm “Đồng bộ đơn hoàn”.</div>
-      </div>
-    </section>
-
-    <!-- ---------- Kế toán ---------- -->
-    <section class="view" id="v-ketoan" hidden>
-      <div class="view-head">
-        <h3>Kế toán</h3>
-        <p>Công nợ phải thu — phải trả, cơ cấu chi phí và tình trạng nghĩa vụ thuế.</p>
-      </div>
-
-      <div class="stats" id="kt-the"></div>
-
-      <div class="grid-2">
-        <div class="panel">
-          <div class="panel-head">
-            <h4>Cơ cấu chi phí tháng 7</h4>
-            <span class="hint">Đơn vị: tỷ đồng</span>
-          </div>
-          <div class="panel-body"><div class="chart" id="kt-chart"></div></div>
-        </div>
-
-        <div class="panel">
-          <div class="panel-head">
-            <h4>Nghĩa vụ thuế</h4>
-          </div>
-          <div class="panel-body"><div class="list" id="kt-thue"></div></div>
-        </div>
-      </div>
-
-      <div class="panel">
-        <div class="panel-head">
-          <h4>Công nợ</h4>
-          <span class="hint">Phải thu và phải trả</span>
-        </div>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Đối tác</th>
-                <th>Loại</th>
-                <th class="num">Số tiền (đ)</th>
-                <th>Hạn</th>
-                <th>Trạng thái</th>
-              </tr>
-            </thead>
-            <tbody id="kt-bang"></tbody>
-          </table>
-        </div>
       </div>
     </section>
 

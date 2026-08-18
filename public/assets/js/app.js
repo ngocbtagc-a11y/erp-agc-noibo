@@ -19,8 +19,8 @@ const TAB = [
   { id: 'nhansu',    ten: 'Nhân sự',    icon: 'M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75' },
   { id: 'kinhdoanh', ten: 'Kinh doanh', icon: 'M23 6l-9.5 9.5-5-5L1 18M17 6h6v6' },
   { id: 'khovan',    ten: 'Kho vận',    icon: 'M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16zM3.27 6.96L12 12.01l8.73-5.05M12 22.08V12' },
-  { id: 'donhoan',   ten: 'Đơn hoàn',   icon: 'M9 14l-4-4 4-4M5 10h11a4 4 0 010 8h-2' },
   { id: 'ketoan',    ten: 'Kế toán',    icon: 'M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6' },
+  { id: 'donhoan',   ten: 'Kết nối sàn', icon: 'M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71' },
   { id: 'quantri',   ten: 'Quản trị',   icon: 'M12 15a3 3 0 100-6 3 3 0 000 6zM19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-2.82 1.17V21a2 2 0 01-4 0v-.09A1.65 1.65 0 006 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.6 14a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 7.6a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z' }
 ];
 
@@ -286,8 +286,9 @@ if (TOI.quyen.includes('nhansu')) {
   veDanhSach('#ns-lich', DB.nhanSu.lich);
 }
 
-/* -- Kinh doanh (còn là dữ liệu mẫu) -- */
+/* -- Kinh doanh -- */
 if (TOI.quyen.includes('kinhdoanh')) {
+  // Doanh thu theo kênh / đối thủ / sản phẩm bán chạy vẫn là dữ liệu mẫu
   veThe('#kd-the', DB.kinhDoanh.the);
   veChart('#kd-chart', DB.kinhDoanh.theoKenh);
   veDanhSach('#kd-doithu', DB.kinhDoanh.doiThu);
@@ -297,6 +298,67 @@ if (TOI.quyen.includes('kinhdoanh')) {
     `<td class="num">${esc(r.dh)}</td>` +
     `<td class="num">${esc(r.dt)}</td>` +
     `<td><span class="tag ${esc(r.tt)}">${esc(r.ttx)}</span></td>`);
+
+  // Vận hành sàn — đơn hoàn cần đối soát (máy chủ thật) — chỉ ai có quyền Đơn hoàn mới thấy
+  if (TOI.quyen.includes('donhoan')) {
+    await khoiDongDoiSoatSan();
+  }
+}
+
+/* ==========================================================================
+   KINH DOANH — Vận hành sàn: đơn hoàn cần đối soát (quá 12h kho chưa nhận)
+   ========================================================================== */
+async function khoiDongDoiSoatSan() {
+  $('#kd-doisoat-panel').hidden = false;
+
+  function gioTre(choTu) {
+    if (!choTu) return '—';
+    const gio = (Date.now() - Date.parse(choTu.replace(' ', 'T'))) / 3600000;
+    return gio >= 24 ? `${(gio / 24).toFixed(1)} ngày` : `${Math.round(gio)} giờ`;
+  }
+
+  async function veDoiSoat() {
+    const { can_doi_soat } = await API.kdCanDoiSoat();
+    veBang('#kd-ds-bang', can_doi_soat, r => {
+      const ngTag = r.nguon === 'tiktok'
+        ? '<span class="tag mute">TikTok</span>'
+        : '<span class="tag sage">Shopee</span>';
+      const tien = r.so_tien != null
+        ? tienVN(Math.round(r.so_tien / 100000)) + ' ' + esc(r.tien_te || '')
+        : '—';
+      const html = `<td>${ngTag}</td>` +
+        `<td class="sm">${esc(r.return_sn)}</td>` +
+        `<td class="sm">${esc(r.order_sn || '—')}</td>` +
+        `<td class="sm">${esc(r.ma_van_don || '—')}</td>` +
+        `<td class="sm" title="${esc(r.san_pham || '')}">${esc(r.san_pham || '—')}</td>` +
+        `<td class="num">${tien}</td>` +
+        `<td class="sm">${esc(r.nguoi_mua || '—')}</td>` +
+        `<td><span class="tag danger">${gioTre(r.cho_kho_nhan_tu)}</span></td>` +
+        `<td><button type="button" class="btn-nho" data-doisoat="${esc(r.return_sn)}">Đã đối soát</button></td>`;
+      return { html, cls: 'canh-bao' };
+    });
+    $('#kd-ds-trong').hidden = can_doi_soat.length > 0;
+    $('#kd-ds-dem').textContent = `${can_doi_soat.length} đơn cần đối soát`;
+  }
+
+  $('#kd-ds-bang').addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-doisoat]');
+    if (!btn) return;
+    const rsn = btn.getAttribute('data-doisoat');
+    btn.disabled = true;
+    const cu = btn.textContent;
+    btn.textContent = 'Đang lưu…';
+    try {
+      await API.kdDaDoiSoat(rsn);
+      await veDoiSoat();
+    } catch (err) {
+      btn.disabled = false;
+      btn.textContent = cu;
+      alert(err.message || 'Không lưu được, thử lại nhé.');
+    }
+  });
+
+  await veDoiSoat();
 }
 
 /* -- Kho — Xuất / Nhập / Tồn (máy chủ thật) -- */
@@ -304,7 +366,7 @@ if (TOI.quyen.includes('khovan')) {
   await khoiDongKho();
 }
 
-/* -- Đơn hoàn — Shopee (máy chủ thật) -- */
+/* -- Kết nối sàn — Đơn hoàn Shopee/TikTok (máy chủ thật) -- */
 if (TOI.quyen.includes('donhoan')) {
   await khoiDongDonHoan();
 }

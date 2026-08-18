@@ -223,8 +223,10 @@ export async function dongBoNen(env) {
     const sp = (r.return_line_items || []).map(li => {
       const ten = li.product_name || '';
       const sku = li.seller_sku || li.sku || '';
-      const sl = li.quantity || li.return_quantity;
-      return ten + (sku ? ` [${sku}]` : '') + (sl && Number(sl) > 1 ? ` x${sl}` : '');
+      const sl = Number(li.quantity || li.return_quantity) || 1;
+      const nhan = sku || ten || '—';
+      // SKU đứng trước, số lượng luôn hiện (để đối chiếu với kho) — tên chỉ để tham khảo thêm
+      return `${nhan} ×${sl}` + (sku && ten ? ` (${ten})` : '');
     }).filter(Boolean).join(' | ') || null;
     await env.DB.prepare(`
       INSERT INTO don_hoan (return_sn, order_sn, trang_thai, ly_do, so_tien, tien_te, nguoi_mua, san_pham, ma_van_don, tao_luc_shopee, cap_nhat_shopee, du_lieu_json, nguon, dong_bo_luc)

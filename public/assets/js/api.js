@@ -108,7 +108,13 @@ export const API = {
 
   /* ---- Đơn hoàn (TikTok) ---- */
   tiktokTrangThai: () => goi('/api/tiktok/trang-thai'),
-  tiktokDongBo: () => goi('/api/tiktok/dong-bo', { method: 'POST' })
+  tiktokDongBo: () => goi('/api/tiktok/dong-bo', { method: 'POST' }),
+
+  /* ---- Kinh doanh: đơn hoàn cần đối soát với sàn (quá 12h kho chưa nhận) ---- */
+  kdCanDoiSoat: () => goi('/api/kinh-doanh/can-doi-soat'),
+  kdDaDoiSoat: (returnSn) => goi('/api/kinh-doanh/da-doi-soat', {
+    method: 'POST', body: JSON.stringify({ return_sn: returnSn })
+  })
   // Lưu ý: kết nối Shopee đi thẳng bằng chuyển trang tới /api/shopee/connect
   // (server trả 302 sang trang ủy quyền Shopee), không qua lớp fetch này.
 };
