@@ -1,4 +1,4 @@
-name = "crm-agc"
+name = "erp-agc"
 main = "src/index.js"
 compatibility_date = "2026-06-10"
 
@@ -18,3 +18,28 @@ database_id = "0575dabe-5bdc-4146-ba5d-6f21e9d1cdc0"
 
 [observability]
 enabled = true
+
+# AI của Cloudflare (Workers AI) — dùng để đọc ảnh CCCD bóc thông tin.
+# Tài khoản đã có sẵn quyền AI, không cần khai thêm khóa.
+[ai]
+binding = "AI"
+
+# Biến công khai (KHÔNG bí mật). App Secret KHÔNG để đây — nó nằm trong
+# "két" Cloudflare (Settings → Variables and Secrets → Secret TIKTOK_APP_SECRET).
+[vars]
+TIKTOK_APP_KEY = "6kvjhfjc9v709"
+TIKTOK_SERVICE_ID = "7674557494503769877"
+
+# Lịch chạy nền: mỗi 3 giờ tự làm mới access_token Shopee (hết hạn sau 4h).
+# Chưa cấu hình Shopee thì cron vẫn chạy nhưng bỏ qua êm.
+[triggers]
+crons = ["0 */3 * * *"]
+
+# ---- Shopee (BỎ COMMENT + điền khi đã có khóa) ---------------------------
+# partner_id KHÔNG bí mật → để ở [vars]. partner_key BÍ MẬT → đặt bằng lệnh:
+#     npx wrangler secret put SHOPEE_PARTNER_KEY
+# (khóa nằm trong "két" của Cloudflare, KHÔNG viết vào file này)
+# [vars]
+# SHOPEE_PARTNER_ID = "123456"
+# SHOPEE_HOST = "https://partner.shopeemobile.com"
+# SHOPEE_REDIRECT = "https://erp-agc.noiboagc.workers.dev/api/shopee/callback"

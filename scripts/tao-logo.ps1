@@ -1,5 +1,5 @@
 # ============================================================================
-#  Tạo các phiên bản logo dùng cho CRM từ logo_trans.png
+#  Tạo các phiên bản logo dùng cho ERP từ logo_trans.png
 #  - logo.png        : logo ngang đầy đủ (dùng ở màn đăng nhập)
 #  - logo-mark.png   : chỉ 2 chiếc lá, vuông (dùng ở thanh bên + favicon)
 #  - favicon-32.png  : biểu tượng tab trình duyệt

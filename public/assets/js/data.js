@@ -1,5 +1,5 @@
 /* ==========================================================================
-   DỮ LIỆU MẪU — CRM Alpha Green Commerce
+   DỮ LIỆU MẪU — ERP Alpha Green Commerce
    ---------------------------------------------------------------------------
    TOÀN BỘ SỐ LIỆU TRONG FILE NÀY LÀ DỮ LIỆU GIẢ, chỉ để xem trước giao diện
    của các tab CHƯA nối máy chủ: Tổng quan, Kinh doanh, Kho vận, Kế toán.

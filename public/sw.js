@@ -1,5 +1,5 @@
 /* ==========================================================================
-   Service Worker — giúp CRM cài được vào màn hình chính và mở nhanh
+   Service Worker — giúp ERP cài được vào màn hình chính và mở nhanh
    ---------------------------------------------------------------------------
    NGUYÊN TẮC BẢO MẬT QUAN TRỌNG:
    TUYỆT ĐỐI KHÔNG lưu (cache) bất kỳ phản hồi nào từ /api/.

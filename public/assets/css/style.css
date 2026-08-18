@@ -1,5 +1,5 @@
 /* ==========================================================================
-   CRM Alpha Green Commerce — Bảng màu & kiểu chữ
+   ERP Alpha Green Commerce — Bảng màu & kiểu chữ
    Phong cách: Sage — xanh ô liu, nền be, chữ serif lớn
    ========================================================================== */
 
@@ -1008,3 +1008,137 @@ td .sm { font-size: 12px; color: var(--text-mute); white-space: nowrap; }
   .modal { padding: 20px; }
   .qt-thaotac button { display: block; width: 100%; }
 }
+
+/* ==========================================================================
+   MODULE KHO — Xuất / Nhập / Tồn
+   ========================================================================== */
+
+/* Thanh chuyển màn (Tồn / Nhập / Xuất / Báo cáo) */
+.seg {
+  display: flex;
+  gap: 6px;
+  background: var(--surface-2);
+  padding: 5px;
+  border-radius: var(--r-pill);
+  margin-bottom: 20px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.seg-nut {
+  flex: 1 0 auto;
+  padding: 9px 16px;
+  border-radius: var(--r-pill);
+  font-weight: 600;
+  font-size: 13.5px;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  transition: background .14s, color .14s, box-shadow .14s;
+}
+.seg-nut.active {
+  background: var(--card);
+  color: var(--ink);
+  box-shadow: var(--shadow-sm);
+}
+
+.kv-pane[hidden] { display: none; }
+
+/* Ô form chiếm cả hàng trong lưới .form-luoi */
+.field-rong { grid-column: 1 / -1; }
+
+/* Nhãn có ô tick */
+.field label.ck {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-weight: 500;
+  color: var(--text);
+  cursor: pointer;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.field label.ck input { width: auto; }
+
+/* Báo thành công (đối xứng với .form-loi) */
+.form-ok {
+  margin-top: 14px;
+  padding: 10px 13px;
+  background: var(--ok-wash);
+  border-radius: var(--r-sm);
+  font-size: 13px;
+  color: var(--ok);
+  font-weight: 600;
+}
+.form-ok[hidden] { display: none; }
+
+/* Nhắc tồn hiện tại khi chọn sản phẩm để xuất */
+.kv-ton-nhac {
+  padding: 11px 14px;
+  background: var(--sage-wash);
+  border-radius: var(--r-sm);
+  font-size: 14px;
+  color: var(--ink-soft);
+}
+.kv-ton-nhac b { color: var(--ink); }
+
+/* Hàng lọc ngày của báo cáo */
+.kv-loc {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: flex-end;
+}
+.kv-loc .field { margin-bottom: 0; min-width: 150px; }
+.kv-loc .btn-primary { width: auto; padding: 11px 22px; }
+
+/* Tên sản phẩm bấm được (mở chi tiết) */
+.kv-lnk {
+  cursor: pointer;
+  border-bottom: 1px dashed var(--sage-pale);
+  display: inline-block;
+}
+.kv-lnk:hover { color: var(--sage-dark); border-color: var(--sage); }
+
+/* Hộp chi tiết rộng hơn hộp mật khẩu */
+.modal-rong { max-width: 640px; }
+.kv-md-sub {
+  font-size: 13.5px;
+  color: var(--text-mute);
+  margin-bottom: 18px;
+}
+.kv-md-muc {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--sage-dark);
+  font-weight: 700;
+  margin: 20px 0 8px;
+}
+.modal-rong .table-wrap { max-height: 240px; overflow-y: auto; }
+
+@media (max-width: 780px) {
+  .kv-loc .field, .kv-loc .btn-primary { width: 100%; }
+}
+
+/* ==========================================================================
+   NÚT HIỆN / ẨN MẬT KHẨU (con mắt)
+   ========================================================================== */
+.pw-wrap { position: relative; display: block; }
+.pw-wrap > input { width: 100%; padding-right: 46px; }
+.pw-eye {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-mute);
+  cursor: pointer;
+  transition: color .14s, background .14s;
+}
+.pw-eye:hover { color: var(--ink-soft); background: var(--sage-wash); }
+.pw-eye svg { width: 20px; height: 20px; }

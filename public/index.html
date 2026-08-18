@@ -5,12 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#3f4d33">
 <meta name="robots" content="noindex, nofollow">
-<title>Đăng nhập — CRM Alpha Green Commerce</title>
+<title>Đăng nhập — ERP Alpha Green Commerce</title>
 <link rel="icon" type="image/png" sizes="32x32" href="assets/img/favicon-32.png">
 <link rel="manifest" href="/manifest.webmanifest">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="CRM AGC">
+<meta name="apple-mobile-web-app-title" content="ERP AGC">
 <link rel="apple-touch-icon" href="assets/img/apple-touch-180.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -104,6 +104,31 @@ const $ = s => document.querySelector(s);
 function baoLoi(o, msg) { o.textContent = msg; o.classList.add('show'); }
 function xoaLoi(o) { o.classList.remove('show'); }
 
+/* ---- Nút con mắt: hiện / ẩn mật khẩu ---- */
+const MAT_HIEN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>';
+const MAT_AN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10 10 0 0 1 12 20C5 20 1 12 1 12a18 18 0 0 1 5.06-5.94M9.9 4.24A9 9 0 0 1 12 4c7 0 11 8 11 8a18 18 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+
+document.querySelectorAll('input[type="password"]').forEach(inp => {
+  const wrap = document.createElement('div');
+  wrap.className = 'pw-wrap';
+  inp.parentNode.insertBefore(wrap, inp);
+  wrap.appendChild(inp);
+
+  const nut = document.createElement('button');
+  nut.type = 'button';
+  nut.className = 'pw-eye';
+  nut.setAttribute('aria-label', 'Hiện hoặc ẩn mật khẩu');
+  nut.innerHTML = MAT_HIEN;
+  wrap.appendChild(nut);
+
+  nut.addEventListener('click', () => {
+    const dangAn = inp.type === 'password';
+    inp.type = dangAn ? 'text' : 'password';
+    nut.innerHTML = dangAn ? MAT_AN : MAT_HIEN;
+    inp.focus();
+  });
+});
+
 function hienKhoiDoiMatKhau(doDaiToiThieu) {
   $('#khoiDangNhap').hidden = true;
   $('#khoiDoiMatKhau').hidden = false;
@@ -171,7 +196,7 @@ $('#formDoiMatKhau').addEventListener('submit', async e => {
   }
 });
 
-// Đăng ký service worker để CRM cài được vào màn hình chính và mở nhanh
+// Đăng ký service worker để ERP cài được vào màn hình chính và mở nhanh
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js').catch(() => { /* không có cũng không sao */ });

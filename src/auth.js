@@ -6,7 +6,10 @@
    xem được mật khẩu của nhân viên, chỉ đặt lại được thôi. Đó là đúng.
    ========================================================================== */
 
-const SO_VONG = 210000;          // số vòng băm — càng cao càng khó dò
+const SO_VONG = 100000;          // số vòng băm. TRẦN CỦA CLOUDFLARE WORKERS LÀ
+                                 // 100.000 — đặt cao hơn (vd 210.000) thì
+                                 // deriveBits NÉM LỖI trên workerd thật, khiến
+                                 // MỌI đăng nhập thất bại (dù local vẫn chạy).
 const HAN_PHIEN_GIO = 12;        // phiên hết hạn sau 12 tiếng
 const TOI_DA_SAI = 5;            // sai quá 5 lần thì khoá
 const CUA_SO_KHOA_PHUT = 15;     // khoá trong 15 phút

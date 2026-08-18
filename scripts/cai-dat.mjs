@@ -1,5 +1,5 @@
 /* ==========================================================================
-   Cài đặt CRM lên Cloudflare — chạy: npm run cai-dat
+   Cài đặt ERP lên Cloudflare — chạy: npm run cai-dat
    ---------------------------------------------------------------------------
    Script này lo khâu dễ sai nhất: tạo database D1 rồi tự điền mã database
    vào wrangler.toml, thay vì bắt người dùng chép tay chuỗi mã dài.
@@ -25,7 +25,7 @@ function thoat(thongDiep) {
   process.exit(1);
 }
 
-console.log('\n  Cài đặt CRM Alpha Green Commerce lên Cloudflare\n');
+console.log('\n  Cài đặt ERP Alpha Green Commerce lên Cloudflare\n');
 
 /* ---- 1. Đã đăng nhập Cloudflare chưa? ---------------------------------- */
 

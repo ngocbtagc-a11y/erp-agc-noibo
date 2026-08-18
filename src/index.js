@@ -1,5 +1,5 @@
 /* ==========================================================================
-   CRM Alpha Green Commerce — Máy chủ (Cloudflare Worker)
+   ERP Alpha Green Commerce — Máy chủ (Cloudflare Worker)
    ---------------------------------------------------------------------------
    NGUYÊN TẮC XUYÊN SUỐT: không tin gì từ trình duyệt.
    Mỗi lần hỏi dữ liệu, máy chủ tự tra "anh là ai" từ cookie phiên rồi mới
@@ -14,9 +14,13 @@ import {
 
 import {
   quyenCua, duocXemTab, duocXemLuong, laAdmin, duocThemNhanSu,
-  TEN_VAI_TRO, VAI_TRO_HOP_LE
+  quyenKho, quyenShopee, TEN_VAI_TRO, VAI_TRO_HOP_LE
 } from './quyen.js';
 import { kiemTraMatKhauDat, DAI_TOI_THIEU } from './mat-khau.js';
+import * as kho from './kho.js';
+import * as shopee from './shopee.js';
+import * as tiktok from './tiktok.js';
+import * as nhansu from './nhansu.js';
 
 /* ---- Trả lời dạng JSON -------------------------------------------------- */
 
@@ -66,7 +70,7 @@ async function dangNhap(req, env) {
 
   // Dù không có tài khoản vẫn chạy băm giả để thời gian trả lời như nhau —
   // tránh việc dò xem tên đăng nhập nào có thật.
-  const hashGia = 'pbkdf2$210000$AAAAAAAAAAAAAAAAAAAAAA==$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
+  const hashGia = 'pbkdf2$100000$AAAAAAAAAAAAAAAAAAAAAA==$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
   const dung = await kiemTraMatKhau(mk, tk?.mat_khau_hash || hashGia);
 
   if (!tk || !dung || !tk.kich_hoat) {
@@ -106,6 +110,8 @@ async function toiLaAi(req, env) {
     xem_luong: q.xem_luong,
     la_admin: laAdmin(phien.vai_tro),
     them_nhan_su: duocThemNhanSu(phien.vai_tro),
+    kho: quyenKho(phien.vai_tro),           // { thao_tac, quan_ly, gia_von } cho tab Kho
+    shopee: quyenShopee(phien.vai_tro),     // { xem, quan_ly } cho tab Đơn hoàn
     // Để giao diện khỏi ghi cứng con số, sau này đổi một chỗ là xong
     mat_khau_dai_toi_thieu: DAI_TOI_THIEU
   });
@@ -371,6 +377,145 @@ async function qtKhoaTaiKhoan(req, env) {
   return json({ ok: true });
 }
 
+/* ==========================================================================
+   KHO — Xuất / Nhập / Tồn
+   ---------------------------------------------------------------------------
+   Nghiệp vụ nằm trong src/kho.js. Các hàm dưới đây chỉ lo hai việc:
+   bắt buộc đăng nhập + chỉ cho vào khi vai trò được xem tab 'khovan', rồi
+   chuyển tiếp cho kho.js. Bản thân kho.js còn kiểm quyền chi tiết (thao tác,
+   quản lý, giá vốn) một lần nữa — chặn kép cho chắc.
+   ========================================================================== */
+
+async function batBuocXemKho(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return { loi: l };
+  if (!duocXemTab(phien.vai_tro, 'khovan')) return { loi: loi('Bạn không có quyền xem Kho vận', 403) };
+  return { phien };
+}
+
+async function khoDanhSachSP(req, env) {
+  const { phien, loi: l } = await batBuocXemKho(req, env);
+  if (l) return l;
+  return kho.danhSachSanPham(env, phien);
+}
+
+async function khoThemSP(req, env) {
+  const { phien, loi: l } = await batBuocXemKho(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return kho.themSanPham(env, phien, b);
+}
+
+async function khoNhap(req, env) {
+  const { phien, loi: l } = await batBuocXemKho(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return kho.nhapKho(env, phien, b);
+}
+
+async function khoXuat(req, env) {
+  const { phien, loi: l } = await batBuocXemKho(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return kho.xuatKho(env, phien, b);
+}
+
+async function khoLo(req, env) {
+  const { phien, loi: l } = await batBuocXemKho(req, env);
+  if (l) return l;
+  const u = new URL(req.url);
+  return kho.loTheoSanPham(env, phien, u.searchParams.get('san_pham_id'));
+}
+
+async function khoBaoCao(req, env) {
+  const { phien, loi: l } = await batBuocXemKho(req, env);
+  if (l) return l;
+  const u = new URL(req.url);
+  return kho.baoCaoXNT(env, phien, u.searchParams.get('tu'), u.searchParams.get('den'));
+}
+
+async function khoLichSu(req, env) {
+  const { phien, loi: l } = await batBuocXemKho(req, env);
+  if (l) return l;
+  const u = new URL(req.url);
+  return kho.lichSu(env, phien, u.searchParams.get('san_pham_id'), u.searchParams.get('gioi_han'));
+}
+
+/* ==========================================================================
+   SHOPEE — Đơn hoàn (Returns)
+   ---------------------------------------------------------------------------
+   Nghiệp vụ trong src/shopee.js. Callback do CHÍNH SHOPEE gọi lại (không mang
+   phiên đăng nhập của mình) nên KHÔNG bắt đăng nhập; các đầu việc còn lại đều
+   bắt đăng nhập, phần kiểm quyền chi tiết nằm trong shopee.js.
+   ========================================================================== */
+
+async function shopeeTrangThai(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  return shopee.apiTrangThai(env, phien);
+}
+
+async function shopeeConnect(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  return shopee.apiConnect(env, phien);
+}
+
+/* Công khai — Shopee gọi lại sau khi shop bấm đồng ý ủy quyền */
+async function shopeeCallback(req, env) {
+  return shopee.apiCallback(env, new URL(req.url));
+}
+
+async function hoanDongBo(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  return shopee.apiDongBo(env, phien);
+}
+
+async function hoanDanhSach(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  return shopee.apiDanhSach(env, phien);
+}
+
+/* --- TikTok (song song Shopee, dùng chung tab Đơn hoàn) --- */
+async function tiktokTrangThai(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  return tiktok.apiTrangThai(env, phien);
+}
+
+async function tiktokConnect(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  return tiktok.apiConnect(env, phien);
+}
+
+async function tiktokCallback(req, env) {
+  return tiktok.apiCallback(env, new URL(req.url));   // công khai — TikTok gọi lại
+}
+
+async function tiktokDongBo(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  return tiktok.apiDongBo(env, phien);
+}
+
+/* --- Đón nhân sự mới bằng ảnh CCCD --- */
+async function nsDocCCCD(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return nhansu.docCCCD(env, phien, b);
+}
+
+async function nsDonMoi(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return nhansu.donNhanSuMoi(env, phien, b);
+}
+
 /* ---- Bộ định tuyến ------------------------------------------------------ */
 
 const DUONG_DAN = {
@@ -384,10 +529,41 @@ const DUONG_DAN = {
   'POST /api/quan-tri/them-nhan-su':   qtThemNhanSu,
   'POST /api/quan-tri/tao-tai-khoan':  qtTaoTaiKhoan,
   'POST /api/quan-tri/dat-lai-mat-khau': qtDatLaiMatKhau,
-  'POST /api/quan-tri/khoa-tai-khoan': qtKhoaTaiKhoan
+  'POST /api/quan-tri/khoa-tai-khoan': qtKhoaTaiKhoan,
+  'GET  /api/kho/san-pham':      khoDanhSachSP,
+  'POST /api/kho/them-san-pham': khoThemSP,
+  'POST /api/kho/nhap':          khoNhap,
+  'POST /api/kho/xuat':          khoXuat,
+  'GET  /api/kho/lo':            khoLo,
+  'GET  /api/kho/bao-cao':       khoBaoCao,
+  'GET  /api/kho/lich-su':       khoLichSu,
+  'GET  /api/shopee/trang-thai': shopeeTrangThai,
+  'GET  /api/shopee/connect':    shopeeConnect,
+  'GET  /api/shopee/callback':   shopeeCallback,
+  'POST /api/hoan/dong-bo':      hoanDongBo,
+  'GET  /api/hoan/danh-sach':    hoanDanhSach,
+  'GET  /api/tiktok/trang-thai': tiktokTrangThai,
+  'GET  /api/tiktok/connect':    tiktokConnect,
+  'GET  /api/tiktok/callback':   tiktokCallback,
+  'POST /api/tiktok/dong-bo':    tiktokDongBo,
+  'POST /api/nhan-su/doc-cccd':  nsDocCCCD,
+  'POST /api/nhan-su/don-moi':   nsDonMoi
 };
 
 export default {
+  /* Lịch chạy nền (Cloudflare Cron) — tự làm mới access_token Shopee trước
+     khi nó hết hạn (4h), để Sếp không bao giờ phải kết nối lại thủ công.
+     Chưa cấu hình / chưa kết nối thì bỏ qua êm, không báo lỗi. */
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil((async () => {
+      try {
+        if (shopee.daCauHinh(env)) await shopee.lamMoiToken(env);
+      } catch (e) {
+        console.error('Cron làm mới token Shopee lỗi:', e.message);
+      }
+    })());
+  },
+
   async fetch(req, env) {
     const url = new URL(req.url);
 

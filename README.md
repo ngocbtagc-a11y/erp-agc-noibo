@@ -1,4 +1,4 @@
-# CRM nội bộ — Công ty TNHH Alpha Green Commerce
+# ERP nội bộ — Công ty TNHH Alpha Green Commerce
 
 Hệ thống quản trị nội bộ: **Tổng quan · Danh bạ · Nhân sự · Kinh doanh · Kho vận · Kế toán**.
 Dùng được trên cả máy tính và điện thoại.
@@ -145,7 +145,7 @@ crm-agc/
 │   └── tao-icon-app.ps1       Tạo icon cho app điện thoại
 └── public/                    ⬅ TRÌNH DUYỆT TẢI VỀ ĐƯỢC (coi như công khai)
     ├── index.html             Đăng nhập + đổi mật khẩu lần đầu
-    ├── app.html               Trang CRM chính
+    ├── app.html               Trang ERP chính
     ├── manifest.webmanifest   Khai báo app điện thoại (PWA)
     ├── sw.js                  Service worker — CHỈ lưu giao diện, không lưu dữ liệu
     └── assets/

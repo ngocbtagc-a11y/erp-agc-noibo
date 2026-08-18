@@ -29,3 +29,8 @@ npm-debug.log*
 
 # Cloudflare
 .wrangler/
+
+# Bí mật + trạng thái cục bộ của Cloudflare Wrangler
+.dev.vars
+.dev.vars.*
+.wrangler/

@@ -68,5 +68,44 @@ export const API = {
 
   qtKhoaTaiKhoan: (taiKhoanId, kichHoat) => goi('/api/quan-tri/khoa-tai-khoan', {
     method: 'POST', body: JSON.stringify({ tai_khoan_id: taiKhoanId, kich_hoat: kichHoat })
-  })
+  }),
+
+  /* ---- Kho: Xuất / Nhập / Tồn ---- */
+  khoSanPham: () => goi('/api/kho/san-pham'),
+
+  khoThemSanPham: (sp) => goi('/api/kho/them-san-pham', {
+    method: 'POST', body: JSON.stringify(sp)
+  }),
+
+  khoNhap: (d) => goi('/api/kho/nhap', { method: 'POST', body: JSON.stringify(d) }),
+
+  khoXuat: (d) => goi('/api/kho/xuat', { method: 'POST', body: JSON.stringify(d) }),
+
+  khoLo: (sanPhamId) =>
+    goi('/api/kho/lo?san_pham_id=' + encodeURIComponent(sanPhamId)),
+
+  khoBaoCao: (tu, den) =>
+    goi('/api/kho/bao-cao?tu=' + encodeURIComponent(tu) + '&den=' + encodeURIComponent(den)),
+
+  khoLichSu: (sanPhamId, gioiHan = 30) =>
+    goi('/api/kho/lich-su?san_pham_id=' + encodeURIComponent(sanPhamId) + '&gioi_han=' + gioiHan),
+
+  /* ---- Đón nhân sự mới (ảnh CCCD) ---- */
+  nsDocCCCD: (anhBase64) => goi('/api/nhan-su/doc-cccd', {
+    method: 'POST', body: JSON.stringify({ anh: anhBase64 })
+  }),
+  nsDonMoi: (hoSo) => goi('/api/nhan-su/don-moi', {
+    method: 'POST', body: JSON.stringify(hoSo)
+  }),
+
+  /* ---- Đơn hoàn (Shopee) ---- */
+  shopeeTrangThai: () => goi('/api/shopee/trang-thai'),
+  hoanDongBo: () => goi('/api/hoan/dong-bo', { method: 'POST' }),
+  hoanDanhSach: () => goi('/api/hoan/danh-sach'),
+
+  /* ---- Đơn hoàn (TikTok) ---- */
+  tiktokTrangThai: () => goi('/api/tiktok/trang-thai'),
+  tiktokDongBo: () => goi('/api/tiktok/dong-bo', { method: 'POST' })
+  // Lưu ý: kết nối Shopee đi thẳng bằng chuyển trang tới /api/shopee/connect
+  // (server trả 302 sang trang ủy quyền Shopee), không qua lớp fetch này.
 };

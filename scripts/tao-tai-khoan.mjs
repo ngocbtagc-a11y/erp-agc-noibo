@@ -1,5 +1,5 @@
 /* ==========================================================================
-   Tạo (các) tài khoản ADMIN đầu tiên cho CRM
+   Tạo (các) tài khoản ADMIN đầu tiên cho ERP
    ---------------------------------------------------------------------------
    Chỉ tạo các tài khoản admin liệt kê trong ADMINS bên dưới. Mọi nhân sự và
    tài khoản khác, admin tự thêm sau trong tab "Quản trị" của web.
@@ -39,7 +39,7 @@ const ADMINS = [
 ];
 /* =========================================================================== */
 
-const SO_VONG = 210000;
+const SO_VONG = 100000;   // TRẦN của Cloudflare Workers — không đặt cao hơn (xem src/auth.js)
 
 function sangBase64(buf) {
   return Buffer.from(new Uint8Array(buf)).toString('base64');

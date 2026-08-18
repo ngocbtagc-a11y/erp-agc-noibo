@@ -1,5 +1,5 @@
 /* ==========================================================================
-   CRM Alpha Green Commerce — Điều khiển giao diện
+   ERP Alpha Green Commerce — Điều khiển giao diện
    ---------------------------------------------------------------------------
    Danh bạ và Nhân sự lấy từ máy chủ thật (máy chủ tự kiểm tra quyền).
    Tổng quan / Kinh doanh / Kho vận / Kế toán vẫn là dữ liệu mẫu trong
@@ -19,6 +19,7 @@ const TAB = [
   { id: 'nhansu',    ten: 'Nhân sự',    icon: 'M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75' },
   { id: 'kinhdoanh', ten: 'Kinh doanh', icon: 'M23 6l-9.5 9.5-5-5L1 18M17 6h6v6' },
   { id: 'khovan',    ten: 'Kho vận',    icon: 'M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16zM3.27 6.96L12 12.01l8.73-5.05M12 22.08V12' },
+  { id: 'donhoan',   ten: 'Đơn hoàn',   icon: 'M9 14l-4-4 4-4M5 10h11a4 4 0 010 8h-2' },
   { id: 'ketoan',    ten: 'Kế toán',    icon: 'M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6' },
   { id: 'quantri',   ten: 'Quản trị',   icon: 'M12 15a3 3 0 100-6 3 3 0 000 6zM19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-2.82 1.17V21a2 2 0 01-4 0v-.09A1.65 1.65 0 006 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.6 14a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 7.6a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z' }
 ];
@@ -292,17 +293,394 @@ if (TOI.quyen.includes('kinhdoanh')) {
     `<td><span class="tag ${esc(r.tt)}">${esc(r.ttx)}</span></td>`);
 }
 
-/* -- Kho vận (còn là dữ liệu mẫu) -- */
+/* -- Kho — Xuất / Nhập / Tồn (máy chủ thật) -- */
 if (TOI.quyen.includes('khovan')) {
-  veThe('#kv-the', DB.khoVan.the);
-  veChart('#kv-chart', DB.khoVan.donHang);
-  veDanhSach('#kv-nhap', DB.khoVan.nhapHang);
-  veBang('#kv-bang', DB.khoVan.tonKho, r =>
-    `<td><div class="nm">${esc(r.sp)}</div></td>` +
-    `<td class="sm">${esc(r.ma)}</td>` +
-    `<td class="num">${esc(r.sl)}</td>` +
-    `<td class="num">${esc(r.ngay.toFixed(1))}</td>` +
-    `<td><span class="tag ${esc(r.tt)}">${esc(r.ttx)}</span></td>`);
+  await khoiDongKho();
+}
+
+/* -- Đơn hoàn — Shopee (máy chủ thật) -- */
+if (TOI.quyen.includes('donhoan')) {
+  await khoiDongDonHoan();
+}
+
+async function khoiDongKho() {
+  const qKho = TOI.kho || { thao_tac: false, quan_ly: false, gia_von: false };
+  let DS_SP = [];          // danh sách sản phẩm + tồn, lấy từ máy chủ
+  let xemGiaVon = false;
+
+  /* Ngày dạng YYYY-MM-DD theo giờ máy người dùng (Hà Nội = giờ VN) */
+  const p2 = n => String(n).padStart(2, '0');
+  const ngayISO = d => `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`;
+
+  /* HSD + số ngày còn lại thành chữ dễ đọc */
+  function moTaHsd(han, soNgay) {
+    if (!han) return '<span class="sm">—</span>';
+    const dd = han.split('-').reverse().join('/');
+    if (soNgay == null) return `<span class="sm">${dd}</span>`;
+    if (soNgay < 0)  return `${dd} <span class="tag danger">quá hạn</span>`;
+    if (soNgay <= 30) return `${dd} <span class="tag warn">còn ${soNgay}n</span>`;
+    return `<span class="sm">${dd}</span>`;
+  }
+
+  const NHAN_TT = {
+    het:         { chu: 'Hết hàng',    mau: 'danger' },
+    sap_het:     { chu: 'Sắp hết',     mau: 'danger' },
+    can_han:     { chu: 'Cận hạn',     mau: 'warn'   },
+    binh_thuong: { chu: 'Bình thường', mau: 'ok'     }
+  };
+
+  /* ---- Ẩn/hiện theo quyền ---- */
+  // Không được thao tác (VD kế toán trưởng) → giấu tab Nhập/Xuất
+  if (!qKho.thao_tac) {
+    document.querySelectorAll('#kvSeg .seg-nut[data-kv="nhap"], #kvSeg .seg-nut[data-kv="xuat"]')
+            .forEach(b => b.remove());
+  }
+  // Không được quản lý kho → giấu ô thêm mã hàng
+  if (qKho.quan_ly) $('#kv-panel-them').hidden = false;
+  // Không xem được giá vốn → bỏ cột giá trị tồn và ô đơn giá
+  if (!qKho.gia_von) {
+    const th = $('#kv-thGiaTri'); if (th) th.remove();
+  } else {
+    $('#kvNhapFieldGia').hidden = false;
+  }
+
+  /* ---- Chuyển màn (segmented) ---- */
+  $('#kvSeg').addEventListener('click', e => {
+    const nut = e.target.closest('.seg-nut');
+    if (!nut) return;
+    document.querySelectorAll('#kvSeg .seg-nut').forEach(b => b.classList.toggle('active', b === nut));
+    ['ton', 'nhap', 'xuat', 'baocao'].forEach(k => {
+      const pane = document.getElementById('kv-pane-' + k);
+      if (pane) pane.hidden = (k !== nut.dataset.kv);
+    });
+  });
+
+  /* ---- Vẽ bảng tồn kho + thẻ tổng quan + đổ dropdown ---- */
+  function veTonKho(tuKhoa) {
+    const k = boDau((tuKhoa || '').trim());
+    const ds = DS_SP.filter(s => !k ||
+      boDau(`${s.ten} ${s.ma_sku} ${s.danh_muc || ''}`).includes(k));
+
+    veBang('#kv-ton-bang', ds, s => {
+      const tt = NHAN_TT[s.trang_thai] || NHAN_TT.binh_thuong;
+      return '' +
+        `<td><div class="nm kv-lnk" data-sp="${esc(s.id)}">${esc(s.ten)}</div>` +
+          `<div class="sm">${esc(s.danh_muc || '')}</div></td>` +
+        `<td class="sm">${esc(s.ma_sku)}</td>` +
+        `<td class="num"><b>${esc(tienVN(s.ton))}</b> <span class="sm">${esc(s.don_vi)}</span></td>` +
+        `<td>${s.theo_doi_hsd ? moTaHsd(s.han_gan_nhat, s.so_ngay_toi_han) : '<span class="sm">không theo dõi</span>'}</td>` +
+        (xemGiaVon ? `<td class="num">${esc(tienVN(s.gia_tri_ton))}</td>` : '') +
+        `<td><span class="tag ${tt.mau}">${esc(tt.chu)}</span></td>`;
+    });
+
+    $('#kv-ton-trong').hidden = ds.length > 0;
+    $('#kv-ton-hint').textContent = `${ds.length}/${DS_SP.length} mã hàng`;
+  }
+
+  function veThe_Kho() {
+    const soMa = DS_SP.length;
+    const duoiMin = DS_SP.filter(s => s.trang_thai === 'sap_het' || s.trang_thai === 'het').length;
+    const canHan = DS_SP.filter(s => s.trang_thai === 'can_han').length;
+    const the = [
+      { k: 'Số mã hàng', v: String(soMa), d: 'Đang kinh doanh' },
+      { k: 'Dưới mức tối thiểu', v: String(duoiMin), d: duoiMin ? 'Cần nhập bổ sung' : 'Ổn', dir: duoiMin ? 'down' : '' },
+      { k: 'Sắp hết hạn (≤30n)', v: String(canHan), d: canHan ? 'Ưu tiên xả hàng' : 'Không có', dir: canHan ? 'down' : '' }
+    ];
+    if (xemGiaVon) {
+      const tong = DS_SP.reduce((s, x) => s + (x.gia_tri_ton || 0), 0);
+      the.push({ k: 'Giá trị tồn kho', v: tienVN(tong) + ' đ', d: 'Theo giá nhập gần nhất' });
+    } else {
+      const tongTon = DS_SP.reduce((s, x) => s + (x.ton || 0), 0);
+      the.push({ k: 'Tổng tồn (đơn vị)', v: tienVN(tongTon), d: 'Cộng mọi mã hàng' });
+    }
+    veThe('#kv-the', the);
+  }
+
+  function doDropdown() {
+    const optNhap = DS_SP.map(s =>
+      `<option value="${esc(s.id)}">${esc(s.ten)} — ${esc(s.ma_sku)}</option>`).join('');
+    const nSel = $('#kvNhapSP'), xSel = $('#kvXuatSP');
+    if (nSel) nSel.innerHTML = '<option value="">— Chọn sản phẩm —</option>' + optNhap;
+    if (xSel) xSel.innerHTML = '<option value="">— Chọn sản phẩm —</option>' +
+      DS_SP.map(s => `<option value="${esc(s.id)}">${esc(s.ten)} — tồn ${s.ton} ${esc(s.don_vi)}</option>`).join('');
+  }
+
+  /* ---- Nạp lại toàn bộ dữ liệu kho từ máy chủ ---- */
+  async function taiLai() {
+    const kq = await API.khoSanPham();
+    DS_SP = kq.san_pham;
+    xemGiaVon = kq.xem_gia_von;
+    veThe_Kho();
+    veTonKho($('#kv-tim').value);
+    doDropdown();
+  }
+
+  await taiLai();
+  $('#kv-tim').addEventListener('input', e => veTonKho(e.target.value));
+
+  /* ---- Bấm vào tên sản phẩm → mở hộp chi tiết lô + lịch sử ---- */
+  $('#kv-ton-bang').addEventListener('click', async e => {
+    const lnk = e.target.closest('.kv-lnk');
+    if (!lnk) return;
+    await moChiTiet(lnk.dataset.sp);
+  });
+
+  const kvModal = $('#kvModalNen');
+  $('#kvModalDong').addEventListener('click', () => { kvModal.hidden = true; });
+  kvModal.addEventListener('click', e => { if (e.target === kvModal) kvModal.hidden = true; });
+
+  async function moChiTiet(spId) {
+    const sp = DS_SP.find(s => s.id === spId);
+    if (!sp) return;
+    $('#kvModalTen').textContent = sp.ten;
+    $('#kvModalMa').textContent = `Mã ${sp.ma_sku} · tồn ${sp.ton} ${sp.don_vi}`;
+    $('#kvModalLo').innerHTML = '';
+    $('#kvModalLichSu').innerHTML = '';
+    kvModal.hidden = false;
+
+    const [{ lo }, { lich_su }] = await Promise.all([
+      API.khoLo(spId), API.khoLichSu(spId, 30)
+    ]);
+
+    // Không theo dõi HSD → luôn hiện dòng nhắc "không quản theo lô".
+    // Có theo dõi → chỉ hiện khi thực sự không còn lô nào.
+    $('#kvModalLoTrong').hidden = sp.theo_doi_hsd ? (lo.length > 0) : false;
+    veBang('#kvModalLo', lo, l =>
+      `<td>${esc(l.so_lo || '—')}</td>` +
+      `<td>${moTaHsd(l.han_su_dung, l.so_ngay_toi_han)}</td>` +
+      `<td class="num">${esc(tienVN(l.ton))}</td>`);
+
+    veBang('#kvModalLichSu', lich_su, g => {
+      const nhap = g.loai === 'nhap';
+      const mau = nhap ? 'ok' : (g.loai === 'xuat' ? 'mute' : 'warn');
+      const chu = nhap ? 'Nhập' : (g.loai === 'xuat' ? 'Xuất' : 'Điều chỉnh');
+      return '' +
+        `<td class="sm">${esc((g.luc || '').slice(0, 16).replace('T', ' '))}</td>` +
+        `<td><span class="tag ${mau}">${chu}</span></td>` +
+        `<td class="num">${esc(tienVN(g.so_luong))}</td>` +
+        `<td class="sm">${esc(g.doi_tac || '—')}</td>` +
+        `<td class="sm">${esc(g.nguoi || '—')}</td>`;
+    });
+  }
+
+  /* ---- Nhập kho ---- */
+  if (qKho.thao_tac) {
+    $('#kvXuatSP').addEventListener('change', e => {
+      const s = DS_SP.find(x => x.id === e.target.value);
+      const box = $('#kvXuatTonBox');
+      if (!s) { box.hidden = true; return; }
+      box.hidden = false;
+      $('#kvXuatTonNhac').innerHTML =
+        `Tồn hiện tại: <b>${tienVN(s.ton)} ${esc(s.don_vi)}</b>` +
+        (s.theo_doi_hsd && s.han_gan_nhat ? ` · HSD gần nhất ${esc(s.han_gan_nhat.split('-').reverse().join('/'))}` : '');
+    });
+
+    $('#kvFormNhap').addEventListener('submit', async ev => {
+      ev.preventDefault();
+      const oLoi = $('#kvLoiNhap'), oOk = $('#kvOkNhap');
+      oLoi.classList.remove('show'); oOk.hidden = true;
+      const nut = $('#kvNutNhap'); nut.disabled = true; nut.textContent = 'Đang lưu…';
+      try {
+        await API.khoNhap({
+          san_pham_id: $('#kvNhapSP').value,
+          so_luong: $('#kvNhapSL').value,
+          don_gia: $('#kvNhapGia').value,
+          so_lo: $('#kvNhapLo').value,
+          han_su_dung: $('#kvNhapHsd').value,
+          doi_tac: $('#kvNhapNCC').value,
+          ghi_chu: $('#kvNhapGhiChu').value
+        });
+        $('#kvFormNhap').reset();
+        oOk.textContent = '✓ Đã nhập kho. Tồn đã cập nhật.'; oOk.hidden = false;
+        await taiLai();
+      } catch (err) {
+        oLoi.textContent = err.message; oLoi.classList.add('show');
+      } finally {
+        nut.disabled = false; nut.textContent = 'Nhập kho';
+      }
+    });
+
+    /* ---- Xuất kho ---- */
+    $('#kvFormXuat').addEventListener('submit', async ev => {
+      ev.preventDefault();
+      const oLoi = $('#kvLoiXuat'), oOk = $('#kvOkXuat');
+      oLoi.classList.remove('show'); oOk.hidden = true;
+      const nut = $('#kvNutXuat'); nut.disabled = true; nut.textContent = 'Đang lưu…';
+      try {
+        const kq = await API.khoXuat({
+          san_pham_id: $('#kvXuatSP').value,
+          so_luong: $('#kvXuatSL').value,
+          doi_tac: $('#kvXuatKenh').value,
+          ghi_chu: $('#kvXuatGhiChu').value
+        });
+        $('#kvFormXuat').reset();
+        $('#kvXuatTonBox').hidden = true;
+        oOk.textContent = '✓ Đã xuất kho theo lô cận hạn nhất (FEFO).'; oOk.hidden = false;
+        await taiLai();
+      } catch (err) {
+        oLoi.textContent = err.message; oLoi.classList.add('show');
+      } finally {
+        nut.disabled = false; nut.textContent = 'Xuất kho';
+      }
+    });
+  }
+
+  /* ---- Thêm mã hàng (chỉ quản lý kho) ---- */
+  if (qKho.quan_ly) {
+    $('#kvFormThemSP').addEventListener('submit', async ev => {
+      ev.preventDefault();
+      const oLoi = $('#kvLoiThemSP');
+      oLoi.classList.remove('show');
+      const nut = $('#kvNutThemSP'); nut.disabled = true; nut.textContent = 'Đang lưu…';
+      try {
+        await API.khoThemSanPham({
+          ma_sku: $('#kvSku').value,
+          ten: $('#kvTenSP').value,
+          danh_muc: $('#kvDanhMuc').value,
+          don_vi: $('#kvDonVi').value,
+          ton_toi_thieu: $('#kvTonMin').value,
+          theo_doi_hsd: $('#kvTheoDoiHsd').checked
+        });
+        $('#kvFormThemSP').reset();
+        $('#kvTheoDoiHsd').checked = true;
+        await taiLai();
+      } catch (err) {
+        oLoi.textContent = err.message; oLoi.classList.add('show');
+      } finally {
+        nut.disabled = false; nut.textContent = 'Thêm mã hàng';
+      }
+    });
+  }
+
+  /* ---- Báo cáo Xuất-Nhập-Tồn ---- */
+  const now = new Date();
+  $('#kvBcTu').value = ngayISO(new Date(now.getFullYear(), now.getMonth(), 1));
+  $('#kvBcDen').value = ngayISO(now);
+
+  $('#kvFormBaoCao').addEventListener('submit', async ev => {
+    ev.preventDefault();
+    const nut = $('#kvNutBaoCao'); nut.disabled = true; nut.textContent = 'Đang tính…';
+    try {
+      const { bang } = await API.khoBaoCao($('#kvBcTu').value, $('#kvBcDen').value);
+      veBang('#kv-bc-bang', bang, r =>
+        `<td><div class="nm">${esc(r.ten)}</div></td>` +
+        `<td class="sm">${esc(r.ma_sku)}</td>` +
+        `<td class="num">${esc(tienVN(r.ton_dau))}</td>` +
+        `<td class="num" style="color:var(--sage,#3f6b3f)">+${esc(tienVN(r.nhap))}</td>` +
+        `<td class="num" style="color:#b3462f">-${esc(tienVN(r.xuat))}</td>` +
+        `<td class="num"><b>${esc(tienVN(r.ton_cuoi))}</b></td>`);
+      $('#kv-bc-trong').hidden = bang.length > 0;
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      nut.disabled = false; nut.textContent = 'Xem báo cáo';
+    }
+  });
+}
+
+/* ==========================================================================
+   ĐƠN HOÀN — Shopee
+   ========================================================================== */
+async function khoiDongDonHoan() {
+  const NHAN_TT = {
+    REQUESTED:  { chu: 'Chờ xử lý',    mau: 'warn'   },
+    PROCESSING: { chu: 'Đang xử lý',   mau: 'warn'   },
+    ACCEPTED:   { chu: 'Đã chấp nhận', mau: 'ok'     },
+    CANCELLED:  { chu: 'Đã huỷ',       mau: 'mute'   },
+    CLOSED:     { chu: 'Đã đóng',      mau: 'mute'   },
+    JUDGING:    { chu: 'Đang phân xử', mau: 'danger' }
+  };
+
+  /* Danh sách đơn hoàn dùng chung — có cột Nguồn (Shopee/TikTok) */
+  async function veDanhSach() {
+    const { don_hoan } = await API.hoanDanhSach();
+    veBang('#dh-bang', don_hoan, r => {
+      const tt = NHAN_TT[r.trang_thai] || { chu: r.trang_thai || '—', mau: 'mute' };
+      const tien = r.so_tien != null
+        ? tienVN(Math.round(r.so_tien / 100000)) + ' ' + esc(r.tien_te || '')
+        : '—';
+      const ngTag = r.nguon === 'tiktok'
+        ? '<span class="tag mute">TikTok</span>'
+        : '<span class="tag sage">Shopee</span>';
+      return `<td>${ngTag}</td>` +
+        `<td class="sm">${esc(r.return_sn)}</td>` +
+        `<td class="sm">${esc(r.order_sn || '—')}</td>` +
+        `<td><span class="tag ${tt.mau}">${esc(tt.chu)}</span></td>` +
+        `<td class="sm">${esc(r.ly_do || '—')}</td>` +
+        `<td class="num">${tien}</td>` +
+        `<td class="sm">${esc(r.nguoi_mua || '—')}</td>`;
+    });
+    $('#dh-trong').hidden = don_hoan.length > 0;
+    $('#dh-dem').textContent = don_hoan.length ? don_hoan.length + ' đơn hoàn' : '';
+  }
+
+  /* Một khối kết nối sàn (dùng cho cả Shopee lẫn TikTok) */
+  function dungSan(cfg) {
+    const oTrang = $(cfg.trang), oHint = $(cfg.hint);
+    const nutKN = $(cfg.ketnoi), nutDB = $(cfg.dongbo);
+    const oLoi = $(cfg.loi), oOk = $(cfg.ok);
+
+    // Sàn đá về kèm ?shopee=ok / ?tiktok=ok sau khi ủy quyền xong
+    if (new URLSearchParams(location.search).get(cfg.co) === 'ok') {
+      oOk.textContent = `✓ Đã kết nối ${cfg.ten} thành công.`; oOk.hidden = false;
+    }
+
+    async function veTrangThai() {
+      const tt = await cfg.apiTrangThai();
+      nutKN.hidden = true; nutDB.hidden = true;
+      if (!tt.da_cau_hinh) {
+        oTrang.innerHTML = `⏳ <b>Chưa cấu hình khóa ${cfg.ten}</b> trên máy chủ. Khung sẵn sàng — chờ nạp khóa rồi kết nối.`;
+        oHint.textContent = 'Chưa cấu hình';
+        return;
+      }
+      if (!tt.da_ket_noi) {
+        oTrang.innerHTML = `🔌 <b>Chưa kết nối shop ${cfg.ten}.</b> ` +
+          (tt.quyen.quan_ly ? `Bấm “Kết nối ${cfg.ten}” để ủy quyền một lần.` : 'Nhờ Giám đốc bấm kết nối.');
+        oHint.textContent = 'Chưa kết nối';
+        if (tt.quyen.quan_ly) { nutKN.hidden = false; nutKN.textContent = `Kết nối ${cfg.ten}`; }
+        return;
+      }
+      oTrang.innerHTML = `✅ <b>Đã kết nối shop</b> <code>${esc(tt.shop_id)}</code>` +
+        (tt.cap_nhat_luc ? ` · làm mới token: ${esc(tt.cap_nhat_luc)}` : '');
+      oHint.textContent = 'Đã kết nối';
+      nutDB.hidden = false;
+      if (tt.quyen.quan_ly) { nutKN.hidden = false; nutKN.textContent = 'Kết nối lại'; }
+    }
+
+    // Kết nối = chuyển trang sang trang ủy quyền của sàn (server trả 302)
+    nutKN.addEventListener('click', () => { window.location.href = cfg.duongDanConnect; });
+
+    nutDB.addEventListener('click', async () => {
+      oLoi.classList.remove('show'); oOk.hidden = true;
+      nutDB.disabled = true; nutDB.textContent = 'Đang đồng bộ…';
+      try {
+        const kq = await cfg.apiDongBo();
+        oOk.textContent = `✓ Đã đồng bộ ${kq.so_don} đơn hoàn ${cfg.ten}.`; oOk.hidden = false;
+        await veDanhSach(); await veTrangThai();
+      } catch (err) {
+        oLoi.textContent = err.message; oLoi.classList.add('show');
+      } finally {
+        nutDB.disabled = false; nutDB.textContent = 'Đồng bộ đơn hoàn';
+      }
+    });
+
+    return veTrangThai;
+  }
+
+  const veShopee = dungSan({
+    ten: 'Shopee', co: 'shopee', duongDanConnect: '/api/shopee/connect',
+    trang: '#dh-trangthai', hint: '#dh-tt-hint', ketnoi: '#dh-ketnoi', dongbo: '#dh-dongbo',
+    loi: '#dh-loi', ok: '#dh-ok', apiTrangThai: API.shopeeTrangThai, apiDongBo: API.hoanDongBo
+  });
+  const veTiktok = dungSan({
+    ten: 'TikTok', co: 'tiktok', duongDanConnect: '/api/tiktok/connect',
+    trang: '#dh-tk-trangthai', hint: '#dh-tk-hint', ketnoi: '#dh-tk-ketnoi', dongbo: '#dh-tk-dongbo',
+    loi: '#dh-tk-loi', ok: '#dh-tk-ok', apiTrangThai: API.tiktokTrangThai, apiDongBo: API.tiktokDongBo
+  });
+
+  await veShopee();
+  await veTiktok();
+  await veDanhSach();
 }
 
 /* -- Kế toán (còn là dữ liệu mẫu) -- */
