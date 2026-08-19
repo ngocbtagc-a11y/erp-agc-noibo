@@ -197,6 +197,15 @@
         <p>Doanh thu theo kênh bán, hiệu quả từng sản phẩm và động thái của đối thủ.</p>
       </div>
 
+      <!-- Chuyển màn: Vận hành sàn / R&D -->
+      <div class="seg" id="kdSeg">
+        <button class="seg-nut active" data-kd="vanhanh">Vận hành sàn</button>
+        <button class="seg-nut" data-kd="rnd">R&amp;D</button>
+      </div>
+
+      <!-- ===== Màn Vận hành sàn ===== -->
+      <div class="kv-pane" id="kd-pane-vanhanh">
+
       <!-- ---------- Vận hành sàn: đơn hoàn cần đối soát (mọi đơn kho chưa xác nhận) ---------- -->
       <div class="panel" id="kd-doisoat-panel" hidden>
         <div class="panel-head">
@@ -305,6 +314,17 @@
             </thead>
             <tbody id="kd-bang"></tbody>
           </table>
+        </div>
+      </div>
+      </div>
+
+      <!-- ===== Màn R&D ===== -->
+      <div class="kv-pane" id="kd-pane-rnd" hidden>
+        <div class="panel">
+          <div class="panel-head"><h4>R&amp;D — Nghiên cứu &amp; phát triển sản phẩm</h4></div>
+          <div class="panel-body">
+            <div class="empty">Khu vực R&amp;D đang chờ nội dung. Sếp cho tôi biết cần theo dõi gì ở đây (ý tưởng sản phẩm mới, mẫu đang thử, kết quả test, tiến độ ra mắt…) là tôi dựng tiếp.</div>
+          </div>
         </div>
       </div>
     </section>
@@ -519,7 +539,8 @@
             <h4>Đơn hoàn về kho</h4>
             <span class="hint" id="dh-dem"></span>
           </div>
-          <div class="panel-body" style="padding-bottom:0">
+          <div class="panel-body" style="padding-bottom:0; padding-top:0">
+            <p class="hint" style="margin:14px 0 14px">Chỉ liệt kê đơn <b>sàn đã đẩy xuống và kho chưa xác nhận nhận</b>. Quá 12h chưa nhận → tô đỏ cảnh báo. Quá 24h vẫn chưa nhận → đơn tự chuyển sang cho <b>Vận hành sàn</b> tra soát (biến mất khỏi đây, xem lại ở Kinh doanh &gt; Vận hành sàn &gt; Cần đối soát) — Vận hành sàn xử lý xong sẽ đẩy đơn trở lại đây.</p>
             <div class="dh-timkiem">
               <div class="search">
                 <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
@@ -553,7 +574,7 @@
               <tbody id="dh-bang"></tbody>
             </table>
           </div>
-          <div class="empty" id="dh-trong" hidden>Chưa có đơn hoàn nào — hãy sang tab “Kết nối sàn” bấm “Đồng bộ đơn hoàn”.</div>
+          <div class="empty" id="dh-trong" hidden>Không có đơn hoàn nào cần kho xử lý lúc này.</div>
         </div>
 
         <!-- Ghép tên sản phẩm -> SKU kho (chỉ quản lý kho / ban giám đốc) -->

@@ -541,6 +541,22 @@ async function kiemTraCanhBaoHoan(env) {
   }
 }
 
+/* Quá 24h kể từ khi sàn báo khách gửi hàng về mà kho VẪN chưa bấm "Đã nhận"
+   -> tự đẩy đơn sang sân "van_hanh" (Vận hành sàn) để họ chủ động tra soát
+   với sàn/ĐVVC, thay vì kho cứ chờ vô thời hạn (Sếp Ngọc chốt 19/08/2026).
+   Đơn biến mất khỏi màn Kho vận > Đơn hoàn, hiện ở Kinh doanh > Vận hành sàn
+   > Cần đối soát. Vận hành sàn tra soát xong (kdDaDoiSoat/kdDayKho) thì
+   dang_cho tự về lại 'kho' — xem migrations/them-luong-tra-soat.sql. */
+async function kiemTraDayVanHanh(env) {
+  await env.DB.prepare(`
+    UPDATE don_hoan
+       SET dang_cho = 'van_hanh'
+     WHERE kho_nhan_luc IS NULL AND dang_cho = 'kho' AND cho_kho_nhan_tu IS NOT NULL
+       AND trang_thai NOT LIKE '%CANCEL%'
+       AND (julianday(datetime('now','+7 hours')) - julianday(cho_kho_nhan_tu)) * 24 >= 24
+  `).run();
+}
+
 /* ==========================================================================
    KINH DOANH — Cần đối soát với sàn
    ---------------------------------------------------------------------------
@@ -566,7 +582,7 @@ async function kdCanDoiSoat(req, env) {
   const { results } = await env.DB.prepare(`
     SELECT d.return_sn, d.order_sn, d.ma_van_don, d.san_pham, d.san_pham_ten,
            COALESCE(d.san_pham_sku, m.ma_sku) AS san_pham_sku, d.so_luong,
-           d.nguon, d.trang_thai, d.so_tien, d.tien_te, d.nguoi_mua,
+           d.nguon, d.trang_thai, d.so_tien, d.tien_te, d.nguoi_mua, d.dang_cho,
            d.cho_kho_nhan_tu, d.lan_tra_soat, d.doi_soat_luc, d.doi_soat_boi
       FROM don_hoan d
       LEFT JOIN sku_map m ON m.ten_san_pham = d.san_pham_ten
@@ -802,6 +818,8 @@ export default {
       try { await tiktok.dongBoNen(env); } catch (e) { console.error('Cron TikTok:', e.message); }
       // Sau khi đồng bộ xong mới quét cảnh báo (mốc 12h đã được cập nhật)
       try { await kiemTraCanhBaoHoan(env); } catch (e) { console.error('Cron cảnh báo:', e.message); }
+      // Quá 24h chưa nhận -> tự đẩy đơn sang sân Vận hành sàn
+      try { await kiemTraDayVanHanh(env); } catch (e) { console.error('Cron đẩy Vận hành sàn:', e.message); }
     })());
   },
 

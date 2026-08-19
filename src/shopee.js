@@ -254,6 +254,12 @@ export async function apiDanhSach(env, phien) {
   // đơn huỷ nhưng khách đã gửi hàng về trước đó (có mã vận đơn), vì hàng vẫn
   // đang trên đường tới kho thật, kho vẫn cần biết để nhận (Sếp Ngọc chốt
   // 19/08/2026, xem kdDonHuy trong index.js).
+  //
+  // Màn này CHỈ là hàng đợi việc cần làm của kho, không phải sổ lưu lịch sử
+  // (Sếp Ngọc chốt 19/08/2026): đơn đã nhận rồi (kho_nhan_luc có giá trị)
+  // hoặc đang ở "sân" Vận hành sàn (dang_cho='van_hanh' — quá 24h chưa nhận,
+  // xem kiemTraDayVanHanh trong index.js) thì KHÔNG hiện ở đây nữa. Vận hành
+  // sàn tra soát/đẩy xong (dang_cho về lại 'kho') là đơn tự hiện lại.
   const { results } = await env.DB.prepare(`
     SELECT d.return_sn, d.order_sn, d.trang_thai, d.ly_do, d.so_tien, d.tien_te, d.nguoi_mua,
            d.san_pham, d.san_pham_ten, COALESCE(d.san_pham_sku, m.ma_sku) AS san_pham_sku,
@@ -263,6 +269,8 @@ export async function apiDanhSach(env, phien) {
       FROM don_hoan d
       LEFT JOIN sku_map m ON m.ten_san_pham = d.san_pham_ten
      WHERE (d.trang_thai NOT LIKE '%CANCEL%' OR d.ma_van_don IS NOT NULL)
+       AND d.kho_nhan_luc IS NULL
+       AND d.dang_cho = 'kho'
      ORDER BY d.dong_bo_luc DESC LIMIT 300
   `).all();
   return json({ don_hoan: results });

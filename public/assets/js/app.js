@@ -357,6 +357,17 @@ if (TOI.quyen.includes('kinhdoanh')) {
     `<td class="num">${esc(r.dt)}</td>` +
     `<td><span class="tag ${esc(r.tt)}">${esc(r.ttx)}</span></td>`);
 
+  // Chuyển màn Vận hành sàn / R&D (giống bộ pills của Kho vận)
+  $('#kdSeg').addEventListener('click', e => {
+    const nut = e.target.closest('.seg-nut');
+    if (!nut) return;
+    document.querySelectorAll('#kdSeg .seg-nut').forEach(b => b.classList.toggle('active', b === nut));
+    ['vanhanh', 'rnd'].forEach(k => {
+      const pane = document.getElementById('kd-pane-' + k);
+      if (pane) pane.hidden = (k !== nut.dataset.kd);
+    });
+  });
+
   // Vận hành sàn — đơn hoàn cần đối soát + đơn hoàn huỷ (máy chủ thật) —
   // chỉ ai có quyền Đơn hoàn mới thấy
   if (TOI.quyen.includes('donhoan')) {
@@ -401,9 +412,12 @@ async function khoiDongDoiSoatSan() {
         `<div class="phu">${esc(r.doi_soat_luc || '')}${r.doi_soat_boi ? ' · ' + esc(r.doi_soat_boi) : ''}</div>`
       : '<span class="tag mute">Chưa</span>';
     const nhanNut = (r.lan_tra_soat > 0) ? `Tra soát lần ${r.lan_tra_soat + 1}` : 'Đã tra soát';
+    // Kho đã để quá 24h không nhận -> hệ thống tự đẩy đơn này lên đây (dang_cho='van_hanh')
+    const daybao = r.dang_cho === 'van_hanh'
+      ? `<div class="phu canh-bao-chu">Kho đẩy lên · quá ${esc(gioTre(r.cho_kho_nhan_tu))}</div>` : '';
     return `<td class="dinh-tick"><input type="checkbox" data-chon="${esc(r.return_sn)}"></td>` +
       `<td class="dinh-cot">${ngTag}</td>` +
-      `<td class="sm dinh-cot2">${esc(r.return_sn)}</td>` +
+      `<td class="sm dinh-cot2">${esc(r.return_sn)}${daybao}</td>` +
       `<td class="sm dinh-cot3">${esc(r.order_sn || '—')}</td>` +
       `<td class="sm dinh-cot4">${esc(r.ma_van_don || '—')}</td>` +
       spCell +
