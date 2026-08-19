@@ -557,14 +557,18 @@ async function kdCanDoiSoat(req, env) {
   if (l) return l;
   if (!duocXemDonHoan(phien.vai_tro)) return loi('Bạn không có quyền', 403);
 
+  // Luồng (Sếp Ngọc chốt): MỌI đơn hoàn, bất kể trạng thái trên sàn, hễ KHO
+  // CHƯA XÁC NHẬN "Đã nhận" (kho_nhan_luc IS NULL) đều vào danh sách tra soát —
+  // vì trạng thái sàn ("Hoàn tất"...) không đảm bảo hàng đã về kho. Loại đơn huỷ.
+  // Đơn chưa tra soát lần nào lên đầu; kèm số lần đã tra soát để theo dõi.
   const { results } = await env.DB.prepare(`
-    SELECT return_sn, order_sn, ma_van_don, san_pham, nguon, trang_thai,
-           so_tien, tien_te, nguoi_mua, cho_kho_nhan_tu
+    SELECT return_sn, order_sn, ma_van_don, san_pham, san_pham_ten, san_pham_sku, so_luong,
+           nguon, trang_thai, so_tien, tien_te, nguoi_mua,
+           cho_kho_nhan_tu, lan_tra_soat, doi_soat_luc, doi_soat_boi
       FROM don_hoan
-     WHERE cho_kho_nhan_tu IS NOT NULL AND kho_nhan_luc IS NULL AND doi_soat_luc IS NULL
+     WHERE kho_nhan_luc IS NULL
        AND trang_thai NOT LIKE '%CANCEL%'
-       AND (julianday(datetime('now','+7 hours')) - julianday(cho_kho_nhan_tu)) * 24 >= 12
-     ORDER BY cho_kho_nhan_tu ASC
+     ORDER BY (doi_soat_luc IS NOT NULL), dong_bo_luc DESC
   `).all();
   return json({ can_doi_soat: results });
 }
@@ -579,11 +583,14 @@ async function kdDaDoiSoat(req, env) {
   const rsn = (b.return_sn || '').trim();
   if (!rsn) return loi('Thiếu mã đơn hoàn');
 
+  // Cho phép tra soát NHIỀU LẦN (mỗi lần +1) chừng nào kho chưa xác nhận nhận hàng.
   const r = await env.DB.prepare(`
-    UPDATE don_hoan SET doi_soat_luc = datetime('now','+7 hours'), doi_soat_boi = ?
-     WHERE return_sn = ? AND doi_soat_luc IS NULL
+    UPDATE don_hoan
+       SET doi_soat_luc = datetime('now','+7 hours'), doi_soat_boi = ?,
+           lan_tra_soat = lan_tra_soat + 1
+     WHERE return_sn = ? AND kho_nhan_luc IS NULL
   `).bind(phien.ho_ten || phien.ten_dang_nhap, rsn).run();
-  if (!r.meta.changes) return loi('Không tìm thấy đơn hoặc đã được đối soát trước đó', 404);
+  if (!r.meta.changes) return loi('Không tìm thấy đơn (hoặc kho đã xác nhận nhận hàng)', 404);
   return json({ ok: true, nguoi: phien.ho_ten || phien.ten_dang_nhap });
 }
 

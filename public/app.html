@@ -197,14 +197,14 @@
         <p>Doanh thu theo kênh bán, hiệu quả từng sản phẩm và động thái của đối thủ.</p>
       </div>
 
-      <!-- ---------- Vận hành sàn: đơn hoàn cần đối soát (quá 12h kho chưa nhận) ---------- -->
+      <!-- ---------- Vận hành sàn: đơn hoàn cần đối soát (mọi đơn kho chưa xác nhận) ---------- -->
       <div class="panel" id="kd-doisoat-panel" hidden>
         <div class="panel-head">
           <h4>Vận hành sàn — Cần đối soát với sàn</h4>
           <span class="hint" id="kd-ds-dem"></span>
         </div>
         <div class="panel-body" style="padding-bottom:0; padding-top:0">
-          <p class="hint" style="margin:14px 0 0">Đơn hoàn sàn báo khách đã gửi về quá 12h mà kho chưa xác nhận nhận hàng — tra vận đơn và khiếu nại/đối soát trực tiếp với sàn, xong thì đánh dấu đã đối soát.</p>
+          <p class="hint" style="margin:14px 0 0">Mọi đơn hoàn (bất kể trạng thái trên sàn) mà <b>kho chưa xác nhận đã nhận hàng</b> đều nằm ở đây — vì trạng thái sàn không đảm bảo hàng đã về kho. Tra vận đơn, khiếu nại/đối soát với sàn, xong thì bấm “Đã tra soát”. Kho bấm “Đã nhận” là đơn tự rời danh sách.</p>
         </div>
         <div class="table-wrap">
           <table>
@@ -214,17 +214,18 @@
                 <th>Mã đơn hoàn</th>
                 <th>Đơn gốc</th>
                 <th>Mã vận đơn</th>
-                <th>Sản phẩm</th>
+                <th>Sản phẩm hoàn về</th>
+                <th class="num">Số lượng</th>
+                <th>Trạng thái trên sàn</th>
                 <th class="num">Số tiền</th>
-                <th>Người mua</th>
-                <th>Trễ</th>
+                <th>Đã tra soát</th>
                 <th></th>
               </tr>
             </thead>
             <tbody id="kd-ds-bang"></tbody>
           </table>
         </div>
-        <div class="empty" id="kd-ds-trong" hidden>Không có đơn hoàn nào cần đối soát — kho đang xử lý đúng hạn.</div>
+        <div class="empty" id="kd-ds-trong" hidden>Không có đơn hoàn nào cần đối soát — kho đã xác nhận nhận hết.</div>
       </div>
 
       <div class="stats" id="kd-the"></div>

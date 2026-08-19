@@ -326,16 +326,34 @@ async function khoiDongDoiSoatSan() {
       const tien = r.so_tien != null
         ? tienVN(Math.round(r.so_tien / 100000)) + ' ' + esc(r.tien_te || '')
         : '—';
+      // Sản phẩm: tên (dòng trên) + SKU x số lượng (dòng dưới)
+      const spSku = r.san_pham_sku || '';
+      const spTen = r.san_pham_ten || r.san_pham || '—';
+      const sl = r.so_luong != null ? r.so_luong : 1;
+      const dong2 = spSku ? `${esc(spSku)} x ${sl}` : '';
+      const spCell = `<td class="sm" title="${esc(spTen)}">${esc(spTen)}` +
+        (dong2 ? `<div class="phu">${dong2}</div>` : '') + `</td>`;
+      // Trạng thái sàn — rút gọn (chỉ tham khảo, không quyết định)
+      const ttChu = (r.trang_thai || '—').replace(/^RETURN_OR_REFUND_/, '')
+        .replace(/^REQUEST_/, '').replace(/_/g, ' ').toLowerCase();
+      // Đã tra soát mấy lần
+      const daTra = (r.lan_tra_soat > 0)
+        ? `<span class="tag warn">${r.lan_tra_soat} lần</span>` +
+          `<div class="phu">${esc(r.doi_soat_luc || '')}${r.doi_soat_boi ? ' · ' + esc(r.doi_soat_boi) : ''}</div>`
+        : '<span class="tag mute">Chưa</span>';
+      const nhanNut = (r.lan_tra_soat > 0) ? `Tra soát lần ${r.lan_tra_soat + 1}` : 'Đã tra soát';
       const html = `<td>${ngTag}</td>` +
         `<td class="sm">${esc(r.return_sn)}</td>` +
         `<td class="sm">${esc(r.order_sn || '—')}</td>` +
         `<td class="sm">${esc(r.ma_van_don || '—')}</td>` +
-        `<td class="sm" title="${esc(r.san_pham || '')}">${esc(r.san_pham || '—')}</td>` +
+        spCell +
+        `<td class="num">${r.so_luong != null ? esc(r.so_luong) : '—'}</td>` +
+        `<td><span class="tag mute" title="${esc(r.trang_thai || '')}">${esc(ttChu)}</span></td>` +
         `<td class="num">${tien}</td>` +
-        `<td class="sm">${esc(r.nguoi_mua || '—')}</td>` +
-        `<td><span class="tag danger">${gioTre(r.cho_kho_nhan_tu)}</span></td>` +
-        `<td><button type="button" class="btn-nho" data-doisoat="${esc(r.return_sn)}">Đã đối soát</button></td>`;
-      return { html, cls: 'canh-bao' };
+        `<td>${daTra}</td>` +
+        `<td><button type="button" class="btn-nho" data-doisoat="${esc(r.return_sn)}">${nhanNut}</button></td>`;
+      // Chưa tra soát lần nào → tô đỏ để vận hành ưu tiên xử lý
+      return { html, cls: (r.lan_tra_soat > 0) ? '' : 'canh-bao' };
     });
     $('#kd-ds-trong').hidden = can_doi_soat.length > 0;
     $('#kd-ds-dem').textContent = `${can_doi_soat.length} đơn cần đối soát`;
