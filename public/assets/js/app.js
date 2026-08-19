@@ -737,12 +737,14 @@ async function khoiDongDonHoan() {
         khoTd = `<td><button type="button" class="btn-nho" data-nhan="${esc(r.return_sn)}">Đã nhận</button>${nhac}</td>`;
       }
 
-      // Hiển thị theo SKU (không dùng tên Shopee dài) — tên chỉ hiện khi rê chuột.
-      // Dữ liệu cũ chưa tách SKU thì tạm dùng chuỗi gộp san_pham cho tới lần đồng bộ tới.
+      // Sản phẩm hoàn về: DÒNG TRÊN = tên sản phẩm trên sàn; DÒNG DƯỚI = SKU x số lượng.
+      // Dữ liệu cũ chưa tách thì tạm dùng chuỗi gộp san_pham cho tới lần đồng bộ tới.
       const spSku = r.san_pham_sku || '';
-      const spTen = r.san_pham_ten || r.san_pham || '';
-      const spChinh = spSku || spTen || '—';
-      const spCell = `<td class="sm" title="${esc(spTen)}"><b>${esc(spChinh)}</b></td>`;
+      const spTen = r.san_pham_ten || r.san_pham || '—';
+      const sl = r.so_luong != null ? r.so_luong : 1;
+      const dong2 = spSku ? `${esc(spSku)} x ${sl}` : '';
+      const spCell = `<td class="sm" title="${esc(spTen)}">${esc(spTen)}` +
+        (dong2 ? `<div class="phu">${dong2}</div>` : '') + `</td>`;
       const slCell = `<td class="num">${r.so_luong != null ? esc(r.so_luong) : '—'}</td>`;
 
       const html = `<td>${ngTag}</td>` +
