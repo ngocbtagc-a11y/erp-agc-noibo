@@ -198,7 +198,13 @@ export async function dongBoNen(env) {
   }
 
   const path = '/return_refund/202309/returns/search';
-  const bodyStr = JSON.stringify({});
+  // Chỉ lấy đơn hoàn TRONG 90 NGÀY GẦN ĐÂY, sắp MỚI NHẤT trước — nếu không sàn
+  // trả 50 đơn cũ nhất trước, đơn mới không bao giờ tới lượt (đầy đơn 2025).
+  const bodyStr = JSON.stringify({
+    create_time_ge: Math.floor(Date.now() / 1000) - 90 * 86400,
+    sort_field: 'create_time',
+    sort_order: 'DESC'
+  });
   const query = {
     app_key: env.TIKTOK_APP_KEY, timestamp: String(nowSec()),
     shop_cipher: kn.shop_cipher, page_size: '50'
