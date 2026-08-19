@@ -105,6 +105,13 @@ export const API = {
   hoanDaNhan: (returnSn) => goi('/api/hoan/da-nhan', {
     method: 'POST', body: JSON.stringify({ return_sn: returnSn })
   }),
+  hoanKhieuNai: (returnSn, ghiChu) => goi('/api/hoan/khieu-nai', {
+    method: 'POST', body: JSON.stringify({ return_sn: returnSn, ghi_chu: ghiChu })
+  }),
+
+  /* ---- Thông báo trong ERP (chuông) ---- */
+  thongBao: () => goi('/api/thong-bao'),
+  thongBaoDaXem: () => goi('/api/thong-bao/da-xem', { method: 'POST' }),
 
   /* ---- Đơn hoàn (TikTok) ---- */
   tiktokTrangThai: () => goi('/api/tiktok/trang-thai'),

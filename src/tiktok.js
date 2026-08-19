@@ -236,8 +236,8 @@ export async function dongBoNen(env) {
     const spSku = [...new Set(skuArr)].join(' | ') || null;
     const soLuong = tongSl || null;
     await env.DB.prepare(`
-      INSERT INTO don_hoan (return_sn, order_sn, trang_thai, ly_do, so_tien, tien_te, nguoi_mua, san_pham, san_pham_ten, san_pham_sku, so_luong, ma_van_don, tao_luc_shopee, cap_nhat_shopee, du_lieu_json, nguon, dong_bo_luc)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'tiktok', datetime('now','+7 hours'))
+      INSERT INTO don_hoan (return_sn, order_sn, trang_thai, ly_do, so_tien, tien_te, nguoi_mua, san_pham, san_pham_ten, san_pham_sku, so_luong, ma_van_don, tao_luc_shopee, cap_nhat_shopee, du_lieu_json, nguon, dang_cho, dong_bo_luc)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'tiktok', 'van_hanh', datetime('now','+7 hours'))
       ON CONFLICT(return_sn) DO UPDATE SET
         trang_thai=excluded.trang_thai, ly_do=excluded.ly_do, so_tien=excluded.so_tien,
         tien_te=excluded.tien_te, nguoi_mua=excluded.nguoi_mua, san_pham=excluded.san_pham,

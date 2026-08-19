@@ -55,6 +55,19 @@
         </svg>
       </button>
       <h2 id="tieuDe">Tổng quan</h2>
+      <div class="tb-chuong" id="tbChuong" hidden>
+        <button class="tb-nut" id="tbNut" aria-label="Thông báo">
+          <svg class="ico" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/>
+          </svg>
+          <span class="tb-badge" id="tbBadge" hidden>0</span>
+        </button>
+        <div class="tb-panel" id="tbPanel" hidden>
+          <div class="tb-panel-dau">Thông báo</div>
+          <div id="tbDanhSach"></div>
+          <div class="tb-trong" id="tbTrong" hidden>Chưa có thông báo nào.</div>
+        </div>
+      </div>
       <div class="date" id="ngayHomNay"></div>
     </header>
 
@@ -540,7 +553,7 @@
             <span class="hint" id="dh-dem"></span>
           </div>
           <div class="panel-body" style="padding-bottom:0; padding-top:0">
-            <p class="hint" style="margin:14px 0 14px">Chỉ liệt kê đơn <b>sàn đã đẩy xuống và kho chưa xác nhận nhận</b>. Quá 12h chưa nhận → tô đỏ cảnh báo. Quá 24h vẫn chưa nhận → đơn tự chuyển sang cho <b>Vận hành sàn</b> tra soát (biến mất khỏi đây, xem lại ở Kinh doanh &gt; Vận hành sàn &gt; Cần đối soát) — Vận hành sàn xử lý xong sẽ đẩy đơn trở lại đây.</p>
+            <p class="hint" style="margin:14px 0 14px">Chỉ hiện đơn <b>Vận hành sàn đã đẩy xuống cho kho</b>. Kho kiểm hàng rồi bấm <b>“Nhận đủ”</b> (đóng đơn) hoặc <b>“Cần khiếu nại”</b> (thiếu/hỏng → đẩy ngược về Vận hành sàn đi khiếu nại với sàn). Có đơn mới đẩy xuống sẽ báo ở chuông 🔔 góc trên.</p>
             <div class="dh-timkiem">
               <div class="search">
                 <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">

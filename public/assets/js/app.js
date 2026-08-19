@@ -572,6 +572,57 @@ if (TOI.shopee && TOI.shopee.xem) {
   await khoiDongDonHoan();
 }
 
+/* ---- Chuông thông báo trong ERP 🔔 ---- */
+(function chuongThongBao() {
+  const NHOM_ROLES = ['nhan_vien_kho', 'quan_ly_kho', 'van_hanh_san', 'giam_doc', 'pho_giam_doc'];
+  if (!NHOM_ROLES.includes(TOI.vai_tro)) return;   // vai trò không nhận thông báo → ẩn chuông
+
+  const chuong = $('#tbChuong'), nut = $('#tbNut'), panel = $('#tbPanel'),
+        badge = $('#tbBadge'), ds = $('#tbDanhSach'), trong = $('#tbTrong');
+  if (!chuong || !nut) return;
+  chuong.hidden = false;
+
+  const ICO = { day_kho: '📦', khieu_nai: '⚠️', canh_bao: '🔔' };
+
+  async function taiThongBao() {
+    let kq;
+    try { kq = await API.thongBao(); } catch { return; }
+    const list = kq.thong_bao || [];
+    if (kq.chua_doc > 0) { badge.textContent = kq.chua_doc > 99 ? '99+' : kq.chua_doc; badge.hidden = false; }
+    else badge.hidden = true;
+    ds.innerHTML = list.map(t =>
+      `<div class="tb-item" data-loai="${esc(t.loai || '')}">` +
+      `${ICO[t.loai] || '🔔'} ${esc(t.noi_dung)}<div class="tb-gio">${esc(t.tao_luc || '')}</div></div>`
+    ).join('');
+    trong.hidden = list.length > 0;
+  }
+
+  nut.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    const dangMo = !panel.hidden;
+    panel.hidden = dangMo;
+    if (!dangMo) { try { await API.thongBaoDaXem(); } catch {} badge.hidden = true; }
+  });
+
+  ds.addEventListener('click', (e) => {
+    const it = e.target.closest('.tb-item');
+    if (!it) return;
+    if (it.dataset.loai === 'day_kho') {
+      moTab('khovan');
+      const b = document.querySelector('#kvSeg .seg-nut[data-kv="donhoan"]'); if (b) b.click();
+    } else if (it.dataset.loai === 'khieu_nai') {
+      moTab('kinhdoanh');
+    }
+    panel.hidden = true;
+  });
+
+  document.addEventListener('click', () => { panel.hidden = true; });
+  panel.addEventListener('click', (e) => e.stopPropagation());
+
+  taiThongBao();
+  setInterval(taiThongBao, 5 * 60 * 1000);   // làm mới 5 phút/lần
+})();
+
 async function khoiDongKho() {
   const qKho = TOI.kho || { thao_tac: false, quan_ly: false, gia_von: false };
   let DS_SP = [];          // danh sách sản phẩm + tồn, lấy từ máy chủ
@@ -878,7 +929,9 @@ async function khoiDongDonHoan() {
           (Date.now() - Date.parse(r.cho_kho_nhan_tu.replace(' ', 'T'))) / 3600000 >= 12;
         if (qua12h) cls = 'canh-bao';
         const nhac = qua12h ? '<div class="phu canh-bao-chu">Quá 12h!</div>' : '';
-        khoTd = `<td><button type="button" class="btn-nho" data-nhan="${esc(r.return_sn)}">Đã nhận</button>${nhac}</td>`;
+        khoTd = `<td style="white-space:nowrap">` +
+          `<button type="button" class="btn-nho btn-primary" data-nhan="${esc(r.return_sn)}">Nhận đủ</button> ` +
+          `<button type="button" class="btn-nho" data-khieunai="${esc(r.return_sn)}">Cần khiếu nại</button>${nhac}</td>`;
       }
 
       // Sản phẩm hoàn về: DÒNG TRÊN = tên sản phẩm trên sàn; DÒNG DƯỚI = SKU x số lượng.
@@ -913,21 +966,30 @@ async function khoiDongDonHoan() {
   }
   $('#dh-tim').addEventListener('input', e => veBangDH(e.target.value));
 
-  /* Bấm "Đã nhận" — kho xác nhận đã nhận được kiện hàng hoàn */
+  /* Kho bấm "Nhận đủ" (đóng đơn) hoặc "Cần khiếu nại" (đẩy về Vận hành sàn) */
   $('#dh-bang').addEventListener('click', async (e) => {
-    const btn = e.target.closest('[data-nhan]');
-    if (!btn) return;
-    const rsn = btn.getAttribute('data-nhan');
+    const btnNhan = e.target.closest('[data-nhan]');
+    const btnKn = e.target.closest('[data-khieunai]');
+    if (!btnNhan && !btnKn) return;
+    const btn = btnNhan || btnKn;
+    const rsn = btn.getAttribute(btnNhan ? 'data-nhan' : 'data-khieunai');
+    let ghiChu = '';
+    if (btnKn) {
+      const nhap = prompt('Lý do cần khiếu nại (thiếu hàng / hỏng / không đúng mô tả…):', '');
+      if (nhap === null) return;   // bấm Huỷ thì thôi
+      ghiChu = nhap;
+    }
     btn.disabled = true;
     const cu = btn.textContent;
     btn.textContent = 'Đang lưu…';
     try {
-      await API.hoanDaNhan(rsn);
-      await veDanhSach();               // tải lại để lấy đúng người + giờ nhận
+      if (btnNhan) await API.hoanDaNhan(rsn);
+      else await API.hoanKhieuNai(rsn, ghiChu);
+      await veDanhSach();               // tải lại
     } catch (err) {
       btn.disabled = false;
       btn.textContent = cu;
-      alert(err.message || 'Không xác nhận được, thử lại nhé.');
+      alert(err.message || 'Không lưu được, thử lại nhé.');
     }
   });
 

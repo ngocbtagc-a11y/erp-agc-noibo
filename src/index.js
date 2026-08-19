@@ -496,6 +496,68 @@ async function hoanDaNhan(req, env) {
   return json({ ok: true, nguoi: phien.ho_ten || phien.ten_dang_nhap });
 }
 
+/* ---- Thông báo trong ERP (chuông 🔔) ------------------------------------
+   Nhóm nhận: kho roles -> 'kho'; vận hành sàn -> 'van_hanh'; ban giám đốc -> cả hai. */
+function nhomCua(vaiTro) {
+  if (vaiTro === 'nhan_vien_kho' || vaiTro === 'quan_ly_kho') return ['kho'];
+  if (vaiTro === 'van_hanh_san') return ['van_hanh'];
+  if (vaiTro === 'giam_doc' || vaiTro === 'pho_giam_doc') return ['kho', 'van_hanh'];
+  return [];
+}
+
+async function guiThongBao(env, nhom, noiDung, loai, lienKet) {
+  try {
+    await env.DB.prepare(
+      `INSERT INTO thong_bao (nhom, noi_dung, loai, lien_ket, tao_luc)
+       VALUES (?, ?, ?, ?, datetime('now','+7 hours'))`
+    ).bind(nhom, noiDung, loai || null, lienKet || null).run();
+  } catch (e) { console.error('Gửi thông báo:', e.message); }
+}
+
+/* Kho bấm "Cần khiếu nại" -> đẩy đơn ngược về Vận hành sàn + báo vận hành */
+async function hoanKhieuNai(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  if (!duocThaoTacKho(phien.vai_tro)) return loi('Bạn không có quyền', 403);
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  const rsn = (b.return_sn || '').trim();
+  const ghiChu = (b.ghi_chu || '').trim().slice(0, 300);
+  if (!rsn) return loi('Thiếu mã đơn hoàn');
+  const r = await env.DB.prepare(
+    `UPDATE don_hoan SET dang_cho = 'van_hanh' WHERE return_sn = ? AND kho_nhan_luc IS NULL`
+  ).bind(rsn).run();
+  if (!r.meta.changes) return loi('Không tìm thấy đơn (hoặc đã nhận đủ)', 404);
+  await guiThongBao(env, 'van_hanh',
+    `Kho báo CẦN KHIẾU NẠI đơn ${rsn}${ghiChu ? ' — ' + ghiChu : ''}. Kiểm tra & khiếu nại với sàn.`,
+    'khieu_nai', rsn);
+  return json({ ok: true });
+}
+
+async function layThongBao(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  const nhom = nhomCua(phien.vai_tro);
+  if (!nhom.length) return json({ thong_bao: [], chua_doc: 0 });
+  const phs = nhom.map(() => '?').join(',');
+  const { results } = await env.DB.prepare(
+    `SELECT id, nhom, noi_dung, loai, lien_ket, tao_luc FROM thong_bao
+      WHERE nhom IN (${phs}) ORDER BY id DESC LIMIT 50`
+  ).bind(...nhom).all();
+  const xem = await env.DB.prepare('SELECT tb_xem_luc FROM tai_khoan WHERE id = ?')
+                          .bind(phien.tai_khoan_id).first();
+  const moc = xem?.tb_xem_luc || '';
+  const chuaDoc = (results || []).filter(t => (t.tao_luc || '') > moc).length;
+  return json({ thong_bao: results || [], chua_doc: chuaDoc });
+}
+
+async function thongBaoDaXem(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  await env.DB.prepare(`UPDATE tai_khoan SET tb_xem_luc = datetime('now','+7 hours') WHERE id = ?`)
+              .bind(phien.tai_khoan_id).run();
+  return json({ ok: true });
+}
+
 /* Gửi cảnh báo qua Telegram. Chưa cấu hình token/chat thì bỏ qua êm (trả false). */
 async function guiTelegram(env, text) {
   const token = env.TELEGRAM_BOT_TOKEN, chatId = env.TELEGRAM_CHAT_ID;
@@ -661,6 +723,11 @@ async function kdDayKho(req, env) {
     `).bind(nguoi, rsn).run();
     if (r.meta.changes) da++;
   }
+  if (da > 0) {
+    await guiThongBao(env, 'kho',
+      `Vận hành sàn đẩy ${da} đơn hoàn sang kho — vào Kho vận › Đơn hoàn để nhận.`,
+      'day_kho', dsRsn[0]);
+  }
   return json({ ok: true, so_don: da, nguoi });
 }
 
@@ -793,6 +860,9 @@ const DUONG_DAN = {
   'GET  /api/hoan/sku-map':      hoanSkuMapDanhSach,
   'POST /api/hoan/sku-map':      hoanSkuMapGan,
   'POST /api/hoan/da-nhan':      hoanDaNhan,
+  'POST /api/hoan/khieu-nai':    hoanKhieuNai,
+  'GET  /api/thong-bao':         layThongBao,
+  'POST /api/thong-bao/da-xem':  thongBaoDaXem,
   'GET  /api/kinh-doanh/can-doi-soat': kdCanDoiSoat,
   'POST /api/kinh-doanh/da-doi-soat':  kdDaDoiSoat,
   'POST /api/kinh-doanh/day-kho':      kdDayKho,
@@ -818,8 +888,7 @@ export default {
       try { await tiktok.dongBoNen(env); } catch (e) { console.error('Cron TikTok:', e.message); }
       // Sau khi đồng bộ xong mới quét cảnh báo (mốc 12h đã được cập nhật)
       try { await kiemTraCanhBaoHoan(env); } catch (e) { console.error('Cron cảnh báo:', e.message); }
-      // Quá 24h chưa nhận -> tự đẩy đơn sang sân Vận hành sàn
-      try { await kiemTraDayVanHanh(env); } catch (e) { console.error('Cron đẩy Vận hành sàn:', e.message); }
+      // (Đã bỏ tự-đẩy-24h: luồng mới cho Vận hành sàn CHỦ ĐỘNG đẩy từng đơn sang kho)
     })());
   },
 
