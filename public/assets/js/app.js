@@ -115,9 +115,11 @@ const LY_DO = {
 /* Mã lý do của TikTok/Shopee thường dài (vd ecom_order_delivered_refund_and_
    return_reason_damaged) → dịch theo TỪ KHÓA cho bền, không phải liệt kê từng mã. */
 const LY_DO_KHOA = [
+  [/not_received|not_delivered|never_received/, 'Chưa nhận được hàng'],
   [/not_match|not_as_described/,          'Không đúng mô tả'],
   [/wrong_product|wrong_item|sent_wrong/, 'Giao sai hàng'],
   [/missing/,                             'Thiếu hàng'],
+  [/buy_now_refund_later|refund_later|sample/, 'Hoàn mẫu (mua trước trả sau)'],
   [/damaged/,                             'Hàng hư hỏng'],
   [/defective/,                           'Hàng lỗi'],
   [/poor_quality|quality/,                'Chất lượng kém'],
@@ -135,7 +137,13 @@ function nhanLyDo(s) {
   if (LY_DO[s]) return LY_DO[s];
   const low = String(s).toLowerCase();
   for (const [re, vn] of LY_DO_KHOA) if (re.test(low)) return vn;
-  let g = low.replace(/_/g, ' ');
+  // Mã lạ chưa map → cắt bỏ tiền tố/hậu tố dài của sàn, chỉ giữ phần nghĩa
+  let g = low
+    .replace(/^ecom_order_(delivered_refund(_and_return)?|to_ship_canceled)_reason_/, '')
+    .replace(/^(system_refund_|buyer_return_and_refund_)/, '')
+    .replace(/_rts_ro$/, '')
+    .replace(/_/g, ' ')
+    .trim();
   g = g.charAt(0).toUpperCase() + g.slice(1);
   return g.length > 34 ? g.slice(0, 34) + '…' : g;
 }
