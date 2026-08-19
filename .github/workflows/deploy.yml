@@ -1,0 +1,29 @@
+# Tự động deploy ERP lên Cloudflare mỗi khi có thay đổi được đẩy lên nhánh main.
+# Nhờ vậy, với nhân viên, "deploy" = CHỈ CẦN đẩy code lên GitHub. Không cần cài
+# wrangler hay đăng nhập Cloudflare trên máy — an toàn hơn vì không phát tán khóa
+# Cloudflare ra nhiều máy. Xem tiến trình/kết quả ở tab "Actions" trên GitHub.
+name: Deploy ERP lên Cloudflare
+
+on:
+  push:
+    branches: [main]        # đẩy lên main -> tự deploy
+  workflow_dispatch:         # cho phép bấm chạy tay trong tab Actions
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      # Account ID KHÔNG bí mật (chỉ là mã định danh tài khoản, không phải khóa)
+      CLOUDFLARE_ACCOUNT_ID: ac4732957e4ef577d32bfe4595f8f022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - name: Deploy bằng wrangler
+        uses: cloudflare/wrangler-action@v3
+        with:
+          # Khóa BÍ MẬT — lưu trong GitHub Secrets, KHÔNG viết thẳng vào file này
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          command: deploy

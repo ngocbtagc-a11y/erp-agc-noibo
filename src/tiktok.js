@@ -218,6 +218,14 @@ export async function dongBoNen(env) {
   for (const r of ds) {
     const returnId = r.return_id || r.return_sn || r.id;
     if (!returnId) continue;
+    // Bỏ qua đơn HỦY NGANG khi còn "chờ giao vận" (chưa bàn giao cho ĐVVC) —
+    // mã lý do TikTok có dạng "ecom_order_to_ship_canceled_reason_...". Đây
+    // không phải hàng hoàn thật (chưa từng rời kho) nên không đưa vào danh
+    // sách Đơn hoàn, kho khỏi phải chờ nhận một gói hàng không tồn tại.
+    // Đã đối chiếu với dữ liệu thật đang đồng bộ (17-18/08/2026) để chọn đúng
+    // mã lý do này, không đoán suông.
+    const lyDo = r.return_reason || r.reason || '';
+    if (/to_ship_canceled/i.test(lyDo)) continue;
     const soTien = r.refund_amount && (r.refund_amount.refund_total || r.refund_amount.total);
     // Tên sản phẩm hoàn về (gộp nhiều dòng hàng) — để kho đối soát
     const sp = (r.return_line_items || []).map(li => {

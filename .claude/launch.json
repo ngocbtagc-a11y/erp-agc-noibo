@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "erp-agc",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "chay"],
+      "port": 8787
+    }
+  ]
+}

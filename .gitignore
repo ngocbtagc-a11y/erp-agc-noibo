@@ -34,3 +34,6 @@ npm-debug.log*
 .dev.vars
 .dev.vars.*
 .wrangler/
+
+# Bản clone lồng nhau tạo nhầm — không đưa vào git
+erp-agc-noibo/
