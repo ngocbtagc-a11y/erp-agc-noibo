@@ -515,7 +515,9 @@ async function guiThongBao(env, nhom, noiDung, loai, lienKet) {
   } catch (e) { console.error('Gửi thông báo:', e.message); }
 }
 
-/* Kho bấm "Cần khiếu nại" -> đẩy đơn ngược về Vận hành sàn + báo vận hành */
+/* Kho bấm "Cần khiếu nại" -> đẩy đơn ngược về Vận hành sàn + báo vận hành.
+   Lý do ghi luôn vào chính đơn hoàn (ly_do_khieu_nai/khieu_nai_luc/khieu_nai_boi)
+   để Vận hành sàn thấy ngay trong bảng "Cần đối soát", không phải lục chuông. */
 async function hoanKhieuNai(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
@@ -524,9 +526,13 @@ async function hoanKhieuNai(req, env) {
   const rsn = (b.return_sn || '').trim();
   const ghiChu = (b.ghi_chu || '').trim().slice(0, 300);
   if (!rsn) return loi('Thiếu mã đơn hoàn');
-  const r = await env.DB.prepare(
-    `UPDATE don_hoan SET dang_cho = 'van_hanh' WHERE return_sn = ? AND kho_nhan_luc IS NULL`
-  ).bind(rsn).run();
+  const nguoi = phien.ho_ten || phien.ten_dang_nhap;
+  const r = await env.DB.prepare(`
+    UPDATE don_hoan
+       SET dang_cho = 'van_hanh', ly_do_khieu_nai = ?,
+           khieu_nai_luc = datetime('now','+7 hours'), khieu_nai_boi = ?
+     WHERE return_sn = ? AND kho_nhan_luc IS NULL
+  `).bind(ghiChu || null, nguoi, rsn).run();
   if (!r.meta.changes) return loi('Không tìm thấy đơn (hoặc đã nhận đủ)', 404);
   await guiThongBao(env, 'van_hanh',
     `Kho báo CẦN KHIẾU NẠI đơn ${rsn}${ghiChu ? ' — ' + ghiChu : ''}. Kiểm tra & khiếu nại với sàn.`,
@@ -652,7 +658,8 @@ async function kdCanDoiSoat(req, env) {
            COALESCE(d.san_pham_sku, m.ma_sku) AS san_pham_sku, d.so_luong,
            d.nguon, d.trang_thai, d.ly_do, d.so_tien, d.tien_te, d.nguoi_mua, d.dang_cho,
            d.cho_kho_nhan_tu, d.lan_tra_soat, d.doi_soat_luc, d.doi_soat_boi,
-           d.tao_luc_shopee, d.dong_bo_luc
+           d.tao_luc_shopee, d.dong_bo_luc,
+           d.ly_do_khieu_nai, d.khieu_nai_luc, d.khieu_nai_boi
       FROM don_hoan d
       LEFT JOIN sku_map m ON m.ten_san_pham = d.san_pham_ten
      WHERE d.kho_nhan_luc IS NULL
@@ -698,10 +705,13 @@ async function kdDaDoiSoat(req, env) {
 
   // Cho phép tra soát NHIỀU LẦN (mỗi lần +1) chừng nào kho chưa xác nhận nhận hàng.
   // "Tra soát xong -> về sân kho" (dang_cho='kho') — xem migrations/them-luong-tra-soat.sql.
+  // Xoá lý do khiếu nại cũ (nếu có) vì vòng khiếu nại này coi như đã xử lý xong —
+  // đơn quay lại kho là một lượt mới, khiếu nại lần sau (nếu có) sẽ ghi đè lại.
   const r = await env.DB.prepare(`
     UPDATE don_hoan
        SET doi_soat_luc = datetime('now','+7 hours'), doi_soat_boi = ?,
-           lan_tra_soat = lan_tra_soat + 1, dang_cho = 'kho'
+           lan_tra_soat = lan_tra_soat + 1, dang_cho = 'kho',
+           ly_do_khieu_nai = NULL, khieu_nai_luc = NULL, khieu_nai_boi = NULL
      WHERE return_sn = ? AND kho_nhan_luc IS NULL
   `).bind(phien.ho_ten || phien.ten_dang_nhap, rsn).run();
   if (!r.meta.changes) return loi('Không tìm thấy đơn (hoặc kho đã xác nhận nhận hàng)', 404);
@@ -726,7 +736,8 @@ async function kdDayKho(req, env) {
     const r = await env.DB.prepare(`
       UPDATE don_hoan
          SET doi_soat_luc = datetime('now','+7 hours'), doi_soat_boi = ?,
-             lan_tra_soat = lan_tra_soat + 1, dang_cho = 'kho'
+             lan_tra_soat = lan_tra_soat + 1, dang_cho = 'kho',
+             ly_do_khieu_nai = NULL, khieu_nai_luc = NULL, khieu_nai_boi = NULL
        WHERE return_sn = ? AND kho_nhan_luc IS NULL
     `).bind(nguoi, rsn).run();
     if (r.meta.changes) da++;
@@ -751,7 +762,8 @@ async function kdDayKeToan(req, env) {
   let da = 0;
   for (const rsn of dsRsn) {
     const r = await env.DB.prepare(
-      `UPDATE don_hoan SET dang_cho = 'ke_toan'
+      `UPDATE don_hoan SET dang_cho = 'ke_toan',
+              ly_do_khieu_nai = NULL, khieu_nai_luc = NULL, khieu_nai_boi = NULL
         WHERE return_sn = ? AND kho_nhan_luc IS NULL AND ke_toan_luc IS NULL`
     ).bind(rsn).run();
     if (r.meta.changes) da++;

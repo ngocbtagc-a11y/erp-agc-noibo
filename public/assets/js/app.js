@@ -452,10 +452,18 @@ async function khoiDongDoiSoatSan() {
     const laMoi = r.tao_luc_shopee && !(r.lan_tra_soat > 0) &&
       (Date.now() / 1000 - Number(r.tao_luc_shopee)) < 3 * 86400;
     const tagMoi = laMoi ? '<span class="tag-new">new</span>' : '';
+    // Lý do kho khiếu nại (nếu kho vừa bấm "Cần khiếu nại") — ưu tiên hiện lý do
+    // thật; đơn nào chỉ tự động đẩy lên do quá 24h chưa nhận (không phải kho
+    // chủ động khiếu nại) thì hiện mốc thời gian trễ để vận hành biết mức độ gấp.
+    const khieuNaiHtml = r.ly_do_khieu_nai
+      ? `<div class="phu canh-bao-chu">⚠️ Kho khiếu nại: ${esc(r.ly_do_khieu_nai)}` +
+        `${r.khieu_nai_boi ? ' — ' + esc(r.khieu_nai_boi) : ''}</div>`
+      : (r.dang_cho === 'van_hanh' && r.cho_kho_nhan_tu
+          ? `<div class="phu canh-bao-chu">Kho đẩy lên · quá ${esc(gioTre(r.cho_kho_nhan_tu))}</div>` : '');
     return `<td class="dinh-tick"><input type="checkbox" data-chon="${esc(r.return_sn)}"></td>` +
       `<td class="dinh-cot">${ngTag}</td>` +
       `<td class="sm dinh-cot2">${esc(r.return_sn)}${tagMoi}` +
-        (ngayTao ? `<div class="phu">Hoàn: ${esc(ngayTao)}</div>` : '') + `</td>` +
+        (ngayTao ? `<div class="phu">Hoàn: ${esc(ngayTao)}</div>` : '') + khieuNaiHtml + `</td>` +
       `<td class="sm dinh-cot3">${esc(r.order_sn || '—')}</td>` +
       `<td class="sm dinh-cot4">${esc(r.ma_van_don || '—')}</td>` +
       spCell +
