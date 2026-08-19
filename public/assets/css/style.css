@@ -638,9 +638,12 @@ tr.canh-bao:hover > td { background: #fbdbd6; }
 .canh-bao-chu { color: #c0392b; font-weight: 700; }
 
 /* ==========================================================================
-   BẢNG DÀI — cuộn gọn trong 1 màn hình (~15 dòng) + cố định tiêu đề + cột đầu
+   BẢNG DÀI — cuộn gọn trong 1 màn hình (~15 dòng) + cố định tiêu đề + các cột đầu
    Dùng cho bảng nào có thể dài (VD "Cần đối soát"): .table-wrap-cuon thay
-   .table-wrap, thêm class .dinh-cot/.dinh-cot2 vào 2 cột đầu (th lẫn td).
+   .table-wrap, thêm class .dinh-tick/.dinh-cot/.dinh-cot2/.dinh-cot3/.dinh-cot4
+   vào các cột đầu cần cố định (cả th lẫn td) — 5 cột: ô tick, Nguồn, Mã đơn
+   hoàn, Đơn gốc, Mã vận đơn. Cột cuối (.dinh-cot4) có viền phải đậm hơn để
+   phân tách rõ vùng cố định với vùng cuộn.
    ========================================================================== */
 .table-wrap-cuon {
   overflow: auto;
@@ -653,13 +656,35 @@ tr.canh-bao:hover > td { background: #fbdbd6; }
 .table-wrap-cuon thead th { padding: 9px 16px; }
 .table-wrap-cuon tbody td { padding: 8px 16px; }
 
-.dinh-cot, .dinh-cot2 { position: sticky; z-index: 1; background: var(--card); }
-.dinh-cot  { left: 0; width: 90px; min-width: 90px; }
-.dinh-cot2 { left: 90px; }
-thead th.dinh-cot, thead th.dinh-cot2 { z-index: 3; background: var(--sage-wash); }
-tbody tr:hover .dinh-cot, tbody tr:hover .dinh-cot2 { background: var(--sage-wash); }
-tbody tr.canh-bao .dinh-cot, tbody tr.canh-bao .dinh-cot2 { background: #fdecea; }
-tbody tr.canh-bao:hover .dinh-cot, tbody tr.canh-bao:hover .dinh-cot2 { background: #fbdbd6; }
+.dinh-tick, .dinh-cot, .dinh-cot2, .dinh-cot3, .dinh-cot4 {
+  position: sticky; z-index: 1; background: var(--card);
+}
+.dinh-tick { left: 0;   width: 40px;  min-width: 40px; text-align: center; }
+.dinh-cot  { left: 40px;  width: 76px;  min-width: 76px; }
+.dinh-cot2 { left: 116px; width: 170px; min-width: 170px; }
+.dinh-cot3 { left: 286px; width: 150px; min-width: 150px; }
+.dinh-cot4 { left: 436px; width: 130px; min-width: 130px; border-right: 1px solid var(--line); }
+
+thead th.dinh-tick, thead th.dinh-cot, thead th.dinh-cot2, thead th.dinh-cot3, thead th.dinh-cot4 {
+  z-index: 3; background: var(--sage-wash);
+}
+tbody tr:hover .dinh-tick, tbody tr:hover .dinh-cot, tbody tr:hover .dinh-cot2,
+tbody tr:hover .dinh-cot3, tbody tr:hover .dinh-cot4 { background: var(--sage-wash); }
+tbody tr.canh-bao .dinh-tick, tbody tr.canh-bao .dinh-cot, tbody tr.canh-bao .dinh-cot2,
+tbody tr.canh-bao .dinh-cot3, tbody tr.canh-bao .dinh-cot4 { background: #fdecea; }
+tbody tr.canh-bao:hover .dinh-tick, tbody tr.canh-bao:hover .dinh-cot, tbody tr.canh-bao:hover .dinh-cot2,
+tbody tr.canh-bao:hover .dinh-cot3, tbody tr.canh-bao:hover .dinh-cot4 { background: #fbdbd6; }
+
+/* Thanh hành động khi có đơn được tick chọn */
+.kd-thanh-chon {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 20px;
+  background: var(--sage-wash);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  font-size: 13px; color: var(--ink);
+}
+.kd-thanh-chon b { color: var(--ink); }
 
 /* Đơn đã tra soát rồi — dìm nhẹ để mắt dồn vào đơn còn cần xử lý ở trên */
 tr.kd-daxong { opacity: .6; }

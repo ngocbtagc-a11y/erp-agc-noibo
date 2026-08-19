@@ -611,14 +611,41 @@ async function kdDaDoiSoat(req, env) {
   if (!rsn) return loi('Thiếu mã đơn hoàn');
 
   // Cho phép tra soát NHIỀU LẦN (mỗi lần +1) chừng nào kho chưa xác nhận nhận hàng.
+  // "Tra soát xong -> về sân kho" (dang_cho='kho') — xem migrations/them-luong-tra-soat.sql.
   const r = await env.DB.prepare(`
     UPDATE don_hoan
        SET doi_soat_luc = datetime('now','+7 hours'), doi_soat_boi = ?,
-           lan_tra_soat = lan_tra_soat + 1
+           lan_tra_soat = lan_tra_soat + 1, dang_cho = 'kho'
      WHERE return_sn = ? AND kho_nhan_luc IS NULL
   `).bind(phien.ho_ten || phien.ten_dang_nhap, rsn).run();
   if (!r.meta.changes) return loi('Không tìm thấy đơn (hoặc kho đã xác nhận nhận hàng)', 404);
   return json({ ok: true, nguoi: phien.ho_ten || phien.ten_dang_nhap });
+}
+
+/* Đẩy HÀNG LOẠT đơn đã chọn (tick chọn ở giao diện) về sân "kho" cùng lúc —
+   coi như đã tra soát xong (giống kdDaDoiSoat) nhưng làm nhiều đơn 1 lần,
+   để Vận hành sàn khỏi bấm từng đơn một khi đối soát cả loạt xong xuôi. */
+async function kdDayKho(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  if (!duocXemDonHoan(phien.vai_tro)) return loi('Bạn không có quyền', 403);
+
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  const dsRsn = Array.isArray(b.return_sn) ? b.return_sn.map(s => String(s).trim()).filter(Boolean) : [];
+  if (!dsRsn.length) return loi('Chưa chọn đơn nào');
+
+  const nguoi = phien.ho_ten || phien.ten_dang_nhap;
+  let da = 0;
+  for (const rsn of dsRsn) {
+    const r = await env.DB.prepare(`
+      UPDATE don_hoan
+         SET doi_soat_luc = datetime('now','+7 hours'), doi_soat_boi = ?,
+             lan_tra_soat = lan_tra_soat + 1, dang_cho = 'kho'
+       WHERE return_sn = ? AND kho_nhan_luc IS NULL
+    `).bind(nguoi, rsn).run();
+    if (r.meta.changes) da++;
+  }
+  return json({ ok: true, so_don: da, nguoi });
 }
 
 /* ==========================================================================
@@ -752,6 +779,7 @@ const DUONG_DAN = {
   'POST /api/hoan/da-nhan':      hoanDaNhan,
   'GET  /api/kinh-doanh/can-doi-soat': kdCanDoiSoat,
   'POST /api/kinh-doanh/da-doi-soat':  kdDaDoiSoat,
+  'POST /api/kinh-doanh/day-kho':      kdDayKho,
   'GET  /api/kinh-doanh/don-huy':      kdDonHuy,
   'GET  /api/tiktok/trang-thai': tiktokTrangThai,
   'GET  /api/tiktok/connect':    tiktokConnect,

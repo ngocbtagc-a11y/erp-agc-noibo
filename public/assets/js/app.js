@@ -401,10 +401,11 @@ async function khoiDongDoiSoatSan() {
         `<div class="phu">${esc(r.doi_soat_luc || '')}${r.doi_soat_boi ? ' · ' + esc(r.doi_soat_boi) : ''}</div>`
       : '<span class="tag mute">Chưa</span>';
     const nhanNut = (r.lan_tra_soat > 0) ? `Tra soát lần ${r.lan_tra_soat + 1}` : 'Đã tra soát';
-    return `<td class="dinh-cot">${ngTag}</td>` +
+    return `<td class="dinh-tick"><input type="checkbox" data-chon="${esc(r.return_sn)}"></td>` +
+      `<td class="dinh-cot">${ngTag}</td>` +
       `<td class="sm dinh-cot2">${esc(r.return_sn)}</td>` +
-      `<td class="sm">${esc(r.order_sn || '—')}</td>` +
-      `<td class="sm">${esc(r.ma_van_don || '—')}</td>` +
+      `<td class="sm dinh-cot3">${esc(r.order_sn || '—')}</td>` +
+      `<td class="sm dinh-cot4">${esc(r.ma_van_don || '—')}</td>` +
       spCell +
       `<td class="num">${r.so_luong != null ? esc(r.so_luong) : '—'}</td>` +
       `<td><span class="tag mute" title="${esc(r.trang_thai || '')}">${esc(ttChu)}</span></td>` +
@@ -423,14 +424,58 @@ async function khoiDongDoiSoatSan() {
 
     let html = chua.map(r => `<tr class="canh-bao">${dongDoiSoat(r)}</tr>`).join('');
     if (chua.length && daXong.length) {
-      html += `<tr class="kd-chiadoi"><td colspan="10">Đã tra soát — chỉ còn chờ kho xác nhận nhận hàng</td></tr>`;
+      html += `<tr class="kd-chiadoi"><td colspan="11">Đã tra soát — chỉ còn chờ kho xác nhận nhận hàng</td></tr>`;
     }
     html += daXong.map(r => `<tr class="kd-daxong">${dongDoiSoat(r)}</tr>`).join('');
     $('#kd-ds-bang').innerHTML = html;
 
     $('#kd-ds-trong').hidden = can_doi_soat.length > 0;
     $('#kd-ds-dem').textContent = `${can_doi_soat.length} đơn cần đối soát`;
+
+    // Mỗi lần vẽ lại bảng là danh sách chọn reset về rỗng (dữ liệu vừa đổi)
+    $('#kd-ds-chontatca').checked = false;
+    veThanhChon();
   }
+
+  /* ---- Tick chọn nhiều đơn -> đẩy hàng loạt sang Kho vận ---- */
+  function dsDangChon() {
+    return [...document.querySelectorAll('#kd-ds-bang input[data-chon]:checked')].map(o => o.getAttribute('data-chon'));
+  }
+  function veThanhChon() {
+    const sl = dsDangChon().length;
+    $('#kd-ds-thanhchon').hidden = sl === 0;
+    $('#kd-ds-sldachon').innerHTML = `Đã chọn <b>${sl}</b> đơn`;
+  }
+  $('#kd-ds-bang').addEventListener('change', (e) => {
+    if (!e.target.matches('input[data-chon]')) return;
+    veThanhChon();
+  });
+  $('#kd-ds-chontatca').addEventListener('change', (e) => {
+    document.querySelectorAll('#kd-ds-bang input[data-chon]').forEach(o => { o.checked = e.target.checked; });
+    veThanhChon();
+  });
+  $('#kd-ds-huychon').addEventListener('click', () => {
+    document.querySelectorAll('#kd-ds-bang input[data-chon]').forEach(o => { o.checked = false; });
+    $('#kd-ds-chontatca').checked = false;
+    veThanhChon();
+  });
+  $('#kd-ds-daykho').addEventListener('click', async () => {
+    const ds = dsDangChon();
+    if (!ds.length) return;
+    const btn = $('#kd-ds-daykho');
+    btn.disabled = true;
+    const cu = btn.textContent;
+    btn.textContent = 'Đang đẩy…';
+    try {
+      await API.kdDayKho(ds);
+      await veDoiSoat();      // tự reset danh sách chọn + tự chìm nhóm vừa đẩy xuống dưới
+    } catch (err) {
+      alert(err.message || 'Không đẩy được, thử lại nhé.');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = cu;
+    }
+  });
 
   $('#kd-ds-bang').addEventListener('click', async (e) => {
     const btn = e.target.closest('[data-doisoat]');

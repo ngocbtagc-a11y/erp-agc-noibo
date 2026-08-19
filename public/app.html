@@ -204,16 +204,25 @@
           <span class="hint" id="kd-ds-dem"></span>
         </div>
         <div class="panel-body" style="padding-bottom:0; padding-top:0">
-          <p class="hint" style="margin:14px 0 0">Mọi đơn hoàn (bất kể trạng thái trên sàn) mà <b>kho chưa xác nhận đã nhận hàng</b> đều nằm ở đây — vì trạng thái sàn không đảm bảo hàng đã về kho. Tra vận đơn, khiếu nại/đối soát với sàn, xong thì bấm “Đã tra soát”. Kho bấm “Đã nhận” là đơn tự rời danh sách.</p>
+          <p class="hint" style="margin:14px 0 0">Mọi đơn hoàn (bất kể trạng thái trên sàn) mà <b>kho chưa xác nhận đã nhận hàng</b> đều nằm ở đây — vì trạng thái sàn không đảm bảo hàng đã về kho. Tra vận đơn, khiếu nại/đối soát với sàn, xong thì bấm “Đã tra soát” (từng đơn) hoặc tick chọn nhiều đơn rồi “Đẩy sang Kho vận” (cả loạt). Kho bấm “Đã nhận” là đơn tự rời danh sách.</p>
         </div>
+
+        <!-- Thanh hành động — chỉ hiện khi có đơn được tick chọn -->
+        <div class="kd-thanh-chon" id="kd-ds-thanhchon" hidden>
+          <span id="kd-ds-sldachon"></span>
+          <button type="button" class="btn-primary" id="kd-ds-daykho" style="width:auto">Đẩy sang Kho vận</button>
+          <button type="button" class="btn-phu" id="kd-ds-huychon">Bỏ chọn</button>
+        </div>
+
         <div class="table-wrap-cuon">
           <table>
             <thead>
               <tr>
+                <th class="dinh-tick"><input type="checkbox" id="kd-ds-chontatca" title="Chọn tất cả"></th>
                 <th class="dinh-cot">Nguồn</th>
                 <th class="dinh-cot2">Mã đơn hoàn</th>
-                <th>Đơn gốc</th>
-                <th>Mã vận đơn</th>
+                <th class="dinh-cot3">Đơn gốc</th>
+                <th class="dinh-cot4">Mã vận đơn</th>
                 <th>Sản phẩm hoàn về</th>
                 <th class="num">Số lượng</th>
                 <th>Trạng thái trên sàn</th>
