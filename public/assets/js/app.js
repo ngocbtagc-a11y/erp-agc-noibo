@@ -62,6 +62,64 @@ function boDau(s) {
                   .replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase();
 }
 
+/* ---- Nhãn đơn hoàn (dùng chung: Kho vận + Kinh doanh > Đơn hoàn huỷ) ---- */
+
+// Nhãn trạng thái sàn → chữ Việt NGẮN + màu (liếc là biết). Gồm cả Shopee lẫn TikTok.
+const NHAN_TT = {
+  // Shopee
+  REQUESTED:  { chu: 'Chờ xử lý',   mau: 'warn'   },
+  PROCESSING: { chu: 'Đang xử lý',  mau: 'warn'   },
+  ACCEPTED:   { chu: 'Đã duyệt',    mau: 'ok'     },
+  CANCELLED:  { chu: 'Đã huỷ',      mau: 'mute'   },
+  CLOSED:     { chu: 'Đã đóng',     mau: 'mute'   },
+  JUDGING:    { chu: 'Đang phân xử',mau: 'danger' },
+  // TikTok
+  RETURN_OR_REFUND_REQUEST_PENDING:  { chu: 'Chờ duyệt',      mau: 'warn'   },
+  RETURN_OR_REFUND_REQUEST_SUCCESS:  { chu: 'Đã duyệt',       mau: 'ok'     },
+  RETURN_OR_REFUND_REQUEST_COMPLETE: { chu: 'Hoàn tất',       mau: 'ok'     },
+  RETURN_OR_REFUND_REQUEST_CANCEL:   { chu: 'Đã huỷ',         mau: 'mute'   },
+  RETURN_OR_REFUND_REQUEST_REJECT:   { chu: 'Bị từ chối',     mau: 'danger' },
+  RETURN_OR_REFUND_PROCESSING:       { chu: 'Đang xử lý',     mau: 'warn'   },
+  RETURN_OR_REFUND_REQUEST_REFUND:   { chu: 'Đang hoàn tiền', mau: 'warn'   },
+  BUYER_SHIPPED_ITEM:                { chu: 'KH đang gửi về', mau: 'warn'   },
+  SELLER_REVIEW_RETURN:              { chu: 'Chờ shop duyệt', mau: 'warn'   },
+  COMPLETED:                         { chu: 'Hoàn tất',       mau: 'ok'     }
+};
+
+// Mã lạ chưa map → rút gọn cho dễ đọc (bỏ tiền tố, thay _ bằng khoảng trắng)
+function nhanTrangThai(s) {
+  if (!s) return { chu: '—', mau: 'mute' };
+  if (NHAN_TT[s]) return NHAN_TT[s];
+  const g = String(s).replace(/^RETURN_OR_REFUND_/, '').replace(/^REQUEST_/, '')
+                     .replace(/_/g, ' ').toLowerCase();
+  return { chu: g.charAt(0).toUpperCase() + g.slice(1), mau: 'mute' };
+}
+
+// Lý do hoàn → chữ Việt ngắn. Mã lạ thì làm sạch + cắt ngắn (giữ text đầy đủ khi rê chuột).
+const LY_DO = {
+  SELLER_SENT_WRONG_ITEM: 'Giao sai hàng',
+  WRONG_ITEM: 'Giao sai hàng',
+  ITEM_DAMAGED: 'Hàng hư hỏng',
+  DAMAGED_ITEM: 'Hàng hư hỏng',
+  ITEM_NOT_AS_DESCRIBED: 'Không đúng mô tả',
+  NOT_AS_DESCRIBED: 'Không đúng mô tả',
+  MISSING_ITEM: 'Thiếu hàng',
+  MISSING_PARTS: 'Thiếu phụ kiện',
+  CHANGE_OF_MIND: 'Đổi ý',
+  NO_LONGER_WANTED: 'Không muốn nữa',
+  WRONG_SIZE: 'Sai kích cỡ',
+  QUALITY_ISSUE: 'Lỗi chất lượng',
+  FAKE_ITEM: 'Hàng giả/nhái',
+  EXPIRED: 'Hết hạn dùng'
+};
+function nhanLyDo(s) {
+  if (!s) return '—';
+  if (LY_DO[s]) return LY_DO[s];
+  let g = String(s).replace(/_/g, ' ').toLowerCase();
+  g = g.charAt(0).toUpperCase() + g.slice(1);
+  return g.length > 34 ? g.slice(0, 34) + '…' : g;
+}
+
 /* ---- Khởi động ---------------------------------------------------------- */
 
 let TOI;
@@ -299,9 +357,11 @@ if (TOI.quyen.includes('kinhdoanh')) {
     `<td class="num">${esc(r.dt)}</td>` +
     `<td><span class="tag ${esc(r.tt)}">${esc(r.ttx)}</span></td>`);
 
-  // Vận hành sàn — đơn hoàn cần đối soát (máy chủ thật) — chỉ ai có quyền Đơn hoàn mới thấy
+  // Vận hành sàn — đơn hoàn cần đối soát + đơn hoàn huỷ (máy chủ thật) —
+  // chỉ ai có quyền Đơn hoàn mới thấy
   if (TOI.quyen.includes('donhoan')) {
     await khoiDongDoiSoatSan();
+    await khoiDongDonHuy();
   }
 }
 
@@ -377,6 +437,55 @@ async function khoiDongDoiSoatSan() {
   });
 
   await veDoiSoat();
+}
+
+/* ==========================================================================
+   KINH DOANH — Vận hành sàn: đơn hoàn/hoàn tiền bị HUỶ trên sàn
+   ---------------------------------------------------------------------------
+   Mọi đơn huỷ đổ về đây (Sếp Ngọc chốt 19/08/2026). Đơn nào có mã vận đơn
+   (hàng vật lý đã/đang quay lại dù đơn bị huỷ) thì cột "Trạng thái kho" cho
+   biết kho đã nhận chưa — đơn đó cũng tự xuất hiện ở Kho vận > Đơn hoàn để
+   kho bấm "Đã nhận" (xem apiDanhSach trong shopee.js).
+   ========================================================================== */
+async function khoiDongDonHuy() {
+  $('#kd-donhuy-panel').hidden = false;
+
+  const { don_huy } = await API.kdDonHuy();
+  veBang('#kd-dh-bang', don_huy, r => {
+    const ngTag = r.nguon === 'tiktok'
+      ? '<span class="tag mute">TikTok</span>'
+      : '<span class="tag sage">Shopee</span>';
+    const spSku = r.san_pham_sku || '';
+    const spTen = r.san_pham_ten || r.san_pham || '—';
+    const dong2 = spSku ? `${esc(spSku)}` : '';
+    const spCell = `<td class="sm" title="${esc(spTen)}">${esc(spTen)}` +
+      (dong2 ? `<div class="phu">${dong2}</div>` : '') + `</td>`;
+    const tt = nhanTrangThai(r.trang_thai);
+    // Cột kho: chỉ có ý nghĩa khi đơn có mã vận đơn (hàng thật đang/đã về) —
+    // không có mã vận đơn thì không có gì để kho nhận, hiện gạch ngang.
+    let khoTd;
+    if (!r.ma_van_don) {
+      khoTd = '<td class="sm">—</td>';
+    } else if (r.kho_nhan_luc) {
+      khoTd = `<td class="sm"><span class="tag ok">✓ Đã nhận</span>` +
+              `<div class="phu">${esc(r.kho_nhan_boi || '')} · ${esc(r.kho_nhan_luc)}</div></td>`;
+    } else {
+      khoTd = '<td class="sm"><span class="tag warn">Chờ kho nhận</span></td>';
+    }
+    const html = `<td>${ngTag}</td>` +
+      `<td class="sm">${esc(r.return_sn)}</td>` +
+      `<td class="sm">${esc(r.order_sn || '—')}</td>` +
+      `<td class="sm">${esc(r.ma_van_don || '—')}</td>` +
+      spCell +
+      `<td class="num">${r.so_luong != null ? esc(r.so_luong) : '—'}</td>` +
+      `<td class="sm">${esc(nhanLyDo(r.ly_do))}</td>` +
+      `<td><span class="tag ${tt.mau}" title="${esc(r.trang_thai || '')}">${esc(tt.chu)}</span></td>` +
+      khoTd;
+    // Có mã vận đơn mà kho chưa nhận → tô đỏ để Vận hành sàn để mắt
+    return { html, cls: (r.ma_van_don && !r.kho_nhan_luc) ? 'canh-bao' : '' };
+  });
+  $('#kd-dh-trong').hidden = don_huy.length > 0;
+  $('#kd-dh-dem').textContent = `${don_huy.length} đơn huỷ`;
 }
 
 /* -- Kho — Xuất / Nhập / Tồn (máy chủ thật) -- */
@@ -670,61 +779,6 @@ async function khoiDongKho() {
    ĐƠN HOÀN — Shopee
    ========================================================================== */
 async function khoiDongDonHoan() {
-  // Nhãn trạng thái sàn → chữ Việt NGẮN + màu (liếc là biết). Gồm cả Shopee lẫn TikTok.
-  const NHAN_TT = {
-    // Shopee
-    REQUESTED:  { chu: 'Chờ xử lý',   mau: 'warn'   },
-    PROCESSING: { chu: 'Đang xử lý',  mau: 'warn'   },
-    ACCEPTED:   { chu: 'Đã duyệt',    mau: 'ok'     },
-    CANCELLED:  { chu: 'Đã huỷ',      mau: 'mute'   },
-    CLOSED:     { chu: 'Đã đóng',     mau: 'mute'   },
-    JUDGING:    { chu: 'Đang phân xử',mau: 'danger' },
-    // TikTok
-    RETURN_OR_REFUND_REQUEST_PENDING:  { chu: 'Chờ duyệt',      mau: 'warn'   },
-    RETURN_OR_REFUND_REQUEST_SUCCESS:  { chu: 'Đã duyệt',       mau: 'ok'     },
-    RETURN_OR_REFUND_REQUEST_COMPLETE: { chu: 'Hoàn tất',       mau: 'ok'     },
-    RETURN_OR_REFUND_REQUEST_CANCEL:   { chu: 'Đã huỷ',         mau: 'mute'   },
-    RETURN_OR_REFUND_REQUEST_REJECT:   { chu: 'Bị từ chối',     mau: 'danger' },
-    RETURN_OR_REFUND_PROCESSING:       { chu: 'Đang xử lý',     mau: 'warn'   },
-    RETURN_OR_REFUND_REQUEST_REFUND:   { chu: 'Đang hoàn tiền', mau: 'warn'   },
-    BUYER_SHIPPED_ITEM:                { chu: 'KH đang gửi về', mau: 'warn'   },
-    SELLER_REVIEW_RETURN:              { chu: 'Chờ shop duyệt', mau: 'warn'   },
-    COMPLETED:                         { chu: 'Hoàn tất',       mau: 'ok'     }
-  };
-
-  // Mã lạ chưa map → rút gọn cho dễ đọc (bỏ tiền tố, thay _ bằng khoảng trắng)
-  function nhanTrangThai(s) {
-    if (!s) return { chu: '—', mau: 'mute' };
-    if (NHAN_TT[s]) return NHAN_TT[s];
-    const g = String(s).replace(/^RETURN_OR_REFUND_/, '').replace(/^REQUEST_/, '')
-                       .replace(/_/g, ' ').toLowerCase();
-    return { chu: g.charAt(0).toUpperCase() + g.slice(1), mau: 'mute' };
-  }
-
-  // Lý do hoàn → chữ Việt ngắn. Mã lạ thì làm sạch + cắt ngắn (giữ text đầy đủ khi rê chuột).
-  const LY_DO = {
-    SELLER_SENT_WRONG_ITEM: 'Giao sai hàng',
-    WRONG_ITEM: 'Giao sai hàng',
-    ITEM_DAMAGED: 'Hàng hư hỏng',
-    DAMAGED_ITEM: 'Hàng hư hỏng',
-    ITEM_NOT_AS_DESCRIBED: 'Không đúng mô tả',
-    NOT_AS_DESCRIBED: 'Không đúng mô tả',
-    MISSING_ITEM: 'Thiếu hàng',
-    MISSING_PARTS: 'Thiếu phụ kiện',
-    CHANGE_OF_MIND: 'Đổi ý',
-    NO_LONGER_WANTED: 'Không muốn nữa',
-    WRONG_SIZE: 'Sai kích cỡ',
-    QUALITY_ISSUE: 'Lỗi chất lượng',
-    FAKE_ITEM: 'Hàng giả/nhái',
-    EXPIRED: 'Hết hạn dùng'
-  };
-  function nhanLyDo(s) {
-    if (!s) return '—';
-    if (LY_DO[s]) return LY_DO[s];
-    let g = String(s).replace(/_/g, ' ').toLowerCase();
-    g = g.charAt(0).toUpperCase() + g.slice(1);
-    return g.length > 34 ? g.slice(0, 34) + '…' : g;
-  }
 
   /* Danh sách đơn hoàn dùng chung — Nguồn + mã vận đơn + tìm kiếm + quẹt QR */
   let DS_DH = [];

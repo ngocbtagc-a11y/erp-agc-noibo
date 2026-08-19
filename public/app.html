@@ -228,6 +228,36 @@
         <div class="empty" id="kd-ds-trong" hidden>Không có đơn hoàn nào cần đối soát — kho đã xác nhận nhận hết.</div>
       </div>
 
+      <!-- ---------- Vận hành sàn: đơn hoàn/hoàn tiền bị HUỶ trên sàn ---------- -->
+      <div class="panel" id="kd-donhuy-panel" hidden>
+        <div class="panel-head">
+          <h4>Vận hành sàn — Đơn hoàn huỷ</h4>
+          <span class="hint" id="kd-dh-dem"></span>
+        </div>
+        <div class="panel-body" style="padding-bottom:0; padding-top:0">
+          <p class="hint" style="margin:14px 0 0">Mọi đơn hoàn/hoàn tiền bị <b>huỷ trên sàn</b> đều nằm ở đây để đối chiếu. Đa số không có hàng vật lý quay lại. Đơn nào có <b>mã vận đơn</b> (khách đã gửi hàng về trước khi bị huỷ) thì cột cuối cho biết kho đã nhận chưa — đơn đó đã tự đẩy sang danh sách Đơn hoàn ở tab Kho vận để kho xác nhận.</p>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Nguồn</th>
+                <th>Mã đơn hoàn</th>
+                <th>Mã đơn gốc</th>
+                <th>Mã vận đơn</th>
+                <th>Sản phẩm</th>
+                <th class="num">Số lượng</th>
+                <th>Lý do</th>
+                <th>Trạng thái trên sàn</th>
+                <th>Trạng thái kho</th>
+              </tr>
+            </thead>
+            <tbody id="kd-dh-bang"></tbody>
+          </table>
+        </div>
+        <div class="empty" id="kd-dh-trong" hidden>Không có đơn hoàn nào bị huỷ.</div>
+      </div>
+
       <div class="stats" id="kd-the"></div>
 
       <div class="grid-2">

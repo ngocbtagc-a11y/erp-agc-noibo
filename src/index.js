@@ -577,6 +577,29 @@ async function kdCanDoiSoat(req, env) {
   return json({ can_doi_soat: results });
 }
 
+/* Đơn hoàn/hoàn tiền bị HUỶ trên sàn — đổ hết về Vận hành sàn theo dõi
+   (Sếp Ngọc chốt 19/08/2026). Đa số không có hàng vật lý quay lại (yêu cầu
+   hoàn bị huỷ/từ chối trước khi ai gửi gì), NHƯNG một số vẫn có mã vận đơn
+   (khách đã gửi hàng về trước khi đơn bị huỷ) — các đơn đó vẫn cần kho nhận
+   thật, nên apiDanhSach (shopee.js) đã đẩy chúng sang list Kho vận song
+   song; ở đây trả kèm kho_nhan_luc để Vận hành sàn biết kho đã nhận chưa. */
+async function kdDonHuy(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  if (!duocXemDonHoan(phien.vai_tro)) return loi('Bạn không có quyền', 403);
+
+  const { results } = await env.DB.prepare(`
+    SELECT d.return_sn, d.order_sn, d.ma_van_don, d.san_pham, d.san_pham_ten,
+           COALESCE(d.san_pham_sku, m.ma_sku) AS san_pham_sku, d.so_luong,
+           d.nguon, d.trang_thai, d.ly_do, d.kho_nhan_luc, d.kho_nhan_boi
+      FROM don_hoan d
+      LEFT JOIN sku_map m ON m.ten_san_pham = d.san_pham_ten
+     WHERE d.trang_thai LIKE '%CANCEL%'
+     ORDER BY (d.ma_van_don IS NOT NULL) DESC, d.dong_bo_luc DESC
+  `).all();
+  return json({ don_huy: results });
+}
+
 /* Vận hành sàn đánh dấu đã đối soát/khiếu nại xong với sàn cho 1 đơn hoàn */
 async function kdDaDoiSoat(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
@@ -729,6 +752,7 @@ const DUONG_DAN = {
   'POST /api/hoan/da-nhan':      hoanDaNhan,
   'GET  /api/kinh-doanh/can-doi-soat': kdCanDoiSoat,
   'POST /api/kinh-doanh/da-doi-soat':  kdDaDoiSoat,
+  'GET  /api/kinh-doanh/don-huy':      kdDonHuy,
   'GET  /api/tiktok/trang-thai': tiktokTrangThai,
   'GET  /api/tiktok/connect':    tiktokConnect,
   'GET  /api/tiktok/callback':   tiktokCallback,

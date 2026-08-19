@@ -115,6 +115,7 @@ export const API = {
   kdDaDoiSoat: (returnSn) => goi('/api/kinh-doanh/da-doi-soat', {
     method: 'POST', body: JSON.stringify({ return_sn: returnSn })
   }),
+  kdDonHuy: () => goi('/api/kinh-doanh/don-huy'),
 
   /* ---- Ghép tên sản phẩm (sàn) -> SKU (kho), cho đơn hoàn cũ không có SKU ---- */
   hoanSkuMapDanhSach: () => goi('/api/hoan/sku-map'),
