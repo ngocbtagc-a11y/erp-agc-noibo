@@ -649,7 +649,8 @@ async function kdCanDoiSoat(req, env) {
       FROM don_hoan d
       LEFT JOIN sku_map m ON m.ten_san_pham = d.san_pham_ten
      WHERE d.kho_nhan_luc IS NULL
-       AND d.trang_thai NOT LIKE '%CANCEL%'
+       AND d.dang_cho = 'van_hanh'
+       AND (d.trang_thai NOT LIKE '%CANCEL%' OR d.ma_van_don IS NOT NULL)
      ORDER BY (d.doi_soat_luc IS NOT NULL), d.dong_bo_luc DESC
   `).all();
   return json({ can_doi_soat: results });
@@ -672,8 +673,8 @@ async function kdDonHuy(req, env) {
            d.nguon, d.trang_thai, d.ly_do, d.kho_nhan_luc, d.kho_nhan_boi
       FROM don_hoan d
       LEFT JOIN sku_map m ON m.ten_san_pham = d.san_pham_ten
-     WHERE d.trang_thai LIKE '%CANCEL%'
-     ORDER BY (d.ma_van_don IS NOT NULL) DESC, d.dong_bo_luc DESC
+     WHERE d.trang_thai LIKE '%CANCEL%' AND d.ma_van_don IS NULL
+     ORDER BY d.dong_bo_luc DESC
   `).all();
   return json({ don_huy: results });
 }

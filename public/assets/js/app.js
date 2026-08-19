@@ -533,28 +533,16 @@ async function khoiDongDonHuy() {
     const spCell = `<td class="sm" title="${esc(spTen)}">${esc(spTen)}` +
       (dong2 ? `<div class="phu">${dong2}</div>` : '') + `</td>`;
     const tt = nhanTrangThai(r.trang_thai);
-    // Cột kho: chỉ có ý nghĩa khi đơn có mã vận đơn (hàng thật đang/đã về) —
-    // không có mã vận đơn thì không có gì để kho nhận, hiện gạch ngang.
-    let khoTd;
-    if (!r.ma_van_don) {
-      khoTd = '<td class="sm">—</td>';
-    } else if (r.kho_nhan_luc) {
-      khoTd = `<td class="sm"><span class="tag ok">✓ Đã nhận</span>` +
-              `<div class="phu">${esc(r.kho_nhan_boi || '')} · ${esc(r.kho_nhan_luc)}</div></td>`;
-    } else {
-      khoTd = '<td class="sm"><span class="tag warn">Chờ kho nhận</span></td>';
-    }
-    const html = `<td>${ngTag}</td>` +
+    // Panel này chỉ còn đơn huỷ KHÔNG có mã vận đơn = huỷ suông, không hàng về —
+    // chỉ là sổ tham chiếu. Đơn huỷ mà CÓ mã vận đơn (có hàng) đã đi vào
+    // danh sách "Cần đối soát" của Vận hành sàn để xử lý như đơn thường.
+    return `<td>${ngTag}</td>` +
       `<td class="sm">${esc(r.return_sn)}</td>` +
       `<td class="sm">${esc(r.order_sn || '—')}</td>` +
-      `<td class="sm">${esc(r.ma_van_don || '—')}</td>` +
       spCell +
       `<td class="num">${r.so_luong != null ? esc(r.so_luong) : '—'}</td>` +
       `<td class="sm">${esc(nhanLyDo(r.ly_do))}</td>` +
-      `<td><span class="tag ${tt.mau}" title="${esc(r.trang_thai || '')}">${esc(tt.chu)}</span></td>` +
-      khoTd;
-    // Có mã vận đơn mà kho chưa nhận → tô đỏ để Vận hành sàn để mắt
-    return { html, cls: (r.ma_van_don && !r.kho_nhan_luc) ? 'canh-bao' : '' };
+      `<td><span class="tag ${tt.mau}" title="${esc(r.trang_thai || '')}">${esc(tt.chu)}</span></td>`;
   });
   $('#kd-dh-trong').hidden = don_huy.length > 0;
   $('#kd-dh-dem').textContent = `${don_huy.length} đơn huỷ`;
