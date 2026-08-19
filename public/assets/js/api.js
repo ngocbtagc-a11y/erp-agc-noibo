@@ -114,6 +114,12 @@ export const API = {
   kdCanDoiSoat: () => goi('/api/kinh-doanh/can-doi-soat'),
   kdDaDoiSoat: (returnSn) => goi('/api/kinh-doanh/da-doi-soat', {
     method: 'POST', body: JSON.stringify({ return_sn: returnSn })
+  }),
+
+  /* ---- Ghép tên sản phẩm (sàn) -> SKU (kho), cho đơn hoàn cũ không có SKU ---- */
+  hoanSkuMapDanhSach: () => goi('/api/hoan/sku-map'),
+  hoanSkuMapGan: (tenSanPham, maSku) => goi('/api/hoan/sku-map', {
+    method: 'POST', body: JSON.stringify({ ten_san_pham: tenSanPham, ma_sku: maSku })
   })
   // Lưu ý: kết nối Shopee đi thẳng bằng chuyển trang tới /api/shopee/connect
   // (server trả 302 sang trang ủy quyền Shopee), không qua lớp fetch này.

@@ -247,14 +247,18 @@ export async function apiDongBo(env, phien) {
 /* Danh sách đơn hoàn đã lưu (để tab hiển thị) */
 export async function apiDanhSach(env, phien) {
   if (!duocXemDonHoan(phien.vai_tro)) return loi('Bạn không có quyền', 403);
+  // Đơn cũ sàn không trả SKU (san_pham_sku NULL) thì lấy tạm SKU đã ghép tay
+  // trong sku_map theo đúng tên sản phẩm — xem migrations/them-sku-map.sql.
   const { results } = await env.DB.prepare(`
-    SELECT return_sn, order_sn, trang_thai, ly_do, so_tien, tien_te, nguoi_mua,
-           san_pham, san_pham_ten, san_pham_sku, so_luong, ma_van_don, nguon,
-           cap_nhat_shopee, dong_bo_luc,
-           kho_nhan_luc, kho_nhan_boi, cho_kho_nhan_tu, lan_tra_soat, dang_cho
-      FROM don_hoan
-     WHERE trang_thai NOT LIKE '%CANCEL%'
-     ORDER BY dong_bo_luc DESC LIMIT 300
+    SELECT d.return_sn, d.order_sn, d.trang_thai, d.ly_do, d.so_tien, d.tien_te, d.nguoi_mua,
+           d.san_pham, d.san_pham_ten, COALESCE(d.san_pham_sku, m.ma_sku) AS san_pham_sku,
+           d.so_luong, d.ma_van_don, d.nguon,
+           d.cap_nhat_shopee, d.dong_bo_luc,
+           d.kho_nhan_luc, d.kho_nhan_boi, d.cho_kho_nhan_tu, d.lan_tra_soat, d.dang_cho
+      FROM don_hoan d
+      LEFT JOIN sku_map m ON m.ten_san_pham = d.san_pham_ten
+     WHERE d.trang_thai NOT LIKE '%CANCEL%'
+     ORDER BY d.dong_bo_luc DESC LIMIT 300
   `).all();
   return json({ don_hoan: results });
 }

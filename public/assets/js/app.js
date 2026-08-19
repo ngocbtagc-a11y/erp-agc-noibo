@@ -805,6 +805,75 @@ async function khoiDongDonHoan() {
     }
   });
 
+  /* ---- Ghép tên sản phẩm (sàn) -> SKU (kho) cho đơn hoàn cũ không có SKU —
+     chỉ quản lý kho / ban giám đốc thấy khối này (giống quyền "thêm mã hàng"
+     ở tab Kho vận). TOI.kho.quan_ly = duocQuanLyKho(vai_tro) ở máy chủ. ---- */
+  function oChonSku(dsSku) {
+    let html = '<select><option value="">— Chọn SKU —</option>';
+    for (const s of dsSku) html += `<option value="${esc(s.ma_sku)}">${esc(s.ma_sku)} — ${esc(s.ten)}</option>`;
+    return html + '</select>';
+  }
+
+  async function veSkuMap() {
+    if (!TOI.kho.quan_ly) return;
+    $('#skm-panel').hidden = false;
+    $('#skm-dagan-panel').hidden = false;
+
+    const { thieu, da_gan, san_pham } = await API.hoanSkuMapDanhSach();
+
+    veBang('#skm-bang', thieu, r =>
+      `<td class="sm" title="${esc(r.ten)}">${esc(r.ten)}</td>` +
+      `<td class="num">${r.so_don}</td>` +
+      `<td class="sm"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">` +
+        oChonSku(san_pham) +
+        `<button type="button" class="btn-nho" data-gan="${esc(r.ten)}">Gán</button>` +
+      `</div></td>`
+    );
+    $('#skm-trong').hidden = thieu.length > 0;
+    $('#skm-dem').textContent = thieu.length ? `${thieu.length} tên chưa gán` : '';
+
+    veBang('#skm-dagan-bang', da_gan, r =>
+      `<td class="sm" title="${esc(r.ten)}">${esc(r.ten)}</td>` +
+      `<td class="sm">${esc(r.ma_sku)}</td>` +
+      `<td class="sm">${esc(r.cap_nhat_luc || '—')}${r.cap_nhat_boi ? ' · ' + esc(r.cap_nhat_boi) : ''}</td>` +
+      `<td><button type="button" class="btn-nho" data-boghep="${esc(r.ten)}">Bỏ ghép</button></td>`
+    );
+    $('#skm-dagan-trong').hidden = da_gan.length > 0;
+  }
+
+  $('#skm-bang').addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-gan]');
+    if (!btn) return;
+    const sel = btn.closest('tr').querySelector('select');
+    const sku = sel ? sel.value : '';
+    if (!sku) { alert('Chọn SKU trước khi gán.'); return; }
+    btn.disabled = true; btn.textContent = 'Đang gán…';
+    try {
+      await API.hoanSkuMapGan(btn.getAttribute('data-gan'), sku);
+      await veSkuMap();
+      await veDanhSach();      // SKU vừa gán áp ngay cho các đơn cùng tên
+    } catch (err) {
+      btn.disabled = false; btn.textContent = 'Gán';
+      alert(err.message || 'Không gán được, thử lại nhé.');
+    }
+  });
+
+  $('#skm-dagan-bang').addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-boghep]');
+    if (!btn) return;
+    const ten = btn.getAttribute('data-boghep');
+    if (!confirm(`Bỏ ghép SKU cho "${ten}"? Các đơn cùng tên sẽ lại hiện thiếu SKU.`)) return;
+    btn.disabled = true;
+    try {
+      await API.hoanSkuMapGan(ten, '');
+      await veSkuMap();
+      await veDanhSach();
+    } catch (err) {
+      btn.disabled = false;
+      alert(err.message || 'Không bỏ ghép được, thử lại nhé.');
+    }
+  });
+
   /* ---- Quẹt QR / mã vạch bằng camera điện thoại (Android + iPhone) ----
      Dùng html5-qrcode — tự chọn bộ quét nhanh nhất của máy, đọc cả mã vạch
      dài (1D) lẫn ô QR (2D). Thư viện chỉ nạp khi bấm nút cho nhẹ trang. */
@@ -927,10 +996,11 @@ async function khoiDongDonHoan() {
   });
 
   // Danh sách đơn hoàn là phần quan trọng nhất (kho dùng) → load TRƯỚC. Phần
-  // kết nối sàn bọc try/catch để lỗi kết nối không chặn việc hiện danh sách.
+  // kết nối sàn + ghép SKU bọc try/catch để lỗi ở đó không chặn việc hiện danh sách.
   await veDanhSach();
   try { await veShopee(); } catch (e) { console.error('Kết nối Shopee:', e); }
   try { await veTiktok(); } catch (e) { console.error('Kết nối TikTok:', e); }
+  try { await veSkuMap(); } catch (e) { console.error('Ghép SKU:', e); }
 }
 
 /* -- Kế toán (còn là dữ liệu mẫu) -- */

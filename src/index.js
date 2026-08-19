@@ -14,7 +14,7 @@ import {
 
 import {
   quyenCua, duocXemTab, duocXemLuong, laAdmin, duocThemNhanSu,
-  quyenKho, quyenShopee, duocThaoTacKho, duocXemDonHoan, TEN_VAI_TRO, VAI_TRO_HOP_LE
+  quyenKho, quyenShopee, duocThaoTacKho, duocQuanLyKho, duocXemDonHoan, TEN_VAI_TRO, VAI_TRO_HOP_LE
 } from './quyen.js';
 import { kiemTraMatKhauDat, DAI_TOI_THIEU } from './mat-khau.js';
 import * as kho from './kho.js';
@@ -561,14 +561,18 @@ async function kdCanDoiSoat(req, env) {
   // CHƯA XÁC NHẬN "Đã nhận" (kho_nhan_luc IS NULL) đều vào danh sách tra soát —
   // vì trạng thái sàn ("Hoàn tất"...) không đảm bảo hàng đã về kho. Loại đơn huỷ.
   // Đơn chưa tra soát lần nào lên đầu; kèm số lần đã tra soát để theo dõi.
+  // Đơn cũ sàn không trả SKU thì lấy tạm SKU đã ghép tay trong sku_map —
+  // giống hệt cách apiDanhSach (shopee.js) làm, để 2 nơi luôn khớp nhau.
   const { results } = await env.DB.prepare(`
-    SELECT return_sn, order_sn, ma_van_don, san_pham, san_pham_ten, san_pham_sku, so_luong,
-           nguon, trang_thai, so_tien, tien_te, nguoi_mua,
-           cho_kho_nhan_tu, lan_tra_soat, doi_soat_luc, doi_soat_boi
-      FROM don_hoan
-     WHERE kho_nhan_luc IS NULL
-       AND trang_thai NOT LIKE '%CANCEL%'
-     ORDER BY (doi_soat_luc IS NOT NULL), dong_bo_luc DESC
+    SELECT d.return_sn, d.order_sn, d.ma_van_don, d.san_pham, d.san_pham_ten,
+           COALESCE(d.san_pham_sku, m.ma_sku) AS san_pham_sku, d.so_luong,
+           d.nguon, d.trang_thai, d.so_tien, d.tien_te, d.nguoi_mua,
+           d.cho_kho_nhan_tu, d.lan_tra_soat, d.doi_soat_luc, d.doi_soat_boi
+      FROM don_hoan d
+      LEFT JOIN sku_map m ON m.ten_san_pham = d.san_pham_ten
+     WHERE d.kho_nhan_luc IS NULL
+       AND d.trang_thai NOT LIKE '%CANCEL%'
+     ORDER BY (d.doi_soat_luc IS NOT NULL), d.dong_bo_luc DESC
   `).all();
   return json({ can_doi_soat: results });
 }
@@ -592,6 +596,68 @@ async function kdDaDoiSoat(req, env) {
   `).bind(phien.ho_ten || phien.ten_dang_nhap, rsn).run();
   if (!r.meta.changes) return loi('Không tìm thấy đơn (hoặc kho đã xác nhận nhận hàng)', 404);
   return json({ ok: true, nguoi: phien.ho_ten || phien.ten_dang_nhap });
+}
+
+/* ==========================================================================
+   Ghép TÊN SẢN PHẨM (trên sàn) → MÃ SKU (kho) — cho đơn hoàn cũ không có SKU
+   ---------------------------------------------------------------------------
+   Xem quyền: ai xem được Đơn hoàn (duocXemDonHoan) đều xem được danh sách
+   tên còn thiếu SKU. Gán/sửa/xoá SKU: chỉ ai quản lý được mã hàng kho
+   (duocQuanLyKho — quản lý kho + ban giám đốc), giống hệt quyền "thêm mã
+   hàng" ở tab Kho vận, vì gán SKU cũng là xác nhận dữ liệu danh mục kho.
+   ========================================================================== */
+async function hoanSkuMapDanhSach(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  if (!duocXemDonHoan(phien.vai_tro)) return loi('Bạn không có quyền', 403);
+
+  // Tên còn thiếu SKU: sàn không trả SKU (san_pham_sku NULL) và chưa ghép
+  // trong sku_map — kèm số đơn đang bị ảnh hưởng để biết nên ưu tiên ghép gì.
+  const [thieu, daGan, sanPham] = await Promise.all([
+    env.DB.prepare(`
+      SELECT san_pham_ten AS ten, COUNT(*) AS so_don
+        FROM don_hoan
+       WHERE san_pham_sku IS NULL AND san_pham_ten IS NOT NULL
+         AND san_pham_ten NOT IN (SELECT ten_san_pham FROM sku_map)
+       GROUP BY san_pham_ten
+       ORDER BY so_don DESC
+    `).all(),
+    env.DB.prepare(`
+      SELECT ten_san_pham AS ten, ma_sku, cap_nhat_luc, cap_nhat_boi
+        FROM sku_map ORDER BY cap_nhat_luc DESC
+    `).all(),
+    env.DB.prepare(`SELECT ma_sku, ten FROM san_pham WHERE dang_ban = 1 ORDER BY ten`).all()
+  ]);
+
+  return json({
+    thieu: thieu.results, da_gan: daGan.results, san_pham: sanPham.results,
+    quyen: { gan: duocQuanLyKho(phien.vai_tro) }
+  });
+}
+
+async function hoanSkuMapGan(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  if (!duocQuanLyKho(phien.vai_tro)) return loi('Bạn không có quyền gán SKU', 403);
+
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  const ten = String(b.ten_san_pham || '').trim();
+  const sku = String(b.ma_sku || '').trim();
+  if (!ten) return loi('Thiếu tên sản phẩm');
+
+  if (!sku) {
+    // Mã hàng để trống = bỏ ghép, trả tên này về danh sách "còn thiếu"
+    await env.DB.prepare('DELETE FROM sku_map WHERE ten_san_pham = ?').bind(ten).run();
+    return json({ ok: true, da_xoa: true });
+  }
+
+  await env.DB.prepare(`
+    INSERT INTO sku_map (ten_san_pham, ma_sku, cap_nhat_luc, cap_nhat_boi)
+    VALUES (?, ?, datetime('now','+7 hours'), ?)
+    ON CONFLICT(ten_san_pham) DO UPDATE SET
+      ma_sku = excluded.ma_sku, cap_nhat_luc = excluded.cap_nhat_luc, cap_nhat_boi = excluded.cap_nhat_boi
+  `).bind(ten, sku, phien.ho_ten || phien.ten_dang_nhap).run();
+  return json({ ok: true });
 }
 
 /* --- TikTok (song song Shopee, dùng chung tab Đơn hoàn) --- */
@@ -658,6 +724,8 @@ const DUONG_DAN = {
   'GET  /api/shopee/callback':   shopeeCallback,
   'POST /api/hoan/dong-bo':      hoanDongBo,
   'GET  /api/hoan/danh-sach':    hoanDanhSach,
+  'GET  /api/hoan/sku-map':      hoanSkuMapDanhSach,
+  'POST /api/hoan/sku-map':      hoanSkuMapGan,
   'POST /api/hoan/da-nhan':      hoanDaNhan,
   'GET  /api/kinh-doanh/can-doi-soat': kdCanDoiSoat,
   'POST /api/kinh-doanh/da-doi-soat':  kdDaDoiSoat,
