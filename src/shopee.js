@@ -252,7 +252,9 @@ export async function apiDanhSach(env, phien) {
            san_pham, san_pham_ten, san_pham_sku, so_luong, ma_van_don, nguon,
            cap_nhat_shopee, dong_bo_luc,
            kho_nhan_luc, kho_nhan_boi, cho_kho_nhan_tu, lan_tra_soat, dang_cho
-      FROM don_hoan ORDER BY dong_bo_luc DESC LIMIT 300
+      FROM don_hoan
+     WHERE trang_thai NOT LIKE '%CANCEL%'
+     ORDER BY dong_bo_luc DESC LIMIT 300
   `).all();
   return json({ don_hoan: results });
 }
