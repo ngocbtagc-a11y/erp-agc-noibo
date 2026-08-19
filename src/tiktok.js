@@ -219,21 +219,29 @@ export async function dongBoNen(env) {
     const returnId = r.return_id || r.return_sn || r.id;
     if (!returnId) continue;
     const soTien = r.refund_amount && (r.refund_amount.refund_total || r.refund_amount.total);
-    // Tên sản phẩm hoàn về (gộp nhiều dòng hàng) — để kho đối soát
+    // Tách tên / SKU / số lượng riêng để kho hiển thị: tên dòng chính, SKU dòng phụ.
+    const tenArr = [], skuArr = [];
+    let tongSl = 0;
     const sp = (r.return_line_items || []).map(li => {
       const ten = li.product_name || '';
       const sku = li.seller_sku || li.sku || '';
       const sl = Number(li.quantity || li.return_quantity) || 1;
+      if (ten) tenArr.push(ten);
+      if (sku) skuArr.push(sku);
+      tongSl += sl;
       const nhan = sku || ten || '—';
-      // SKU đứng trước, số lượng luôn hiện (để đối chiếu với kho) — tên chỉ để tham khảo thêm
       return `${nhan} ×${sl}` + (sku && ten ? ` (${ten})` : '');
     }).filter(Boolean).join(' | ') || null;
+    const spTen = [...new Set(tenArr)].join(' | ') || null;
+    const spSku = [...new Set(skuArr)].join(' | ') || null;
+    const soLuong = tongSl || null;
     await env.DB.prepare(`
-      INSERT INTO don_hoan (return_sn, order_sn, trang_thai, ly_do, so_tien, tien_te, nguoi_mua, san_pham, ma_van_don, tao_luc_shopee, cap_nhat_shopee, du_lieu_json, nguon, dong_bo_luc)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'tiktok', datetime('now','+7 hours'))
+      INSERT INTO don_hoan (return_sn, order_sn, trang_thai, ly_do, so_tien, tien_te, nguoi_mua, san_pham, san_pham_ten, san_pham_sku, so_luong, ma_van_don, tao_luc_shopee, cap_nhat_shopee, du_lieu_json, nguon, dong_bo_luc)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'tiktok', datetime('now','+7 hours'))
       ON CONFLICT(return_sn) DO UPDATE SET
         trang_thai=excluded.trang_thai, ly_do=excluded.ly_do, so_tien=excluded.so_tien,
         tien_te=excluded.tien_te, nguoi_mua=excluded.nguoi_mua, san_pham=excluded.san_pham,
+        san_pham_ten=excluded.san_pham_ten, san_pham_sku=excluded.san_pham_sku, so_luong=excluded.so_luong,
         ma_van_don=excluded.ma_van_don,
         cap_nhat_shopee=excluded.cap_nhat_shopee, du_lieu_json=excluded.du_lieu_json,
         nguon='tiktok', dong_bo_luc=datetime('now','+7 hours')
@@ -243,7 +251,7 @@ export async function dongBoNen(env) {
       soTien != null ? Math.round(Number(soTien) * 100000) || null : null,
       (r.refund_amount && r.refund_amount.currency) || r.currency || null,
       (r.buyer_info && r.buyer_info.username) || r.buyer_name || null,
-      sp,
+      sp, spTen, spSku, soLuong,
       r.return_tracking_number || r.tracking_number || null,
       r.create_time ? String(r.create_time) : null,
       r.update_time ? String(r.update_time) : null,

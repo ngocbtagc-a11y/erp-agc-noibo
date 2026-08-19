@@ -366,8 +366,10 @@ if (TOI.quyen.includes('khovan')) {
   await khoiDongKho();
 }
 
-/* -- Kết nối sàn — Đơn hoàn Shopee/TikTok (máy chủ thật) -- */
-if (TOI.quyen.includes('donhoan')) {
+/* -- Đơn hoàn Shopee/TikTok — danh sách nằm trong tab Kho vận (kho xử lý),
+   khối kết nối nằm trong tab Kết nối sàn. Chạy cho MỌI vai trò xem được đơn
+   hoàn (gồm cả kho), không chỉ vai trò có tab Kết nối sàn. -- */
+if (TOI.shopee && TOI.shopee.xem) {
   await khoiDongDonHoan();
 }
 
@@ -417,7 +419,7 @@ async function khoiDongKho() {
     const nut = e.target.closest('.seg-nut');
     if (!nut) return;
     document.querySelectorAll('#kvSeg .seg-nut').forEach(b => b.classList.toggle('active', b === nut));
-    ['ton', 'nhap', 'xuat', 'baocao'].forEach(k => {
+    ['ton', 'nhap', 'xuat', 'baocao', 'donhoan'].forEach(k => {
       const pane = document.getElementById('kv-pane-' + k);
       if (pane) pane.hidden = (k !== nut.dataset.kv);
     });
@@ -711,7 +713,7 @@ async function khoiDongDonHoan() {
   function veBangDH(tuKhoa) {
     const k = boDau((tuKhoa || '').trim());
     const ds = DS_DH.filter(r => !k ||
-      boDau(`${r.return_sn} ${r.order_sn || ''} ${r.ma_van_don || ''} ${r.san_pham || ''} ${r.nguoi_mua || ''}`).includes(k));
+      boDau(`${r.return_sn} ${r.order_sn || ''} ${r.ma_van_don || ''} ${r.san_pham_ten || r.san_pham || ''} ${r.san_pham_sku || ''} ${r.nguoi_mua || ''}`).includes(k));
     veBang('#dh-bang', ds, r => {
       const tt = nhanTrangThai(r.trang_thai);
       const tien = r.so_tien != null
@@ -735,11 +737,20 @@ async function khoiDongDonHoan() {
         khoTd = `<td><button type="button" class="btn-nho" data-nhan="${esc(r.return_sn)}">Đã nhận</button>${nhac}</td>`;
       }
 
+      // Sản phẩm: dòng chính = tên sản phẩm, dòng phụ = SKU (dữ liệu cũ chưa tách
+      // thì hiển thị tạm chuỗi gộp san_pham cho tới lần đồng bộ tới).
+      const spTen = r.san_pham_ten || r.san_pham || '—';
+      const spSku = r.san_pham_sku || '';
+      const spCell = `<td class="sm" title="${esc(r.san_pham || spTen)}">${esc(spTen)}` +
+        (spSku ? `<div class="phu">SKU: ${esc(spSku)}</div>` : '') + `</td>`;
+      const slCell = `<td class="num">${r.so_luong != null ? esc(r.so_luong) : '—'}</td>`;
+
       const html = `<td>${ngTag}</td>` +
         `<td class="sm">${esc(r.return_sn)}</td>` +
         `<td class="sm">${esc(r.order_sn || '—')}</td>` +
         `<td class="sm">${esc(r.ma_van_don || '—')}</td>` +
-        `<td class="sm" title="${esc(r.san_pham || '')}">${esc(r.san_pham || '—')}</td>` +
+        spCell +
+        slCell +
         `<td><span class="tag ${tt.mau}" title="${esc(r.trang_thai || '')}">${esc(tt.chu)}</span></td>` +
         `<td class="num">${tien}</td>` +
         `<td class="sm">${esc(r.nguoi_mua || '—')}</td>` +
@@ -895,9 +906,11 @@ async function khoiDongDonHoan() {
     loi: '#dh-tk-loi', ok: '#dh-tk-ok', apiTrangThai: API.tiktokTrangThai, apiDongBo: API.tiktokDongBo
   });
 
-  await veShopee();
-  await veTiktok();
+  // Danh sách đơn hoàn là phần quan trọng nhất (kho dùng) → load TRƯỚC. Phần
+  // kết nối sàn bọc try/catch để lỗi kết nối không chặn việc hiện danh sách.
   await veDanhSach();
+  try { await veShopee(); } catch (e) { console.error('Kết nối Shopee:', e); }
+  try { await veTiktok(); } catch (e) { console.error('Kết nối TikTok:', e); }
 }
 
 /* -- Kế toán (còn là dữ liệu mẫu) -- */

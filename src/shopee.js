@@ -188,27 +188,35 @@ export async function dongBoNen(env) {
     if (kq.error) throw new Error('Shopee báo lỗi: ' + (kq.message || kq.error));
     const ds = (kq.response && kq.response.return) || [];
     for (const r of ds) {
+      const tenArr = [], skuArr = [];
+      let tongSl = 0;
       const sp = (r.item || []).map(it => {
         const ten = it.name || it.item_name || '';
         const sku = it.item_sku || it.model_sku || '';
         const sl = Number(it.amount || it.quantity) || 1;
+        if (ten) tenArr.push(ten);
+        if (sku) skuArr.push(sku);
+        tongSl += sl;
         const nhan = sku || ten || '—';
-        // SKU đứng trước, số lượng luôn hiện (để đối chiếu với kho) — tên chỉ để tham khảo thêm
         return `${nhan} ×${sl}` + (sku && ten ? ` (${ten})` : '');
       }).filter(Boolean).join(' | ') || null;
+      const spTen = [...new Set(tenArr)].join(' | ') || null;
+      const spSku = [...new Set(skuArr)].join(' | ') || null;
+      const soLuong = tongSl || null;
       await env.DB.prepare(`
-        INSERT INTO don_hoan (return_sn, order_sn, trang_thai, ly_do, so_tien, tien_te, nguoi_mua, san_pham, ma_van_don, tao_luc_shopee, cap_nhat_shopee, du_lieu_json, dong_bo_luc)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now','+7 hours'))
+        INSERT INTO don_hoan (return_sn, order_sn, trang_thai, ly_do, so_tien, tien_te, nguoi_mua, san_pham, san_pham_ten, san_pham_sku, so_luong, ma_van_don, tao_luc_shopee, cap_nhat_shopee, du_lieu_json, dong_bo_luc)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now','+7 hours'))
         ON CONFLICT(return_sn) DO UPDATE SET
           trang_thai=excluded.trang_thai, ly_do=excluded.ly_do, so_tien=excluded.so_tien,
           tien_te=excluded.tien_te, nguoi_mua=excluded.nguoi_mua, san_pham=excluded.san_pham,
+          san_pham_ten=excluded.san_pham_ten, san_pham_sku=excluded.san_pham_sku, so_luong=excluded.so_luong,
           ma_van_don=excluded.ma_van_don,
           cap_nhat_shopee=excluded.cap_nhat_shopee, du_lieu_json=excluded.du_lieu_json,
           dong_bo_luc=datetime('now','+7 hours')
       `).bind(
         String(r.return_sn), r.order_sn || null, r.status || null, r.reason || null,
         Math.round((Number(r.refund_amount) || 0) * 100000) || null, r.currency || null,
-        (r.user && r.user.username) || null, sp,
+        (r.user && r.user.username) || null, sp, spTen, spSku, soLuong,
         r.tracking_number || r.return_tracking_number || null,
         r.create_time ? String(r.create_time) : null,
         r.update_time ? String(r.update_time) : null,
@@ -241,8 +249,9 @@ export async function apiDanhSach(env, phien) {
   if (!duocXemDonHoan(phien.vai_tro)) return loi('Bạn không có quyền', 403);
   const { results } = await env.DB.prepare(`
     SELECT return_sn, order_sn, trang_thai, ly_do, so_tien, tien_te, nguoi_mua,
-           san_pham, ma_van_don, nguon, cap_nhat_shopee, dong_bo_luc,
-           kho_nhan_luc, kho_nhan_boi, cho_kho_nhan_tu
+           san_pham, san_pham_ten, san_pham_sku, so_luong, ma_van_don, nguon,
+           cap_nhat_shopee, dong_bo_luc,
+           kho_nhan_luc, kho_nhan_boi, cho_kho_nhan_tu, lan_tra_soat, dang_cho
       FROM don_hoan ORDER BY dong_bo_luc DESC LIMIT 300
   `).all();
   return json({ don_hoan: results });

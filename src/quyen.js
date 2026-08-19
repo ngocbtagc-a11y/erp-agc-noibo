@@ -76,7 +76,11 @@ const QUYEN_SHOPEE = {
   giam_doc:       { xem: true, quan_ly: true  },
   pho_giam_doc:   { xem: true, quan_ly: true  },
   van_hanh_san:   { xem: true, quan_ly: false },
-  ke_toan_truong: { xem: true, quan_ly: false }
+  ke_toan_truong: { xem: true, quan_ly: false },
+  // Kho cần XEM đơn hoàn (để nhận hàng, bấm "Đã nhận", quẹt QR) — nhưng KHÔNG
+  // được kết nối sàn (quan_ly=false). Danh sách đơn hoàn nằm trong tab Kho vận.
+  quan_ly_kho:    { xem: true, quan_ly: false },
+  nhan_vien_kho:  { xem: true, quan_ly: false }
 };
 
 const KHONG_QUYEN_SHOPEE = { xem: false, quan_ly: false };

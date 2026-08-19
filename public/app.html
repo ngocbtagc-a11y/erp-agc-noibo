@@ -284,6 +284,7 @@
         <button class="seg-nut" data-kv="nhap">Nhập kho</button>
         <button class="seg-nut" data-kv="xuat">Xuất kho</button>
         <button class="seg-nut" data-kv="baocao">Báo cáo</button>
+        <button class="seg-nut" data-kv="donhoan">Đơn hoàn</button>
       </div>
 
       <!-- ===== Màn Tồn kho ===== -->
@@ -470,6 +471,51 @@
           <div class="empty" id="kv-bc-trong" hidden>Không có phát sinh trong kỳ đã chọn.</div>
         </div>
       </div>
+
+      <!-- ===== Màn Đơn hoàn (chuyển từ Kết nối sàn sang, để kho xử lý) ===== -->
+      <div class="kv-pane" id="kv-pane-donhoan" hidden>
+        <div class="panel">
+          <div class="panel-head">
+            <h4>Đơn hoàn về kho</h4>
+            <span class="hint" id="dh-dem"></span>
+          </div>
+          <div class="panel-body" style="padding-bottom:0">
+            <div class="dh-timkiem">
+              <div class="search">
+                <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                  <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+                </svg>
+                <input type="search" id="dh-tim" placeholder="Tìm: mã đơn hoàn · đơn gốc · mã vận đơn · sản phẩm · SKU · người mua">
+              </div>
+              <button type="button" class="btn-phu" id="dh-quetqr">
+                <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:4px">
+                  <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3M20 14v7M14 20h3"/>
+                </svg>Quẹt QR
+              </button>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Nguồn</th>
+                  <th>Mã đơn hoàn</th>
+                  <th>Đơn gốc</th>
+                  <th>Mã vận đơn</th>
+                  <th>Sản phẩm hoàn về</th>
+                  <th class="num">Số lượng</th>
+                  <th>Trạng thái trên sàn</th>
+                  <th class="num">Số tiền</th>
+                  <th>Người mua</th>
+                  <th>Kho nhận</th>
+                </tr>
+              </thead>
+              <tbody id="dh-bang"></tbody>
+            </table>
+          </div>
+          <div class="empty" id="dh-trong" hidden>Chưa có đơn hoàn nào — hãy sang tab “Kết nối sàn” bấm “Đồng bộ đơn hoàn”.</div>
+        </div>
+      </div>
     </section>
 
     <!-- ---------- Kế toán ---------- -->
@@ -561,46 +607,10 @@
         </div>
       </div>
 
-      <!-- Danh sách đơn hoàn -->
       <div class="panel">
-        <div class="panel-head">
-          <h4>Danh sách đơn hoàn</h4>
-          <span class="hint" id="dh-dem"></span>
+        <div class="panel-body">
+          <div class="kv-ton-nhac">📦 Danh sách đơn hoàn đã chuyển sang tab <b>Kho vận → Đơn hoàn</b> để kho xử lý (nhận hàng, quẹt QR). Tab này giờ chỉ dùng để kết nối sàn.</div>
         </div>
-        <div class="panel-body" style="padding-bottom:0">
-          <div class="dh-timkiem">
-            <div class="search">
-              <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-                <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
-              </svg>
-              <input type="search" id="dh-tim" placeholder="Tìm: mã đơn hoàn · đơn gốc · mã vận đơn · sản phẩm · người mua">
-            </div>
-            <button type="button" class="btn-phu" id="dh-quetqr">
-              <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:4px">
-                <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3M20 14v7M14 20h3"/>
-              </svg>Quẹt QR
-            </button>
-          </div>
-        </div>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Nguồn</th>
-                <th>Mã đơn hoàn</th>
-                <th>Đơn gốc</th>
-                <th>Mã vận đơn</th>
-                <th>Sản phẩm hoàn về</th>
-                <th>Trạng thái trên sàn</th>
-                <th class="num">Số tiền</th>
-                <th>Người mua</th>
-                <th>Kho nhận</th>
-              </tr>
-            </thead>
-            <tbody id="dh-bang"></tbody>
-          </table>
-        </div>
-        <div class="empty" id="dh-trong" hidden>Chưa có đơn hoàn nào — hãy kết nối Shopee rồi bấm “Đồng bộ đơn hoàn”.</div>
       </div>
     </section>
 
