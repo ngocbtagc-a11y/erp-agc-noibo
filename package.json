@@ -19,6 +19,8 @@
     "nap-tiktok": "wrangler d1 execute crm-agc --remote --file=migrations/them-tiktok.sql",
     "nap-hoso-may": "wrangler d1 execute crm-agc --local --file=migrations/them-hoso-nhansu.sql",
     "nap-hoso": "wrangler d1 execute crm-agc --remote --file=migrations/them-hoso-nhansu.sql",
+    "nap-doisoat-may": "wrangler d1 execute crm-agc --local --file=migrations/them-doisoat.sql",
+    "nap-doisoat": "wrangler d1 execute crm-agc --remote --file=migrations/them-doisoat.sql",
     "chay": "wrangler dev",
     "dua-len": "wrangler deploy"
   },

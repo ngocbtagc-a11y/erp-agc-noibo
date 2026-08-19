@@ -20,7 +20,7 @@ const TAB = [
   { id: 'kinhdoanh', ten: 'Kinh doanh', icon: 'M23 6l-9.5 9.5-5-5L1 18M17 6h6v6' },
   { id: 'khovan',    ten: 'Kho vận',    icon: 'M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16zM3.27 6.96L12 12.01l8.73-5.05M12 22.08V12' },
   { id: 'ketoan',    ten: 'Kế toán',    icon: 'M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6' },
-  { id: 'ketnoisan', ten: 'Kết nối sàn', icon: 'M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71' },
+  { id: 'donhoan',   ten: 'Kết nối sàn', icon: 'M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71' },
   { id: 'quantri',   ten: 'Quản trị',   icon: 'M12 15a3 3 0 100-6 3 3 0 000 6zM19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-2.82 1.17V21a2 2 0 01-4 0v-.09A1.65 1.65 0 006 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.6 14a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 7.6a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z' }
 ];
 
@@ -286,8 +286,9 @@ if (TOI.quyen.includes('nhansu')) {
   veDanhSach('#ns-lich', DB.nhanSu.lich);
 }
 
-/* -- Kinh doanh (còn là dữ liệu mẫu) -- */
+/* -- Kinh doanh -- */
 if (TOI.quyen.includes('kinhdoanh')) {
+  // Doanh thu theo kênh / đối thủ / sản phẩm bán chạy vẫn là dữ liệu mẫu
   veThe('#kd-the', DB.kinhDoanh.the);
   veChart('#kd-chart', DB.kinhDoanh.theoKenh);
   veDanhSach('#kd-doithu', DB.kinhDoanh.doiThu);
@@ -298,16 +299,66 @@ if (TOI.quyen.includes('kinhdoanh')) {
     `<td class="num">${esc(r.dt)}</td>` +
     `<td><span class="tag ${esc(r.tt)}">${esc(r.ttx)}</span></td>`);
 
-  // Chuyển màn R&D / Vận hành TMĐT (giống bộ pills của Kho vận)
-  document.getElementById('kdSeg')?.addEventListener('click', e => {
-    const nut = e.target.closest('.seg-nut');
-    if (!nut) return;
-    document.querySelectorAll('#kdSeg .seg-nut').forEach(b => b.classList.toggle('active', b === nut));
-    ['rnd', 'vanhanh'].forEach(k => {
-      const pane = document.getElementById('kd-pane-' + k);
-      if (pane) pane.hidden = (k !== nut.dataset.kd);
+  // Vận hành sàn — đơn hoàn cần đối soát (máy chủ thật) — chỉ ai có quyền Đơn hoàn mới thấy
+  if (TOI.quyen.includes('donhoan')) {
+    await khoiDongDoiSoatSan();
+  }
+}
+
+/* ==========================================================================
+   KINH DOANH — Vận hành sàn: đơn hoàn cần đối soát (quá 12h kho chưa nhận)
+   ========================================================================== */
+async function khoiDongDoiSoatSan() {
+  $('#kd-doisoat-panel').hidden = false;
+
+  function gioTre(choTu) {
+    if (!choTu) return '—';
+    const gio = (Date.now() - Date.parse(choTu.replace(' ', 'T'))) / 3600000;
+    return gio >= 24 ? `${(gio / 24).toFixed(1)} ngày` : `${Math.round(gio)} giờ`;
+  }
+
+  async function veDoiSoat() {
+    const { can_doi_soat } = await API.kdCanDoiSoat();
+    veBang('#kd-ds-bang', can_doi_soat, r => {
+      const ngTag = r.nguon === 'tiktok'
+        ? '<span class="tag mute">TikTok</span>'
+        : '<span class="tag sage">Shopee</span>';
+      const tien = r.so_tien != null
+        ? tienVN(Math.round(r.so_tien / 100000)) + ' ' + esc(r.tien_te || '')
+        : '—';
+      const html = `<td>${ngTag}</td>` +
+        `<td class="sm">${esc(r.return_sn)}</td>` +
+        `<td class="sm">${esc(r.order_sn || '—')}</td>` +
+        `<td class="sm">${esc(r.ma_van_don || '—')}</td>` +
+        `<td class="sm" title="${esc(r.san_pham || '')}">${esc(r.san_pham || '—')}</td>` +
+        `<td class="num">${tien}</td>` +
+        `<td class="sm">${esc(r.nguoi_mua || '—')}</td>` +
+        `<td><span class="tag danger">${gioTre(r.cho_kho_nhan_tu)}</span></td>` +
+        `<td><button type="button" class="btn-nho" data-doisoat="${esc(r.return_sn)}">Đã đối soát</button></td>`;
+      return { html, cls: 'canh-bao' };
     });
+    $('#kd-ds-trong').hidden = can_doi_soat.length > 0;
+    $('#kd-ds-dem').textContent = `${can_doi_soat.length} đơn cần đối soát`;
+  }
+
+  $('#kd-ds-bang').addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-doisoat]');
+    if (!btn) return;
+    const rsn = btn.getAttribute('data-doisoat');
+    btn.disabled = true;
+    const cu = btn.textContent;
+    btn.textContent = 'Đang lưu…';
+    try {
+      await API.kdDaDoiSoat(rsn);
+      await veDoiSoat();
+    } catch (err) {
+      btn.disabled = false;
+      btn.textContent = cu;
+      alert(err.message || 'Không lưu được, thử lại nhé.');
+    }
   });
+
+  await veDoiSoat();
 }
 
 /* -- Kho — Xuất / Nhập / Tồn (máy chủ thật) -- */
@@ -315,10 +366,8 @@ if (TOI.quyen.includes('khovan')) {
   await khoiDongKho();
 }
 
-/* -- Đơn hoàn — Shopee/TikTok (máy chủ thật) — màn con trong Kho vận +
-   khối kết nối trong tab Kết nối sàn, dùng chung 1 khối khởi động vì cùng
-   đọc/ghi những phần tử id="dh-*" dù chúng nằm ở 2 tab khác nhau. */
-if (TOI.shopee.xem) {
+/* -- Kết nối sàn — Đơn hoàn Shopee/TikTok (máy chủ thật) -- */
+if (TOI.quyen.includes('donhoan')) {
   await khoiDongDonHoan();
 }
 
@@ -362,31 +411,13 @@ async function khoiDongKho() {
   } else {
     $('#kvNhapFieldGia').hidden = false;
   }
-  // Không có quyền xem Đơn hoàn (VD quản lý/nhân viên kho) → giấu màn con đó
-  if (!TOI.shopee.xem) {
-    const b = document.querySelector('#kvSeg .seg-nut[data-kv="donhoan"]');
-    if (b) b.remove();
-  }
-  // Vận hành sàn không có nghiệp vụ kho nào (thao_tac/quan_ly/gia_von đều
-  // false) → giấu luôn Tồn kho + Báo cáo, chỉ còn Đơn hoàn là màn dùng được,
-  // và mặc định mở luôn màn đó thay vì Tồn kho (Tồn kho rỗng với vai trò này).
-  const coKho = qKho.thao_tac || qKho.quan_ly || qKho.gia_von;
-  if (!coKho) {
-    document.querySelectorAll('#kvSeg .seg-nut[data-kv="ton"], #kvSeg .seg-nut[data-kv="baocao"]')
-            .forEach(b => b.remove());
-    if (TOI.shopee.xem) {
-      document.querySelectorAll('#kvSeg .seg-nut').forEach(b => b.classList.toggle('active', b.dataset.kv === 'donhoan'));
-      $('#kv-pane-ton').hidden = true;
-      $('#kv-pane-donhoan').hidden = false;
-    }
-  }
 
   /* ---- Chuyển màn (segmented) ---- */
   $('#kvSeg').addEventListener('click', e => {
     const nut = e.target.closest('.seg-nut');
     if (!nut) return;
     document.querySelectorAll('#kvSeg .seg-nut').forEach(b => b.classList.toggle('active', b === nut));
-    ['ton', 'nhap', 'xuat', 'baocao', 'donhoan'].forEach(k => {
+    ['ton', 'nhap', 'xuat', 'baocao'].forEach(k => {
       const pane = document.getElementById('kv-pane-' + k);
       if (pane) pane.hidden = (k !== nut.dataset.kv);
     });
@@ -677,103 +708,64 @@ async function khoiDongDonHoan() {
 
   /* Danh sách đơn hoàn dùng chung — Nguồn + mã vận đơn + tìm kiếm + quẹt QR */
   let DS_DH = [];
-
-  /* TikTok hay tách 1 đơn thành nhiều mã return_id (theo từng lần khách bấm
-     hoàn / từng dòng hàng) dù cùng chung order_sn. Gộp các dòng cùng order_sn
-     lại thành 1 hàng để Sếp theo dõi 1 đơn ra 1 dòng, đỡ rối. Đơn không có
-     order_sn (hiếm) thì giữ riêng, không gộp nhầm với nhau. */
-  function gomTheoDonGoc(ds) {
-    const nhom = new Map();
-    for (const r of ds) {
-      const khoa = (r.order_sn && String(r.order_sn).trim()) || `__${r.return_sn}`;
-      if (!nhom.has(khoa)) nhom.set(khoa, []);
-      nhom.get(khoa).push(r);
-    }
-    return [...nhom.values()];
-  }
-
   function veBangDH(tuKhoa) {
     const k = boDau((tuKhoa || '').trim());
     const ds = DS_DH.filter(r => !k ||
       boDau(`${r.return_sn} ${r.order_sn || ''} ${r.ma_van_don || ''} ${r.san_pham || ''} ${r.nguoi_mua || ''}`).includes(k));
-    const nhomDs = gomTheoDonGoc(ds);
-    veBang('#dh-bang', nhomDs, nhom => {
-      const dau = nhom[0];
-      const nhieu = nhom.length > 1;
-      const ngTag = dau.nguon === 'tiktok'
+    veBang('#dh-bang', ds, r => {
+      const tt = nhanTrangThai(r.trang_thai);
+      const tien = r.so_tien != null
+        ? tienVN(Math.round(r.so_tien / 100000)) + ' ' + esc(r.tien_te || '')
+        : '—';
+      const ngTag = r.nguon === 'tiktok'
         ? '<span class="tag mute">TikTok</span>'
         : '<span class="tag sage">Shopee</span>';
 
-      // Mã đơn hoàn — bị tách nhiều return_id cùng đơn gốc thì gộp hiển thị 1 dòng.
-      const dsRsn = nhom.map(r => r.return_sn);
-      const maDH = nhieu
-        ? `<span title="Gồm ${dsRsn.length} mã: ${esc(dsRsn.join(', '))}">${esc(dsRsn[0])} <span class="tag mute">+${nhom.length - 1}</span></span>`
-        : esc(dau.return_sn);
-
-      // Trạng thái — cùng trạng thái thì 1 nhãn, khác nhau thì gộp nhãn + liệt kê khi trỏ chuột vào.
-      const dsTT = [...new Set(nhom.map(r => r.trang_thai))];
-      const ttHtml = dsTT.length <= 1
-        ? (() => { const tt = nhanTrangThai(dau.trang_thai); return `<span class="tag ${tt.mau}" title="${esc(dau.trang_thai || '')}">${esc(tt.chu)}</span>`; })()
-        : `<span class="tag warn" title="${esc(dsTT.map(s => nhanTrangThai(s).chu).join(', '))}">${dsTT.length} trạng thái</span>`;
-
-      // Số tiền — cộng dồn các dòng cùng đơn.
-      const coTien = nhom.some(r => r.so_tien != null);
-      const tongTien = nhom.reduce((s, r) => s + (r.so_tien != null ? Number(r.so_tien) : 0), 0);
-      const tien = coTien ? tienVN(Math.round(tongTien / 100000)) + ' ' + esc(dau.tien_te || '') : '—';
-
-      // Sản phẩm + mã vận đơn — gộp, bỏ trùng lặp.
-      const spGop = [...new Set(nhom.map(r => r.san_pham).filter(Boolean))].join(' | ') || '—';
-      const vdGop = [...new Set(nhom.map(r => r.ma_van_don).filter(Boolean))].join(', ') || '—';
-
-      // Kho nhận — cả nhóm đã nhận hết / nhận một phần / chưa nhận.
+      // Cột "Kho nhận": đã nhận → tick + người + giờ; chưa nhận → nút bấm.
       // Quá 12h kể từ khi sàn báo khách gửi về mà chưa nhận → tô đỏ cả hàng.
-      const chuaNhan = nhom.filter(r => !r.kho_nhan_luc);
       let khoTd, cls = '';
-      if (chuaNhan.length === 0) {
-        const cuoi = nhom.slice().sort((a, b) => (a.kho_nhan_luc || '').localeCompare(b.kho_nhan_luc || '')).pop();
+      if (r.kho_nhan_luc) {
         khoTd = `<td class="sm"><span class="tag ok">✓ Đã nhận</span>` +
-                `<div class="phu">${esc(cuoi.kho_nhan_boi || '')} · ${esc(cuoi.kho_nhan_luc || '')}</div></td>`;
+                `<div class="phu">${esc(r.kho_nhan_boi || '')} · ${esc(r.kho_nhan_luc)}</div></td>`;
       } else {
-        const qua12h = chuaNhan.some(r => r.cho_kho_nhan_tu &&
-          (Date.now() - Date.parse(r.cho_kho_nhan_tu.replace(' ', 'T'))) / 3600000 >= 12);
+        const qua12h = r.cho_kho_nhan_tu &&
+          (Date.now() - Date.parse(r.cho_kho_nhan_tu.replace(' ', 'T'))) / 3600000 >= 12;
         if (qua12h) cls = 'canh-bao';
         const nhac = qua12h ? '<div class="phu canh-bao-chu">Quá 12h!</div>' : '';
-        const nhanChu = nhieu && chuaNhan.length < nhom.length ? `Nhận nốt (${chuaNhan.length})` : 'Đã nhận';
-        khoTd = `<td><button type="button" class="btn-nho" data-nhan="${esc(chuaNhan.map(r => r.return_sn).join(','))}">${nhanChu}</button>${nhac}</td>`;
+        khoTd = `<td><button type="button" class="btn-nho" data-nhan="${esc(r.return_sn)}">Đã nhận</button>${nhac}</td>`;
       }
 
       const html = `<td>${ngTag}</td>` +
-        `<td class="sm">${maDH}</td>` +
-        `<td class="sm">${esc(dau.order_sn || '—')}</td>` +
-        `<td class="sm">${esc(vdGop)}</td>` +
-        `<td class="sm" title="${esc(spGop)}">${esc(spGop)}</td>` +
-        `<td>${ttHtml}</td>` +
+        `<td class="sm">${esc(r.return_sn)}</td>` +
+        `<td class="sm">${esc(r.order_sn || '—')}</td>` +
+        `<td class="sm">${esc(r.ma_van_don || '—')}</td>` +
+        `<td class="sm" title="${esc(r.san_pham || '')}">${esc(r.san_pham || '—')}</td>` +
+        `<td><span class="tag ${tt.mau}" title="${esc(r.trang_thai || '')}">${esc(tt.chu)}</span></td>` +
         `<td class="num">${tien}</td>` +
-        `<td class="sm">${esc(dau.nguoi_mua || '—')}</td>` +
+        `<td class="sm">${esc(r.nguoi_mua || '—')}</td>` +
         khoTd;
       return { html, cls };
     });
-    $('#dh-trong').hidden = nhomDs.length > 0;
-    $('#dh-dem').textContent = `${nhomDs.length}/${gomTheoDonGoc(DS_DH).length} đơn hoàn`;
+    $('#dh-trong').hidden = ds.length > 0;
+    $('#dh-dem').textContent = `${ds.length}/${DS_DH.length} đơn hoàn`;
   }
   async function veDanhSach() {
     const { don_hoan } = await API.hoanDanhSach();
     DS_DH = don_hoan;
     veBangDH($('#dh-tim').value);
   }
-  $('#dh-tim')?.addEventListener('input', e => veBangDH(e.target.value));
+  $('#dh-tim').addEventListener('input', e => veBangDH(e.target.value));
 
   /* Bấm "Đã nhận" — kho xác nhận đã nhận được kiện hàng hoàn */
-  $('#dh-bang')?.addEventListener('click', async (e) => {
+  $('#dh-bang').addEventListener('click', async (e) => {
     const btn = e.target.closest('[data-nhan]');
     if (!btn) return;
-    const dsRsn = btn.getAttribute('data-nhan').split(',').filter(Boolean);
-    if (!dsRsn.length) return;
+    const rsn = btn.getAttribute('data-nhan');
     btn.disabled = true;
     const cu = btn.textContent;
     btn.textContent = 'Đang lưu…';
     try {
-      for (const rsn of dsRsn) await API.hoanDaNhan(rsn);   // đơn gộp nhiều mã → xác nhận lần lượt từng mã
+      await API.hoanDaNhan(rsn);
       await veDanhSach();               // tải lại để lấy đúng người + giờ nhận
     } catch (err) {
       btn.disabled = false;
@@ -835,9 +827,9 @@ async function khoiDongDonHoan() {
     qrDoc = null;
   }
 
-  $('#dh-quetqr')?.addEventListener('click', moQuetQR);
-  $('#qrDong')?.addEventListener('click', dongQuetQR);
-  qrModal?.addEventListener('click', e => { if (e.target === qrModal) dongQuetQR(); });
+  $('#dh-quetqr').addEventListener('click', moQuetQR);
+  $('#qrDong').addEventListener('click', dongQuetQR);
+  qrModal.addEventListener('click', e => { if (e.target === qrModal) dongQuetQR(); });
 
   /* Một khối kết nối sàn (dùng cho cả Shopee lẫn TikTok) */
   function dungSan(cfg) {

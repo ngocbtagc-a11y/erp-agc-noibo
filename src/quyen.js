@@ -9,12 +9,8 @@
 
 /* Các mảng dữ liệu trong hệ thống.
    "quantri" = tab quản trị: thêm nhân sự, tạo tài khoản, đặt lại mật khẩu.
-   Chỉ admin (Giám đốc, Phó Giám đốc) thấy.
-   "ketnoisan" = tab riêng chỉ để kết nối/đồng bộ Shopee, TikTok — tách khỏi
-   Kho vận vì đây là việc cấp công ty (ủy quyền shop), không phải việc kho.
-   Đơn hoàn không còn là tab riêng — đã gộp làm 1 màn con trong "khovan"
-   (xem kvSeg trong app.js), vì đây là nơi kho xác nhận nhận lại hàng hoàn. */
-export const TAB = ['tongquan', 'danhba', 'nhansu', 'kinhdoanh', 'khovan', 'ketoan', 'ketnoisan', 'quantri'];
+   Chỉ admin (Giám đốc, Phó Giám đốc) thấy. */
+export const TAB = ['tongquan', 'danhba', 'nhansu', 'kinhdoanh', 'khovan', 'donhoan', 'ketoan', 'quantri'];
 
 /* Vai trò → được xem mảng nào và làm được gì.
    Danh bạ mở cho tất cả (Sếp Ngọc yêu cầu: ai cũng tra được số liên hệ).
@@ -23,20 +19,15 @@ export const TAB = ['tongquan', 'danhba', 'nhansu', 'kinhdoanh', 'khovan', 'keto
    - admin        : cấp/khoá/đặt lại tài khoản, thêm nhân sự có cả lương.
    - them_nhan_su : thêm nhân sự vào hồ sơ (KHÔNG đụng tới lương, KHÔNG cấp
                     được tài khoản). HCNS có mức này.
-   - xem_luong    : xem cột lương. HCNS KHÔNG có — đây là ranh giới cứng.
-
-   Vận hành sàn không có nghiệp vụ kho (không nhập/xuất/tồn — quyenKho() của
-   vai trò này mặc định toàn false), nhưng vẫn cần tab "khovan" vì màn Đơn
-   hoàn nằm trong đó; app.js tự ẩn các màn con Tồn/Nhập/Xuất/Báo cáo, chỉ để
-   lại Đơn hoàn cho vai trò này (xem hàm khoiDongKho). */
+   - xem_luong    : xem cột lương. HCNS KHÔNG có — đây là ranh giới cứng. */
 const QUYEN_THEO_VAI_TRO = {
-  giam_doc:        { tab: ['tongquan', 'danhba', 'nhansu', 'kinhdoanh', 'khovan', 'ketoan', 'ketnoisan', 'quantri'], xem_luong: true,  admin: true,  them_nhan_su: true  },
-  pho_giam_doc:    { tab: ['tongquan', 'danhba', 'nhansu', 'kinhdoanh', 'khovan', 'ketoan', 'ketnoisan', 'quantri'], xem_luong: true,  admin: true,  them_nhan_su: true  },
-  ke_toan_truong:  { tab: ['tongquan', 'danhba', 'khovan', 'ketoan', 'ketnoisan'],                                   xem_luong: true,  admin: false, them_nhan_su: false },
-  quan_ly_kho:     { tab: ['tongquan', 'danhba', 'khovan', 'nhansu'],                                                xem_luong: false, admin: false, them_nhan_su: false },
-  nhan_vien_kho:   { tab: ['tongquan', 'danhba', 'khovan'],                                                          xem_luong: false, admin: false, them_nhan_su: false },
-  hcns:            { tab: ['tongquan', 'danhba', 'nhansu', 'quantri'],                                               xem_luong: false, admin: false, them_nhan_su: true  },
-  van_hanh_san:    { tab: ['tongquan', 'danhba', 'kinhdoanh', 'khovan', 'ketnoisan'],                                xem_luong: false, admin: false, them_nhan_su: false }
+  giam_doc:        { tab: ['tongquan', 'danhba', 'nhansu', 'kinhdoanh', 'khovan', 'donhoan', 'ketoan', 'quantri'], xem_luong: true,  admin: true,  them_nhan_su: true  },
+  pho_giam_doc:    { tab: ['tongquan', 'danhba', 'nhansu', 'kinhdoanh', 'khovan', 'donhoan', 'ketoan', 'quantri'], xem_luong: true,  admin: true,  them_nhan_su: true  },
+  ke_toan_truong:  { tab: ['tongquan', 'danhba', 'khovan', 'donhoan', 'ketoan'],                                   xem_luong: true,  admin: false, them_nhan_su: false },
+  quan_ly_kho:     { tab: ['tongquan', 'danhba', 'khovan', 'nhansu'],                                              xem_luong: false, admin: false, them_nhan_su: false },
+  nhan_vien_kho:   { tab: ['tongquan', 'danhba', 'khovan'],                                                        xem_luong: false, admin: false, them_nhan_su: false },
+  hcns:            { tab: ['tongquan', 'danhba', 'nhansu', 'quantri'],                                             xem_luong: false, admin: false, them_nhan_su: true  },
+  van_hanh_san:    { tab: ['tongquan', 'danhba', 'kinhdoanh', 'donhoan'],                                          xem_luong: false, admin: false, them_nhan_su: false }
 };
 
 /* ---- Quyền trong module Kho --------------------------------------------
@@ -76,12 +67,11 @@ export function duocXemGiaVon(vaiTro) {
   return quyenKho(vaiTro).gia_von === true;
 }
 
-/* ---- Quyền module Đơn hoàn (Shopee/TikTok) ------------------------------
-   - xem     : xem danh sách đơn hoàn (trong tab Kho vận) + kết nối/đồng bộ
-               (tab Kết nối sàn). Vận hành sàn, kế toán trưởng và ban giám
-               đốc đều có.
-   - quan_ly : được KẾT NỐI Shopee/TikTok (ủy quyền shop) — chỉ ban giám đốc,
-               vì đây là hành động cấp công ty đụng tới tài khoản shop. */
+/* ---- Quyền module Đơn hoàn (Shopee) ------------------------------------
+   - xem     : xem danh sách đơn hoàn + bấm đồng bộ. Vận hành sàn, kế toán
+               trưởng và ban giám đốc đều có.
+   - quan_ly : được KẾT NỐI Shopee (ủy quyền shop) — chỉ ban giám đốc, vì
+               đây là hành động cấp công ty đụng tới tài khoản shop. */
 const QUYEN_SHOPEE = {
   giam_doc:       { xem: true, quan_ly: true  },
   pho_giam_doc:   { xem: true, quan_ly: true  },

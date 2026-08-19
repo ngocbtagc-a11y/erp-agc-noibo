@@ -14,7 +14,7 @@ import {
 
 import {
   quyenCua, duocXemTab, duocXemLuong, laAdmin, duocThemNhanSu,
-  quyenKho, quyenShopee, duocThaoTacKho, TEN_VAI_TRO, VAI_TRO_HOP_LE
+  quyenKho, quyenShopee, duocThaoTacKho, duocXemDonHoan, TEN_VAI_TRO, VAI_TRO_HOP_LE
 } from './quyen.js';
 import { kiemTraMatKhauDat, DAI_TOI_THIEU } from './mat-khau.js';
 import * as kho from './kho.js';
@@ -541,6 +541,52 @@ async function kiemTraCanhBaoHoan(env) {
   }
 }
 
+/* ==========================================================================
+   KINH DOANH — Cần đối soát với sàn
+   ---------------------------------------------------------------------------
+   Đơn hoàn mà sàn đã báo khách gửi hàng về (cho_kho_nhan_tu) nhưng kho chưa
+   xác nhận nhận (kho_nhan_luc) quá 12h thì đẩy sang đây cho Vận hành sàn
+   theo dõi và đối soát/khiếu nại với sàn — cùng bộ lọc với cron cảnh báo
+   Telegram ở kiemTraCanhBaoHoan(), chỉ khác là không giới hạn "chưa báo lần
+   nào" (da_canh_bao) vì đây là màn xem liên tục, không phải cảnh báo 1 lần.
+   Quyền dùng chung với Đơn hoàn (duocXemDonHoan): Giám đốc, Phó Giám đốc,
+   Vận hành sàn, Kế toán trưởng. ========================================== */
+
+async function kdCanDoiSoat(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  if (!duocXemDonHoan(phien.vai_tro)) return loi('Bạn không có quyền', 403);
+
+  const { results } = await env.DB.prepare(`
+    SELECT return_sn, order_sn, ma_van_don, san_pham, nguon, trang_thai,
+           so_tien, tien_te, nguoi_mua, cho_kho_nhan_tu
+      FROM don_hoan
+     WHERE cho_kho_nhan_tu IS NOT NULL AND kho_nhan_luc IS NULL AND doi_soat_luc IS NULL
+       AND trang_thai NOT LIKE '%CANCEL%'
+       AND (julianday(datetime('now','+7 hours')) - julianday(cho_kho_nhan_tu)) * 24 >= 12
+     ORDER BY cho_kho_nhan_tu ASC
+  `).all();
+  return json({ can_doi_soat: results });
+}
+
+/* Vận hành sàn đánh dấu đã đối soát/khiếu nại xong với sàn cho 1 đơn hoàn */
+async function kdDaDoiSoat(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  if (!duocXemDonHoan(phien.vai_tro)) return loi('Bạn không có quyền', 403);
+
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  const rsn = (b.return_sn || '').trim();
+  if (!rsn) return loi('Thiếu mã đơn hoàn');
+
+  const r = await env.DB.prepare(`
+    UPDATE don_hoan SET doi_soat_luc = datetime('now','+7 hours'), doi_soat_boi = ?
+     WHERE return_sn = ? AND doi_soat_luc IS NULL
+  `).bind(phien.ho_ten || phien.ten_dang_nhap, rsn).run();
+  if (!r.meta.changes) return loi('Không tìm thấy đơn hoặc đã được đối soát trước đó', 404);
+  return json({ ok: true, nguoi: phien.ho_ten || phien.ten_dang_nhap });
+}
+
 /* --- TikTok (song song Shopee, dùng chung tab Đơn hoàn) --- */
 async function tiktokTrangThai(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
@@ -606,6 +652,8 @@ const DUONG_DAN = {
   'POST /api/hoan/dong-bo':      hoanDongBo,
   'GET  /api/hoan/danh-sach':    hoanDanhSach,
   'POST /api/hoan/da-nhan':      hoanDaNhan,
+  'GET  /api/kinh-doanh/can-doi-soat': kdCanDoiSoat,
+  'POST /api/kinh-doanh/da-doi-soat':  kdDaDoiSoat,
   'GET  /api/tiktok/trang-thai': tiktokTrangThai,
   'GET  /api/tiktok/connect':    tiktokConnect,
   'GET  /api/tiktok/callback':   tiktokCallback,

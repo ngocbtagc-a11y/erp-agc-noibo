@@ -197,25 +197,37 @@
         <p>Doanh thu theo kênh bán, hiệu quả từng sản phẩm và động thái của đối thủ.</p>
       </div>
 
-      <!-- Chuyển màn: R&D / Vận hành TMĐT -->
-      <div class="seg" id="kdSeg">
-        <button class="seg-nut active" data-kd="rnd">R&amp;D</button>
-        <button class="seg-nut" data-kd="vanhanh">Vận hành TMĐT</button>
-      </div>
-
-      <!-- ===== Màn R&D ===== -->
-      <div class="kv-pane" id="kd-pane-rnd">
-        <div class="panel">
-          <div class="panel-head"><h4>R&amp;D — Nghiên cứu &amp; phát triển sản phẩm</h4></div>
-          <div class="panel-body">
-            <div class="empty">Khu vực R&amp;D đang chờ nội dung. Sếp cho tôi biết cần theo dõi gì ở đây (ý tưởng sản phẩm mới, mẫu đang thử, kết quả test, tiến độ ra mắt…) là tôi dựng tiếp.</div>
-          </div>
+      <!-- ---------- Vận hành sàn: đơn hoàn cần đối soát (quá 12h kho chưa nhận) ---------- -->
+      <div class="panel" id="kd-doisoat-panel" hidden>
+        <div class="panel-head">
+          <h4>Vận hành sàn — Cần đối soát với sàn</h4>
+          <span class="hint" id="kd-ds-dem"></span>
         </div>
+        <div class="panel-body" style="padding-bottom:0; padding-top:0">
+          <p class="hint" style="margin:14px 0 0">Đơn hoàn sàn báo khách đã gửi về quá 12h mà kho chưa xác nhận nhận hàng — tra vận đơn và khiếu nại/đối soát trực tiếp với sàn, xong thì đánh dấu đã đối soát.</p>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Nguồn</th>
+                <th>Mã đơn hoàn</th>
+                <th>Đơn gốc</th>
+                <th>Mã vận đơn</th>
+                <th>Sản phẩm</th>
+                <th class="num">Số tiền</th>
+                <th>Người mua</th>
+                <th>Trễ</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="kd-ds-bang"></tbody>
+          </table>
+        </div>
+        <div class="empty" id="kd-ds-trong" hidden>Không có đơn hoàn nào cần đối soát — kho đang xử lý đúng hạn.</div>
       </div>
 
-      <!-- ===== Màn Vận hành TMĐT ===== -->
-      <div class="kv-pane" id="kd-pane-vanhanh" hidden>
-        <div class="stats" id="kd-the"></div>
+      <div class="stats" id="kd-the"></div>
 
       <div class="grid-2">
         <div class="panel">
@@ -255,7 +267,6 @@
           </table>
         </div>
       </div>
-      </div>
     </section>
 
     <!-- ---------- Kho — Xuất / Nhập / Tồn ---------- -->
@@ -267,13 +278,12 @@
 
       <div class="stats" id="kv-the"></div>
 
-      <!-- Chuyển màn: Tồn / Nhập / Xuất / Báo cáo / Đơn hoàn -->
+      <!-- Chuyển màn: Tồn / Nhập / Xuất / Báo cáo -->
       <div class="seg" id="kvSeg">
         <button class="seg-nut active" data-kv="ton">Tồn kho</button>
         <button class="seg-nut" data-kv="nhap">Nhập kho</button>
         <button class="seg-nut" data-kv="xuat">Xuất kho</button>
         <button class="seg-nut" data-kv="baocao">Báo cáo</button>
-        <button class="seg-nut" data-kv="donhoan">Đơn hoàn</button>
       </div>
 
       <!-- ===== Màn Tồn kho ===== -->
@@ -460,94 +470,6 @@
           <div class="empty" id="kv-bc-trong" hidden>Không có phát sinh trong kỳ đã chọn.</div>
         </div>
       </div>
-
-      <!-- ===== Màn Đơn hoàn (Shopee/TikTok) ===== -->
-      <div class="kv-pane" id="kv-pane-donhoan" hidden>
-        <div class="panel">
-          <div class="panel-head">
-            <h4>Danh sách đơn hoàn</h4>
-            <span class="hint" id="dh-dem"></span>
-          </div>
-          <div class="panel-body" style="padding-bottom:0">
-            <div class="dh-timkiem">
-              <div class="search">
-                <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-                  <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
-                </svg>
-                <input type="search" id="dh-tim" placeholder="Tìm: mã đơn hoàn · đơn gốc · mã vận đơn · sản phẩm · người mua">
-              </div>
-              <button type="button" class="btn-phu" id="dh-quetqr">
-                <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:4px">
-                  <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3M20 14v7M14 20h3"/>
-                </svg>Quẹt QR
-              </button>
-            </div>
-          </div>
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Nguồn</th>
-                  <th>Mã đơn hoàn</th>
-                  <th>Đơn gốc</th>
-                  <th>Mã vận đơn</th>
-                  <th>Sản phẩm hoàn về</th>
-                  <th>Trạng thái trên sàn</th>
-                  <th class="num">Số tiền</th>
-                  <th>Người mua</th>
-                  <th>Kho nhận</th>
-                </tr>
-              </thead>
-              <tbody id="dh-bang"></tbody>
-            </table>
-          </div>
-          <div class="empty" id="dh-trong" hidden>Chưa có đơn hoàn nào — hãy sang tab “Kết nối sàn” để kết nối rồi đồng bộ.</div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ---------- Kết nối sàn (Shopee/TikTok) ---------- -->
-    <section class="view" id="v-ketnoisan" hidden>
-      <div class="view-head">
-        <h3>Kết nối sàn</h3>
-        <p>Ủy quyền một lần cho mỗi sàn — sau đó token tự làm mới, không phải nối lại. Đồng bộ để kéo đơn hoàn/hoàn tiền về mục Đơn hoàn trong tab Kho vận.</p>
-      </div>
-
-      <div class="grid-2">
-        <!-- Trạng thái kết nối Shopee -->
-        <div class="panel">
-          <div class="panel-head">
-            <h4>Kết nối Shopee</h4>
-            <span class="hint" id="dh-tt-hint"></span>
-          </div>
-          <div class="panel-body">
-            <div id="dh-trangthai" class="kv-ton-nhac">Đang kiểm tra…</div>
-            <div style="margin-top:14px; display:flex; gap:10px; flex-wrap:wrap">
-              <button class="btn-primary" id="dh-ketnoi" hidden style="width:auto">Kết nối Shopee</button>
-              <button class="btn-phu" id="dh-dongbo" hidden>Đồng bộ đơn hoàn</button>
-            </div>
-            <div class="form-loi" id="dh-loi"></div>
-            <div class="form-ok" id="dh-ok" hidden></div>
-          </div>
-        </div>
-
-        <!-- Trạng thái kết nối TikTok -->
-        <div class="panel">
-          <div class="panel-head">
-            <h4>Kết nối TikTok Shop</h4>
-            <span class="hint" id="dh-tk-hint"></span>
-          </div>
-          <div class="panel-body">
-            <div id="dh-tk-trangthai" class="kv-ton-nhac">Đang kiểm tra…</div>
-            <div style="margin-top:14px; display:flex; gap:10px; flex-wrap:wrap">
-              <button class="btn-primary" id="dh-tk-ketnoi" hidden style="width:auto">Kết nối TikTok</button>
-              <button class="btn-phu" id="dh-tk-dongbo" hidden>Đồng bộ đơn hoàn</button>
-            </div>
-            <div class="form-loi" id="dh-tk-loi"></div>
-            <div class="form-ok" id="dh-tk-ok" hidden></div>
-          </div>
-        </div>
-      </div>
     </section>
 
     <!-- ---------- Kế toán ---------- -->
@@ -595,6 +517,90 @@
             <tbody id="kt-bang"></tbody>
           </table>
         </div>
+      </div>
+    </section>
+
+    <!-- ---------- Kết nối sàn — Đơn hoàn (Shopee + TikTok) ---------- -->
+    <section class="view" id="v-donhoan" hidden>
+      <div class="view-head">
+        <h3>Kết nối sàn</h3>
+        <p>Kéo đơn hoàn / hoàn tiền từ Shopee & TikTok về để theo dõi và đối soát. Cần kết nối sàn một lần; sau đó token tự làm mới, không phải nối lại.</p>
+      </div>
+
+      <!-- Trạng thái kết nối -->
+      <div class="panel">
+        <div class="panel-head">
+          <h4>Kết nối Shopee</h4>
+          <span class="hint" id="dh-tt-hint"></span>
+        </div>
+        <div class="panel-body">
+          <div id="dh-trangthai" class="kv-ton-nhac">Đang kiểm tra…</div>
+          <div style="margin-top:14px; display:flex; gap:10px; flex-wrap:wrap">
+            <button class="btn-primary" id="dh-ketnoi" hidden style="width:auto">Kết nối Shopee</button>
+            <button class="btn-phu" id="dh-dongbo" hidden>Đồng bộ đơn hoàn</button>
+          </div>
+          <div class="form-loi" id="dh-loi"></div>
+          <div class="form-ok" id="dh-ok" hidden></div>
+        </div>
+      </div>
+
+      <!-- Trạng thái kết nối TikTok -->
+      <div class="panel">
+        <div class="panel-head">
+          <h4>Kết nối TikTok Shop</h4>
+          <span class="hint" id="dh-tk-hint"></span>
+        </div>
+        <div class="panel-body">
+          <div id="dh-tk-trangthai" class="kv-ton-nhac">Đang kiểm tra…</div>
+          <div style="margin-top:14px; display:flex; gap:10px; flex-wrap:wrap">
+            <button class="btn-primary" id="dh-tk-ketnoi" hidden style="width:auto">Kết nối TikTok</button>
+            <button class="btn-phu" id="dh-tk-dongbo" hidden>Đồng bộ đơn hoàn</button>
+          </div>
+          <div class="form-loi" id="dh-tk-loi"></div>
+          <div class="form-ok" id="dh-tk-ok" hidden></div>
+        </div>
+      </div>
+
+      <!-- Danh sách đơn hoàn -->
+      <div class="panel">
+        <div class="panel-head">
+          <h4>Danh sách đơn hoàn</h4>
+          <span class="hint" id="dh-dem"></span>
+        </div>
+        <div class="panel-body" style="padding-bottom:0">
+          <div class="dh-timkiem">
+            <div class="search">
+              <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+              </svg>
+              <input type="search" id="dh-tim" placeholder="Tìm: mã đơn hoàn · đơn gốc · mã vận đơn · sản phẩm · người mua">
+            </div>
+            <button type="button" class="btn-phu" id="dh-quetqr">
+              <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:4px">
+                <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3M20 14v7M14 20h3"/>
+              </svg>Quẹt QR
+            </button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Nguồn</th>
+                <th>Mã đơn hoàn</th>
+                <th>Đơn gốc</th>
+                <th>Mã vận đơn</th>
+                <th>Sản phẩm hoàn về</th>
+                <th>Trạng thái trên sàn</th>
+                <th class="num">Số tiền</th>
+                <th>Người mua</th>
+                <th>Kho nhận</th>
+              </tr>
+            </thead>
+            <tbody id="dh-bang"></tbody>
+          </table>
+        </div>
+        <div class="empty" id="dh-trong" hidden>Chưa có đơn hoàn nào — hãy kết nối Shopee rồi bấm “Đồng bộ đơn hoàn”.</div>
       </div>
     </section>
 
