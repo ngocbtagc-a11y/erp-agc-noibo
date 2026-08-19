@@ -631,6 +631,20 @@ td .sm { font-size: 12px; color: var(--text-mute); white-space: nowrap; }
 }
 .dh-timkiem .btn-phu { white-space: nowrap; flex-shrink: 0; }
 
+/* Ô lọc nhỏ gọn (VD: lọc Nguồn) đặt cạnh ô tìm kiếm — cùng chiều cao với .search input */
+.chon-nho {
+  flex-shrink: 0;
+  padding: 11px 32px 11px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13.5px;
+  font-family: inherit;
+  cursor: pointer;
+}
+.chon-nho:focus { outline: none; border-color: var(--sage); box-shadow: 0 0 0 3px rgba(154,171,134,.22); }
+
 /* Hàng đơn hoàn quá 12h chưa nhận — tô đỏ để kho/vận hành thấy ngay */
 tr.canh-bao > td { background: #fdecea; }
 tr.canh-bao:hover > td { background: #fbdbd6; }
@@ -675,12 +689,14 @@ tr.canh-bao:hover > td { background: #fbdbd6; }
 
 .dinh-tick, .dinh-cot, .dinh-cot2, .dinh-cot3, .dinh-cot4 {
   position: sticky; z-index: 1; background: var(--card);
+  padding-left: 8px !important; padding-right: 8px !important;   /* gọn hơn ô thường (16px) vì cột hẹp */
+  overflow: hidden; text-overflow: ellipsis;   /* mã dài (19 số) bị cắt gọn — trỏ chuột vào xem trọn */
 }
-.dinh-tick { left: 0;   width: 40px;  min-width: 40px; text-align: center; }
-.dinh-cot  { left: 40px;  width: 76px;  min-width: 76px; }
-.dinh-cot2 { left: 116px; width: 170px; min-width: 170px; }
-.dinh-cot3 { left: 286px; width: 150px; min-width: 150px; }
-.dinh-cot4 { left: 436px; width: 130px; min-width: 130px; border-right: 1px solid var(--line); }
+.dinh-tick { left: 0;   width: 34px;  min-width: 34px; text-align: center; }
+.dinh-cot  { left: 34px;  width: 64px;  min-width: 64px; }
+.dinh-cot2 { left: 98px;  width: 132px; min-width: 132px; }
+.dinh-cot3 { left: 230px; width: 122px; min-width: 122px; }
+.dinh-cot4 { left: 352px; width: 96px;  min-width: 96px;  border-right: 1px solid var(--line); }
 
 thead th.dinh-tick, thead th.dinh-cot, thead th.dinh-cot2, thead th.dinh-cot3, thead th.dinh-cot4 {
   z-index: 3; background: var(--sage-wash);

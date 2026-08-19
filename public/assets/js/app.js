@@ -452,20 +452,24 @@ async function khoiDongDoiSoatSan() {
     const laMoi = r.tao_luc_shopee && !(r.lan_tra_soat > 0) &&
       (Date.now() / 1000 - Number(r.tao_luc_shopee)) < 3 * 86400;
     const tagMoi = laMoi ? '<span class="tag-new">new</span>' : '';
-    // Lý do kho khiếu nại (nếu kho vừa bấm "Cần khiếu nại") — ưu tiên hiện lý do
-    // thật; đơn nào chỉ tự động đẩy lên do quá 24h chưa nhận (không phải kho
-    // chủ động khiếu nại) thì hiện mốc thời gian trễ để vận hành biết mức độ gấp.
+    // Lý do kho khiếu nại (nếu kho vừa bấm "Cần khiếu nại") — icon + tag đỏ nổi
+    // bật để vận hành sàn không lướt qua, kèm nguyên văn lý do kho ghi. Đơn nào
+    // chỉ tự động đẩy lên do quá 24h chưa nhận (không phải kho chủ động khiếu
+    // nại) thì hiện mốc thời gian trễ nhẹ hơn để biết mức độ gấp.
     const khieuNaiHtml = r.ly_do_khieu_nai
-      ? `<div class="phu canh-bao-chu">⚠️ Kho khiếu nại: ${esc(r.ly_do_khieu_nai)}` +
-        `${r.khieu_nai_boi ? ' — ' + esc(r.khieu_nai_boi) : ''}</div>`
+      ? `<div class="phu" style="margin-top:4px">` +
+          `<span class="tag danger">⚠️ Kho khiếu nại</span>` +
+          `<div class="canh-bao-chu" style="margin-top:3px">${esc(r.ly_do_khieu_nai)}` +
+            `${r.khieu_nai_boi ? ' — ' + esc(r.khieu_nai_boi) : ''}</div>` +
+        `</div>`
       : (r.dang_cho === 'van_hanh' && r.cho_kho_nhan_tu
           ? `<div class="phu canh-bao-chu">Kho đẩy lên · quá ${esc(gioTre(r.cho_kho_nhan_tu))}</div>` : '');
     return `<td class="dinh-tick"><input type="checkbox" data-chon="${esc(r.return_sn)}"></td>` +
       `<td class="dinh-cot">${ngTag}</td>` +
-      `<td class="sm dinh-cot2">${esc(r.return_sn)}${tagMoi}` +
+      `<td class="sm dinh-cot2" title="${esc(r.return_sn)}">${esc(r.return_sn)}${tagMoi}` +
         (ngayTao ? `<div class="phu">Hoàn: ${esc(ngayTao)}</div>` : '') + khieuNaiHtml + `</td>` +
-      `<td class="sm dinh-cot3">${esc(r.order_sn || '—')}</td>` +
-      `<td class="sm dinh-cot4">${esc(r.ma_van_don || '—')}</td>` +
+      `<td class="sm dinh-cot3" title="${esc(r.order_sn || '')}">${esc(r.order_sn || '—')}</td>` +
+      `<td class="sm dinh-cot4" title="${esc(r.ma_van_don || '')}">${esc(r.ma_van_don || '—')}</td>` +
       spCell +
       `<td class="num">${r.so_luong != null ? esc(r.so_luong) : '—'}</td>` +
       `<td class="sm">${esc(nhanLyDo(r.ly_do))}</td>` +
@@ -475,13 +479,24 @@ async function khoiDongDoiSoatSan() {
       `<td><button type="button" class="btn-nho" data-doisoat="${esc(r.return_sn)}">${nhanNut}</button></td>`;
   }
 
-  async function veDoiSoat() {
-    const { can_doi_soat } = await API.kdCanDoiSoat();
+  // Dữ liệu thô từ máy chủ — lọc tìm kiếm/nguồn làm ngay ở trình duyệt,
+  // không cần gọi lại API mỗi lần Sếp gõ chữ hay đổi bộ lọc.
+  let DS_DOISOAT = [];
 
-    // Chưa tra soát lần nào → lên đầu, cần xử lý gấp (tô đỏ).
-    // Đã tra soát rồi → tự chìm xuống cuối, chỉ còn chờ kho xác nhận nhận hàng.
-    const chua = can_doi_soat.filter(r => !(r.lan_tra_soat > 0));
-    const daXong = can_doi_soat.filter(r => r.lan_tra_soat > 0);
+  function veBangDoiSoat() {
+    const tk = boDau(($('#kd-ds-tim').value || '').trim());
+    const locNguon = $('#kd-ds-locnguon').value;
+    const ds = DS_DOISOAT.filter(r => {
+      if (locNguon && r.nguon !== locNguon) return false;
+      if (!tk) return true;
+      return boDau(`${r.return_sn} ${r.order_sn || ''} ${r.ma_van_don || ''} ${r.san_pham_ten || r.san_pham || ''} ${r.san_pham_sku || ''}`).includes(tk);
+    });
+
+    // Chưa tra soát lần nào HOẶC kho vừa khiếu nại (dù trước đó đã tra soát
+    // rồi, khiếu nại mới vẫn là việc gấp) → lên đầu, tô đỏ.
+    // Còn lại (đã tra soát, không có khiếu nại đang mở) → tự chìm xuống cuối.
+    const chua = ds.filter(r => !(r.lan_tra_soat > 0) || r.ly_do_khieu_nai);
+    const daXong = ds.filter(r => (r.lan_tra_soat > 0) && !r.ly_do_khieu_nai);
 
     let html = chua.map(r => `<tr class="canh-bao">${dongDoiSoat(r)}</tr>`).join('');
     if (chua.length && daXong.length) {
@@ -490,13 +505,23 @@ async function khoiDongDoiSoatSan() {
     html += daXong.map(r => `<tr class="kd-daxong">${dongDoiSoat(r)}</tr>`).join('');
     $('#kd-ds-bang').innerHTML = html;
 
-    $('#kd-ds-trong').hidden = can_doi_soat.length > 0;
-    $('#kd-ds-dem').textContent = `${can_doi_soat.length} đơn cần đối soát`;
+    $('#kd-ds-trong').hidden = ds.length > 0;
+    $('#kd-ds-dem').textContent = (tk || locNguon)
+      ? `${ds.length}/${DS_DOISOAT.length} đơn cần đối soát`
+      : `${ds.length} đơn cần đối soát`;
 
     // Mỗi lần vẽ lại bảng là danh sách chọn reset về rỗng (dữ liệu vừa đổi)
     $('#kd-ds-chontatca').checked = false;
     veThanhChon();
   }
+
+  async function veDoiSoat() {
+    const { can_doi_soat } = await API.kdCanDoiSoat();
+    DS_DOISOAT = can_doi_soat;
+    veBangDoiSoat();
+  }
+  $('#kd-ds-tim').addEventListener('input', veBangDoiSoat);
+  $('#kd-ds-locnguon').addEventListener('change', veBangDoiSoat);
 
   /* ---- Tick chọn nhiều đơn -> đẩy hàng loạt sang Kho vận ---- */
   function dsDangChon() {
