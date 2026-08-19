@@ -176,6 +176,8 @@ export async function apiCallback(env, urlObj) {
   if (!code) return new Response('Thiếu auth_code', { status: 400 });
   try {
     await doiCodeLayToken(env, code);
+    // Kết nối xong là kéo đơn hoàn về ngay, khỏi phải bấm "Đồng bộ".
+    try { await dongBoNen(env); } catch (e) { console.error('Đồng bộ ngay sau kết nối TikTok:', e.message); }
     return new Response(null, { status: 302, headers: { Location: '/app?tiktok=ok' } });
   } catch (e) {
     return new Response('Kết nối TikTok thất bại: ' + e.message, { status: 502 });

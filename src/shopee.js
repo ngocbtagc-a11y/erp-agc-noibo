@@ -166,6 +166,9 @@ export async function apiCallback(env, urlObj) {
   if (!code || !shopId) return new Response('Thiếu code hoặc shop_id', { status: 400 });
   try {
     await doiCodeLayToken(env, code, shopId);
+    // Kết nối xong là KÉO ĐƠN HOÀN VỀ NGAY, khỏi phải bấm "Đồng bộ" (Sếp Ngọc
+    // 19/08/2026). Lỗi đồng bộ không chặn — cron 5 phút sẽ tự thử lại.
+    try { await dongBoNen(env); } catch (e) { console.error('Đồng bộ ngay sau kết nối Shopee:', e.message); }
     // Ủy quyền xong → đưa người dùng về app, gắn cờ để giao diện báo thành công
     return new Response(null, { status: 302, headers: { Location: '/app?shopee=ok' } });
   } catch (e) {
