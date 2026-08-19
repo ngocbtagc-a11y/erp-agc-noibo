@@ -190,6 +190,7 @@ export async function dongBoNen(env) {
   const _vn = new Date(Date.now() + 7 * 3600 * 1000);
   const dauThang = Math.floor(Date.UTC(_vn.getUTCFullYear(), _vn.getUTCMonth(), 1) / 1000) - 7 * 3600;
   let them = 0;
+  const cauLenh = [];   // gom lệnh ghi để chạy BATCH (tránh vượt trần subrequest Worker)
   for (let tuLuc = dauThang; tuLuc < gioNay; tuLuc += 15 * 86400) {
     const denLuc = Math.min(tuLuc + 15 * 86400 - 1, gioNay);
     let pageNo = 0, con = true;
@@ -216,7 +217,7 @@ export async function dongBoNen(env) {
       const spTen = [...new Set(tenArr)].join(' | ') || null;
       const spSku = [...new Set(skuArr)].join(' | ') || null;
       const soLuong = tongSl || null;
-      await env.DB.prepare(`
+      cauLenh.push(env.DB.prepare(`
         INSERT INTO don_hoan (return_sn, order_sn, trang_thai, ly_do, so_tien, tien_te, nguoi_mua, san_pham, san_pham_ten, san_pham_sku, so_luong, ma_van_don, tao_luc_shopee, cap_nhat_shopee, du_lieu_json, dang_cho, dong_bo_luc)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'van_hanh', datetime('now','+7 hours'))
         ON CONFLICT(return_sn) DO UPDATE SET
@@ -234,12 +235,16 @@ export async function dongBoNen(env) {
         r.create_time ? String(r.create_time) : null,
         r.update_time ? String(r.update_time) : null,
         JSON.stringify(r)
-      ).run();
+      ));
       them++;
     }
       con = !!(kq.response && kq.response.more);
       pageNo++;
     }
+  }
+  // Ghi hàng loạt theo lô 50 lệnh/batch — mỗi batch chỉ tính 1 subrequest
+  for (let i = 0; i < cauLenh.length; i += 50) {
+    await env.DB.batch(cauLenh.slice(i, i + 50));
   }
   return them;
 }
