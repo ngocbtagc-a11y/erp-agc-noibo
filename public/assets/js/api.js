@@ -125,7 +125,15 @@ export const API = {
   kdDayKho: (dsReturnSn) => goi('/api/kinh-doanh/day-kho', {
     method: 'POST', body: JSON.stringify({ return_sn: dsReturnSn })
   }),
-  kdDonHuy: () => goi('/api/kinh-doanh/don-huy'),
+  kdDayKeToan: (dsReturnSn) => goi('/api/kinh-doanh/day-ke-toan', {
+    method: 'POST', body: JSON.stringify({ return_sn: dsReturnSn })
+  }),
+
+  /* ---- Kế toán: đơn hoàn cần tra soát tiền ---- */
+  ktCanTraSoat: () => goi('/api/ke-toan/can-tra-soat'),
+  ktDaTraSoat: (returnSn) => goi('/api/ke-toan/da-tra-soat', {
+    method: 'POST', body: JSON.stringify({ return_sn: returnSn })
+  }),
 
   /* ---- Ghép tên sản phẩm (sàn) -> SKU (kho), cho đơn hoàn cũ không có SKU ---- */
   hoanSkuMapDanhSach: () => goi('/api/hoan/sku-map'),

@@ -226,13 +226,14 @@
           <span class="hint" id="kd-ds-dem"></span>
         </div>
         <div class="panel-body" style="padding-bottom:0; padding-top:0">
-          <p class="hint" style="margin:14px 0 0">Mọi đơn hoàn (bất kể trạng thái trên sàn) mà <b>kho chưa xác nhận đã nhận hàng</b> đều nằm ở đây — vì trạng thái sàn không đảm bảo hàng đã về kho. Tra vận đơn, khiếu nại/đối soát với sàn, xong thì bấm “Đã tra soát” (từng đơn) hoặc tick chọn nhiều đơn rồi “Đẩy sang Kho vận” (cả loạt). Kho bấm “Đã nhận” là đơn tự rời danh sách.</p>
+          <p class="hint" style="margin:14px 0 0">MỌI đơn hoàn (kể cả đơn huỷ) đều nằm chung ở đây để Vận hành sàn phân loại. Tick chọn đơn rồi: <b>“Đẩy sang Kho vận”</b> (đơn có hàng về để kho nhận) hoặc <b>“Đẩy sang Kế toán”</b> (đơn đã hoàn tiền để kế toán tra soát). Bên nhận sẽ được báo qua chuông 🔔. Tag <span class="tag-new">new</span> = đơn mới phát sinh chưa xử lý.</p>
         </div>
 
         <!-- Thanh hành động — chỉ hiện khi có đơn được tick chọn -->
         <div class="kd-thanh-chon" id="kd-ds-thanhchon" hidden>
           <span id="kd-ds-sldachon"></span>
           <button type="button" class="btn-primary" id="kd-ds-daykho" style="width:auto">Đẩy sang Kho vận</button>
+          <button type="button" class="btn-primary" id="kd-ds-dayketoan" style="width:auto">Đẩy sang Kế toán</button>
           <button type="button" class="btn-phu" id="kd-ds-huychon">Bỏ chọn</button>
         </div>
 
@@ -247,6 +248,7 @@
                 <th class="dinh-cot4">Mã vận đơn</th>
                 <th>Sản phẩm hoàn về</th>
                 <th class="num">Số lượng</th>
+                <th>Lý do</th>
                 <th>Trạng thái trên sàn</th>
                 <th class="num">Số tiền</th>
                 <th>Đã tra soát</th>
@@ -257,34 +259,6 @@
           </table>
         </div>
         <div class="empty" id="kd-ds-trong" hidden>Không có đơn hoàn nào cần đối soát — kho đã xác nhận nhận hết.</div>
-      </div>
-
-      <!-- ---------- Vận hành sàn: đơn hoàn/hoàn tiền bị HUỶ trên sàn ---------- -->
-      <div class="panel" id="kd-donhuy-panel" hidden>
-        <div class="panel-head">
-          <h4>Vận hành sàn — Đơn hoàn huỷ</h4>
-          <span class="hint" id="kd-dh-dem"></span>
-        </div>
-        <div class="panel-body" style="padding-bottom:0; padding-top:0">
-          <p class="hint" style="margin:14px 0 0">Đơn hoàn/hoàn tiền bị <b>huỷ trên sàn và KHÔNG có hàng về</b> (huỷ suông) — chỉ là sổ tham chiếu, không cần xử lý. Đơn huỷ nhưng <b>có mã vận đơn</b> (khách đã gửi hàng về trước khi huỷ) không nằm ở đây mà đã vào danh sách <b>“Cần đối soát”</b> phía trên để xử lý như đơn thường.</p>
-        </div>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Nguồn</th>
-                <th>Mã đơn hoàn</th>
-                <th>Mã đơn gốc</th>
-                <th>Sản phẩm</th>
-                <th class="num">Số lượng</th>
-                <th>Lý do</th>
-                <th>Trạng thái trên sàn</th>
-              </tr>
-            </thead>
-            <tbody id="kd-dh-bang"></tbody>
-          </table>
-        </div>
-        <div class="empty" id="kd-dh-trong" hidden>Không có đơn hoàn nào bị huỷ.</div>
       </div>
 
       <div class="stats" id="kd-the"></div>
@@ -596,6 +570,35 @@
       <div class="view-head">
         <h3>Kế toán</h3>
         <p>Công nợ phải thu — phải trả, cơ cấu chi phí và tình trạng nghĩa vụ thuế.</p>
+      </div>
+
+      <!-- Đơn hoàn Vận hành sàn đẩy sang để kế toán tra soát tiền -->
+      <div class="panel" id="kt-trasoat-panel" hidden>
+        <div class="panel-head">
+          <h4>Đơn hoàn cần tra soát tiền</h4>
+          <span class="hint" id="kt-ts-dem"></span>
+        </div>
+        <div class="panel-body" style="padding-bottom:0; padding-top:0">
+          <p class="hint" style="margin:14px 0 0">Đơn hoàn Vận hành sàn đã đẩy sang (đã hoàn tiền cho khách). Kế toán đối chiếu số tiền hoàn với sổ sách/sao kê sàn, xong bấm “Đã tra soát”.</p>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Nguồn</th>
+                <th>Mã đơn hoàn</th>
+                <th>Đơn gốc</th>
+                <th>Sản phẩm hoàn về</th>
+                <th class="num">Số lượng</th>
+                <th>Lý do</th>
+                <th class="num">Số tiền hoàn</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="kt-ts-bang"></tbody>
+          </table>
+        </div>
+        <div class="empty" id="kt-ts-trong" hidden>Chưa có đơn hoàn nào cần tra soát.</div>
       </div>
 
       <div class="stats" id="kt-the"></div>

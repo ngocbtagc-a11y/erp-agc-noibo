@@ -29,7 +29,7 @@ binding = "AI"
 [vars]
 TIKTOK_APP_KEY = "6kvjhfjc9v709"
 TIKTOK_SERVICE_ID = "7674557494503769877"
-SHOPEE_PARTNER_ID = "1241414"
+SHOPEE_PARTNER_ID = "2042172"
 
 # Lịch chạy nền: MỖI 5 PHÚT tự đồng bộ đơn hoàn Shopee + TikTok về DB
 # (gần realtime). Sàn nào chưa kết nối thì bỏ qua êm; token tự làm mới.

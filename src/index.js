@@ -501,7 +501,8 @@ async function hoanDaNhan(req, env) {
 function nhomCua(vaiTro) {
   if (vaiTro === 'nhan_vien_kho' || vaiTro === 'quan_ly_kho') return ['kho'];
   if (vaiTro === 'van_hanh_san') return ['van_hanh'];
-  if (vaiTro === 'giam_doc' || vaiTro === 'pho_giam_doc') return ['kho', 'van_hanh'];
+  if (vaiTro === 'ke_toan_truong') return ['ke_toan'];
+  if (vaiTro === 'giam_doc' || vaiTro === 'pho_giam_doc') return ['kho', 'van_hanh', 'ke_toan'];
   return [];
 }
 
@@ -641,16 +642,22 @@ async function kdCanDoiSoat(req, env) {
   // Đơn chưa tra soát lần nào lên đầu; kèm số lần đã tra soát để theo dõi.
   // Đơn cũ sàn không trả SKU thì lấy tạm SKU đã ghép tay trong sku_map —
   // giống hệt cách apiDanhSach (shopee.js) làm, để 2 nơi luôn khớp nhau.
+  // GỘP 1 LIST (Sếp Ngọc chốt 19/08/2026): MỌI đơn đang ở sân Vận hành sàn
+  // (dang_cho='van_hanh') mà kho chưa nhận VÀ kế toán chưa tra soát — kể cả đơn
+  // huỷ (trước tách riêng panel "Đơn hoàn huỷ", nay gộp chung cho nhanh). Vận
+  // hành xem lý do rồi bấm "Đẩy sang Kho vận" (hàng về) hoặc "Đẩy sang Kế toán"
+  // (đã hoàn tiền, kế toán tra soát).
   const { results } = await env.DB.prepare(`
     SELECT d.return_sn, d.order_sn, d.ma_van_don, d.san_pham, d.san_pham_ten,
            COALESCE(d.san_pham_sku, m.ma_sku) AS san_pham_sku, d.so_luong,
-           d.nguon, d.trang_thai, d.so_tien, d.tien_te, d.nguoi_mua, d.dang_cho,
-           d.cho_kho_nhan_tu, d.lan_tra_soat, d.doi_soat_luc, d.doi_soat_boi
+           d.nguon, d.trang_thai, d.ly_do, d.so_tien, d.tien_te, d.nguoi_mua, d.dang_cho,
+           d.cho_kho_nhan_tu, d.lan_tra_soat, d.doi_soat_luc, d.doi_soat_boi,
+           d.tao_luc_shopee, d.dong_bo_luc
       FROM don_hoan d
       LEFT JOIN sku_map m ON m.ten_san_pham = d.san_pham_ten
      WHERE d.kho_nhan_luc IS NULL
+       AND d.ke_toan_luc IS NULL
        AND d.dang_cho = 'van_hanh'
-       AND (d.trang_thai NOT LIKE '%CANCEL%' OR d.ma_van_don IS NOT NULL)
      ORDER BY (d.doi_soat_luc IS NOT NULL), d.dong_bo_luc DESC
   `).all();
   return json({ can_doi_soat: results });
@@ -730,6 +737,65 @@ async function kdDayKho(req, env) {
       'day_kho', dsRsn[0]);
   }
   return json({ ok: true, so_don: da, nguoi });
+}
+
+/* Vận hành sàn bấm "Đẩy sang Kế toán" — đơn đã hoàn tiền, kế toán tra soát tiền */
+async function kdDayKeToan(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  if (!duocXemDonHoan(phien.vai_tro)) return loi('Bạn không có quyền', 403);
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  const dsRsn = Array.isArray(b.return_sn) ? b.return_sn.map(s => String(s).trim()).filter(Boolean)
+              : (b.return_sn ? [String(b.return_sn).trim()] : []);
+  if (!dsRsn.length) return loi('Chưa chọn đơn nào');
+  let da = 0;
+  for (const rsn of dsRsn) {
+    const r = await env.DB.prepare(
+      `UPDATE don_hoan SET dang_cho = 'ke_toan'
+        WHERE return_sn = ? AND kho_nhan_luc IS NULL AND ke_toan_luc IS NULL`
+    ).bind(rsn).run();
+    if (r.meta.changes) da++;
+  }
+  if (da > 0) {
+    await guiThongBao(env, 'ke_toan',
+      `Vận hành sàn đẩy ${da} đơn hoàn (đã hoàn tiền) sang Kế toán tra soát — vào Kế toán › Đơn hoàn tra soát.`,
+      'day_ke_toan', dsRsn[0]);
+  }
+  return json({ ok: true, so_don: da });
+}
+
+/* Kế toán: danh sách đơn hoàn cần tra soát tiền (Vận hành đã đẩy sang) */
+async function ktCanTraSoat(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  if (!duocXemTab(phien.vai_tro, 'ketoan')) return loi('Bạn không có quyền', 403);
+  const { results } = await env.DB.prepare(`
+    SELECT d.return_sn, d.order_sn, d.ma_van_don, d.san_pham_ten,
+           COALESCE(d.san_pham_sku, m.ma_sku) AS san_pham_sku, d.so_luong,
+           d.nguon, d.trang_thai, d.ly_do, d.so_tien, d.tien_te, d.nguoi_mua,
+           d.doi_soat_boi, d.tao_luc_shopee
+      FROM don_hoan d
+      LEFT JOIN sku_map m ON m.ten_san_pham = d.san_pham_ten
+     WHERE d.dang_cho = 'ke_toan' AND d.ke_toan_luc IS NULL
+     ORDER BY d.dong_bo_luc DESC
+  `).all();
+  return json({ can_tra_soat: results });
+}
+
+/* Kế toán bấm "Đã tra soát" -> đóng đơn về phía kế toán */
+async function ktDaTraSoat(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  if (!duocXemTab(phien.vai_tro, 'ketoan')) return loi('Bạn không có quyền', 403);
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  const rsn = (b.return_sn || '').trim();
+  if (!rsn) return loi('Thiếu mã đơn hoàn');
+  const r = await env.DB.prepare(
+    `UPDATE don_hoan SET ke_toan_luc = datetime('now','+7 hours'), ke_toan_boi = ?
+      WHERE return_sn = ? AND ke_toan_luc IS NULL`
+  ).bind(phien.ho_ten || phien.ten_dang_nhap, rsn).run();
+  if (!r.meta.changes) return loi('Không tìm thấy đơn hoặc đã tra soát trước đó', 404);
+  return json({ ok: true });
 }
 
 /* ==========================================================================
@@ -867,7 +933,9 @@ const DUONG_DAN = {
   'GET  /api/kinh-doanh/can-doi-soat': kdCanDoiSoat,
   'POST /api/kinh-doanh/da-doi-soat':  kdDaDoiSoat,
   'POST /api/kinh-doanh/day-kho':      kdDayKho,
-  'GET  /api/kinh-doanh/don-huy':      kdDonHuy,
+  'POST /api/kinh-doanh/day-ke-toan':  kdDayKeToan,
+  'GET  /api/ke-toan/can-tra-soat':    ktCanTraSoat,
+  'POST /api/ke-toan/da-tra-soat':     ktDaTraSoat,
   'GET  /api/tiktok/trang-thai': tiktokTrangThai,
   'GET  /api/tiktok/connect':    tiktokConnect,
   'GET  /api/tiktok/callback':   tiktokCallback,
