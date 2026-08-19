@@ -200,10 +200,13 @@ export async function dongBoNen(env) {
   }
 
   const path = '/return_refund/202309/returns/search';
-  // Chỉ lấy đơn hoàn TRONG 90 NGÀY GẦN ĐÂY, sắp MỚI NHẤT trước — nếu không sàn
-  // trả 50 đơn cũ nhất trước, đơn mới không bao giờ tới lượt (đầy đơn 2025).
+  // Chỉ lấy đơn hoàn phát sinh TỪ ĐẦU THÁNG NÀY, sắp MỚI NHẤT trước — nếu không
+  // sàn trả 50 đơn cũ nhất trước, đơn mới không bao giờ tới lượt. Cuối tháng sẽ
+  // đóng gói/lưu trữ rồi dọn cho DB gọn (Sếp Ngọc 19/08/2026).
+  const _vn = new Date(Date.now() + 7 * 3600 * 1000);
+  const dauThang = Math.floor(Date.UTC(_vn.getUTCFullYear(), _vn.getUTCMonth(), 1) / 1000) - 7 * 3600;
   const bodyStr = JSON.stringify({
-    create_time_ge: Math.floor(Date.now() / 1000) - 90 * 86400,
+    create_time_ge: dauThang,
     sort_field: 'create_time',
     sort_order: 'DESC'
   });

@@ -183,11 +183,21 @@ export async function dongBoNen(env) {
   const kn = await ketNoiConHan(env);
   if (!kn) return null;
 
-  let pageNo = 0, them = 0, con = true;
-  while (con && pageNo < 20) {                     // chặn trần 20 trang cho an toàn
-    const kq = await goiTheoShop(env, '/api/v2/returns/get_return_list', kn, {
-      page_no: String(pageNo), page_size: '50'
-    });
+  // Chỉ lấy đơn hoàn TỪ ĐẦU THÁNG NÀY. Shopee giới hạn mỗi lần tra tối đa 15
+  // ngày -> chia tháng thành các khung 15 ngày. Cuối tháng đóng gói/lưu trữ rồi
+  // dọn DB cho gọn (Sếp Ngọc 19/08/2026).
+  const gioNay = Math.floor(Date.now() / 1000);
+  const _vn = new Date(Date.now() + 7 * 3600 * 1000);
+  const dauThang = Math.floor(Date.UTC(_vn.getUTCFullYear(), _vn.getUTCMonth(), 1) / 1000) - 7 * 3600;
+  let them = 0;
+  for (let tuLuc = dauThang; tuLuc < gioNay; tuLuc += 15 * 86400) {
+    const denLuc = Math.min(tuLuc + 15 * 86400 - 1, gioNay);
+    let pageNo = 0, con = true;
+    while (con && pageNo < 20) {                     // chặn trần 20 trang mỗi khung
+      const kq = await goiTheoShop(env, '/api/v2/returns/get_return_list', kn, {
+        page_no: String(pageNo), page_size: '50',
+        create_time_from: String(tuLuc), create_time_to: String(denLuc)
+      });
     if (kq.error) throw new Error('Shopee báo lỗi: ' + (kq.message || kq.error));
     const ds = (kq.response && kq.response.return) || [];
     for (const r of ds) {
@@ -227,8 +237,9 @@ export async function dongBoNen(env) {
       ).run();
       them++;
     }
-    con = !!(kq.response && kq.response.more);
-    pageNo++;
+      con = !!(kq.response && kq.response.more);
+      pageNo++;
+    }
   }
   return them;
 }
