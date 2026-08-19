@@ -14,7 +14,7 @@
    Kho vận vì đây là việc cấp công ty (ủy quyền shop), không phải việc kho.
    Đơn hoàn không còn là tab riêng — đã gộp làm 1 màn con trong "khovan"
    (xem kvSeg trong app.js), vì đây là nơi kho xác nhận nhận lại hàng hoàn. */
-export const TAB = ['tongquan', 'danhba', 'nhansu', 'kinhdoanh', 'khovan', 'ketnoisan', 'ketoan', 'quantri'];
+export const TAB = ['tongquan', 'danhba', 'nhansu', 'kinhdoanh', 'khovan', 'ketoan', 'ketnoisan', 'quantri'];
 
 /* Vai trò → được xem mảng nào và làm được gì.
    Danh bạ mở cho tất cả (Sếp Ngọc yêu cầu: ai cũng tra được số liên hệ).
@@ -30,9 +30,9 @@ export const TAB = ['tongquan', 'danhba', 'nhansu', 'kinhdoanh', 'khovan', 'ketn
    hoàn nằm trong đó; app.js tự ẩn các màn con Tồn/Nhập/Xuất/Báo cáo, chỉ để
    lại Đơn hoàn cho vai trò này (xem hàm khoiDongKho). */
 const QUYEN_THEO_VAI_TRO = {
-  giam_doc:        { tab: ['tongquan', 'danhba', 'nhansu', 'kinhdoanh', 'khovan', 'ketnoisan', 'ketoan', 'quantri'], xem_luong: true,  admin: true,  them_nhan_su: true  },
-  pho_giam_doc:    { tab: ['tongquan', 'danhba', 'nhansu', 'kinhdoanh', 'khovan', 'ketnoisan', 'ketoan', 'quantri'], xem_luong: true,  admin: true,  them_nhan_su: true  },
-  ke_toan_truong:  { tab: ['tongquan', 'danhba', 'khovan', 'ketnoisan', 'ketoan'],                                   xem_luong: true,  admin: false, them_nhan_su: false },
+  giam_doc:        { tab: ['tongquan', 'danhba', 'nhansu', 'kinhdoanh', 'khovan', 'ketoan', 'ketnoisan', 'quantri'], xem_luong: true,  admin: true,  them_nhan_su: true  },
+  pho_giam_doc:    { tab: ['tongquan', 'danhba', 'nhansu', 'kinhdoanh', 'khovan', 'ketoan', 'ketnoisan', 'quantri'], xem_luong: true,  admin: true,  them_nhan_su: true  },
+  ke_toan_truong:  { tab: ['tongquan', 'danhba', 'khovan', 'ketoan', 'ketnoisan'],                                   xem_luong: true,  admin: false, them_nhan_su: false },
   quan_ly_kho:     { tab: ['tongquan', 'danhba', 'khovan', 'nhansu'],                                                xem_luong: false, admin: false, them_nhan_su: false },
   nhan_vien_kho:   { tab: ['tongquan', 'danhba', 'khovan'],                                                          xem_luong: false, admin: false, them_nhan_su: false },
   hcns:            { tab: ['tongquan', 'danhba', 'nhansu', 'quantri'],                                               xem_luong: false, admin: false, them_nhan_su: true  },

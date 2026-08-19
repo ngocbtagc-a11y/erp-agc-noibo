@@ -197,7 +197,25 @@
         <p>Doanh thu theo kênh bán, hiệu quả từng sản phẩm và động thái của đối thủ.</p>
       </div>
 
-      <div class="stats" id="kd-the"></div>
+      <!-- Chuyển màn: R&D / Vận hành TMĐT -->
+      <div class="seg" id="kdSeg">
+        <button class="seg-nut active" data-kd="rnd">R&amp;D</button>
+        <button class="seg-nut" data-kd="vanhanh">Vận hành TMĐT</button>
+      </div>
+
+      <!-- ===== Màn R&D ===== -->
+      <div class="kv-pane" id="kd-pane-rnd">
+        <div class="panel">
+          <div class="panel-head"><h4>R&amp;D — Nghiên cứu &amp; phát triển sản phẩm</h4></div>
+          <div class="panel-body">
+            <div class="empty">Khu vực R&amp;D đang chờ nội dung. Sếp cho tôi biết cần theo dõi gì ở đây (ý tưởng sản phẩm mới, mẫu đang thử, kết quả test, tiến độ ra mắt…) là tôi dựng tiếp.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== Màn Vận hành TMĐT ===== -->
+      <div class="kv-pane" id="kd-pane-vanhanh" hidden>
+        <div class="stats" id="kd-the"></div>
 
       <div class="grid-2">
         <div class="panel">
@@ -236,6 +254,7 @@
             <tbody id="kd-bang"></tbody>
           </table>
         </div>
+      </div>
       </div>
     </section>
 
