@@ -637,6 +637,47 @@ tr.canh-bao:hover > td { background: #fbdbd6; }
 .phu { font-size: 11px; color: var(--text-mute); margin-top: 3px; line-height: 1.3; }
 .canh-bao-chu { color: #c0392b; font-weight: 700; }
 
+/* ==========================================================================
+   BẢNG DÀI — cuộn gọn trong 1 màn hình (~15 dòng) + cố định tiêu đề + cột đầu
+   Dùng cho bảng nào có thể dài (VD "Cần đối soát"): .table-wrap-cuon thay
+   .table-wrap, thêm class .dinh-cot/.dinh-cot2 vào 2 cột đầu (th lẫn td).
+   ========================================================================== */
+.table-wrap-cuon {
+  overflow: auto;
+  max-height: 880px;   /* ~15 dòng (đo thật ~55-58px/dòng do có dòng phụ SKU + lần tra soát) + tiêu đề */
+  -webkit-overflow-scrolling: touch;
+}
+.table-wrap-cuon table { border-collapse: separate; border-spacing: 0; }
+.table-wrap-cuon thead th { position: sticky; top: 0; z-index: 2; }
+/* Bảng dài cần gọn dòng hơn bảng thường để nhét đủ 15 dòng/màn hình */
+.table-wrap-cuon thead th { padding: 9px 16px; }
+.table-wrap-cuon tbody td { padding: 8px 16px; }
+
+.dinh-cot, .dinh-cot2 { position: sticky; z-index: 1; background: var(--card); }
+.dinh-cot  { left: 0; width: 90px; min-width: 90px; }
+.dinh-cot2 { left: 90px; }
+thead th.dinh-cot, thead th.dinh-cot2 { z-index: 3; background: var(--sage-wash); }
+tbody tr:hover .dinh-cot, tbody tr:hover .dinh-cot2 { background: var(--sage-wash); }
+tbody tr.canh-bao .dinh-cot, tbody tr.canh-bao .dinh-cot2 { background: #fdecea; }
+tbody tr.canh-bao:hover .dinh-cot, tbody tr.canh-bao:hover .dinh-cot2 { background: #fbdbd6; }
+
+/* Đơn đã tra soát rồi — dìm nhẹ để mắt dồn vào đơn còn cần xử lý ở trên */
+tr.kd-daxong { opacity: .6; }
+tr.kd-daxong:hover { opacity: 1; }
+
+/* Dòng ngăn cách 2 nhóm (chưa tra soát / đã tra soát) trong bảng dài */
+tr.kd-chiadoi td {
+  position: sticky; left: 0;
+  background: var(--surface-2);
+  color: var(--text-mute);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  padding: 8px 20px;
+  white-space: nowrap;
+}
+
 .empty {
   padding: 34px 20px;
   text-align: center;
