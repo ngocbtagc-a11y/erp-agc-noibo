@@ -247,6 +247,27 @@ async function chatDanhSach(req, env) {
   return json({ tin_nhan: tinNhan, toi_id: phien.nhan_su_id });
 }
 
+/* Danh sách người đã từng chat riêng gần đây (2 chiều) — để hiện bong bóng
+   truy cập nhanh cạnh nút chat nổi, khỏi phải vào Danh bạ bấm lại "Chat
+   ngay" mỗi lần (Sếp Ngọc yêu cầu 20/08/2026). Sắp theo tin mới nhất. */
+async function chatGanDay(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  const { results } = await env.DB.prepare(`
+    SELECT ns.id, ns.ho_ten, ns.viet_tat, MAX(x.id) AS tin_cuoi_id
+      FROM (
+        SELECT CASE WHEN nguoi_gui_id = ? THEN nguoi_nhan_id ELSE nguoi_gui_id END AS doi_tac_id, id
+          FROM tin_nhan_chat
+         WHERE nguoi_nhan_id IS NOT NULL AND (nguoi_gui_id = ? OR nguoi_nhan_id = ?)
+      ) x
+      JOIN nhan_su ns ON ns.id = x.doi_tac_id
+     GROUP BY ns.id
+     ORDER BY tin_cuoi_id DESC
+     LIMIT 6
+  `).bind(phien.nhan_su_id, phien.nhan_su_id, phien.nhan_su_id).all();
+  return json({ gan_day: results || [] });
+}
+
 /* Đếm tin CHƯA XEM trên TOÀN BỘ các luồng (kênh chung + mọi cuộc chat riêng
    gửi tới tôi) — không phụ thuộc đang mở luồng nào trên widget. Cần cái này
    riêng vì chatDanhSach() ở trên chỉ nhìn thấy 1 luồng tại 1 thời điểm (luồng
@@ -624,14 +645,25 @@ async function hoanDaNhan(req, env) {
   if (!rsn) return loi('Thiếu mã đơn hoàn');
   if (!TINH_TRANG_HOP_LE.includes(tinhTrang)) return loi('Thiếu hoặc sai tình trạng hàng hóa');
   const nguoi = phien.ho_ten || phien.ten_dang_nhap;
+  // Hàng còn tốt (bán lại được) thì đẩy luôn sang Kế toán để đối soát chéo
+  // số lượng/tiền với sàn — cùng hàng đợi với luồng hoàn tiền không qua kho
+  // (kdDayKeToan), phân biệt nhau bằng kho_nhan_luc có giá trị hay không
+  // (Sếp Ngọc chốt 20/08/2026, 3 luồng về Kế toán). Hư hỏng/thiếu/sai hàng
+  // thì KHÔNG đẩy ở đây — Kho tự bấm "Cần khiếu nại" để đẩy về Vận hành sàn.
   const r = await env.DB.prepare(`
     UPDATE don_hoan
        SET kho_nhan_luc = datetime('now','+7 hours'),
            kho_nhan_boi = ?, da_canh_bao = 1,
-           tinh_trang_hang = ?, tinh_trang_luc = datetime('now','+7 hours'), tinh_trang_boi = ?
+           tinh_trang_hang = ?, tinh_trang_luc = datetime('now','+7 hours'), tinh_trang_boi = ?,
+           dang_cho = CASE WHEN ? = 'con_tot' THEN 'ke_toan' ELSE dang_cho END
      WHERE return_sn = ? AND kho_nhan_luc IS NULL
-  `).bind(nguoi, tinhTrang, nguoi, rsn).run();
+  `).bind(nguoi, tinhTrang, nguoi, tinhTrang, rsn).run();
   if (!r.meta.changes) return loi('Không tìm thấy đơn hoặc đã được nhận trước đó', 404);
+  if (tinhTrang === 'con_tot') {
+    await guiThongBao(env, 'ke_toan',
+      `Kho đã nhập kho đơn hoàn ${rsn} — cần đối soát chéo với sàn.`,
+      'day_ke_toan', rsn);
+  }
   return json({ ok: true, nguoi });
 }
 
@@ -997,7 +1029,7 @@ async function ktCanTraSoat(req, env) {
     SELECT d.return_sn, d.order_sn, d.ma_van_don, d.san_pham_ten,
            COALESCE(d.san_pham_sku, m.ma_sku) AS san_pham_sku, d.so_luong,
            d.nguon, d.trang_thai, d.ly_do, d.so_tien, d.tien_te, d.nguoi_mua,
-           d.doi_soat_boi, d.tao_luc_shopee
+           d.doi_soat_boi, d.tao_luc_shopee, d.kho_nhan_luc, d.tinh_trang_hang
       FROM don_hoan d
       LEFT JOIN sku_map m ON m.ten_san_pham = d.san_pham_ten
      WHERE d.dang_cho = 'ke_toan' AND d.ke_toan_luc IS NULL
@@ -1176,6 +1208,7 @@ const DUONG_DAN = {
   'GET  /api/nhan-su':       layNhanSu,
   'GET  /api/chat/tin-nhan': chatDanhSach,
   'GET  /api/chat/chua-doc': chatChuaDoc,
+  'GET  /api/chat/gan-day':  chatGanDay,
   'POST /api/chat/gui':      chatGui,
   'GET  /api/chat/tep':      chatTepDinhKem,
   'GET  /api/quan-tri/danh-sach':      qtDanhSach,

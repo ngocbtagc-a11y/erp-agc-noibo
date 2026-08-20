@@ -408,7 +408,7 @@ if (TOI.quyen.includes('chat')) {
 async function khoiDongChat() {
   const widget = $('#cnbWidget'), nutMo = $('#cnbNut'), popup = $('#cnbPopup'),
         nutDong = $('#cnbDong'), nutLui = $('#cnbLui'), badge = $('#cnbBadge'),
-        dauTen = $('#cnbDauTen'), dauPhu = $('#cnbDauPhu');
+        dauTen = $('#cnbDauTen'), dauPhu = $('#cnbDauPhu'), ganDayEl = $('#cnbGanDay');
   const khung = $('#chat-khung');
   if (!widget) return;
   widget.hidden = false;
@@ -527,12 +527,30 @@ async function khoiDongChat() {
     try {
       const { so_luong, id_lon_nhat } = await API.chatChuaDoc(idMocToanCuc);
       if (so_luong > 0 && !dangMo) { chuaDoc += so_luong; veBadge(); }
+      if (so_luong > 0) veGanDay();   // có tin mới thì đối tác đó cũng cần nổi/lên đầu danh sách
       idMocToanCuc = Math.max(idMocToanCuc, id_lon_nhat);
     } catch { /* mất mạng tạm thời — bỏ qua, đợt hỏi sau tự thử lại */ }
   }
 
+  // Bong bóng truy cập nhanh các chat riêng gần đây, cạnh nút chính
+  async function veGanDay() {
+    try {
+      const { gan_day } = await API.chatGanDay();
+      ganDayEl.innerHTML = (gan_day || []).map(p =>
+        `<button type="button" class="cnb-gd-item" title="${esc(p.ho_ten)}" data-ganday="${esc(p.id)}" data-ten="${esc(p.ho_ten)}" data-vt="${esc(p.viet_tat)}">${esc(p.viet_tat)}</button>`
+      ).join('');
+    } catch { /* mất mạng tạm thời — bỏ qua, đợt hỏi sau tự thử lại */ }
+  }
+  ganDayEl.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-ganday]');
+    if (!btn) return;
+    e.stopPropagation();
+    window.moChatVoi?.(btn.getAttribute('data-ganday'), btn.getAttribute('data-ten'), btn.getAttribute('data-vt'));
+  });
+
   await taiLanDau();
   await hoiChuaDocToanCuc();   // lấy mốc ban đầu, KHÔNG tính lịch sử cũ là "mới" ngay lúc vừa mở trang
+  await veGanDay();
   setInterval(hoiTinMoi, 6000);
   setInterval(hoiChuaDocToanCuc, 6000);
 
@@ -576,6 +594,7 @@ async function khoiDongChat() {
     veTieuDe();
     moPopup();
     await taiLanDau();
+    veGanDay();   // đối tác mới lần đầu chat thì cũng cần hiện luôn bong bóng
   };
 
   // Chọn / bỏ file đính kèm
@@ -1243,7 +1262,7 @@ async function khoiDongDonHoan() {
       let khoTd, cls = '';
       if (r.kho_nhan_luc) {
         if (r.phan_loai_nhan === 'hong_cho_huy') {
-          khoTd = `<td class="sm"><span class="tag danger">⚠️ Hàng hỏng — chờ huỷ</span>` +
+          khoTd = `<td class="sm"><span class="tag danger">⚠️ Hỏng/Chờ Hủy</span>` +
             `<div class="phu">${esc(r.phan_loai_boi || '')} · ${esc(r.phan_loai_luc || '')}</div></td>`;
         } else if (r.phan_loai_nhan === 'nhap_kho') {
           khoTd = `<td class="sm"><span class="tag ok">✓ Nhập kho lại</span>` +
@@ -1265,7 +1284,7 @@ async function khoiDongDonHoan() {
         khoTd = laDonHuy
           ? `<td style="white-space:nowrap">` +
               `<button type="button" class="btn-nho btn-primary" data-phanloai="nhap_kho" data-rsn="${esc(r.return_sn)}">Nhập kho</button> ` +
-              `<button type="button" class="btn-nho" data-phanloai="hong_cho_huy" data-rsn="${esc(r.return_sn)}">Hàng hỏng/Chờ huỷ</button> ` +
+              `<button type="button" class="btn-nho" data-phanloai="hong_cho_huy" data-rsn="${esc(r.return_sn)}">Hỏng/Chờ Hủy</button> ` +
               `<button type="button" class="btn-nho" data-khieunai="${esc(r.return_sn)}">Cần khiếu nại</button>${nhac}</td>`
           : `<td style="white-space:nowrap">` +
               `<select class="sel-tinhtrang" style="margin-right:4px">` +
@@ -1516,9 +1535,16 @@ async function khoiDongKeToanTraSoat() {
         ? tienVN(Math.round(r.so_tien / 100000)) + ' ' + esc(r.tien_te || '') : '—';
       const sp = oSanPham(r.san_pham_ten, r.san_pham_sku, r.so_luong);
       const spCell = `<td class="sm" title="${esc(sp.title)}">${sp.html}</td>`;
+      // 2 luồng chung 1 hàng đợi: hoàn tiền không qua kho (kho_nhan_luc rỗng)
+      // vs hàng đã nhập kho (Kho đã bấm "Nhận đủ" — Còn tốt) cần đối soát
+      // chéo số lượng/tiền với sàn — phân biệt bằng thẻ này.
+      const veTag = r.kho_nhan_luc
+        ? '<span class="tag ok">📦 Đã nhập kho</span>'
+        : '<span class="tag mute">💰 Hoàn tiền</span>';
       return `<td>${ngTag}</td>` +
         `<td class="sm">${esc(r.return_sn)}</td>` +
         `<td class="sm">${esc(r.order_sn || '—')}</td>` +
+        `<td>${veTag}</td>` +
         spCell +
         `<td class="num">${r.so_luong != null ? esc(r.so_luong) : '—'}</td>` +
         `<td class="sm">${esc(nhanLyDo(r.ly_do))}</td>` +

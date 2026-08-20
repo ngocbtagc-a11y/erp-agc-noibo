@@ -688,6 +688,27 @@ tr.canh-bao:hover > td { background: #fbdbd6; }
 .cnb-nut:hover { background: var(--sage-dark); transform: translateY(-1px); }
 .cnb-nut .tb-badge { top: -2px; right: -2px; }
 
+/* Bong bóng truy cập nhanh các chat riêng gần đây — xếp dọc ngay trên nút chính */
+.cnb-ganday {
+  position: fixed; right: 28px; bottom: 92px; z-index: 301;
+  display: flex; flex-direction: column-reverse; align-items: center; gap: 10px;
+}
+.cnb-gd-item {
+  position: relative;
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  background: var(--sage-dark);
+  color: var(--white);
+  border: 2px solid var(--card);
+  cursor: pointer;
+  font-size: 12px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: var(--shadow-md);
+  transition: transform .12s;
+}
+.cnb-gd-item:hover { transform: translateY(-1px) scale(1.05); }
+.cnb-gd-item .tb-badge { top: -3px; right: -3px; }
+
 .cnb-popup {
   position: fixed; right: 24px; bottom: 92px; z-index: 300;
   width: 360px; max-width: calc(100vw - 32px);
