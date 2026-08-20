@@ -628,11 +628,11 @@
       <!-- Đơn hoàn Vận hành sàn đẩy sang để kế toán tra soát tiền -->
       <div class="panel" id="kt-trasoat-panel" hidden>
         <div class="panel-head">
-          <h4>Đơn hoàn cần tra soát tiền</h4>
+          <h4>Đơn hoàn cần tra soát</h4>
           <span class="hint" id="kt-ts-dem"></span>
         </div>
         <div class="panel-body" style="padding-bottom:0; padding-top:0">
-          <p class="hint" style="margin:14px 0 0">Đơn hoàn Vận hành sàn đã đẩy sang (đã hoàn tiền cho khách). Kế toán đối chiếu số tiền hoàn với sổ sách/sao kê sàn, xong bấm “Đã tra soát”.</p>
+          <p class="hint" style="margin:14px 0 0">Gộp 2 luồng: <b>💰 Hoàn tiền</b> — Vận hành sàn đẩy sang khi đơn đã hoàn tiền cho khách, không có hàng vật lý về kho; <b>📦 Đã nhập kho</b> — Kho xác nhận nhận hàng còn tốt (bán lại được), cần đối soát chéo số lượng/tiền với sàn. Kế toán rà xong bấm “Đã tra soát”.</p>
         </div>
         <div class="table-wrap">
           <table>
@@ -641,6 +641,7 @@
                 <th>Nguồn</th>
                 <th>Mã đơn hoàn</th>
                 <th>Đơn gốc</th>
+                <th>Về từ đâu</th>
                 <th>Sản phẩm hoàn về</th>
                 <th class="num">Số lượng</th>
                 <th>Lý do</th>

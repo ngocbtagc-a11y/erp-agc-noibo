@@ -624,14 +624,25 @@ async function hoanDaNhan(req, env) {
   if (!rsn) return loi('Thiếu mã đơn hoàn');
   if (!TINH_TRANG_HOP_LE.includes(tinhTrang)) return loi('Thiếu hoặc sai tình trạng hàng hóa');
   const nguoi = phien.ho_ten || phien.ten_dang_nhap;
+  // Hàng còn tốt (bán lại được) thì đẩy luôn sang Kế toán để đối soát chéo
+  // số lượng/tiền với sàn — cùng hàng đợi với luồng hoàn tiền không qua kho
+  // (kdDayKeToan), phân biệt nhau bằng kho_nhan_luc có giá trị hay không
+  // (Sếp Ngọc chốt 20/08/2026, 3 luồng về Kế toán). Hư hỏng/thiếu/sai hàng
+  // thì KHÔNG đẩy ở đây — Kho tự bấm "Cần khiếu nại" để đẩy về Vận hành sàn.
   const r = await env.DB.prepare(`
     UPDATE don_hoan
        SET kho_nhan_luc = datetime('now','+7 hours'),
            kho_nhan_boi = ?, da_canh_bao = 1,
-           tinh_trang_hang = ?, tinh_trang_luc = datetime('now','+7 hours'), tinh_trang_boi = ?
+           tinh_trang_hang = ?, tinh_trang_luc = datetime('now','+7 hours'), tinh_trang_boi = ?,
+           dang_cho = CASE WHEN ? = 'con_tot' THEN 'ke_toan' ELSE dang_cho END
      WHERE return_sn = ? AND kho_nhan_luc IS NULL
-  `).bind(nguoi, tinhTrang, nguoi, rsn).run();
+  `).bind(nguoi, tinhTrang, nguoi, tinhTrang, rsn).run();
   if (!r.meta.changes) return loi('Không tìm thấy đơn hoặc đã được nhận trước đó', 404);
+  if (tinhTrang === 'con_tot') {
+    await guiThongBao(env, 'ke_toan',
+      `Kho đã nhập kho đơn hoàn ${rsn} — cần đối soát chéo với sàn.`,
+      'day_ke_toan', rsn);
+  }
   return json({ ok: true, nguoi });
 }
 
@@ -997,7 +1008,7 @@ async function ktCanTraSoat(req, env) {
     SELECT d.return_sn, d.order_sn, d.ma_van_don, d.san_pham_ten,
            COALESCE(d.san_pham_sku, m.ma_sku) AS san_pham_sku, d.so_luong,
            d.nguon, d.trang_thai, d.ly_do, d.so_tien, d.tien_te, d.nguoi_mua,
-           d.doi_soat_boi, d.tao_luc_shopee
+           d.doi_soat_boi, d.tao_luc_shopee, d.kho_nhan_luc, d.tinh_trang_hang
       FROM don_hoan d
       LEFT JOIN sku_map m ON m.ten_san_pham = d.san_pham_ten
      WHERE d.dang_cho = 'ke_toan' AND d.ke_toan_luc IS NULL

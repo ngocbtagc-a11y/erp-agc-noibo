@@ -1516,9 +1516,16 @@ async function khoiDongKeToanTraSoat() {
         ? tienVN(Math.round(r.so_tien / 100000)) + ' ' + esc(r.tien_te || '') : '—';
       const sp = oSanPham(r.san_pham_ten, r.san_pham_sku, r.so_luong);
       const spCell = `<td class="sm" title="${esc(sp.title)}">${sp.html}</td>`;
+      // 2 luồng chung 1 hàng đợi: hoàn tiền không qua kho (kho_nhan_luc rỗng)
+      // vs hàng đã nhập kho (Kho đã bấm "Nhận đủ" — Còn tốt) cần đối soát
+      // chéo số lượng/tiền với sàn — phân biệt bằng thẻ này.
+      const veTag = r.kho_nhan_luc
+        ? '<span class="tag ok">📦 Đã nhập kho</span>'
+        : '<span class="tag mute">💰 Hoàn tiền</span>';
       return `<td>${ngTag}</td>` +
         `<td class="sm">${esc(r.return_sn)}</td>` +
         `<td class="sm">${esc(r.order_sn || '—')}</td>` +
+        `<td>${veTag}</td>` +
         spCell +
         `<td class="num">${r.so_luong != null ? esc(r.so_luong) : '—'}</td>` +
         `<td class="sm">${esc(nhanLyDo(r.ly_do))}</td>` +
