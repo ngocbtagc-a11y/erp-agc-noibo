@@ -350,6 +350,25 @@ button { cursor: pointer; border: none; background: none; }
   flex-shrink: 0;
 }
 
+/* Ảnh đại diện thay chữ viết tắt — cùng khung tròn .av có sẵn (width/height/
+   border-radius/background đều thừa hưởng từ .sb-user .av / .person .av),
+   chỉ cần thêm object-fit để ảnh không méo khi khác tỉ lệ khung. */
+img.av { object-fit: cover; display: block; cursor: default; }
+.av-wrap { cursor: pointer; flex-shrink: 0; }   /* sidebar: bấm vào ảnh/chữ viết tắt của CHÍNH MÌNH để đổi ảnh */
+.av-wrap:hover .av { filter: brightness(.92); }
+
+/* Vinh danh (Tổng quan) */
+.vd-goiy {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  background: var(--sage-wash); border-radius: var(--r-sm);
+  padding: 10px 13px; font-size: 12.5px; color: var(--ink-soft);
+}
+.vd-item { padding: 10px 0; border-bottom: 1px solid var(--line); }
+.vd-item:last-child { border-bottom: none; }
+.vd-item .vd-noidung { font-size: 13.5px; color: var(--ink); margin: 2px 0; }
+.vd-item .vd-noidung::before { content: '“'; }
+.vd-item .vd-noidung::after { content: '”'; }
+
 .sb-user .meta { min-width: 0; flex: 1; }
 .sb-user .meta b {
   display: block;

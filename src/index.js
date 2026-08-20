@@ -99,6 +99,8 @@ async function toiLaAi(req, env) {
   if (l) return l;
 
   const q = quyenCua(phien.vai_tro);
+  const ns = await env.DB.prepare('SELECT (anh_chan_dung IS NOT NULL) AS co_anh FROM nhan_su WHERE id = ?')
+                         .bind(phien.nhan_su_id).first();
   return json({
     id: phien.nhan_su_id,
     ten: phien.ho_ten,
@@ -106,6 +108,7 @@ async function toiLaAi(req, env) {
     chuc_vu: phien.chuc_vu || TEN_VAI_TRO[phien.vai_tro] || '',
     vai_tro: phien.vai_tro,
     phai_doi_mk: !!phien.phai_doi_mk,
+    co_anh: !!ns?.co_anh,
     quyen: q.tab,
     xem_luong: q.xem_luong,
     la_admin: laAdmin(phien.vai_tro),
@@ -165,6 +168,7 @@ async function layDanhBa(req, env) {
   // nên dữ liệu lương không có đường nào rời khỏi máy chủ qua đây.
   const { results } = await env.DB.prepare(`
     SELECT n.id, n.ho_ten, n.viet_tat, n.chuc_vu, n.bo_phan, n.sdt, n.email,
+           (n.anh_chan_dung IS NOT NULL) AS co_anh,
            q.ho_ten AS quan_ly
       FROM nhan_su n
       LEFT JOIN nhan_su q ON q.id = n.quan_ly_id
@@ -190,10 +194,10 @@ async function layNhanSu(req, env) {
   // không được chọn ra khỏi database — không phải "lấy ra rồi ẩn đi".
   const cauLenh = xemLuong
     ? `SELECT id, ho_ten, viet_tat, chuc_vu, bo_phan, trang_thai,
-              ngay_vao, luong
+              ngay_vao, luong, (anh_chan_dung IS NOT NULL) AS co_anh
          FROM nhan_su WHERE dang_lam = 1 ORDER BY bo_phan, ho_ten`
     : `SELECT id, ho_ten, viet_tat, chuc_vu, bo_phan, trang_thai,
-              ngay_vao
+              ngay_vao, (anh_chan_dung IS NOT NULL) AS co_anh
          FROM nhan_su WHERE dang_lam = 1 ORDER BY bo_phan, ho_ten`;
 
   const { results } = await env.DB.prepare(cauLenh).all();
@@ -389,7 +393,7 @@ async function qtDanhSach(req, env) {
 
   const { results } = await env.DB.prepare(`
     SELECT n.id, n.ho_ten, n.viet_tat, n.chuc_vu, n.bo_phan, n.sdt, n.email,
-           n.phap_nhan, n.trang_thai, n.dang_lam,
+           n.phap_nhan, n.trang_thai, n.dang_lam, (n.anh_chan_dung IS NOT NULL) AS co_anh,
            t.id AS tai_khoan_id, t.ten_dang_nhap, t.vai_tro, t.kich_hoat, t.phai_doi_mk
       FROM nhan_su n
       LEFT JOIN tai_khoan t ON t.nhan_su_id = n.id
@@ -869,7 +873,7 @@ async function thongBaoDaXem(req, env) {
 }
 
 /* ==========================================================================
-   TÁC VỤ — giao việc cho nhân viên (Sếp Ngọc yêu cầu 20/08/2026). Theo tinh
+   TRẠM VIỆC — giao việc cho nhân viên (Sếp Ngọc yêu cầu 20/08/2026). Theo tinh
    thần MBOs của công ty: mỗi việc BẮT BUỘC có "đầu ra cụ thể" (dau_ra),
    tách khỏi "mô tả" (mo_ta, chỉ là ghi chú thêm, không bắt buộc).
    Luồng trạng thái: moi -> dang_lam -> cho_duyet -> hoan_thanh (hoặc huy
@@ -977,6 +981,64 @@ async function cvCapNhat(req, env) {
     await guiThongBao(env, null, `${nguoi} đã huỷ việc "${cv.tieu_de}".`, 'cong_viec_huy', String(id), cv.nguoi_nhan_id);
   }
   return json({ ok: true });
+}
+
+/* ==========================================================================
+   VINH DANH — bảng khen ngợi nhỏ ở Tổng quan, ai cũng thấy (Sếp Ngọc yêu
+   cầu 20/08/2026, rèn thói quen ghi nhận đồng nghiệp). Mở cho mọi vai trò
+   xem VÀ gửi — không riêng ban giám đốc, khen nhau qua lại càng tốt.
+   ========================================================================== */
+async function vdDanhSach(req, env) {
+  const { loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+
+  const { results } = await env.DB.prepare(`
+    SELECT v.id, v.nhan_su_id, v.nhan_su_ten, v.noi_dung, v.nguoi_gui_ten, v.tao_luc,
+           (n.anh_chan_dung IS NOT NULL) AS co_anh
+      FROM vinh_danh v
+      LEFT JOIN nhan_su n ON n.id = v.nhan_su_id
+     ORDER BY v.id DESC LIMIT 10
+  `).all();
+
+  // Gợi ý nhẹ (Sếp Ngọc yêu cầu): "thỉnh thoảng cũng lấy dữ liệu" từ Trạm
+  // Việc lên — ai hoàn thành nhiều việc nhất trong 7 ngày qua mà CHƯA được
+  // vinh danh vì việc đó (so lien_ket với id cong_viec, tránh gợi ý lặp lại
+  // đúng người vừa mới khen). Chỉ là gợi ý hiển thị, Sếp vẫn tự gõ lời khen.
+  const goiY = await env.DB.prepare(`
+    SELECT nguoi_nhan_id, nguoi_nhan_ten, COUNT(*) AS so_viec
+      FROM cong_viec
+     WHERE trang_thai = 'hoan_thanh'
+       AND cap_nhat_luc >= datetime('now', '-7 days', '+7 hours')
+     GROUP BY nguoi_nhan_id
+     ORDER BY so_viec DESC
+     LIMIT 1
+  `).first();
+
+  return json({ vinh_danh: results || [], goi_y: goiY || null });
+}
+
+async function vdGui(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  const nhanSuId = String(b.nhan_su_id || '').trim();
+  const noiDung = String(b.noi_dung || '').trim().slice(0, 500);
+  if (!nhanSuId) return loi('Chưa chọn người được vinh danh');
+  if (!noiDung) return loi('Chưa viết lời khen');
+
+  const ns = await env.DB.prepare('SELECT ho_ten FROM nhan_su WHERE id = ?').bind(nhanSuId).first();
+  if (!ns) return loi('Không tìm thấy người này', 404);
+
+  const nguoiGui = phien.ho_ten || phien.ten_dang_nhap;
+  const r = await env.DB.prepare(`
+    INSERT INTO vinh_danh (nhan_su_id, nhan_su_ten, noi_dung, nguoi_gui_id, nguoi_gui_ten, tao_luc)
+    VALUES (?, ?, ?, ?, ?, datetime('now','+7 hours'))
+  `).bind(nhanSuId, ns.ho_ten, noiDung, phien.nhan_su_id, nguoiGui).run();
+
+  if (nhanSuId !== phien.nhan_su_id) {
+    await guiThongBao(env, null, `${nguoiGui} vừa vinh danh bạn: "${noiDung}"`, 'vinh_danh', String(r.meta.last_row_id), nhanSuId);
+  }
+  return json({ ok: true, id: r.meta.last_row_id });
 }
 
 /* Gửi cảnh báo qua Telegram. Chưa cấu hình token/chat thì bỏ qua êm (trả false). */
@@ -1407,6 +1469,40 @@ async function nsDonMoi(req, env) {
   return nhansu.donNhanSuMoi(env, phien, b);
 }
 
+/* Ảnh đại diện — TỰ ai cũng đổi được ảnh CỦA CHÍNH MÌNH (khác ảnh chân dung
+   hồ sơ CCCD do HCNS đón vào, dùng CHUNG 1 cột anh_chan_dung — Sếp Ngọc yêu
+   cầu 20/08/2026 "để lưu dấu ấn cá nhân + hiện khi vinh danh"). Trình duyệt
+   tự nén nhỏ ảnh bằng canvas trước khi gửi (xem app.js), nên máy chủ chỉ
+   việc lưu base64 thẳng vào DB — theo đúng tiền lệ ảnh CCCD, không cần R2. */
+const ANH_DAI_DIEN_TOI_DA = 800 * 1024;   // 800KB — ảnh đã nén ở trình duyệt nên bình thường chỉ vài chục KB
+
+async function nsAnhDaiDien(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  const raw = String(b.anh || '').replace(/^data:[^,]*,/, '');
+  if (!raw) return loi('Chưa chọn ảnh');
+  let doDai;
+  try { doDai = atob(raw).length; } catch { return loi('Ảnh không hợp lệ'); }
+  if (doDai < 50) return loi('Ảnh quá nhỏ hoặc hỏng');
+  if (doDai > ANH_DAI_DIEN_TOI_DA) return loi('Ảnh vẫn còn quá lớn, thử ảnh khác nhé', 413);
+  await env.DB.prepare('UPDATE nhan_su SET anh_chan_dung = ? WHERE id = ?').bind(raw, phien.nhan_su_id).run();
+  return json({ ok: true });
+}
+
+/* Xem ảnh đại diện của 1 người — GET /api/nhan-su/anh?id=X (ai đăng nhập rồi
+   cũng xem được ảnh của bất kỳ ai, giống tinh thần Danh bạ mở cho tất cả). */
+async function nsAnhXem(req, env) {
+  const { loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  const id = new URL(req.url).searchParams.get('id');
+  if (!id) return loi('Thiếu id', 400);
+  const ns = await env.DB.prepare('SELECT anh_chan_dung FROM nhan_su WHERE id = ?').bind(id).first();
+  if (!ns || !ns.anh_chan_dung) return loi('Không có ảnh', 404);
+  const bin = Uint8Array.from(atob(ns.anh_chan_dung), c => c.charCodeAt(0));
+  return new Response(bin, { headers: { 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, max-age=3600' } });
+}
+
 /* ---- Bộ định tuyến ------------------------------------------------------ */
 
 const DUONG_DAN = {
@@ -1416,6 +1512,8 @@ const DUONG_DAN = {
   'POST /api/doi-mat-khau':  doiMatKhau,
   'GET  /api/danh-ba':       layDanhBa,
   'GET  /api/nhan-su':       layNhanSu,
+  'POST /api/nhan-su/anh-dai-dien': nsAnhDaiDien,
+  'GET  /api/nhan-su/anh':          nsAnhXem,
   'GET  /api/chat/tin-nhan': chatDanhSach,
   'GET  /api/chat/chua-doc': chatChuaDoc,
   'GET  /api/chat/gan-day':  chatGanDay,
@@ -1445,6 +1543,8 @@ const DUONG_DAN = {
   'POST /api/hoan/khieu-nai':    hoanKhieuNai,
   'POST /api/hoan/chua-nhan':    hoanChuaNhan,
   'POST /api/hoan/phan-loai':    hoanPhanLoai,
+  'GET  /api/vinh-danh': vdDanhSach,
+  'POST /api/vinh-danh': vdGui,
   'GET  /api/cong-viec/danh-sach': cvDanhSach,
   'POST /api/cong-viec/tao':       cvTao,
   'POST /api/cong-viec/cap-nhat':  cvCapNhat,

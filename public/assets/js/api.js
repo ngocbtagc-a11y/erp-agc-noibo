@@ -52,8 +52,17 @@ export const API = {
   danhBa: () => goi('/api/danh-ba'),
 
   nhanSu: () => goi('/api/nhan-su'),
+  nsAnhDaiDien: (anhBase64) => goi('/api/nhan-su/anh-dai-dien', {
+    method: 'POST', body: JSON.stringify({ anh: anhBase64 })
+  }),
 
-  /* ---- Tác vụ: giao việc cho nhân viên ---- */
+  /* ---- Vinh danh (Tổng quan) ---- */
+  vdDanhSach: () => goi('/api/vinh-danh'),
+  vdGui: (nhanSuId, noiDung) => goi('/api/vinh-danh', {
+    method: 'POST', body: JSON.stringify({ nhan_su_id: nhanSuId, noi_dung: noiDung })
+  }),
+
+  /* ---- Trạm Việc: giao việc cho nhân viên ---- */
   cvDanhSach: () => goi('/api/cong-viec/danh-sach'),
   cvTao: (cv) => goi('/api/cong-viec/tao', { method: 'POST', body: JSON.stringify(cv) }),
   cvCapNhat: (id, trangThai, ketQua) => goi('/api/cong-viec/cap-nhat', {

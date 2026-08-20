@@ -16,7 +16,7 @@ import { API } from './api.js';
 const TAB = [
   { id: 'tongquan',  ten: 'Tổng quan',  icon: 'M3 12l9-9 9 9M5 10v10h14V10' },
   { id: 'danhba',    ten: 'Danh bạ',    icon: 'M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8' },
-  { id: 'congviec',  ten: 'Tác vụ',     icon: 'M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11' },
+  { id: 'congviec',  ten: 'Trạm Việc',  icon: 'M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11' },
   { id: 'nhansu',    ten: 'Nhân sự',    icon: 'M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75' },
   { id: 'kinhdoanh', ten: 'Kinh doanh', icon: 'M23 6l-9.5 9.5-5-5L1 18M17 6h6v6' },
   { id: 'khovan',    ten: 'Kho vận',    icon: 'M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16zM3.27 6.96L12 12.01l8.73-5.05M12 22.08V12' },
@@ -49,6 +49,15 @@ function el(tag, cls, html) {
 function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, c =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+/* Khung tròn avatar — ảnh đại diện (co_anh=true) hoặc chữ viết tắt (mặc
+   định). Dùng chung mọi nơi có khung .av (sidebar, Danh bạ, Nhân sự, Vinh
+   danh…) — CSS .av lo kích thước/bo tròn, hàm này chỉ quyết định nội dung. */
+function avHtml(id, vietTat, coAnh) {
+  return coAnh
+    ? `<img class="av" src="/api/nhan-su/anh?id=${encodeURIComponent(id)}" alt="">`
+    : `<div class="av">${esc(vietTat)}</div>`;
 }
 
 /* 22000000 → "22.000.000" */
@@ -205,7 +214,53 @@ if (TOI.phai_doi_mk) {
   throw new Error('Phải đổi mật khẩu trước');
 }
 
-$('#uAv').textContent = TOI.viet_tat;
+/* Nén ảnh về hình vuông nhỏ (canvas, cắt giữa kiểu object-fit:cover) trước
+   khi gửi lên — máy chủ chỉ lưu base64 thẳng vào DB, không tự nén được. */
+function nenAnhVuong(file, kichThuoc = 200) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const canvas = document.createElement('canvas');
+      canvas.width = kichThuoc; canvas.height = kichThuoc;
+      const ctx = canvas.getContext('2d');
+      const canh = Math.min(img.width, img.height);
+      const sx = (img.width - canh) / 2, sy = (img.height - canh) / 2;
+      ctx.drawImage(img, sx, sy, canh, canh, 0, 0, kichThuoc, kichThuoc);
+      resolve(canvas.toDataURL('image/jpeg', 0.85));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Không đọc được ảnh này')); };
+    img.src = url;
+  });
+}
+
+function veAvatarSidebar(capNhat) {
+  const wrap = $('#uAvWrap');
+  wrap.querySelector('.av')?.remove();
+  const html = TOI.co_anh
+    ? `<img class="av" id="uAv" src="/api/nhan-su/anh?id=${encodeURIComponent(TOI.id)}${capNhat ? '&v=' + Date.now() : ''}" alt="">`
+    : `<div class="av" id="uAv">${esc(TOI.viet_tat)}</div>`;
+  wrap.insertAdjacentHTML('afterbegin', html);
+}
+veAvatarSidebar();
+
+$('#uAvWrap').addEventListener('click', () => $('#uAvFile').click());
+$('#uAvFile').addEventListener('change', async () => {
+  const f = $('#uAvFile').files[0];
+  if (!f) return;
+  try {
+    const anh = await nenAnhVuong(f, 200);
+    await API.nsAnhDaiDien(anh);
+    TOI.co_anh = true;
+    veAvatarSidebar(true);
+  } catch (err) {
+    alert(err.message || 'Không đổi được ảnh, thử lại nhé.');
+  } finally {
+    $('#uAvFile').value = '';
+  }
+});
+
 $('#uTen').textContent = TOI.ten;
 $('#uChucVu').textContent = TOI.chuc_vu;
 
@@ -356,6 +411,7 @@ veThe('#tq-the', DB.tongQuan.the);
 veChart('#tq-chart', DB.tongQuan.doanhThu6Thang);
 veTienDo('#tq-muctieu', DB.tongQuan.mucTieuQuy);
 veDanhSach('#tq-canhbao', DB.tongQuan.cannBaoDong);
+await khoiDongVinhDanh();
 
 /* -- Danh bạ (máy chủ thật) -- */
 if (TOI.quyen.includes('danhba')) {
@@ -371,7 +427,7 @@ if (TOI.quyen.includes('danhba')) {
     const coChat = TOI.quyen.includes('chat');
 
     veBang('#db-bang', ds, n =>
-      `<td><div class="person"><div class="av">${esc(n.viet_tat)}</div>` +
+      `<td><div class="person">${avHtml(n.id, n.viet_tat, n.co_anh)}` +
         `<div><div class="nm">${esc(n.ho_ten)}</div>` +
         `<div class="sm">${esc(n.chuc_vu)}</div></div></div></td>` +
       `<td>${esc(n.bo_phan)}</td>` +
@@ -396,7 +452,7 @@ if (TOI.quyen.includes('danhba')) {
   });
 }
 
-/* -- Tác vụ: giao việc cho nhân viên (máy chủ thật) -- */
+/* -- Trạm Việc: giao việc cho nhân viên (máy chủ thật) -- */
 if (TOI.quyen.includes('congviec')) {
   await khoiDongCongViec();
 }
@@ -407,7 +463,94 @@ if (TOI.quyen.includes('chat')) {
 }
 
 /* ==========================================================================
-   TÁC VỤ — giao việc cho nhân viên. Theo tinh thần MBOs (quản lý theo mục
+   VINH DANH (Tổng quan) — bảng khen ngợi nhỏ, ai mở ERP cũng thấy.
+   ========================================================================== */
+
+// "Vừa xong" / "5 phút trước" / "2 giờ trước" / "hôm qua" — chỉ dùng nội bộ
+// cho khu Vinh danh (danh sách chat/thông báo khác đã có kiểu hiện giờ riêng)
+function thoiGianTruoc(chuoi) {
+  if (!chuoi) return '';
+  const luc = Date.parse(chuoi.replace(' ', 'T'));
+  const gioNay = Date.now() + 7 * 3600 * 1000;
+  const phut = Math.max(0, Math.round((gioNay - luc) / 60000));
+  if (phut < 1) return 'vừa xong';
+  if (phut < 60) return `${phut} phút trước`;
+  const gio = Math.round(phut / 60);
+  if (gio < 24) return `${gio} giờ trước`;
+  return `${Math.round(gio / 24)} ngày trước`;
+}
+
+async function khoiDongVinhDanh() {
+  const { danh_ba } = await API.danhBa();
+  const chonNguoi = $('#vd-nguoi');
+  danh_ba.forEach(n => {
+    const o = document.createElement('option');
+    o.value = n.id; o.textContent = n.ho_ten;
+    chonNguoi.appendChild(o);
+  });
+
+  $('#vd-nut-mo').addEventListener('click', () => {
+    const body = $('#vd-form-body');
+    body.hidden = !body.hidden;
+  });
+
+  async function taiLai() {
+    let kq;
+    try { kq = await API.vdDanhSach(); } catch { return; }
+    const ds = kq.vinh_danh || [];
+
+    const goiYBody = $('#vd-goiy-body');
+    if (kq.goi_y && kq.goi_y.so_viec > 0) {
+      goiYBody.hidden = false;
+      $('#vd-goiy').innerHTML =
+        `💡 <span>${esc(kq.goi_y.nguoi_nhan_ten)} vừa hoàn thành ${kq.goi_y.so_viec} việc ở Trạm Việc tuần này</span>` +
+        `<button type="button" class="btn-nho" id="vd-goiy-nut">Vinh danh luôn</button>`;
+      $('#vd-goiy-nut').addEventListener('click', () => {
+        $('#vd-form-body').hidden = false;
+        chonNguoi.value = kq.goi_y.nguoi_nhan_id;
+        $('#vd-noidung').value = `Hoàn thành ${kq.goi_y.so_viec} việc ở Trạm Việc tuần này, làm tốt lắm!`;
+        $('#vd-noidung').focus();
+      });
+    } else {
+      goiYBody.hidden = true;
+    }
+
+    const list = $('#vd-list');
+    list.innerHTML = ds.map(r => `
+      <div class="vd-item person">
+        ${avHtml(r.nhan_su_id, (r.nhan_su_ten || '?').trim().split(/\s+/).slice(-2).map(t => t[0]).join('').toUpperCase(), r.co_anh)}
+        <div>
+          <div class="nm">${esc(r.nhan_su_ten)}</div>
+          <div class="vd-noidung">${esc(r.noi_dung)}</div>
+          <div class="sm">— ${esc(r.nguoi_gui_ten)} · ${thoiGianTruoc(r.tao_luc)}</div>
+        </div>
+      </div>
+    `).join('');
+    $('#vd-trong').hidden = ds.length > 0;
+  }
+
+  $('#vd-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    $('#vd-loi').textContent = '';
+    const nut = $('#vd-nut-gui');
+    nut.disabled = true;
+    try {
+      await API.vdGui(chonNguoi.value, $('#vd-noidung').value.trim());
+      $('#vd-form').reset();
+      $('#vd-form-body').hidden = true;
+      await taiLai();
+    } catch (err) {
+      $('#vd-loi').textContent = err.message || 'Không gửi được, thử lại nhé.';
+    } finally {
+      nut.disabled = false;
+    }
+  });
+
+  await taiLai();
+}
+
+/* ==========================================================================
+   TRẠM VIỆC — giao việc cho nhân viên. Theo tinh thần MBOs (quản lý theo mục
    tiêu): mỗi việc BẮT BUỘC có "đầu ra cụ thể", không chỉ mô tả làm gì.
    Luồng trạng thái: moi -> dang_lam -> cho_duyet -> hoan_thanh (hoặc huy).
    ========================================================================== */
@@ -809,7 +952,7 @@ if (TOI.quyen.includes('nhansu')) {
   veBang('#ns-bang', nhan_su, r => {
     const tt = TRANG_THAI[r.trang_thai] || { chu: r.trang_thai, mau: 'mute' };
     return '' +
-      `<td><div class="person"><div class="av">${esc(r.viet_tat)}</div>` +
+      `<td><div class="person">${avHtml(r.id, r.viet_tat, r.co_anh)}` +
         `<div><div class="nm">${esc(r.ho_ten)}</div>` +
         `<div class="sm">${esc(r.chuc_vu)}</div></div></div></td>` +
       `<td>${esc(r.bo_phan)}</td>` +
@@ -1978,7 +2121,7 @@ if (TOI.quyen.includes('quantri')) {
       }
 
       return '' +
-        `<td><div class="person"><div class="av">${esc(n.viet_tat)}</div>` +
+        `<td><div class="person">${avHtml(n.id, n.viet_tat, n.co_anh)}` +
           `<div><div class="nm">${esc(n.ho_ten)}</div>` +
           `<div class="sm">${esc(n.chuc_vu || TT_QT[n.trang_thai] || '')}</div></div></div></td>` +
         `<td>${esc(n.bo_phan || '—')}</td>` +

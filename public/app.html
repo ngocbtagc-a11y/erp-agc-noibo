@@ -35,7 +35,10 @@
 
     <div class="sb-foot">
       <div class="sb-user">
-        <div class="av" id="uAv">··</div>
+        <div class="av-wrap" id="uAvWrap" title="Bấm để đổi ảnh đại diện">
+          <div class="av" id="uAv">··</div>
+          <input type="file" id="uAvFile" accept="image/*" hidden>
+        </div>
         <div class="meta">
           <b id="uTen">—</b>
           <span id="uChucVu">—</span>
@@ -115,6 +118,37 @@
         </div>
         <div class="panel-body"><div class="list" id="tq-canhbao"></div></div>
       </div>
+
+      <!-- ---------- Vinh danh — khu khen ngợi nhỏ, ai mở ERP cũng thấy ---------- -->
+      <div class="panel">
+        <div class="panel-head">
+          <h4>🏆 Vinh danh</h4>
+          <button type="button" class="btn-phu" id="vd-nut-mo" style="width:auto">+ Khen ai đó</button>
+        </div>
+        <div class="panel-body" id="vd-goiy-body" hidden>
+          <div class="vd-goiy" id="vd-goiy"></div>
+        </div>
+        <div class="panel-body" id="vd-form-body" hidden>
+          <form id="vd-form" class="form-luoi" autocomplete="off">
+            <div class="field field-rong">
+              <label>Khen ai *</label>
+              <select id="vd-nguoi" required><option value="">— Chọn người —</option></select>
+            </div>
+            <div class="field field-rong">
+              <label>Lời khen *</label>
+              <textarea id="vd-noidung" required rows="2" maxlength="500" placeholder="Ví dụ: Xử lý gọn đơn khiếu nại khó hôm qua, khách rất hài lòng!"></textarea>
+            </div>
+            <div class="field field-nut">
+              <button type="submit" class="btn-primary" id="vd-nut-gui">Vinh danh</button>
+            </div>
+          </form>
+          <div class="form-loi" id="vd-loi"></div>
+        </div>
+        <div class="panel-body" style="padding-top:0">
+          <div id="vd-list"></div>
+          <div class="empty" id="vd-trong" hidden>Chưa có ai được vinh danh — thử khen 1 người nhé.</div>
+        </div>
+      </div>
     </section>
 
     <!-- ---------- Danh bạ ---------- -->
@@ -156,10 +190,10 @@
       </div>
     </section>
 
-    <!-- ---------- Tác vụ — giao việc cho nhân viên ---------- -->
+    <!-- ---------- Trạm Việc — giao việc cho nhân viên ---------- -->
     <section class="view" id="v-congviec" hidden>
       <div class="view-head">
-        <h3>Tác vụ</h3>
+        <h3>Trạm Việc</h3>
         <p>Giao việc rõ đầu ra, theo dõi tới khi xong — không chỉ mô tả làm gì mà phải rõ kết quả cần đạt.</p>
       </div>
 
