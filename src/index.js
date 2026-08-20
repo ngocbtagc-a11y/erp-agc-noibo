@@ -281,17 +281,27 @@ async function chatChuaDoc(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
 
-  const sauId = parseInt(new URL(req.url).searchParams.get('sau_id'), 10) || 0;
+  // Đếm chưa đọc theo mốc ĐÃ ĐỌC lưu ở MÁY CHỦ (chat_xem_id) — không phụ thuộc
+  // trình duyệt, nên tải lại trang không làm tin cũ thành "chưa đọc" nữa.
   const { results } = await env.DB.prepare(`
     SELECT COUNT(*) AS so_luong, MAX(id) AS id_lon_nhat
     FROM tin_nhan_chat
     WHERE (nguoi_nhan_id IS NULL OR nguoi_nhan_id = ?)
       AND nguoi_gui_id != ?
-      AND id > ?
-  `).bind(phien.nhan_su_id, phien.nhan_su_id, sauId).all();
+      AND id > (SELECT COALESCE(chat_xem_id, 0) FROM tai_khoan WHERE id = ?)
+  `).bind(phien.nhan_su_id, phien.nhan_su_id, phien.tai_khoan_id).all();
   const r = (results && results[0]) || {};
-  // MAX(id) trả về NULL khi không có dòng nào khớp — giữ nguyên mốc cũ, đừng lùi về null
-  return json({ so_luong: r.so_luong || 0, id_lon_nhat: r.id_lon_nhat || sauId });
+  return json({ so_luong: r.so_luong || 0, id_lon_nhat: r.id_lon_nhat || 0 });
+}
+
+/* Đánh dấu ĐÃ ĐỌC chat tới tin mới nhất (gọi khi mở popup chat) */
+async function chatDaDoc(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  await env.DB.prepare(
+    `UPDATE tai_khoan SET chat_xem_id = (SELECT COALESCE(MAX(id), 0) FROM tin_nhan_chat) WHERE id = ?`
+  ).bind(phien.tai_khoan_id).run();
+  return json({ ok: true });
 }
 
 /* Gửi tin nhắn — có thể chỉ có chữ, chỉ có file, hoặc cả hai. Có nguoi_nhan_id
@@ -1623,6 +1633,7 @@ const DUONG_DAN = {
   'GET  /api/nhan-su/anh':          nsAnhXem,
   'GET  /api/chat/tin-nhan': chatDanhSach,
   'GET  /api/chat/chua-doc': chatChuaDoc,
+  'POST /api/chat/da-doc':   chatDaDoc,
   'GET  /api/chat/gan-day':  chatGanDay,
   'POST /api/chat/gui':      chatGui,
   'GET  /api/chat/tep':      chatTepDinhKem,

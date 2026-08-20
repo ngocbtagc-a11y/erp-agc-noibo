@@ -77,7 +77,8 @@ export const API = {
     const qs = q.toString();
     return goi('/api/chat/tin-nhan' + (qs ? '?' + qs : ''));
   },
-  chatChuaDoc: (sauId) => goi('/api/chat/chua-doc?sau_id=' + (sauId || 0)),
+  chatChuaDoc: () => goi('/api/chat/chua-doc'),
+  chatDaDoc: () => goi('/api/chat/da-doc', { method: 'POST' }),
   chatGanDay: () => goi('/api/chat/gan-day'),
   chatGui: (noiDung, tep, voiId) => {
     const fd = new FormData();

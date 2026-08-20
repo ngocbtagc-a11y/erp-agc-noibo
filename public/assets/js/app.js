@@ -809,6 +809,7 @@ async function khoiDongChat() {
   let nguoiNhanHienTai = null;    // null = kênh chung; {id, ten, viet_tat} = đang chat riêng
   let dangMo = false;
   let chuaDoc = 0;
+  let chuaDocTruoc = 0;   // số chưa đọc lần kiểm tra trước (để biết có THÊM tin mới không)
 
   // Đổi giờ VN "YYYY-MM-DD HH:MM:SS" -> "HH:MM" (hôm nay) hoặc "dd/mm HH:MM"
   function gioChat(chuoi) {
@@ -915,14 +916,12 @@ async function khoiDongChat() {
      nhắn riêng mới gửi tới. */
   async function hoiChuaDocToanCuc() {
     try {
-      const { so_luong, id_lon_nhat } = await API.chatChuaDoc(idMocToanCuc);
-      // Đang mở popup = đang đọc -> badge luôn về 0 (chỉ hiện số khi có tin mới
-      // lúc đang ĐÓNG). Sếp Ngọc chốt 20/08/2026.
-      if (dangMo) chuaDoc = 0;
-      else if (so_luong > 0) chuaDoc += so_luong;
+      const { so_luong } = await API.chatChuaDoc();   // tổng chưa đọc THẬT (mốc máy chủ)
+      if (so_luong > chuaDocTruoc) veGanDay();          // có thêm tin mới -> làm mới danh sách gần đây
+      chuaDocTruoc = so_luong;
+      // Đang mở popup = đang đọc hết -> badge 0. Đóng thì hiện đúng số chưa đọc.
+      chuaDoc = dangMo ? 0 : so_luong;
       veBadge();
-      if (so_luong > 0) veGanDay();   // có tin mới thì đối tác đó cũng cần nổi/lên đầu danh sách
-      idMocToanCuc = Math.max(idMocToanCuc, id_lon_nhat);
     } catch { /* mất mạng tạm thời — bỏ qua, đợt hỏi sau tự thử lại */ }
   }
 
@@ -957,7 +956,9 @@ async function khoiDongChat() {
   function moPopup() {
     dangMo = true; popup.hidden = false;
     boQuaClickKeTiep = true;
-    chuaDoc = 0; veBadge();
+    chuaDoc = 0; chuaDocTruoc = 0; veBadge();
+    // Đánh dấu ĐÃ ĐỌC ở máy chủ -> tải lại trang cũng không hiện "1" lại nữa
+    API.chatDaDoc().catch(() => {});
     cuoiTrang();
     setTimeout(() => $('#chat-noidung')?.focus(), 60);
   }
