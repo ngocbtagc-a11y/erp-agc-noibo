@@ -1420,8 +1420,10 @@ async function khoiDongDonHoan() {
   let DS_DH = [];
   function veBangDH(tuKhoa) {
     const k = boDau((tuKhoa || '').trim());
-    const ds = DS_DH.filter(r => !k ||
-      boDau(`${r.return_sn} ${r.order_sn || ''} ${r.ma_van_don || ''} ${r.san_pham_ten || r.san_pham || ''} ${r.san_pham_sku || ''} ${r.nguoi_mua || ''}`).includes(k));
+    const coShopee = $('#dh-nguon-shopee').checked, coTiktok = $('#dh-nguon-tiktok').checked;
+    const ds = DS_DH.filter(r =>
+      (r.nguon === 'tiktok' ? coTiktok : coShopee) &&
+      (!k || boDau(`${r.return_sn} ${r.order_sn || ''} ${r.ma_van_don || ''} ${r.san_pham_ten || r.san_pham || ''} ${r.san_pham_sku || ''} ${r.nguoi_mua || ''}`).includes(k)));
     veBang('#dh-bang', ds, r => {
       const tt = nhanTrangThai(r.trang_thai);
       const tien = r.so_tien != null
@@ -1503,6 +1505,8 @@ async function khoiDongDonHoan() {
     veBangDH($('#dh-tim').value);
   }
   $('#dh-tim').addEventListener('input', e => veBangDH(e.target.value));
+  $('#dh-nguon-shopee').addEventListener('change', () => veBangDH($('#dh-tim').value));
+  $('#dh-nguon-tiktok').addEventListener('change', () => veBangDH($('#dh-tim').value));
 
   /* Kho bấm "Nhận đủ" / "Nhập kho" / "Hàng hỏng-Chờ huỷ" (đóng đơn) hoặc
      "Cần khiếu nại" (đẩy về Vận hành sàn) */
@@ -1517,7 +1521,9 @@ async function khoiDongDonHoan() {
       btn.getAttribute('data-nhan') || btn.getAttribute('data-khieunai') || btn.getAttribute('data-chuanhan');
     let ghiChu = '';
     if (btnKn) {
-      // Đang chọn sẵn "Hư hỏng" ở ô tình trạng thì gợi ý luôn lý do, khỏi gõ lại.
+      // Gõ lý do xong mới đẩy về Vận hành sàn (anh Duy chốt 20/08/2026) —
+      // khác "Chưa nhận được" là đẩy ngay không cần gõ gì. Đang chọn sẵn
+      // "Hư hỏng" ở ô tình trạng thì gợi ý luôn lý do, khỏi gõ lại.
       const sel = btn.closest('td').querySelector('.sel-tinhtrang');
       const goiY = sel && sel.value === 'hu_hong' ? 'Hàng hư hỏng khi kho nhận' : '';
       const nhap = prompt('Lý do cần khiếu nại (thiếu hàng / hỏng / không đúng mô tả…):', goiY);
