@@ -87,8 +87,8 @@
       </div>
 
       <div class="view-head">
-        <h3>Tổng quan công ty</h3>
-        <p>Bức tranh chung của Alpha Green Commerce — doanh thu, tiến độ mục tiêu và những việc cần chú ý.</p>
+        <h3>Trạm Mục Tiêu</h3>
+        <p>Mục tiêu MBOs (công ty → phòng ban), giao việc theo dõi tới khi xong, và bức tranh chung của Alpha Green Commerce.</p>
       </div>
 
       <!-- ---------- Vinh danh — khu khen ngợi nhỏ, lên đầu trang để ai mở ERP cũng thấy ngay ---------- -->
@@ -168,28 +168,7 @@
           <div class="mt-nhom-nhan">Cấp công ty</div>
           <div id="mt-congty-list"></div>
           <div class="empty" id="mt-congty-trong" hidden>Chưa có mục tiêu công ty nào cho quý này.</div>
-          <div class="mt-nhom-nhan" style="margin-top:18px">Cấp phòng ban</div>
-          <div id="mt-phongban-list"></div>
-          <div class="empty" id="mt-phongban-trong" hidden>Chưa có mục tiêu phòng ban nào cho quý này.</div>
         </div>
-      </div>
-
-      <div class="stats" id="tq-the"></div>
-
-      <div class="panel">
-        <div class="panel-head">
-          <h4>Doanh thu 6 tháng gần nhất</h4>
-          <span class="hint">Đơn vị: tỷ đồng</span>
-        </div>
-        <div class="panel-body"><div class="chart" id="tq-chart"></div></div>
-      </div>
-
-      <div class="panel">
-        <div class="panel-head">
-          <h4>Việc cần chú ý</h4>
-          <span class="hint">Tổng hợp từ 4 mảng</span>
-        </div>
-        <div class="panel-body"><div class="list" id="tq-canhbao"></div></div>
       </div>
 
       <!-- ---------- Trạm Mục Tiêu — giao việc cho nhân viên (gộp vào Tổng quan) ---------- -->
@@ -315,6 +294,35 @@
           </div>
           <div class="empty" id="cv-trong-giao" hidden>Sếp/bạn chưa giao việc nào.</div>
         </div>
+      </div>
+
+      <!-- ---------- Mục tiêu phòng ban ---------- -->
+      <div class="panel">
+        <div class="panel-head">
+          <h4>🏢 Mục tiêu phòng ban</h4>
+        </div>
+        <div class="panel-body">
+          <div id="mt-phongban-list"></div>
+          <div class="empty" id="mt-phongban-trong" hidden>Chưa có mục tiêu phòng ban nào cho quý này.</div>
+        </div>
+      </div>
+
+      <div class="stats" id="tq-the"></div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h4>Doanh thu 6 tháng gần nhất</h4>
+          <span class="hint">Đơn vị: tỷ đồng</span>
+        </div>
+        <div class="panel-body"><div class="chart" id="tq-chart"></div></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h4>Việc cần chú ý</h4>
+          <span class="hint">Tổng hợp từ 4 mảng</span>
+        </div>
+        <div class="panel-body"><div class="list" id="tq-canhbao"></div></div>
       </div>
     </section>
 
