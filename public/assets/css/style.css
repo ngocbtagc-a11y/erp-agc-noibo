@@ -669,7 +669,8 @@ tr.canh-bao:hover > td { background: #fbdbd6; }
 .tb-trong { padding: 24px 16px; text-align: center; color: var(--text-mute); }
 
 /* ==========================================================================
-   CHAT NỘI BỘ — 1 kênh chung, kiểu bong bóng tin nhắn
+   CHAT NỘI BỘ — kiểu Messenger: bong bóng bo tròn, gộp tin liên tiếp cùng
+   người gửi (đỡ lặp avatar/tên), tin của mình tô màu đặc bên phải.
    ========================================================================== */
 .chat-khung {
   height: 62vh;
@@ -679,62 +680,88 @@ tr.canh-bao:hover > td { background: #fbdbd6; }
   padding: 20px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 2px;                 /* gần nhau — .chat-tin tự thêm margin-top khi KHÔNG gộp */
+  background: var(--surface);
 }
 
-.chat-tin { display: flex; gap: 10px; max-width: 78%; }
+.chat-tin { display: flex; gap: 8px; max-width: 72%; margin-top: 12px; }
+.chat-tin.chat-gop { margin-top: 2px; }         /* liền sau tin cùng người, cùng lúc */
 .chat-tin.chat-cua-toi { align-self: flex-end; flex-direction: row-reverse; }
 
 .chat-avt {
   flex-shrink: 0;
-  width: 32px; height: 32px;
+  width: 28px; height: 28px;
   border-radius: 50%;
-  background: var(--sage);
+  background: var(--sage-dark);
   color: var(--white);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   display: flex; align-items: center; justify-content: center;
+  align-self: flex-end;      /* avatar neo đáy cụm, giống Messenger */
 }
+.chat-avt.chat-avt-rong { background: none; }   /* giữ chỗ cho thẳng hàng khi đã gộp */
+.chat-tin.chat-cua-toi .chat-avt { display: none; }   /* tin của mình không cần avatar */
 
-.chat-noi { min-width: 0; }
+.chat-noi { min-width: 0; display: flex; flex-direction: column; }
 .chat-ten {
   font-size: 11px;
   color: var(--text-mute);
-  margin-bottom: 3px;
+  margin: 0 0 3px 4px;
 }
-.chat-cua-toi .chat-ten { text-align: right; }
+.chat-tin.chat-gop .chat-ten { display: none; }
+.chat-tin.chat-cua-toi .chat-ten { display: none; }   /* tin của mình khỏi lặp lại tên mình */
 
 .chat-bong {
-  background: var(--surface);
-  border-radius: var(--r-md);
-  padding: 9px 13px;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 9px 14px;
   font-size: 13.5px;
-  line-height: 1.45;
+  line-height: 1.4;
   word-break: break-word;
   white-space: pre-wrap;
+  width: fit-content;
+  max-width: 100%;
 }
-.chat-cua-toi .chat-bong { background: var(--sage-wash); }
+.chat-tin:not(.chat-cua-toi):not(.chat-gop) .chat-bong { border-bottom-left-radius: 6px; }
+.chat-tin.chat-cua-toi .chat-bong {
+  background: var(--sage);
+  border-color: var(--sage);
+  color: var(--white);
+}
+.chat-tin.chat-cua-toi:not(.chat-gop) .chat-bong { border-bottom-right-radius: 6px; }
+.chat-bong + .chat-bong,
+.chat-bong + .chat-tep-card,
+.chat-tep-card + .chat-bong { margin-top: 3px; }
+
+.chat-gio-canh {
+  font-size: 10px;
+  color: var(--text-mute);
+  margin: 3px 4px 0;
+  display: none;             /* chỉ hiện khi hover, giống Messenger rê chuột xem giờ */
+}
+.chat-tin:hover .chat-gio-canh { display: block; }
+.chat-cua-toi .chat-gio-canh { text-align: right; }
 
 .chat-tep-card {
   display: flex; align-items: center; gap: 8px;
-  margin-top: 6px;
   padding: 8px 12px;
   background: var(--white);
   border: 1px solid var(--line);
-  border-radius: var(--r-sm);
+  border-radius: 14px;
   font-size: 12.5px;
   text-decoration: none;
   color: var(--ink);
+  width: fit-content;
 }
 .chat-tep-card:hover { border-color: var(--sage); }
 .chat-tep-card .sm { color: var(--text-mute); font-size: 11px; }
 
 .chat-anh {
   display: block;
-  max-width: 260px;
-  max-height: 260px;
-  border-radius: var(--r-sm);
-  margin-top: 6px;
+  max-width: 240px;
+  max-height: 240px;
+  border-radius: 14px;
   cursor: pointer;
 }
 

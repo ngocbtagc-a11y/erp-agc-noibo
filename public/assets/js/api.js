@@ -120,6 +120,9 @@ export const API = {
   hoanKhieuNai: (returnSn, ghiChu) => goi('/api/hoan/khieu-nai', {
     method: 'POST', body: JSON.stringify({ return_sn: returnSn, ghi_chu: ghiChu })
   }),
+  hoanPhanLoai: (returnSn, phanLoai) => goi('/api/hoan/phan-loai', {
+    method: 'POST', body: JSON.stringify({ return_sn: returnSn, phan_loai: phanLoai })
+  }),
 
   /* ---- Thông báo trong ERP (chuông) ---- */
   thongBao: () => goi('/api/thong-bao'),
@@ -145,6 +148,12 @@ export const API = {
   ktCanTraSoat: () => goi('/api/ke-toan/can-tra-soat'),
   ktDaTraSoat: (returnSn) => goi('/api/ke-toan/da-tra-soat', {
     method: 'POST', body: JSON.stringify({ return_sn: returnSn })
+  }),
+
+  /* ---- Kế toán: hàng hỏng do vận chuyển (đơn huỷ) — biên bản hủy hàng tháng ---- */
+  ktHangHong: () => goi('/api/ke-toan/hang-hong'),
+  ktLapBienBan: (dsReturnSn) => goi('/api/ke-toan/lap-bien-ban', {
+    method: 'POST', body: JSON.stringify({ return_sn: dsReturnSn })
   }),
 
   /* ---- Ghép tên sản phẩm (sàn) -> SKU (kho), cho đơn hoàn cũ không có SKU ---- */

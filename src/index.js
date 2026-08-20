@@ -592,6 +592,40 @@ async function hoanDaNhan(req, env) {
   return json({ ok: true, nguoi: phien.ho_ten || phien.ten_dang_nhap });
 }
 
+/* Kho phân loại hàng nhận về từ đơn HUỶ có mã vận đơn (Sếp Ngọc chốt
+   20/08/2026): 'nhap_kho' (hàng còn tốt, nhập lại kho) hoặc 'hong_cho_huy'
+   (hư hỏng do vận chuyển, chờ lập biên bản hủy cùng kế toán). Chỉ dùng cho
+   đơn huỷ — đơn hoàn bình thường vẫn "Nhận đủ" như cũ, không qua đây. */
+async function hoanPhanLoai(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  if (!duocThaoTacKho(phien.vai_tro)) return loi('Bạn không có quyền', 403);
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  const rsn = (b.return_sn || '').trim();
+  const phanLoai = String(b.phan_loai || '').trim();
+  if (!rsn) return loi('Thiếu mã đơn hoàn');
+  if (phanLoai !== 'nhap_kho' && phanLoai !== 'hong_cho_huy') return loi('Phân loại không hợp lệ');
+
+  const nguoi = phien.ho_ten || phien.ten_dang_nhap;
+  const r = await env.DB.prepare(`
+    UPDATE don_hoan
+       SET kho_nhan_luc = COALESCE(kho_nhan_luc, datetime('now','+7 hours')),
+           kho_nhan_boi = COALESCE(kho_nhan_boi, ?),
+           phan_loai_nhan = ?, phan_loai_luc = datetime('now','+7 hours'), phan_loai_boi = ?,
+           dang_cho = CASE WHEN ? = 'hong_cho_huy' THEN 'ke_toan_huy' ELSE dang_cho END,
+           da_canh_bao = 1
+     WHERE return_sn = ? AND trang_thai LIKE '%CANCEL%'
+  `).bind(nguoi, phanLoai, nguoi, phanLoai, rsn).run();
+  if (!r.meta.changes) return loi('Không tìm thấy đơn (chỉ áp dụng cho đơn đã huỷ)', 404);
+
+  if (phanLoai === 'hong_cho_huy') {
+    await guiThongBao(env, 'ke_toan',
+      `Kho báo hàng hỏng do vận chuyển — đơn ${rsn}, chờ lập biên bản hủy cùng kế toán.`,
+      'hang_hong', rsn);
+  }
+  return json({ ok: true, nguoi });
+}
+
 /* ---- Thông báo trong ERP (chuông 🔔) ------------------------------------
    Nhóm nhận: kho roles -> 'kho'; vận hành sàn -> 'van_hanh'; ban giám đốc -> cả hai. */
 function nhomCua(vaiTro) {
@@ -922,6 +956,49 @@ async function ktDaTraSoat(req, env) {
 }
 
 /* ==========================================================================
+   HÀNG HỎNG DO VẬN CHUYỂN (đơn huỷ) — Kho phân loại xong đẩy sang đây, Kế
+   toán + Kho cứ cuối tháng gom lại lập 1 biên bản hủy chung (Sếp Ngọc chốt
+   20/08/2026). Khác "Đơn hoàn cần tra soát tiền" (đó là tiền hoàn, đây là
+   HÀNG hỏng cần ghi giảm tồn kho).
+   ========================================================================== */
+async function ktHangHong(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  if (!duocXemTab(phien.vai_tro, 'ketoan')) return loi('Bạn không có quyền', 403);
+  const { results } = await env.DB.prepare(`
+    SELECT d.return_sn, d.order_sn, d.ma_van_don, d.san_pham_ten,
+           COALESCE(d.san_pham_sku, m.ma_sku) AS san_pham_sku, d.so_luong,
+           d.nguon, d.kho_nhan_luc, d.kho_nhan_boi, d.phan_loai_luc, d.phan_loai_boi
+      FROM don_hoan d
+      LEFT JOIN sku_map m ON m.ten_san_pham = d.san_pham_ten
+     WHERE d.phan_loai_nhan = 'hong_cho_huy' AND d.bien_ban_luc IS NULL
+     ORDER BY d.phan_loai_luc ASC
+  `).all();
+  return json({ hang_hong: results });
+}
+
+/* Kho + Kế toán cùng chốt — tick chọn hàng loạt rồi "Đã lập biên bản hủy" */
+async function ktLapBienBan(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  if (!duocXemTab(phien.vai_tro, 'ketoan')) return loi('Bạn không có quyền', 403);
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  const dsRsn = Array.isArray(b.return_sn) ? b.return_sn.map(s => String(s).trim()).filter(Boolean) : [];
+  if (!dsRsn.length) return loi('Chưa chọn đơn nào');
+
+  const nguoi = phien.ho_ten || phien.ten_dang_nhap;
+  let da = 0;
+  for (const rsn of dsRsn) {
+    const r = await env.DB.prepare(`
+      UPDATE don_hoan SET bien_ban_luc = datetime('now','+7 hours'), bien_ban_boi = ?
+       WHERE return_sn = ? AND phan_loai_nhan = 'hong_cho_huy' AND bien_ban_luc IS NULL
+    `).bind(nguoi, rsn).run();
+    if (r.meta.changes) da++;
+  }
+  return json({ ok: true, so_don: da });
+}
+
+/* ==========================================================================
    Ghép TÊN SẢN PHẨM (trên sàn) → MÃ SKU (kho) — cho đơn hoàn cũ không có SKU
    ---------------------------------------------------------------------------
    Xem quyền: ai xem được Đơn hoàn (duocXemDonHoan) đều xem được danh sách
@@ -1054,6 +1131,7 @@ const DUONG_DAN = {
   'POST /api/hoan/sku-map':      hoanSkuMapGan,
   'POST /api/hoan/da-nhan':      hoanDaNhan,
   'POST /api/hoan/khieu-nai':    hoanKhieuNai,
+  'POST /api/hoan/phan-loai':    hoanPhanLoai,
   'GET  /api/thong-bao':         layThongBao,
   'POST /api/thong-bao/da-xem':  thongBaoDaXem,
   'GET  /api/kinh-doanh/can-doi-soat': kdCanDoiSoat,
@@ -1062,6 +1140,8 @@ const DUONG_DAN = {
   'POST /api/kinh-doanh/day-ke-toan':  kdDayKeToan,
   'GET  /api/ke-toan/can-tra-soat':    ktCanTraSoat,
   'POST /api/ke-toan/da-tra-soat':     ktDaTraSoat,
+  'GET  /api/ke-toan/hang-hong':       ktHangHong,
+  'POST /api/ke-toan/lap-bien-ban':    ktLapBienBan,
   'GET  /api/tiktok/trang-thai': tiktokTrangThai,
   'GET  /api/tiktok/connect':    tiktokConnect,
   'GET  /api/tiktok/callback':   tiktokCallback,

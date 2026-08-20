@@ -643,6 +643,41 @@
         <div class="empty" id="kt-ts-trong" hidden>Chưa có đơn hoàn nào cần tra soát.</div>
       </div>
 
+      <!-- Hàng hỏng do vận chuyển (đơn huỷ) — chờ lập biên bản hủy hàng tháng -->
+      <div class="panel" id="kt-hanghong-panel" hidden>
+        <div class="panel-head">
+          <h4>Hàng hỏng do vận chuyển — chờ lập biên bản hủy</h4>
+          <span class="hint" id="kt-hh-dem"></span>
+        </div>
+        <div class="panel-body" style="padding-bottom:0; padding-top:0">
+          <p class="hint" style="margin:14px 0 0">Kho xác nhận hàng nhận về từ đơn huỷ bị hỏng do vận chuyển. Cuối tháng, Kho + Kế toán cùng rà lại danh sách này, tick chọn rồi bấm “Đã lập biên bản hủy” để chốt thành 1 biên bản hủy hàng của tháng.</p>
+        </div>
+
+        <div class="kd-thanh-chon" id="kt-hh-thanhchon" hidden>
+          <span id="kt-hh-sldachon"></span>
+          <button type="button" class="btn-primary" id="kt-hh-lapbienban" style="width:auto">Đã lập biên bản hủy</button>
+          <button type="button" class="btn-phu" id="kt-hh-huychon">Bỏ chọn</button>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th style="width:40px"><input type="checkbox" id="kt-hh-chontatca" title="Chọn tất cả"></th>
+                <th>Nguồn</th>
+                <th>Mã đơn hoàn</th>
+                <th>Đơn gốc</th>
+                <th>Sản phẩm</th>
+                <th class="num">Số lượng</th>
+                <th>Kho phân loại</th>
+              </tr>
+            </thead>
+            <tbody id="kt-hh-bang"></tbody>
+          </table>
+        </div>
+        <div class="empty" id="kt-hh-trong" hidden>Chưa có hàng hỏng nào chờ lập biên bản.</div>
+      </div>
+
       <div class="stats" id="kt-the"></div>
 
       <div class="grid-2">
