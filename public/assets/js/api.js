@@ -120,6 +120,9 @@ export const API = {
   hoanKhieuNai: (returnSn, ghiChu) => goi('/api/hoan/khieu-nai', {
     method: 'POST', body: JSON.stringify({ return_sn: returnSn, ghi_chu: ghiChu })
   }),
+  hoanChuaNhan: (returnSn) => goi('/api/hoan/chua-nhan', {
+    method: 'POST', body: JSON.stringify({ return_sn: returnSn })
+  }),
   hoanPhanLoai: (returnSn, phanLoai) => goi('/api/hoan/phan-loai', {
     method: 'POST', body: JSON.stringify({ return_sn: returnSn, phan_loai: phanLoai })
   }),

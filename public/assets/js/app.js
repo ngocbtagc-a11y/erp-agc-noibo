@@ -1174,7 +1174,8 @@ async function khoiDongDonHoan() {
                 `<option value="sai_hang">Sai hàng</option>` +
               `</select>` +
               `<button type="button" class="btn-nho btn-primary" data-nhan="${esc(r.return_sn)}">Nhận đủ</button> ` +
-              `<button type="button" class="btn-nho" data-khieunai="${esc(r.return_sn)}">Cần khiếu nại</button>${nhac}</td>`;
+              `<button type="button" class="btn-nho" data-khieunai="${esc(r.return_sn)}">Cần khiếu nại</button> ` +
+              `<button type="button" class="btn-nho" data-chuanhan="${esc(r.return_sn)}">Chưa nhận được</button>${nhac}</td>`;
       }
 
       // Sản phẩm — nhiều sản phẩm thì mỗi sản phẩm 1 dòng (oSanPham, dùng chung)
@@ -1211,17 +1212,23 @@ async function khoiDongDonHoan() {
     const btnNhan = e.target.closest('[data-nhan]');
     const btnKn = e.target.closest('[data-khieunai]');
     const btnPl = e.target.closest('[data-phanloai]');
-    if (!btnNhan && !btnKn && !btnPl) return;
-    const btn = btnNhan || btnKn || btnPl;
-    const rsn = btnPl ? btn.getAttribute('data-rsn') : btn.getAttribute(btnNhan ? 'data-nhan' : 'data-khieunai');
+    const btnCn = e.target.closest('[data-chuanhan]');
+    if (!btnNhan && !btnKn && !btnPl && !btnCn) return;
+    const btn = btnNhan || btnKn || btnPl || btnCn;
+    const rsn = btn.getAttribute('data-rsn') ||
+      btn.getAttribute('data-nhan') || btn.getAttribute('data-khieunai') || btn.getAttribute('data-chuanhan');
     let ghiChu = '';
     if (btnKn) {
-      const nhap = prompt('Lý do cần khiếu nại (thiếu hàng / hỏng / không đúng mô tả…):', '');
+      // Đang chọn sẵn "Hư hỏng" ở ô tình trạng thì gợi ý luôn lý do, khỏi gõ lại.
+      const sel = btn.closest('td').querySelector('.sel-tinhtrang');
+      const goiY = sel && sel.value === 'hu_hong' ? 'Hàng hư hỏng khi kho nhận' : '';
+      const nhap = prompt('Lý do cần khiếu nại (thiếu hàng / hỏng / không đúng mô tả…):', goiY);
       if (nhap === null) return;   // bấm Huỷ thì thôi
       ghiChu = nhap;
     }
     if (btnPl && btn.getAttribute('data-phanloai') === 'hong_cho_huy' &&
         !confirm('Xác nhận hàng hỏng do vận chuyển, chờ lập biên bản hủy cùng kế toán?')) return;
+    if (btnCn && !confirm('Xác nhận CHƯA NHẬN ĐƯỢC hàng — đơn sẽ đẩy ngay về Vận hành sàn để khiếu nại với sàn?')) return;
     let tinhTrang = '';
     if (btnNhan) {
       const sel = btn.closest('td').querySelector('.sel-tinhtrang');
@@ -1233,6 +1240,7 @@ async function khoiDongDonHoan() {
     try {
       if (btnNhan) await API.hoanDaNhan(rsn, tinhTrang);
       else if (btnPl) await API.hoanPhanLoai(rsn, btn.getAttribute('data-phanloai'));
+      else if (btnCn) await API.hoanChuaNhan(rsn);
       else await API.hoanKhieuNai(rsn, ghiChu);
       await veDanhSach();               // tải lại
     } catch (err) {
