@@ -282,9 +282,10 @@ export async function apiDanhSach(env, phien) {
   const { results } = await env.DB.prepare(`
     SELECT d.return_sn, d.order_sn, d.trang_thai, d.ly_do, d.so_tien, d.tien_te, d.nguoi_mua,
            d.san_pham, d.san_pham_ten, COALESCE(d.san_pham_sku, m.ma_sku) AS san_pham_sku,
-           d.so_luong, d.ma_van_don, d.nguon,
+           d.so_luong, d.ma_van_don, d.nguon, d.tao_luc_shopee,
            d.cap_nhat_shopee, d.dong_bo_luc,
-           d.kho_nhan_luc, d.kho_nhan_boi, d.cho_kho_nhan_tu, d.lan_tra_soat, d.dang_cho
+           d.kho_nhan_luc, d.kho_nhan_boi, d.cho_kho_nhan_tu, d.lan_tra_soat, d.dang_cho,
+           d.phan_loai_nhan, d.phan_loai_boi, d.phan_loai_luc, d.tinh_trang_hang
       FROM don_hoan d
       LEFT JOIN sku_map m ON m.ten_san_pham = d.san_pham_ten
      WHERE (d.trang_thai NOT LIKE '%CANCEL%' OR d.ma_van_don IS NOT NULL)

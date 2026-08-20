@@ -608,22 +608,31 @@ async function hoanDanhSach(req, env) {
   return shopee.apiDanhSach(env, phien);
 }
 
-/* Kho xác nhận đã nhận được kiện hàng hoàn → tắt đồng hồ đếm 12h cho đơn đó */
+const TINH_TRANG_HOP_LE = ['con_tot', 'hu_hong', 'thieu_hang', 'sai_hang'];
+
+/* Kho xác nhận đã nhận được kiện hàng hoàn → tắt đồng hồ đếm 12h cho đơn đó.
+   Ghi kèm tình trạng hàng hóa (còn tốt / hư hỏng / thiếu hàng / sai hàng) để
+   Kế toán và Vận hành sàn biết ngay hàng về có bán lại được không, khỏi phải
+   hỏi lại Kho (Sếp Ngọc chốt 20/08/2026). */
 async function hoanDaNhan(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
   if (!duocThaoTacKho(phien.vai_tro)) return loi('Bạn không có quyền xác nhận nhận hàng', 403);
   let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
   const rsn = (b.return_sn || '').trim();
+  const tinhTrang = (b.tinh_trang || '').trim();
   if (!rsn) return loi('Thiếu mã đơn hoàn');
+  if (!TINH_TRANG_HOP_LE.includes(tinhTrang)) return loi('Thiếu hoặc sai tình trạng hàng hóa');
+  const nguoi = phien.ho_ten || phien.ten_dang_nhap;
   const r = await env.DB.prepare(`
     UPDATE don_hoan
        SET kho_nhan_luc = datetime('now','+7 hours'),
-           kho_nhan_boi = ?, da_canh_bao = 1
+           kho_nhan_boi = ?, da_canh_bao = 1,
+           tinh_trang_hang = ?, tinh_trang_luc = datetime('now','+7 hours'), tinh_trang_boi = ?
      WHERE return_sn = ? AND kho_nhan_luc IS NULL
-  `).bind(phien.ho_ten || phien.ten_dang_nhap, rsn).run();
+  `).bind(nguoi, tinhTrang, nguoi, rsn).run();
   if (!r.meta.changes) return loi('Không tìm thấy đơn hoặc đã được nhận trước đó', 404);
-  return json({ ok: true, nguoi: phien.ho_ten || phien.ten_dang_nhap });
+  return json({ ok: true, nguoi });
 }
 
 /* Kho phân loại hàng nhận về từ đơn HUỶ có mã vận đơn (Sếp Ngọc chốt
@@ -694,6 +703,22 @@ async function donDepDuLieuNgoaiThang(env) {
   if (r.meta.changes) console.log(`Dọn ${r.meta.changes} đơn hoàn ngoài tháng làm việc`);
 }
 
+/* Đẩy 1 đơn hoàn ngược về Vận hành sàn + báo vận hành (dùng chung cho cả
+   "Cần khiếu nại" gõ tay lẫn "Chưa nhận được" bấm nhanh — 2 lối vào, 1 lõi). */
+async function dayVeVanHanh(env, rsn, ghiChu, nguoi, loaiThongBao) {
+  const r = await env.DB.prepare(`
+    UPDATE don_hoan
+       SET dang_cho = 'van_hanh', ly_do_khieu_nai = ?,
+           khieu_nai_luc = datetime('now','+7 hours'), khieu_nai_boi = ?
+     WHERE return_sn = ? AND kho_nhan_luc IS NULL
+  `).bind(ghiChu || null, nguoi, rsn).run();
+  if (!r.meta.changes) return false;
+  await guiThongBao(env, 'van_hanh',
+    `Kho báo CẦN KHIẾU NẠI đơn ${rsn}${ghiChu ? ' — ' + ghiChu : ''}. Kiểm tra & khiếu nại với sàn.`,
+    loaiThongBao || 'khieu_nai', rsn);
+  return true;
+}
+
 /* Kho bấm "Cần khiếu nại" -> đẩy đơn ngược về Vận hành sàn + báo vận hành.
    Lý do ghi luôn vào chính đơn hoàn (ly_do_khieu_nai/khieu_nai_luc/khieu_nai_boi)
    để Vận hành sàn thấy ngay trong bảng "Cần đối soát", không phải lục chuông. */
@@ -706,16 +731,24 @@ async function hoanKhieuNai(req, env) {
   const ghiChu = (b.ghi_chu || '').trim().slice(0, 300);
   if (!rsn) return loi('Thiếu mã đơn hoàn');
   const nguoi = phien.ho_ten || phien.ten_dang_nhap;
-  const r = await env.DB.prepare(`
-    UPDATE don_hoan
-       SET dang_cho = 'van_hanh', ly_do_khieu_nai = ?,
-           khieu_nai_luc = datetime('now','+7 hours'), khieu_nai_boi = ?
-     WHERE return_sn = ? AND kho_nhan_luc IS NULL
-  `).bind(ghiChu || null, nguoi, rsn).run();
-  if (!r.meta.changes) return loi('Không tìm thấy đơn (hoặc đã nhận đủ)', 404);
-  await guiThongBao(env, 'van_hanh',
-    `Kho báo CẦN KHIẾU NẠI đơn ${rsn}${ghiChu ? ' — ' + ghiChu : ''}. Kiểm tra & khiếu nại với sàn.`,
-    'khieu_nai', rsn);
+  const ok = await dayVeVanHanh(env, rsn, ghiChu, nguoi);
+  if (!ok) return loi('Không tìm thấy đơn (hoặc đã nhận đủ)', 404);
+  return json({ ok: true });
+}
+
+/* Kho bấm "Chưa nhận được" -> 1 click đẩy ngay về Vận hành sàn, không cần gõ
+   lý do (khác "Cần khiếu nại" là phải gõ tay) — Vận hành sàn thấy tag đỏ
+   trong "Cần đối soát" giống hệt luồng khiếu nại (Sếp Ngọc chốt 20/08/2026). */
+async function hoanChuaNhan(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  if (!duocThaoTacKho(phien.vai_tro)) return loi('Bạn không có quyền', 403);
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  const rsn = (b.return_sn || '').trim();
+  if (!rsn) return loi('Thiếu mã đơn hoàn');
+  const nguoi = phien.ho_ten || phien.ten_dang_nhap;
+  const ok = await dayVeVanHanh(env, rsn, 'Kho chưa nhận được hàng', nguoi);
+  if (!ok) return loi('Không tìm thấy đơn (hoặc đã nhận đủ)', 404);
   return json({ ok: true });
 }
 
@@ -1166,6 +1199,7 @@ const DUONG_DAN = {
   'POST /api/hoan/sku-map':      hoanSkuMapGan,
   'POST /api/hoan/da-nhan':      hoanDaNhan,
   'POST /api/hoan/khieu-nai':    hoanKhieuNai,
+  'POST /api/hoan/chua-nhan':    hoanChuaNhan,
   'POST /api/hoan/phan-loai':    hoanPhanLoai,
   'GET  /api/thong-bao':         layThongBao,
   'POST /api/thong-bao/da-xem':  thongBaoDaXem,

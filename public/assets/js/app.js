@@ -56,6 +56,14 @@ function tienVN(n) {
   return Number(n).toLocaleString('vi-VN');
 }
 
+// Đổi unix (giây) -> "dd/mm/yy" — dùng chung nhiều tab (Đối soát, Đơn hoàn...)
+function ngayVN(unix) {
+  if (!unix) return '';
+  const d = new Date(Number(unix) * 1000);
+  if (isNaN(d)) return '';
+  return d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: '2-digit' });
+}
+
 /* Bỏ dấu để gõ "ke toan" cũng tìm ra "Kế toán" */
 function boDau(s) {
   return String(s).normalize('NFD').replace(/[̀-ͯ]/g, '')
@@ -698,14 +706,6 @@ async function khoiDongDoiSoatSan() {
     return gio >= 24 ? `${(gio / 24).toFixed(1)} ngày` : `${Math.round(gio)} giờ`;
   }
 
-  // Đổi unix (giây) -> "dd/mm/yy"
-  function ngayVN(unix) {
-    if (!unix) return '';
-    const d = new Date(Number(unix) * 1000);
-    if (isNaN(d)) return '';
-    return d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: '2-digit' });
-  }
-
   // 1 dòng bảng — dùng chung cho cả 2 nhóm (chưa/đã tra soát) bên dưới
   function dongDoiSoat(r) {
     const ngTag = r.nguon === 'tiktok'
@@ -1249,7 +1249,12 @@ async function khoiDongDonHoan() {
           khoTd = `<td class="sm"><span class="tag ok">✓ Nhập kho lại</span>` +
             `<div class="phu">${esc(r.phan_loai_boi || '')} · ${esc(r.phan_loai_luc || '')}</div></td>`;
         } else {
-          khoTd = `<td class="sm"><span class="tag ok">✓ Đã nhận</span>` +
+          const TT_NHAN = {
+            con_tot: ['ok', '✓ Còn tốt'], hu_hong: ['danger', '⚠️ Hư hỏng'],
+            thieu_hang: ['danger', '⚠️ Thiếu hàng'], sai_hang: ['danger', '⚠️ Sai hàng']
+          };
+          const tt = TT_NHAN[r.tinh_trang_hang] || ['ok', '✓ Đã nhận'];
+          khoTd = `<td class="sm"><span class="tag ${tt[0]}">${tt[1]}</span>` +
                   `<div class="phu">${esc(r.kho_nhan_boi || '')} · ${esc(r.kho_nhan_luc)}</div></td>`;
         }
       } else {
@@ -1263,8 +1268,15 @@ async function khoiDongDonHoan() {
               `<button type="button" class="btn-nho" data-phanloai="hong_cho_huy" data-rsn="${esc(r.return_sn)}">Hỏng/Chờ Hủy</button> ` +
               `<button type="button" class="btn-nho" data-khieunai="${esc(r.return_sn)}">Cần khiếu nại</button>${nhac}</td>`
           : `<td style="white-space:nowrap">` +
+              `<select class="sel-tinhtrang" style="margin-right:4px">` +
+                `<option value="con_tot">Còn tốt</option>` +
+                `<option value="hu_hong">Hư hỏng</option>` +
+                `<option value="thieu_hang">Thiếu hàng</option>` +
+                `<option value="sai_hang">Sai hàng</option>` +
+              `</select>` +
               `<button type="button" class="btn-nho btn-primary" data-nhan="${esc(r.return_sn)}">Nhận đủ</button> ` +
-              `<button type="button" class="btn-nho" data-khieunai="${esc(r.return_sn)}">Cần khiếu nại</button>${nhac}</td>`;
+              `<button type="button" class="btn-nho" data-khieunai="${esc(r.return_sn)}">Cần khiếu nại</button> ` +
+              `<button type="button" class="btn-nho" data-chuanhan="${esc(r.return_sn)}">Chưa nhận được</button>${nhac}</td>`;
       }
 
       // Sản phẩm — nhiều sản phẩm thì mỗi sản phẩm 1 dòng (oSanPham, dùng chung)
@@ -1273,6 +1285,7 @@ async function khoiDongDonHoan() {
       const slCell = `<td class="num">${r.so_luong != null ? esc(r.so_luong) : '—'}</td>`;
 
       const html = `<td>${ngTag}</td>` +
+        `<td class="sm">${ngayVN(r.tao_luc_shopee)}</td>` +
         `<td class="sm">${esc(r.return_sn)}</td>` +
         `<td class="sm">${esc(r.order_sn || '—')}</td>` +
         `<td class="sm">${esc(r.ma_van_don || '—')}</td>` +
@@ -1300,23 +1313,35 @@ async function khoiDongDonHoan() {
     const btnNhan = e.target.closest('[data-nhan]');
     const btnKn = e.target.closest('[data-khieunai]');
     const btnPl = e.target.closest('[data-phanloai]');
-    if (!btnNhan && !btnKn && !btnPl) return;
-    const btn = btnNhan || btnKn || btnPl;
-    const rsn = btnPl ? btn.getAttribute('data-rsn') : btn.getAttribute(btnNhan ? 'data-nhan' : 'data-khieunai');
+    const btnCn = e.target.closest('[data-chuanhan]');
+    if (!btnNhan && !btnKn && !btnPl && !btnCn) return;
+    const btn = btnNhan || btnKn || btnPl || btnCn;
+    const rsn = btn.getAttribute('data-rsn') ||
+      btn.getAttribute('data-nhan') || btn.getAttribute('data-khieunai') || btn.getAttribute('data-chuanhan');
     let ghiChu = '';
     if (btnKn) {
-      const nhap = prompt('Lý do cần khiếu nại (thiếu hàng / hỏng / không đúng mô tả…):', '');
+      // Đang chọn sẵn "Hư hỏng" ở ô tình trạng thì gợi ý luôn lý do, khỏi gõ lại.
+      const sel = btn.closest('td').querySelector('.sel-tinhtrang');
+      const goiY = sel && sel.value === 'hu_hong' ? 'Hàng hư hỏng khi kho nhận' : '';
+      const nhap = prompt('Lý do cần khiếu nại (thiếu hàng / hỏng / không đúng mô tả…):', goiY);
       if (nhap === null) return;   // bấm Huỷ thì thôi
       ghiChu = nhap;
     }
     if (btnPl && btn.getAttribute('data-phanloai') === 'hong_cho_huy' &&
         !confirm('Xác nhận hàng hỏng do vận chuyển, chờ lập biên bản hủy cùng kế toán?')) return;
+    if (btnCn && !confirm('Xác nhận CHƯA NHẬN ĐƯỢC hàng — đơn sẽ đẩy ngay về Vận hành sàn để khiếu nại với sàn?')) return;
+    let tinhTrang = '';
+    if (btnNhan) {
+      const sel = btn.closest('td').querySelector('.sel-tinhtrang');
+      tinhTrang = sel ? sel.value : '';
+    }
     btn.disabled = true;
     const cu = btn.textContent;
     btn.textContent = 'Đang lưu…';
     try {
-      if (btnNhan) await API.hoanDaNhan(rsn);
+      if (btnNhan) await API.hoanDaNhan(rsn, tinhTrang);
       else if (btnPl) await API.hoanPhanLoai(rsn, btn.getAttribute('data-phanloai'));
+      else if (btnCn) await API.hoanChuaNhan(rsn);
       else await API.hoanKhieuNai(rsn, ghiChu);
       await veDanhSach();               // tải lại
     } catch (err) {
