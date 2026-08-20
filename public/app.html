@@ -81,8 +81,8 @@
           <circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>
         </svg>
         <div>
-          <b>Danh bạ, Nhân sự và Kho đã chạy trên máy chủ thật</b> — đăng nhập, phân quyền, lương và tồn kho do máy chủ kiểm tra.
-          Riêng Tổng quan, Kinh doanh, Kế toán vẫn là dữ liệu mẫu, chưa nối database.
+          <b>Danh bạ, Nhân sự, Kho, Mục tiêu và Trạm Mục Tiêu đã chạy trên máy chủ thật</b> — đăng nhập, phân quyền, lương, tồn kho và tiến độ mục tiêu do máy chủ kiểm tra.
+          Riêng phần biểu đồ doanh thu ở Tổng quan, Kinh doanh, Kế toán vẫn là dữ liệu mẫu, chưa nối database.
         </div>
       </div>
 
@@ -127,24 +127,61 @@
         </div>
       </div>
 
+      <!-- ---------- Mục tiêu (MBOs) — Công ty -> Phòng ban, theo quý ---------- -->
+      <div class="panel">
+        <div class="panel-head">
+          <h4>🎯 Mục tiêu (MBOs)</h4>
+          <div style="display:flex; gap:10px; align-items:center">
+            <span class="hint" id="mt-ky-hint"></span>
+            <button type="button" class="btn-phu" id="mt-nut-mo-form" style="width:auto">+ Thêm mục tiêu</button>
+          </div>
+        </div>
+        <div class="panel-body" id="mt-form-body" hidden>
+          <form id="mt-form" class="form-luoi" autocomplete="off">
+            <div class="field">
+              <label>Cấp *</label>
+              <select id="mt-cap" required>
+                <option value="phong_ban">Phòng ban</option>
+                <option value="cong_ty" id="mt-opt-congty" hidden>Công ty</option>
+              </select>
+            </div>
+            <div class="field" id="mt-field-bophan">
+              <label>Phòng ban / bộ phận *</label>
+              <input type="text" id="mt-bo-phan" placeholder="VD: Kho vận, Kế toán, Vận hành sàn...">
+            </div>
+            <div class="field field-rong">
+              <label>Tên mục tiêu *</label>
+              <input type="text" id="mt-tieu-de" required placeholder="VD: Doanh thu Shopee đạt 30 tỷ trong quý">
+            </div>
+            <div class="field field-rong">
+              <label>Mô tả (tuỳ chọn)</label>
+              <textarea id="mt-mo-ta" rows="2" placeholder="Bối cảnh, con số cụ thể, cách đo..."></textarea>
+            </div>
+            <div class="field field-nut" style="display:flex; gap:10px">
+              <button type="submit" class="btn-primary" id="mt-nut-luu" style="width:auto">Lưu mục tiêu</button>
+              <button type="button" class="btn-phu" id="mt-nut-huy" style="width:auto">Hủy</button>
+            </div>
+          </form>
+          <div class="form-loi" id="mt-loi"></div>
+        </div>
+        <div class="panel-body" style="padding-top:0">
+          <div class="mt-nhom-nhan">Cấp công ty</div>
+          <div id="mt-congty-list"></div>
+          <div class="empty" id="mt-congty-trong" hidden>Chưa có mục tiêu công ty nào cho quý này.</div>
+          <div class="mt-nhom-nhan" style="margin-top:18px">Cấp phòng ban</div>
+          <div id="mt-phongban-list"></div>
+          <div class="empty" id="mt-phongban-trong" hidden>Chưa có mục tiêu phòng ban nào cho quý này.</div>
+        </div>
+      </div>
+
       <div class="stats" id="tq-the"></div>
 
-      <div class="grid-2">
-        <div class="panel">
-          <div class="panel-head">
-            <h4>Doanh thu 6 tháng gần nhất</h4>
-            <span class="hint">Đơn vị: tỷ đồng</span>
-          </div>
-          <div class="panel-body"><div class="chart" id="tq-chart"></div></div>
+      <div class="panel">
+        <div class="panel-head">
+          <h4>Doanh thu 6 tháng gần nhất</h4>
+          <span class="hint">Đơn vị: tỷ đồng</span>
         </div>
-
-        <div class="panel">
-          <div class="panel-head">
-            <h4>Tiến độ mục tiêu Q3/2026</h4>
-            <span class="hint">Hợp nhất pháp nhân</span>
-          </div>
-          <div class="panel-body"><div id="tq-muctieu"></div></div>
-        </div>
+        <div class="panel-body"><div class="chart" id="tq-chart"></div></div>
       </div>
 
       <div class="panel">
@@ -154,52 +191,11 @@
         </div>
         <div class="panel-body"><div class="list" id="tq-canhbao"></div></div>
       </div>
-    </section>
 
-    <!-- ---------- Danh bạ ---------- -->
-    <section class="view" id="v-danhba" hidden>
-      <div class="view-head">
-        <h3>Danh bạ nội bộ</h3>
-        <p>Mọi nhân sự đều tra được. Chỉ có thông tin liên lạc phục vụ công việc — không có lương, không có thông tin cá nhân riêng tư.</p>
-      </div>
-
-      <div class="panel">
-        <div class="panel-head">
-          <h4>Tìm người</h4>
-          <span class="hint" id="db-dem"></span>
-        </div>
-        <div class="panel-body" style="padding-bottom:0">
-          <div class="search">
-            <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-              <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
-            </svg>
-            <input type="search" id="db-tim" placeholder="Gõ tên, bộ phận hoặc chức vụ — ví dụ: kho, kế toán, Duy">
-          </div>
-        </div>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Nhân sự</th>
-                <th>Bộ phận</th>
-                <th>Điện thoại</th>
-                <th>Email</th>
-                <th>Quản lý trực tiếp</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody id="db-bang"></tbody>
-          </table>
-        </div>
-        <div class="empty" id="db-trong" hidden>Không tìm thấy ai khớp với từ khoá này.</div>
-      </div>
-    </section>
-
-    <!-- ---------- Trạm Mục Tiêu — giao việc cho nhân viên ---------- -->
-    <section class="view" id="v-congviec" hidden>
-      <div class="view-head">
-        <h3>Trạm Mục Tiêu</h3>
-        <p>Giao việc rõ đầu ra, theo dõi tới khi xong — không chỉ mô tả làm gì mà phải rõ kết quả cần đạt.</p>
+      <!-- ---------- Trạm Mục Tiêu — giao việc cho nhân viên (gộp vào Tổng quan) ---------- -->
+      <div class="view-head" style="margin-top:8px">
+        <h3>Trạm Mục Tiêu — giao việc</h3>
+        <p>Giao việc rõ đầu ra, theo dõi tới khi xong — không chỉ mô tả làm gì mà phải rõ kết quả cần đạt. Gắn vào mục tiêu ở trên (tuỳ chọn) để tự tính tiến độ.</p>
       </div>
 
       <div class="panel">
@@ -222,6 +218,10 @@
                 <input type="text" id="cv-phoi-hop-tim" placeholder="Gõ tên để lọc…">
               </div>
               <div id="cv-phoi-hop" class="cv-phoihop"></div>
+            </div>
+            <div class="field field-rong">
+              <label>Thuộc mục tiêu <span class="hint">(tuỳ chọn — để tự tính tiến độ mục tiêu)</span></label>
+              <select id="cv-muc-tieu"><option value="">— Không gắn mục tiêu —</option></select>
             </div>
             <div class="field field-rong">
               <label>Tên việc *</label>
@@ -313,8 +313,47 @@
               <tbody id="cv-bang-giao"></tbody>
             </table>
           </div>
-          <div class="empty" id="cv-trong-giao" hidden>Chưa giao việc nào.</div>
+          <div class="empty" id="cv-trong-giao" hidden>Sếp/bạn chưa giao việc nào.</div>
         </div>
+      </div>
+    </section>
+
+    <!-- ---------- Danh bạ ---------- -->
+    <section class="view" id="v-danhba" hidden>
+      <div class="view-head">
+        <h3>Danh bạ nội bộ</h3>
+        <p>Mọi nhân sự đều tra được. Chỉ có thông tin liên lạc phục vụ công việc — không có lương, không có thông tin cá nhân riêng tư.</p>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h4>Tìm người</h4>
+          <span class="hint" id="db-dem"></span>
+        </div>
+        <div class="panel-body" style="padding-bottom:0">
+          <div class="search">
+            <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+            </svg>
+            <input type="search" id="db-tim" placeholder="Gõ tên, bộ phận hoặc chức vụ — ví dụ: kho, kế toán, Duy">
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Nhân sự</th>
+                <th>Bộ phận</th>
+                <th>Điện thoại</th>
+                <th>Email</th>
+                <th>Quản lý trực tiếp</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="db-bang"></tbody>
+          </table>
+        </div>
+        <div class="empty" id="db-trong" hidden>Không tìm thấy ai khớp với từ khoá này.</div>
       </div>
     </section>
 

@@ -18,7 +18,7 @@
      sign = HMAC-SHA256(base, partner_key)  → chuỗi hex
    ========================================================================== */
 
-import { duocQuanLyShopee, duocXemDonHoan } from './quyen.js';
+import { duocQuanLyShopee, duocXemDonHoan, duocXemTab } from './quyen.js';
 
 /* ---- Trả lời JSON ------------------------------------------------------- */
 function json(d, status = 200) {
@@ -53,6 +53,21 @@ export async function coCotTinhTrangHang(env) {
   }
   return _coCotTinhTrang;
 }
+/* Bảng don_hang (doanh thu/số đơn) có thể CHƯA nạp migration them-donhang.sql
+   — tự kiểm tra 1 lần, cache trong isolate, giống coCotTinhTrangHang() ở
+   trên. Chưa nạp thì các hàm đồng bộ đơn hàng tự bỏ qua êm, không lỗi. */
+let _coBangDonHang = null;
+async function coBangDonHang(env) {
+  if (_coBangDonHang !== null) return _coBangDonHang;
+  try {
+    await env.DB.prepare(`SELECT 1 FROM don_hang LIMIT 1`).first();
+    _coBangDonHang = true;
+  } catch {
+    _coBangDonHang = false;
+  }
+  return _coBangDonHang;
+}
+
 function host(env) { return (env.SHOPEE_HOST || 'https://partner.shopeemobile.com').replace(/\/+$/, ''); }
 function redirect(env) { return env.SHOPEE_REDIRECT || 'https://erp-agc.noiboagc.workers.dev/api/shopee/callback'; }
 function nowSec() { return Math.floor(Date.now() / 1000); }
@@ -318,4 +333,114 @@ export async function apiDanhSach(env, phien) {
      ORDER BY d.dong_bo_luc DESC LIMIT 300
   `).all();
   return json({ don_hoan: results });
+}
+
+/* ==========================================================================
+   ĐƠN HÀNG — Doanh thu + số đơn (khác Đơn hoàn ở trên, dùng LẠI cùng 1 kết
+   nối đã ủy quyền — không phải nối lại). Xem migrations/them-donhang.sql.
+   ---------------------------------------------------------------------------
+   Kéo qua 2 bước theo tài liệu Shopee Open Platform v2:
+     1) get_order_list  — chỉ trả order_sn + order_status theo khoảng
+        update_time (Shopee giới hạn 15 ngày/lần gọi — chia khung như
+        dongBoNen() của Đơn hoàn ở trên).
+     2) get_order_detail — order_sn_list (tối đa 50 mã/lần) mới trả được
+        total_amount, buyer_username, item_list...
+   ⚠️ total_amount là TỔNG GIÁ ĐƠN, CHƯA trừ phí sàn/voucher/phí vận chuyển —
+   không phải doanh thu thực nhận. Doanh thu thực (đã trừ phí) phải lấy từ
+   nhóm API đối soát/escrow riêng — việc lớn hơn, để làm sau nếu cần.
+   ⚠️ Field response_optional_fields/tên cột CHƯA chạy thử với khóa thật —
+   cần tinh chỉnh khi có khóa, giống lưu ý đã có ở tiktok.js.
+   ========================================================================== */
+
+/* Mốc đồng bộ lần trước — chưa có thì lấy 30 ngày gần nhất làm nền ban đầu */
+function moGocDongBoDonHang(kn) {
+  return kn.dh_dong_bo_den ? Number(kn.dh_dong_bo_den) : nowSec() - 30 * 86400;
+}
+
+export async function dongBoDonHangNen(env) {
+  if (!daCauHinh(env)) return null;
+  if (!(await coBangDonHang(env))) return null;   // chưa nạp migration them-donhang.sql
+  const kn = await ketNoiConHan(env);
+  if (!kn) return null;
+
+  const tuGoc = moGocDongBoDonHang(kn);
+  const denGoc = nowSec();
+  const cauLenh = [];
+  let them = 0;
+
+  for (let tuLuc = tuGoc; tuLuc < denGoc; tuLuc += 15 * 86400) {
+    const denLuc = Math.min(tuLuc + 15 * 86400 - 1, denGoc);
+
+    // 1) Gom order_sn theo trang (cursor) trong khung [tuLuc, denLuc]
+    let cursor = '', con = true, trang = 0;
+    const dsOrderSn = [];
+    while (con && trang < 20) {                     // chặn trần 20 trang/khung cho an toàn
+      const kq = await goiTheoShop(env, '/api/v2/order/get_order_list', kn, {
+        time_range_field: 'update_time', time_from: String(tuLuc), time_to: String(denLuc),
+        page_size: '100', cursor
+      });
+      if (kq.error) throw new Error('Shopee báo lỗi (get_order_list): ' + (kq.message || kq.error));
+      const ds = (kq.response && kq.response.order_list) || [];
+      for (const o of ds) if (o.order_sn) dsOrderSn.push(o.order_sn);
+      cursor = (kq.response && kq.response.next_cursor) || '';
+      con = !!(kq.response && kq.response.more) && !!cursor;
+      trang++;
+    }
+
+    // 2) Lấy chi tiết theo lô 50 mã — mới có total_amount để tính doanh thu
+    for (let i = 0; i < dsOrderSn.length; i += 50) {
+      const lo = dsOrderSn.slice(i, i + 50);
+      const kq = await goiTheoShop(env, '/api/v2/order/get_order_detail', kn, {
+        order_sn_list: lo.join(','),
+        response_optional_fields: 'order_status,total_amount,currency,buyer_username,create_time,update_time,item_list'
+      });
+      if (kq.error) throw new Error('Shopee báo lỗi (get_order_detail): ' + (kq.message || kq.error));
+      const ds = (kq.response && kq.response.order_list) || [];
+      for (const o of ds) {
+        const soSp = (o.item_list || []).reduce(
+          (s, it) => s + (Number(it.model_quantity_purchased || it.amount) || 0), 0);
+        cauLenh.push(env.DB.prepare(`
+          INSERT INTO don_hang (order_sn, nguon, trang_thai, tong_tien, tien_te, nguoi_mua, so_sp, tao_luc_san, cap_nhat_san, du_lieu_json, dong_bo_luc)
+          VALUES (?, 'shopee', ?, ?, ?, ?, ?, ?, ?, ?, datetime('now','+7 hours'))
+          ON CONFLICT(order_sn) DO UPDATE SET
+            trang_thai=excluded.trang_thai, tong_tien=excluded.tong_tien, tien_te=excluded.tien_te,
+            nguoi_mua=excluded.nguoi_mua, so_sp=excluded.so_sp,
+            cap_nhat_san=excluded.cap_nhat_san, du_lieu_json=excluded.du_lieu_json,
+            dong_bo_luc=datetime('now','+7 hours')
+        `).bind(
+          String(o.order_sn), o.order_status || null,
+          Math.round((Number(o.total_amount) || 0) * 100000) || null, o.currency || null,
+          o.buyer_username || null, soSp || null,
+          o.create_time ? String(o.create_time) : null,
+          o.update_time ? String(o.update_time) : null,
+          JSON.stringify(o)
+        ));
+        them++;
+      }
+    }
+  }
+
+  // Ghi hàng loạt theo lô 50 lệnh/batch — cùng cách Đơn hoàn tránh vượt trần subrequest
+  for (let i = 0; i < cauLenh.length; i += 50) {
+    await env.DB.batch(cauLenh.slice(i, i + 50));
+  }
+
+  await env.DB.prepare('UPDATE shopee_ket_noi SET dh_dong_bo_den = ? WHERE shop_id = ?')
+              .bind(String(denGoc), kn.shop_id).run();
+  return them;
+}
+
+/* Nút "Đồng bộ đơn hàng" ở tab Kinh doanh — ai xem được Kinh doanh đều bấm được */
+export async function apiDongBoDonHang(env, phien) {
+  if (!duocXemTab(phien.vai_tro, 'kinhdoanh')) return loi('Bạn không có quyền', 403);
+  if (!daCauHinh(env)) return loi('Chưa nạp khóa Shopee trên máy chủ', 409);
+  if (!(await coBangDonHang(env))) return loi('Chưa nạp migration them-donhang.sql trên máy chủ', 409);
+  const co = await env.DB.prepare('SELECT shop_id FROM shopee_ket_noi LIMIT 1').first();
+  if (!co) return loi('Chưa kết nối shop Shopee. Hãy vào tab Kết nối sàn trước.', 409);
+  try {
+    const so = await dongBoDonHangNen(env);
+    return json({ ok: true, so_don: so || 0 });
+  } catch (e) {
+    return loi(e.message, 502);
+  }
 }

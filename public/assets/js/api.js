@@ -69,6 +69,15 @@ export const API = {
     method: 'POST', body: JSON.stringify({ id, trang_thai: trangThai, ket_qua: ketQua })
   }),
 
+  /* ---- Mục tiêu (MBOs: công ty / phòng ban) ---- */
+  mtDanhSach: (nam, quy) => goi('/api/muc-tieu/danh-sach' +
+    (nam && quy ? `?nam=${nam}&quy=${quy}` : '')),
+  mtTao: (mt) => goi('/api/muc-tieu/tao', { method: 'POST', body: JSON.stringify(mt) }),
+  mtChot: (id) => goi('/api/muc-tieu/chot', { method: 'POST', body: JSON.stringify({ id }) }),
+  mtCapNhat: (id, truong) => goi('/api/muc-tieu/cap-nhat', {
+    method: 'POST', body: JSON.stringify({ id, ...truong })
+  }),
+
   /* ---- Chat nội bộ (kênh chung + chat riêng từng người) ---- */
   chatDanhSach: (sauId, voiId) => {
     const q = new URLSearchParams();

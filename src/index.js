@@ -907,25 +907,27 @@ async function thongBaoDaXem(req, env) {
    bất kỳ lúc nào trước khi xong). Mở cho MỌI vai trò, ai cũng giao/nhận
    việc được — không giới hạn theo cấp bậc (đơn giản hoá MVP).
    ========================================================================== */
-const CV_COT = `id, tieu_de, dau_ra, mo_ta, nguoi_giao_id, nguoi_giao_ten,
-                nguoi_nhan_id, nguoi_nhan_ten, phoi_hop_ids, phoi_hop_ten,
-                han_chot, trang_thai, ket_qua, tao_luc, cap_nhat_luc`;
+const CV_COT = `c.id, c.tieu_de, c.dau_ra, c.mo_ta, c.nguoi_giao_id, c.nguoi_giao_ten,
+                c.nguoi_nhan_id, c.nguoi_nhan_ten, c.phoi_hop_ids, c.phoi_hop_ten,
+                c.han_chot, c.trang_thai, c.ket_qua, c.tao_luc, c.cap_nhat_luc,
+                c.muc_tieu_id, m.tieu_de AS muc_tieu_ten`;
+const CV_TU = `cong_viec c LEFT JOIN muc_tieu m ON m.id = c.muc_tieu_id`;
 
 async function cvDanhSach(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
   const [nhan, giao, phoiHop] = await Promise.all([
     env.DB.prepare(
-      `SELECT ${CV_COT} FROM cong_viec WHERE nguoi_nhan_id = ?
-        ORDER BY (trang_thai IN ('hoan_thanh','huy')), (han_chot IS NULL), han_chot ASC, id DESC`
+      `SELECT ${CV_COT} FROM ${CV_TU} WHERE c.nguoi_nhan_id = ?
+        ORDER BY (c.trang_thai IN ('hoan_thanh','huy')), (c.han_chot IS NULL), c.han_chot ASC, c.id DESC`
     ).bind(phien.nhan_su_id).all(),
     env.DB.prepare(
-      `SELECT ${CV_COT} FROM cong_viec WHERE nguoi_giao_id = ?
-        ORDER BY (trang_thai IN ('hoan_thanh','huy')), id DESC`
+      `SELECT ${CV_COT} FROM ${CV_TU} WHERE c.nguoi_giao_id = ?
+        ORDER BY (c.trang_thai IN ('hoan_thanh','huy')), c.id DESC`
     ).bind(phien.nhan_su_id).all(),
     env.DB.prepare(
-      `SELECT ${CV_COT} FROM cong_viec WHERE phoi_hop_ids LIKE '%,' || ? || ',%'
-        ORDER BY (trang_thai IN ('hoan_thanh','huy')), (han_chot IS NULL), han_chot ASC, id DESC`
+      `SELECT ${CV_COT} FROM ${CV_TU} WHERE c.phoi_hop_ids LIKE '%,' || ? || ',%'
+        ORDER BY (c.trang_thai IN ('hoan_thanh','huy')), (c.han_chot IS NULL), c.han_chot ASC, c.id DESC`
     ).bind(phien.nhan_su_id).all()
   ]);
   return json({ nhan: nhan.results || [], giao: giao.results || [], phoi_hop: phoiHop.results || [] });
@@ -940,6 +942,7 @@ async function cvTao(req, env) {
   const dauRa = String(b.dau_ra || '').trim().slice(0, 1000);
   const moTa = String(b.mo_ta || '').trim().slice(0, 2000) || null;
   const hanChot = String(b.han_chot || '').trim() || null;
+  const mucTieuId = b.muc_tieu_id ? parseInt(b.muc_tieu_id, 10) : null;
 
   if (!nguoiNhanId) return loi('Chưa chọn người nhận việc');
   if (nguoiNhanId === phien.nhan_su_id) return loi('Không tự giao việc cho chính mình');
@@ -948,6 +951,14 @@ async function cvTao(req, env) {
 
   const ns = await env.DB.prepare('SELECT ho_ten FROM nhan_su WHERE id = ?').bind(nguoiNhanId).first();
   if (!ns) return loi('Không tìm thấy người nhận việc', 404);
+
+  // Gắn vào mục tiêu (tuỳ chọn) — chỉ chấp nhận id mục tiêu có thật, âm thầm
+  // bỏ qua nếu gõ bậy/mục tiêu đã bị xoá, không chặn việc giao việc.
+  let mtIdHopLe = null;
+  if (mucTieuId) {
+    const mt = await env.DB.prepare('SELECT id FROM muc_tieu WHERE id = ?').bind(mucTieuId).first();
+    if (mt) mtIdHopLe = mucTieuId;
+  }
 
   // Người phối hợp (tuỳ chọn, chọn nhiều) — MBOs: chỉ hỗ trợ, không chịu đầu ra.
   // Loại trùng người nhận chính và người giao; chỉ giữ nhân sự có thật.
@@ -964,9 +975,9 @@ async function cvTao(req, env) {
 
   const nguoiGiao = phien.ho_ten || phien.ten_dang_nhap;
   const r = await env.DB.prepare(`
-    INSERT INTO cong_viec (tieu_de, dau_ra, mo_ta, nguoi_giao_id, nguoi_giao_ten, nguoi_nhan_id, nguoi_nhan_ten, phoi_hop_ids, phoi_hop_ten, han_chot, trang_thai, tao_luc)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'moi', datetime('now','+7 hours'))
-  `).bind(tieuDe, dauRa, moTa, phien.nhan_su_id, nguoiGiao, nguoiNhanId, ns.ho_ten, phoiHopIds, phoiHopTen, hanChot).run();
+    INSERT INTO cong_viec (tieu_de, dau_ra, mo_ta, nguoi_giao_id, nguoi_giao_ten, nguoi_nhan_id, nguoi_nhan_ten, phoi_hop_ids, phoi_hop_ten, han_chot, muc_tieu_id, trang_thai, tao_luc)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'moi', datetime('now','+7 hours'))
+  `).bind(tieuDe, dauRa, moTa, phien.nhan_su_id, nguoiGiao, nguoiNhanId, ns.ho_ten, phoiHopIds, phoiHopTen, hanChot, mtIdHopLe).run();
 
   await guiThongBao(env, null, `${nguoiGiao} giao việc mới: "${tieuDe}"`, 'cong_viec_moi', String(r.meta.last_row_id), nguoiNhanId);
   for (const p of phList) {
@@ -1027,6 +1038,129 @@ async function cvCapNhat(req, env) {
   } else if (trangThaiMoi === 'huy') {
     await guiThongBao(env, null, `${nguoi} đã huỷ việc "${cv.tieu_de}".`, 'cong_viec_huy', String(id), cv.nguoi_nhan_id);
   }
+  return json({ ok: true });
+}
+
+/* ==========================================================================
+   MỤC TIÊU — MBOs 2 tầng: Công ty -> Phòng ban (Sếp Phong yêu cầu 20/08/2026).
+   Mục tiêu CÔNG TY: chỉ Giám đốc/Phó Giám đốc tạo VÀ chốt (Sếp Phong: "Tôi là
+   người chốt mục tiêu công ty"). Mục tiêu PHÒNG BAN: mở cho ai cũng tạo được
+   (giống triết lý MVP của Trạm Mục Tiêu — tin tưởng trưởng phòng tự đặt mục
+   tiêu cho phòng mình), gắn với 1 bộ phận (bo_phan, chữ tự do theo nhan_su).
+   Tiến độ KHÔNG nhập tay — tự tính % từ công việc (Trạm Mục Tiêu) đã gắn vào
+   mục tiêu đó mà trạng thái = hoàn_thành, để khỏi nói suông không có việc cụ
+   thể chứng minh (đúng tinh thần MBOs). Theo QUÝ — xem migrations/them-muctieu.sql.
+   ========================================================================== */
+
+function kyHienTai() {
+  const _vn = new Date(Date.now() + 7 * 3600 * 1000);
+  return { nam: _vn.getUTCFullYear(), quy: Math.floor(_vn.getUTCMonth() / 3) + 1 };
+}
+
+const MT_COT = `id, cap, bo_phan, tieu_de, mo_ta, nam, quy, nguoi_tao_id, nguoi_tao_ten,
+                trang_thai, da_chot, chot_boi, chot_luc, tao_luc, cap_nhat_luc,
+                (SELECT COUNT(*) FROM cong_viec WHERE muc_tieu_id = m.id) AS so_viec,
+                (SELECT COUNT(*) FROM cong_viec WHERE muc_tieu_id = m.id AND trang_thai = 'hoan_thanh') AS so_viec_xong`;
+
+async function mtDanhSach(req, env) {
+  const { loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  const u = new URL(req.url);
+  const ky = kyHienTai();
+  const nam = parseInt(u.searchParams.get('nam'), 10) || ky.nam;
+  const quy = parseInt(u.searchParams.get('quy'), 10) || ky.quy;
+
+  const { results } = await env.DB.prepare(
+    `SELECT ${MT_COT} FROM muc_tieu m WHERE nam = ? AND quy = ? ORDER BY cap ASC, tao_luc DESC`
+  ).bind(nam, quy).all();
+
+  return json({
+    nam, quy,
+    cong_ty: results.filter(r => r.cap === 'cong_ty'),
+    phong_ban: results.filter(r => r.cap === 'phong_ban')
+  });
+}
+
+async function mtTao(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+
+  const cap = String(b.cap || '').trim();
+  if (!['cong_ty', 'phong_ban'].includes(cap)) return loi('Cấp mục tiêu không hợp lệ');
+  if (cap === 'cong_ty' && !laAdmin(phien.vai_tro)) {
+    return loi('Chỉ Giám đốc/Phó Giám đốc mới được đặt mục tiêu cấp công ty', 403);
+  }
+
+  const boPhan = cap === 'phong_ban' ? String(b.bo_phan || '').trim() : null;
+  if (cap === 'phong_ban' && !boPhan) return loi('Thiếu tên phòng ban/bộ phận');
+
+  const tieuDe = String(b.tieu_de || '').trim().slice(0, 200);
+  if (!tieuDe) return loi('Thiếu tên mục tiêu');
+  const moTa = String(b.mo_ta || '').trim().slice(0, 2000) || null;
+
+  const ky = kyHienTai();
+  const nam = parseInt(b.nam, 10) || ky.nam;
+  const quy = parseInt(b.quy, 10) || ky.quy;
+  if (quy < 1 || quy > 4) return loi('Quý không hợp lệ (1-4)');
+
+  const nguoiTao = phien.ho_ten || phien.ten_dang_nhap;
+  const r = await env.DB.prepare(`
+    INSERT INTO muc_tieu (cap, bo_phan, tieu_de, mo_ta, nam, quy, nguoi_tao_id, nguoi_tao_ten, trang_thai, tao_luc)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'dang_thuc_hien', datetime('now','+7 hours'))
+  `).bind(cap, boPhan, tieuDe, moTa, nam, quy, phien.nhan_su_id, nguoiTao).run();
+
+  return json({ ok: true, id: r.meta.last_row_id });
+}
+
+/* Giám đốc/Phó Giám đốc CHỐT mục tiêu công ty — khoá lại, không sửa được nữa */
+async function mtChot(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  if (!laAdmin(phien.vai_tro)) return loi('Chỉ Giám đốc/Phó Giám đốc mới được chốt mục tiêu công ty', 403);
+
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  const id = parseInt(b.id, 10);
+  if (!id) return loi('Thiếu id mục tiêu');
+
+  const nguoi = phien.ho_ten || phien.ten_dang_nhap;
+  const r = await env.DB.prepare(`
+    UPDATE muc_tieu SET da_chot = 1, chot_boi = ?, chot_luc = datetime('now','+7 hours')
+     WHERE id = ? AND cap = 'cong_ty' AND da_chot = 0
+  `).bind(nguoi, id).run();
+  if (!r.meta.changes) return loi('Không tìm thấy mục tiêu công ty này (hoặc đã chốt trước đó)', 404);
+  return json({ ok: true, nguoi });
+}
+
+/* Người tạo hoặc admin đổi trạng thái (hoàn thành/huỷ) hoặc sửa tiêu đề/mô tả.
+   Mục tiêu công ty ĐÃ CHỐT thì khoá — không sửa/huỷ được nữa (phải chốt cẩn thận). */
+async function mtCapNhat(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  const id = parseInt(b.id, 10);
+  if (!id) return loi('Thiếu id mục tiêu');
+
+  const mt = await env.DB.prepare('SELECT * FROM muc_tieu WHERE id = ?').bind(id).first();
+  if (!mt) return loi('Không tìm thấy mục tiêu', 404);
+  if (mt.da_chot) return loi('Mục tiêu công ty đã chốt, không sửa được nữa', 409);
+
+  const laChu = mt.nguoi_tao_id === phien.nhan_su_id || laAdmin(phien.vai_tro);
+  if (!laChu) return loi('Chỉ người tạo (hoặc Giám đốc/Phó Giám đốc) mới sửa được mục tiêu này', 403);
+
+  const truong = {};
+  if (b.trang_thai != null) {
+    const tt = String(b.trang_thai).trim();
+    if (!['dang_thuc_hien', 'hoan_thanh', 'huy'].includes(tt)) return loi('Trạng thái không hợp lệ');
+    truong.trang_thai = tt;
+  }
+  if (b.tieu_de != null) truong.tieu_de = String(b.tieu_de).trim().slice(0, 200) || mt.tieu_de;
+  if (b.mo_ta != null) truong.mo_ta = String(b.mo_ta).trim().slice(0, 2000) || null;
+  if (!Object.keys(truong).length) return loi('Không có gì để sửa');
+
+  const cotSet = Object.keys(truong).map(k => `${k} = ?`).join(', ');
+  await env.DB.prepare(`UPDATE muc_tieu SET ${cotSet}, cap_nhat_luc = datetime('now','+7 hours') WHERE id = ?`)
+              .bind(...Object.values(truong), id).run();
   return json({ ok: true });
 }
 
@@ -1449,6 +1583,63 @@ async function ktDaTraSoat(req, env) {
 }
 
 /* ==========================================================================
+   KINH DOANH — Doanh thu + số đơn thật (kéo từ Shopee/TikTok, khác Đơn hoàn
+   ở trên). Dùng LẠI kết nối đã ủy quyền cho Đơn hoàn — không cần nối lại.
+   Xem migrations/them-donhang.sql + dongBoDonHangNen() trong shopee.js/tiktok.js.
+   ⚠️ tong_tien là TỔNG GIÁ ĐƠN, CHƯA trừ phí sàn/voucher/phí vận chuyển —
+   không phải doanh thu thực nhận (ghi rõ ở giao diện, đừng để Sếp hiểu nhầm
+   là lợi nhuận hay tiền thực về tài khoản).
+   ========================================================================== */
+
+/* Đồng bộ đơn hàng CẢ 2 sàn — 1 nút bấm, dùng chung nút bấm lẫn lịch chạy nền */
+async function kdDongBoDonHang(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  if (!duocXemTab(phien.vai_tro, 'kinhdoanh')) return loi('Bạn không có quyền', 403);
+
+  const ket = { shopee: null, tiktok: null, loi: [] };
+  try { ket.shopee = await shopee.dongBoDonHangNen(env); }
+  catch (e) { ket.loi.push('Shopee: ' + e.message); }
+  try { ket.tiktok = await tiktok.dongBoDonHangNen(env); }
+  catch (e) { ket.loi.push('TikTok: ' + e.message); }
+
+  if (ket.shopee == null && ket.tiktok == null && ket.loi.length === 0) {
+    return loi('Chưa cấu hình/kết nối sàn nào, hoặc chưa nạp migration them-donhang.sql trên máy chủ', 409);
+  }
+  const soDon = (ket.shopee || 0) + (ket.tiktok || 0);
+  return json({ ok: ket.loi.length === 0, so_don: soDon, loi: ket.loi });
+}
+
+/* Tổng quan doanh thu/số đơn cho thẻ + biểu đồ tab Kinh doanh */
+async function kdTongQuanDoanhThu(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  if (!duocXemTab(phien.vai_tro, 'kinhdoanh')) return loi('Bạn không có quyền', 403);
+
+  const _vn = new Date(Date.now() + 7 * 3600 * 1000);
+  const dauThangSec = Math.floor(Date.UTC(_vn.getUTCFullYear(), _vn.getUTCMonth(), 1) / 1000) - 7 * 3600;
+  const dauNgaySec  = Math.floor(Date.UTC(_vn.getUTCFullYear(), _vn.getUTCMonth(), _vn.getUTCDate()) / 1000) - 7 * 3600;
+
+  let coBang = true, homNay = { so_don: 0, tong_tien: 0 }, thangNay = [];
+  try {
+    homNay = await env.DB.prepare(`
+      SELECT COUNT(*) AS so_don, COALESCE(SUM(tong_tien),0) AS tong_tien
+        FROM don_hang WHERE CAST(tao_luc_san AS INTEGER) >= ?
+    `).bind(dauNgaySec).first();
+
+    const kq = await env.DB.prepare(`
+      SELECT nguon, COUNT(*) AS so_don, COALESCE(SUM(tong_tien),0) AS tong_tien
+        FROM don_hang WHERE CAST(tao_luc_san AS INTEGER) >= ? GROUP BY nguon
+    `).bind(dauThangSec).all();
+    thangNay = kq.results || [];
+  } catch {
+    coBang = false;   // chưa nạp migration them-donhang.sql trên máy chủ này
+  }
+
+  return json({ co_bang: coBang, hom_nay: homNay, thang_nay: thangNay });
+}
+
+/* ==========================================================================
    HÀNG HỎNG DO VẬN CHUYỂN (đơn huỷ) — Kho phân loại xong đẩy sang đây, Kế
    toán + Kho cứ cuối tháng gom lại lập 1 biên bản hủy chung (Sếp Ngọc chốt
    20/08/2026). Khác "Đơn hoàn cần tra soát tiền" (đó là tiền hoàn, đây là
@@ -1670,6 +1861,10 @@ const DUONG_DAN = {
   'GET  /api/cong-viec/danh-sach': cvDanhSach,
   'POST /api/cong-viec/tao':       cvTao,
   'POST /api/cong-viec/cap-nhat':  cvCapNhat,
+  'GET  /api/muc-tieu/danh-sach': mtDanhSach,
+  'POST /api/muc-tieu/tao':       mtTao,
+  'POST /api/muc-tieu/chot':      mtChot,
+  'POST /api/muc-tieu/cap-nhat':  mtCapNhat,
   'GET  /api/thong-bao':         layThongBao,
   'POST /api/thong-bao/da-xem':  thongBaoDaXem,
   'GET  /api/kinh-doanh/can-doi-soat': kdCanDoiSoat,
@@ -1677,6 +1872,8 @@ const DUONG_DAN = {
   'POST /api/kinh-doanh/da-doi-soat':  kdDaDoiSoat,
   'POST /api/kinh-doanh/day-kho':      kdDayKho,
   'POST /api/kinh-doanh/day-ke-toan':  kdDayKeToan,
+  'GET  /api/kinh-doanh/tong-quan-doanh-thu': kdTongQuanDoanhThu,
+  'POST /api/kinh-doanh/dong-bo-don-hang':    kdDongBoDonHang,
   'GET  /api/ke-toan/can-tra-soat':    ktCanTraSoat,
   'POST /api/ke-toan/da-tra-soat':     ktDaTraSoat,
   'GET  /api/ke-toan/hang-hong':       ktHangHong,
@@ -1700,6 +1897,10 @@ export default {
     ctx.waitUntil((async () => {
       try { await shopee.dongBoNen(env); } catch (e) { console.error('Cron Shopee:', e.message); }
       try { await tiktok.dongBoNen(env); } catch (e) { console.error('Cron TikTok:', e.message); }
+      // Doanh thu + số đơn (đơn hàng, khác đơn hoàn) — tự bỏ qua êm nếu chưa
+      // nạp migration them-donhang.sql hoặc chưa cấu hình/kết nối sàn.
+      try { await shopee.dongBoDonHangNen(env); } catch (e) { console.error('Cron Shopee đơn hàng:', e.message); }
+      try { await tiktok.dongBoDonHangNen(env); } catch (e) { console.error('Cron TikTok đơn hàng:', e.message); }
       // Sau khi đồng bộ xong mới quét cảnh báo (mốc 12h đã được cập nhật)
       try { await kiemTraCanhBaoHoan(env); } catch (e) { console.error('Cron cảnh báo:', e.message); }
       // Lý do hoàn nghiêm trọng (nghi hàng giả/nhái, hộp hàng rỗng) — báo NGAY
