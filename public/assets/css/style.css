@@ -552,7 +552,20 @@ img.av { object-fit: cover; display: block; cursor: default; }
    BẢNG
    ========================================================================== */
 
-.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 4px; }
+
+/* Thanh cuộn ngang LUÔN hiện rõ, không ẩn kiểu overlay của hệ điều hành —
+   bảng nhiều cột (Đơn hoàn, Lịch sử…) mới dễ kéo ngang (anh Duy yêu cầu
+   20/08/2026). Bọc trong .table-wrap và .table-wrap-cuon. */
+.table-wrap, .table-wrap-cuon { scrollbar-width: auto; scrollbar-color: var(--sage-pale) var(--surface-2); }
+.table-wrap::-webkit-scrollbar, .table-wrap-cuon::-webkit-scrollbar { height: 11px; }
+.table-wrap::-webkit-scrollbar-track, .table-wrap-cuon::-webkit-scrollbar-track {
+  background: var(--surface-2); border-radius: var(--r-pill);
+}
+.table-wrap::-webkit-scrollbar-thumb, .table-wrap-cuon::-webkit-scrollbar-thumb {
+  background: var(--sage-pale); border-radius: var(--r-pill); border: 2px solid var(--surface-2);
+}
+.table-wrap::-webkit-scrollbar-thumb:hover, .table-wrap-cuon::-webkit-scrollbar-thumb:hover { background: var(--sage); }
 
 table { width: 100%; border-collapse: collapse; min-width: 560px; }
 

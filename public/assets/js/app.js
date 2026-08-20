@@ -1857,22 +1857,26 @@ async function khoiDongLichSuHoan() {
   // đọc kỹ cột trạng thái mới biết (anh Duy yêu cầu 20/08/2026).
   const TINH_TRANG_CANH_BAO = ['hu_hong', 'thieu_hang', 'sai_hang'];
 
+  // { mau, chu, phu: ghi chú (lý do…), canhBao, nguoi, luc: NGƯỜI/LÚC thao tác
+  // gần nhất — tách riêng khỏi phu để lên hẳn 1 cột "Người thực hiện" (anh
+  // Duy yêu cầu 20/08/2026), không phải đọc chữ nhỏ dưới trạng thái nữa.
   function trangThaiXuLy(r) {
     if (r.kho_nhan_luc) {
       if (r.phan_loai_nhan === 'hong_cho_huy')
-        return { mau: 'danger', chu: '⚠️ Hàng hỏng — chờ huỷ', phu: `${r.phan_loai_boi || ''} · ${r.phan_loai_luc || ''}`, canhBao: true };
+        return { mau: 'danger', chu: '⚠️ Hàng hỏng — chờ huỷ', canhBao: true, nguoi: r.phan_loai_boi, luc: r.phan_loai_luc };
       if (r.phan_loai_nhan === 'nhap_kho')
-        return { mau: 'ok', chu: '✓ Nhập kho lại', phu: `${r.phan_loai_boi || ''} · ${r.phan_loai_luc || ''}` };
+        return { mau: 'ok', chu: '✓ Nhập kho lại', nguoi: r.phan_loai_boi, luc: r.phan_loai_luc };
       const tt = TT_NHAN_LS[r.tinh_trang_hang] || ['ok', '✓ Đã nhận'];
-      const phu = r.ke_toan_luc ? `Kế toán đã tra soát · ${r.ke_toan_boi || ''}` : `Kho nhận: ${r.kho_nhan_boi || ''} · ${r.kho_nhan_luc}`;
-      return { mau: tt[0], chu: tt[1], phu, canhBao: TINH_TRANG_CANH_BAO.includes(r.tinh_trang_hang) };
+      if (r.ke_toan_luc)
+        return { mau: tt[0], chu: tt[1], phu: 'Kế toán đã tra soát', nguoi: r.ke_toan_boi, luc: r.ke_toan_luc, canhBao: TINH_TRANG_CANH_BAO.includes(r.tinh_trang_hang) };
+      return { mau: tt[0], chu: tt[1], nguoi: r.kho_nhan_boi, luc: r.kho_nhan_luc, canhBao: TINH_TRANG_CANH_BAO.includes(r.tinh_trang_hang) };
     }
     if (r.dang_cho === 'van_hanh' && r.ly_do_khieu_nai)
-      return { mau: 'danger', chu: '⚠️ Kho khiếu nại — chờ Vận hành sàn',
-        phu: `${r.ly_do_khieu_nai}${r.khieu_nai_boi ? ' — ' + r.khieu_nai_boi : ''}`, canhBao: true };
+      return { mau: 'danger', chu: '⚠️ Kho khiếu nại — chờ Vận hành sàn', phu: r.ly_do_khieu_nai,
+        nguoi: r.khieu_nai_boi, luc: r.khieu_nai_luc, canhBao: true };
     if (r.dang_cho === 'ke_toan')
-      return { mau: 'warn', chu: '💰 Chờ Kế toán tra soát', phu: '' };
-    return { mau: 'mute', chu: 'Đang chờ Kho nhận', phu: '' };
+      return { mau: 'warn', chu: '💰 Chờ Kế toán tra soát' };
+    return { mau: 'mute', chu: 'Đang chờ Kho nhận' };
   }
 
   function veBangLS(tuKhoa) {
@@ -1900,7 +1904,8 @@ async function khoiDongLichSuHoan() {
         `<td><span class="tag ${tt.mau}" title="${esc(r.trang_thai || '')}">${esc(tt.chu)}</span></td>` +
         `<td class="num">${tien}</td>` +
         `<td class="sm">${esc(r.nguoi_mua || '—')}</td>` +
-        `<td class="sm"><span class="tag ${xl.mau}">${esc(xl.chu)}</span>${xl.phu ? `<div class="phu">${esc(xl.phu)}</div>` : ''}</td>`;
+        `<td class="sm"><span class="tag ${xl.mau}">${esc(xl.chu)}</span>${xl.phu ? `<div class="phu">${esc(xl.phu)}</div>` : ''}</td>` +
+        `<td class="sm">${xl.nguoi ? esc(xl.nguoi) + (xl.luc ? `<div class="phu">${esc(xl.luc)}</div>` : '') : '—'}</td>`;
       return { html, cls: xl.canhBao ? 'canh-bao' : '' };
     });
     $('#ls-trong').hidden = ds.length > 0;
