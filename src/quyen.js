@@ -27,7 +27,12 @@ const QUYEN_THEO_VAI_TRO = {
   quan_ly_kho:     { tab: ['tongquan', 'danhba', 'khovan', 'nhansu'],                                              xem_luong: false, admin: false, them_nhan_su: false },
   nhan_vien_kho:   { tab: ['tongquan', 'danhba', 'khovan'],                                                        xem_luong: false, admin: false, them_nhan_su: false },
   hcns:            { tab: ['tongquan', 'danhba', 'nhansu', 'quantri'],                                             xem_luong: false, admin: false, them_nhan_su: true  },
-  van_hanh_san:    { tab: ['tongquan', 'danhba', 'kinhdoanh', 'donhoan'],                                          xem_luong: false, admin: false, them_nhan_su: false }
+  van_hanh_san:    { tab: ['tongquan', 'danhba', 'kinhdoanh', 'donhoan'],                                          xem_luong: false, admin: false, them_nhan_su: false },
+  // Vai trò TEST (Sếp Ngọc chốt 19/08/2026): cho nhân viên vào bấm thử để
+  // hiểu luồng 3 chặng Kho -> Vận hành sàn -> Kế toán, KHÔNG dính quyền admin
+  // (không cấp/khoá tài khoản, không xem lương, không thêm nhân sự). Xem
+  // được đủ các tab liên quan tới luồng đơn hoàn để test trọn vẹn từ đầu tới cuối.
+  nv_test:         { tab: ['tongquan', 'danhba', 'kinhdoanh', 'khovan', 'donhoan', 'ketoan'],                      xem_luong: false, admin: false, them_nhan_su: false }
 };
 
 /* ---- Quyền trong module Kho --------------------------------------------
@@ -46,7 +51,8 @@ const QUYEN_KHO = {
   pho_giam_doc:   { thao_tac: true,  quan_ly: true,  gia_von: true  },
   quan_ly_kho:    { thao_tac: true,  quan_ly: true,  gia_von: true  },
   nhan_vien_kho:  { thao_tac: true,  quan_ly: false, gia_von: false },
-  ke_toan_truong: { thao_tac: false, quan_ly: false, gia_von: true  }
+  ke_toan_truong: { thao_tac: false, quan_ly: false, gia_von: true  },
+  nv_test:        { thao_tac: true,  quan_ly: false, gia_von: false }   // test "Đã nhận"/"Cần khiếu nại" ở Kho vận
 };
 
 const KHONG_QUYEN_KHO = { thao_tac: false, quan_ly: false, gia_von: false };
@@ -80,7 +86,8 @@ const QUYEN_SHOPEE = {
   // Kho cần XEM đơn hoàn (để nhận hàng, bấm "Đã nhận", quẹt QR) — nhưng KHÔNG
   // được kết nối sàn (quan_ly=false). Danh sách đơn hoàn nằm trong tab Kho vận.
   quan_ly_kho:    { xem: true, quan_ly: false },
-  nhan_vien_kho:  { xem: true, quan_ly: false }
+  nhan_vien_kho:  { xem: true, quan_ly: false },
+  nv_test:        { xem: true, quan_ly: false }   // test xem/thao tác đơn hoàn, KHÔNG được nối shop thật
 };
 
 const KHONG_QUYEN_SHOPEE = { xem: false, quan_ly: false };
@@ -95,6 +102,20 @@ export function duocXemDonHoan(vaiTro) {
 
 export function duocQuanLyShopee(vaiTro) {
   return quyenShopee(vaiTro).quan_ly === true;
+}
+
+/* ---- Ranh giới bộ phận trong luồng đơn hoàn 3 chặng Kho <-> Vận hành sàn <->
+   Kế toán (Sếp Ngọc chốt 19/08/2026): mỗi bộ phận CHỈ được sửa/thao tác ở
+   đúng chặng việc của mình, xem thì có thể xem rộng hơn (để biết đơn đang ở
+   đâu) nhưng KHÔNG được bấm nút của chặng khác. Bộ phận nào, việc nấy:
+   - Kho: chỉ "Đã nhận" / "Cần khiếu nại" (duocThaoTacKho, đã có sẵn).
+   - Vận hành sàn: chỉ "Đã tra soát" / "Đẩy sang Kho vận" / "Đẩy sang Kế toán"
+     (duocThaoTacVanHanh — MỚI, trước đây dùng chung duocXemDonHoan nên kế
+     toán trưởng lỡ thao tác được cả bước của vận hành sàn).
+   - Kế toán: chỉ "Đã tra soát tiền" (duocXemTab(vaiTro,'ketoan'), đã có sẵn). */
+const CO_THAO_TAC_VAN_HANH = new Set(['giam_doc', 'pho_giam_doc', 'van_hanh_san', 'nv_test']);
+export function duocThaoTacVanHanh(vaiTro) {
+  return CO_THAO_TAC_VAN_HANH.has(vaiTro);
 }
 
 /* Vai trò lạ (do gõ sai trong database) → không có quyền gì cả.
@@ -136,5 +157,6 @@ export const TEN_VAI_TRO = {
   quan_ly_kho:    'Quản lý kho',
   nhan_vien_kho:  'Nhân viên kho',
   hcns:           'Hành chính nhân sự',
-  van_hanh_san:   'Vận hành sàn'
+  van_hanh_san:   'Vận hành sàn',
+  nv_test:        'Nhân viên (test luồng)'
 };

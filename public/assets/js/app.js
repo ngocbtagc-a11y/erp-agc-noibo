@@ -148,6 +148,38 @@ function nhanLyDo(s) {
   return g.length > 34 ? g.slice(0, 34) + '…' : g;
 }
 
+/* Ô "Sản phẩm hoàn về" dùng chung cho Kho vận / Cần đối soát / Kế toán tra soát.
+   1 đơn hoàn có thể gồm nhiều sản phẩm — san_pham_ten/san_pham_sku lưu nối
+   nhau bằng " | " (xem shopee.js, tiktok.js). Nhiều sản phẩm thì mỗi sản
+   phẩm xuống 1 dòng riêng cho dễ theo dõi (Sếp Ngọc chốt), thay vì dồn hết
+   vào 1 dòng dài khó đọc. Ghép đúng SKU theo từng sản phẩm khi số lượng tên
+   và số lượng SKU khớp nhau; lệch số lượng (dữ liệu cũ/thiếu) thì liệt kê
+   SKU chung 1 dòng bên dưới cho an toàn, khỏi ghép nhầm tên với SKU. */
+function oSanPham(spTenRaw, spSkuRaw, soLuong) {
+  const tenArr = String(spTenRaw || '').split(' | ').filter(Boolean);
+  const skuArr = String(spSkuRaw || '').split(' | ').filter(Boolean);
+  if (!tenArr.length) return { html: '—', title: '' };
+
+  if (tenArr.length === 1) {
+    const dong2 = skuArr[0]
+      ? `${esc(skuArr[0])}${soLuong != null ? ' x ' + esc(soLuong) : ''}` : '';
+    return {
+      html: esc(tenArr[0]) + (dong2 ? `<div class="phu">${dong2}</div>` : ''),
+      title: tenArr[0]
+    };
+  }
+
+  const khopSku = skuArr.length === tenArr.length;
+  const dongTen = tenArr.map((ten, i) => {
+    const sku = khopSku ? skuArr[i] : '';
+    return `<div${i > 0 ? ' style="margin-top:4px"' : ''}>${esc(ten)}` +
+      (sku ? `<div class="phu">${esc(sku)}</div>` : '') + `</div>`;
+  }).join('');
+  const skuChungDong = (!khopSku && skuArr.length)
+    ? `<div class="phu" style="margin-top:4px">SKU: ${esc(skuArr.join(', '))}</div>` : '';
+  return { html: dongTen + skuChungDong, title: tenArr.join(' | ') };
+}
+
 /* ---- Khởi động ---------------------------------------------------------- */
 
 let TOI;
@@ -409,6 +441,20 @@ if (TOI.quyen.includes('kinhdoanh')) {
 async function khoiDongDoiSoatSan() {
   $('#kd-doisoat-panel').hidden = false;
 
+  // Chỉ Vận hành sàn (+ ban giám đốc) được bấm nút ở bước này — kế toán trưởng
+  // vẫn xem được cả bảng (để biết đơn đang ở đâu) nhưng không thao tác được,
+  // đúng luật "bộ phận nào việc nấy" (Sếp Ngọc chốt 19/08/2026). Ô tick/nút
+  // vẫn giữ nguyên cấu trúc cột (để không lệch cột cố định), chỉ bỏ trống
+  // nội dung tương tác bên trong khi không có quyền.
+  const coQuyen = !!TOI.thao_tac_van_hanh;
+  if (!coQuyen) {
+    const thTick = $('#kd-doisoat-panel thead th.dinh-tick');
+    if (thTick) thTick.innerHTML = '';
+    // Không cần ẩn riêng thanh "Đã chọn N đơn" — vì không còn ô tick nào để
+    // chọn (dongDoiSoat bỏ trống ô tick khi !coQuyen) nên thanh này tự nhiên
+    // không bao giờ hiện lên (veThanhChon dựa trên dsDangChon() luôn rỗng).
+  }
+
   function gioTre(choTu) {
     if (!choTu) return '—';
     const gio = (Date.now() - Date.parse(choTu.replace(' ', 'T'))) / 3600000;
@@ -431,13 +477,9 @@ async function khoiDongDoiSoatSan() {
     const tien = r.so_tien != null
       ? tienVN(Math.round(r.so_tien / 100000)) + ' ' + esc(r.tien_te || '')
       : '—';
-    // Sản phẩm: tên (dòng trên) + SKU x số lượng (dòng dưới)
-    const spSku = r.san_pham_sku || '';
-    const spTen = r.san_pham_ten || r.san_pham || '—';
-    const sl = r.so_luong != null ? r.so_luong : 1;
-    const dong2 = spSku ? `${esc(spSku)} x ${sl}` : '';
-    const spCell = `<td class="sm" title="${esc(spTen)}">${esc(spTen)}` +
-      (dong2 ? `<div class="phu">${dong2}</div>` : '') + `</td>`;
+    // Sản phẩm — nhiều sản phẩm thì mỗi sản phẩm 1 dòng (oSanPham, dùng chung)
+    const sp = oSanPham(r.san_pham_ten || r.san_pham, r.san_pham_sku, r.so_luong);
+    const spCell = `<td class="sm" title="${esc(sp.title)}">${sp.html}</td>`;
     // Trạng thái sàn — rút gọn (chỉ tham khảo, không quyết định)
     const ttChu = (r.trang_thai || '—').replace(/^RETURN_OR_REFUND_/, '')
       .replace(/^REQUEST_/, '').replace(/_/g, ' ').toLowerCase();
@@ -464,7 +506,8 @@ async function khoiDongDoiSoatSan() {
         `</div>`
       : (r.dang_cho === 'van_hanh' && r.cho_kho_nhan_tu
           ? `<div class="phu canh-bao-chu">Kho đẩy lên · quá ${esc(gioTre(r.cho_kho_nhan_tu))}</div>` : '');
-    return `<td class="dinh-tick"><input type="checkbox" data-chon="${esc(r.return_sn)}"></td>` +
+    const oTick = coQuyen ? `<input type="checkbox" data-chon="${esc(r.return_sn)}">` : '';
+    return `<td class="dinh-tick">${oTick}</td>` +
       `<td class="dinh-cot">${ngTag}</td>` +
       `<td class="sm dinh-cot2" title="${esc(r.return_sn)}">${esc(r.return_sn)}${tagMoi}` +
         (ngayTao ? `<div class="phu">Hoàn: ${esc(ngayTao)}</div>` : '') + khieuNaiHtml + `</td>` +
@@ -476,7 +519,7 @@ async function khoiDongDoiSoatSan() {
       `<td><span class="tag mute" title="${esc(r.trang_thai || '')}">${esc(ttChu)}</span></td>` +
       `<td class="num">${tien}</td>` +
       `<td>${daTra}</td>` +
-      `<td><button type="button" class="btn-nho" data-doisoat="${esc(r.return_sn)}">${nhanNut}</button></td>`;
+      `<td>${coQuyen ? `<button type="button" class="btn-nho" data-doisoat="${esc(r.return_sn)}">${nhanNut}</button>` : ''}</td>`;
   }
 
   // Dữ liệu thô từ máy chủ — lọc tìm kiếm/nguồn làm ngay ở trình duyệt,
@@ -970,14 +1013,9 @@ async function khoiDongDonHoan() {
           `<button type="button" class="btn-nho" data-khieunai="${esc(r.return_sn)}">Cần khiếu nại</button>${nhac}</td>`;
       }
 
-      // Sản phẩm hoàn về: DÒNG TRÊN = tên sản phẩm trên sàn; DÒNG DƯỚI = SKU x số lượng.
-      // Dữ liệu cũ chưa tách thì tạm dùng chuỗi gộp san_pham cho tới lần đồng bộ tới.
-      const spSku = r.san_pham_sku || '';
-      const spTen = r.san_pham_ten || r.san_pham || '—';
-      const sl = r.so_luong != null ? r.so_luong : 1;
-      const dong2 = spSku ? `${esc(spSku)} x ${sl}` : '';
-      const spCell = `<td class="sm" title="${esc(spTen)}">${esc(spTen)}` +
-        (dong2 ? `<div class="phu">${dong2}</div>` : '') + `</td>`;
+      // Sản phẩm — nhiều sản phẩm thì mỗi sản phẩm 1 dòng (oSanPham, dùng chung)
+      const sp = oSanPham(r.san_pham_ten || r.san_pham, r.san_pham_sku, r.so_luong);
+      const spCell = `<td class="sm" title="${esc(sp.title)}">${sp.html}</td>`;
       const slCell = `<td class="num">${r.so_luong != null ? esc(r.so_luong) : '—'}</td>`;
 
       const html = `<td>${ngTag}</td>` +
@@ -1191,12 +1229,8 @@ async function khoiDongKeToanTraSoat() {
         ? '<span class="tag mute">TikTok</span>' : '<span class="tag sage">Shopee</span>';
       const tien = r.so_tien != null
         ? tienVN(Math.round(r.so_tien / 100000)) + ' ' + esc(r.tien_te || '') : '—';
-      const spSku = r.san_pham_sku || '';
-      const spTen = r.san_pham_ten || '—';
-      const sl = r.so_luong != null ? r.so_luong : 1;
-      const dong2 = spSku ? `${esc(spSku)} x ${sl}` : '';
-      const spCell = `<td class="sm" title="${esc(spTen)}">${esc(spTen)}` +
-        (dong2 ? `<div class="phu">${dong2}</div>` : '') + `</td>`;
+      const sp = oSanPham(r.san_pham_ten, r.san_pham_sku, r.so_luong);
+      const spCell = `<td class="sm" title="${esc(sp.title)}">${sp.html}</td>`;
       return `<td>${ngTag}</td>` +
         `<td class="sm">${esc(r.return_sn)}</td>` +
         `<td class="sm">${esc(r.order_sn || '—')}</td>` +

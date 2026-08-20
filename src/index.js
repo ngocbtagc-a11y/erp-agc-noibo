@@ -14,7 +14,7 @@ import {
 
 import {
   quyenCua, duocXemTab, duocXemLuong, laAdmin, duocThemNhanSu,
-  quyenKho, quyenShopee, duocThaoTacKho, duocQuanLyKho, duocXemDonHoan, TEN_VAI_TRO, VAI_TRO_HOP_LE
+  quyenKho, quyenShopee, duocThaoTacKho, duocQuanLyKho, duocXemDonHoan, duocThaoTacVanHanh, TEN_VAI_TRO, VAI_TRO_HOP_LE
 } from './quyen.js';
 import { kiemTraMatKhauDat, DAI_TOI_THIEU } from './mat-khau.js';
 import * as kho from './kho.js';
@@ -112,6 +112,7 @@ async function toiLaAi(req, env) {
     them_nhan_su: duocThemNhanSu(phien.vai_tro),
     kho: quyenKho(phien.vai_tro),           // { thao_tac, quan_ly, gia_von } cho tab Kho
     shopee: quyenShopee(phien.vai_tro),     // { xem, quan_ly } cho tab Đơn hoàn
+    thao_tac_van_hanh: duocThaoTacVanHanh(phien.vai_tro),   // được bấm nút ở bước Vận hành sàn (Cần đối soát) hay chỉ xem
     // Để giao diện khỏi ghi cứng con số, sau này đổi một chỗ là xong
     mat_khau_dai_toi_thieu: DAI_TOI_THIEU
   });
@@ -515,6 +516,21 @@ async function guiThongBao(env, nhom, noiDung, loai, lienKet) {
   } catch (e) { console.error('Gửi thông báo:', e.message); }
 }
 
+/* LUẬT CỨNG (Sếp Ngọc chốt 19/08/2026): đơn hoàn chỉ giữ trong THÁNG LÀM VIỆC
+   hiện tại — quá tháng thì tự xoá, không tích rác lại như hồi mới nối Shopee
+   (dính 97 đơn từ 12/2024-2/2025 do lần đồng bộ đầu tiên chưa lọc ngày).
+   Chạy mỗi lần cron (5 phút/lần) — DELETE theo mốc đầu tháng (giờ VN) nên
+   luôn tự trôi theo tháng, không cần sửa code khi sang tháng mới. */
+async function donDepDuLieuNgoaiThang(env) {
+  const gioNay = new Date();
+  const vn = new Date(gioNay.getTime() + 7 * 3600 * 1000);
+  const dauThang = Math.floor(Date.UTC(vn.getUTCFullYear(), vn.getUTCMonth(), 1) / 1000) - 7 * 3600;
+  const r = await env.DB.prepare(
+    `DELETE FROM don_hoan WHERE tao_luc_shopee IS NULL OR CAST(tao_luc_shopee AS INTEGER) < ?`
+  ).bind(dauThang).run();
+  if (r.meta.changes) console.log(`Dọn ${r.meta.changes} đơn hoàn ngoài tháng làm việc`);
+}
+
 /* Kho bấm "Cần khiếu nại" -> đẩy đơn ngược về Vận hành sàn + báo vận hành.
    Lý do ghi luôn vào chính đơn hoàn (ly_do_khieu_nai/khieu_nai_luc/khieu_nai_boi)
    để Vận hành sàn thấy ngay trong bảng "Cần đối soát", không phải lục chuông. */
@@ -697,7 +713,7 @@ async function kdDonHuy(req, env) {
 async function kdDaDoiSoat(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
-  if (!duocXemDonHoan(phien.vai_tro)) return loi('Bạn không có quyền', 403);
+  if (!duocThaoTacVanHanh(phien.vai_tro)) return loi('Bạn không có quyền — thao tác này chỉ dành cho Vận hành sàn', 403);
 
   let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
   const rsn = (b.return_sn || '').trim();
@@ -724,7 +740,7 @@ async function kdDaDoiSoat(req, env) {
 async function kdDayKho(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
-  if (!duocXemDonHoan(phien.vai_tro)) return loi('Bạn không có quyền', 403);
+  if (!duocThaoTacVanHanh(phien.vai_tro)) return loi('Bạn không có quyền — thao tác này chỉ dành cho Vận hành sàn', 403);
 
   let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
   const dsRsn = Array.isArray(b.return_sn) ? b.return_sn.map(s => String(s).trim()).filter(Boolean) : [];
@@ -754,7 +770,7 @@ async function kdDayKho(req, env) {
 async function kdDayKeToan(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
-  if (!duocXemDonHoan(phien.vai_tro)) return loi('Bạn không có quyền', 403);
+  if (!duocThaoTacVanHanh(phien.vai_tro)) return loi('Bạn không có quyền — thao tác này chỉ dành cho Vận hành sàn', 403);
   let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
   const dsRsn = Array.isArray(b.return_sn) ? b.return_sn.map(s => String(s).trim()).filter(Boolean)
               : (b.return_sn ? [String(b.return_sn).trim()] : []);
@@ -970,6 +986,8 @@ export default {
       // Sau khi đồng bộ xong mới quét cảnh báo (mốc 12h đã được cập nhật)
       try { await kiemTraCanhBaoHoan(env); } catch (e) { console.error('Cron cảnh báo:', e.message); }
       // (Đã bỏ tự-đẩy-24h: luồng mới cho Vận hành sàn CHỦ ĐỘNG đẩy từng đơn sang kho)
+      // Luật cứng: đơn hoàn chỉ giữ trong tháng làm việc hiện tại
+      try { await donDepDuLieuNgoaiThang(env); } catch (e) { console.error('Cron dọn dữ liệu ngoài tháng:', e.message); }
     })());
   },
 
