@@ -1282,18 +1282,20 @@ async function kdDayKho(req, env) {
   const dsRsn = Array.isArray(b.return_sn) ? b.return_sn.map(s => String(s).trim()).filter(Boolean) : [];
   if (!dsRsn.length) return loi('Chưa chọn đơn nào');
 
+  // 1 câu UPDATE duy nhất cho CẢ LOẠT đơn đã tick — trước đây chạy 1 câu
+  // UPDATE RIÊNG cho từng đơn trong vòng lặp (N lượt gọi D1 tuần tự), Vận
+  // hành sàn tick nhiều đơn thì thấy load chậm/đơ hẳn do phải đợi lần lượt
+  // từng lượt xong mới tới lượt sau (Sếp Ngọc báo 20/08/2026).
   const nguoi = phien.ho_ten || phien.ten_dang_nhap;
-  let da = 0;
-  for (const rsn of dsRsn) {
-    const r = await env.DB.prepare(`
-      UPDATE don_hoan
-         SET doi_soat_luc = datetime('now','+7 hours'), doi_soat_boi = ?,
-             lan_tra_soat = lan_tra_soat + 1, dang_cho = 'kho',
-             ly_do_khieu_nai = NULL, khieu_nai_luc = NULL, khieu_nai_boi = NULL
-       WHERE return_sn = ? AND kho_nhan_luc IS NULL
-    `).bind(nguoi, rsn).run();
-    if (r.meta.changes) da++;
-  }
+  const phs = dsRsn.map(() => '?').join(',');
+  const rBatch = await env.DB.prepare(`
+    UPDATE don_hoan
+       SET doi_soat_luc = datetime('now','+7 hours'), doi_soat_boi = ?,
+           lan_tra_soat = lan_tra_soat + 1, dang_cho = 'kho',
+           ly_do_khieu_nai = NULL, khieu_nai_luc = NULL, khieu_nai_boi = NULL
+     WHERE return_sn IN (${phs}) AND kho_nhan_luc IS NULL
+  `).bind(nguoi, ...dsRsn).run();
+  const da = rBatch.meta.changes;
   if (da > 0) {
     await guiThongBao(env, 'kho',
       `Vận hành sàn đẩy ${da} đơn hoàn sang kho — vào Kho vận › Đơn hoàn để nhận.`,
@@ -1311,15 +1313,14 @@ async function kdDayKeToan(req, env) {
   const dsRsn = Array.isArray(b.return_sn) ? b.return_sn.map(s => String(s).trim()).filter(Boolean)
               : (b.return_sn ? [String(b.return_sn).trim()] : []);
   if (!dsRsn.length) return loi('Chưa chọn đơn nào');
-  let da = 0;
-  for (const rsn of dsRsn) {
-    const r = await env.DB.prepare(
-      `UPDATE don_hoan SET dang_cho = 'ke_toan',
-              ly_do_khieu_nai = NULL, khieu_nai_luc = NULL, khieu_nai_boi = NULL
-        WHERE return_sn = ? AND kho_nhan_luc IS NULL AND ke_toan_luc IS NULL`
-    ).bind(rsn).run();
-    if (r.meta.changes) da++;
-  }
+  // Gộp 1 câu UPDATE cho cả loạt — xem lý do ở kdDayKho() ngay trên.
+  const phs2 = dsRsn.map(() => '?').join(',');
+  const rBatch = await env.DB.prepare(
+    `UPDATE don_hoan SET dang_cho = 'ke_toan',
+            ly_do_khieu_nai = NULL, khieu_nai_luc = NULL, khieu_nai_boi = NULL
+      WHERE return_sn IN (${phs2}) AND kho_nhan_luc IS NULL AND ke_toan_luc IS NULL`
+  ).bind(...dsRsn).run();
+  const da = rBatch.meta.changes;
   if (da > 0) {
     await guiThongBao(env, 'ke_toan',
       `Vận hành sàn đẩy ${da} đơn hoàn (đã hoàn tiền) sang Kế toán tra soát — vào Kế toán › Đơn hoàn tra soát.`,
@@ -1393,16 +1394,15 @@ async function ktLapBienBan(req, env) {
   const dsRsn = Array.isArray(b.return_sn) ? b.return_sn.map(s => String(s).trim()).filter(Boolean) : [];
   if (!dsRsn.length) return loi('Chưa chọn đơn nào');
 
+  // Gộp 1 câu UPDATE cho cả loạt — xem lý do ở kdDayKho() (trước đây chạy
+  // 1 câu riêng mỗi đơn trong vòng lặp, tick nhiều đơn thì đơ máy).
   const nguoi = phien.ho_ten || phien.ten_dang_nhap;
-  let da = 0;
-  for (const rsn of dsRsn) {
-    const r = await env.DB.prepare(`
-      UPDATE don_hoan SET bien_ban_luc = datetime('now','+7 hours'), bien_ban_boi = ?
-       WHERE return_sn = ? AND phan_loai_nhan = 'hong_cho_huy' AND bien_ban_luc IS NULL
-    `).bind(nguoi, rsn).run();
-    if (r.meta.changes) da++;
-  }
-  return json({ ok: true, so_don: da });
+  const phs3 = dsRsn.map(() => '?').join(',');
+  const rBatch = await env.DB.prepare(`
+    UPDATE don_hoan SET bien_ban_luc = datetime('now','+7 hours'), bien_ban_boi = ?
+     WHERE return_sn IN (${phs3}) AND phan_loai_nhan = 'hong_cho_huy' AND bien_ban_luc IS NULL
+  `).bind(nguoi, ...dsRsn).run();
+  return json({ ok: true, so_don: rBatch.meta.changes });
 }
 
 /* ==========================================================================
