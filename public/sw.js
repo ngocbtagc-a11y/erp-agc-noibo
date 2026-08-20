@@ -11,7 +11,7 @@
    tĩnh, để sau mỗi lần cập nhật web, người dùng luôn nhận bản mới nhất.
    ========================================================================== */
 
-const TEN_KHO = 'agc-crm-v3';
+const TEN_KHO = 'agc-crm-v4';
 
 /* Phần khung tĩnh — nạp sẵn để lần mở sau nhanh và mở được cả khi mạng chập chờn */
 const KHUNG_TINH = [
