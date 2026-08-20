@@ -1853,18 +1853,23 @@ async function khoiDongLichSuHoan() {
     thieu_hang: ['danger', '⚠️ Thiếu hàng'], sai_hang: ['danger', '⚠️ Sai hàng']
   };
 
+  // Hàng hư hỏng/thiếu/sai — bôi đỏ cả hàng cho dễ thấy ngay, không phải
+  // đọc kỹ cột trạng thái mới biết (anh Duy yêu cầu 20/08/2026).
+  const TINH_TRANG_CANH_BAO = ['hu_hong', 'thieu_hang', 'sai_hang'];
+
   function trangThaiXuLy(r) {
     if (r.kho_nhan_luc) {
       if (r.phan_loai_nhan === 'hong_cho_huy')
-        return { mau: 'danger', chu: '⚠️ Hàng hỏng — chờ huỷ', phu: `${r.phan_loai_boi || ''} · ${r.phan_loai_luc || ''}` };
+        return { mau: 'danger', chu: '⚠️ Hàng hỏng — chờ huỷ', phu: `${r.phan_loai_boi || ''} · ${r.phan_loai_luc || ''}`, canhBao: true };
       if (r.phan_loai_nhan === 'nhap_kho')
         return { mau: 'ok', chu: '✓ Nhập kho lại', phu: `${r.phan_loai_boi || ''} · ${r.phan_loai_luc || ''}` };
       const tt = TT_NHAN_LS[r.tinh_trang_hang] || ['ok', '✓ Đã nhận'];
-      const phu = r.ke_toan_luc ? `Kế toán đã tra soát · ${r.ke_toan_boi || ''}` : `${r.kho_nhan_boi || ''} · ${r.kho_nhan_luc}`;
-      return { mau: tt[0], chu: tt[1], phu };
+      const phu = r.ke_toan_luc ? `Kế toán đã tra soát · ${r.ke_toan_boi || ''}` : `Kho nhận: ${r.kho_nhan_boi || ''} · ${r.kho_nhan_luc}`;
+      return { mau: tt[0], chu: tt[1], phu, canhBao: TINH_TRANG_CANH_BAO.includes(r.tinh_trang_hang) };
     }
     if (r.dang_cho === 'van_hanh' && r.ly_do_khieu_nai)
-      return { mau: 'danger', chu: '⚠️ Kho khiếu nại — chờ Vận hành sàn', phu: r.ly_do_khieu_nai };
+      return { mau: 'danger', chu: '⚠️ Kho khiếu nại — chờ Vận hành sàn',
+        phu: `${r.ly_do_khieu_nai}${r.khieu_nai_boi ? ' — ' + r.khieu_nai_boi : ''}`, canhBao: true };
     if (r.dang_cho === 'ke_toan')
       return { mau: 'warn', chu: '💰 Chờ Kế toán tra soát', phu: '' };
     return { mau: 'mute', chu: 'Đang chờ Kho nhận', phu: '' };
@@ -1896,7 +1901,7 @@ async function khoiDongLichSuHoan() {
         `<td class="num">${tien}</td>` +
         `<td class="sm">${esc(r.nguoi_mua || '—')}</td>` +
         `<td class="sm"><span class="tag ${xl.mau}">${esc(xl.chu)}</span>${xl.phu ? `<div class="phu">${esc(xl.phu)}</div>` : ''}</td>`;
-      return { html };
+      return { html, cls: xl.canhBao ? 'canh-bao' : '' };
     });
     $('#ls-trong').hidden = ds.length > 0;
     $('#ls-dem').textContent = `${ds.length}/${DS_LS.length} đơn hoàn`;

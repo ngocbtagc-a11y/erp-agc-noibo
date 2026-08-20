@@ -33,6 +33,26 @@ function loi(msg, status = 400) { return json({ loi: msg }, status); }
 export function daCauHinh(env) {
   return !!(env.SHOPEE_PARTNER_ID && env.SHOPEE_PARTNER_KEY);
 }
+
+/* Database thật có thể CHƯA nạp migration them-tinhtrang-hang.sql (chờ Sếp
+   Ngọc chạy tay — xem HUONG-DAN-NGUOI-MOI.md). Tự kiểm tra cột có tồn tại
+   chưa, cache lại trong isolate (không hỏi lại mỗi request) — có cột thì
+   dùng đầy đủ, chưa có thì mọi chỗ dùng đến tự bỏ qua êm, không lỗi. Nạp
+   migration xong là tự nâng cấp lên đầy đủ, không cần sửa/deploy lại code
+   (anh Duy chốt 20/08/2026, sau khi bị vỡ bảng Đơn hoàn vì thiếu cột 1 lần). */
+let _coCotTinhTrang = null;
+export async function coCotTinhTrangHang(env) {
+  if (_coCotTinhTrang !== null) return _coCotTinhTrang;
+  // PRAGMA table_info không dùng được qua binding D1 trong Worker (chỉ chạy
+  // được qua CLI wrangler) — thử SELECT thật, cột không tồn tại thì ném lỗi.
+  try {
+    await env.DB.prepare(`SELECT tinh_trang_hang FROM don_hoan LIMIT 1`).first();
+    _coCotTinhTrang = true;
+  } catch {
+    _coCotTinhTrang = false;
+  }
+  return _coCotTinhTrang;
+}
 function host(env) { return (env.SHOPEE_HOST || 'https://partner.shopeemobile.com').replace(/\/+$/, ''); }
 function redirect(env) { return env.SHOPEE_REDIRECT || 'https://erp-agc.noiboagc.workers.dev/api/shopee/callback'; }
 function nowSec() { return Math.floor(Date.now() / 1000); }

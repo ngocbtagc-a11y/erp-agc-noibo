@@ -639,19 +639,22 @@ async function hoanDanhSach(req, env) {
    dang_cho. Chỉ đọc, không thao tác được ở đây (anh Duy yêu cầu 20/08/2026).
    Lưu ý: đơn hoàn ngoài THÁNG LÀM VIỆC hiện tại đã bị cron tự xoá (xem
    donDepDuLieuNgoaiThang) nên màn này cũng chỉ tra được trong tháng hiện tại.
-   KHÔNG lấy tinh_trang_hang — cột này chờ Sếp Ngọc nạp migration lên DB thật,
-   xem chú thích tương tự trong shopee.js apiDanhSach. */
+   Cột tinh_trang_hang chỉ lấy khi DB thật đã có (xem coCotTinhTrangHang
+   trong shopee.js) — tự nâng cấp khi Sếp Ngọc nạp migration, không lỗi nếu
+   chưa nạp. */
 async function hoanLichSu(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
   if (!duocXemDonHoan(phien.vai_tro)) return loi('Bạn không có quyền', 403);
+  const coTT = await shopee.coCotTinhTrangHang(env);
   const { results } = await env.DB.prepare(`
     SELECT d.return_sn, d.order_sn, d.trang_thai, d.ly_do, d.so_tien, d.tien_te, d.nguoi_mua,
            d.san_pham, d.san_pham_ten, COALESCE(d.san_pham_sku, m.ma_sku) AS san_pham_sku,
            d.so_luong, d.ma_van_don, d.nguon, d.tao_luc_shopee, d.dong_bo_luc,
            d.kho_nhan_luc, d.kho_nhan_boi, d.phan_loai_nhan, d.phan_loai_luc, d.phan_loai_boi,
-           d.dang_cho, d.ly_do_khieu_nai, d.khieu_nai_luc,
+           d.dang_cho, d.ly_do_khieu_nai, d.khieu_nai_luc, d.khieu_nai_boi,
            d.ke_toan_luc, d.ke_toan_boi
+           ${coTT ? ', d.tinh_trang_hang, d.tinh_trang_luc, d.tinh_trang_boi' : ''}
       FROM don_hoan d
       LEFT JOIN sku_map m ON m.ten_san_pham = d.san_pham_ten
      ORDER BY d.dong_bo_luc DESC LIMIT 500
@@ -680,14 +683,24 @@ async function hoanDaNhan(req, env) {
   // (kdDayKeToan), phân biệt nhau bằng kho_nhan_luc có giá trị hay không
   // (Sếp Ngọc chốt 20/08/2026, 3 luồng về Kế toán). Hư hỏng/thiếu/sai hàng
   // thì KHÔNG đẩy ở đây — Kho tự bấm "Cần khiếu nại" để đẩy về Vận hành sàn.
-  const r = await env.DB.prepare(`
+  // Ghi tinh_trang_hang CHỈ khi DB thật đã có cột (xem coCotTinhTrangHang) —
+  // chưa nạp migration thì vẫn nhận đơn bình thường, chỉ chưa lưu được tình
+  // trạng chi tiết, tự nâng cấp khi Sếp Ngọc nạp xong, không cần deploy lại.
+  const coTT = await shopee.coCotTinhTrangHang(env);
+  const r = await env.DB.prepare(coTT ? `
     UPDATE don_hoan
        SET kho_nhan_luc = datetime('now','+7 hours'),
            kho_nhan_boi = ?, da_canh_bao = 1,
            tinh_trang_hang = ?, tinh_trang_luc = datetime('now','+7 hours'), tinh_trang_boi = ?,
            dang_cho = CASE WHEN ? = 'con_tot' THEN 'ke_toan' ELSE dang_cho END
      WHERE return_sn = ? AND kho_nhan_luc IS NULL
-  `).bind(nguoi, tinhTrang, nguoi, tinhTrang, rsn).run();
+  ` : `
+    UPDATE don_hoan
+       SET kho_nhan_luc = datetime('now','+7 hours'),
+           kho_nhan_boi = ?, da_canh_bao = 1,
+           dang_cho = CASE WHEN ? = 'con_tot' THEN 'ke_toan' ELSE dang_cho END
+     WHERE return_sn = ? AND kho_nhan_luc IS NULL
+  `).bind(...(coTT ? [nguoi, tinhTrang, nguoi, tinhTrang, rsn] : [nguoi, tinhTrang, rsn])).run();
   if (!r.meta.changes) return loi('Không tìm thấy đơn hoặc đã được nhận trước đó', 404);
   if (tinhTrang === 'con_tot') {
     await guiThongBao(env, 'ke_toan',
