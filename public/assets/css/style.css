@@ -630,6 +630,11 @@ td .sm { font-size: 12px; color: var(--text-mute); white-space: nowrap; }
   margin-bottom: 0;
 }
 .dh-timkiem .btn-phu { white-space: nowrap; flex-shrink: 0; }
+.dh-tick-nguon {
+  display: flex; align-items: center; gap: 5px; flex-shrink: 0;
+  font-size: 13px; color: var(--text); white-space: nowrap; cursor: pointer;
+}
+.dh-tick-nguon input { cursor: pointer; }
 
 /* Ô lọc nhỏ gọn (VD: lọc Nguồn) đặt cạnh ô tìm kiếm — cùng chiều cao với .search input */
 .chon-nho {
