@@ -845,10 +845,16 @@
         <div class="panel-body" style="padding-bottom:0; padding-top:0">
           <p class="hint" style="margin:14px 0 0">Gộp 2 luồng: <b>💰 Hoàn tiền</b> — Vận hành sàn đẩy sang khi đơn đã hoàn tiền cho khách, không có hàng vật lý về kho; <b>📦 Đã nhập kho</b> — Kho xác nhận nhận hàng còn tốt (bán lại được), cần đối soát chéo số lượng/tiền với sàn. Kế toán rà xong bấm “Đã tra soát”.</p>
         </div>
+        <div class="kd-thanh-chon" id="kt-ts-thanhchon" hidden>
+          <span id="kt-ts-sldachon"></span>
+          <button type="button" class="btn-primary" id="kt-ts-xuatexcel" style="width:auto">Xuất Excel</button>
+          <button type="button" class="btn-phu" id="kt-ts-huychon">Bỏ chọn</button>
+        </div>
         <div class="table-wrap">
           <table>
             <thead>
               <tr>
+                <th style="width:40px"><input type="checkbox" id="kt-ts-chontatca" title="Chọn tất cả"></th>
                 <th>Nguồn</th>
                 <th>Mã đơn hoàn</th>
                 <th>Đơn gốc</th>

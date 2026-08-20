@@ -108,6 +108,7 @@ const NHAN_TT = {
   CANCELLED:  { chu: 'Đã huỷ',      mau: 'mute'   },
   CLOSED:     { chu: 'Đã đóng',     mau: 'mute'   },
   JUDGING:    { chu: 'Đang phân xử',mau: 'danger' },
+  AWAITING_BUYER_SHIP: { chu: 'Chờ khách gửi hàng', mau: 'warn' },
   // TikTok
   RETURN_OR_REFUND_REQUEST_PENDING:  { chu: 'Chờ duyệt',      mau: 'warn'   },
   RETURN_OR_REFUND_REQUEST_SUCCESS:  { chu: 'Đã duyệt',       mau: 'ok'     },
@@ -1126,9 +1127,10 @@ async function khoiDongDoiSoatSan() {
     // Sản phẩm — nhiều sản phẩm thì mỗi sản phẩm 1 dòng (oSanPham, dùng chung)
     const sp = oSanPham(r.san_pham_ten || r.san_pham, r.san_pham_sku, r.so_luong);
     const spCell = `<td class="sm" title="${esc(sp.title)}">${sp.html}</td>`;
-    // Trạng thái sàn — rút gọn (chỉ tham khảo, không quyết định)
-    const ttChu = (r.trang_thai || '—').replace(/^RETURN_OR_REFUND_/, '')
-      .replace(/^REQUEST_/, '').replace(/_/g, ' ').toLowerCase();
+    // Trạng thái sàn — dùng chung nhanTrangThai() (trước đây tự lowercase
+    // tay ở đây, không qua từ điển nên vẫn hiện tiếng Anh thô dù NHAN_TT đã
+    // có sẵn bản dịch — Sếp Ngọc bắt lỗi 20/08/2026 từ ảnh chụp cột này).
+    const tt = nhanTrangThai(r.trang_thai);
     // Đã tra soát mấy lần
     const daTra = (r.lan_tra_soat > 0)
       ? `<span class="tag warn">${r.lan_tra_soat} lần</span>` +
@@ -1162,7 +1164,7 @@ async function khoiDongDoiSoatSan() {
       spCell +
       `<td class="num">${r.so_luong != null ? esc(r.so_luong) : '—'}</td>` +
       `<td class="sm">${oLyDo(r.ly_do)}</td>` +
-      `<td><span class="tag mute" title="${esc(r.trang_thai || '')}">${esc(ttChu)}</span></td>` +
+      `<td><span class="tag ${tt.mau}" title="${esc(r.trang_thai || '')}">${esc(tt.chu)}</span></td>` +
       `<td class="num">${tien}</td>` +
       `<td>${daTra}</td>` +
       `<td>${coQuyen ? `<button type="button" class="btn-nho" data-doisoat="${esc(r.return_sn)}">${nhanNut}</button>` : ''}</td>`;
@@ -2018,11 +2020,25 @@ async function khoiDongKeToanTraSoat() {
   if (!panel) return;
   panel.hidden = false;
 
+  // Dữ liệu thô để xuất Excel dùng lại (bảng chỉ hiện HTML, cần bản gốc
+  // để lấy chữ thuần — Sếp Ngọc yêu cầu 20/08/2026: tích chọn hàng loạt +
+  // xuất Excel, cùng kiểu tick-chọn với "Hàng hỏng chờ huỷ" đã có sẵn).
+  let DS_TS = [];
+
+  function dsDangChon() {
+    return [...document.querySelectorAll('#kt-ts-bang input[data-chon]:checked')].map(o => o.getAttribute('data-chon'));
+  }
+  function veThanhChon() {
+    const sl = dsDangChon().length;
+    $('#kt-ts-thanhchon').hidden = sl === 0;
+    $('#kt-ts-sldachon').innerHTML = `Đã chọn <b>${sl}</b> đơn`;
+  }
+
   async function veTraSoat() {
     let kq;
     try { kq = await API.ktCanTraSoat(); } catch { return; }
-    const ds = kq.can_tra_soat || [];
-    veBang('#kt-ts-bang', ds, r => {
+    DS_TS = kq.can_tra_soat || [];
+    veBang('#kt-ts-bang', DS_TS, r => {
       const ngTag = r.nguon === 'tiktok'
         ? '<span class="tag mute">TikTok</span>' : '<span class="tag sage">Shopee</span>';
       const tien = r.so_tien != null
@@ -2035,7 +2051,8 @@ async function khoiDongKeToanTraSoat() {
       const veTag = r.kho_nhan_luc
         ? '<span class="tag ok">📦 Đã nhập kho</span>'
         : '<span class="tag mute">💰 Hoàn tiền</span>';
-      return `<td>${ngTag}</td>` +
+      return `<td><input type="checkbox" data-chon="${esc(r.return_sn)}"></td>` +
+        `<td>${ngTag}</td>` +
         `<td class="sm">${esc(r.return_sn)}</td>` +
         `<td class="sm">${esc(r.order_sn || '—')}</td>` +
         `<td>${veTag}</td>` +
@@ -2045,9 +2062,41 @@ async function khoiDongKeToanTraSoat() {
         `<td class="num">${tien}</td>` +
         `<td><button type="button" class="btn-nho btn-primary" data-trasoat="${esc(r.return_sn)}">Đã tra soát</button></td>`;
     });
-    $('#kt-ts-trong').hidden = ds.length > 0;
-    $('#kt-ts-dem').textContent = ds.length ? `${ds.length} đơn cần tra soát` : '';
+    $('#kt-ts-trong').hidden = DS_TS.length > 0;
+    $('#kt-ts-dem').textContent = DS_TS.length ? `${DS_TS.length} đơn cần tra soát` : '';
+    $('#kt-ts-chontatca').checked = false;
+    veThanhChon();
   }
+
+  $('#kt-ts-bang').addEventListener('change', (e) => {
+    if (!e.target.matches('input[data-chon]')) return;
+    veThanhChon();
+  });
+  $('#kt-ts-chontatca').addEventListener('change', (e) => {
+    document.querySelectorAll('#kt-ts-bang input[data-chon]').forEach(o => { o.checked = e.target.checked; });
+    veThanhChon();
+  });
+  $('#kt-ts-huychon').addEventListener('click', () => {
+    document.querySelectorAll('#kt-ts-bang input[data-chon]').forEach(o => { o.checked = false; });
+    $('#kt-ts-chontatca').checked = false;
+    veThanhChon();
+  });
+  $('#kt-ts-xuatexcel').addEventListener('click', () => {
+    const chon = new Set(dsDangChon());
+    const ds = DS_TS.filter(r => chon.has(r.return_sn));
+    if (!ds.length) return;
+    const cot = ['Nguồn', 'Mã đơn hoàn', 'Đơn gốc', 'Về từ đâu', 'Sản phẩm hoàn về', 'Số lượng', 'Lý do', 'Số tiền hoàn'];
+    const hang = ds.map(r => {
+      const sp = oSanPham(r.san_pham_ten, r.san_pham_sku, r.so_luong);
+      const tien = r.so_tien != null ? tienVN(Math.round(r.so_tien / 100000)) + ' ' + (r.tien_te || '') : '';
+      return [
+        r.nguon === 'tiktok' ? 'TikTok' : 'Shopee', r.return_sn, r.order_sn || '',
+        r.kho_nhan_luc ? 'Đã nhập kho' : 'Hoàn tiền',
+        sp.title, r.so_luong ?? '', nhanLyDo(r.ly_do), tien
+      ];
+    });
+    xuatCSV(`don-hoan-can-tra-soat-${new Date().toISOString().slice(0, 10)}.csv`, cot, hang);
+  });
 
   $('#kt-ts-bang').addEventListener('click', async (e) => {
     const btn = e.target.closest('[data-trasoat]');
