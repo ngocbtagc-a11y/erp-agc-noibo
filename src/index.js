@@ -729,6 +729,29 @@ async function donDepDuLieuNgoaiThang(env) {
   const gioNay = new Date();
   const vn = new Date(gioNay.getTime() + 7 * 3600 * 1000);
   const dauThang = Math.floor(Date.UTC(vn.getUTCFullYear(), vn.getUTCMonth(), 1) / 1000) - 7 * 3600;
+
+  // Trước khi xoá, cộng dồn số liệu (theo khách + đúng tháng gốc của từng
+  // đơn) vào khach_hang_hoan_thang — bảng này KHÔNG bị xoá theo tháng, để
+  // CSKH vẫn xem được xếp hạng khách hoàn/hủy nhiều nhiều tháng về sau
+  // (Sếp Ngọc chốt 20/08/2026), dù bảng đơn hoàn gốc vẫn tuân luật cũ.
+  await env.DB.prepare(`
+    INSERT INTO khach_hang_hoan_thang (nguoi_mua, thang, nguon, so_don, so_huy, gan_nhat)
+    SELECT nguoi_mua,
+           strftime('%Y-%m', datetime(CAST(tao_luc_shopee AS INTEGER), 'unixepoch', '+7 hours')),
+           nguon,
+           COUNT(*),
+           SUM(CASE WHEN trang_thai LIKE '%CANCEL%' THEN 1 ELSE 0 END),
+           MAX(CAST(tao_luc_shopee AS INTEGER))
+      FROM don_hoan
+     WHERE tao_luc_shopee IS NOT NULL AND CAST(tao_luc_shopee AS INTEGER) < ?
+       AND nguoi_mua IS NOT NULL AND nguoi_mua != ''
+     GROUP BY nguoi_mua, nguon, strftime('%Y-%m', datetime(CAST(tao_luc_shopee AS INTEGER), 'unixepoch', '+7 hours'))
+    ON CONFLICT(nguoi_mua, thang, nguon) DO UPDATE SET
+      so_don = so_don + excluded.so_don,
+      so_huy = so_huy + excluded.so_huy,
+      gan_nhat = MAX(gan_nhat, excluded.gan_nhat)
+  `).bind(dauThang).run();
+
   const r = await env.DB.prepare(
     `DELETE FROM don_hoan WHERE tao_luc_shopee IS NULL OR CAST(tao_luc_shopee AS INTEGER) < ?`
   ).bind(dauThang).run();
@@ -935,6 +958,46 @@ async function kdDonHuy(req, env) {
      ORDER BY d.dong_bo_luc DESC
   `).all();
   return json({ don_huy: results });
+}
+
+/* Chăm sóc khách hàng: xếp hạng khách mua hoàn/hủy nhiều nhất trong 6 tháng
+   gần đây. Bảng đơn hoàn gốc (don_hoan) chỉ giữ đúng tháng làm việc hiện
+   tại (bị cron donDepDuLieuNgoaiThang dọn mỗi tháng) nên KHÔNG đủ để nhìn
+   6 tháng — gộp thêm bảng tổng hợp bền vững khach_hang_hoan_thang (được
+   cộng dồn ngay trước mỗi lần dọn) để có đủ lịch sử (Sếp Ngọc chốt
+   20/08/2026, xem donDepDuLieuNgoaiThang()). */
+async function kdKhachHoanNhieu(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  if (!duocXemDonHoan(phien.vai_tro)) return loi('Bạn không có quyền', 403);
+
+  const gioNay = new Date();
+  const vn = new Date(gioNay.getTime() + 7 * 3600 * 1000);
+  const moc6Thang = new Date(Date.UTC(vn.getUTCFullYear(), vn.getUTCMonth() - 6, 1));
+  const thang6ThangTruoc = moc6Thang.toISOString().slice(0, 7);   // 'YYYY-MM'
+
+  const { results } = await env.DB.prepare(`
+    SELECT nguoi_mua,
+           GROUP_CONCAT(DISTINCT nguon) AS nguon,
+           SUM(so_don) AS so_don,
+           SUM(so_huy) AS so_huy,
+           MAX(gan_nhat) AS gan_nhat
+      FROM (
+        SELECT nguoi_mua, nguon, so_don, so_huy, gan_nhat
+          FROM khach_hang_hoan_thang
+         WHERE thang >= ?
+        UNION ALL
+        SELECT nguoi_mua, nguon, 1 AS so_don,
+               CASE WHEN trang_thai LIKE '%CANCEL%' THEN 1 ELSE 0 END AS so_huy,
+               CAST(tao_luc_shopee AS INTEGER) AS gan_nhat
+          FROM don_hoan
+         WHERE nguoi_mua IS NOT NULL AND nguoi_mua != ''
+      ) x
+     GROUP BY nguoi_mua
+     ORDER BY so_don DESC
+     LIMIT 30
+  `).bind(thang6ThangTruoc).all();
+  return json({ khach_hang: results });
 }
 
 /* Vận hành sàn đánh dấu đã đối soát/khiếu nại xong với sàn cho 1 đơn hoàn */
@@ -1237,6 +1300,7 @@ const DUONG_DAN = {
   'GET  /api/thong-bao':         layThongBao,
   'POST /api/thong-bao/da-xem':  thongBaoDaXem,
   'GET  /api/kinh-doanh/can-doi-soat': kdCanDoiSoat,
+  'GET  /api/kinh-doanh/khach-hoan-nhieu': kdKhachHoanNhieu,
   'POST /api/kinh-doanh/da-doi-soat':  kdDaDoiSoat,
   'POST /api/kinh-doanh/day-kho':      kdDayKho,
   'POST /api/kinh-doanh/day-ke-toan':  kdDayKeToan,

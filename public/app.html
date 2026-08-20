@@ -255,6 +255,7 @@
       <div class="seg" id="kdSeg">
         <button class="seg-nut" data-kd="rnd">R&amp;D</button>
         <button class="seg-nut active" data-kd="vanhanh">Vận hành sàn</button>
+        <button class="seg-nut" data-kd="cskh">Chăm sóc KH</button>
       </div>
 
       <!-- ===== Màn Vận hành sàn ===== -->
@@ -364,6 +365,35 @@
           <div class="panel-body">
             <div class="empty">Khu vực R&amp;D đang chờ nội dung. Sếp cho tôi biết cần theo dõi gì ở đây (ý tưởng sản phẩm mới, mẫu đang thử, kết quả test, tiến độ ra mắt…) là tôi dựng tiếp.</div>
           </div>
+        </div>
+      </div>
+
+      <!-- ===== Màn Chăm sóc khách hàng ===== -->
+      <div class="kv-pane" id="kd-pane-cskh" hidden>
+        <div class="panel">
+          <div class="panel-head">
+            <h4>Khách hàng hoàn/hủy nhiều nhất (6 tháng gần đây)</h4>
+            <span class="hint" id="cskh-dem"></span>
+          </div>
+          <div class="panel-body" style="padding-bottom:0; padding-top:0">
+            <p class="hint" style="margin:14px 0 0">Xếp hạng theo tổng số đơn hoàn + hủy trong 6 tháng gần nhất, tự cập nhật theo dữ liệu đơn hoàn hiện có — để CSKH ưu tiên theo dõi/chăm sóc những khách mua lại nhiều lần nhưng cũng hoàn/hủy nhiều.</p>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width:40px">#</th>
+                  <th>Khách hàng</th>
+                  <th>Nguồn</th>
+                  <th class="num">Tổng đơn hoàn/hủy</th>
+                  <th class="num">Trong đó hủy</th>
+                  <th>Lần gần nhất</th>
+                </tr>
+              </thead>
+              <tbody id="cskh-bang"></tbody>
+            </table>
+          </div>
+          <div class="empty" id="cskh-trong" hidden>Chưa có đơn hoàn nào trong 6 tháng gần đây.</div>
         </div>
       </div>
     </section>
