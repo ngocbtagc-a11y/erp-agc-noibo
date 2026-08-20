@@ -180,7 +180,8 @@ button { cursor: pointer; border: none; background: none; }
 }
 
 .field input,
-.field select {
+.field select,
+.field textarea {
   width: 100%;
   padding: 12px 14px;
   border: 1px solid var(--line);
@@ -189,8 +190,19 @@ button { cursor: pointer; border: none; background: none; }
   transition: border-color .16s, box-shadow .16s;
 }
 
+/* .field textarea không có luật riêng trước đây nên rơi về khung mặc định
+   nhỏ xíu của trình duyệt (~2 dòng, không giãn hết chiều rộng) — thấy rõ
+   nhất ở ô "Lời khen" (Vinh danh) và "Đầu ra cụ thể"/"Ghi chú" (Trạm Việc). */
+.field textarea {
+  font-family: inherit;
+  font-size: inherit;
+  resize: vertical;
+  min-height: 90px;
+}
+
 .field input:focus,
-.field select:focus {
+.field select:focus,
+.field textarea:focus {
   outline: none;
   border-color: var(--sage);
   box-shadow: 0 0 0 3px rgba(154,171,134,.22);
@@ -357,17 +369,47 @@ img.av { object-fit: cover; display: block; cursor: default; }
 .av-wrap { cursor: pointer; flex-shrink: 0; }   /* sidebar: bấm vào ảnh/chữ viết tắt của CHÍNH MÌNH để đổi ảnh */
 .av-wrap:hover .av { filter: brightness(.92); }
 
-/* Vinh danh (Tổng quan) */
+/* Vinh danh (Tổng quan) — cố tình làm TO, RỰC RỠ hơn mọi panel khác trong
+   Tổng quan (Sếp Ngọc chốt 20/08: "truyền cảm hứng hơn tí đi, nghiêm túc
+   quá") — header gradient vàng-cam kiểu bảng vinh danh/cúp, không dùng
+   tông sage trầm như phần còn lại của trang. */
+.vd-panel .panel-head {
+  background: linear-gradient(120deg, #d9a441 0%, #b8863b 60%, #a06b2a 100%);
+  border-bottom: none;
+}
+.vd-panel .panel-head h4 {
+  font-size: 19px;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0,0,0,.15);
+}
+.vd-panel .panel-head #vd-nut-mo {
+  background: rgba(255,255,255,.22);
+  color: #fff;
+  font-weight: 600;
+}
+.vd-panel .panel-head #vd-nut-mo:hover { background: rgba(255,255,255,.32); }
+
 .vd-goiy {
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-  background: var(--sage-wash); border-radius: var(--r-sm);
-  padding: 10px 13px; font-size: 12.5px; color: var(--ink-soft);
+  background: var(--warn-wash); border-radius: var(--r-sm);
+  padding: 12px 15px; font-size: 13.5px; color: #6d5325; font-weight: 500;
 }
-.vd-item { padding: 10px 0; border-bottom: 1px solid var(--line); }
-.vd-item:last-child { border-bottom: none; }
-.vd-item .vd-noidung { font-size: 13.5px; color: var(--ink); margin: 2px 0; }
+
+.vd-item {
+  display: flex; align-items: flex-start; gap: 14px;
+  padding: 16px; margin-bottom: 12px;
+  background: var(--warn-wash);
+  border-radius: var(--r-md);
+  border: 1px solid #ecd9b5;
+}
+.vd-item:last-child { margin-bottom: 0; }
+.vd-item.person .av { width: 48px; height: 48px; font-size: 16px; }   /* .person .av (định nghĩa sau, cùng độ đặc hiệu) thắng nếu chỉ ghi .vd-item .av */
+.vd-item .nm { font-size: 17px; font-weight: 700; color: var(--ink); }
+.vd-item .vd-noidung { font-size: 15px; line-height: 1.5; color: var(--ink); margin: 6px 0; font-weight: 500; }
 .vd-item .vd-noidung::before { content: '“'; }
 .vd-item .vd-noidung::after { content: '”'; }
+.vd-item .sm { font-size: 12.5px; }
 
 .sb-user .meta { min-width: 0; flex: 1; }
 .sb-user .meta b {

@@ -524,8 +524,8 @@ async function khoiDongVinhDanh() {
     list.innerHTML = ds.map(r => `
       <div class="vd-item person">
         ${avHtml(r.nhan_su_id, (r.nhan_su_ten || '?').trim().split(/\s+/).slice(-2).map(t => t[0]).join('').toUpperCase(), r.co_anh)}
-        <div>
-          <div class="nm">${esc(r.nhan_su_ten)}</div>
+        <div style="flex:1">
+          <div class="nm">${esc(r.nhan_su_ten)} <span class="tag sage" title="Sao tích luỹ, đổi quà">⭐ ${esc(r.sao ?? 0)}</span></div>
           <div class="vd-noidung">${esc(r.noi_dung)}</div>
           <div class="sm">— ${esc(r.nguoi_gui_ten)} · ${thoiGianTruoc(r.tao_luc)}</div>
         </div>

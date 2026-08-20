@@ -91,6 +91,37 @@
         <p>Bức tranh chung của Alpha Green Commerce — doanh thu, tiến độ mục tiêu và những việc cần chú ý.</p>
       </div>
 
+      <!-- ---------- Vinh danh — khu khen ngợi nhỏ, lên đầu trang để ai mở ERP cũng thấy ngay ---------- -->
+      <div class="panel vd-panel">
+        <div class="panel-head">
+          <h4>🏆 Vinh danh chiến binh ALPHA MEMBER nổi bật</h4>
+          <button type="button" class="btn-phu" id="vd-nut-mo" style="width:auto">+ Khen ai đó</button>
+        </div>
+        <div class="panel-body" id="vd-goiy-body" hidden>
+          <div class="vd-goiy" id="vd-goiy"></div>
+        </div>
+        <div class="panel-body" id="vd-form-body" hidden>
+          <form id="vd-form" class="form-luoi" autocomplete="off">
+            <div class="field field-rong">
+              <label>Khen ai *</label>
+              <select id="vd-nguoi" required><option value="">— Chọn người —</option></select>
+            </div>
+            <div class="field field-rong">
+              <label>Lời khen *</label>
+              <textarea id="vd-noidung" required rows="4" maxlength="500" placeholder="Ví dụ: Xử lý gọn đơn khiếu nại khó hôm qua, khách rất hài lòng!"></textarea>
+            </div>
+            <div class="field field-nut">
+              <button type="submit" class="btn-primary" id="vd-nut-gui">Vinh danh</button>
+            </div>
+          </form>
+          <div class="form-loi" id="vd-loi"></div>
+        </div>
+        <div class="panel-body" style="padding-top:0">
+          <div id="vd-list"></div>
+          <div class="empty" id="vd-trong" hidden>Chưa có lời khen nào trong 48h qua — thử khen 1 người nhé.</div>
+        </div>
+      </div>
+
       <div class="stats" id="tq-the"></div>
 
       <div class="grid-2">
@@ -117,37 +148,6 @@
           <span class="hint">Tổng hợp từ 4 mảng</span>
         </div>
         <div class="panel-body"><div class="list" id="tq-canhbao"></div></div>
-      </div>
-
-      <!-- ---------- Vinh danh — khu khen ngợi nhỏ, ai mở ERP cũng thấy ---------- -->
-      <div class="panel">
-        <div class="panel-head">
-          <h4>🏆 Vinh danh</h4>
-          <button type="button" class="btn-phu" id="vd-nut-mo" style="width:auto">+ Khen ai đó</button>
-        </div>
-        <div class="panel-body" id="vd-goiy-body" hidden>
-          <div class="vd-goiy" id="vd-goiy"></div>
-        </div>
-        <div class="panel-body" id="vd-form-body" hidden>
-          <form id="vd-form" class="form-luoi" autocomplete="off">
-            <div class="field field-rong">
-              <label>Khen ai *</label>
-              <select id="vd-nguoi" required><option value="">— Chọn người —</option></select>
-            </div>
-            <div class="field field-rong">
-              <label>Lời khen *</label>
-              <textarea id="vd-noidung" required rows="2" maxlength="500" placeholder="Ví dụ: Xử lý gọn đơn khiếu nại khó hôm qua, khách rất hài lòng!"></textarea>
-            </div>
-            <div class="field field-nut">
-              <button type="submit" class="btn-primary" id="vd-nut-gui">Vinh danh</button>
-            </div>
-          </form>
-          <div class="form-loi" id="vd-loi"></div>
-        </div>
-        <div class="panel-body" style="padding-top:0">
-          <div id="vd-list"></div>
-          <div class="empty" id="vd-trong" hidden>Chưa có ai được vinh danh — thử khen 1 người nhé.</div>
-        </div>
       </div>
     </section>
 

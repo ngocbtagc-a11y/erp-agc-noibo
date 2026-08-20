@@ -1005,12 +1005,16 @@ async function vdDanhSach(req, env) {
   const { loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
 
+  // Chỉ hiện lời khen trong 48h gần nhất (Sếp Ngọc chốt 20/08/2026) — dữ liệu
+  // vẫn giữ vĩnh viễn trong bảng, chỉ ẩn khỏi danh sách hiển thị sau 48h để
+  // khu Vinh danh luôn "tươi", không tồn đọng lời khen cũ.
   const { results } = await env.DB.prepare(`
     SELECT v.id, v.nhan_su_id, v.nhan_su_ten, v.noi_dung, v.nguoi_gui_ten, v.tao_luc,
-           (n.anh_chan_dung IS NOT NULL) AS co_anh
+           (n.anh_chan_dung IS NOT NULL) AS co_anh, n.sao
       FROM vinh_danh v
       LEFT JOIN nhan_su n ON n.id = v.nhan_su_id
-     ORDER BY v.id DESC LIMIT 10
+     WHERE v.tao_luc >= datetime('now', '-48 hours', '+7 hours')
+     ORDER BY v.id DESC LIMIT 20
   `).all();
 
   // Gợi ý nhẹ (Sếp Ngọc yêu cầu): "thỉnh thoảng cũng lấy dữ liệu" từ Trạm
@@ -1048,8 +1052,12 @@ async function vdGui(req, env) {
     VALUES (?, ?, ?, ?, ?, datetime('now','+7 hours'))
   `).bind(nhanSuId, ns.ho_ten, noiDung, phien.nhan_su_id, nguoiGui).run();
 
+  // Mỗi lần được vinh danh thì +1 sao tích luỹ (Sếp Ngọc yêu cầu 20/08/2026,
+  // sau này dùng đổi quà — catalog đổi quà CHƯA xây, đây mới là phần cộng dồn).
+  await env.DB.prepare('UPDATE nhan_su SET sao = sao + 1 WHERE id = ?').bind(nhanSuId).run();
+
   if (nhanSuId !== phien.nhan_su_id) {
-    await guiThongBao(env, null, `${nguoiGui} vừa vinh danh bạn: "${noiDung}"`, 'vinh_danh', String(r.meta.last_row_id), nhanSuId);
+    await guiThongBao(env, null, `${nguoiGui} vừa vinh danh bạn: "${noiDung}" (+1 ⭐)`, 'vinh_danh', String(r.meta.last_row_id), nhanSuId);
   }
   return json({ ok: true, id: r.meta.last_row_id });
 }
