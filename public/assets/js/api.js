@@ -58,8 +58,8 @@ export const API = {
 
   /* ---- Vinh danh (Tổng quan) ---- */
   vdDanhSach: () => goi('/api/vinh-danh'),
-  vdGui: (nhanSuId, noiDung) => goi('/api/vinh-danh', {
-    method: 'POST', body: JSON.stringify({ nhan_su_id: nhanSuId, noi_dung: noiDung })
+  vdGui: (nhanSuId, noiDung, soSao) => goi('/api/vinh-danh', {
+    method: 'POST', body: JSON.stringify({ nhan_su_id: nhanSuId, noi_dung: noiDung, so_sao: soSao })
   }),
 
   /* ---- Trạm Việc: giao việc cho nhân viên ---- */

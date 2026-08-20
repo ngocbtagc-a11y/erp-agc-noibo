@@ -1009,7 +1009,7 @@ async function vdDanhSach(req, env) {
   // vẫn giữ vĩnh viễn trong bảng, chỉ ẩn khỏi danh sách hiển thị sau 48h để
   // khu Vinh danh luôn "tươi", không tồn đọng lời khen cũ.
   const { results } = await env.DB.prepare(`
-    SELECT v.id, v.nhan_su_id, v.nhan_su_ten, v.noi_dung, v.nguoi_gui_ten, v.tao_luc,
+    SELECT v.id, v.nhan_su_id, v.nhan_su_ten, v.noi_dung, v.nguoi_gui_ten, v.tao_luc, v.so_sao,
            (n.anh_chan_dung IS NOT NULL) AS co_anh, n.sao
       FROM vinh_danh v
       LEFT JOIN nhan_su n ON n.id = v.nhan_su_id
@@ -1040,24 +1040,26 @@ async function vdGui(req, env) {
   let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
   const nhanSuId = String(b.nhan_su_id || '').trim();
   const noiDung = String(b.noi_dung || '').trim().slice(0, 500);
+  const soSao = parseInt(b.so_sao, 10);
   if (!nhanSuId) return loi('Chưa chọn người được vinh danh');
   if (!noiDung) return loi('Chưa viết lời khen');
+  if (!Number.isInteger(soSao) || soSao < 1 || soSao > 50) return loi('Số sao gửi tặng phải từ 1 đến 50');
 
   const ns = await env.DB.prepare('SELECT ho_ten FROM nhan_su WHERE id = ?').bind(nhanSuId).first();
   if (!ns) return loi('Không tìm thấy người này', 404);
 
   const nguoiGui = phien.ho_ten || phien.ten_dang_nhap;
   const r = await env.DB.prepare(`
-    INSERT INTO vinh_danh (nhan_su_id, nhan_su_ten, noi_dung, nguoi_gui_id, nguoi_gui_ten, tao_luc)
-    VALUES (?, ?, ?, ?, ?, datetime('now','+7 hours'))
-  `).bind(nhanSuId, ns.ho_ten, noiDung, phien.nhan_su_id, nguoiGui).run();
+    INSERT INTO vinh_danh (nhan_su_id, nhan_su_ten, noi_dung, nguoi_gui_id, nguoi_gui_ten, so_sao, tao_luc)
+    VALUES (?, ?, ?, ?, ?, ?, datetime('now','+7 hours'))
+  `).bind(nhanSuId, ns.ho_ten, noiDung, phien.nhan_su_id, nguoiGui, soSao).run();
 
-  // Mỗi lần được vinh danh thì +1 sao tích luỹ (Sếp Ngọc yêu cầu 20/08/2026,
+  // Cộng đúng số sao Sếp chọn vào sao tích luỹ (Sếp Ngọc yêu cầu 20/08/2026,
   // sau này dùng đổi quà — catalog đổi quà CHƯA xây, đây mới là phần cộng dồn).
-  await env.DB.prepare('UPDATE nhan_su SET sao = sao + 1 WHERE id = ?').bind(nhanSuId).run();
+  await env.DB.prepare('UPDATE nhan_su SET sao = sao + ? WHERE id = ?').bind(soSao, nhanSuId).run();
 
   if (nhanSuId !== phien.nhan_su_id) {
-    await guiThongBao(env, null, `${nguoiGui} vừa vinh danh bạn: "${noiDung}" (+1 ⭐)`, 'vinh_danh', String(r.meta.last_row_id), nhanSuId);
+    await guiThongBao(env, null, `${nguoiGui} vừa vinh danh bạn: "${noiDung}" (+${soSao} ⭐)`, 'vinh_danh', String(r.meta.last_row_id), nhanSuId);
   }
   return json({ ok: true, id: r.meta.last_row_id });
 }

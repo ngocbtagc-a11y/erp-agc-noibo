@@ -525,7 +525,9 @@ async function khoiDongVinhDanh() {
       <div class="vd-item person">
         ${avHtml(r.nhan_su_id, (r.nhan_su_ten || '?').trim().split(/\s+/).slice(-2).map(t => t[0]).join('').toUpperCase(), r.co_anh)}
         <div style="flex:1">
-          <div class="nm">${esc(r.nhan_su_ten)} <span class="tag sage" title="Sao tích luỹ, đổi quà">⭐ ${esc(r.sao ?? 0)}</span></div>
+          <div class="nm">${esc(r.nhan_su_ten)}` +
+            ` <span class="tag warn" title="Vừa được tặng lần này">+${esc(r.so_sao ?? 1)} ⭐</span>` +
+            ` <span class="tag sage" title="Tổng sao tích luỹ, dùng đổi quà">⭐ ${esc(r.sao ?? 0)} tổng</span></div>
           <div class="vd-noidung">${esc(r.noi_dung)}</div>
           <div class="sm">— ${esc(r.nguoi_gui_ten)} · ${thoiGianTruoc(r.tao_luc)}</div>
         </div>
@@ -540,7 +542,7 @@ async function khoiDongVinhDanh() {
     const nut = $('#vd-nut-gui');
     nut.disabled = true;
     try {
-      await API.vdGui(chonNguoi.value, $('#vd-noidung').value.trim());
+      await API.vdGui(chonNguoi.value, $('#vd-noidung').value.trim(), parseInt($('#vd-so-sao').value, 10));
       $('#vd-form').reset();
       $('#vd-form-body').hidden = true;
       await taiLai();
