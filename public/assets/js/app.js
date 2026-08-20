@@ -16,7 +16,6 @@ import { API } from './api.js';
 const TAB = [
   { id: 'tongquan',  ten: 'Tổng quan',  icon: 'M3 12l9-9 9 9M5 10v10h14V10' },
   { id: 'danhba',    ten: 'Danh bạ',    icon: 'M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8' },
-  { id: 'chat',      ten: 'Chat nội bộ', icon: 'M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z' },
   { id: 'nhansu',    ten: 'Nhân sự',    icon: 'M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75' },
   { id: 'kinhdoanh', ten: 'Kinh doanh', icon: 'M23 6l-9.5 9.5-5-5L1 18M17 6h6v6' },
   { id: 'khovan',    ten: 'Kho vận',    icon: 'M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16zM3.27 6.96L12 12.01l8.73-5.05M12 22.08V12' },
@@ -366,6 +365,10 @@ if (TOI.quyen.includes('danhba')) {
     const ds = danh_ba.filter(n => !k ||
       boDau(`${n.ho_ten} ${n.chuc_vu} ${n.bo_phan} ${n.sdt} ${n.email}`).includes(k));
 
+    // Nút "Chat ngay" mở chat riêng (DM) — chỉ hiện nếu có kênh chat và
+    // không phải chính mình (tự chat với mình thì vô nghĩa).
+    const coChat = TOI.quyen.includes('chat');
+
     veBang('#db-bang', ds, n =>
       `<td><div class="person"><div class="av">${esc(n.viet_tat)}</div>` +
         `<div><div class="nm">${esc(n.ho_ten)}</div>` +
@@ -373,7 +376,10 @@ if (TOI.quyen.includes('danhba')) {
       `<td>${esc(n.bo_phan)}</td>` +
       `<td><a class="lnk" href="tel:${esc(String(n.sdt || '').replace(/\s/g, ''))}">${esc(n.sdt || '—')}</a></td>` +
       `<td><a class="lnk" href="mailto:${esc(n.email)}">${esc(n.email || '—')}</a></td>` +
-      `<td class="sm">${esc(n.quan_ly || '—')}</td>`);
+      `<td class="sm">${esc(n.quan_ly || '—')}</td>` +
+      `<td>${(coChat && n.id !== TOI.id)
+        ? `<button type="button" class="btn-nho" data-chatngay="${esc(n.id)}" data-ten="${esc(n.ho_ten)}" data-vt="${esc(n.viet_tat)}">Chat ngay</button>`
+        : ''}</td>`);
 
     $('#db-trong').hidden = ds.length > 0;
     $('#db-dem').textContent = `${ds.length}/${danh_ba.length} người`;
@@ -381,6 +387,12 @@ if (TOI.quyen.includes('danhba')) {
 
   veDanhBa('');
   $('#db-tim').addEventListener('input', e => veDanhBa(e.target.value));
+
+  $('#db-bang').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-chatngay]');
+    if (!btn) return;
+    window.moChatVoi?.(btn.getAttribute('data-chatngay'), btn.getAttribute('data-ten'), btn.getAttribute('data-vt'));
+  });
 }
 
 /* -- Chat nội bộ (máy chủ thật) -- */
@@ -389,12 +401,24 @@ if (TOI.quyen.includes('chat')) {
 }
 
 /* ==========================================================================
-   CHAT NỘI BỘ — 1 kênh chung, tự hỏi lại (poll) mỗi vài giây cho gần realtime
+   CHAT NỘI BỘ — bong bóng nổi góc phải dưới (kiểu Messenger). Kênh chung +
+   chat riêng (DM) từng người — bấm "Chat ngay" ở Danh bạ (window.moChatVoi)
+   để mở đúng luồng riêng với người đó. Tự hỏi lại (poll) mỗi vài giây.
    ========================================================================== */
 async function khoiDongChat() {
+  const widget = $('#cnbWidget'), nutMo = $('#cnbNut'), popup = $('#cnbPopup'),
+        nutDong = $('#cnbDong'), nutLui = $('#cnbLui'), badge = $('#cnbBadge'),
+        dauTen = $('#cnbDauTen'), dauPhu = $('#cnbDauPhu');
   const khung = $('#chat-khung');
+  if (!widget) return;
+  widget.hidden = false;
+
   let idCuoi = 0;
+  let idMocToanCuc = 0;   // mốc "đã biết tới đâu" TÍNH TRÊN MỌI luồng (không riêng luồng đang mở) — dùng cho huy hiệu
   let tepDangChon = null;
+  let nguoiNhanHienTai = null;    // null = kênh chung; {id, ten, viet_tat} = đang chat riêng
+  let dangMo = false;
+  let chuaDoc = 0;
 
   // Đổi giờ VN "YYYY-MM-DD HH:MM:SS" -> "HH:MM" (hôm nay) hoặc "dd/mm HH:MM"
   function gioChat(chuoi) {
@@ -455,8 +479,29 @@ async function khoiDongChat() {
 
   function cuoiTrang() { khung.scrollTop = khung.scrollHeight; }
 
+  function veTieuDe() {
+    if (nguoiNhanHienTai) {
+      dauTen.textContent = '💬 ' + nguoiNhanHienTai.ten;
+      dauPhu.textContent = 'Chat riêng';
+      nutLui.hidden = false;
+    } else {
+      dauTen.textContent = '💬 Kênh chung';
+      dauPhu.textContent = '';
+      nutLui.hidden = true;
+    }
+  }
+
+  function veBadge() {
+    if (chuaDoc > 0 && !dangMo) { badge.textContent = chuaDoc > 99 ? '99+' : chuaDoc; badge.hidden = false; }
+    else badge.hidden = true;
+  }
+
+  // Tải lại từ đầu — dùng khi mở popup lần đầu HOẶC vừa đổi cuộc trò chuyện
   async function taiLanDau() {
-    const { tin_nhan } = await API.chatDanhSach();
+    khung.querySelectorAll('.chat-tin').forEach(el => el.remove());   // giữ lại #chat-trong (nằm trong khung)
+    idCuoi = 0;
+    nguoiGuiTruoc = null; taoLucTruoc = null;
+    const { tin_nhan } = await API.chatDanhSach(null, nguoiNhanHienTai?.id);
     $('#chat-trong').hidden = tin_nhan.length > 0;
     tin_nhan.forEach(t => themTin(t));
     cuoiTrang();
@@ -464,18 +509,74 @@ async function khoiDongChat() {
 
   async function hoiTinMoi() {
     try {
-      const { tin_nhan } = await API.chatDanhSach(idCuoi);
+      const { tin_nhan } = await API.chatDanhSach(idCuoi, nguoiNhanHienTai?.id);
       if (tin_nhan.length) {
         const oDay = khung.scrollHeight - khung.scrollTop - khung.clientHeight < 80;
         tin_nhan.forEach(t => themTin(t));
         $('#chat-trong').hidden = true;
-        if (oDay) cuoiTrang();   // chỉ tự cuộn nếu Sếp đang xem gần cuối, khỏi giật khi đọc tin cũ
+        if (oDay) cuoiTrang();   // chỉ tự cuộn nếu đang xem gần cuối, khỏi giật khi đọc tin cũ
       }
     } catch { /* mất mạng tạm thời — bỏ qua, đợt hỏi sau tự thử lại */ }
   }
 
+  /* Huy hiệu chưa đọc: kiểm tra TOÀN BỘ luồng (kênh chung + mọi chat riêng
+     gửi tới tôi), không chỉ luồng đang mở trên widget — nếu không thì ai
+     đang xem kênh chung (hay đang đóng popup) sẽ không hề hay biết có tin
+     nhắn riêng mới gửi tới. */
+  async function hoiChuaDocToanCuc() {
+    try {
+      const { so_luong, id_lon_nhat } = await API.chatChuaDoc(idMocToanCuc);
+      if (so_luong > 0 && !dangMo) { chuaDoc += so_luong; veBadge(); }
+      idMocToanCuc = Math.max(idMocToanCuc, id_lon_nhat);
+    } catch { /* mất mạng tạm thời — bỏ qua, đợt hỏi sau tự thử lại */ }
+  }
+
   await taiLanDau();
+  await hoiChuaDocToanCuc();   // lấy mốc ban đầu, KHÔNG tính lịch sử cũ là "mới" ngay lúc vừa mở trang
   setInterval(hoiTinMoi, 6000);
+  setInterval(hoiChuaDocToanCuc, 6000);
+
+  /* ---- Mở / đóng popup (giống hệt cách chuông thông báo làm) ----
+     boQuaClickKeTiep: nút "Chat ngay" ở Danh bạ (hay bất kỳ nút nào bên
+     ngoài widget sau này) không tự stopPropagation() được — click đó nổi
+     bọt lên document và bị coi là "click ra ngoài" nên đóng popup ngay
+     lập tức. Cờ này bỏ qua đúng 1 lượt click sau khi moPopup() vừa chạy. */
+  let boQuaClickKeTiep = false;
+  function moPopup() {
+    dangMo = true; popup.hidden = false;
+    boQuaClickKeTiep = true;
+    chuaDoc = 0; veBadge();
+    cuoiTrang();
+    setTimeout(() => $('#chat-noidung')?.focus(), 60);
+  }
+  function dongPopup() { dangMo = false; popup.hidden = true; }
+
+  nutMo.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (popup.hidden) moPopup(); else dongPopup();
+  });
+  nutDong.addEventListener('click', (e) => { e.stopPropagation(); dongPopup(); });
+  document.addEventListener('click', () => {
+    if (boQuaClickKeTiep) { boQuaClickKeTiep = false; return; }
+    if (dangMo) dongPopup();
+  });
+  popup.addEventListener('click', (e) => e.stopPropagation());
+
+  // Về kênh chung từ 1 cuộc chat riêng
+  nutLui.addEventListener('click', async () => {
+    nguoiNhanHienTai = null;
+    veTieuDe();
+    await taiLanDau();
+  });
+
+  // Mở chat riêng với 1 người — gọi từ nút "Chat ngay" ở Danh bạ
+  window.moChatVoi = async (id, ten, vietTat) => {
+    if (!id || id === TOI.id) return;
+    nguoiNhanHienTai = { id, ten, viet_tat: vietTat };
+    veTieuDe();
+    moPopup();
+    await taiLanDau();
+  };
 
   // Chọn / bỏ file đính kèm
   $('#chat-nut-tep').addEventListener('click', () => $('#chat-tep').click());
@@ -501,7 +602,7 @@ async function khoiDongChat() {
     const nutGui = $('#chat-nut-gui');
     nutGui.disabled = true;
     try {
-      const { id } = await API.chatGui(noiDung, tepDangChon);
+      const { id } = await API.chatGui(noiDung, tepDangChon, nguoiNhanHienTai?.id);
       oNoiDung.value = '';
       $('#chat-tep').value = '';
       tepDangChon = null;

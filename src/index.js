@@ -202,10 +202,14 @@ async function layNhanSu(req, env) {
 }
 
 /* ==========================================================================
-   CHAT NỘI BỘ — 1 kênh chung cho toàn công ty (Sếp Ngọc chốt 19/08/2026)
+   CHAT NỘI BỘ — kênh chung TOÀN công ty + chat riêng (DM) từng người
+   (Sếp Ngọc chốt 19-20/08/2026)
    ---------------------------------------------------------------------------
    Mở cho MỌI người đăng nhập (giống Danh bạ) — không phân quyền theo bộ
    phận, vì đây là kênh làm việc chung thay Zalo/Misa chat đang dùng loạn.
+   nguoi_nhan_id NULL = tin ở kênh chung; có giá trị = tin nhắn RIÊNG (DM)
+   giữa nguoi_gui_id và nguoi_nhan_id (2 chiều). Bấm "Chat ngay" ở Danh bạ
+   mở đúng luồng riêng với người đó.
    File đính kèm lưu base64 thẳng trong D1 (theo đúng cách CCCD đang làm,
    xem nhansu.js — quy mô công ty nhỏ, chưa cần mở R2). Giới hạn 4MB/file.
    Trình duyệt tự hỏi lại (poll) — không dùng WebSocket cho gọn hạ tầng.
@@ -213,32 +217,60 @@ async function layNhanSu(req, env) {
 const CHAT_TEP_TOI_DA = 4 * 1024 * 1024;   // 4MB — đủ ảnh chụp màn hình, Excel, PDF ngắn
 
 /* Lấy tin nhắn — mặc định 50 tin gần nhất; truyền sau_id để chỉ lấy tin MỚI
-   hơn (dùng cho polling, đỡ tải lại toàn bộ). Không trả tep_du_lieu (nặng). */
+   hơn (dùng cho polling, đỡ tải lại toàn bộ). ?voi=<nhan_su_id> = lấy luồng
+   chat RIÊNG với người đó thay vì kênh chung. Không trả tep_du_lieu (nặng). */
 async function chatDanhSach(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
 
   const url = new URL(req.url);
   const sauId = parseInt(url.searchParams.get('sau_id'), 10);
+  const voi = (url.searchParams.get('voi') || '').trim() || null;
+
+  const cotChung = `id, nguoi_gui_id, nguoi_gui_ten, nguoi_gui_viet_tat, nguoi_nhan_id, noi_dung,
+              tep_ten, tep_loai, tep_kich_thuoc, tao_luc`;
+  // Kênh chung: nguoi_nhan_id IS NULL. Riêng (DM): 2 chiều giữa tôi và "voi".
+  const dieuKienPhamVi = voi
+    ? `((nguoi_gui_id = ? AND nguoi_nhan_id = ?) OR (nguoi_gui_id = ? AND nguoi_nhan_id = ?))`
+    : `nguoi_nhan_id IS NULL`;
+  const thamSoPhamVi = voi ? [phien.nhan_su_id, voi, voi, phien.nhan_su_id] : [];
 
   const cauLenh = sauId > 0
-    ? `SELECT id, nguoi_gui_id, nguoi_gui_ten, nguoi_gui_viet_tat, noi_dung,
-              tep_ten, tep_loai, tep_kich_thuoc, tao_luc
-         FROM tin_nhan_chat WHERE id > ? ORDER BY id ASC`
-    : `SELECT id, nguoi_gui_id, nguoi_gui_ten, nguoi_gui_viet_tat, noi_dung,
-              tep_ten, tep_loai, tep_kich_thuoc, tao_luc
-         FROM tin_nhan_chat ORDER BY id DESC LIMIT 50`;
+    ? `SELECT ${cotChung} FROM tin_nhan_chat WHERE ${dieuKienPhamVi} AND id > ? ORDER BY id ASC`
+    : `SELECT ${cotChung} FROM tin_nhan_chat WHERE ${dieuKienPhamVi} ORDER BY id DESC LIMIT 50`;
 
-  const { results } = sauId > 0
-    ? await env.DB.prepare(cauLenh).bind(sauId).all()
-    : await env.DB.prepare(cauLenh).all();
+  const thamSo = sauId > 0 ? [...thamSoPhamVi, sauId] : thamSoPhamVi;
+  const { results } = await env.DB.prepare(cauLenh).bind(...thamSo).all();
 
   // Lấy 50 tin gần nhất theo id giảm dần thì phải đảo lại cho đúng thứ tự thời gian
   const tinNhan = sauId > 0 ? (results || []) : (results || []).reverse();
   return json({ tin_nhan: tinNhan, toi_id: phien.nhan_su_id });
 }
 
-/* Gửi tin nhắn — có thể chỉ có chữ, chỉ có file, hoặc cả hai */
+/* Đếm tin CHƯA XEM trên TOÀN BỘ các luồng (kênh chung + mọi cuộc chat riêng
+   gửi tới tôi) — không phụ thuộc đang mở luồng nào trên widget. Cần cái này
+   riêng vì chatDanhSach() ở trên chỉ nhìn thấy 1 luồng tại 1 thời điểm (luồng
+   đang mở), nên trước đây nhắn riêng cho ai đó mà họ đang xem kênh chung
+   (hoặc đóng popup) thì huy hiệu KHÔNG BAO GIỜ tăng — họ không biết có tin. */
+async function chatChuaDoc(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+
+  const sauId = parseInt(new URL(req.url).searchParams.get('sau_id'), 10) || 0;
+  const { results } = await env.DB.prepare(`
+    SELECT COUNT(*) AS so_luong, MAX(id) AS id_lon_nhat
+    FROM tin_nhan_chat
+    WHERE (nguoi_nhan_id IS NULL OR nguoi_nhan_id = ?)
+      AND nguoi_gui_id != ?
+      AND id > ?
+  `).bind(phien.nhan_su_id, phien.nhan_su_id, sauId).all();
+  const r = (results && results[0]) || {};
+  // MAX(id) trả về NULL khi không có dòng nào khớp — giữ nguyên mốc cũ, đừng lùi về null
+  return json({ so_luong: r.so_luong || 0, id_lon_nhat: r.id_lon_nhat || sauId });
+}
+
+/* Gửi tin nhắn — có thể chỉ có chữ, chỉ có file, hoặc cả hai. Có nguoi_nhan_id
+   trong form thì là tin nhắn RIÊNG, không thì vào kênh chung. */
 async function chatGui(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
@@ -246,6 +278,8 @@ async function chatGui(req, env) {
   let b; try { b = await req.formData(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
   const noiDung = String(b.get('noi_dung') || '').trim().slice(0, 2000);
   const tep = b.get('tep');   // File hoặc null
+  const nguoiNhanId = String(b.get('nguoi_nhan_id') || '').trim() || null;
+  if (nguoiNhanId && nguoiNhanId === phien.nhan_su_id) return loi('Không tự chat với chính mình được');
 
   let tepTen = null, tepLoai = null, tepKichThuoc = null, tepB64 = null;
   if (tep && typeof tep === 'object' && tep.size > 0) {
@@ -262,11 +296,11 @@ async function chatGui(req, env) {
   const nguoi = phien.ho_ten || phien.ten_dang_nhap;
   const r = await env.DB.prepare(`
     INSERT INTO tin_nhan_chat
-      (nguoi_gui_id, nguoi_gui_ten, nguoi_gui_viet_tat, noi_dung,
+      (nguoi_gui_id, nguoi_gui_ten, nguoi_gui_viet_tat, nguoi_nhan_id, noi_dung,
        tep_ten, tep_loai, tep_kich_thuoc, tep_du_lieu, tao_luc)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now','+7 hours'))
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now','+7 hours'))
   `).bind(
-    phien.nhan_su_id, nguoi, phien.viet_tat || '?', noiDung || null,
+    phien.nhan_su_id, nguoi, phien.viet_tat || '?', nguoiNhanId, noiDung || null,
     tepTen, tepLoai, tepKichThuoc, tepB64
   ).run();
 
@@ -1141,6 +1175,7 @@ const DUONG_DAN = {
   'GET  /api/danh-ba':       layDanhBa,
   'GET  /api/nhan-su':       layNhanSu,
   'GET  /api/chat/tin-nhan': chatDanhSach,
+  'GET  /api/chat/chua-doc': chatChuaDoc,
   'POST /api/chat/gui':      chatGui,
   'GET  /api/chat/tep':      chatTepDinhKem,
   'GET  /api/quan-tri/danh-sach':      qtDanhSach,
