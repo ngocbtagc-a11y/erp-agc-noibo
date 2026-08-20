@@ -1125,6 +1125,42 @@ async function kiemTraDayVanHanh(env) {
   `).run();
 }
 
+/* Lý do hoàn NGHIÊM TRỌNG — nghi hàng giả/nhái hoặc hộp hàng rỗng (Sếp Ngọc
+   yêu cầu 20/08/2026, đây là rủi ro pháp lý/uy tín, cần biết NGAY chứ không
+   đợi ai đó tình cờ lướt thấy trong danh sách). Cùng nhóm từ khoá với bản
+   dịch tiếng Việt ở app.js (LY_DO_KHOA) nhưng viết riêng ở đây vì backend
+   không import được file frontend — sửa 1 bên thì nhớ soát bên kia.
+   da_canh_bao_nghiem_trong chặn gửi lặp lại mỗi 5 phút cho cùng 1 đơn. */
+const LY_DO_NGHIEM_TRONG_RE = /counterfeit|fake|empty_(box|parcel|package)/i;
+
+async function kiemTraLyDoNghiemTrong(env) {
+  const { results } = await env.DB.prepare(`
+    SELECT return_sn, order_sn, ly_do, nguon, nguoi_mua
+      FROM don_hoan
+     WHERE da_canh_bao_nghiem_trong = 0 AND ly_do IS NOT NULL
+  `).all();
+  const canhBao = (results || []).filter(r => LY_DO_NGHIEM_TRONG_RE.test(r.ly_do));
+  if (!canhBao.length) return;
+
+  for (const r of canhBao) {
+    const nguon = r.nguon === 'tiktok' ? 'TikTok' : 'Shopee';
+    const loaiRui = /counterfeit|fake/i.test(r.ly_do) ? 'nghi HÀNG GIẢ/NHÁI' : 'HỘP HÀNG RỖNG';
+    const noiDung = `🚨 Đơn hoàn ${r.return_sn} (${nguon}) — lý do ${loaiRui}: "${r.ly_do}". Cần kiểm tra ngay, đây là rủi ro pháp lý/uy tín.`;
+    await guiThongBao(env, 'van_hanh', noiDung, 'canh_bao_nghiem_trong', r.return_sn);
+    try {
+      await guiTelegram(env,
+        `🚨 CẢNH BÁO NGHIÊM TRỌNG — ĐƠN HOÀN\n\n` +
+        `Sàn: ${nguon}\nMã đơn hoàn: ${r.return_sn}\nĐơn gốc: ${r.order_sn || '—'}\n` +
+        `Người mua: ${r.nguoi_mua || '—'}\nLý do: ${r.ly_do} (${loaiRui})\n\n` +
+        `→ Kiểm tra ngay, đây là rủi ro pháp lý/uy tín (hàng giả/nhái hoặc hộp rỗng).`);
+    } catch (e) { console.error('Telegram cảnh báo nghiêm trọng:', e.message); }
+  }
+
+  const phs = canhBao.map(() => '?').join(',');
+  await env.DB.prepare(`UPDATE don_hoan SET da_canh_bao_nghiem_trong = 1 WHERE return_sn IN (${phs})`)
+              .bind(...canhBao.map(r => r.return_sn)).run();
+}
+
 /* ==========================================================================
    KINH DOANH — Cần đối soát với sàn
    ---------------------------------------------------------------------------
@@ -1616,6 +1652,8 @@ export default {
       try { await tiktok.dongBoNen(env); } catch (e) { console.error('Cron TikTok:', e.message); }
       // Sau khi đồng bộ xong mới quét cảnh báo (mốc 12h đã được cập nhật)
       try { await kiemTraCanhBaoHoan(env); } catch (e) { console.error('Cron cảnh báo:', e.message); }
+      // Lý do hoàn nghiêm trọng (nghi hàng giả/nhái, hộp hàng rỗng) — báo NGAY
+      try { await kiemTraLyDoNghiemTrong(env); } catch (e) { console.error('Cron cảnh báo nghiêm trọng:', e.message); }
       // (Đã bỏ tự-đẩy-24h: luồng mới cho Vận hành sàn CHỦ ĐỘNG đẩy từng đơn sang kho)
       // Luật cứng: đơn hoàn chỉ giữ trong tháng làm việc hiện tại
       try { await donDepDuLieuNgoaiThang(env); } catch (e) { console.error('Cron dọn dữ liệu ngoài tháng:', e.message); }

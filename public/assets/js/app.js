@@ -128,7 +128,23 @@ const LY_DO = {
   WRONG_SIZE: 'Sai kích cỡ',
   QUALITY_ISSUE: 'Lỗi chất lượng',
   FAKE_ITEM: 'Hàng giả/nhái',
-  EXPIRED: 'Hết hạn dùng'
+  EXPIRED: 'Hết hạn dùng',
+  // Bổ sung 20/08/2026 — rà dữ liệu thật thấy các mã này rơi qua chưa dịch,
+  // vẫn hiện tiếng Anh thô (Sếp Ngọc bắt lỗi từ ảnh chụp cột "Lý do").
+  BROKEN_PRODUCTS: 'Hàng vỡ/hỏng',
+  CHANGE_MIND: 'Đổi ý',
+  DAMAGED_OTHERS: 'Hàng hư hỏng (khác)',
+  DIFFERENT_DESCRIPTION: 'Không đúng mô tả',
+  EXPIRED_PRODUCT: 'Hết hạn dùng',
+  FUNCTIONAL_DMG: 'Lỗi chức năng',
+  ITEM_FAKE: 'Hàng giả/nhái',
+  ITEM_MISSING: 'Thiếu hàng',
+  NOT_RECEIPT: 'Chưa nhận được hàng',
+  OUTER_DAMAGED_PACKAGE: 'Bao bì ngoài bị hỏng',
+  SPILLED_CONTENTS: 'Hàng bị đổ/tràn',
+  USED: 'Hàng đã qua sử dụng',
+  WRONG_ADDRESS: 'Sai địa chỉ giao hàng',
+  WRONG_ORDER_INFO: 'Sai thông tin đơn hàng'
 };
 /* Mã lý do của TikTok/Shopee thường dài (vd ecom_order_delivered_refund_and_
    return_reason_damaged) → dịch theo TỪ KHÓA cho bền, không phải liệt kê từng mã. */
@@ -142,6 +158,7 @@ const LY_DO_KHOA = [
   [/defective/,                           'Hàng lỗi'],
   [/poor_quality|quality/,                'Chất lượng kém'],
   [/counterfeit|fake/,                    'Nghi hàng giả/nhái'],
+  [/empty_(box|parcel|package)|empty.*box|no.*item.*inside/, 'Hộp hàng rỗng'],
   [/missed_delivery|delivery_date/,       'Giao trễ hẹn'],
   [/change_payment/,                      'Huỷ: đổi phương thức thanh toán'],
   [/wrong_delivery_info/,                 'Huỷ: sai thông tin giao hàng'],
@@ -164,6 +181,17 @@ function nhanLyDo(s) {
     .trim();
   g = g.charAt(0).toUpperCase() + g.slice(1);
   return g.length > 34 ? g.slice(0, 34) + '…' : g;
+}
+
+/* Lý do NGHIÊM TRỌNG (nghi hàng giả/nhái, hộp hàng rỗng) — cùng mẫu regex
+   với backend (index.js: LY_DO_NGHIEM_TRONG_RE), sửa 1 bên nhớ soát bên
+   kia. Máy chủ đã tự gửi thông báo/Telegram; đây chỉ thêm dấu đỏ ngay
+   trên bảng để KHÔNG PHẢI mở chuông mới thấy (Sếp Ngọc yêu cầu 20/08/2026). */
+const LY_DO_NGHIEM_TRONG_RE = /counterfeit|fake|empty_(box|parcel|package)/i;
+function oLyDo(s) {
+  const chu = nhanLyDo(s);
+  if (!s || !LY_DO_NGHIEM_TRONG_RE.test(s)) return esc(chu);
+  return `<span class="tag danger" title="${esc(s)}">🚨 ${esc(chu)}</span>`;
 }
 
 /* Ô "Sản phẩm hoàn về" dùng chung cho Kho vận / Cần đối soát / Kế toán tra soát.
@@ -1116,7 +1144,7 @@ async function khoiDongDoiSoatSan() {
       `<td class="sm dinh-cot4" title="${esc(r.ma_van_don || '')}">${esc(r.ma_van_don || '—')}</td>` +
       spCell +
       `<td class="num">${r.so_luong != null ? esc(r.so_luong) : '—'}</td>` +
-      `<td class="sm">${esc(nhanLyDo(r.ly_do))}</td>` +
+      `<td class="sm">${oLyDo(r.ly_do)}</td>` +
       `<td><span class="tag mute" title="${esc(r.trang_thai || '')}">${esc(ttChu)}</span></td>` +
       `<td class="num">${tien}</td>` +
       `<td>${daTra}</td>` +
@@ -1996,7 +2024,7 @@ async function khoiDongKeToanTraSoat() {
         `<td>${veTag}</td>` +
         spCell +
         `<td class="num">${r.so_luong != null ? esc(r.so_luong) : '—'}</td>` +
-        `<td class="sm">${esc(nhanLyDo(r.ly_do))}</td>` +
+        `<td class="sm">${oLyDo(r.ly_do)}</td>` +
         `<td class="num">${tien}</td>` +
         `<td><button type="button" class="btn-nho btn-primary" data-trasoat="${esc(r.return_sn)}">Đã tra soát</button></td>`;
     });
