@@ -902,6 +902,10 @@ async function khoiDongDoiSoatSan() {
     }
   });
 
+  // Cho chuông thông báo gọi lại được khi bấm vào 1 thông báo — không thì
+  // tab Vận hành sàn chỉ hiện lại dữ liệu cũ từ lúc tải trang, chưa có đơn
+  // vừa được đẩy sang (anh Duy phát hiện 20/08/2026).
+  window.LAM_MOI_DOISOAT = veDoiSoat;
   await veDoiSoat();
 }
 
@@ -956,19 +960,28 @@ if (TOI.shopee && TOI.shopee.xem) {
     e.stopPropagation();
     const dangMo = !panel.hidden;
     panel.hidden = dangMo;
+    if (!dangMo) await taiThongBao();   // mở chuông thì tải lại, khỏi chờ 5 phút
     if (!dangMo) { try { await API.thongBaoDaXem(); } catch {} badge.hidden = true; }
   });
 
+  // Trước chỉ chuyển đúng tab nhưng danh sách bên trong vẫn là dữ liệu tải
+  // từ lúc mở trang — đơn vừa đẩy sang chưa kịp hiện, tưởng như "bấm vào
+  // không thấy đơn đâu" (anh Duy phát hiện 20/08/2026). Giờ gọi lại đúng
+  // hàm tải dữ liệu của màn đó (window.LAM_MOI_*, gắn ở khoiDong* liên quan).
   ds.addEventListener('click', (e) => {
     const it = e.target.closest('.tb-item');
     if (!it) return;
     if (it.dataset.loai === 'day_kho') {
       moTab('khovan');
       const b = document.querySelector('#kvSeg .seg-nut[data-kv="donhoan"]'); if (b) b.click();
+      if (window.LAM_MOI_DONHOAN) window.LAM_MOI_DONHOAN();
     } else if (it.dataset.loai === 'khieu_nai') {
       moTab('kinhdoanh');
+      const b = document.querySelector('#kdSeg .seg-nut[data-kd="vanhanh"]'); if (b) b.click();
+      if (window.LAM_MOI_DOISOAT) window.LAM_MOI_DOISOAT();
     } else if (it.dataset.loai === 'day_ke_toan') {
       moTab('ketoan');
+      if (window.LAM_MOI_TRASOAT) window.LAM_MOI_TRASOAT();
     }
     panel.hidden = true;
   });
@@ -1521,6 +1534,8 @@ async function khoiDongDonHoan() {
     loi: '#dh-tk-loi', ok: '#dh-tk-ok', apiTrangThai: API.tiktokTrangThai, apiDongBo: API.tiktokDongBo
   });
 
+  // Cho chuông thông báo gọi lại được (xem chú thích ở LAM_MOI_DOISOAT).
+  window.LAM_MOI_DONHOAN = veDanhSach;
   // Danh sách đơn hoàn là phần quan trọng nhất (kho dùng) → load TRƯỚC. Phần
   // kết nối sàn + ghép SKU bọc try/catch để lỗi ở đó không chặn việc hiện danh sách.
   await veDanhSach();
@@ -1594,6 +1609,8 @@ async function khoiDongKeToanTraSoat() {
     } catch (err) { btn.disabled = false; btn.textContent = cu; alert(err.message || 'Không lưu được, thử lại nhé.'); }
   });
 
+  // Cho chuông thông báo gọi lại được (xem chú thích ở LAM_MOI_DOISOAT).
+  window.LAM_MOI_TRASOAT = veTraSoat;
   await veTraSoat();
 }
 
