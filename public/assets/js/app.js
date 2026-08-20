@@ -406,6 +406,7 @@ async function khoiDongChat() {
   widget.hidden = false;
 
   let idCuoi = 0;
+  let idMocToanCuc = 0;   // mốc "đã biết tới đâu" TÍNH TRÊN MỌI luồng (không riêng luồng đang mở) — dùng cho huy hiệu
   let tepDangChon = null;
   let nguoiNhanHienTai = null;    // null = kênh chung; {id, ten, viet_tat} = đang chat riêng
   let dangMo = false;
@@ -506,17 +507,26 @@ async function khoiDongChat() {
         tin_nhan.forEach(t => themTin(t));
         $('#chat-trong').hidden = true;
         if (oDay) cuoiTrang();   // chỉ tự cuộn nếu đang xem gần cuối, khỏi giật khi đọc tin cũ
-        // Đếm chưa đọc: tin không phải của mình mà tới lúc popup đang đóng
-        if (!dangMo) {
-          const tuNguoiKhac = tin_nhan.filter(t => t.nguoi_gui_id !== TOI.id).length;
-          if (tuNguoiKhac) { chuaDoc += tuNguoiKhac; veBadge(); }
-        }
       }
     } catch { /* mất mạng tạm thời — bỏ qua, đợt hỏi sau tự thử lại */ }
   }
 
+  /* Huy hiệu chưa đọc: kiểm tra TOÀN BỘ luồng (kênh chung + mọi chat riêng
+     gửi tới tôi), không chỉ luồng đang mở trên widget — nếu không thì ai
+     đang xem kênh chung (hay đang đóng popup) sẽ không hề hay biết có tin
+     nhắn riêng mới gửi tới. */
+  async function hoiChuaDocToanCuc() {
+    try {
+      const { so_luong, id_lon_nhat } = await API.chatChuaDoc(idMocToanCuc);
+      if (so_luong > 0 && !dangMo) { chuaDoc += so_luong; veBadge(); }
+      idMocToanCuc = Math.max(idMocToanCuc, id_lon_nhat);
+    } catch { /* mất mạng tạm thời — bỏ qua, đợt hỏi sau tự thử lại */ }
+  }
+
   await taiLanDau();
+  await hoiChuaDocToanCuc();   // lấy mốc ban đầu, KHÔNG tính lịch sử cũ là "mới" ngay lúc vừa mở trang
   setInterval(hoiTinMoi, 6000);
+  setInterval(hoiChuaDocToanCuc, 6000);
 
   /* ---- Mở / đóng popup (giống hệt cách chuông thông báo làm) ----
      boQuaClickKeTiep: nút "Chat ngay" ở Danh bạ (hay bất kỳ nút nào bên

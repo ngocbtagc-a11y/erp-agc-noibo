@@ -247,6 +247,28 @@ async function chatDanhSach(req, env) {
   return json({ tin_nhan: tinNhan, toi_id: phien.nhan_su_id });
 }
 
+/* Đếm tin CHƯA XEM trên TOÀN BỘ các luồng (kênh chung + mọi cuộc chat riêng
+   gửi tới tôi) — không phụ thuộc đang mở luồng nào trên widget. Cần cái này
+   riêng vì chatDanhSach() ở trên chỉ nhìn thấy 1 luồng tại 1 thời điểm (luồng
+   đang mở), nên trước đây nhắn riêng cho ai đó mà họ đang xem kênh chung
+   (hoặc đóng popup) thì huy hiệu KHÔNG BAO GIỜ tăng — họ không biết có tin. */
+async function chatChuaDoc(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+
+  const sauId = parseInt(new URL(req.url).searchParams.get('sau_id'), 10) || 0;
+  const { results } = await env.DB.prepare(`
+    SELECT COUNT(*) AS so_luong, MAX(id) AS id_lon_nhat
+    FROM tin_nhan_chat
+    WHERE (nguoi_nhan_id IS NULL OR nguoi_nhan_id = ?)
+      AND nguoi_gui_id != ?
+      AND id > ?
+  `).bind(phien.nhan_su_id, phien.nhan_su_id, sauId).all();
+  const r = (results && results[0]) || {};
+  // MAX(id) trả về NULL khi không có dòng nào khớp — giữ nguyên mốc cũ, đừng lùi về null
+  return json({ so_luong: r.so_luong || 0, id_lon_nhat: r.id_lon_nhat || sauId });
+}
+
 /* Gửi tin nhắn — có thể chỉ có chữ, chỉ có file, hoặc cả hai. Có nguoi_nhan_id
    trong form thì là tin nhắn RIÊNG, không thì vào kênh chung. */
 async function chatGui(req, env) {
@@ -1120,6 +1142,7 @@ const DUONG_DAN = {
   'GET  /api/danh-ba':       layDanhBa,
   'GET  /api/nhan-su':       layNhanSu,
   'GET  /api/chat/tin-nhan': chatDanhSach,
+  'GET  /api/chat/chua-doc': chatChuaDoc,
   'POST /api/chat/gui':      chatGui,
   'GET  /api/chat/tep':      chatTepDinhKem,
   'GET  /api/quan-tri/danh-sach':      qtDanhSach,
