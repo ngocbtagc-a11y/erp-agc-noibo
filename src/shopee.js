@@ -279,13 +279,17 @@ export async function apiDanhSach(env, phien) {
   // hoặc đang ở "sân" Vận hành sàn (dang_cho='van_hanh' — quá 24h chưa nhận,
   // xem kiemTraDayVanHanh trong index.js) thì KHÔNG hiện ở đây nữa. Vận hành
   // sàn tra soát/đẩy xong (dang_cho về lại 'kho') là đơn tự hiện lại.
+  // KHÔNG lấy d.tinh_trang_hang ở đây dù frontend có đọc field này — hàng
+  // trả về luôn có kho_nhan_luc IS NULL (lọc ở WHERE bên dưới) nên tình
+  // trạng luôn null, không dùng tới; bỏ ra để không vỡ nếu server chạy
+  // trước khi database thật kịp nạp migration them-tinhtrang-hang.sql.
   const { results } = await env.DB.prepare(`
     SELECT d.return_sn, d.order_sn, d.trang_thai, d.ly_do, d.so_tien, d.tien_te, d.nguoi_mua,
            d.san_pham, d.san_pham_ten, COALESCE(d.san_pham_sku, m.ma_sku) AS san_pham_sku,
            d.so_luong, d.ma_van_don, d.nguon, d.tao_luc_shopee,
            d.cap_nhat_shopee, d.dong_bo_luc,
            d.kho_nhan_luc, d.kho_nhan_boi, d.cho_kho_nhan_tu, d.lan_tra_soat, d.dang_cho,
-           d.phan_loai_nhan, d.phan_loai_boi, d.phan_loai_luc, d.tinh_trang_hang
+           d.phan_loai_nhan, d.phan_loai_boi, d.phan_loai_luc
       FROM don_hoan d
       LEFT JOIN sku_map m ON m.ten_san_pham = d.san_pham_ten
      WHERE (d.trang_thai NOT LIKE '%CANCEL%' OR d.ma_van_don IS NOT NULL)
