@@ -53,7 +53,7 @@ export const API = {
 
   nhanSu: () => goi('/api/nhan-su'),
 
-  /* ---- Tác vụ: giao việc cho nhân viên ---- */
+  /* ---- Trạm Việc: giao việc cho nhân viên ---- */
   cvDanhSach: () => goi('/api/cong-viec/danh-sach'),
   cvTao: (cv) => goi('/api/cong-viec/tao', { method: 'POST', body: JSON.stringify(cv) }),
   cvCapNhat: (id, trangThai, ketQua) => goi('/api/cong-viec/cap-nhat', {

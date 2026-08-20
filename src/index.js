@@ -843,7 +843,7 @@ async function thongBaoDaXem(req, env) {
 }
 
 /* ==========================================================================
-   TÁC VỤ — giao việc cho nhân viên (Sếp Ngọc yêu cầu 20/08/2026). Theo tinh
+   TRẠM VIỆC — giao việc cho nhân viên (Sếp Ngọc yêu cầu 20/08/2026). Theo tinh
    thần MBOs của công ty: mỗi việc BẮT BUỘC có "đầu ra cụ thể" (dau_ra),
    tách khỏi "mô tả" (mo_ta, chỉ là ghi chú thêm, không bắt buộc).
    Luồng trạng thái: moi -> dang_lam -> cho_duyet -> hoan_thanh (hoặc huy

@@ -16,7 +16,7 @@ import { API } from './api.js';
 const TAB = [
   { id: 'tongquan',  ten: 'Tổng quan',  icon: 'M3 12l9-9 9 9M5 10v10h14V10' },
   { id: 'danhba',    ten: 'Danh bạ',    icon: 'M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8' },
-  { id: 'congviec',  ten: 'Tác vụ',     icon: 'M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11' },
+  { id: 'congviec',  ten: 'Trạm Việc',  icon: 'M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11' },
   { id: 'nhansu',    ten: 'Nhân sự',    icon: 'M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75' },
   { id: 'kinhdoanh', ten: 'Kinh doanh', icon: 'M23 6l-9.5 9.5-5-5L1 18M17 6h6v6' },
   { id: 'khovan',    ten: 'Kho vận',    icon: 'M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16zM3.27 6.96L12 12.01l8.73-5.05M12 22.08V12' },
@@ -396,7 +396,7 @@ if (TOI.quyen.includes('danhba')) {
   });
 }
 
-/* -- Tác vụ: giao việc cho nhân viên (máy chủ thật) -- */
+/* -- Trạm Việc: giao việc cho nhân viên (máy chủ thật) -- */
 if (TOI.quyen.includes('congviec')) {
   await khoiDongCongViec();
 }
@@ -407,7 +407,7 @@ if (TOI.quyen.includes('chat')) {
 }
 
 /* ==========================================================================
-   TÁC VỤ — giao việc cho nhân viên. Theo tinh thần MBOs (quản lý theo mục
+   TRẠM VIỆC — giao việc cho nhân viên. Theo tinh thần MBOs (quản lý theo mục
    tiêu): mỗi việc BẮT BUỘC có "đầu ra cụ thể", không chỉ mô tả làm gì.
    Luồng trạng thái: moi -> dang_lam -> cho_duyet -> hoan_thanh (hoặc huy).
    ========================================================================== */
