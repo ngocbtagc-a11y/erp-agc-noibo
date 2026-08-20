@@ -16,7 +16,7 @@ import { API } from './api.js';
 const TAB = [
   { id: 'tongquan',  ten: 'Tổng quan',  icon: 'M3 12l9-9 9 9M5 10v10h14V10' },
   { id: 'danhba',    ten: 'Danh bạ',    icon: 'M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8' },
-  { id: 'congviec',  ten: 'Trạm Việc',  icon: 'M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11' },
+  { id: 'congviec',  ten: 'Trạm Mục Tiêu',  icon: 'M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11' },
   { id: 'nhansu',    ten: 'Nhân sự',    icon: 'M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75' },
   { id: 'kinhdoanh', ten: 'Kinh doanh', icon: 'M23 6l-9.5 9.5-5-5L1 18M17 6h6v6' },
   { id: 'khovan',    ten: 'Kho vận',    icon: 'M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16zM3.27 6.96L12 12.01l8.73-5.05M12 22.08V12' },
@@ -498,7 +498,7 @@ if (TOI.quyen.includes('danhba')) {
   });
 }
 
-/* -- Trạm Việc: giao việc cho nhân viên (máy chủ thật) -- */
+/* -- Trạm Mục Tiêu: giao việc cho nhân viên (máy chủ thật) -- */
 if (TOI.quyen.includes('congviec')) {
   await khoiDongCongViec();
 }
@@ -564,12 +564,12 @@ async function khoiDongVinhDanh() {
     if (kq.goi_y && kq.goi_y.so_viec > 0) {
       goiYBody.hidden = false;
       $('#vd-goiy').innerHTML =
-        `💡 <span>${esc(kq.goi_y.nguoi_nhan_ten)} vừa hoàn thành ${kq.goi_y.so_viec} việc ở Trạm Việc tuần này</span>` +
+        `💡 <span>${esc(kq.goi_y.nguoi_nhan_ten)} vừa hoàn thành ${kq.goi_y.so_viec} việc ở Trạm Mục Tiêu tuần này</span>` +
         `<button type="button" class="btn-nho" id="vd-goiy-nut">Vinh danh luôn</button>`;
       $('#vd-goiy-nut').addEventListener('click', () => {
         dongMoFormVd(true);
         chonNguoi.value = kq.goi_y.nguoi_nhan_id;
-        $('#vd-noidung').value = `Hoàn thành ${kq.goi_y.so_viec} việc ở Trạm Việc tuần này, làm tốt lắm!`;
+        $('#vd-noidung').value = `Hoàn thành ${kq.goi_y.so_viec} việc ở Trạm Mục Tiêu tuần này, làm tốt lắm!`;
         $('#vd-noidung').focus();
       });
     } else {
@@ -628,10 +628,17 @@ const CV_TRANG_THAI = {
 async function khoiDongCongViec() {
   const { danh_ba } = await API.danhBa();
   const chonNguoiNhan = $('#cv-nguoi-nhan');
+  const oPhoiHop = $('#cv-phoi-hop');
   danh_ba.filter(n => n.id !== TOI.id).forEach(n => {
     const o = document.createElement('option');
     o.value = n.id; o.textContent = `${n.ho_ten} — ${n.chuc_vu || ''}`;
     chonNguoiNhan.appendChild(o);
+    if (oPhoiHop) {
+      const lbl = document.createElement('label');
+      lbl.className = 'cv-ph-item';
+      lbl.innerHTML = `<input type="checkbox" value="${esc(n.id)}"><span>${esc(n.ho_ten)}</span>`;
+      oPhoiHop.appendChild(lbl);
+    }
   });
 
   // Ẩn/hiện form giao việc — đổi chữ nút theo trạng thái + có nút "Hủy" riêng
@@ -652,7 +659,7 @@ async function khoiDongCongViec() {
     const nut = e.target.closest('.seg-nut');
     if (!nut) return;
     document.querySelectorAll('#cvSeg .seg-nut').forEach(b => b.classList.toggle('active', b === nut));
-    ['nhan', 'giao'].forEach(k => {
+    ['nhan', 'phoihop', 'giao'].forEach(k => {
       const pane = document.getElementById('cv-pane-' + k);
       if (pane) pane.hidden = (k !== nut.dataset.cv);
     });
@@ -674,7 +681,7 @@ async function khoiDongCongViec() {
       let nut = '';
       if (r.trang_thai === 'moi') nut = `<button type="button" class="btn-nho btn-primary" data-cv-batdau="${r.id}">Bắt đầu làm</button>`;
       else if (r.trang_thai === 'dang_lam') nut = `<button type="button" class="btn-nho btn-primary" data-cv-nop="${r.id}">Nộp kết quả</button>`;
-      return `<td><div class="nm">${esc(r.tieu_de)}</div>${r.mo_ta ? `<div class="sm">${esc(r.mo_ta)}</div>` : ''}${r.ket_qua ? `<div class="sm"><b>Kết quả:</b> ${esc(r.ket_qua)}</div>` : ''}</td>` +
+      return `<td><div class="nm">${esc(r.tieu_de)}</div>${r.mo_ta ? `<div class="sm">${esc(r.mo_ta)}</div>` : ''}${r.phoi_hop_ten ? `<div class="sm">🤝 Phối hợp: ${esc(r.phoi_hop_ten)}</div>` : ''}${r.ket_qua ? `<div class="sm"><b>Kết quả:</b> ${esc(r.ket_qua)}</div>` : ''}</td>` +
         `<td class="sm">${esc(r.dau_ra)}</td>` +
         `<td class="sm">${esc(r.nguoi_giao_ten)}</td>` +
         `<td class="sm">${dongHan(r.han_chot)}</td>` +
@@ -693,7 +700,7 @@ async function khoiDongCongViec() {
       if (r.trang_thai === 'moi' || r.trang_thai === 'dang_lam' || r.trang_thai === 'cho_duyet') {
         nut += ` <button type="button" class="btn-nho" data-cv-huy="${r.id}">Huỷ</button>`;
       }
-      return `<td><div class="nm">${esc(r.tieu_de)}</div>${r.mo_ta ? `<div class="sm">${esc(r.mo_ta)}</div>` : ''}${r.ket_qua ? `<div class="sm"><b>Kết quả:</b> ${esc(r.ket_qua)}</div>` : ''}</td>` +
+      return `<td><div class="nm">${esc(r.tieu_de)}</div>${r.mo_ta ? `<div class="sm">${esc(r.mo_ta)}</div>` : ''}${r.phoi_hop_ten ? `<div class="sm">🤝 Phối hợp: ${esc(r.phoi_hop_ten)}</div>` : ''}${r.ket_qua ? `<div class="sm"><b>Kết quả:</b> ${esc(r.ket_qua)}</div>` : ''}</td>` +
         `<td class="sm">${esc(r.dau_ra)}</td>` +
         `<td class="sm">${esc(r.nguoi_nhan_ten)}</td>` +
         `<td class="sm">${dongHan(r.han_chot)}</td>` +
@@ -701,6 +708,18 @@ async function khoiDongCongViec() {
         `<td style="white-space:nowrap">${nut}</td>`;
     });
     $('#cv-trong-giao').hidden = (kq.giao || []).length > 0;
+
+    // Việc mình được mời PHỐI HỢP (không phải người chính) — chỉ theo dõi
+    veBang('#cv-bang-phoihop', kq.phoi_hop || [], r => {
+      const tt = CV_TRANG_THAI[r.trang_thai] || CV_TRANG_THAI.moi;
+      return `<td><div class="nm">${esc(r.tieu_de)}</div>${r.mo_ta ? `<div class="sm">${esc(r.mo_ta)}</div>` : ''}</td>` +
+        `<td class="sm">${esc(r.dau_ra)}</td>` +
+        `<td class="sm">${esc(r.nguoi_nhan_ten)}</td>` +
+        `<td class="sm">${esc(r.nguoi_giao_ten)}</td>` +
+        `<td class="sm">${dongHan(r.han_chot)}</td>` +
+        `<td><span class="tag ${tt.mau}">${tt.chu}</span></td>`;
+    });
+    $('#cv-trong-phoihop').hidden = (kq.phoi_hop || []).length > 0;
   }
 
   $('#cv-form').addEventListener('submit', async (e) => {
@@ -711,6 +730,7 @@ async function khoiDongCongViec() {
     try {
       await API.cvTao({
         nguoi_nhan_id: chonNguoiNhan.value,
+        phoi_hop: oPhoiHop ? [...oPhoiHop.querySelectorAll('input:checked')].map(i => i.value) : [],
         tieu_de: $('#cv-tieu-de').value.trim(),
         dau_ra: $('#cv-dau-ra').value.trim(),
         mo_ta: $('#cv-mo-ta').value.trim(),
@@ -766,6 +786,7 @@ async function khoiDongCongViec() {
   $('#cv-bang-nhan').addEventListener('click', xuLyNut);
   $('#cv-bang-giao').addEventListener('click', xuLyNut);
 
+  window.LAM_MOI_CONGVIEC = taiLai;   // để chuông thông báo gọi làm mới được
   await taiLai();
 }
 
@@ -895,7 +916,11 @@ async function khoiDongChat() {
   async function hoiChuaDocToanCuc() {
     try {
       const { so_luong, id_lon_nhat } = await API.chatChuaDoc(idMocToanCuc);
-      if (so_luong > 0 && !dangMo) { chuaDoc += so_luong; veBadge(); }
+      // Đang mở popup = đang đọc -> badge luôn về 0 (chỉ hiện số khi có tin mới
+      // lúc đang ĐÓNG). Sếp Ngọc chốt 20/08/2026.
+      if (dangMo) chuaDoc = 0;
+      else if (so_luong > 0) chuaDoc += so_luong;
+      veBadge();
       if (so_luong > 0) veGanDay();   // có tin mới thì đối tác đó cũng cần nổi/lên đầu danh sách
       idMocToanCuc = Math.max(idMocToanCuc, id_lon_nhat);
     } catch { /* mất mạng tạm thời — bỏ qua, đợt hỏi sau tự thử lại */ }
@@ -1304,15 +1329,15 @@ if (TOI.shopee && TOI.shopee.xem) {
 
 /* ---- Chuông thông báo trong ERP 🔔 ---- */
 (function chuongThongBao() {
-  const NHOM_ROLES = ['nhan_vien_kho', 'quan_ly_kho', 'van_hanh_san', 'ke_toan_truong', 'giam_doc', 'pho_giam_doc'];
-  if (!NHOM_ROLES.includes(TOI.vai_tro)) return;   // vai trò không nhận thông báo → ẩn chuông
-
+  // Chuông hiện cho MỌI người đăng nhập — thông báo gồm cả CÁ NHÂN (giao việc,
+  // mời phối hợp) lẫn theo NHÓM (kho/vận hành/kế toán), ai cũng có thể nhận.
   const chuong = $('#tbChuong'), nut = $('#tbNut'), panel = $('#tbPanel'),
         badge = $('#tbBadge'), ds = $('#tbDanhSach'), trong = $('#tbTrong');
   if (!chuong || !nut) return;
   chuong.hidden = false;
 
-  const ICO = { day_kho: '📦', day_ke_toan: '💰', khieu_nai: '⚠️', canh_bao: '🔔' };
+  const ICO = { day_kho: '📦', day_ke_toan: '💰', khieu_nai: '⚠️', canh_bao: '🔔',
+                cong_viec_moi: '🎯', cong_viec_phoi_hop: '🤝' };
 
   async function taiThongBao() {
     let kq;
@@ -1353,6 +1378,9 @@ if (TOI.shopee && TOI.shopee.xem) {
     } else if (it.dataset.loai === 'day_ke_toan') {
       moTab('ketoan');
       if (window.LAM_MOI_TRASOAT) window.LAM_MOI_TRASOAT();
+    } else if (it.dataset.loai === 'cong_viec_moi' || it.dataset.loai === 'cong_viec_phoi_hop') {
+      moTab('congviec');
+      if (window.LAM_MOI_CONGVIEC) window.LAM_MOI_CONGVIEC();
     }
     panel.hidden = true;
   });

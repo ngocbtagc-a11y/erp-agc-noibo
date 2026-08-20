@@ -894,13 +894,13 @@ async function thongBaoDaXem(req, env) {
    việc được — không giới hạn theo cấp bậc (đơn giản hoá MVP).
    ========================================================================== */
 const CV_COT = `id, tieu_de, dau_ra, mo_ta, nguoi_giao_id, nguoi_giao_ten,
-                nguoi_nhan_id, nguoi_nhan_ten, han_chot, trang_thai, ket_qua,
-                tao_luc, cap_nhat_luc`;
+                nguoi_nhan_id, nguoi_nhan_ten, phoi_hop_ids, phoi_hop_ten,
+                han_chot, trang_thai, ket_qua, tao_luc, cap_nhat_luc`;
 
 async function cvDanhSach(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
-  const [nhan, giao] = await Promise.all([
+  const [nhan, giao, phoiHop] = await Promise.all([
     env.DB.prepare(
       `SELECT ${CV_COT} FROM cong_viec WHERE nguoi_nhan_id = ?
         ORDER BY (trang_thai IN ('hoan_thanh','huy')), (han_chot IS NULL), han_chot ASC, id DESC`
@@ -908,9 +908,13 @@ async function cvDanhSach(req, env) {
     env.DB.prepare(
       `SELECT ${CV_COT} FROM cong_viec WHERE nguoi_giao_id = ?
         ORDER BY (trang_thai IN ('hoan_thanh','huy')), id DESC`
+    ).bind(phien.nhan_su_id).all(),
+    env.DB.prepare(
+      `SELECT ${CV_COT} FROM cong_viec WHERE phoi_hop_ids LIKE '%,' || ? || ',%'
+        ORDER BY (trang_thai IN ('hoan_thanh','huy')), (han_chot IS NULL), han_chot ASC, id DESC`
     ).bind(phien.nhan_su_id).all()
   ]);
-  return json({ nhan: nhan.results || [], giao: giao.results || [] });
+  return json({ nhan: nhan.results || [], giao: giao.results || [], phoi_hop: phoiHop.results || [] });
 }
 
 async function cvTao(req, env) {
@@ -931,13 +935,29 @@ async function cvTao(req, env) {
   const ns = await env.DB.prepare('SELECT ho_ten FROM nhan_su WHERE id = ?').bind(nguoiNhanId).first();
   if (!ns) return loi('Không tìm thấy người nhận việc', 404);
 
+  // Người phối hợp (tuỳ chọn, chọn nhiều) — MBOs: chỉ hỗ trợ, không chịu đầu ra.
+  // Loại trùng người nhận chính và người giao; chỉ giữ nhân sự có thật.
+  const phArr = Array.isArray(b.phoi_hop)
+    ? [...new Set(b.phoi_hop.map(x => String(x).trim()).filter(Boolean))] : [];
+  const phList = [];
+  for (const id of phArr) {
+    if (id === nguoiNhanId || id === phien.nhan_su_id) continue;
+    const p = await env.DB.prepare('SELECT ho_ten FROM nhan_su WHERE id = ?').bind(id).first();
+    if (p) phList.push({ id, ten: p.ho_ten });
+  }
+  const phoiHopIds = phList.length ? ',' + phList.map(p => p.id).join(',') + ',' : null;
+  const phoiHopTen = phList.length ? phList.map(p => p.ten).join(', ') : null;
+
   const nguoiGiao = phien.ho_ten || phien.ten_dang_nhap;
   const r = await env.DB.prepare(`
-    INSERT INTO cong_viec (tieu_de, dau_ra, mo_ta, nguoi_giao_id, nguoi_giao_ten, nguoi_nhan_id, nguoi_nhan_ten, han_chot, trang_thai, tao_luc)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'moi', datetime('now','+7 hours'))
-  `).bind(tieuDe, dauRa, moTa, phien.nhan_su_id, nguoiGiao, nguoiNhanId, ns.ho_ten, hanChot).run();
+    INSERT INTO cong_viec (tieu_de, dau_ra, mo_ta, nguoi_giao_id, nguoi_giao_ten, nguoi_nhan_id, nguoi_nhan_ten, phoi_hop_ids, phoi_hop_ten, han_chot, trang_thai, tao_luc)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'moi', datetime('now','+7 hours'))
+  `).bind(tieuDe, dauRa, moTa, phien.nhan_su_id, nguoiGiao, nguoiNhanId, ns.ho_ten, phoiHopIds, phoiHopTen, hanChot).run();
 
   await guiThongBao(env, null, `${nguoiGiao} giao việc mới: "${tieuDe}"`, 'cong_viec_moi', String(r.meta.last_row_id), nguoiNhanId);
+  for (const p of phList) {
+    await guiThongBao(env, null, `${nguoiGiao} mời bạn PHỐI HỢP việc: "${tieuDe}" (người chính: ${ns.ho_ten})`, 'cong_viec_phoi_hop', String(r.meta.last_row_id), p.id);
+  }
   return json({ ok: true, id: r.meta.last_row_id });
 }
 

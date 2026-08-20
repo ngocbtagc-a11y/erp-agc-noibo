@@ -195,10 +195,10 @@
       </div>
     </section>
 
-    <!-- ---------- Trạm Việc — giao việc cho nhân viên ---------- -->
+    <!-- ---------- Trạm Mục Tiêu — giao việc cho nhân viên ---------- -->
     <section class="view" id="v-congviec" hidden>
       <div class="view-head">
-        <h3>Trạm Việc</h3>
+        <h3>Trạm Mục Tiêu</h3>
         <p>Giao việc rõ đầu ra, theo dõi tới khi xong — không chỉ mô tả làm gì mà phải rõ kết quả cần đạt.</p>
       </div>
 
@@ -210,8 +210,12 @@
         <div class="panel-body" id="cv-form-body" hidden>
           <form id="cv-form" class="form-luoi" autocomplete="off">
             <div class="field field-rong">
-              <label>Giao cho ai *</label>
+              <label>Giao cho ai * <span class="hint">(người chịu trách nhiệm chính)</span></label>
               <select id="cv-nguoi-nhan" required><option value="">— Chọn người nhận việc —</option></select>
+            </div>
+            <div class="field field-rong">
+              <label>Người phối hợp <span class="hint">(tuỳ chọn — chọn nhiều người hỗ trợ)</span></label>
+              <div id="cv-phoi-hop" class="cv-phoihop"></div>
             </div>
             <div class="field field-rong">
               <label>Tên việc *</label>
@@ -240,6 +244,7 @@
 
       <div class="seg" id="cvSeg">
         <button class="seg-nut active" data-cv="nhan">Việc tôi nhận</button>
+        <button class="seg-nut" data-cv="phoihop">Việc phối hợp</button>
         <button class="seg-nut" data-cv="giao">Việc tôi giao</button>
       </div>
 
@@ -261,6 +266,27 @@
             </table>
           </div>
           <div class="empty" id="cv-trong-nhan" hidden>Chưa ai giao việc gì cho Sếp/bạn cả.</div>
+        </div>
+      </div>
+
+      <div class="kv-pane" id="cv-pane-phoihop" hidden>
+        <div class="panel">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Việc</th>
+                  <th>Đầu ra cần đạt</th>
+                  <th>Người chính</th>
+                  <th>Người giao</th>
+                  <th>Hạn chót</th>
+                  <th>Trạng thái</th>
+                </tr>
+              </thead>
+              <tbody id="cv-bang-phoihop"></tbody>
+            </table>
+          </div>
+          <div class="empty" id="cv-trong-phoihop" hidden>Chưa được mời phối hợp việc nào.</div>
         </div>
       </div>
 
