@@ -494,9 +494,19 @@ async function khoiDongVinhDanh() {
     chonNguoi.appendChild(o);
   });
 
-  $('#vd-nut-mo').addEventListener('click', () => {
-    const body = $('#vd-form-body');
-    body.hidden = !body.hidden;
+  // Nút mở/đóng đổi chữ theo trạng thái — trước đây chữ đứng yên "+ Khen ai
+  // đó" dù form đang mở, không ai biết bấm lại là đóng được (Sếp Ngọc bắt lỗi
+  // 20/08/2026: "mở ra xong ko đóng được vào à"). Thêm cả nút "Hủy" trong
+  // form cho chắc, khỏi phải đoán bấm lại nút mở.
+  const nutMoVd = $('#vd-nut-mo');
+  function dongMoFormVd(hienForm) {
+    $('#vd-form-body').hidden = !hienForm;
+    nutMoVd.textContent = hienForm ? '✕ Đóng' : '+ Khen ai đó';
+  }
+  nutMoVd.addEventListener('click', () => dongMoFormVd($('#vd-form-body').hidden));
+  $('#vd-nut-huy').addEventListener('click', () => {
+    $('#vd-form').reset();
+    dongMoFormVd(false);
   });
 
   async function taiLai() {
@@ -511,7 +521,7 @@ async function khoiDongVinhDanh() {
         `💡 <span>${esc(kq.goi_y.nguoi_nhan_ten)} vừa hoàn thành ${kq.goi_y.so_viec} việc ở Trạm Việc tuần này</span>` +
         `<button type="button" class="btn-nho" id="vd-goiy-nut">Vinh danh luôn</button>`;
       $('#vd-goiy-nut').addEventListener('click', () => {
-        $('#vd-form-body').hidden = false;
+        dongMoFormVd(true);
         chonNguoi.value = kq.goi_y.nguoi_nhan_id;
         $('#vd-noidung').value = `Hoàn thành ${kq.goi_y.so_viec} việc ở Trạm Việc tuần này, làm tốt lắm!`;
         $('#vd-noidung').focus();
@@ -544,7 +554,7 @@ async function khoiDongVinhDanh() {
     try {
       await API.vdGui(chonNguoi.value, $('#vd-noidung').value.trim(), parseInt($('#vd-so-sao').value, 10));
       $('#vd-form').reset();
-      $('#vd-form-body').hidden = true;
+      dongMoFormVd(false);
       await taiLai();
     } catch (err) {
       $('#vd-loi').textContent = err.message || 'Không gửi được, thử lại nhé.';
@@ -578,10 +588,17 @@ async function khoiDongCongViec() {
     chonNguoiNhan.appendChild(o);
   });
 
-  // Ẩn/hiện form giao việc
-  $('#cv-nut-mo-form').addEventListener('click', () => {
-    const body = $('#cv-form-body');
-    body.hidden = !body.hidden;
+  // Ẩn/hiện form giao việc — đổi chữ nút theo trạng thái + có nút "Hủy" riêng
+  // trong form, cùng lỗi/cùng sửa với Vinh danh (Sếp Ngọc bắt lỗi 20/08/2026).
+  const nutMoCv = $('#cv-nut-mo-form');
+  function dongMoFormCv(hienForm) {
+    $('#cv-form-body').hidden = !hienForm;
+    nutMoCv.textContent = hienForm ? '✕ Đóng' : '+ Giao việc mới';
+  }
+  nutMoCv.addEventListener('click', () => dongMoFormCv($('#cv-form-body').hidden));
+  $('#cv-nut-huy').addEventListener('click', () => {
+    $('#cv-form').reset();
+    dongMoFormCv(false);
   });
 
   // Chuyển màn Việc tôi nhận / Việc tôi giao
@@ -654,7 +671,7 @@ async function khoiDongCongViec() {
         han_chot: $('#cv-han-chot').value || null
       });
       $('#cv-form').reset();
-      $('#cv-form-body').hidden = true;
+      dongMoFormCv(false);
       await taiLai();
     } catch (err) {
       $('#cv-loi').textContent = err.message || 'Không giao được việc, thử lại nhé.';

@@ -114,8 +114,9 @@
               <label>Số ⭐ gửi tặng *</label>
               <input type="number" id="vd-so-sao" required min="1" max="50" step="1" value="1">
             </div>
-            <div class="field field-nut">
-              <button type="submit" class="btn-primary" id="vd-nut-gui">Vinh danh</button>
+            <div class="field field-nut" style="display:flex; gap:10px">
+              <button type="submit" class="btn-primary" id="vd-nut-gui" style="width:auto">Vinh danh</button>
+              <button type="button" class="btn-phu" id="vd-nut-huy" style="width:auto">Hủy</button>
             </div>
           </form>
           <div class="form-loi" id="vd-loi"></div>
@@ -228,8 +229,9 @@
               <label>Hạn chót (tuỳ chọn)</label>
               <input type="date" id="cv-han-chot">
             </div>
-            <div class="field field-nut">
-              <button type="submit" class="btn-primary" id="cv-nut-luu">Giao việc</button>
+            <div class="field field-nut" style="display:flex; gap:10px">
+              <button type="submit" class="btn-primary" id="cv-nut-luu" style="width:auto">Giao việc</button>
+              <button type="button" class="btn-phu" id="cv-nut-huy" style="width:auto">Hủy</button>
             </div>
           </form>
           <div class="form-loi" id="cv-loi"></div>
