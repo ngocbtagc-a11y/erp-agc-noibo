@@ -57,6 +57,14 @@ function tienVN(n) {
   return Number(n).toLocaleString('vi-VN');
 }
 
+// Đổi unix (giây) -> "dd/mm/yy" — dùng chung nhiều tab (Đối soát, Đơn hoàn...)
+function ngayVN(unix) {
+  if (!unix) return '';
+  const d = new Date(Number(unix) * 1000);
+  if (isNaN(d)) return '';
+  return d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: '2-digit' });
+}
+
 /* Bỏ dấu để gõ "ke toan" cũng tìm ra "Kế toán" */
 function boDau(s) {
   return String(s).normalize('NFD').replace(/[̀-ͯ]/g, '')
@@ -595,14 +603,6 @@ async function khoiDongDoiSoatSan() {
     if (!choTu) return '—';
     const gio = (Date.now() - Date.parse(choTu.replace(' ', 'T'))) / 3600000;
     return gio >= 24 ? `${(gio / 24).toFixed(1)} ngày` : `${Math.round(gio)} giờ`;
-  }
-
-  // Đổi unix (giây) -> "dd/mm/yy"
-  function ngayVN(unix) {
-    if (!unix) return '';
-    const d = new Date(Number(unix) * 1000);
-    if (isNaN(d)) return '';
-    return d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: '2-digit' });
   }
 
   // 1 dòng bảng — dùng chung cho cả 2 nhóm (chưa/đã tra soát) bên dưới
@@ -1148,7 +1148,12 @@ async function khoiDongDonHoan() {
           khoTd = `<td class="sm"><span class="tag ok">✓ Nhập kho lại</span>` +
             `<div class="phu">${esc(r.phan_loai_boi || '')} · ${esc(r.phan_loai_luc || '')}</div></td>`;
         } else {
-          khoTd = `<td class="sm"><span class="tag ok">✓ Đã nhận</span>` +
+          const TT_NHAN = {
+            con_tot: ['ok', '✓ Còn tốt'], hu_hong: ['danger', '⚠️ Hư hỏng'],
+            thieu_hang: ['danger', '⚠️ Thiếu hàng'], sai_hang: ['danger', '⚠️ Sai hàng']
+          };
+          const tt = TT_NHAN[r.tinh_trang_hang] || ['ok', '✓ Đã nhận'];
+          khoTd = `<td class="sm"><span class="tag ${tt[0]}">${tt[1]}</span>` +
                   `<div class="phu">${esc(r.kho_nhan_boi || '')} · ${esc(r.kho_nhan_luc)}</div></td>`;
         }
       } else {
@@ -1162,6 +1167,12 @@ async function khoiDongDonHoan() {
               `<button type="button" class="btn-nho" data-phanloai="hong_cho_huy" data-rsn="${esc(r.return_sn)}">Hàng hỏng/Chờ huỷ</button> ` +
               `<button type="button" class="btn-nho" data-khieunai="${esc(r.return_sn)}">Cần khiếu nại</button>${nhac}</td>`
           : `<td style="white-space:nowrap">` +
+              `<select class="sel-tinhtrang" style="margin-right:4px">` +
+                `<option value="con_tot">Còn tốt</option>` +
+                `<option value="hu_hong">Hư hỏng</option>` +
+                `<option value="thieu_hang">Thiếu hàng</option>` +
+                `<option value="sai_hang">Sai hàng</option>` +
+              `</select>` +
               `<button type="button" class="btn-nho btn-primary" data-nhan="${esc(r.return_sn)}">Nhận đủ</button> ` +
               `<button type="button" class="btn-nho" data-khieunai="${esc(r.return_sn)}">Cần khiếu nại</button>${nhac}</td>`;
       }
@@ -1172,6 +1183,7 @@ async function khoiDongDonHoan() {
       const slCell = `<td class="num">${r.so_luong != null ? esc(r.so_luong) : '—'}</td>`;
 
       const html = `<td>${ngTag}</td>` +
+        `<td class="sm">${ngayVN(r.tao_luc_shopee)}</td>` +
         `<td class="sm">${esc(r.return_sn)}</td>` +
         `<td class="sm">${esc(r.order_sn || '—')}</td>` +
         `<td class="sm">${esc(r.ma_van_don || '—')}</td>` +
@@ -1210,11 +1222,16 @@ async function khoiDongDonHoan() {
     }
     if (btnPl && btn.getAttribute('data-phanloai') === 'hong_cho_huy' &&
         !confirm('Xác nhận hàng hỏng do vận chuyển, chờ lập biên bản hủy cùng kế toán?')) return;
+    let tinhTrang = '';
+    if (btnNhan) {
+      const sel = btn.closest('td').querySelector('.sel-tinhtrang');
+      tinhTrang = sel ? sel.value : '';
+    }
     btn.disabled = true;
     const cu = btn.textContent;
     btn.textContent = 'Đang lưu…';
     try {
-      if (btnNhan) await API.hoanDaNhan(rsn);
+      if (btnNhan) await API.hoanDaNhan(rsn, tinhTrang);
       else if (btnPl) await API.hoanPhanLoai(rsn, btn.getAttribute('data-phanloai'));
       else await API.hoanKhieuNai(rsn, ghiChu);
       await veDanhSach();               // tải lại

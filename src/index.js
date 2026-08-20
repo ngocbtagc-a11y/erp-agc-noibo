@@ -574,22 +574,31 @@ async function hoanDanhSach(req, env) {
   return shopee.apiDanhSach(env, phien);
 }
 
-/* Kho xác nhận đã nhận được kiện hàng hoàn → tắt đồng hồ đếm 12h cho đơn đó */
+const TINH_TRANG_HOP_LE = ['con_tot', 'hu_hong', 'thieu_hang', 'sai_hang'];
+
+/* Kho xác nhận đã nhận được kiện hàng hoàn → tắt đồng hồ đếm 12h cho đơn đó.
+   Ghi kèm tình trạng hàng hóa (còn tốt / hư hỏng / thiếu hàng / sai hàng) để
+   Kế toán và Vận hành sàn biết ngay hàng về có bán lại được không, khỏi phải
+   hỏi lại Kho (Sếp Ngọc chốt 20/08/2026). */
 async function hoanDaNhan(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
   if (!duocThaoTacKho(phien.vai_tro)) return loi('Bạn không có quyền xác nhận nhận hàng', 403);
   let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
   const rsn = (b.return_sn || '').trim();
+  const tinhTrang = (b.tinh_trang || '').trim();
   if (!rsn) return loi('Thiếu mã đơn hoàn');
+  if (!TINH_TRANG_HOP_LE.includes(tinhTrang)) return loi('Thiếu hoặc sai tình trạng hàng hóa');
+  const nguoi = phien.ho_ten || phien.ten_dang_nhap;
   const r = await env.DB.prepare(`
     UPDATE don_hoan
        SET kho_nhan_luc = datetime('now','+7 hours'),
-           kho_nhan_boi = ?, da_canh_bao = 1
+           kho_nhan_boi = ?, da_canh_bao = 1,
+           tinh_trang_hang = ?, tinh_trang_luc = datetime('now','+7 hours'), tinh_trang_boi = ?
      WHERE return_sn = ? AND kho_nhan_luc IS NULL
-  `).bind(phien.ho_ten || phien.ten_dang_nhap, rsn).run();
+  `).bind(nguoi, tinhTrang, nguoi, rsn).run();
   if (!r.meta.changes) return loi('Không tìm thấy đơn hoặc đã được nhận trước đó', 404);
-  return json({ ok: true, nguoi: phien.ho_ten || phien.ten_dang_nhap });
+  return json({ ok: true, nguoi });
 }
 
 /* Kho phân loại hàng nhận về từ đơn HUỶ có mã vận đơn (Sếp Ngọc chốt

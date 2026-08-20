@@ -114,8 +114,8 @@ export const API = {
   shopeeTrangThai: () => goi('/api/shopee/trang-thai'),
   hoanDongBo: () => goi('/api/hoan/dong-bo', { method: 'POST' }),
   hoanDanhSach: () => goi('/api/hoan/danh-sach'),
-  hoanDaNhan: (returnSn) => goi('/api/hoan/da-nhan', {
-    method: 'POST', body: JSON.stringify({ return_sn: returnSn })
+  hoanDaNhan: (returnSn, tinhTrang) => goi('/api/hoan/da-nhan', {
+    method: 'POST', body: JSON.stringify({ return_sn: returnSn, tinh_trang: tinhTrang })
   }),
   hoanKhieuNai: (returnSn, ghiChu) => goi('/api/hoan/khieu-nai', {
     method: 'POST', body: JSON.stringify({ return_sn: returnSn, ghi_chu: ghiChu })
