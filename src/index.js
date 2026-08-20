@@ -247,6 +247,27 @@ async function chatDanhSach(req, env) {
   return json({ tin_nhan: tinNhan, toi_id: phien.nhan_su_id });
 }
 
+/* Danh sách người đã từng chat riêng gần đây (2 chiều) — để hiện bong bóng
+   truy cập nhanh cạnh nút chat nổi, khỏi phải vào Danh bạ bấm lại "Chat
+   ngay" mỗi lần (Sếp Ngọc yêu cầu 20/08/2026). Sắp theo tin mới nhất. */
+async function chatGanDay(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  const { results } = await env.DB.prepare(`
+    SELECT ns.id, ns.ho_ten, ns.viet_tat, MAX(x.id) AS tin_cuoi_id
+      FROM (
+        SELECT CASE WHEN nguoi_gui_id = ? THEN nguoi_nhan_id ELSE nguoi_gui_id END AS doi_tac_id, id
+          FROM tin_nhan_chat
+         WHERE nguoi_nhan_id IS NOT NULL AND (nguoi_gui_id = ? OR nguoi_nhan_id = ?)
+      ) x
+      JOIN nhan_su ns ON ns.id = x.doi_tac_id
+     GROUP BY ns.id
+     ORDER BY tin_cuoi_id DESC
+     LIMIT 6
+  `).bind(phien.nhan_su_id, phien.nhan_su_id, phien.nhan_su_id).all();
+  return json({ gan_day: results || [] });
+}
+
 /* Đếm tin CHƯA XEM trên TOÀN BỘ các luồng (kênh chung + mọi cuộc chat riêng
    gửi tới tôi) — không phụ thuộc đang mở luồng nào trên widget. Cần cái này
    riêng vì chatDanhSach() ở trên chỉ nhìn thấy 1 luồng tại 1 thời điểm (luồng
@@ -1187,6 +1208,7 @@ const DUONG_DAN = {
   'GET  /api/nhan-su':       layNhanSu,
   'GET  /api/chat/tin-nhan': chatDanhSach,
   'GET  /api/chat/chua-doc': chatChuaDoc,
+  'GET  /api/chat/gan-day':  chatGanDay,
   'POST /api/chat/gui':      chatGui,
   'GET  /api/chat/tep':      chatTepDinhKem,
   'GET  /api/quan-tri/danh-sach':      qtDanhSach,

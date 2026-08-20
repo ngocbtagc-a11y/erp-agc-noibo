@@ -62,6 +62,7 @@ export const API = {
     return goi('/api/chat/tin-nhan' + (qs ? '?' + qs : ''));
   },
   chatChuaDoc: (sauId) => goi('/api/chat/chua-doc?sau_id=' + (sauId || 0)),
+  chatGanDay: () => goi('/api/chat/gan-day'),
   chatGui: (noiDung, tep, voiId) => {
     const fd = new FormData();
     if (noiDung) fd.append('noi_dung', noiDung);
