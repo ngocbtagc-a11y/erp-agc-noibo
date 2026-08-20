@@ -2097,6 +2097,21 @@ async function khoiDongKeToanTraSoat() {
     });
     xuatCSV(`don-hoan-can-tra-soat-${new Date().toISOString().slice(0, 10)}.csv`, cot, hang);
   });
+  $('#kt-ts-trasoathangloat').addEventListener('click', async () => {
+    const ds = dsDangChon();
+    if (!ds.length) return;
+    if (!confirm(`Xác nhận đã tra soát ${ds.length} đơn đã chọn?`)) return;
+    const nut = $('#kt-ts-trasoathangloat');
+    nut.disabled = true; const cu = nut.textContent; nut.textContent = 'Đang lưu…';
+    try {
+      await API.ktDaTraSoat(ds);
+      await veTraSoat();
+    } catch (err) {
+      alert(err.message || 'Không lưu được, thử lại nhé.');
+    } finally {
+      nut.disabled = false; nut.textContent = cu;
+    }
+  });
 
   $('#kt-ts-bang').addEventListener('click', async (e) => {
     const btn = e.target.closest('[data-trasoat]');

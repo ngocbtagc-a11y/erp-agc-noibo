@@ -1393,19 +1393,25 @@ async function ktCanTraSoat(req, env) {
 }
 
 /* Kế toán bấm "Đã tra soát" -> đóng đơn về phía kế toán */
+/* return_sn có thể là 1 mã (chuỗi, nút "Đã tra soát" từng dòng) hoặc 1 mảng
+   (tick chọn hàng loạt rồi bấm nút gộp — Sếp Ngọc yêu cầu 20/08/2026). Gộp 1
+   câu UPDATE ... IN (...) cho cả 2 trường hợp, giống kdDayKho/kdDayKeToan. */
 async function ktDaTraSoat(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
   if (!duocXemTab(phien.vai_tro, 'ketoan')) return loi('Bạn không có quyền', 403);
   let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
-  const rsn = (b.return_sn || '').trim();
-  if (!rsn) return loi('Thiếu mã đơn hoàn');
+  const dsRsn = Array.isArray(b.return_sn) ? b.return_sn.map(s => String(s).trim()).filter(Boolean)
+              : (b.return_sn ? [String(b.return_sn).trim()] : []);
+  if (!dsRsn.length) return loi('Chưa chọn đơn nào');
+
+  const phs = dsRsn.map(() => '?').join(',');
   const r = await env.DB.prepare(
     `UPDATE don_hoan SET ke_toan_luc = datetime('now','+7 hours'), ke_toan_boi = ?
-      WHERE return_sn = ? AND ke_toan_luc IS NULL`
-  ).bind(phien.ho_ten || phien.ten_dang_nhap, rsn).run();
+      WHERE return_sn IN (${phs}) AND ke_toan_luc IS NULL`
+  ).bind(phien.ho_ten || phien.ten_dang_nhap, ...dsRsn).run();
   if (!r.meta.changes) return loi('Không tìm thấy đơn hoặc đã tra soát trước đó', 404);
-  return json({ ok: true });
+  return json({ ok: true, so_don: r.meta.changes });
 }
 
 /* ==========================================================================
