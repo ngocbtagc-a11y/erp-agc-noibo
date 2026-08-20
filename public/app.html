@@ -156,6 +156,96 @@
       </div>
     </section>
 
+    <!-- ---------- Tác vụ — giao việc cho nhân viên ---------- -->
+    <section class="view" id="v-congviec" hidden>
+      <div class="view-head">
+        <h3>Tác vụ</h3>
+        <p>Giao việc rõ đầu ra, theo dõi tới khi xong — không chỉ mô tả làm gì mà phải rõ kết quả cần đạt.</p>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h4>Giao việc mới</h4>
+          <button type="button" class="btn-phu" id="cv-nut-mo-form" style="width:auto">+ Giao việc mới</button>
+        </div>
+        <div class="panel-body" id="cv-form-body" hidden>
+          <form id="cv-form" class="form-luoi" autocomplete="off">
+            <div class="field field-rong">
+              <label>Giao cho ai *</label>
+              <select id="cv-nguoi-nhan" required><option value="">— Chọn người nhận việc —</option></select>
+            </div>
+            <div class="field field-rong">
+              <label>Tên việc *</label>
+              <input type="text" id="cv-tieu-de" required placeholder="Ví dụ: Rà soát tồn kho lô hàng chè chưng yến">
+            </div>
+            <div class="field field-rong">
+              <label>Đầu ra cụ thể cần đạt *</label>
+              <textarea id="cv-dau-ra" required rows="2" placeholder="Không ghi 'làm gì' — ghi rõ XONG thì kết quả trông như thế nào. Ví dụ: File Excel đối chiếu tồn thực tế vs sổ sách, khớp 100%, gửi trước 17h."></textarea>
+            </div>
+            <div class="field field-rong">
+              <label>Ghi chú thêm (tuỳ chọn)</label>
+              <textarea id="cv-mo-ta" rows="2" placeholder="Bối cảnh, cách làm gợi ý, ai cần phối hợp…"></textarea>
+            </div>
+            <div class="field">
+              <label>Hạn chót (tuỳ chọn)</label>
+              <input type="date" id="cv-han-chot">
+            </div>
+            <div class="field field-nut">
+              <button type="submit" class="btn-primary" id="cv-nut-luu">Giao việc</button>
+            </div>
+          </form>
+          <div class="form-loi" id="cv-loi"></div>
+        </div>
+      </div>
+
+      <div class="seg" id="cvSeg">
+        <button class="seg-nut active" data-cv="nhan">Việc tôi nhận</button>
+        <button class="seg-nut" data-cv="giao">Việc tôi giao</button>
+      </div>
+
+      <div class="kv-pane" id="cv-pane-nhan">
+        <div class="panel">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Việc</th>
+                  <th>Đầu ra cần đạt</th>
+                  <th>Người giao</th>
+                  <th>Hạn chót</th>
+                  <th>Trạng thái</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="cv-bang-nhan"></tbody>
+            </table>
+          </div>
+          <div class="empty" id="cv-trong-nhan" hidden>Chưa ai giao việc gì cho Sếp/bạn cả.</div>
+        </div>
+      </div>
+
+      <div class="kv-pane" id="cv-pane-giao" hidden>
+        <div class="panel">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Việc</th>
+                  <th>Đầu ra cần đạt</th>
+                  <th>Giao cho</th>
+                  <th>Hạn chót</th>
+                  <th>Trạng thái</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="cv-bang-giao"></tbody>
+            </table>
+          </div>
+          <div class="empty" id="cv-trong-giao" hidden>Chưa giao việc nào.</div>
+        </div>
+      </div>
+    </section>
+
     <!-- ---------- Chat nội bộ — bong bóng nổi góc phải dưới, kiểu Messenger ---------- -->
     <div class="cnb-widget" id="cnbWidget" hidden>
       <div class="cnb-popup" id="cnbPopup" hidden>

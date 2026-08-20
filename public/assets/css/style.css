@@ -760,6 +760,7 @@ tr.canh-bao:hover > td { background: #fbdbd6; }
 @media (max-width: 480px) {
   .cnb-popup { right: 12px; left: 12px; width: auto; bottom: 88px; }
   .cnb-nut { right: 16px; bottom: 16px; }
+  .cnb-ganday { right: 20px; bottom: 84px; }   /* theo đúng nút chính dời vị trí ở mobile */
 }
 
 .chat-tin { display: flex; gap: 8px; max-width: 72%; margin-top: 12px; }

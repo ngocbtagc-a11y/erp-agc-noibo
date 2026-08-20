@@ -10,7 +10,7 @@
 /* Các mảng dữ liệu trong hệ thống.
    "quantri" = tab quản trị: thêm nhân sự, tạo tài khoản, đặt lại mật khẩu.
    Chỉ admin (Giám đốc, Phó Giám đốc) thấy. */
-export const TAB = ['tongquan', 'danhba', 'chat', 'nhansu', 'kinhdoanh', 'khovan', 'donhoan', 'ketoan', 'quantri'];
+export const TAB = ['tongquan', 'danhba', 'chat', 'congviec', 'nhansu', 'kinhdoanh', 'khovan', 'donhoan', 'ketoan', 'quantri'];
 
 /* Vai trò → được xem mảng nào và làm được gì.
    Danh bạ VÀ Chat nội bộ mở cho tất cả (Sếp Ngọc yêu cầu: ai cũng tra được
@@ -22,18 +22,18 @@ export const TAB = ['tongquan', 'danhba', 'chat', 'nhansu', 'kinhdoanh', 'khovan
                     được tài khoản). HCNS có mức này.
    - xem_luong    : xem cột lương. HCNS KHÔNG có — đây là ranh giới cứng. */
 const QUYEN_THEO_VAI_TRO = {
-  giam_doc:        { tab: ['tongquan', 'danhba', 'chat', 'nhansu', 'kinhdoanh', 'khovan', 'donhoan', 'ketoan', 'quantri'], xem_luong: true,  admin: true,  them_nhan_su: true  },
-  pho_giam_doc:    { tab: ['tongquan', 'danhba', 'chat', 'nhansu', 'kinhdoanh', 'khovan', 'donhoan', 'ketoan', 'quantri'], xem_luong: true,  admin: true,  them_nhan_su: true  },
-  ke_toan_truong:  { tab: ['tongquan', 'danhba', 'chat', 'khovan', 'donhoan', 'ketoan'],                                   xem_luong: true,  admin: false, them_nhan_su: false },
-  quan_ly_kho:     { tab: ['tongquan', 'danhba', 'chat', 'khovan', 'nhansu'],                                              xem_luong: false, admin: false, them_nhan_su: false },
-  nhan_vien_kho:   { tab: ['tongquan', 'danhba', 'chat', 'khovan'],                                                        xem_luong: false, admin: false, them_nhan_su: false },
-  hcns:            { tab: ['tongquan', 'danhba', 'chat', 'nhansu', 'quantri'],                                             xem_luong: false, admin: false, them_nhan_su: true  },
-  van_hanh_san:    { tab: ['tongquan', 'danhba', 'chat', 'kinhdoanh', 'donhoan'],                                          xem_luong: false, admin: false, them_nhan_su: false },
+  giam_doc:        { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'nhansu', 'kinhdoanh', 'khovan', 'donhoan', 'ketoan', 'quantri'], xem_luong: true,  admin: true,  them_nhan_su: true  },
+  pho_giam_doc:    { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'nhansu', 'kinhdoanh', 'khovan', 'donhoan', 'ketoan', 'quantri'], xem_luong: true,  admin: true,  them_nhan_su: true  },
+  ke_toan_truong:  { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'khovan', 'donhoan', 'ketoan'],                                   xem_luong: true,  admin: false, them_nhan_su: false },
+  quan_ly_kho:     { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'khovan', 'nhansu'],                                              xem_luong: false, admin: false, them_nhan_su: false },
+  nhan_vien_kho:   { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'khovan'],                                                        xem_luong: false, admin: false, them_nhan_su: false },
+  hcns:            { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'nhansu', 'quantri'],                                             xem_luong: false, admin: false, them_nhan_su: true  },
+  van_hanh_san:    { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'kinhdoanh', 'donhoan'],                                          xem_luong: false, admin: false, them_nhan_su: false },
   // Vai trò TEST (Sếp Ngọc chốt 19/08/2026): cho nhân viên vào bấm thử để
   // hiểu luồng 3 chặng Kho -> Vận hành sàn -> Kế toán, KHÔNG dính quyền admin
   // (không cấp/khoá tài khoản, không xem lương, không thêm nhân sự). Xem
   // được đủ các tab liên quan tới luồng đơn hoàn để test trọn vẹn từ đầu tới cuối.
-  nv_test:         { tab: ['tongquan', 'danhba', 'chat', 'kinhdoanh', 'khovan', 'donhoan', 'ketoan'],                      xem_luong: false, admin: false, them_nhan_su: false }
+  nv_test:         { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'kinhdoanh', 'khovan', 'donhoan', 'ketoan'],                      xem_luong: false, admin: false, them_nhan_su: false }
 };
 
 /* ---- Quyền trong module Kho --------------------------------------------

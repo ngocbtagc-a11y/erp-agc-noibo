@@ -53,6 +53,13 @@ export const API = {
 
   nhanSu: () => goi('/api/nhan-su'),
 
+  /* ---- Tác vụ: giao việc cho nhân viên ---- */
+  cvDanhSach: () => goi('/api/cong-viec/danh-sach'),
+  cvTao: (cv) => goi('/api/cong-viec/tao', { method: 'POST', body: JSON.stringify(cv) }),
+  cvCapNhat: (id, trangThai, ketQua) => goi('/api/cong-viec/cap-nhat', {
+    method: 'POST', body: JSON.stringify({ id, trang_thai: trangThai, ket_qua: ketQua })
+  }),
+
   /* ---- Chat nội bộ (kênh chung + chat riêng từng người) ---- */
   chatDanhSach: (sauId, voiId) => {
     const q = new URLSearchParams();
