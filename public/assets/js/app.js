@@ -1243,7 +1243,7 @@ async function khoiDongDonHoan() {
       let khoTd, cls = '';
       if (r.kho_nhan_luc) {
         if (r.phan_loai_nhan === 'hong_cho_huy') {
-          khoTd = `<td class="sm"><span class="tag danger">⚠️ Hàng hỏng — chờ huỷ</span>` +
+          khoTd = `<td class="sm"><span class="tag danger">⚠️ Hỏng/Chờ Hủy</span>` +
             `<div class="phu">${esc(r.phan_loai_boi || '')} · ${esc(r.phan_loai_luc || '')}</div></td>`;
         } else if (r.phan_loai_nhan === 'nhap_kho') {
           khoTd = `<td class="sm"><span class="tag ok">✓ Nhập kho lại</span>` +
@@ -1260,7 +1260,7 @@ async function khoiDongDonHoan() {
         khoTd = laDonHuy
           ? `<td style="white-space:nowrap">` +
               `<button type="button" class="btn-nho btn-primary" data-phanloai="nhap_kho" data-rsn="${esc(r.return_sn)}">Nhập kho</button> ` +
-              `<button type="button" class="btn-nho" data-phanloai="hong_cho_huy" data-rsn="${esc(r.return_sn)}">Hàng hỏng/Chờ huỷ</button> ` +
+              `<button type="button" class="btn-nho" data-phanloai="hong_cho_huy" data-rsn="${esc(r.return_sn)}">Hỏng/Chờ Hủy</button> ` +
               `<button type="button" class="btn-nho" data-khieunai="${esc(r.return_sn)}">Cần khiếu nại</button>${nhac}</td>`
           : `<td style="white-space:nowrap">` +
               `<button type="button" class="btn-nho btn-primary" data-nhan="${esc(r.return_sn)}">Nhận đủ</button> ` +
