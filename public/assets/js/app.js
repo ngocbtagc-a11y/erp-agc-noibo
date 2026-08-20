@@ -636,10 +636,35 @@ async function khoiDongCongViec() {
     if (oPhoiHop) {
       const lbl = document.createElement('label');
       lbl.className = 'cv-ph-item';
+      lbl.dataset.ten = boDau(n.ho_ten);
       lbl.innerHTML = `<input type="checkbox" value="${esc(n.id)}"><span>${esc(n.ho_ten)}</span>`;
       oPhoiHop.appendChild(lbl);
     }
   });
+
+  // Công ty càng đông, danh sách càng dài → cho gõ lọc tên thay vì cuộn tìm.
+  // Không bỏ chọn khi lọc — người đã tick vẫn giữ, chỉ đang tạm bị ẩn đi.
+  const oTimPhoiHop = $('#cv-phoi-hop-tim');
+  if (oTimPhoiHop && oPhoiHop) {
+    oTimPhoiHop.addEventListener('input', e => {
+      const k = boDau(e.target.value.trim());
+      let coHien = false;
+      oPhoiHop.querySelectorAll('.cv-ph-item').forEach(lbl => {
+        const khop = !k || lbl.dataset.ten.includes(k);
+        lbl.classList.toggle('an', !khop);
+        if (khop) coHien = true;
+      });
+      let oTrong = oPhoiHop.querySelector('.cv-ph-trong');
+      if (!coHien) {
+        if (!oTrong) {
+          oTrong = el('div', 'cv-ph-trong', 'Không tìm thấy ai khớp.');
+          oPhoiHop.appendChild(oTrong);
+        }
+      } else if (oTrong) {
+        oTrong.remove();
+      }
+    });
+  }
 
   // Ẩn/hiện form giao việc — đổi chữ nút theo trạng thái + có nút "Hủy" riêng
   // trong form, cùng lỗi/cùng sửa với Vinh danh (Sếp Ngọc bắt lỗi 20/08/2026).

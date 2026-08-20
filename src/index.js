@@ -166,13 +166,17 @@ async function layDanhBa(req, env) {
 
   // Chỉ chọn đúng các cột liên lạc. Cột lương không nằm trong câu lệnh này,
   // nên dữ liệu lương không có đường nào rời khỏi máy chủ qua đây.
+  // Ẩn tài khoản vai trò "nv_test" (test/Shopee reviewer) khỏi danh bạ —
+  // đây là tài khoản bấm thử, không phải nhân sự thật, không để lẫn vào
+  // danh sách chọn người (Chat, Người nhận/Người phối hợp ở Trạm Việc...).
   const { results } = await env.DB.prepare(`
     SELECT n.id, n.ho_ten, n.viet_tat, n.chuc_vu, n.bo_phan, n.sdt, n.email,
            (n.anh_chan_dung IS NOT NULL) AS co_anh,
            q.ho_ten AS quan_ly
       FROM nhan_su n
       LEFT JOIN nhan_su q ON q.id = n.quan_ly_id
-     WHERE n.dang_lam = 1
+      LEFT JOIN tai_khoan t ON t.nhan_su_id = n.id
+     WHERE n.dang_lam = 1 AND (t.vai_tro IS NULL OR t.vai_tro != 'nv_test')
      ORDER BY n.bo_phan, n.ho_ten
   `).all();
 
