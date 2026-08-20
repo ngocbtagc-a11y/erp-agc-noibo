@@ -130,6 +130,7 @@ export const API = {
   shopeeTrangThai: () => goi('/api/shopee/trang-thai'),
   hoanDongBo: () => goi('/api/hoan/dong-bo', { method: 'POST' }),
   hoanDanhSach: () => goi('/api/hoan/danh-sach'),
+  hoanLichSu: () => goi('/api/hoan/lich-su'),
   hoanDaNhan: (returnSn, tinhTrang) => goi('/api/hoan/da-nhan', {
     method: 'POST', body: JSON.stringify({ return_sn: returnSn, tinh_trang: tinhTrang })
   }),

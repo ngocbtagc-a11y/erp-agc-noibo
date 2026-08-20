@@ -1085,6 +1085,7 @@ if (TOI.quyen.includes('khovan')) {
    hoàn (gồm cả kho), không chỉ vai trò có tab Kết nối sàn. -- */
 if (TOI.shopee && TOI.shopee.xem) {
   await khoiDongDonHoan();
+  await khoiDongLichSuHoan();
 }
 
 /* ---- Chuông thông báo trong ERP 🔔 ---- */
@@ -1195,7 +1196,7 @@ async function khoiDongKho() {
     const nut = e.target.closest('.seg-nut');
     if (!nut) return;
     document.querySelectorAll('#kvSeg .seg-nut').forEach(b => b.classList.toggle('active', b === nut));
-    ['ton', 'nhap', 'xuat', 'baocao', 'donhoan'].forEach(k => {
+    ['ton', 'nhap', 'xuat', 'baocao', 'donhoan', 'lichsu'].forEach(k => {
       const pane = document.getElementById('kv-pane-' + k);
       if (pane) pane.hidden = (k !== nut.dataset.kv);
     });
@@ -1697,6 +1698,78 @@ async function khoiDongDonHoan() {
   await veDanhSach();
   try { await veShopee(); } catch (e) { console.error('Kết nối Shopee:', e); }
   try { await veTiktok(); } catch (e) { console.error('Kết nối TikTok:', e); }
+}
+
+/* -- Lịch sử đơn hoàn — tra cứu lại đơn ĐÃ xử lý xong (anh Duy yêu cầu
+   20/08/2026), khác tab "Đơn hoàn" chỉ là hàng đợi việc cần làm. Chỉ xem,
+   không có nút thao tác. -- */
+async function khoiDongLichSuHoan() {
+  let DS_LS = [];
+  const TT_NHAN_LS = {
+    con_tot: ['ok', '✓ Còn tốt'], hu_hong: ['danger', '⚠️ Hư hỏng'],
+    thieu_hang: ['danger', '⚠️ Thiếu hàng'], sai_hang: ['danger', '⚠️ Sai hàng']
+  };
+
+  function trangThaiXuLy(r) {
+    if (r.kho_nhan_luc) {
+      if (r.phan_loai_nhan === 'hong_cho_huy')
+        return { mau: 'danger', chu: '⚠️ Hàng hỏng — chờ huỷ', phu: `${r.phan_loai_boi || ''} · ${r.phan_loai_luc || ''}` };
+      if (r.phan_loai_nhan === 'nhap_kho')
+        return { mau: 'ok', chu: '✓ Nhập kho lại', phu: `${r.phan_loai_boi || ''} · ${r.phan_loai_luc || ''}` };
+      const tt = TT_NHAN_LS[r.tinh_trang_hang] || ['ok', '✓ Đã nhận'];
+      const phu = r.ke_toan_luc ? `Kế toán đã tra soát · ${r.ke_toan_boi || ''}` : `${r.kho_nhan_boi || ''} · ${r.kho_nhan_luc}`;
+      return { mau: tt[0], chu: tt[1], phu };
+    }
+    if (r.dang_cho === 'van_hanh' && r.ly_do_khieu_nai)
+      return { mau: 'danger', chu: '⚠️ Kho khiếu nại — chờ Vận hành sàn', phu: r.ly_do_khieu_nai };
+    if (r.dang_cho === 'ke_toan')
+      return { mau: 'warn', chu: '💰 Chờ Kế toán tra soát', phu: '' };
+    return { mau: 'mute', chu: 'Đang chờ Kho nhận', phu: '' };
+  }
+
+  function veBangLS(tuKhoa) {
+    const k = boDau((tuKhoa || '').trim());
+    const coShopee = $('#ls-nguon-shopee').checked, coTiktok = $('#ls-nguon-tiktok').checked;
+    const ds = DS_LS.filter(r =>
+      (r.nguon === 'tiktok' ? coTiktok : coShopee) &&
+      (!k || boDau(`${r.return_sn} ${r.order_sn || ''} ${r.ma_van_don || ''} ${r.san_pham_ten || r.san_pham || ''} ${r.san_pham_sku || ''} ${r.nguoi_mua || ''}`).includes(k)));
+    veBang('#ls-bang', ds, r => {
+      const tt = nhanTrangThai(r.trang_thai);
+      const tien = r.so_tien != null
+        ? tienVN(Math.round(r.so_tien / 100000)) + ' ' + esc(r.tien_te || '')
+        : '—';
+      const ngTag = r.nguon === 'tiktok'
+        ? '<span class="tag mute">TikTok</span>' : '<span class="tag sage">Shopee</span>';
+      const sp = oSanPham(r.san_pham_ten || r.san_pham, r.san_pham_sku, r.so_luong);
+      const xl = trangThaiXuLy(r);
+      const html = `<td>${ngTag}</td>` +
+        `<td class="sm">${ngayVN(r.tao_luc_shopee)}</td>` +
+        `<td class="sm">${esc(r.return_sn)}</td>` +
+        `<td class="sm">${esc(r.order_sn || '—')}</td>` +
+        `<td class="sm">${esc(r.ma_van_don || '—')}</td>` +
+        `<td class="sm" title="${esc(sp.title)}">${sp.html}</td>` +
+        `<td class="num">${r.so_luong != null ? esc(r.so_luong) : '—'}</td>` +
+        `<td><span class="tag ${tt.mau}" title="${esc(r.trang_thai || '')}">${esc(tt.chu)}</span></td>` +
+        `<td class="num">${tien}</td>` +
+        `<td class="sm">${esc(r.nguoi_mua || '—')}</td>` +
+        `<td class="sm"><span class="tag ${xl.mau}">${esc(xl.chu)}</span>${xl.phu ? `<div class="phu">${esc(xl.phu)}</div>` : ''}</td>`;
+      return { html };
+    });
+    $('#ls-trong').hidden = ds.length > 0;
+    $('#ls-dem').textContent = `${ds.length}/${DS_LS.length} đơn hoàn`;
+  }
+
+  async function veLichSu() {
+    let kq;
+    try { kq = await API.hoanLichSu(); } catch { return; }
+    DS_LS = kq.don_hoan || [];
+    veBangLS($('#ls-tim').value);
+  }
+  $('#ls-tim').addEventListener('input', e => veBangLS(e.target.value));
+  $('#ls-nguon-shopee').addEventListener('change', () => veBangLS($('#ls-tim').value));
+  $('#ls-nguon-tiktok').addEventListener('change', () => veBangLS($('#ls-tim').value));
+
+  await veLichSu();
 }
 
 /* -- Kế toán (còn là dữ liệu mẫu) -- */

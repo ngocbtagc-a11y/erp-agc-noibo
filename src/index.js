@@ -629,6 +629,32 @@ async function hoanDanhSach(req, env) {
   return shopee.apiDanhSach(env, phien);
 }
 
+/* Lịch sử đơn hoàn — TRA CỨU LẠI đơn đã xử lý (khác apiDanhSach chỉ là hàng
+   đợi việc cần làm, đơn xử lý xong là biến mất khỏi đó). Trả MỌI đơn hoàn
+   đang còn trong database (kể cả đã nhận/đã tra soát xong), không lọc theo
+   dang_cho. Chỉ đọc, không thao tác được ở đây (anh Duy yêu cầu 20/08/2026).
+   Lưu ý: đơn hoàn ngoài THÁNG LÀM VIỆC hiện tại đã bị cron tự xoá (xem
+   donDepDuLieuNgoaiThang) nên màn này cũng chỉ tra được trong tháng hiện tại.
+   KHÔNG lấy tinh_trang_hang — cột này chờ Sếp Ngọc nạp migration lên DB thật,
+   xem chú thích tương tự trong shopee.js apiDanhSach. */
+async function hoanLichSu(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  if (!duocXemDonHoan(phien.vai_tro)) return loi('Bạn không có quyền', 403);
+  const { results } = await env.DB.prepare(`
+    SELECT d.return_sn, d.order_sn, d.trang_thai, d.ly_do, d.so_tien, d.tien_te, d.nguoi_mua,
+           d.san_pham, d.san_pham_ten, COALESCE(d.san_pham_sku, m.ma_sku) AS san_pham_sku,
+           d.so_luong, d.ma_van_don, d.nguon, d.tao_luc_shopee, d.dong_bo_luc,
+           d.kho_nhan_luc, d.kho_nhan_boi, d.phan_loai_nhan, d.phan_loai_luc, d.phan_loai_boi,
+           d.dang_cho, d.ly_do_khieu_nai, d.khieu_nai_luc,
+           d.ke_toan_luc, d.ke_toan_boi
+      FROM don_hoan d
+      LEFT JOIN sku_map m ON m.ten_san_pham = d.san_pham_ten
+     ORDER BY d.dong_bo_luc DESC LIMIT 500
+  `).all();
+  return json({ don_hoan: results });
+}
+
 const TINH_TRANG_HOP_LE = ['con_tot', 'hu_hong', 'thieu_hang', 'sai_hang'];
 
 /* Kho xác nhận đã nhận được kiện hàng hoàn → tắt đồng hồ đếm 12h cho đơn đó.
@@ -1412,6 +1438,7 @@ const DUONG_DAN = {
   'GET  /api/shopee/callback':   shopeeCallback,
   'POST /api/hoan/dong-bo':      hoanDongBo,
   'GET  /api/hoan/danh-sach':    hoanDanhSach,
+  'GET  /api/hoan/lich-su':      hoanLichSu,
   'GET  /api/hoan/sku-map':      hoanSkuMapDanhSach,
   'POST /api/hoan/sku-map':      hoanSkuMapGan,
   'POST /api/hoan/da-nhan':      hoanDaNhan,

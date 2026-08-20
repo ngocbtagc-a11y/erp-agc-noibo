@@ -504,6 +504,7 @@
         <button class="seg-nut" data-kv="xuat">Xuất kho</button>
         <button class="seg-nut" data-kv="baocao">Báo cáo</button>
         <button class="seg-nut" data-kv="donhoan">Đơn hoàn</button>
+        <button class="seg-nut" data-kv="lichsu">Lịch sử đơn hoàn</button>
       </div>
 
       <!-- ===== Màn Tồn kho ===== -->
@@ -737,6 +738,51 @@
             </table>
           </div>
           <div class="empty" id="dh-trong" hidden>Không có đơn hoàn nào cần kho xử lý lúc này.</div>
+        </div>
+
+      </div>
+
+      <!-- ===== Màn Lịch sử đơn hoàn (tra cứu lại đơn đã xử lý) ===== -->
+      <div class="kv-pane" id="kv-pane-lichsu" hidden>
+        <div class="panel">
+          <div class="panel-head">
+            <h4>Lịch sử đơn hoàn</h4>
+            <span class="hint" id="ls-dem"></span>
+          </div>
+          <div class="panel-body" style="padding-bottom:0; padding-top:0">
+            <p class="hint" style="margin:14px 0 14px">Tra cứu lại MỌI đơn hoàn còn trong hệ thống — kể cả đã nhận/đã xử lý xong (khác tab "Đơn hoàn" chỉ hiện đơn đang chờ xử lý). Chỉ xem, không thao tác được ở đây. Lưu ý: đơn hoàn ngoài tháng làm việc hiện tại đã tự động dọn khỏi hệ thống, không tra lại được.</p>
+            <div class="dh-timkiem">
+              <div class="search">
+                <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                  <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+                </svg>
+                <input type="search" id="ls-tim" placeholder="Tìm: mã đơn hoàn · đơn gốc · mã vận đơn · sản phẩm · SKU · người mua">
+              </div>
+              <label class="dh-tick-nguon"><input type="checkbox" id="ls-nguon-shopee" checked> Shopee</label>
+              <label class="dh-tick-nguon"><input type="checkbox" id="ls-nguon-tiktok" checked> TikTok</label>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Nguồn</th>
+                  <th>Ngày</th>
+                  <th>Mã đơn hoàn</th>
+                  <th>Đơn gốc</th>
+                  <th>Mã vận đơn</th>
+                  <th>Sản phẩm hoàn về</th>
+                  <th class="num">Số lượng</th>
+                  <th>Trạng thái trên sàn</th>
+                  <th class="num">Số tiền</th>
+                  <th>Người mua</th>
+                  <th>Trạng thái xử lý</th>
+                </tr>
+              </thead>
+              <tbody id="ls-bang"></tbody>
+            </table>
+          </div>
+          <div class="empty" id="ls-trong" hidden>Không tìm thấy đơn hoàn nào khớp.</div>
         </div>
 
       </div>
