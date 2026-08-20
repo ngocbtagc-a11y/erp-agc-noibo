@@ -470,7 +470,12 @@ if (TOI.quyen.includes('chat')) {
 // cho khu Vinh danh (danh sách chat/thông báo khác đã có kiểu hiện giờ riêng)
 function thoiGianTruoc(chuoi) {
   if (!chuoi) return '';
-  const luc = Date.parse(chuoi.replace(' ', 'T'));
+  // Chuỗi từ máy chủ là giờ VN "trần trụi" (datetime('now','+7 hours'), không
+  // có 'Z'/múi giờ) — PHẢI ép đọc là UTC (thêm 'Z') để khớp với gioNay bên
+  // dưới, không thì Date.parse tự đoán theo múi giờ HỆ ĐIỀU HÀNH trình duyệt,
+  // sai lệch tuỳ máy (bắt được lỗi này khi tự test: hiện "7 giờ trước" cho
+  // tin vừa gửi xong, trên máy có múi giờ hệ thống UTC+7).
+  const luc = Date.parse(chuoi.replace(' ', 'T') + 'Z');
   const gioNay = Date.now() + 7 * 3600 * 1000;
   const phut = Math.max(0, Math.round((gioNay - luc) / 60000));
   if (phut < 1) return 'vừa xong';
