@@ -1147,6 +1147,15 @@ async function kiemTraLyDoNghiemTrong(env) {
     const loaiRui = /counterfeit|fake/i.test(r.ly_do) ? 'nghi HÀNG GIẢ/NHÁI' : 'HỘP HÀNG RỖNG';
     const noiDung = `🚨 Đơn hoàn ${r.return_sn} (${nguon}) — lý do ${loaiRui}: "${r.ly_do}". Cần kiểm tra ngay, đây là rủi ro pháp lý/uy tín.`;
     await guiThongBao(env, 'van_hanh', noiDung, 'canh_bao_nghiem_trong', r.return_sn);
+    // Gửi thẳng vào kênh chat chung nữa (Sếp Ngọc yêu cầu 20/08/2026, sợ
+    // chuông thông báo bị bỏ sót) — "Hệ thống" đóng vai người gửi, hiện
+    // trong kênh chung như 1 tin nhắn bình thường, ai cũng thấy ngay.
+    try {
+      await env.DB.prepare(`
+        INSERT INTO tin_nhan_chat (nguoi_gui_id, nguoi_gui_ten, nguoi_gui_viet_tat, nguoi_nhan_id, noi_dung, tao_luc)
+        VALUES ('he_thong', '🚨 Hệ thống cảnh báo', 'HT', NULL, ?, datetime('now','+7 hours'))
+      `).bind(noiDung).run();
+    } catch (e) { console.error('Gửi chat cảnh báo nghiêm trọng:', e.message); }
     try {
       await guiTelegram(env,
         `🚨 CẢNH BÁO NGHIÊM TRỌNG — ĐƠN HOÀN\n\n` +
