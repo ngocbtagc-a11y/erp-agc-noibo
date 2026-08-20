@@ -10,9 +10,12 @@
    Phải tắt cờ này ở chính màn đăng nhập, không thì trang tự đá về chính nó
    và tải lại vô tận. */
 async function goi(duongDan, tuyChon = {}, tuDongVeDangNhap = true) {
+  // FormData (gửi kèm file) thì KHÔNG tự đặt Content-Type — để trình duyệt tự
+  // ghi boundary multipart, đặt tay vào là hỏng luôn cả yêu cầu.
+  const laFormData = tuyChon.body instanceof FormData;
   const res = await fetch(duongDan, {
     credentials: 'same-origin',
-    headers: { 'Content-Type': 'application/json' },
+    ...(laFormData ? {} : { headers: { 'Content-Type': 'application/json' } }),
     ...tuyChon
   });
 
@@ -49,6 +52,15 @@ export const API = {
   danhBa: () => goi('/api/danh-ba'),
 
   nhanSu: () => goi('/api/nhan-su'),
+
+  /* ---- Chat nội bộ ---- */
+  chatDanhSach: (sauId) => goi('/api/chat/tin-nhan' + (sauId ? '?sau_id=' + sauId : '')),
+  chatGui: (noiDung, tep) => {
+    const fd = new FormData();
+    if (noiDung) fd.append('noi_dung', noiDung);
+    if (tep) fd.append('tep', tep);
+    return goi('/api/chat/gui', { method: 'POST', body: fd });
+  },
 
   /* ---- Quản trị (chỉ admin) ---- */
   qtDanhSach: () => goi('/api/quan-tri/danh-sach'),

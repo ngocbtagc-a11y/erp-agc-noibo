@@ -669,6 +669,106 @@ tr.canh-bao:hover > td { background: #fbdbd6; }
 .tb-trong { padding: 24px 16px; text-align: center; color: var(--text-mute); }
 
 /* ==========================================================================
+   CHAT NỘI BỘ — 1 kênh chung, kiểu bong bóng tin nhắn
+   ========================================================================== */
+.chat-khung {
+  height: 62vh;
+  min-height: 360px;
+  max-height: 720px;
+  overflow-y: auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.chat-tin { display: flex; gap: 10px; max-width: 78%; }
+.chat-tin.chat-cua-toi { align-self: flex-end; flex-direction: row-reverse; }
+
+.chat-avt {
+  flex-shrink: 0;
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  background: var(--sage);
+  color: var(--white);
+  font-size: 11px;
+  font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+}
+
+.chat-noi { min-width: 0; }
+.chat-ten {
+  font-size: 11px;
+  color: var(--text-mute);
+  margin-bottom: 3px;
+}
+.chat-cua-toi .chat-ten { text-align: right; }
+
+.chat-bong {
+  background: var(--surface);
+  border-radius: var(--r-md);
+  padding: 9px 13px;
+  font-size: 13.5px;
+  line-height: 1.45;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+.chat-cua-toi .chat-bong { background: var(--sage-wash); }
+
+.chat-tep-card {
+  display: flex; align-items: center; gap: 8px;
+  margin-top: 6px;
+  padding: 8px 12px;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  font-size: 12.5px;
+  text-decoration: none;
+  color: var(--ink);
+}
+.chat-tep-card:hover { border-color: var(--sage); }
+.chat-tep-card .sm { color: var(--text-mute); font-size: 11px; }
+
+.chat-anh {
+  display: block;
+  max-width: 260px;
+  max-height: 260px;
+  border-radius: var(--r-sm);
+  margin-top: 6px;
+  cursor: pointer;
+}
+
+.chat-file-dinhkem {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 20px;
+  background: var(--sage-wash);
+  border-top: 1px solid var(--line);
+  font-size: 12.5px;
+}
+.chat-file-dinhkem button {
+  background: none; border: none; cursor: pointer;
+  color: var(--text-mute); font-size: 14px; line-height: 1;
+}
+
+.chat-nhap {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--line);
+}
+.chat-nhap input[type="text"] {
+  flex: 1;
+  padding: 11px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+}
+.chat-nhap input[type="text"]:focus {
+  outline: none; background: var(--white); border-color: var(--sage);
+  box-shadow: 0 0 0 3px rgba(154,171,134,.22);
+}
+.chat-nut-tep { flex-shrink: 0; padding: 10px; border-radius: 50%; width: auto; }
+
+/* ==========================================================================
    BẢNG DÀI — cuộn gọn trong 1 màn hình (~15 dòng) + cố định tiêu đề + các cột đầu
    Dùng cho bảng nào có thể dài (VD "Cần đối soát"): .table-wrap-cuon thay
    .table-wrap, thêm class .dinh-tick/.dinh-cot/.dinh-cot2/.dinh-cot3/.dinh-cot4

@@ -16,6 +16,7 @@ import { API } from './api.js';
 const TAB = [
   { id: 'tongquan',  ten: 'Tổng quan',  icon: 'M3 12l9-9 9 9M5 10v10h14V10' },
   { id: 'danhba',    ten: 'Danh bạ',    icon: 'M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8' },
+  { id: 'chat',      ten: 'Chat nội bộ', icon: 'M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z' },
   { id: 'nhansu',    ten: 'Nhân sự',    icon: 'M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75' },
   { id: 'kinhdoanh', ten: 'Kinh doanh', icon: 'M23 6l-9.5 9.5-5-5L1 18M17 6h6v6' },
   { id: 'khovan',    ten: 'Kho vận',    icon: 'M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16zM3.27 6.96L12 12.01l8.73-5.05M12 22.08V12' },
@@ -372,6 +373,127 @@ if (TOI.quyen.includes('danhba')) {
 
   veDanhBa('');
   $('#db-tim').addEventListener('input', e => veDanhBa(e.target.value));
+}
+
+/* -- Chat nội bộ (máy chủ thật) -- */
+if (TOI.quyen.includes('chat')) {
+  await khoiDongChat();
+}
+
+/* ==========================================================================
+   CHAT NỘI BỘ — 1 kênh chung, tự hỏi lại (poll) mỗi vài giây cho gần realtime
+   ========================================================================== */
+async function khoiDongChat() {
+  const khung = $('#chat-khung');
+  let idCuoi = 0;
+  let tepDangChon = null;
+
+  // Đổi giờ VN "YYYY-MM-DD HH:MM:SS" -> "HH:MM" (hôm nay) hoặc "dd/mm HH:MM"
+  function gioChat(chuoi) {
+    if (!chuoi) return '';
+    const [ngay, gio] = chuoi.split(' ');
+    const homNay = new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
+    const hhmm = (gio || '').slice(0, 5);
+    if (ngay === homNay) return hhmm;
+    const [, thang, ng] = ngay.split('-');
+    return `${ng}/${thang} ${hhmm}`;
+  }
+
+  function dinhDangCo(byte) {
+    if (byte == null) return '';
+    if (byte < 1024) return byte + ' B';
+    if (byte < 1024 * 1024) return (byte / 1024).toFixed(0) + ' KB';
+    return (byte / (1024 * 1024)).toFixed(1) + ' MB';
+  }
+
+  function themTin(t, cuoiCung) {
+    const cuaToi = t.nguoi_gui_id === TOI.id;
+    const div = document.createElement('div');
+    div.className = 'chat-tin' + (cuaToi ? ' chat-cua-toi' : '');
+
+    let noiDungHtml = t.noi_dung ? `<div class="chat-bong">${esc(t.noi_dung)}</div>` : '';
+    if (t.tep_ten) {
+      const laAnh = (t.tep_loai || '').startsWith('image/');
+      const url = `/api/chat/tep?id=${t.id}`;
+      noiDungHtml += laAnh
+        ? `<img class="chat-anh" src="${esc(url)}" alt="${esc(t.tep_ten)}" onclick="window.open('${esc(url)}','_blank')">`
+        : `<a class="chat-tep-card" href="${esc(url)}" target="_blank" rel="noopener">` +
+            `📎 <span>${esc(t.tep_ten)}<div class="sm">${dinhDangCo(t.tep_kich_thuoc)}</div></span></a>`;
+    }
+
+    div.innerHTML =
+      `<div class="chat-avt">${esc(t.nguoi_gui_viet_tat)}</div>` +
+      `<div class="chat-noi">` +
+        `<div class="chat-ten">${cuaToi ? '' : esc(t.nguoi_gui_ten) + ' · '}${esc(gioChat(t.tao_luc))}</div>` +
+        noiDungHtml +
+      `</div>`;
+    khung.appendChild(div);
+    idCuoi = Math.max(idCuoi, t.id);
+  }
+
+  function cuoiTrang() { khung.scrollTop = khung.scrollHeight; }
+
+  async function taiLanDau() {
+    const { tin_nhan } = await API.chatDanhSach();
+    $('#chat-trong').hidden = tin_nhan.length > 0;
+    tin_nhan.forEach(t => themTin(t));
+    cuoiTrang();
+  }
+
+  async function hoiTinMoi() {
+    try {
+      const { tin_nhan } = await API.chatDanhSach(idCuoi);
+      if (tin_nhan.length) {
+        const oDay = khung.scrollHeight - khung.scrollTop - khung.clientHeight < 80;
+        tin_nhan.forEach(t => themTin(t));
+        $('#chat-trong').hidden = true;
+        if (oDay) cuoiTrang();   // chỉ tự cuộn nếu Sếp đang xem gần cuối, khỏi giật khi đọc tin cũ
+      }
+    } catch { /* mất mạng tạm thời — bỏ qua, đợt hỏi sau tự thử lại */ }
+  }
+
+  await taiLanDau();
+  setInterval(hoiTinMoi, 6000);
+
+  // Chọn / bỏ file đính kèm
+  $('#chat-nut-tep').addEventListener('click', () => $('#chat-tep').click());
+  $('#chat-tep').addEventListener('change', () => {
+    const f = $('#chat-tep').files[0] || null;
+    tepDangChon = f;
+    $('#chat-file-dinhkem').hidden = !f;
+    $('#chat-file-ten').textContent = f ? `${f.name} (${dinhDangCo(f.size)})` : '';
+  });
+  $('#chat-file-bo').addEventListener('click', () => {
+    tepDangChon = null;
+    $('#chat-tep').value = '';
+    $('#chat-file-dinhkem').hidden = true;
+  });
+
+  // Gửi
+  $('#chat-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const oNoiDung = $('#chat-noidung');
+    const noiDung = oNoiDung.value.trim();
+    if (!noiDung && !tepDangChon) return;
+    $('#chat-loi').textContent = '';
+    const nutGui = $('#chat-nut-gui');
+    nutGui.disabled = true;
+    try {
+      const { id } = await API.chatGui(noiDung, tepDangChon);
+      oNoiDung.value = '';
+      $('#chat-tep').value = '';
+      tepDangChon = null;
+      $('#chat-file-dinhkem').hidden = true;
+      // Hiện luôn tin vừa gửi (khỏi đợi vòng hỏi lại tiếp theo)
+      if (id > idCuoi) await hoiTinMoi();
+      cuoiTrang();
+    } catch (err) {
+      $('#chat-loi').textContent = err.message || 'Không gửi được, thử lại nhé.';
+    } finally {
+      nutGui.disabled = false;
+      oNoiDung.focus();
+    }
+  });
 }
 
 /* -- Nhân sự (máy chủ thật) -- */

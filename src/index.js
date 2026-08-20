@@ -202,6 +202,101 @@ async function layNhanSu(req, env) {
 }
 
 /* ==========================================================================
+   CHAT NỘI BỘ — 1 kênh chung cho toàn công ty (Sếp Ngọc chốt 19/08/2026)
+   ---------------------------------------------------------------------------
+   Mở cho MỌI người đăng nhập (giống Danh bạ) — không phân quyền theo bộ
+   phận, vì đây là kênh làm việc chung thay Zalo/Misa chat đang dùng loạn.
+   File đính kèm lưu base64 thẳng trong D1 (theo đúng cách CCCD đang làm,
+   xem nhansu.js — quy mô công ty nhỏ, chưa cần mở R2). Giới hạn 4MB/file.
+   Trình duyệt tự hỏi lại (poll) — không dùng WebSocket cho gọn hạ tầng.
+   ========================================================================== */
+const CHAT_TEP_TOI_DA = 4 * 1024 * 1024;   // 4MB — đủ ảnh chụp màn hình, Excel, PDF ngắn
+
+/* Lấy tin nhắn — mặc định 50 tin gần nhất; truyền sau_id để chỉ lấy tin MỚI
+   hơn (dùng cho polling, đỡ tải lại toàn bộ). Không trả tep_du_lieu (nặng). */
+async function chatDanhSach(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+
+  const url = new URL(req.url);
+  const sauId = parseInt(url.searchParams.get('sau_id'), 10);
+
+  const cauLenh = sauId > 0
+    ? `SELECT id, nguoi_gui_id, nguoi_gui_ten, nguoi_gui_viet_tat, noi_dung,
+              tep_ten, tep_loai, tep_kich_thuoc, tao_luc
+         FROM tin_nhan_chat WHERE id > ? ORDER BY id ASC`
+    : `SELECT id, nguoi_gui_id, nguoi_gui_ten, nguoi_gui_viet_tat, noi_dung,
+              tep_ten, tep_loai, tep_kich_thuoc, tao_luc
+         FROM tin_nhan_chat ORDER BY id DESC LIMIT 50`;
+
+  const { results } = sauId > 0
+    ? await env.DB.prepare(cauLenh).bind(sauId).all()
+    : await env.DB.prepare(cauLenh).all();
+
+  // Lấy 50 tin gần nhất theo id giảm dần thì phải đảo lại cho đúng thứ tự thời gian
+  const tinNhan = sauId > 0 ? (results || []) : (results || []).reverse();
+  return json({ tin_nhan: tinNhan, toi_id: phien.nhan_su_id });
+}
+
+/* Gửi tin nhắn — có thể chỉ có chữ, chỉ có file, hoặc cả hai */
+async function chatGui(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+
+  let b; try { b = await req.formData(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  const noiDung = String(b.get('noi_dung') || '').trim().slice(0, 2000);
+  const tep = b.get('tep');   // File hoặc null
+
+  let tepTen = null, tepLoai = null, tepKichThuoc = null, tepB64 = null;
+  if (tep && typeof tep === 'object' && tep.size > 0) {
+    if (tep.size > CHAT_TEP_TOI_DA) return loi('File quá 4MB — Sếp nén lại hoặc gửi link nhé', 413);
+    tepTen = String(tep.name || 'tep-dinh-kem').slice(0, 200);
+    tepLoai = String(tep.type || 'application/octet-stream');
+    tepKichThuoc = tep.size;
+    const buf = await tep.arrayBuffer();
+    tepB64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+  }
+
+  if (!noiDung && !tepB64) return loi('Tin nhắn trống');
+
+  const nguoi = phien.ho_ten || phien.ten_dang_nhap;
+  const r = await env.DB.prepare(`
+    INSERT INTO tin_nhan_chat
+      (nguoi_gui_id, nguoi_gui_ten, nguoi_gui_viet_tat, noi_dung,
+       tep_ten, tep_loai, tep_kich_thuoc, tep_du_lieu, tao_luc)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now','+7 hours'))
+  `).bind(
+    phien.nhan_su_id, nguoi, phien.viet_tat || '?', noiDung || null,
+    tepTen, tepLoai, tepKichThuoc, tepB64
+  ).run();
+
+  return json({ ok: true, id: r.meta.last_row_id });
+}
+
+/* Tải file đính kèm của 1 tin nhắn — GET /api/chat/tep?id=123 */
+async function chatTepDinhKem(req, env) {
+  const { loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+
+  const id = parseInt(new URL(req.url).searchParams.get('id'), 10);
+  if (!id) return loi('Thiếu id file', 400);
+
+  const r = await env.DB.prepare(
+    'SELECT tep_ten, tep_loai, tep_du_lieu FROM tin_nhan_chat WHERE id = ?'
+  ).bind(id).first();
+  if (!r || !r.tep_du_lieu) return loi('Không tìm thấy file', 404);
+
+  const bin = Uint8Array.from(atob(r.tep_du_lieu), c => c.charCodeAt(0));
+  return new Response(bin, {
+    headers: {
+      'Content-Type': r.tep_loai || 'application/octet-stream',
+      'Content-Disposition': `inline; filename="${encodeURIComponent(r.tep_ten || 'tep')}"`,
+      'Cache-Control': 'private, max-age=31536000'
+    }
+  });
+}
+
+/* ==========================================================================
    QUẢN TRỊ — chỉ admin (Giám đốc, Phó Giám đốc)
    ---------------------------------------------------------------------------
    Mọi đầu việc dưới đây đều kiểm tra laAdmin() ở máy chủ. Người không phải
@@ -935,6 +1030,9 @@ const DUONG_DAN = {
   'POST /api/doi-mat-khau':  doiMatKhau,
   'GET  /api/danh-ba':       layDanhBa,
   'GET  /api/nhan-su':       layNhanSu,
+  'GET  /api/chat/tin-nhan': chatDanhSach,
+  'POST /api/chat/gui':      chatGui,
+  'GET  /api/chat/tep':      chatTepDinhKem,
   'GET  /api/quan-tri/danh-sach':      qtDanhSach,
   'POST /api/quan-tri/them-nhan-su':   qtThemNhanSu,
   'POST /api/quan-tri/tao-tai-khoan':  qtTaoTaiKhoan,
