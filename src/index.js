@@ -1152,6 +1152,18 @@ async function kdCanDoiSoat(req, env) {
   // huỷ (trước tách riêng panel "Đơn hoàn huỷ", nay gộp chung cho nhanh). Vận
   // hành xem lý do rồi bấm "Đẩy sang Kho vận" (hàng về) hoặc "Đẩy sang Kế toán"
   // (đã hoàn tiền, kế toán tra soát).
+  //
+  // TỰ ẨN đơn mà KHÁCH ĐÃ TỰ HUỶ YÊU CẦU HOÀN (Sếp Ngọc chốt 20/08/2026, phát
+  // hiện từ rà soát: 9 đơn CANCELLED cũ vẫn hiện song song với yêu cầu hoàn
+  // MỚI hơn của cùng đơn hàng, + 39 đơn CANCELLED không có nút nào xử lý đúng
+  // bản chất được — "Đẩy sang Kho"/"Đẩy sang Kế toán" đều sai vì không có
+  // hàng về, không có tiền hoàn). Sàn tự cập nhật trang_thai mỗi 5 phút qua
+  // dongBoNen() (shopee.js/tiktok.js) nên chỉ cần LỌC ở đây là tự "biến mất"
+  // theo đúng nhịp 5 phút đó, không cần thêm cron riêng.
+  // CHỪA LẠI đơn CANCELLED nhưng CÓ mã vận đơn (ma_van_don) — đây là "đơn huỷ
+  // có hàng vật lý về" (khách đã gửi hàng trước khi đơn bị huỷ), vẫn cần Vận
+  // hành sàn đẩy xuống Kho để chạy luồng Nhập kho/Hàng hỏng — GIỐNG HỆT điều
+  // kiện apiDanhSach (shopee.js) đang dùng, để 2 nơi luôn khớp nhau tuyệt đối.
   const { results } = await env.DB.prepare(`
     SELECT d.return_sn, d.order_sn, d.ma_van_don, d.san_pham, d.san_pham_ten,
            COALESCE(d.san_pham_sku, m.ma_sku) AS san_pham_sku, d.so_luong,
@@ -1164,6 +1176,7 @@ async function kdCanDoiSoat(req, env) {
      WHERE d.kho_nhan_luc IS NULL
        AND d.ke_toan_luc IS NULL
        AND d.dang_cho = 'van_hanh'
+       AND (d.trang_thai NOT LIKE '%CANCEL%' OR d.ma_van_don IS NOT NULL)
      ORDER BY (d.doi_soat_luc IS NOT NULL), d.dong_bo_luc DESC
   `).all();
   return json({ can_doi_soat: results });
