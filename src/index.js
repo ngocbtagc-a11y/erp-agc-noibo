@@ -711,12 +711,17 @@ function nhomCua(vaiTro) {
   return [];
 }
 
-async function guiThongBao(env, nhom, noiDung, loai, lienKet) {
+/* nguoiNhanId (tuỳ chọn): báo cho ĐÚNG 1 người thay vì cả nhóm phòng ban —
+   dùng cho Tác vụ (giao việc là chuyện riêng 2 người, không phải cả phòng
+   ban cần biết). Truyền nhom=null khi dùng kiểu này — cột nhom vẫn NOT NULL
+   nên ghi tạm 'ca_nhan' (không khớp bất kỳ nhóm thật nào, chỉ để ràng buộc
+   DB vui lòng; layThongBao lọc bằng nguoi_nhan_id chứ không phải nhom này). */
+async function guiThongBao(env, nhom, noiDung, loai, lienKet, nguoiNhanId) {
   try {
     await env.DB.prepare(
-      `INSERT INTO thong_bao (nhom, noi_dung, loai, lien_ket, tao_luc)
-       VALUES (?, ?, ?, ?, datetime('now','+7 hours'))`
-    ).bind(nhom, noiDung, loai || null, lienKet || null).run();
+      `INSERT INTO thong_bao (nhom, noi_dung, loai, lien_ket, nguoi_nhan_id, tao_luc)
+       VALUES (?, ?, ?, ?, ?, datetime('now','+7 hours'))`
+    ).bind(nhom || 'ca_nhan', noiDung, loai || null, lienKet || null, nguoiNhanId || null).run();
   } catch (e) { console.error('Gửi thông báo:', e.message); }
 }
 
@@ -811,12 +816,17 @@ async function layThongBao(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
   const nhom = nhomCua(phien.vai_tro);
-  if (!nhom.length) return json({ thong_bao: [], chua_doc: 0 });
-  const phs = nhom.map(() => '?').join(',');
+  // Gộp 2 nguồn: thông báo theo NHÓM phòng ban (như cũ) + thông báo nhắm
+  // ĐÚNG cá nhân (vd Tác vụ giao việc) — ai cũng có thể nhận loại sau dù
+  // vai trò không thuộc nhóm phòng ban nào (vd hcns không có trong nhomCua).
+  const dieuKien = nhom.length
+    ? `(nhom IN (${nhom.map(() => '?').join(',')}) AND nguoi_nhan_id IS NULL) OR nguoi_nhan_id = ?`
+    : `nguoi_nhan_id = ?`;
+  const thamSo = [...nhom, phien.nhan_su_id];
   const { results } = await env.DB.prepare(
     `SELECT id, nhom, noi_dung, loai, lien_ket, tao_luc FROM thong_bao
-      WHERE nhom IN (${phs}) ORDER BY id DESC LIMIT 50`
-  ).bind(...nhom).all();
+      WHERE ${dieuKien} ORDER BY id DESC LIMIT 50`
+  ).bind(...thamSo).all();
   const xem = await env.DB.prepare('SELECT tb_xem_luc FROM tai_khoan WHERE id = ?')
                           .bind(phien.tai_khoan_id).first();
   const moc = xem?.tb_xem_luc || '';
@@ -829,6 +839,117 @@ async function thongBaoDaXem(req, env) {
   if (l) return l;
   await env.DB.prepare(`UPDATE tai_khoan SET tb_xem_luc = datetime('now','+7 hours') WHERE id = ?`)
               .bind(phien.tai_khoan_id).run();
+  return json({ ok: true });
+}
+
+/* ==========================================================================
+   TÁC VỤ — giao việc cho nhân viên (Sếp Ngọc yêu cầu 20/08/2026). Theo tinh
+   thần MBOs của công ty: mỗi việc BẮT BUỘC có "đầu ra cụ thể" (dau_ra),
+   tách khỏi "mô tả" (mo_ta, chỉ là ghi chú thêm, không bắt buộc).
+   Luồng trạng thái: moi -> dang_lam -> cho_duyet -> hoan_thanh (hoặc huy
+   bất kỳ lúc nào trước khi xong). Mở cho MỌI vai trò, ai cũng giao/nhận
+   việc được — không giới hạn theo cấp bậc (đơn giản hoá MVP).
+   ========================================================================== */
+const CV_COT = `id, tieu_de, dau_ra, mo_ta, nguoi_giao_id, nguoi_giao_ten,
+                nguoi_nhan_id, nguoi_nhan_ten, han_chot, trang_thai, ket_qua,
+                tao_luc, cap_nhat_luc`;
+
+async function cvDanhSach(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  const [nhan, giao] = await Promise.all([
+    env.DB.prepare(
+      `SELECT ${CV_COT} FROM cong_viec WHERE nguoi_nhan_id = ?
+        ORDER BY (trang_thai IN ('hoan_thanh','huy')), (han_chot IS NULL), han_chot ASC, id DESC`
+    ).bind(phien.nhan_su_id).all(),
+    env.DB.prepare(
+      `SELECT ${CV_COT} FROM cong_viec WHERE nguoi_giao_id = ?
+        ORDER BY (trang_thai IN ('hoan_thanh','huy')), id DESC`
+    ).bind(phien.nhan_su_id).all()
+  ]);
+  return json({ nhan: nhan.results || [], giao: giao.results || [] });
+}
+
+async function cvTao(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  const nguoiNhanId = String(b.nguoi_nhan_id || '').trim();
+  const tieuDe = String(b.tieu_de || '').trim().slice(0, 200);
+  const dauRa = String(b.dau_ra || '').trim().slice(0, 1000);
+  const moTa = String(b.mo_ta || '').trim().slice(0, 2000) || null;
+  const hanChot = String(b.han_chot || '').trim() || null;
+
+  if (!nguoiNhanId) return loi('Chưa chọn người nhận việc');
+  if (nguoiNhanId === phien.nhan_su_id) return loi('Không tự giao việc cho chính mình');
+  if (!tieuDe) return loi('Thiếu tên việc');
+  if (!dauRa) return loi('Thiếu đầu ra cụ thể cần đạt — đừng chỉ ghi "làm gì", ghi rõ xong thì kết quả ra sao');
+
+  const ns = await env.DB.prepare('SELECT ho_ten FROM nhan_su WHERE id = ?').bind(nguoiNhanId).first();
+  if (!ns) return loi('Không tìm thấy người nhận việc', 404);
+
+  const nguoiGiao = phien.ho_ten || phien.ten_dang_nhap;
+  const r = await env.DB.prepare(`
+    INSERT INTO cong_viec (tieu_de, dau_ra, mo_ta, nguoi_giao_id, nguoi_giao_ten, nguoi_nhan_id, nguoi_nhan_ten, han_chot, trang_thai, tao_luc)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'moi', datetime('now','+7 hours'))
+  `).bind(tieuDe, dauRa, moTa, phien.nhan_su_id, nguoiGiao, nguoiNhanId, ns.ho_ten, hanChot).run();
+
+  await guiThongBao(env, null, `${nguoiGiao} giao việc mới: "${tieuDe}"`, 'cong_viec_moi', String(r.meta.last_row_id), nguoiNhanId);
+  return json({ ok: true, id: r.meta.last_row_id });
+}
+
+const CV_TRANG_THAI_HOP_LE = ['moi', 'dang_lam', 'cho_duyet', 'hoan_thanh', 'huy'];
+
+async function cvCapNhat(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  const id = parseInt(b.id, 10);
+  const trangThaiMoi = String(b.trang_thai || '').trim();
+  const ketQua = b.ket_qua != null ? String(b.ket_qua).trim().slice(0, 2000) : null;
+  if (!id) return loi('Thiếu id công việc');
+  if (!CV_TRANG_THAI_HOP_LE.includes(trangThaiMoi)) return loi('Trạng thái không hợp lệ');
+
+  const cv = await env.DB.prepare('SELECT * FROM cong_viec WHERE id = ?').bind(id).first();
+  if (!cv) return loi('Không tìm thấy công việc', 404);
+
+  const laNguoiNhan = cv.nguoi_nhan_id === phien.nhan_su_id;
+  const laNguoiGiao = cv.nguoi_giao_id === phien.nhan_su_id || laAdmin(phien.vai_tro);
+
+  // Trả lại làm tiếp (cho_duyet -> dang_lam) — CHỈ người giao được bấm, tách
+  // riêng khỏi bảng dưới vì đích đến 'dang_lam' còn dùng chung với nhánh
+  // "Bắt đầu làm" (moi -> dang_lam, người NHẬN bấm) — 2 luật khác hẳn nhau
+  // dù cùng đích đến, phải phân biệt bằng trạng thái NGUỒN.
+  if (trangThaiMoi === 'dang_lam' && cv.trang_thai === 'cho_duyet') {
+    if (!laNguoiGiao) return loi('Chỉ người giao việc mới trả lại được', 403);
+  } else {
+    const CHUYEN_HOP_LE = {
+      dang_lam:   { tu: ['moi'],       ai: laNguoiNhan },
+      cho_duyet:  { tu: ['dang_lam'],  ai: laNguoiNhan, batBuocKetQua: true },
+      hoan_thanh: { tu: ['cho_duyet'], ai: laNguoiGiao },
+      huy:        { tu: ['moi', 'dang_lam', 'cho_duyet'], ai: laNguoiGiao }
+    };
+    const luat = CHUYEN_HOP_LE[trangThaiMoi];
+    if (!luat || !luat.tu.includes(cv.trang_thai)) return loi(`Không thể chuyển từ "${cv.trang_thai}" sang "${trangThaiMoi}"`, 400);
+    if (!luat.ai) return loi('Bạn không có quyền chuyển trạng thái này', 403);
+    if (luat.batBuocKetQua && !ketQua) return loi('Hãy điền kết quả thực tế trước khi nộp');
+  }
+
+  await env.DB.prepare(`
+    UPDATE cong_viec SET trang_thai = ?, ket_qua = COALESCE(?, ket_qua), cap_nhat_luc = datetime('now','+7 hours')
+     WHERE id = ?
+  `).bind(trangThaiMoi, ketQua, id).run();
+
+  const nguoi = phien.ho_ten || phien.ten_dang_nhap;
+  if (trangThaiMoi === 'cho_duyet') {
+    await guiThongBao(env, null, `${nguoi} đã nộp kết quả việc "${cv.tieu_de}" — chờ duyệt.`, 'cong_viec_cho_duyet', String(id), cv.nguoi_giao_id);
+  } else if (trangThaiMoi === 'hoan_thanh') {
+    await guiThongBao(env, null, `${nguoi} đã duyệt xong việc "${cv.tieu_de}".`, 'cong_viec_xong', String(id), cv.nguoi_nhan_id);
+  } else if (trangThaiMoi === 'dang_lam' && cv.trang_thai === 'cho_duyet') {
+    await guiThongBao(env, null, `${nguoi} yêu cầu làm lại việc "${cv.tieu_de}".`, 'cong_viec_tralai', String(id), cv.nguoi_nhan_id);
+  } else if (trangThaiMoi === 'huy') {
+    await guiThongBao(env, null, `${nguoi} đã huỷ việc "${cv.tieu_de}".`, 'cong_viec_huy', String(id), cv.nguoi_nhan_id);
+  }
   return json({ ok: true });
 }
 
@@ -1297,6 +1418,9 @@ const DUONG_DAN = {
   'POST /api/hoan/khieu-nai':    hoanKhieuNai,
   'POST /api/hoan/chua-nhan':    hoanChuaNhan,
   'POST /api/hoan/phan-loai':    hoanPhanLoai,
+  'GET  /api/cong-viec/danh-sach': cvDanhSach,
+  'POST /api/cong-viec/tao':       cvTao,
+  'POST /api/cong-viec/cap-nhat':  cvCapNhat,
   'GET  /api/thong-bao':         layThongBao,
   'POST /api/thong-bao/da-xem':  thongBaoDaXem,
   'GET  /api/kinh-doanh/can-doi-soat': kdCanDoiSoat,

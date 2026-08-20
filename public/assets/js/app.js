@@ -16,6 +16,7 @@ import { API } from './api.js';
 const TAB = [
   { id: 'tongquan',  ten: 'Tổng quan',  icon: 'M3 12l9-9 9 9M5 10v10h14V10' },
   { id: 'danhba',    ten: 'Danh bạ',    icon: 'M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8' },
+  { id: 'congviec',  ten: 'Tác vụ',     icon: 'M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11' },
   { id: 'nhansu',    ten: 'Nhân sự',    icon: 'M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75' },
   { id: 'kinhdoanh', ten: 'Kinh doanh', icon: 'M23 6l-9.5 9.5-5-5L1 18M17 6h6v6' },
   { id: 'khovan',    ten: 'Kho vận',    icon: 'M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16zM3.27 6.96L12 12.01l8.73-5.05M12 22.08V12' },
@@ -395,9 +396,164 @@ if (TOI.quyen.includes('danhba')) {
   });
 }
 
+/* -- Tác vụ: giao việc cho nhân viên (máy chủ thật) -- */
+if (TOI.quyen.includes('congviec')) {
+  await khoiDongCongViec();
+}
+
 /* -- Chat nội bộ (máy chủ thật) -- */
 if (TOI.quyen.includes('chat')) {
   await khoiDongChat();
+}
+
+/* ==========================================================================
+   TÁC VỤ — giao việc cho nhân viên. Theo tinh thần MBOs (quản lý theo mục
+   tiêu): mỗi việc BẮT BUỘC có "đầu ra cụ thể", không chỉ mô tả làm gì.
+   Luồng trạng thái: moi -> dang_lam -> cho_duyet -> hoan_thanh (hoặc huy).
+   ========================================================================== */
+const CV_TRANG_THAI = {
+  moi:        { chu: 'Mới giao',    mau: 'mute' },
+  dang_lam:   { chu: 'Đang làm',    mau: 'warn' },
+  cho_duyet:  { chu: 'Chờ duyệt',   mau: 'sage' },
+  hoan_thanh: { chu: 'Hoàn thành',  mau: 'ok' },
+  huy:        { chu: 'Đã huỷ',      mau: 'danger' }
+};
+
+async function khoiDongCongViec() {
+  const { danh_ba } = await API.danhBa();
+  const chonNguoiNhan = $('#cv-nguoi-nhan');
+  danh_ba.filter(n => n.id !== TOI.id).forEach(n => {
+    const o = document.createElement('option');
+    o.value = n.id; o.textContent = `${n.ho_ten} — ${n.chuc_vu || ''}`;
+    chonNguoiNhan.appendChild(o);
+  });
+
+  // Ẩn/hiện form giao việc
+  $('#cv-nut-mo-form').addEventListener('click', () => {
+    const body = $('#cv-form-body');
+    body.hidden = !body.hidden;
+  });
+
+  // Chuyển màn Việc tôi nhận / Việc tôi giao
+  $('#cvSeg').addEventListener('click', (e) => {
+    const nut = e.target.closest('.seg-nut');
+    if (!nut) return;
+    document.querySelectorAll('#cvSeg .seg-nut').forEach(b => b.classList.toggle('active', b === nut));
+    ['nhan', 'giao'].forEach(k => {
+      const pane = document.getElementById('cv-pane-' + k);
+      if (pane) pane.hidden = (k !== nut.dataset.cv);
+    });
+  });
+
+  function dongHan(hanChot) {
+    if (!hanChot) return '—';
+    const quaHan = hanChot < new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
+    const [nam, thang, ngay] = hanChot.split('-');
+    return `<span class="${quaHan ? 'canh-bao-chu' : ''}">${ngay}/${thang}/${nam}</span>`;
+  }
+
+  async function taiLai() {
+    let kq;
+    try { kq = await API.cvDanhSach(); } catch { return; }
+
+    veBang('#cv-bang-nhan', kq.nhan || [], r => {
+      const tt = CV_TRANG_THAI[r.trang_thai] || CV_TRANG_THAI.moi;
+      let nut = '';
+      if (r.trang_thai === 'moi') nut = `<button type="button" class="btn-nho btn-primary" data-cv-batdau="${r.id}">Bắt đầu làm</button>`;
+      else if (r.trang_thai === 'dang_lam') nut = `<button type="button" class="btn-nho btn-primary" data-cv-nop="${r.id}">Nộp kết quả</button>`;
+      return `<td><div class="nm">${esc(r.tieu_de)}</div>${r.mo_ta ? `<div class="sm">${esc(r.mo_ta)}</div>` : ''}${r.ket_qua ? `<div class="sm"><b>Kết quả:</b> ${esc(r.ket_qua)}</div>` : ''}</td>` +
+        `<td class="sm">${esc(r.dau_ra)}</td>` +
+        `<td class="sm">${esc(r.nguoi_giao_ten)}</td>` +
+        `<td class="sm">${dongHan(r.han_chot)}</td>` +
+        `<td><span class="tag ${tt.mau}">${tt.chu}</span></td>` +
+        `<td style="white-space:nowrap">${nut}</td>`;
+    });
+    $('#cv-trong-nhan').hidden = (kq.nhan || []).length > 0;
+
+    veBang('#cv-bang-giao', kq.giao || [], r => {
+      const tt = CV_TRANG_THAI[r.trang_thai] || CV_TRANG_THAI.moi;
+      let nut = '';
+      if (r.trang_thai === 'cho_duyet') {
+        nut = `<button type="button" class="btn-nho btn-primary" data-cv-duyet="${r.id}">Duyệt xong</button> ` +
+              `<button type="button" class="btn-nho" data-cv-tralai="${r.id}">Trả lại</button>`;
+      }
+      if (r.trang_thai === 'moi' || r.trang_thai === 'dang_lam' || r.trang_thai === 'cho_duyet') {
+        nut += ` <button type="button" class="btn-nho" data-cv-huy="${r.id}">Huỷ</button>`;
+      }
+      return `<td><div class="nm">${esc(r.tieu_de)}</div>${r.mo_ta ? `<div class="sm">${esc(r.mo_ta)}</div>` : ''}${r.ket_qua ? `<div class="sm"><b>Kết quả:</b> ${esc(r.ket_qua)}</div>` : ''}</td>` +
+        `<td class="sm">${esc(r.dau_ra)}</td>` +
+        `<td class="sm">${esc(r.nguoi_nhan_ten)}</td>` +
+        `<td class="sm">${dongHan(r.han_chot)}</td>` +
+        `<td><span class="tag ${tt.mau}">${tt.chu}</span></td>` +
+        `<td style="white-space:nowrap">${nut}</td>`;
+    });
+    $('#cv-trong-giao').hidden = (kq.giao || []).length > 0;
+  }
+
+  $('#cv-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    $('#cv-loi').textContent = '';
+    const nut = $('#cv-nut-luu');
+    nut.disabled = true;
+    try {
+      await API.cvTao({
+        nguoi_nhan_id: chonNguoiNhan.value,
+        tieu_de: $('#cv-tieu-de').value.trim(),
+        dau_ra: $('#cv-dau-ra').value.trim(),
+        mo_ta: $('#cv-mo-ta').value.trim(),
+        han_chot: $('#cv-han-chot').value || null
+      });
+      $('#cv-form').reset();
+      $('#cv-form-body').hidden = true;
+      await taiLai();
+    } catch (err) {
+      $('#cv-loi').textContent = err.message || 'Không giao được việc, thử lại nhé.';
+    } finally {
+      nut.disabled = false;
+    }
+  });
+
+  async function xuLyNut(e) {
+    const nutBatDau = e.target.closest('[data-cv-batdau]');
+    const nutNop = e.target.closest('[data-cv-nop]');
+    const nutDuyet = e.target.closest('[data-cv-duyet]');
+    const nutTraLai = e.target.closest('[data-cv-tralai]');
+    const nutHuy = e.target.closest('[data-cv-huy]');
+    const btn = nutBatDau || nutNop || nutDuyet || nutTraLai || nutHuy;
+    if (!btn) return;
+
+    let id, trangThai, ketQua;
+    if (nutBatDau) { id = btn.getAttribute('data-cv-batdau'); trangThai = 'dang_lam'; }
+    else if (nutNop) {
+      id = btn.getAttribute('data-cv-nop'); trangThai = 'cho_duyet';
+      const nhap = prompt('Kết quả thực tế đạt được (so với đầu ra đã giao):', '');
+      if (nhap === null) return;
+      if (!nhap.trim()) { alert('Cần điền kết quả trước khi nộp.'); return; }
+      ketQua = nhap.trim();
+    }
+    else if (nutDuyet) { id = btn.getAttribute('data-cv-duyet'); trangThai = 'hoan_thanh'; }
+    else if (nutTraLai) {
+      id = btn.getAttribute('data-cv-tralai'); trangThai = 'dang_lam';
+      if (!confirm('Trả việc lại cho nhân viên làm tiếp?')) return;
+    }
+    else if (nutHuy) {
+      id = btn.getAttribute('data-cv-huy'); trangThai = 'huy';
+      if (!confirm('Huỷ việc này?')) return;
+    }
+
+    btn.disabled = true;
+    try {
+      await API.cvCapNhat(id, trangThai, ketQua);
+      await taiLai();
+    } catch (err) {
+      alert(err.message || 'Không lưu được, thử lại nhé.');
+      btn.disabled = false;
+    }
+  }
+  $('#cv-bang-nhan').addEventListener('click', xuLyNut);
+  $('#cv-bang-giao').addEventListener('click', xuLyNut);
+
+  await taiLai();
 }
 
 /* ==========================================================================
