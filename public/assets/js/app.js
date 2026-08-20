@@ -686,7 +686,7 @@ if (TOI.quyen.includes('kinhdoanh')) {
     const nut = e.target.closest('.seg-nut');
     if (!nut) return;
     document.querySelectorAll('#kdSeg .seg-nut').forEach(b => b.classList.toggle('active', b === nut));
-    ['vanhanh', 'rnd'].forEach(k => {
+    ['vanhanh', 'rnd', 'cskh'].forEach(k => {
       const pane = document.getElementById('kd-pane-' + k);
       if (pane) pane.hidden = (k !== nut.dataset.kd);
     });
@@ -696,7 +696,29 @@ if (TOI.quyen.includes('kinhdoanh')) {
   // quyền Đơn hoàn mới thấy
   if (TOI.quyen.includes('donhoan')) {
     await khoiDongDoiSoatSan();
+    await khoiDongCSKH();
   }
+}
+
+/* Chăm sóc khách hàng — bảng xếp hạng khách hoàn/hủy nhiều nhất 6 tháng gần đây */
+async function khoiDongCSKH() {
+  let kq;
+  try { kq = await API.kdKhachHoanNhieu(); } catch { return; }
+  const ds = kq.khach_hang || [];
+  ds.forEach((r, i) => { r.__thu_tu = i + 1; });
+  veBang('#cskh-bang', ds, r => {
+    const ngTag = (r.nguon || '').split(',').map(n =>
+      n === 'tiktok' ? '<span class="tag mute">TikTok</span>' : '<span class="tag sage">Shopee</span>'
+    ).join(' ');
+    return `<td class="num">${r.__thu_tu}</td>` +
+      `<td>${esc(r.nguoi_mua)}</td>` +
+      `<td>${ngTag}</td>` +
+      `<td class="num">${esc(r.so_don)}</td>` +
+      `<td class="num">${esc(r.so_huy)}</td>` +
+      `<td class="sm">${ngayVN(r.gan_nhat)}</td>`;
+  });
+  $('#cskh-trong').hidden = ds.length > 0;
+  $('#cskh-dem').textContent = ds.length ? `${ds.length} khách` : '';
 }
 
 /* ==========================================================================

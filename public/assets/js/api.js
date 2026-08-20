@@ -146,6 +146,7 @@ export const API = {
 
   /* ---- Kinh doanh: đơn hoàn cần đối soát với sàn (quá 12h kho chưa nhận) ---- */
   kdCanDoiSoat: () => goi('/api/kinh-doanh/can-doi-soat'),
+  kdKhachHoanNhieu: () => goi('/api/kinh-doanh/khach-hoan-nhieu'),
   kdDaDoiSoat: (returnSn) => goi('/api/kinh-doanh/da-doi-soat', {
     method: 'POST', body: JSON.stringify({ return_sn: returnSn })
   }),
