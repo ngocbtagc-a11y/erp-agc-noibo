@@ -53,12 +53,19 @@ export const API = {
 
   nhanSu: () => goi('/api/nhan-su'),
 
-  /* ---- Chat nội bộ ---- */
-  chatDanhSach: (sauId) => goi('/api/chat/tin-nhan' + (sauId ? '?sau_id=' + sauId : '')),
-  chatGui: (noiDung, tep) => {
+  /* ---- Chat nội bộ (kênh chung + chat riêng từng người) ---- */
+  chatDanhSach: (sauId, voiId) => {
+    const q = new URLSearchParams();
+    if (sauId) q.set('sau_id', sauId);
+    if (voiId) q.set('voi', voiId);
+    const qs = q.toString();
+    return goi('/api/chat/tin-nhan' + (qs ? '?' + qs : ''));
+  },
+  chatGui: (noiDung, tep, voiId) => {
     const fd = new FormData();
     if (noiDung) fd.append('noi_dung', noiDung);
     if (tep) fd.append('tep', tep);
+    if (voiId) fd.append('nguoi_nhan_id', voiId);
     return goi('/api/chat/gui', { method: 'POST', body: fd });
   },
 

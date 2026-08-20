@@ -146,6 +146,7 @@
                 <th>Điện thoại</th>
                 <th>Email</th>
                 <th>Quản lý trực tiếp</th>
+                <th></th>
               </tr>
             </thead>
             <tbody id="db-bang"></tbody>
@@ -155,16 +156,19 @@
       </div>
     </section>
 
-    <!-- ---------- Chat nội bộ ---------- -->
-    <section class="view" id="v-chat" hidden>
-      <div class="view-head">
-        <h3>Chat nội bộ</h3>
-        <p>1 kênh chung cho cả công ty — gõ chuyện công việc, gửi kèm file/ảnh nếu cần. Ai đăng nhập cũng vào được.</p>
-      </div>
-
-      <div class="panel">
+    <!-- ---------- Chat nội bộ — bong bóng nổi góc phải dưới, kiểu Messenger ---------- -->
+    <div class="cnb-widget" id="cnbWidget" hidden>
+      <div class="cnb-popup" id="cnbPopup" hidden>
+        <div class="cnb-dau">
+          <button type="button" class="cnb-lui" id="cnbLui" hidden title="Về kênh chung">←</button>
+          <div class="cnb-dau-ten">
+            <span id="cnbDauTen">💬 Kênh chung</span>
+            <span class="sm" id="cnbDauPhu"></span>
+          </div>
+          <button type="button" class="cnb-dong" id="cnbDong" aria-label="Đóng chat">✕</button>
+        </div>
         <div class="chat-khung" id="chat-khung">
-          <div class="empty" id="chat-trong" hidden>Chưa có tin nhắn nào — Sếp gõ dòng đầu tiên nhé.</div>
+          <div class="empty" id="chat-trong" hidden>Chưa có tin nhắn nào — gõ dòng đầu tiên nhé.</div>
         </div>
         <div class="chat-file-dinhkem" id="chat-file-dinhkem" hidden>
           <span id="chat-file-ten"></span>
@@ -177,12 +181,18 @@
             </svg>
           </button>
           <input type="file" id="chat-tep" hidden>
-          <input type="text" id="chat-noidung" placeholder="Nhắn gì đó cho cả công ty…" maxlength="2000">
+          <input type="text" id="chat-noidung" placeholder="Nhắn gì đó…" maxlength="2000">
           <button type="submit" class="btn-primary" id="chat-nut-gui" style="width:auto">Gửi</button>
         </form>
         <div class="form-loi" id="chat-loi"></div>
       </div>
-    </section>
+      <button class="cnb-nut" id="cnbNut" aria-label="Chat nội bộ">
+        <svg class="ico" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/>
+        </svg>
+        <span class="tb-badge" id="cnbBadge" hidden>0</span>
+      </button>
+    </div>
 
     <!-- ---------- Nhân sự ---------- -->
     <section class="view" id="v-nhansu" hidden>
