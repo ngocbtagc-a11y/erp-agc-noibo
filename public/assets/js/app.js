@@ -500,12 +500,12 @@ if (TOI.quyen.includes('danhba')) {
 
 /* -- Trạm Mục Tiêu: giao việc cho nhân viên (máy chủ thật) -- */
 if (TOI.quyen.includes('congviec')) {
-  await khoiDongCongViec();
+  try { await khoiDongCongViec(); } catch (e) { console.error('Trạm Mục Tiêu:', e); }
 }
 
 /* -- Chat nội bộ (máy chủ thật) -- */
 if (TOI.quyen.includes('chat')) {
-  await khoiDongChat();
+  try { await khoiDongChat(); } catch (e) { console.error('Chat nội bộ:', e); }
 }
 
 /* ==========================================================================
@@ -1077,7 +1077,7 @@ if (TOI.quyen.includes('kinhdoanh')) {
     `<td><span class="tag ${esc(r.tt)}">${esc(r.ttx)}</span></td>`);
 
   // Chuyển màn Vận hành sàn / R&D (giống bộ pills của Kho vận)
-  $('#kdSeg').addEventListener('click', e => {
+  $('#kdSeg')?.addEventListener('click', e => {
     const nut = e.target.closest('.seg-nut');
     if (!nut) return;
     document.querySelectorAll('#kdSeg .seg-nut').forEach(b => b.classList.toggle('active', b === nut));
@@ -1088,10 +1088,10 @@ if (TOI.quyen.includes('kinhdoanh')) {
   });
 
   // Vận hành sàn — đơn hoàn cần đối soát (đã GỘP đơn huỷ vào chung) — chỉ ai có
-  // quyền Đơn hoàn mới thấy
+  // quyền Đơn hoàn mới thấy. Bọc try/catch để 1 lỗi không kéo sập phần sau.
   if (TOI.quyen.includes('donhoan')) {
-    await khoiDongDoiSoatSan();
-    await khoiDongCSKH();
+    try { await khoiDongDoiSoatSan(); } catch (e) { console.error('Đối soát sàn:', e); }
+    try { await khoiDongCSKH(); } catch (e) { console.error('CSKH:', e); }
   }
 }
 
@@ -1317,15 +1317,15 @@ async function khoiDongDoiSoatSan() {
 
 /* -- Kho — Xuất / Nhập / Tồn (máy chủ thật) -- */
 if (TOI.quyen.includes('khovan')) {
-  await khoiDongKho();
+  try { await khoiDongKho(); } catch (e) { console.error('Kho vận:', e); }
 }
 
 /* -- Đơn hoàn Shopee/TikTok — danh sách nằm trong tab Kho vận (kho xử lý),
    khối kết nối nằm trong tab Kết nối sàn. Chạy cho MỌI vai trò xem được đơn
    hoàn (gồm cả kho), không chỉ vai trò có tab Kết nối sàn. -- */
 if (TOI.shopee && TOI.shopee.xem) {
-  await khoiDongDonHoan();
-  await khoiDongLichSuHoan();
+  try { await khoiDongDonHoan(); } catch (e) { console.error('Đơn hoàn/Kết nối sàn:', e); }
+  try { await khoiDongLichSuHoan(); } catch (e) { console.error('Lịch sử hoàn:', e); }
 }
 
 /* ---- Chuông thông báo trong ERP 🔔 ---- */
