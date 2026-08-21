@@ -23,7 +23,7 @@
    lần và tinh chỉnh nếu TikTok đổi chi tiết — đã gói gọn trong hàm kyTikTok().
    ========================================================================== */
 
-import { duocXemDonHoan, duocQuanLyShopee } from './quyen.js';
+import { duocXemDonHoan, duocQuanLyShopee, duocXemTab } from './quyen.js';
 
 function json(d, status = 200) {
   return new Response(JSON.stringify(d), {
@@ -287,6 +287,127 @@ export async function apiDongBo(env, phien) {
   if (!co) return loi('Chưa kết nối shop TikTok. Hãy bấm “Kết nối TikTok” trước.', 409);
   try {
     const so = await dongBoNen(env);
+    return json({ ok: true, so_don: so || 0 });
+  } catch (e) {
+    return loi(e.message, 502);
+  }
+}
+
+/* ==========================================================================
+   ĐƠN HÀNG — Doanh thu + số đơn (khác Đơn hoàn ở trên, dùng LẠI cùng 1 kết
+   nối đã ủy quyền). Xem migrations/them-donhang.sql.
+   ⚠️ total_amount là TỔNG GIÁ ĐƠN, CHƯA trừ phí sàn/voucher/phí vận chuyển —
+   không phải doanh thu thực nhận (giống lưu ý ở shopee.js).
+   ⚠️ Field/endpoint theo tài liệu TikTok bản 202309, CHƯA chạy thử với khóa
+   thật — cần tinh chỉnh khi có khóa, giống lưu ý đã có ở dongBoNen() trên.
+   ========================================================================== */
+
+let _coBangDonHang = null;
+async function coBangDonHang(env) {
+  if (_coBangDonHang !== null) return _coBangDonHang;
+  try {
+    await env.DB.prepare(`SELECT 1 FROM don_hang LIMIT 1`).first();
+    _coBangDonHang = true;
+  } catch {
+    _coBangDonHang = false;
+  }
+  return _coBangDonHang;
+}
+
+function moGocDongBoDonHang(kn) {
+  return kn.dh_dong_bo_den ? Number(kn.dh_dong_bo_den) : nowSec() - 30 * 86400;
+}
+
+export async function dongBoDonHangNen(env) {
+  if (!daCauHinh(env)) return null;
+  if (!(await coBangDonHang(env))) return null;   // chưa nạp migration them-donhang.sql
+  let kn = await ketNoiConHan(env);
+  if (!kn) return null;
+
+  if (!kn.shop_cipher) {
+    const sc = await layShopCipher(env, kn.access_token);
+    if (!sc.cipher) throw new Error('Chưa lấy được mã shop từ TikTok: ' +
+      ((sc.raw && sc.raw.message) || JSON.stringify(sc.raw).slice(0, 200)));
+    await luuShopCipher(env, sc);
+    kn = { ...kn, shop_cipher: sc.cipher };
+  }
+
+  const tuGoc = moGocDongBoDonHang(kn);
+  const denGoc = nowSec();
+  const path = '/order/202309/orders/search';
+  let pageToken = '', con = true, trang = 0, them = 0;
+  const cauLenh = [];
+
+  while (con && trang < 20) {                        // chặn trần 20 trang cho an toàn
+    const bodyStr = JSON.stringify({
+      update_time_ge: tuGoc, update_time_lt: denGoc,
+      sort_field: 'update_time', sort_order: 'DESC'
+    });
+    const query = {
+      app_key: env.TIKTOK_APP_KEY, timestamp: String(nowSec()),
+      shop_cipher: kn.shop_cipher, page_size: '50',
+      ...(pageToken ? { page_token: pageToken } : {})
+    };
+    const sign = await kyTikTok(env, path, query, bodyStr);
+    const q = new URLSearchParams({ ...query, sign });
+    const res = await fetch(`${apiHost(env)}${path}?${q}`, {
+      method: 'POST',
+      headers: { 'x-tts-access-token': kn.access_token, 'Content-Type': 'application/json' },
+      body: bodyStr
+    });
+    const kq = await res.json();
+    if (kq.code && kq.code !== 0) throw new Error('TikTok báo lỗi (orders/search): ' + (kq.message || kq.code));
+
+    const ds = (kq.data && kq.data.orders) || [];
+    for (const o of ds) {
+      const orderId = o.id || o.order_id;
+      if (!orderId) continue;
+      const soSp = (o.line_items || []).length;
+      const tong = o.payment && (o.payment.total_amount || o.payment.sub_total);
+      cauLenh.push(env.DB.prepare(`
+        INSERT INTO don_hang (order_sn, nguon, trang_thai, tong_tien, tien_te, nguoi_mua, so_sp, tao_luc_san, cap_nhat_san, du_lieu_json, dong_bo_luc)
+        VALUES (?, 'tiktok', ?, ?, ?, ?, ?, ?, ?, ?, datetime('now','+7 hours'))
+        ON CONFLICT(order_sn) DO UPDATE SET
+          trang_thai=excluded.trang_thai, tong_tien=excluded.tong_tien, tien_te=excluded.tien_te,
+          nguoi_mua=excluded.nguoi_mua, so_sp=excluded.so_sp,
+          cap_nhat_san=excluded.cap_nhat_san, du_lieu_json=excluded.du_lieu_json,
+          dong_bo_luc=datetime('now','+7 hours')
+      `).bind(
+        String(orderId), o.status || null,
+        tong != null ? Math.round(Number(tong) * 100000) || null : null,
+        (o.payment && o.payment.currency) || null,
+        o.buyer_email || (o.recipient_address && o.recipient_address.name) || null,
+        soSp || null,
+        o.create_time ? String(o.create_time) : null,
+        o.update_time ? String(o.update_time) : null,
+        JSON.stringify(o)
+      ));
+      them++;
+    }
+
+    pageToken = (kq.data && kq.data.next_page_token) || '';
+    con = !!pageToken;
+    trang++;
+  }
+
+  for (let i = 0; i < cauLenh.length; i += 50) {
+    await env.DB.batch(cauLenh.slice(i, i + 50));
+  }
+
+  await env.DB.prepare('UPDATE tiktok_ket_noi SET dh_dong_bo_den = ? WHERE shop_id = ?')
+              .bind(String(denGoc), kn.shop_id).run();
+  return them;
+}
+
+/* Nút "Đồng bộ đơn hàng" ở tab Kinh doanh — ai xem được Kinh doanh đều bấm được */
+export async function apiDongBoDonHang(env, phien) {
+  if (!duocXemTab(phien.vai_tro, 'kinhdoanh')) return loi('Bạn không có quyền', 403);
+  if (!daCauHinh(env)) return loi('Chưa nạp khóa TikTok trên máy chủ', 409);
+  if (!(await coBangDonHang(env))) return loi('Chưa nạp migration them-donhang.sql trên máy chủ', 409);
+  const co = await env.DB.prepare('SELECT shop_id FROM tiktok_ket_noi LIMIT 1').first();
+  if (!co) return loi('Chưa kết nối shop TikTok. Hãy vào tab Kết nối sàn trước.', 409);
+  try {
+    const so = await dongBoDonHangNen(env);
     return json({ ok: true, so_don: so || 0 });
   } catch (e) {
     return loi(e.message, 502);

@@ -23,6 +23,10 @@
     "nap-tinhtranghang": "wrangler d1 execute crm-agc --remote --file=migrations/them-tinhtrang-hang.sql",
     "nap-doisoat-may": "wrangler d1 execute crm-agc --local --file=migrations/them-doisoat.sql",
     "nap-doisoat": "wrangler d1 execute crm-agc --remote --file=migrations/them-doisoat.sql",
+    "nap-donhang-may": "wrangler d1 execute crm-agc --local --file=migrations/them-donhang.sql",
+    "nap-donhang": "wrangler d1 execute crm-agc --remote --file=migrations/them-donhang.sql",
+    "nap-muctieu-may": "wrangler d1 execute crm-agc --local --file=migrations/them-muctieu.sql",
+    "nap-muctieu": "wrangler d1 execute crm-agc --remote --file=migrations/them-muctieu.sql",
     "chay": "wrangler dev",
     "dua-len": "wrangler deploy"
   },

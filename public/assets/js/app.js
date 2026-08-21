@@ -14,9 +14,8 @@ import { API } from './api.js';
 
 /* ---- Danh mục tab ------------------------------------------------------- */
 const TAB = [
-  { id: 'tongquan',  ten: 'Tổng quan',  icon: 'M3 12l9-9 9 9M5 10v10h14V10' },
+  { id: 'tongquan',  ten: 'Trạm Mục Tiêu', icon: 'M3 12l9-9 9 9M5 10v10h14V10' },
   { id: 'danhba',    ten: 'Danh bạ',    icon: 'M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8' },
-  { id: 'congviec',  ten: 'Trạm Mục Tiêu',  icon: 'M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11' },
   { id: 'nhansu',    ten: 'Nhân sự',    icon: 'M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75' },
   { id: 'kinhdoanh', ten: 'Kinh doanh', icon: 'M23 6l-9.5 9.5-5-5L1 18M17 6h6v6' },
   { id: 'khovan',    ten: 'Kho vận',    icon: 'M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16zM3.27 6.96L12 12.01l8.73-5.05M12 22.08V12' },
@@ -455,9 +454,9 @@ function veBang(dich, ds, hang) {
 /* -- Tổng quan (còn là dữ liệu mẫu) -- */
 veThe('#tq-the', DB.tongQuan.the);
 veChart('#tq-chart', DB.tongQuan.doanhThu6Thang);
-veTienDo('#tq-muctieu', DB.tongQuan.mucTieuQuy);
 veDanhSach('#tq-canhbao', DB.tongQuan.cannBaoDong);
 await khoiDongVinhDanh();
+await khoiDongMucTieu();
 
 /* -- Danh bạ (máy chủ thật) -- */
 if (TOI.quyen.includes('danhba')) {
@@ -613,6 +612,153 @@ async function khoiDongVinhDanh() {
 }
 
 /* ==========================================================================
+   MỤC TIÊU (MBOs) — Công ty -> Phòng ban, theo quý. Tiến độ tự tính từ %
+   công việc (Trạm Mục Tiêu) đã gắn vào mục tiêu mà trạng thái = hoàn_thành.
+   ========================================================================== */
+async function khoiDongMucTieu() {
+  const oForm = $('#mt-form-body');
+  const oCap = $('#mt-cap');
+  const oBoPhanField = $('#mt-field-bophan');
+
+  // Chỉ Giám đốc/Phó Giám đốc mới thấy lựa chọn "Công ty" khi tạo mục tiêu —
+  // máy chủ vẫn tự chặn lại nếu cố gửi thẳng (đây chỉ để gọn giao diện).
+  if (TOI.la_admin) $('#mt-opt-congty').hidden = false;
+
+  function capNhatBoPhanField() {
+    oBoPhanField.hidden = (oCap.value !== 'phong_ban');
+  }
+  oCap.addEventListener('change', capNhatBoPhanField);
+  capNhatBoPhanField();
+
+  $('#mt-nut-mo-form').addEventListener('click', () => {
+    oForm.hidden = !oForm.hidden;
+  });
+  $('#mt-nut-huy').addEventListener('click', () => {
+    $('#mt-form').reset();
+    capNhatBoPhanField();
+    oForm.hidden = true;
+  });
+
+  function veThe1MucTieu(m) {
+    const pct = m.so_viec > 0 ? Math.round((m.so_viec_xong / m.so_viec) * 100) : 0;
+    const mauBar = pct >= 70 ? '' : (pct >= 40 ? 'warn' : 'danger');
+    const daXong = m.trang_thai === 'hoan_thanh';
+    const daHuy = m.trang_thai === 'huy';
+
+    let nhan;
+    if (m.cap === 'cong_ty') {
+      nhan = m.da_chot
+        ? `<span class="tag ok">✓ Đã chốt bởi ${esc(m.chot_boi || '')}</span>`
+        : (TOI.la_admin
+            ? `<button type="button" class="btn-nho btn-primary" data-mt-chot="${m.id}">Chốt mục tiêu</button>`
+            : `<span class="tag warn">Chưa chốt</span>`);
+    } else {
+      nhan = `<span class="tag mute">${esc(m.bo_phan || '')}</span>`;
+    }
+    const trangThaiTag = daXong ? ' <span class="tag ok">Hoàn thành</span>'
+                        : (daHuy ? ' <span class="tag danger">Đã huỷ</span>' : '');
+
+    const duocSua = (m.nguoi_tao_id === TOI.id || TOI.la_admin) && !daXong && !daHuy && !m.da_chot;
+    const nutSua = duocSua
+      ? `<div style="margin-top:8px"><button type="button" class="btn-nho" data-mt-xong="${m.id}">Hoàn thành</button> <button type="button" class="btn-nho" data-mt-huy="${m.id}">Huỷ</button></div>`
+      : '';
+
+    const r = el('div', 'list-item',
+      `<div class="body">` +
+        `<b>${esc(m.tieu_de)}</b>${trangThaiTag}` +
+        (m.mo_ta ? `<span>${esc(m.mo_ta)}</span>` : '') +
+        `<div class="sm" style="margin-top:4px">${nhan} · ${m.so_viec_xong}/${m.so_viec} việc xong · ${esc(m.nguoi_tao_ten)}</div>` +
+        `<div class="bar-row" style="margin-top:8px">` +
+          `<div class="bar"><i class="${mauBar}" style="width:0"></i></div>` +
+          `<div class="pct">${pct}%</div>` +
+        `</div>${nutSua}` +
+      `</div>`);
+    requestAnimationFrame(() => { r.querySelector('.bar > i').style.width = pct + '%'; });
+    return r;
+  }
+
+  let DS_MT = [];   // cả 2 cấp, dùng chung để đổ dropdown "Thuộc mục tiêu" ở Trạm Mục Tiêu
+
+  async function taiLaiMucTieu() {
+    const kq = await API.mtDanhSach();
+    $('#mt-ky-hint').textContent = `Quý ${kq.quy}/${kq.nam}`;
+    DS_MT = [...(kq.cong_ty || []), ...(kq.phong_ban || [])];
+
+    const oCT = $('#mt-congty-list'); oCT.innerHTML = '';
+    (kq.cong_ty || []).forEach(m => oCT.appendChild(veThe1MucTieu(m)));
+    $('#mt-congty-trong').hidden = (kq.cong_ty || []).length > 0;
+
+    const oPB = $('#mt-phongban-list'); oPB.innerHTML = '';
+    (kq.phong_ban || []).forEach(m => oPB.appendChild(veThe1MucTieu(m)));
+    $('#mt-phongban-trong').hidden = (kq.phong_ban || []).length > 0;
+
+    // Đổ dropdown "Thuộc mục tiêu" trong form Giao việc mới
+    const oSel = $('#cv-muc-tieu');
+    if (oSel) {
+      const dangChon = oSel.value;
+      oSel.innerHTML = '<option value="">— Không gắn mục tiêu —</option>' +
+        DS_MT.filter(m => m.trang_thai === 'dang_thuc_hien').map(m =>
+          `<option value="${m.id}">[${m.cap === 'cong_ty' ? 'Công ty' : esc(m.bo_phan)}] ${esc(m.tieu_de)}</option>`).join('');
+      oSel.value = dangChon;
+    }
+  }
+  window.LAM_MOI_MUCTIEU = taiLaiMucTieu;
+
+  $('#mt-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    $('#mt-loi').textContent = '';
+    const nut = $('#mt-nut-luu');
+    nut.disabled = true;
+    try {
+      await API.mtTao({
+        cap: oCap.value,
+        bo_phan: $('#mt-bo-phan').value.trim(),
+        tieu_de: $('#mt-tieu-de').value.trim(),
+        mo_ta: $('#mt-mo-ta').value.trim()
+      });
+      $('#mt-form').reset();
+      capNhatBoPhanField();
+      oForm.hidden = true;
+      await taiLaiMucTieu();
+    } catch (err) {
+      $('#mt-loi').textContent = err.message || 'Không lưu được, thử lại nhé.';
+    } finally {
+      nut.disabled = false;
+    }
+  });
+
+  async function xuLyNutMucTieu(e) {
+    const nutChot = e.target.closest('[data-mt-chot]');
+    const nutXong = e.target.closest('[data-mt-xong]');
+    const nutHuy = e.target.closest('[data-mt-huy]');
+    const nut = nutChot || nutXong || nutHuy;
+    if (!nut) return;
+    const dangLam = nut.textContent;
+    nut.disabled = true;
+    try {
+      if (nutChot) {
+        if (!confirm('Chốt mục tiêu này? Sau khi chốt sẽ KHOÁ, không sửa/huỷ được nữa.')) { nut.disabled = false; return; }
+        await API.mtChot(nut.getAttribute('data-mt-chot'));
+      } else if (nutXong) {
+        await API.mtCapNhat(nut.getAttribute('data-mt-xong'), { trang_thai: 'hoan_thanh' });
+      } else if (nutHuy) {
+        if (!confirm('Huỷ mục tiêu này?')) { nut.disabled = false; return; }
+        await API.mtCapNhat(nut.getAttribute('data-mt-huy'), { trang_thai: 'huy' });
+      }
+      await taiLaiMucTieu();
+    } catch (err) {
+      alert(err.message || 'Không thực hiện được, thử lại nhé.');
+      nut.disabled = false;
+      nut.textContent = dangLam;
+    }
+  }
+  $('#mt-congty-list').addEventListener('click', xuLyNutMucTieu);
+  $('#mt-phongban-list').addEventListener('click', xuLyNutMucTieu);
+
+  await taiLaiMucTieu();
+}
+
+/* ==========================================================================
    TRẠM VIỆC — giao việc cho nhân viên. Theo tinh thần MBOs (quản lý theo mục
    tiêu): mỗi việc BẮT BUỘC có "đầu ra cụ thể", không chỉ mô tả làm gì.
    Luồng trạng thái: moi -> dang_lam -> cho_duyet -> hoan_thanh (hoặc huy).
@@ -636,10 +782,35 @@ async function khoiDongCongViec() {
     if (oPhoiHop) {
       const lbl = document.createElement('label');
       lbl.className = 'cv-ph-item';
+      lbl.dataset.ten = boDau(n.ho_ten);
       lbl.innerHTML = `<input type="checkbox" value="${esc(n.id)}"><span>${esc(n.ho_ten)}</span>`;
       oPhoiHop.appendChild(lbl);
     }
   });
+
+  // Công ty càng đông, danh sách càng dài → cho gõ lọc tên thay vì cuộn tìm.
+  // Không bỏ chọn khi lọc — người đã tick vẫn giữ, chỉ đang tạm bị ẩn đi.
+  const oTimPhoiHop = $('#cv-phoi-hop-tim');
+  if (oTimPhoiHop && oPhoiHop) {
+    oTimPhoiHop.addEventListener('input', e => {
+      const k = boDau(e.target.value.trim());
+      let coHien = false;
+      oPhoiHop.querySelectorAll('.cv-ph-item').forEach(lbl => {
+        const khop = !k || lbl.dataset.ten.includes(k);
+        lbl.classList.toggle('an', !khop);
+        if (khop) coHien = true;
+      });
+      let oTrong = oPhoiHop.querySelector('.cv-ph-trong');
+      if (!coHien) {
+        if (!oTrong) {
+          oTrong = el('div', 'cv-ph-trong', 'Không tìm thấy ai khớp.');
+          oPhoiHop.appendChild(oTrong);
+        }
+      } else if (oTrong) {
+        oTrong.remove();
+      }
+    });
+  }
 
   // Ẩn/hiện form giao việc — đổi chữ nút theo trạng thái + có nút "Hủy" riêng
   // trong form, cùng lỗi/cùng sửa với Vinh danh (Sếp Ngọc bắt lỗi 20/08/2026).
@@ -731,11 +902,14 @@ async function khoiDongCongViec() {
       await API.cvTao({
         nguoi_nhan_id: chonNguoiNhan.value,
         phoi_hop: oPhoiHop ? [...oPhoiHop.querySelectorAll('input:checked')].map(i => i.value) : [],
+        muc_tieu_id: $('#cv-muc-tieu') ? $('#cv-muc-tieu').value || null : null,
         tieu_de: $('#cv-tieu-de').value.trim(),
         dau_ra: $('#cv-dau-ra').value.trim(),
         mo_ta: $('#cv-mo-ta').value.trim(),
         han_chot: $('#cv-han-chot').value || null
       });
+      // Gắn việc vào mục tiêu xong -> tiến độ mục tiêu đổi, tải lại luôn cho khớp
+      if (window.LAM_MOI_MUCTIEU) window.LAM_MOI_MUCTIEU();
       $('#cv-form').reset();
       dongMoFormCv(false);
       await taiLai();
@@ -778,6 +952,8 @@ async function khoiDongCongViec() {
     try {
       await API.cvCapNhat(id, trangThai, ketQua);
       await taiLai();
+      // Việc chuyển Hoàn thành/Huỷ có thể đổi tiến độ mục tiêu đang gắn — tải lại
+      if ((trangThai === 'hoan_thanh' || trangThai === 'huy') && window.LAM_MOI_MUCTIEU) window.LAM_MOI_MUCTIEU();
     } catch (err) {
       alert(err.message || 'Không lưu được, thử lại nhé.');
       btn.disabled = false;
@@ -1380,7 +1556,7 @@ if (TOI.shopee && TOI.shopee.xem) {
       moTab('ketoan');
       if (window.LAM_MOI_TRASOAT) window.LAM_MOI_TRASOAT();
     } else if (it.dataset.loai === 'cong_viec_moi' || it.dataset.loai === 'cong_viec_phoi_hop') {
-      moTab('congviec');
+      moTab('tongquan');
       if (window.LAM_MOI_CONGVIEC) window.LAM_MOI_CONGVIEC();
     }
     panel.hidden = true;
