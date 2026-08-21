@@ -79,7 +79,7 @@
 
       <div class="view-head">
         <h3>Trạm Mục Tiêu</h3>
-        <p>Mục tiêu MBOs (công ty → phòng ban), giao việc theo dõi tới khi xong, và bức tranh chung của Alpha Green Commerce.</p>
+        <p>Mục tiêu MBOs (công ty → phòng ban → cá nhân), giao việc theo dõi tới khi xong, và bức tranh chung của Alpha Green Commerce.</p>
       </div>
 
       <!-- ---------- Vinh danh — khu khen ngợi nhỏ, lên đầu trang để ai mở ERP cũng thấy ngay ---------- -->
@@ -118,10 +118,13 @@
         </div>
       </div>
 
-      <!-- ---------- Mục tiêu (MBOs) — Công ty -> Phòng ban, theo quý ---------- -->
-      <div class="panel">
+      <!-- ---------- Trạm Mục Tiêu (MBOs) — Công ty -> Phòng ban -> Cá nhân, theo quý.
+           Gộp chung "Mục tiêu (MBOs)" + "Trạm Mục Tiêu" (Sếp Ngọc chốt 21/08/2026:
+           "bản chất 2 cái này nó như nhau") — mục tiêu ở trên, việc cụ thể để đạt
+           mục tiêu (giao việc) ở ngay dưới trong cùng 1 khối. ---------- -->
+      <div class="panel mt-panel">
         <div class="panel-head">
-          <h4>🎯 Mục tiêu (MBOs)</h4>
+          <h4>🎯 Trạm Mục Tiêu (MBOs)</h4>
           <div style="display:flex; gap:10px; align-items:center">
             <span class="hint" id="mt-ky-hint"></span>
             <button type="button" class="btn-phu" id="mt-nut-mo-form" style="width:auto">+ Thêm mục tiêu</button>
@@ -132,6 +135,7 @@
             <div class="field">
               <label>Cấp *</label>
               <select id="mt-cap" required>
+                <option value="ca_nhan">Cá nhân (tôi)</option>
                 <option value="phong_ban">Phòng ban</option>
                 <option value="cong_ty" id="mt-opt-congty" hidden>Công ty</option>
               </select>
@@ -156,21 +160,24 @@
           <div class="form-loi" id="mt-loi"></div>
         </div>
         <div class="panel-body" style="padding-top:0">
+          <p class="hint" style="margin:0 0 14px">Mục tiêu 3 cấp: Công ty → Phòng ban → Cá nhân. Tiến độ tự tính từ việc đã gắn ở phần "Giao việc" bên dưới (đã Hoàn thành), không nhập tay.</p>
+
           <div class="mt-nhom-nhan">Cấp công ty</div>
           <div id="mt-congty-list"></div>
           <div class="empty" id="mt-congty-trong" hidden>Chưa có mục tiêu công ty nào cho quý này.</div>
+
+          <div class="mt-nhom-nhan" style="margin-top:18px">Cấp phòng ban</div>
+          <div id="mt-phongban-list"></div>
+          <div class="empty" id="mt-phongban-trong" hidden>Chưa có mục tiêu phòng ban nào cho quý này.</div>
+
+          <div class="mt-nhom-nhan" style="margin-top:18px">Cấp cá nhân</div>
+          <div id="mt-canhan-list"></div>
+          <div class="empty" id="mt-canhan-trong" hidden>Chưa có mục tiêu cá nhân nào cho quý này.</div>
         </div>
-      </div>
 
-      <!-- ---------- Trạm Mục Tiêu — giao việc cho nhân viên (gộp vào Tổng quan) ---------- -->
-      <div class="view-head" style="margin-top:8px">
-        <h3>Trạm Mục Tiêu — việc cần làm &amp; giao việc</h3>
-        <p>Tự thêm việc cần làm cho bản thân (chọn "Tôi"), hoặc giao cho người khác rõ đầu ra. Mời thêm người phối hợp để làm cùng. Gắn vào mục tiêu ở trên (tuỳ chọn) để tự tính tiến độ.</p>
-      </div>
-
-      <div class="panel">
-        <div class="panel-head">
-          <h4>Thêm việc cần làm / Giao việc</h4>
+        <div class="panel-body mt-viec-body">
+          <h4 style="margin:0 0 4px">Thêm việc cần làm / Giao việc</h4>
+          <p class="hint" style="margin:0 0 12px">Tự thêm việc cần làm cho bản thân (chọn "Tôi"), hoặc giao cho người khác rõ đầu ra. Mời thêm người phối hợp để làm cùng. Gắn vào mục tiêu ở trên (tuỳ chọn) để tự tính tiến độ.</p>
           <button type="button" class="btn-phu" id="cv-nut-mo-form" style="width:auto">+ Giao việc mới</button>
         </div>
         <div class="panel-body" id="cv-form-body" hidden>
@@ -284,17 +291,6 @@
             </table>
           </div>
           <div class="empty" id="cv-trong-giao" hidden>Sếp/bạn chưa giao việc nào.</div>
-        </div>
-      </div>
-
-      <!-- ---------- Mục tiêu phòng ban ---------- -->
-      <div class="panel">
-        <div class="panel-head">
-          <h4>🏢 Mục tiêu phòng ban</h4>
-        </div>
-        <div class="panel-body">
-          <div id="mt-phongban-list"></div>
-          <div class="empty" id="mt-phongban-trong" hidden>Chưa có mục tiêu phòng ban nào cho quý này.</div>
         </div>
       </div>
 

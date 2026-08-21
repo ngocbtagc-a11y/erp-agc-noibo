@@ -568,7 +568,7 @@ img.av { object-fit: cover; display: block; cursor: default; }
   max-width: 620px;
 }
 
-/* Nhãn nhóm nhỏ trong panel — dùng cho khối Mục tiêu (Cấp công ty / Cấp phòng ban) */
+/* Nhãn nhóm nhỏ trong panel — dùng cho khối Mục tiêu (Cấp công ty / Phòng ban / Cá nhân) */
 .mt-nhom-nhan {
   font-size: 11.5px;
   color: var(--text-mute);
@@ -582,11 +582,35 @@ img.av { object-fit: cover; display: block; cursor: default; }
    theo tiến độ (xanh >=70% · vàng 40-69% · đỏ <40%). Tên dài cắt 1 dòng, rê
    chuột hiện đủ (không dùng chữ chạy vì khó đọc). --- */
 /* Xếp 2 cột trên màn rộng cho đỡ phí chiều ngang, tự về 1 cột khi hẹp/điện thoại */
-#mt-congty-list, #mt-phongban-list {
+#mt-congty-list, #mt-phongban-list, #mt-canhan-list {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
   gap: 8px;
 }
+
+/* Trạm Mục Tiêu (MBOs) — gộp khối mục tiêu + giao việc (Sếp Ngọc chốt
+   21/08/2026: "bản chất 2 cái này nó như nhau"), tô CAM để phân biệt với
+   Vinh danh (vàng-hổ phách) nhưng vẫn cùng tinh thần "nổi bật, truyền cảm
+   hứng" thay vì tông sage trầm mặc định. */
+.mt-panel .panel-head {
+  background: linear-gradient(120deg, #e2792e 0%, #c85f1f 55%, #a84c15 100%);
+  border-bottom: none;
+}
+.mt-panel .panel-head h4 {
+  font-size: 19px;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0,0,0,.15);
+}
+.mt-panel .panel-head .hint { color: rgba(255,255,255,.85); }
+.mt-panel .panel-head #mt-nut-mo-form {
+  background: rgba(255,255,255,.22);
+  color: #fff;
+  font-weight: 600;
+}
+.mt-panel .panel-head #mt-nut-mo-form:hover { background: rgba(255,255,255,.32); }
+
+.mt-viec-body { border-top: 1px solid var(--line); }
 
 .mt-the {
   border: 1px solid var(--line);

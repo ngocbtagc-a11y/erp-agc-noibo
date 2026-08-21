@@ -1180,14 +1180,20 @@ async function cvCapNhat(req, env) {
 }
 
 /* ==========================================================================
-   MỤC TIÊU — MBOs 2 tầng: Công ty -> Phòng ban (Sếp Phong yêu cầu 20/08/2026).
+   MỤC TIÊU — MBOs 3 tầng: Công ty -> Phòng ban -> Cá nhân (Sếp Phong chốt
+   20/08/2026, Sếp Ngọc bổ sung tầng cá nhân + gộp chung 1 khối "Trạm Mục
+   Tiêu (MBOs)" với bảng giao việc 21/08/2026 — 2 khối vốn cùng bản chất:
+   mục tiêu ở đây, việc cụ thể để đạt mục tiêu ở Trạm Mục Tiêu bên dưới).
    Mục tiêu CÔNG TY: chỉ Giám đốc/Phó Giám đốc tạo VÀ chốt (Sếp Phong: "Tôi là
-   người chốt mục tiêu công ty"). Mục tiêu PHÒNG BAN: mở cho ai cũng tạo được
-   (giống triết lý MVP của Trạm Mục Tiêu — tin tưởng trưởng phòng tự đặt mục
-   tiêu cho phòng mình), gắn với 1 bộ phận (bo_phan, chữ tự do theo nhan_su).
+   người chốt mục tiêu công ty"). Mục tiêu PHÒNG BAN + CÁ NHÂN: mở cho ai cũng
+   tạo được (giống triết lý MVP của Trạm Mục Tiêu — tin tưởng tự đặt mục tiêu
+   cho phòng/cho bản thân). Phòng ban gắn với 1 bộ phận (bo_phan, chữ tự do
+   theo nhan_su); cá nhân không cần bo_phan — nguoi_tao_ten đã đủ nhận diện.
    Tiến độ KHÔNG nhập tay — tự tính % từ công việc (Trạm Mục Tiêu) đã gắn vào
    mục tiêu đó mà trạng thái = hoàn_thành, để khỏi nói suông không có việc cụ
-   thể chứng minh (đúng tinh thần MBOs). Theo QUÝ — xem migrations/them-muctieu.sql.
+   thể chứng minh (đúng tinh thần MBOs). Theo QUÝ — xem migrations/them-muctieu.sql
+   (bảng dùng cột cap kiểu TEXT tự do, không CHECK constraint, nên thêm tầng
+   'ca_nhan' không cần migration mới).
    ========================================================================== */
 
 function kyHienTai() {
@@ -1215,7 +1221,8 @@ async function mtDanhSach(req, env) {
   return json({
     nam, quy,
     cong_ty: results.filter(r => r.cap === 'cong_ty'),
-    phong_ban: results.filter(r => r.cap === 'phong_ban')
+    phong_ban: results.filter(r => r.cap === 'phong_ban'),
+    ca_nhan: results.filter(r => r.cap === 'ca_nhan')
   });
 }
 
@@ -1225,7 +1232,7 @@ async function mtTao(req, env) {
   let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
 
   const cap = String(b.cap || '').trim();
-  if (!['cong_ty', 'phong_ban'].includes(cap)) return loi('Cấp mục tiêu không hợp lệ');
+  if (!['cong_ty', 'phong_ban', 'ca_nhan'].includes(cap)) return loi('Cấp mục tiêu không hợp lệ');
   if (cap === 'cong_ty' && !laAdmin(phien.vai_tro)) {
     return loi('Chỉ Giám đốc/Phó Giám đốc mới được đặt mục tiêu cấp công ty', 403);
   }

@@ -661,7 +661,8 @@ async function khoiDongMucTieu() {
     const daXong = m.trang_thai === 'hoan_thanh';
     const daHuy = m.trang_thai === 'huy';
 
-    // Badge gọn: cấp công ty -> nút/chốt; cấp phòng ban -> tên bộ phận
+    // Badge gọn: cấp công ty -> nút/chốt; cấp phòng ban -> tên bộ phận; cấp
+    // cá nhân -> không cần chip riêng (tên người đã hiện sẵn ở dòng dưới).
     let badge;
     if (m.cap === 'cong_ty') {
       badge = m.da_chot
@@ -669,8 +670,10 @@ async function khoiDongMucTieu() {
         : (TOI.la_admin
             ? `<button type="button" class="btn-nho btn-primary" data-mt-chot="${m.id}">Chốt</button>`
             : `<span class="mt-chip warn">Chưa chốt</span>`);
-    } else {
+    } else if (m.cap === 'phong_ban') {
       badge = `<span class="mt-chip mute">${esc(m.bo_phan || '')}</span>`;
+    } else {
+      badge = `<span class="mt-chip mute">🙋 Cá nhân</span>`;
     }
     if (daXong) badge += ` <span class="mt-chip ok">Hoàn thành</span>`;
     else if (daHuy) badge += ` <span class="mt-chip danger">Đã huỷ</span>`;
@@ -697,12 +700,12 @@ async function khoiDongMucTieu() {
     return r;
   }
 
-  let DS_MT = [];   // cả 2 cấp, dùng chung để đổ dropdown "Thuộc mục tiêu" ở Trạm Mục Tiêu
+  let DS_MT = [];   // cả 3 cấp, dùng chung để đổ dropdown "Thuộc mục tiêu" ở Trạm Mục Tiêu
 
   async function taiLaiMucTieu() {
     const kq = await API.mtDanhSach();
     $('#mt-ky-hint').textContent = `Quý ${kq.quy}/${kq.nam}`;
-    DS_MT = [...(kq.cong_ty || []), ...(kq.phong_ban || [])];
+    DS_MT = [...(kq.cong_ty || []), ...(kq.phong_ban || []), ...(kq.ca_nhan || [])];
 
     const oCT = $('#mt-congty-list'); oCT.innerHTML = '';
     (kq.cong_ty || []).forEach(m => oCT.appendChild(veThe1MucTieu(m)));
@@ -712,13 +715,18 @@ async function khoiDongMucTieu() {
     (kq.phong_ban || []).forEach(m => oPB.appendChild(veThe1MucTieu(m)));
     $('#mt-phongban-trong').hidden = (kq.phong_ban || []).length > 0;
 
+    const oCN = $('#mt-canhan-list'); oCN.innerHTML = '';
+    (kq.ca_nhan || []).forEach(m => oCN.appendChild(veThe1MucTieu(m)));
+    $('#mt-canhan-trong').hidden = (kq.ca_nhan || []).length > 0;
+
     // Đổ dropdown "Thuộc mục tiêu" trong form Giao việc mới
     const oSel = $('#cv-muc-tieu');
     if (oSel) {
       const dangChon = oSel.value;
+      const nhanCap = m => m.cap === 'cong_ty' ? 'Công ty' : (m.cap === 'phong_ban' ? esc(m.bo_phan) : 'Cá nhân');
       oSel.innerHTML = '<option value="">— Không gắn mục tiêu —</option>' +
         DS_MT.filter(m => m.trang_thai === 'dang_thuc_hien').map(m =>
-          `<option value="${m.id}">[${m.cap === 'cong_ty' ? 'Công ty' : esc(m.bo_phan)}] ${esc(m.tieu_de)}</option>`).join('');
+          `<option value="${m.id}">[${nhanCap(m)}] ${esc(m.tieu_de)}</option>`).join('');
       oSel.value = dangChon;
     }
   }
@@ -774,6 +782,7 @@ async function khoiDongMucTieu() {
   }
   $('#mt-congty-list').addEventListener('click', xuLyNutMucTieu);
   $('#mt-phongban-list').addEventListener('click', xuLyNutMucTieu);
+  $('#mt-canhan-list').addEventListener('click', xuLyNutMucTieu);
 
   await taiLaiMucTieu();
 }
