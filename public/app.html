@@ -1296,6 +1296,56 @@
   </div>
 </div>
 
+<!-- Hộp Kho nhập khiếu nại: lý do + ảnh + video minh chứng -->
+<div class="modal-nen" id="knModalNen" hidden>
+  <div class="modal modal-rong">
+    <h4>Báo khiếu nại — hàng hoàn có vấn đề</h4>
+    <div class="kv-md-sub" id="knModalDon">—</div>
+
+    <form id="knForm" autocomplete="off">
+      <div class="field" style="margin-top:14px">
+        <label>Lý do / mô tả vấn đề *</label>
+        <textarea id="knLyDo" rows="3" required placeholder="VD: Hộp bị móp méo, hàng bên trong vỡ vụn, thiếu 2/5 sản phẩm..."></textarea>
+      </div>
+      <div class="field">
+        <label>Ảnh minh chứng (tối đa 6 ảnh, không bắt buộc)</label>
+        <input type="file" id="knAnh" accept="image/*" multiple>
+        <div class="kn-luoi-anh" id="knAnhLuoi"></div>
+      </div>
+      <div class="field">
+        <label>Video minh chứng (không bắt buộc, tối đa 50MB)</label>
+        <input type="file" id="knVideo" accept="video/*">
+        <div class="hint" id="knVideoTen"></div>
+      </div>
+      <div class="form-loi" id="knLoi"></div>
+      <div class="modal-nut" style="margin-top:14px">
+        <button type="button" class="btn-phu" id="knHuy">Huỷ</button>
+        <button type="submit" class="btn-primary" id="knNutGui">Gửi khiếu nại</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Hộp Vận hành sàn xem ảnh/video minh chứng kho gửi kèm khiếu nại -->
+<div class="modal-nen" id="knXemModalNen" hidden>
+  <div class="modal modal-rong">
+    <h4>Ảnh/video minh chứng</h4>
+    <div class="kv-md-sub" id="knXemDon">—</div>
+
+    <div class="kv-md-muc">Ảnh</div>
+    <div class="kn-luoi-anh" id="knXemAnh"></div>
+    <div class="empty" id="knXemAnhTrong" hidden>Kho chưa gửi ảnh.</div>
+
+    <div class="kv-md-muc">Video</div>
+    <div id="knXemVideo"></div>
+    <div class="empty" id="knXemVideoTrong" hidden>Kho chưa gửi video.</div>
+
+    <div class="modal-nut" style="margin-top:14px">
+      <button type="button" class="btn-primary" id="knXemDong">Đóng</button>
+    </div>
+  </div>
+</div>
+
 <!-- Hộp quẹt QR / mã vạch trên kiện hàng hoàn (dùng camera điện thoại) -->
 <div class="modal-nen" id="qrModalNen" hidden>
   <div class="modal">

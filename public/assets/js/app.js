@@ -1348,11 +1348,16 @@ async function khoiDongDoiSoatSan() {
     // bật để vận hành sàn không lướt qua, kèm nguyên văn lý do kho ghi. Đơn nào
     // chỉ tự động đẩy lên do quá 24h chưa nhận (không phải kho chủ động khiếu
     // nại) thì hiện mốc thời gian trễ nhẹ hơn để biết mức độ gấp.
+    const soMinhChung = (r.so_anh || 0) + (r.so_video || 0);
+    const xemMinhChung = soMinhChung
+      ? ` <button type="button" class="btn-nho" data-xemmc="${esc(r.return_sn)}" style="margin-top:3px">📷 Xem minh chứng (${soMinhChung})</button>`
+      : '';
     const khieuNaiHtml = r.ly_do_khieu_nai
       ? `<div class="phu" style="margin-top:4px">` +
           `<span class="tag danger">⚠️ Kho khiếu nại</span>` +
           `<div class="canh-bao-chu" style="margin-top:3px">${esc(r.ly_do_khieu_nai)}` +
             `${r.khieu_nai_boi ? ' — ' + esc(r.khieu_nai_boi) : ''}</div>` +
+          xemMinhChung +
         `</div>`
       : (r.dang_cho === 'van_hanh' && r.cho_kho_nhan_tu
           ? `<div class="phu canh-bao-chu">Kho đẩy lên · quá ${esc(gioTre(r.cho_kho_nhan_tu))}</div>` : '');
@@ -1458,6 +1463,9 @@ async function khoiDongDoiSoatSan() {
   $('#kd-ds-dayketoan')?.addEventListener('click', () => dayHangLoat($('#kd-ds-dayketoan'), API.kdDayKeToan));
 
   $('#kd-ds-bang').addEventListener('click', async (e) => {
+    const btnXem = e.target.closest('[data-xemmc]');
+    if (btnXem) { moXemMinhChung(btnXem.getAttribute('data-xemmc')); return; }
+
     const btn = e.target.closest('[data-doisoat]');
     if (!btn) return;
     const rsn = btn.getAttribute('data-doisoat');
@@ -1473,6 +1481,34 @@ async function khoiDongDoiSoatSan() {
       alert(err.message || 'Không lưu được, thử lại nhé.');
     }
   });
+
+  /* ---- Hộp xem ảnh/video minh chứng kho gửi kèm khiếu nại ---- */
+  const knXemModal = $('#knXemModalNen');
+  $('#knXemDong').addEventListener('click', () => { knXemModal.hidden = true; });
+  knXemModal.addEventListener('click', e => { if (e.target === knXemModal) knXemModal.hidden = true; });
+
+  async function moXemMinhChung(rsn) {
+    const r = DS_DOISOAT.find(x => x.return_sn === rsn);
+    const ngChu = r && r.nguon === 'tiktok' ? 'TikTok' : 'Shopee';
+    $('#knXemDon').innerHTML = `${esc(ngChu)} · Mã đơn hoàn <b>${esc(rsn)}</b>`;
+    $('#knXemAnh').innerHTML = '';
+    $('#knXemVideo').innerHTML = '';
+    knXemModal.hidden = false;
+
+    const { minh_chung } = await API.hoanKhieuNaiMinhChung(rsn);
+    const anh = minh_chung.filter(m => m.loai === 'anh');
+    const video = minh_chung.filter(m => m.loai === 'video');
+
+    $('#knXemAnh').innerHTML = anh.map(a =>
+      `<a class="kn-thumb" href="${a.du_lieu}" target="_blank" rel="noopener"><img src="${a.du_lieu}" alt="Ảnh minh chứng"></a>`
+    ).join('');
+    $('#knXemAnhTrong').hidden = anh.length > 0;
+
+    $('#knXemVideo').innerHTML = video.map(v =>
+      `<div class="kn-video-box"><video controls preload="metadata" src="${API.hoanKhieuNaiVideoUrl(v.id)}"></video></div>`
+    ).join('');
+    $('#knXemVideoTrong').hidden = video.length > 0;
+  }
 
   // Cho chuông thông báo gọi lại được khi bấm vào 1 thông báo — không thì
   // tab Vận hành sàn chỉ hiện lại dữ liệu cũ từ lúc tải trang, chưa có đơn
@@ -1844,6 +1880,31 @@ async function khoiDongKho() {
   });
 }
 
+/* Nén ảnh minh chứng khiếu nại — giữ nguyên tỉ lệ (khác nenAnhVuong dùng cho
+   avatar, cắt vuông), giới hạn cạnh dài nhất 1280px, JPEG chất lượng 0.72:
+   đủ rõ để làm bằng chứng, đủ nhẹ để nằm gọn trong giới hạn 2MB/giá trị D1. */
+function nenAnh(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const MAX = 1280;
+      let w = img.width, h = img.height;
+      if (w > MAX || h > MAX) {
+        const ti = w > h ? MAX / w : MAX / h;
+        w = Math.round(w * ti); h = Math.round(h * ti);
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL('image/jpeg', 0.72));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Không đọc được ảnh này')); };
+    img.src = url;
+  });
+}
+
 /* ==========================================================================
    ĐƠN HOÀN — Shopee
    ========================================================================== */
@@ -1942,27 +2003,25 @@ async function khoiDongDonHoan() {
   $('#dh-nguon-tiktok').addEventListener('change', () => veBangDH($('#dh-tim').value));
 
   /* Kho bấm "Nhận đủ" / "Nhập kho" / "Hàng hỏng-Chờ huỷ" (đóng đơn) hoặc
-     "Cần khiếu nại" (đẩy về Vận hành sàn) */
+     "Chưa nhận được" (đẩy ngay). Riêng "Cần khiếu nại" mở hộp nhập lý do +
+     ảnh/video (thay vì prompt() chỉ nhập được chữ) — xử lý ở hộp đó luôn. */
   $('#dh-bang').addEventListener('click', async (e) => {
     const btnNhan = e.target.closest('[data-nhan]');
     const btnKn = e.target.closest('[data-khieunai]');
     const btnPl = e.target.closest('[data-phanloai]');
     const btnCn = e.target.closest('[data-chuanhan]');
     if (!btnNhan && !btnKn && !btnPl && !btnCn) return;
-    const btn = btnNhan || btnKn || btnPl || btnCn;
-    const rsn = btn.getAttribute('data-rsn') ||
-      btn.getAttribute('data-nhan') || btn.getAttribute('data-khieunai') || btn.getAttribute('data-chuanhan');
-    let ghiChu = '';
+
     if (btnKn) {
-      // Gõ lý do xong mới đẩy về Vận hành sàn (anh Duy chốt 20/08/2026) —
-      // khác "Chưa nhận được" là đẩy ngay không cần gõ gì. Đang chọn sẵn
-      // "Hư hỏng" ở ô tình trạng thì gợi ý luôn lý do, khỏi gõ lại.
-      const sel = btn.closest('td').querySelector('.sel-tinhtrang');
+      // Đang chọn sẵn "Hư hỏng" ở ô tình trạng thì gợi ý luôn lý do, khỏi gõ lại.
+      const sel = btnKn.closest('td').querySelector('.sel-tinhtrang');
       const goiY = sel && sel.value === 'hu_hong' ? 'Hàng hư hỏng khi kho nhận' : '';
-      const nhap = prompt('Lý do cần khiếu nại (thiếu hàng / hỏng / không đúng mô tả…):', goiY);
-      if (nhap === null) return;   // bấm Huỷ thì thôi
-      ghiChu = nhap;
+      moKhieuNaiModal(btnKn.getAttribute('data-khieunai'), goiY);
+      return;
     }
+
+    const btn = btnNhan || btnPl || btnCn;
+    const rsn = btn.getAttribute('data-rsn') || btn.getAttribute('data-nhan') || btn.getAttribute('data-chuanhan');
     if (btnPl && btn.getAttribute('data-phanloai') === 'hong_cho_huy' &&
         !confirm('Xác nhận hàng hỏng do vận chuyển, chờ lập biên bản hủy cùng kế toán?')) return;
     if (btnCn && !confirm('Xác nhận CHƯA NHẬN ĐƯỢC hàng — đơn sẽ đẩy ngay về Vận hành sàn để khiếu nại với sàn?')) return;
@@ -1977,13 +2036,98 @@ async function khoiDongDonHoan() {
     try {
       if (btnNhan) await API.hoanDaNhan(rsn, tinhTrang);
       else if (btnPl) await API.hoanPhanLoai(rsn, btn.getAttribute('data-phanloai'));
-      else if (btnCn) await API.hoanChuaNhan(rsn);
-      else await API.hoanKhieuNai(rsn, ghiChu);
+      else await API.hoanChuaNhan(rsn);
       await veDanhSach();               // tải lại
     } catch (err) {
       btn.disabled = false;
       btn.textContent = cu;
       alert(err.message || 'Không lưu được, thử lại nhé.');
+    }
+  });
+
+  /* ---- Hộp nhập khiếu nại: lý do + ảnh (nén ở trình duyệt) + video ---- */
+  const knModal = $('#knModalNen');
+  let anhDangChon = [];      // [{ base64 }]
+  let videoDangChon = null;
+  let returnSnDangMo = null;
+
+  function veAnhLuoi() {
+    $('#knAnhLuoi').innerHTML = anhDangChon.map((a, i) =>
+      `<div class="kn-thumb"><img src="${a.base64}" alt="Ảnh minh chứng">` +
+      `<div class="kn-xoa" data-xoaanh="${i}">×</div></div>`
+    ).join('');
+  }
+
+  function moKhieuNaiModal(returnSn, goiYLyDo) {
+    returnSnDangMo = returnSn;
+    $('#knForm').reset();
+    anhDangChon = []; videoDangChon = null;
+    veAnhLuoi();
+    $('#knVideoTen').textContent = '';
+    $('#knLoi').textContent = '';
+    if (goiYLyDo) $('#knLyDo').value = goiYLyDo;
+    const r = DS_DH.find(x => x.return_sn === returnSn);
+    const ngChu = r && r.nguon === 'tiktok' ? 'TikTok' : 'Shopee';
+    const spTen = (r && (r.san_pham_ten || r.san_pham)) || '—';
+    $('#knModalDon').innerHTML =
+      `${esc(ngChu)} · Mã đơn hoàn <b>${esc(returnSn)}</b>` +
+      (r && r.order_sn ? ` · Đơn gốc ${esc(r.order_sn)}` : '') +
+      `<br>${esc(spTen)}`;
+    knModal.hidden = false;
+    $('#knLyDo').focus();
+  }
+  function dongKhieuNaiModal() { knModal.hidden = true; returnSnDangMo = null; }
+
+  $('#knHuy').addEventListener('click', dongKhieuNaiModal);
+  knModal.addEventListener('click', e => { if (e.target === knModal) dongKhieuNaiModal(); });
+
+  $('#knAnh').addEventListener('change', async () => {
+    const files = [...$('#knAnh').files].slice(0, Math.max(0, 6 - anhDangChon.length));
+    for (const f of files) {
+      try { anhDangChon.push({ base64: await nenAnh(f) }); }
+      catch { alert(`Không đọc được ảnh "${f.name}", thử ảnh khác nhé.`); }
+    }
+    veAnhLuoi();
+    $('#knAnh').value = '';
+  });
+
+  $('#knAnhLuoi').addEventListener('click', e => {
+    const btn = e.target.closest('[data-xoaanh]');
+    if (!btn) return;
+    anhDangChon.splice(Number(btn.getAttribute('data-xoaanh')), 1);
+    veAnhLuoi();
+  });
+
+  $('#knVideo').addEventListener('change', () => {
+    const f = $('#knVideo').files[0];
+    videoDangChon = f || null;
+    $('#knVideoTen').textContent = f ? `${f.name} (${(f.size / 1024 / 1024).toFixed(1)}MB)` : '';
+  });
+
+  $('#knForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!returnSnDangMo) return;
+    const lyDo = $('#knLyDo').value.trim();
+    if (lyDo.length < 5) { $('#knLoi').textContent = 'Vui lòng mô tả rõ vấn đề.'; return; }
+
+    const btn = $('#knNutGui');
+    btn.disabled = true;
+    const cu = btn.textContent;
+    $('#knLoi').textContent = '';
+    try {
+      btn.textContent = 'Đang gửi…';
+      await API.hoanKhieuNai(returnSnDangMo, lyDo, anhDangChon.map(a => a.base64));
+      if (videoDangChon) {
+        btn.textContent = 'Đang tải video…';
+        await API.hoanKhieuNaiVideo(returnSnDangMo, videoDangChon);
+      }
+      dongKhieuNaiModal();
+      await veDanhSach();
+    } catch (err) {
+      $('#knLoi').textContent = err.message || 'Không gửi được, thử lại nhé.';
+    } finally {
+      btn.disabled = false;
+      btn.textContent = cu;
     }
   });
 

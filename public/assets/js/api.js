@@ -153,9 +153,18 @@ export const API = {
   hoanDaNhan: (returnSn, tinhTrang) => goi('/api/hoan/da-nhan', {
     method: 'POST', body: JSON.stringify({ return_sn: returnSn, tinh_trang: tinhTrang })
   }),
-  hoanKhieuNai: (returnSn, ghiChu) => goi('/api/hoan/khieu-nai', {
-    method: 'POST', body: JSON.stringify({ return_sn: returnSn, ghi_chu: ghiChu })
+  hoanKhieuNai: (returnSn, ghiChu, anh = []) => goi('/api/hoan/khieu-nai', {
+    method: 'POST', body: JSON.stringify({ return_sn: returnSn, ghi_chu: ghiChu, anh })
   }),
+  hoanKhieuNaiVideo: (returnSn, file) => {
+    const fd = new FormData();
+    fd.append('return_sn', returnSn);
+    fd.append('file', file);
+    return goi('/api/hoan/khieu-nai/video', { method: 'POST', body: fd });
+  },
+  hoanKhieuNaiVideoUrl: (id) => '/api/hoan/khieu-nai/video?id=' + encodeURIComponent(id),
+  hoanKhieuNaiMinhChung: (returnSn) =>
+    goi('/api/hoan/khieu-nai/minh-chung?return_sn=' + encodeURIComponent(returnSn)),
   hoanChuaNhan: (returnSn) => goi('/api/hoan/chua-nhan', {
     method: 'POST', body: JSON.stringify({ return_sn: returnSn })
   }),
