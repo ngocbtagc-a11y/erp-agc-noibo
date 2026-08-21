@@ -385,10 +385,72 @@ export async function apiDanhSach(env, phien) {
    cần tinh chỉnh khi có khóa, giống lưu ý đã có ở tiktok.js.
    ========================================================================== */
 
-/* Mốc đồng bộ lần trước — chưa có thì lấy 30 ngày gần nhất làm nền ban đầu */
+/* Mốc đồng bộ lần trước — chưa có thì lấy ĐẦU NGÀY HÔM NAY (giờ VN) làm nền
+   ban đầu (chị Huyền chốt 21/08/2026: không cần quét lùi cả tháng, chỉ cần
+   từ hôm nay trở đi — cũng nhẹ hơn nhiều cho giới hạn subrequest bên dưới). */
 function moGocDongBoDonHang(kn) {
-  return kn.dh_dong_bo_den ? Number(kn.dh_dong_bo_den) : nowSec() - 30 * 86400;
+  if (kn.dh_dong_bo_den) return Number(kn.dh_dong_bo_den);
+  const vn = new Date(Date.now() + 7 * 3600 * 1000);
+  return Math.floor(Date.UTC(vn.getUTCFullYear(), vn.getUTCMonth(), vn.getUTCDate()) / 1000) - 7 * 3600;
 }
+
+/* Dựng 1 câu INSERT ... ON CONFLICT cho đơn hàng — dùng chung cho vòng lặp
+   bên dưới, tách riêng cho gọn. coHuy/coVanDon: có cột "đơn hủy"/"mã vận
+   đơn" trên DB thật chưa (xem coCotDonHangHuy/coCotMaVanDon ở trên). */
+function cauLenhDonHang(env, o, coHuy, coVanDon) {
+  const items = o.item_list || [];
+  const soSp = items.reduce((s, it) => s + (Number(it.model_quantity_purchased || it.amount) || 0), 0);
+  // Tên/SKU sản phẩm — cùng cách gộp + khử trùng lặp như Đơn hoàn (dongBoNen ở trên)
+  const tenArr = [...new Set(items.map(it => it.item_name || it.name).filter(Boolean))];
+  const skuArr = [...new Set(items.map(it => it.model_sku || it.item_sku).filter(Boolean))];
+  const spTen = tenArr.join(' | ') || null;
+  const spSku = skuArr.join(' | ') || null;
+  const maVanDon = o.tracking_number ||
+    (o.package_list && o.package_list[0] && o.package_list[0].tracking_number) || null;
+
+  const cotHuy = coHuy ? `, san_pham_ten, san_pham_sku, huy_ly_do, huy_boi, huy_ly_do_khach` : '';
+  const gtHuy = coHuy ? `, ?, ?, ?, ?, ?` : '';
+  const capNhatHuy = coHuy
+    ? `, san_pham_ten=excluded.san_pham_ten, san_pham_sku=excluded.san_pham_sku,
+         huy_ly_do=excluded.huy_ly_do, huy_boi=excluded.huy_boi, huy_ly_do_khach=excluded.huy_ly_do_khach`
+    : '';
+  const thamSoHuy = coHuy ? [spTen, spSku, o.cancel_reason || null, o.cancel_by || null, o.buyer_cancel_reason || null] : [];
+
+  const cotVanDon = coVanDon ? `, ma_van_don` : '';
+  const gtVanDon = coVanDon ? `, ?` : '';
+  const capNhatVanDon = coVanDon ? `, ma_van_don=excluded.ma_van_don` : '';
+  const thamSoVanDon = coVanDon ? [maVanDon] : [];
+
+  return env.DB.prepare(`
+    INSERT INTO don_hang (order_sn, nguon, trang_thai, tong_tien, tien_te, nguoi_mua, so_sp, tao_luc_san, cap_nhat_san, du_lieu_json, dong_bo_luc${cotHuy}${cotVanDon})
+    VALUES (?, 'shopee', ?, ?, ?, ?, ?, ?, ?, ?, datetime('now','+7 hours')${gtHuy}${gtVanDon})
+    ON CONFLICT(order_sn) DO UPDATE SET
+      trang_thai=excluded.trang_thai, tong_tien=excluded.tong_tien, tien_te=excluded.tien_te,
+      nguoi_mua=excluded.nguoi_mua, so_sp=excluded.so_sp,
+      cap_nhat_san=excluded.cap_nhat_san, du_lieu_json=excluded.du_lieu_json,
+      dong_bo_luc=datetime('now','+7 hours')${capNhatHuy}${capNhatVanDon}
+  `).bind(
+    String(o.order_sn), o.order_status || null,
+    Math.round((Number(o.total_amount) || 0) * 100000) || null, o.currency || null,
+    o.buyer_username || null, soSp || null,
+    o.create_time ? String(o.create_time) : null,
+    o.update_time ? String(o.update_time) : null,
+    JSON.stringify(o),
+    ...thamSoHuy,
+    ...thamSoVanDon
+  );
+}
+
+/* Cloudflare Workers giới hạn ~50 subrequest (fetch + D1) trong 1 LẦN CHẠY
+   (gói free). Shop có hàng nghìn đơn/tháng nên quét nhiều ngày 1 lúc là vượt
+   trần — trước đây gom hết rồi mới ghi 1 lần, vượt trần là MẤT SẠCH dữ liệu
+   vừa quét (không kịp ghi). Giờ: đếm subrequest, GHI NGAY từng lô 50 đơn thay
+   vì gom tới cuối, và dừng sớm có kiểm soát khi gần chạm trần — lần chạy sau
+   (cron 5 phút/lần) tự tiếp tục đúng chỗ dừng nhờ mốc dh_dong_bo_den chỉ tiến
+   tới đúng update_time đơn CUỐI CÙNG đã ghi xong, không tiến tới "bây giờ"
+   nếu chưa quét hết (Claude 21/08/2026, sau khi shop thật báo lỗi "Too many
+   subrequests"). */
+const GIOI_HAN_SUBREQ = 35;
 
 export async function dongBoDonHangNen(env) {
   if (!daCauHinh(env)) return null;
@@ -400,100 +462,60 @@ export async function dongBoDonHangNen(env) {
   const coVanDon = await coCotMaVanDon(env);
   const tuGoc = moGocDongBoDonHang(kn);
   const denGoc = nowSec();
-  const cauLenh = [];
-  let them = 0;
 
-  for (let tuLuc = tuGoc; tuLuc < denGoc; tuLuc += 15 * 86400) {
-    const denLuc = Math.min(tuLuc + 15 * 86400 - 1, denGoc);
+  let subReq = 0, them = 0, mocMoi = null, cursor = '', con = true, trang = 0;
 
-    // 1) Gom order_sn theo trang (cursor) trong khung [tuLuc, denLuc]
-    let cursor = '', con = true, trang = 0;
-    const dsOrderSn = [];
-    while (con && trang < 20) {                     // chặn trần 20 trang/khung cho an toàn
-      const kq = await goiTheoShop(env, '/api/v2/order/get_order_list', kn, {
-        time_range_field: 'update_time', time_from: String(tuLuc), time_to: String(denLuc),
-        page_size: '100', cursor
-      });
-      if (kq.error) throw new Error('Shopee báo lỗi (get_order_list): ' + (kq.message || kq.error));
-      const ds = (kq.response && kq.response.order_list) || [];
-      for (const o of ds) if (o.order_sn) dsOrderSn.push(o.order_sn);
-      cursor = (kq.response && kq.response.next_cursor) || '';
-      con = !!(kq.response && kq.response.more) && !!cursor;
-      trang++;
-    }
+  outer:
+  while (con && trang < 20) {
+    if (subReq >= GIOI_HAN_SUBREQ) break;
+    const kq = await goiTheoShop(env, '/api/v2/order/get_order_list', kn, {
+      time_range_field: 'update_time', time_from: String(tuGoc), time_to: String(denGoc),
+      page_size: '100', cursor
+    });
+    subReq++;
+    if (kq.error) throw new Error('Shopee báo lỗi (get_order_list): ' + (kq.message || kq.error));
+    const dsOrderSn = ((kq.response && kq.response.order_list) || []).map(o => o.order_sn).filter(Boolean);
 
-    // 2) Lấy chi tiết theo lô 50 mã — mới có total_amount để tính doanh thu
+    // Lấy chi tiết + GHI NGAY từng lô 50 mã (không gom tới cuối mới ghi) —
+    // ⚠️ cancel_reason/cancel_by/buyer_cancel_reason/tracking_number CHƯA
+    // chạy thử với khóa thật — xem NHAN_HUY_BOI/cột Mã vận đơn trong app.js
+    // > khoiDongDonHangHuy nếu thấy trống hết dù đơn có hủy/có ship.
     for (let i = 0; i < dsOrderSn.length; i += 50) {
+      if (subReq >= GIOI_HAN_SUBREQ) break outer;
       const lo = dsOrderSn.slice(i, i + 50);
-      // cancel_reason/cancel_by/buyer_cancel_reason: chỉ Shopee trả cho đơn
-      // order_status=CANCELLED — đơn khác thì các field này rỗng, vô hại.
-      // ⚠️ CHƯA chạy thử với khóa thật — chưa chắc chắn giá trị cancel_by là
-      // 'buyer'/'seller'/'system' hay dạng khác (xem NHAN_HUY_BOI trong
-      // app.js > khoiDongDonHangHuy). Chạy thử xong cần đối chiếu lại.
-      // ⚠️ tracking_number CHƯA chạy thử với khóa thật — chưa chắc chắn tên
-      // field đúng (có thể nằm trong package_list/logistics_info thay vì ở
-      // gốc). Chạy thử xong cần đối chiếu, xem NHAN_HUY_BOI/cột Mã vận đơn
-      // trong app.js > khoiDongDonHangHuy nếu thấy trống hết dù đơn có ship.
-      const kq = await goiTheoShop(env, '/api/v2/order/get_order_detail', kn, {
+      const kqCt = await goiTheoShop(env, '/api/v2/order/get_order_detail', kn, {
         order_sn_list: lo.join(','),
         response_optional_fields: 'order_status,total_amount,currency,buyer_username,create_time,update_time,item_list,cancel_reason,cancel_by,buyer_cancel_reason,tracking_number'
       });
-      if (kq.error) throw new Error('Shopee báo lỗi (get_order_detail): ' + (kq.message || kq.error));
-      const ds = (kq.response && kq.response.order_list) || [];
-      for (const o of ds) {
-        const items = o.item_list || [];
-        const soSp = items.reduce((s, it) => s + (Number(it.model_quantity_purchased || it.amount) || 0), 0);
-        // Tên/SKU sản phẩm — cùng cách gộp + khử trùng lặp như Đơn hoàn (dongBoNen ở trên)
-        const tenArr = [...new Set(items.map(it => it.item_name || it.name).filter(Boolean))];
-        const skuArr = [...new Set(items.map(it => it.model_sku || it.item_sku).filter(Boolean))];
-        const spTen = tenArr.join(' | ') || null;
-        const spSku = skuArr.join(' | ') || null;
-        const maVanDon = o.tracking_number ||
-          (o.package_list && o.package_list[0] && o.package_list[0].tracking_number) || null;
-
-        const cotHuy = coHuy ? `, san_pham_ten, san_pham_sku, huy_ly_do, huy_boi, huy_ly_do_khach` : '';
-        const gtHuy = coHuy ? `, ?, ?, ?, ?, ?` : '';
-        const capNhatHuy = coHuy
-          ? `, san_pham_ten=excluded.san_pham_ten, san_pham_sku=excluded.san_pham_sku,
-               huy_ly_do=excluded.huy_ly_do, huy_boi=excluded.huy_boi, huy_ly_do_khach=excluded.huy_ly_do_khach`
-          : '';
-        const thamSoHuy = coHuy ? [spTen, spSku, o.cancel_reason || null, o.cancel_by || null, o.buyer_cancel_reason || null] : [];
-
-        const cotVanDon = coVanDon ? `, ma_van_don` : '';
-        const gtVanDon = coVanDon ? `, ?` : '';
-        const capNhatVanDon = coVanDon ? `, ma_van_don=excluded.ma_van_don` : '';
-        const thamSoVanDon = coVanDon ? [maVanDon] : [];
-
-        cauLenh.push(env.DB.prepare(`
-          INSERT INTO don_hang (order_sn, nguon, trang_thai, tong_tien, tien_te, nguoi_mua, so_sp, tao_luc_san, cap_nhat_san, du_lieu_json, dong_bo_luc${cotHuy}${cotVanDon})
-          VALUES (?, 'shopee', ?, ?, ?, ?, ?, ?, ?, ?, datetime('now','+7 hours')${gtHuy}${gtVanDon})
-          ON CONFLICT(order_sn) DO UPDATE SET
-            trang_thai=excluded.trang_thai, tong_tien=excluded.tong_tien, tien_te=excluded.tien_te,
-            nguoi_mua=excluded.nguoi_mua, so_sp=excluded.so_sp,
-            cap_nhat_san=excluded.cap_nhat_san, du_lieu_json=excluded.du_lieu_json,
-            dong_bo_luc=datetime('now','+7 hours')${capNhatHuy}${capNhatVanDon}
-        `).bind(
-          String(o.order_sn), o.order_status || null,
-          Math.round((Number(o.total_amount) || 0) * 100000) || null, o.currency || null,
-          o.buyer_username || null, soSp || null,
-          o.create_time ? String(o.create_time) : null,
-          o.update_time ? String(o.update_time) : null,
-          JSON.stringify(o),
-          ...thamSoHuy,
-          ...thamSoVanDon
-        ));
-        them++;
+      subReq++;
+      if (kqCt.error) throw new Error('Shopee báo lỗi (get_order_detail): ' + (kqCt.message || kqCt.error));
+      const dsCt = (kqCt.response && kqCt.response.order_list) || [];
+      const cauLenh = dsCt.map(o => cauLenhDonHang(env, o, coHuy, coVanDon));
+      if (cauLenh.length) {
+        await env.DB.batch(cauLenh);
+        subReq++;
       }
+      for (const o of dsCt) {
+        const ut = Number(o.update_time) || 0;
+        if (ut && (mocMoi === null || ut > mocMoi)) mocMoi = ut;
+      }
+      them += dsCt.length;
     }
+
+    cursor = (kq.response && kq.response.next_cursor) || '';
+    con = !!(kq.response && kq.response.more) && !!cursor;
+    trang++;
   }
 
-  // Ghi hàng loạt theo lô 50 lệnh/batch — cùng cách Đơn hoàn tránh vượt trần subrequest
-  for (let i = 0; i < cauLenh.length; i += 50) {
-    await env.DB.batch(cauLenh.slice(i, i + 50));
+  // con=true khi dừng lại còn ĐANG DỞ (hết subrequest hoặc chạm trần trang) —
+  // chỉ tiến mốc tới đơn cuối đã ghi xong, KHÔNG tiến tới "bây giờ", để lần
+  // sau quét tiếp phần còn thiếu thay vì bỏ sót. Quét trọn hết (con=false)
+  // thì coi như bắt kịp, tiến mốc tới hiện tại luôn.
+  const mocLuu = con ? mocMoi : denGoc;
+  if (mocLuu) {
+    await env.DB.prepare('UPDATE shopee_ket_noi SET dh_dong_bo_den = ? WHERE shop_id = ?')
+                .bind(String(mocLuu), kn.shop_id).run();
   }
-
-  await env.DB.prepare('UPDATE shopee_ket_noi SET dh_dong_bo_den = ? WHERE shop_id = ?')
-              .bind(String(denGoc), kn.shop_id).run();
   return them;
 }
 
