@@ -115,6 +115,11 @@ npm run dua-len        # đưa code lên production
 5. **Service worker KHÔNG cache** (`public/sw.js`) — cố tình vậy để tránh kẹt "bản HTML mới + JS cũ". Nếu ai đó thấy app **kẹt/lệch/thiếu**, mở **`/reset.html`** một lần là tự dọn sạch bản cũ rồi vào lại. Đừng thêm cache vào service worker.
 6. **Giờ giấc** ở các module lưu theo **+7 (giờ Việt Nam)** để báo cáo khớp ngày.
 7. **Đơn hoàn TikTok:** lấy `shop_cipher` qua `/authorization/**202407**/shops` — bản `202309` báo lỗi scope 105005. Ký chữ ký TikTok: `app_secret + path + (params sort key+value) + body + app_secret`, HMAC-SHA256 hex.
+8. **Migration MỚI: KHÔNG gọi `wrangler d1 execute --file=...` trực tiếp nữa.** Dùng
+   `node scripts/chay-migration.mjs <ten-file.sql> --remote` — script chạy file XONG rồi
+   TỰ GHI vào bảng `schema_migrations`, tránh quên (đúng nguyên nhân 2 sự cố "trắng
+   trơn"/"vỡ bảng" đã từng xảy ra). Trước khi deploy tính năng cần bảng/cột mới, chạy
+   `npm run migration-kiemtra` để biết chắc bản thật đã đủ migration chưa.
 
 ## 9. Cần giúp?
 

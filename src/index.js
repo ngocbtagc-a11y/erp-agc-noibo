@@ -820,6 +820,22 @@ async function donDepDuLieuNgoaiThang(env) {
   if (r.meta.changes) console.log(`Dọn ${r.meta.changes} đơn hoàn ngoài tháng làm việc`);
 }
 
+/* Đơn hàng (doanh thu) — KHÔNG xoá dòng như đơn hoàn (đây là dữ liệu kinh
+   doanh cần giữ lâu dài để tra cứu doanh thu quá khứ, khác đơn hoàn chỉ có
+   giá trị vận hành trong tháng). Chỉ dọn cột du_lieu_json (payload thô từ
+   sàn, nặng nhất) sau 90 ngày — giữ nguyên tong_tien/so_sp/trang_thai/ngày
+   tháng vĩnh viễn (audit hiệu năng 21/08/2026, mục P0). */
+async function donDepJsonDonHangCu(env) {
+  const gioNay = Math.floor(Date.now() / 1000);
+  const nguong90Ngay = gioNay - 90 * 86400;
+  const r = await env.DB.prepare(
+    `UPDATE don_hang SET du_lieu_json = NULL
+      WHERE du_lieu_json IS NOT NULL
+        AND tao_luc_san IS NOT NULL AND CAST(tao_luc_san AS INTEGER) < ?`
+  ).bind(nguong90Ngay).run();
+  if (r.meta.changes) console.log(`Dọn payload thô của ${r.meta.changes} đơn hàng cũ hơn 90 ngày`);
+}
+
 /* Đẩy 1 đơn hoàn ngược về Vận hành sàn + báo vận hành (dùng chung cho cả
    "Cần khiếu nại" gõ tay lẫn "Chưa nhận được" bấm nhanh — 2 lối vào, 1 lõi). */
 async function dayVeVanHanh(env, rsn, ghiChu, nguoi, loaiThongBao) {
@@ -1034,21 +1050,28 @@ const CV_TU = `cong_viec c LEFT JOIN muc_tieu m ON m.id = c.muc_tieu_id`;
 async function cvDanhSach(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
+  // LIMIT 300 mỗi danh sách — phòng khi công ty đông lên, tránh trả về vô hạn
+  // dòng (audit hiệu năng 21/08/2026, mục P0). Việc cũ/hoàn thành đã bị xếp
+  // xuống cuối bởi ORDER BY nên bị cắt bớt trước, không mất việc đang mở —
+  // và giờ đã có tab "Lịch sử làm việc" riêng để tra việc cũ đầy đủ.
   const [nhan, giao, phoiHop] = await Promise.all([
     env.DB.prepare(
       `SELECT ${CV_COT} FROM ${CV_TU} WHERE c.nguoi_nhan_id = ?
-        ORDER BY (c.trang_thai IN ('hoan_thanh','huy')), (c.han_chot IS NULL), c.han_chot ASC, c.id DESC`
+        ORDER BY (c.trang_thai IN ('hoan_thanh','huy')), (c.han_chot IS NULL), c.han_chot ASC, c.id DESC
+        LIMIT 300`
     ).bind(phien.nhan_su_id).all(),
     env.DB.prepare(
       // Việc GIAO cho người khác. Todo cá nhân (tự giao cho mình) không tính
       // vào đây — nó nằm ở "Việc cần làm" — nên loại nguoi_nhan = nguoi_giao.
       `SELECT ${CV_COT} FROM ${CV_TU}
          WHERE c.nguoi_giao_id = ? AND c.nguoi_nhan_id <> c.nguoi_giao_id
-        ORDER BY (c.trang_thai IN ('hoan_thanh','huy')), c.id DESC`
+        ORDER BY (c.trang_thai IN ('hoan_thanh','huy')), c.id DESC
+        LIMIT 300`
     ).bind(phien.nhan_su_id).all(),
     env.DB.prepare(
       `SELECT ${CV_COT} FROM ${CV_TU} WHERE c.phoi_hop_ids LIKE '%,' || ? || ',%'
-        ORDER BY (c.trang_thai IN ('hoan_thanh','huy')), (c.han_chot IS NULL), c.han_chot ASC, c.id DESC`
+        ORDER BY (c.trang_thai IN ('hoan_thanh','huy')), (c.han_chot IS NULL), c.han_chot ASC, c.id DESC
+        LIMIT 300`
     ).bind(phien.nhan_su_id).all()
   ]);
   return json({ nhan: nhan.results || [], giao: giao.results || [], phoi_hop: phoiHop.results || [] });
@@ -1231,8 +1254,10 @@ async function mtDanhSach(req, env) {
   const nam = parseInt(u.searchParams.get('nam'), 10) || ky.nam;
   const quy = parseInt(u.searchParams.get('quy'), 10) || ky.quy;
 
+  // LIMIT 300 — đã lọc theo đúng 1 quý nên vốn nhỏ, thêm trần cho chắc
+  // (audit hiệu năng 21/08/2026, mục P0).
   const { results } = await env.DB.prepare(
-    `SELECT ${MT_COT} FROM muc_tieu m WHERE nam = ? AND quy = ? ORDER BY cap ASC, tao_luc DESC`
+    `SELECT ${MT_COT} FROM muc_tieu m WHERE nam = ? AND quy = ? ORDER BY cap ASC, tao_luc DESC LIMIT 300`
   ).bind(nam, quy).all();
 
   return json({
@@ -2139,6 +2164,7 @@ export default {
         try { await shopee.dongBoDonHangNen(env); } catch (e) { console.error('Cron Shopee đơn hàng:', e.message); }
         try { await tiktok.dongBoDonHangNen(env); } catch (e) { console.error('Cron TikTok đơn hàng:', e.message); }
         try { await donDepDuLieuNgoaiThang(env); } catch (e) { console.error('Cron dọn dữ liệu ngoài tháng:', e.message); }
+      try { await donDepJsonDonHangCu(env); } catch (e) { console.error('Cron dọn payload đơn hàng cũ:', e.message); }
       }
     })());
   },

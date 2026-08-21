@@ -27,6 +27,11 @@
     "nap-donhang": "wrangler d1 execute crm-agc --remote --file=migrations/them-donhang.sql",
     "nap-muctieu-may": "wrangler d1 execute crm-agc --local --file=migrations/them-muctieu.sql",
     "nap-muctieu": "wrangler d1 execute crm-agc --remote --file=migrations/them-muctieu.sql",
+    "nap-schemamigrations-may": "wrangler d1 execute crm-agc --local --file=migrations/them-schema-migrations.sql",
+    "nap-schemamigrations": "wrangler d1 execute crm-agc --remote --file=migrations/them-schema-migrations.sql",
+    "migration-kiemtra": "node scripts/kiem-tra-migration.mjs",
+    "migration-kiemtra-may": "node scripts/kiem-tra-migration.mjs --local",
+    "migration-chay": "node scripts/chay-migration.mjs",
     "chay": "wrangler dev",
     "dua-len": "wrangler deploy"
   },
