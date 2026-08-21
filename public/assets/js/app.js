@@ -2029,6 +2029,32 @@ async function khoiDongKho() {
         `<td><span class="tag ${tt.mau}">${esc(tt.chu)}</span></td>`;
     });
 
+    // Card mobile (≤780px) — CÙNG dữ liệu ds, chỉ khác cách render (pilot
+    // Mobile Card 21/08/2026). Bấm cả card mở đúng modal chi tiết như bấm
+    // tên sản phẩm trên bảng desktop (moChiTiet bên dưới).
+    const oCard = $('#kv-ton-card');
+    oCard.innerHTML = '';
+    ds.forEach(s => {
+      const tt = NHAN_TT[s.trang_thai] || NHAN_TT.binh_thuong;
+      const card = el('div', 'kv-card',
+        `<div class="kv-card-dau">
+           <div>
+             <div class="kv-card-ten">${esc(s.ten)}</div>
+             <div class="kv-card-sku">${esc(s.ma_sku)}${s.danh_muc ? ' · ' + esc(s.danh_muc) : ''}</div>
+           </div>
+           <span class="tag ${tt.mau}">${esc(tt.chu)}</span>
+         </div>
+         <div class="kv-card-hang">
+           <span class="kv-card-ton">${esc(tienVN(s.ton))}</span>
+           <span class="kv-card-donvi">${esc(s.don_vi)}</span>
+         </div>` +
+        (s.theo_doi_hsd ? `<div class="kv-card-phu">HSD gần nhất: ${moTaHsd(s.han_gan_nhat, s.so_ngay_toi_han)}</div>` : '') +
+        (xemGiaVon && s.gia_tri_ton != null ? `<div class="kv-card-phu">Giá trị tồn: ${esc(tienVN(s.gia_tri_ton))} đ</div>` : '')
+      );
+      card.dataset.sp = s.id;
+      oCard.appendChild(card);
+    });
+
     $('#kv-ton-trong').hidden = ds.length > 0;
     $('#kv-ton-hint').textContent = `${ds.length}/${DS_SP.length} mã hàng`;
   }
@@ -2079,6 +2105,14 @@ async function khoiDongKho() {
     const lnk = e.target.closest('.kv-lnk');
     if (!lnk) return;
     await moChiTiet(lnk.dataset.sp);
+  });
+
+  // Card mobile: bấm cả card (không cần đúng vào chữ) — target lớn hơn, dễ
+  // bấm 1 tay hơn link nhỏ trên bảng desktop.
+  $('#kv-ton-card').addEventListener('click', async e => {
+    const card = e.target.closest('.kv-card');
+    if (!card) return;
+    await moChiTiet(card.dataset.sp);
   });
 
   const kvModal = $('#kvModalNen');

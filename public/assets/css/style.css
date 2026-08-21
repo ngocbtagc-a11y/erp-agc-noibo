@@ -1362,6 +1362,44 @@ tr.kd-chiadoi td {
 .list-item .meta { font-size: 11.5px; color: var(--text-mute); white-space: nowrap; }
 
 /* ==========================================================================
+   CARD MOBILE — thay bảng cuộn ngang trên màn hẹp (pilot: Tồn kho, 21/08/2026)
+   ---------------------------------------------------------------------------
+   Cùng 1 dữ liệu, render ra CẢ HAI (bảng + card) — CSS quyết định cái nào
+   hiện theo bề rộng màn hình, giống mốc 780px đã dùng ở nơi khác trong file
+   này. Không cần JS theo dõi resize: xoay ngang/dọc điện thoại tự chuyển.
+   ========================================================================== */
+.kv-card-list { display: none; }
+
+.kv-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 14px 16px;
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+}
+.kv-card:active { background: var(--surface); }
+
+.kv-card-dau { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.kv-card-ten { font-size: 14.5px; font-weight: 600; color: var(--ink); line-height: 1.35; }
+.kv-card-sku { font-size: 12px; color: var(--text-mute); margin-top: 1px; }
+
+.kv-card-hang { display: flex; align-items: baseline; gap: 6px; margin-top: 2px; }
+.kv-card-ton    { font-size: 19px; font-weight: 700; color: var(--ink); }
+.kv-card-donvi  { font-size: 12.5px; color: var(--text-mute); }
+
+.kv-card-phu { font-size: 12px; color: var(--text-mute); }
+.kv-card-phu + .kv-card-phu { margin-top: -2px; }
+
+@media (max-width: 780px) {
+  .kv-ton-table { display: none; }
+  .kv-card-list { display: flex; flex-direction: column; gap: 10px; }
+}
+
+/* ==========================================================================
    THÔNG BÁO DỮ LIỆU MẪU
    ========================================================================== */
 

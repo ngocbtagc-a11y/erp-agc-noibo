@@ -630,7 +630,7 @@
               <input type="search" id="kv-tim" placeholder="Tìm theo tên, mã hàng hoặc nhóm hàng">
             </div>
           </div>
-          <div class="table-wrap">
+          <div class="table-wrap kv-ton-table">
             <table>
               <thead>
                 <tr>
@@ -645,6 +645,9 @@
               <tbody id="kv-ton-bang"></tbody>
             </table>
           </div>
+          <!-- Mobile (≤780px): cùng dữ liệu, hiện dạng Card thay vì bảng cuộn
+               ngang — CSS tự chuyển theo bề rộng màn hình, xem style.css. -->
+          <div class="kv-card-list" id="kv-ton-card"></div>
           <div class="empty" id="kv-ton-trong" hidden>Chưa có mã hàng nào khớp — hoặc kho còn trống, hãy nhập hàng ở tab “Nhập kho”.</div>
         </div>
 
