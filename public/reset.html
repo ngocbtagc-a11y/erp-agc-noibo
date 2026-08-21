@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Dọn kẹt ERP AGC</title>
+  <style>
+    :root { --sage:#9aab86; --ink:#3f4d33; --mute:#8a8a81; --bg:#f2f1ee; --line:#dcdad4; }
+    * { box-sizing:border-box; }
+    body {
+      margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
+      background:var(--bg); color:var(--ink);
+      font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+      padding:24px;
+    }
+    .hop {
+      background:#fff; border:1px solid var(--line); border-radius:16px;
+      padding:32px 28px; max-width:420px; width:100%; text-align:center;
+      box-shadow:0 8px 30px rgba(0,0,0,.06);
+    }
+    .icon { font-size:44px; margin-bottom:10px; }
+    h1 { font-size:20px; margin:0 0 8px; }
+    p { color:var(--mute); font-size:14.5px; line-height:1.55; margin:0 0 20px; }
+    #tt { font-weight:600; color:var(--ink); min-height:22px; font-size:15px; }
+    .spin {
+      width:34px; height:34px; margin:6px auto 14px;
+      border:3px solid var(--line); border-top-color:var(--sage);
+      border-radius:50%; animation:q 1s linear infinite;
+    }
+    @keyframes q { to { transform:rotate(360deg); } }
+    a.btn {
+      display:inline-block; margin-top:6px; background:var(--sage); color:#fff;
+      text-decoration:none; padding:11px 22px; border-radius:10px; font-weight:600; font-size:15px;
+    }
+  </style>
+</head>
+<body>
+  <div class="hop">
+    <div class="icon">🧹</div>
+    <h1>Đang dọn bản cũ bị kẹt</h1>
+    <div class="spin" id="sp"></div>
+    <div id="tt">Đang xử lý…</div>
+    <p id="mo">Giữ nguyên trang này vài giây, hệ thống sẽ tự đưa Sếp về ERP với bản mới nhất.</p>
+    <a class="btn" id="nut" href="/app.html" style="display:none">Vào ERP ngay</a>
+  </div>
+
+  <script>
+    (async function () {
+      var tt = document.getElementById('tt');
+      var mo = document.getElementById('mo');
+      var sp = document.getElementById('sp');
+      var nut = document.getElementById('nut');
+
+      function xong(thongDiep) {
+        sp.style.display = 'none';
+        tt.textContent = thongDiep;
+        mo.textContent = 'Xong! Đang quay lại ERP…';
+        nut.style.display = 'inline-block';
+        // Tự quay về sau 1.2s, kèm nút bấm tay phòng khi
+        setTimeout(function () { location.replace('/app.html'); }, 1200);
+      }
+
+      try {
+        // 1) Gỡ mọi service worker cũ (bản từng cache app.js gây lệch bản)
+        if ('serviceWorker' in navigator) {
+          var regs = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(regs.map(function (r) { return r.unregister(); }));
+        }
+        // 2) Xoá sạch mọi cache trình duyệt đang giữ
+        if (self.caches && caches.keys) {
+          var ten = await caches.keys();
+          await Promise.all(ten.map(function (k) { return caches.delete(k); }));
+        }
+        xong('Đã dọn sạch bản cũ ✔');
+      } catch (e) {
+        // Có lỗi vẫn cho Sếp vào tiếp — lần tải sau đã là bản mới
+        xong('Đã dọn (một phần) ✔');
+      }
+    })();
+  </script>
+</body>
+</html>

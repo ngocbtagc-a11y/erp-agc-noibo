@@ -396,20 +396,25 @@ img.av { object-fit: cover; display: block; cursor: default; }
   padding: 12px 15px; font-size: 13.5px; color: #6d5325; font-weight: 500;
 }
 
+/* Danh sách vinh danh: xếp 2 cột trên màn rộng, tự về 1 cột khi hẹp/điện thoại */
+#vd-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 10px;
+}
 .vd-item {
-  display: flex; align-items: flex-start; gap: 14px;
-  padding: 16px; margin-bottom: 12px;
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 12px 14px;
   background: var(--warn-wash);
   border-radius: var(--r-md);
   border: 1px solid #ecd9b5;
 }
-.vd-item:last-child { margin-bottom: 0; }
-.vd-item.person .av { width: 48px; height: 48px; font-size: 16px; }   /* .person .av (định nghĩa sau, cùng độ đặc hiệu) thắng nếu chỉ ghi .vd-item .av */
-.vd-item .nm { font-size: 17px; font-weight: 700; color: var(--ink); }
-.vd-item .vd-noidung { font-size: 15px; line-height: 1.5; color: var(--ink); margin: 6px 0; font-weight: 500; }
+.vd-item.person .av { width: 40px; height: 40px; font-size: 15px; }   /* .person .av (định nghĩa sau, cùng độ đặc hiệu) thắng nếu chỉ ghi .vd-item .av */
+.vd-item .nm { font-size: 15px; font-weight: 700; color: var(--ink); }
+.vd-item .vd-noidung { font-size: 14px; line-height: 1.45; color: var(--ink); margin: 4px 0; font-weight: 500; }
 .vd-item .vd-noidung::before { content: '“'; }
 .vd-item .vd-noidung::after { content: '”'; }
-.vd-item .sm { font-size: 12.5px; }
+.vd-item .sm { font-size: 12px; }
 
 .sb-user .meta { min-width: 0; flex: 1; }
 .sb-user .meta b {
@@ -519,6 +524,69 @@ img.av { object-fit: cover; display: block; cursor: default; }
   text-transform: uppercase;
   margin-bottom: 8px;
 }
+
+/* --- Thẻ mục tiêu MBOs (gọn, nổi bật) — mỗi mục 1 thẻ nhỏ, viền trái đổi màu
+   theo tiến độ (xanh >=70% · vàng 40-69% · đỏ <40%). Tên dài cắt 1 dòng, rê
+   chuột hiện đủ (không dùng chữ chạy vì khó đọc). --- */
+/* Xếp 2 cột trên màn rộng cho đỡ phí chiều ngang, tự về 1 cột khi hẹp/điện thoại */
+#mt-congty-list, #mt-phongban-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+  gap: 8px;
+}
+
+.mt-the {
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--sage);
+  border-radius: 10px;
+  padding: 9px 12px;
+  background: var(--surface);
+  transition: box-shadow .16s, border-color .16s;
+}
+.mt-the:hover  { box-shadow: 0 2px 10px rgba(0,0,0,.05); }
+.mt-the.warn   { border-left-color: var(--warn); }
+.mt-the.danger { border-left-color: var(--danger); }
+.mt-the.cho    { border-left-color: var(--line); }   /* chưa chia việc */
+.mt-the.mo     { opacity: .55; }   /* đã huỷ */
+
+.mt-the-top { display: flex; align-items: baseline; gap: 10px; }
+.mt-the-tt {
+  flex: 1; min-width: 0;
+  font-size: 13.5px; font-weight: 600; color: var(--ink); line-height: 1.35;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.mt-the-pct {
+  flex-shrink: 0;
+  font-size: 16px; font-weight: 800; color: var(--ok);
+  font-variant-numeric: tabular-nums;
+}
+.mt-the-pct span   { font-size: 10px; font-weight: 600; opacity: .65; margin-left: 1px; }
+.mt-the-pct.warn   { color: var(--warn); }
+.mt-the-pct.danger { color: var(--danger); }
+.mt-the-pct.cho    { color: var(--text-mute); }
+
+.mt-the-bar { margin-top: 7px; height: 6px; }
+
+.mt-the-mo {
+  margin-top: 6px; font-size: 12px; color: var(--text-mute); line-height: 1.4;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.mt-the-meta {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; margin-top: 8px;
+}
+.mt-the-viec { font-size: 11.5px; color: var(--text-mute); font-variant-numeric: tabular-nums; }
+.mt-the-nut  { margin-left: auto; display: inline-flex; gap: 6px; }
+
+.mt-chip {
+  display: inline-flex; align-items: center;
+  font-size: 10.5px; font-weight: 700;
+  padding: 2px 8px; border-radius: var(--r-pill); white-space: nowrap;
+}
+.mt-chip.ok     { background: var(--ok-wash);     color: var(--ok); }
+.mt-chip.warn   { background: var(--warn-wash);   color: var(--warn); }
+.mt-chip.danger { background: var(--danger-wash); color: var(--danger); }
+.mt-chip.mute   { background: var(--surface-2);   color: var(--text-mute); }
 
 /* ==========================================================================
    THẺ SỐ LIỆU

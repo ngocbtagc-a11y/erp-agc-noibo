@@ -451,6 +451,18 @@ function veBang(dich, ds, hang) {
    ĐỔ DỮ LIỆU
    ========================================================================== */
 
+/* Nhãn trạng thái công việc — PHẢI khai báo TRƯỚC khối init bên dưới, vì
+   khoiDongCongViec() được gọi sớm (Trạm Mục Tiêu nằm trong Tổng quan) và
+   taiLai() dùng ngay hằng này. Để dưới sẽ dính "temporal dead zone" của
+   const -> bảng "Việc tôi giao" ném lỗi, hiện trống (bắt được 21/08/2026). */
+const CV_TRANG_THAI = {
+  moi:        { chu: 'Mới giao',    mau: 'mute' },
+  dang_lam:   { chu: 'Đang làm',    mau: 'warn' },
+  cho_duyet:  { chu: 'Chờ duyệt',   mau: 'sage' },
+  hoan_thanh: { chu: 'Hoàn thành',  mau: 'ok' },
+  huy:        { chu: 'Đã huỷ',      mau: 'danger' }
+};
+
 /* -- Tổng quan (còn là dữ liệu mẫu) -- */
 veThe('#tq-the', DB.tongQuan.the);
 veChart('#tq-chart', DB.tongQuan.doanhThu6Thang);
@@ -641,37 +653,45 @@ async function khoiDongMucTieu() {
 
   function veThe1MucTieu(m) {
     const pct = m.so_viec > 0 ? Math.round((m.so_viec_xong / m.so_viec) * 100) : 0;
-    const mauBar = pct >= 70 ? '' : (pct >= 40 ? 'warn' : 'danger');
+    const mauBar = pct >= 70 ? '' : (pct >= 40 ? 'warn' : 'danger');  // màu thanh .bar>i
+    // Màu số % + viền trái thẻ. Mục chưa chia việc (0 việc) để trung tính (xám),
+    // không tô đỏ như thể đang bết bát.
+    const mucMau = m.so_viec === 0 ? 'cho'
+                 : (pct >= 70 ? 'ok' : (pct >= 40 ? 'warn' : 'danger'));
     const daXong = m.trang_thai === 'hoan_thanh';
     const daHuy = m.trang_thai === 'huy';
 
-    let nhan;
+    // Badge gọn: cấp công ty -> nút/chốt; cấp phòng ban -> tên bộ phận
+    let badge;
     if (m.cap === 'cong_ty') {
-      nhan = m.da_chot
-        ? `<span class="tag ok">✓ Đã chốt bởi ${esc(m.chot_boi || '')}</span>`
+      badge = m.da_chot
+        ? `<span class="mt-chip ok" title="Chốt bởi ${esc(m.chot_boi || '')}">✓ Đã chốt</span>`
         : (TOI.la_admin
-            ? `<button type="button" class="btn-nho btn-primary" data-mt-chot="${m.id}">Chốt mục tiêu</button>`
-            : `<span class="tag warn">Chưa chốt</span>`);
+            ? `<button type="button" class="btn-nho btn-primary" data-mt-chot="${m.id}">Chốt</button>`
+            : `<span class="mt-chip warn">Chưa chốt</span>`);
     } else {
-      nhan = `<span class="tag mute">${esc(m.bo_phan || '')}</span>`;
+      badge = `<span class="mt-chip mute">${esc(m.bo_phan || '')}</span>`;
     }
-    const trangThaiTag = daXong ? ' <span class="tag ok">Hoàn thành</span>'
-                        : (daHuy ? ' <span class="tag danger">Đã huỷ</span>' : '');
+    if (daXong) badge += ` <span class="mt-chip ok">Hoàn thành</span>`;
+    else if (daHuy) badge += ` <span class="mt-chip danger">Đã huỷ</span>`;
 
     const duocSua = (m.nguoi_tao_id === TOI.id || TOI.la_admin) && !daXong && !daHuy && !m.da_chot;
     const nutSua = duocSua
-      ? `<div style="margin-top:8px"><button type="button" class="btn-nho" data-mt-xong="${m.id}">Hoàn thành</button> <button type="button" class="btn-nho" data-mt-huy="${m.id}">Huỷ</button></div>`
+      ? `<span class="mt-the-nut"><button type="button" class="btn-nho" data-mt-xong="${m.id}">Xong</button> <button type="button" class="btn-nho" data-mt-huy="${m.id}">Huỷ</button></span>`
       : '';
 
-    const r = el('div', 'list-item',
-      `<div class="body">` +
-        `<b>${esc(m.tieu_de)}</b>${trangThaiTag}` +
-        (m.mo_ta ? `<span>${esc(m.mo_ta)}</span>` : '') +
-        `<div class="sm" style="margin-top:4px">${nhan} · ${m.so_viec_xong}/${m.so_viec} việc xong · ${esc(m.nguoi_tao_ten)}</div>` +
-        `<div class="bar-row" style="margin-top:8px">` +
-          `<div class="bar"><i class="${mauBar}" style="width:0"></i></div>` +
-          `<div class="pct">${pct}%</div>` +
-        `</div>${nutSua}` +
+    // Thẻ nhỏ gọn: hàng 1 = tên (cắt 1 dòng, rê chuột hiện đủ) + % nổi bật;
+    // hàng 2 = thanh tiến độ; hàng 3 = mô tả 1 dòng; hàng 4 = badge + số việc + nút.
+    const r = el('div', 'mt-the ' + mucMau + (daHuy ? ' mo' : ''),
+      `<div class="mt-the-top">` +
+        `<div class="mt-the-tt" title="${esc(m.tieu_de)}">${esc(m.tieu_de)}</div>` +
+        `<div class="mt-the-pct ${mucMau}">${pct}<span>%</span></div>` +
+      `</div>` +
+      `<div class="bar mt-the-bar"><i class="${mauBar}" style="width:0"></i></div>` +
+      (m.mo_ta ? `<div class="mt-the-mo" title="${esc(m.mo_ta)}">${esc(m.mo_ta)}</div>` : '') +
+      `<div class="mt-the-meta">${badge}` +
+        `<span class="mt-the-viec">${m.so_viec_xong}/${m.so_viec} việc · ${esc(m.nguoi_tao_ten)}</span>` +
+        nutSua +
       `</div>`);
     requestAnimationFrame(() => { r.querySelector('.bar > i').style.width = pct + '%'; });
     return r;
@@ -762,14 +782,8 @@ async function khoiDongMucTieu() {
    TRẠM VIỆC — giao việc cho nhân viên. Theo tinh thần MBOs (quản lý theo mục
    tiêu): mỗi việc BẮT BUỘC có "đầu ra cụ thể", không chỉ mô tả làm gì.
    Luồng trạng thái: moi -> dang_lam -> cho_duyet -> hoan_thanh (hoặc huy).
+   (Nhãn CV_TRANG_THAI đã dời lên đầu file — xem ghi chú ở đó.)
    ========================================================================== */
-const CV_TRANG_THAI = {
-  moi:        { chu: 'Mới giao',    mau: 'mute' },
-  dang_lam:   { chu: 'Đang làm',    mau: 'warn' },
-  cho_duyet:  { chu: 'Chờ duyệt',   mau: 'sage' },
-  hoan_thanh: { chu: 'Hoàn thành',  mau: 'ok' },
-  huy:        { chu: 'Đã huỷ',      mau: 'danger' }
-};
 
 async function khoiDongCongViec() {
   const { danh_ba } = await API.danhBa();
