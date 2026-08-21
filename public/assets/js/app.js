@@ -1401,6 +1401,26 @@ async function khoiDongDonHangHuy() {
     return d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: '2-digit' });
   }
 
+  $('#kd-dhh-dongbo')?.addEventListener('click', async () => {
+    const btn = $('#kd-dhh-dongbo');
+    btn.disabled = true;
+    const cu = btn.textContent;
+    btn.textContent = 'Đang đồng bộ…';
+    $('#kd-dhh-loi').textContent = '';
+    try {
+      await API.kdDongBoDonHang();
+      await taiDonHangHuy();
+    } catch (err) {
+      $('#kd-dhh-loi').textContent = err.message || 'Không đồng bộ được, thử lại nhé.';
+    } finally {
+      btn.disabled = false;
+      btn.textContent = cu;
+    }
+  });
+
+  await taiDonHangHuy();
+
+  async function taiDonHangHuy() {
   const { don_huy, co_bang, co_van_don } = await API.kdDonHangHuy();
   $('#kd-donhanghuy-panel').hidden = false;
   if (!co_bang) {
@@ -1442,6 +1462,7 @@ async function khoiDongDonHangHuy() {
   $('#kd-dhh-dem').textContent = co_van_don
     ? `${don_huy.length} đơn bị hủy sau khi đã chuẩn bị (có mã vận đơn) tháng này`
     : `${don_huy.length} đơn bị hủy tháng này`;
+  }
 }
 
 /* Chăm sóc khách hàng — bảng xếp hạng khách hoàn/hủy nhiều nhất 6 tháng gần đây */

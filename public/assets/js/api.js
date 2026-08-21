@@ -194,6 +194,7 @@ export const API = {
     method: 'POST', body: JSON.stringify({ return_sn: dsReturnSn })
   }),
   kdDonHangHuy: () => goi('/api/kinh-doanh/don-hang-huy'),
+  kdDongBoDonHang: () => goi('/api/kinh-doanh/dong-bo-don-hang', { method: 'POST' }),
 
   /* ---- Kế toán: đơn hoàn cần tra soát tiền ---- */
   ktCanTraSoat: () => goi('/api/ke-toan/can-tra-soat'),
