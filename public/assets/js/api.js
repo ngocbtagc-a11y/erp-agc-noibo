@@ -192,6 +192,7 @@ export const API = {
   kdDayKeToan: (dsReturnSn) => goi('/api/kinh-doanh/day-ke-toan', {
     method: 'POST', body: JSON.stringify({ return_sn: dsReturnSn })
   }),
+  kdDonHangHuy: () => goi('/api/kinh-doanh/don-hang-huy'),
 
   /* ---- Kế toán: đơn hoàn cần tra soát tiền ---- */
   ktCanTraSoat: () => goi('/api/ke-toan/can-tra-soat'),

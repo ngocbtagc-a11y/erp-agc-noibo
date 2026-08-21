@@ -1269,6 +1269,51 @@ if (TOI.quyen.includes('kinhdoanh')) {
     try { await khoiDongDoiSoatSan(); } catch (e) { console.error('Đối soát sàn:', e); }
     try { await khoiDongCSKH(); } catch (e) { console.error('CSKH:', e); }
   }
+  try { await khoiDongDonHangHuy(); } catch (e) { console.error('Đơn hàng bị hủy:', e); }
+}
+
+/* Vận hành sàn — đơn hàng bị HỦY trước khi giao (Order API, khác Đơn hoàn) */
+async function khoiDongDonHangHuy() {
+  // Đổi unix (giây) -> "dd/mm/yy"
+  function ngayVN(unix) {
+    if (!unix) return '';
+    const d = new Date(Number(unix) * 1000);
+    if (isNaN(d)) return '';
+    return d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: '2-digit' });
+  }
+
+  const { don_huy, co_bang } = await API.kdDonHangHuy();
+  $('#kd-donhanghuy-panel').hidden = false;
+  if (!co_bang) {
+    $('#kd-dhh-dem').textContent = 'Chưa nạp migration them-donhang-huy.sql';
+    $('#kd-dhh-trong').hidden = false;
+    $('#kd-dhh-trong').textContent = 'Máy chủ chưa nạp cấu trúc dữ liệu cho mục này — báo Sếp Ngọc nạp migration them-donhang-huy.sql.';
+    return;
+  }
+  const NHAN_HUY_BOI = { buyer: 'Khách hàng', seller: 'Người bán', system: 'Hệ thống' };
+  veBang('#kd-dhh-bang', don_huy, r => {
+    const ngTag = r.nguon === 'tiktok'
+      ? '<span class="tag mute">TikTok</span>'
+      : '<span class="tag sage">Shopee</span>';
+    const tien = r.tong_tien != null
+      ? tienVN(Math.round(r.tong_tien / 100000)) + ' ' + esc(r.tien_te || '')
+      : '—';
+    const spTen = r.san_pham_ten || '—';
+    const spSku = r.san_pham_sku || '';
+    const spCell = `<td class="sm" title="${esc(spTen)}">${esc(spTen)}` +
+      (spSku ? `<div class="phu">${esc(spSku)}</div>` : '') + `</td>`;
+    const lyDo = r.huy_ly_do_khach || r.huy_ly_do || '—';
+    return `<td>${ngTag}</td>` +
+      `<td class="sm">${ngayVN(r.tao_luc_san)}</td>` +
+      `<td class="sm">${esc(r.order_sn)}</td>` +
+      `<td class="sm">${esc(r.nguoi_mua || '—')}</td>` +
+      spCell +
+      `<td class="num">${tien}</td>` +
+      `<td class="sm">${esc(NHAN_HUY_BOI[r.huy_boi] || r.huy_boi || '—')}</td>` +
+      `<td class="sm">${esc(lyDo)}</td>`;
+  });
+  $('#kd-dhh-trong').hidden = don_huy.length > 0;
+  $('#kd-dhh-dem').textContent = `${don_huy.length} đơn bị hủy tháng này`;
 }
 
 /* Chăm sóc khách hàng — bảng xếp hạng khách hoàn/hủy nhiều nhất 6 tháng gần đây */

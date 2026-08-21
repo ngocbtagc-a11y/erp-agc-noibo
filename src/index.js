@@ -1760,6 +1760,36 @@ async function kdTongQuanDoanhThu(req, env) {
 }
 
 /* ==========================================================================
+   ĐƠN HÀNG BỊ HỦY trước khi giao (Order API — KHÁC "Đơn hoàn/Trả hàng" ở
+   bảng don_hoan). Đơn khách hủy khi CHƯA từng xuất kho, hoặc hệ thống/người
+   bán tự hủy — hàng vẫn nguyên trong kho, không phải luồng xử lý của Kho vận.
+   Chỉ có Shopee (đã lấy được cancel_reason/cancel_by) — TikTok làm sau.
+   Xem migrations/them-donhang-huy.sql + dongBoDonHangNen() trong shopee.js.
+   ========================================================================== */
+async function donHangHuy(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  if (!duocXemTab(phien.vai_tro, 'kinhdoanh')) return loi('Bạn không có quyền', 403);
+
+  const _vn = new Date(Date.now() + 7 * 3600 * 1000);
+  const dauThangSec = Math.floor(Date.UTC(_vn.getUTCFullYear(), _vn.getUTCMonth(), 1) / 1000) - 7 * 3600;
+
+  try {
+    const { results } = await env.DB.prepare(`
+      SELECT order_sn, nguon, tong_tien, tien_te, nguoi_mua, so_sp,
+             san_pham_ten, san_pham_sku, huy_ly_do, huy_boi, huy_ly_do_khach,
+             tao_luc_san, cap_nhat_san
+        FROM don_hang
+       WHERE trang_thai = 'CANCELLED' AND CAST(tao_luc_san AS INTEGER) >= ?
+       ORDER BY cap_nhat_san DESC LIMIT 300
+    `).bind(dauThangSec).all();
+    return json({ don_huy: results, co_bang: true });
+  } catch {
+    return json({ don_huy: [], co_bang: false });   // chưa nạp migration them-donhang-huy.sql
+  }
+}
+
+/* ==========================================================================
    HÀNG HỎNG DO VẬN CHUYỂN (đơn huỷ) — Kho phân loại xong đẩy sang đây, Kế
    toán + Kho cứ cuối tháng gom lại lập 1 biên bản hủy chung (Sếp Ngọc chốt
    20/08/2026). Khác "Đơn hoàn cần tra soát tiền" (đó là tiền hoàn, đây là
@@ -1997,6 +2027,7 @@ const DUONG_DAN = {
   'POST /api/kinh-doanh/day-ke-toan':  kdDayKeToan,
   'GET  /api/kinh-doanh/tong-quan-doanh-thu': kdTongQuanDoanhThu,
   'POST /api/kinh-doanh/dong-bo-don-hang':    kdDongBoDonHang,
+  'GET  /api/kinh-doanh/don-hang-huy':        donHangHuy,
   'GET  /api/ke-toan/can-tra-soat':    ktCanTraSoat,
   'POST /api/ke-toan/da-tra-soat':     ktDaTraSoat,
   'GET  /api/ke-toan/hang-hong':       ktHangHong,
