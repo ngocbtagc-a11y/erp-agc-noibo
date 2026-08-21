@@ -131,35 +131,6 @@
             <button type="button" class="btn-phu" id="cv-nut-mo-form" style="width:auto">+ Giao Mục Tiêu</button>
           </div>
         </div>
-        <div class="panel-body" id="mt-form-body" hidden>
-          <form id="mt-form" class="form-luoi" autocomplete="off">
-            <div class="field">
-              <label>Cấp *</label>
-              <select id="mt-cap" required>
-                <option value="ca_nhan">Cá nhân (tôi)</option>
-                <option value="phong_ban">Phòng ban</option>
-                <option value="cong_ty" id="mt-opt-congty" hidden>Công ty</option>
-              </select>
-            </div>
-            <div class="field" id="mt-field-bophan">
-              <label>Phòng ban / bộ phận *</label>
-              <input type="text" id="mt-bo-phan" placeholder="VD: Kho vận, Kế toán, Vận hành sàn...">
-            </div>
-            <div class="field field-rong">
-              <label>Tên mục tiêu *</label>
-              <input type="text" id="mt-tieu-de" required placeholder="VD: Doanh thu Shopee đạt 30 tỷ trong quý">
-            </div>
-            <div class="field field-rong">
-              <label>Mô tả (tuỳ chọn)</label>
-              <textarea id="mt-mo-ta" rows="2" placeholder="Bối cảnh, con số cụ thể, cách đo..."></textarea>
-            </div>
-            <div class="field field-nut" style="display:flex; gap:10px">
-              <button type="submit" class="btn-primary" id="mt-nut-luu" style="width:auto">Lưu mục tiêu</button>
-              <button type="button" class="btn-phu" id="mt-nut-huy" style="width:auto">Hủy</button>
-            </div>
-          </form>
-          <div class="form-loi" id="mt-loi"></div>
-        </div>
         <div class="panel-body" style="padding-top:0">
           <p class="hint" style="margin:0 0 14px">Mục tiêu 3 cấp: Công ty → Phòng ban → Cá nhân. Bấm vào 1 thẻ mục tiêu để xem chi tiết việc gắn vào. Tiến độ tự tính từ việc đã Hoàn thành, không nhập tay.</p>
 
@@ -174,60 +145,6 @@
           <div class="mt-nhom-nhan" style="margin-top:18px">Cấp cá nhân</div>
           <div id="mt-canhan-list"></div>
           <div class="empty" id="mt-canhan-trong" hidden>Chưa có mục tiêu cá nhân nào cho quý này.</div>
-        </div>
-
-        <div class="panel-body mt-viec-body">
-          <p class="hint" style="margin:0">Tự thêm việc cần làm cho bản thân (chọn "Tôi"), hoặc giao cho người khác rõ đầu ra. Mời thêm người phối hợp để làm cùng. Gắn vào mục tiêu ở trên (tuỳ chọn) để tự tính tiến độ.</p>
-        </div>
-        <div class="panel-body" id="cv-form-body" hidden>
-          <form id="cv-form" class="form-luoi" autocomplete="off">
-            <div class="field field-rong">
-              <label>Giao cho ai * <span class="hint">(người chịu trách nhiệm chính)</span></label>
-              <select id="cv-nguoi-nhan" required><option value="">— Chọn người nhận việc —</option></select>
-            </div>
-            <div class="field field-rong">
-              <label>Tên việc *</label>
-              <input type="text" id="cv-tieu-de" required placeholder="Ví dụ: Rà soát tồn kho lô hàng chè chưng yến">
-            </div>
-            <div class="field field-rong">
-              <label>Đầu ra cụ thể cần đạt *</label>
-              <textarea id="cv-dau-ra" required rows="2" placeholder="Không ghi 'làm gì' — ghi rõ XONG thì kết quả trông như thế nào. Ví dụ: File Excel đối chiếu tồn thực tế vs sổ sách, khớp 100%, gửi trước 17h."></textarea>
-            </div>
-            <div class="field">
-              <label>Hạn chót (tuỳ chọn)</label>
-              <input type="date" id="cv-han-chot">
-            </div>
-
-            <div class="field field-rong" style="margin-bottom:0">
-              <button type="button" class="btn-nho" id="cv-nut-tuychon">+ Thêm tuỳ chọn (mục tiêu, người phối hợp, ghi chú)</button>
-            </div>
-            <div class="field-rong" id="cv-tuychon-them" hidden>
-              <div class="field field-rong">
-                <label>Thuộc mục tiêu <span class="hint">(tuỳ chọn — để tự tính tiến độ mục tiêu)</span></label>
-                <select id="cv-muc-tieu"><option value="">— Không gắn mục tiêu —</option></select>
-              </div>
-              <div class="field field-rong">
-                <label>Người phối hợp <span class="hint">(tuỳ chọn — chọn nhiều người hỗ trợ)</span></label>
-                <div class="search cv-ph-search">
-                  <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-                    <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
-                  </svg>
-                  <input type="text" id="cv-phoi-hop-tim" placeholder="Gõ tên để lọc…">
-                </div>
-                <div id="cv-phoi-hop" class="cv-phoihop"></div>
-              </div>
-              <div class="field field-rong">
-                <label>Ghi chú thêm (tuỳ chọn)</label>
-                <textarea id="cv-mo-ta" rows="2" placeholder="Bối cảnh, cách làm gợi ý, ai cần phối hợp…"></textarea>
-              </div>
-            </div>
-
-            <div class="field field-nut" style="display:flex; gap:10px">
-              <button type="submit" class="btn-primary" id="cv-nut-luu" style="width:auto">Giao việc</button>
-              <button type="button" class="btn-phu" id="cv-nut-huy" style="width:auto">Hủy</button>
-            </div>
-          </form>
-          <div class="form-loi" id="cv-loi"></div>
         </div>
       </div>
 
@@ -1298,6 +1215,100 @@
       <button class="btn-phu" id="mkModalChep">Chép cả hai</button>
       <button class="btn-primary" id="mkModalDong">Đã chép, đóng lại</button>
     </div>
+  </div>
+</div>
+
+<!-- Hộp "+ Thêm mục tiêu" — sổ ra màn hình phụ (modal) thay vì sổ ngay dưới
+     nút, để cùng chỗ với hộp "+ Giao Mục Tiêu" bên dưới, khỏi lúc thì trên
+     lúc thì dưới (Sếp Ngọc bắt lỗi 21/08/2026: "ngáo đét, sổ ra màn hình
+     phụ đi cho dễ làm"). -->
+<div class="modal-nen" id="mtFormModalNen" hidden>
+  <div class="modal">
+    <h4>+ Thêm mục tiêu</h4>
+    <form id="mt-form" class="form-luoi" autocomplete="off">
+      <div class="field">
+        <label>Cấp *</label>
+        <select id="mt-cap" required>
+          <option value="ca_nhan">Cá nhân (tôi)</option>
+          <option value="phong_ban">Phòng ban</option>
+          <option value="cong_ty" id="mt-opt-congty" hidden>Công ty</option>
+        </select>
+      </div>
+      <div class="field" id="mt-field-bophan">
+        <label>Phòng ban / bộ phận *</label>
+        <input type="text" id="mt-bo-phan" placeholder="VD: Kho vận, Kế toán, Vận hành sàn...">
+      </div>
+      <div class="field field-rong">
+        <label>Tên mục tiêu *</label>
+        <input type="text" id="mt-tieu-de" required placeholder="VD: Doanh thu Shopee đạt 30 tỷ trong quý">
+      </div>
+      <div class="field field-rong">
+        <label>Mô tả (tuỳ chọn)</label>
+        <textarea id="mt-mo-ta" rows="2" placeholder="Bối cảnh, con số cụ thể, cách đo..."></textarea>
+      </div>
+      <div class="field field-nut" style="display:flex; gap:10px">
+        <button type="submit" class="btn-primary" id="mt-nut-luu" style="width:auto">Lưu mục tiêu</button>
+        <button type="button" class="btn-phu" id="mt-nut-huy" style="width:auto">Hủy</button>
+      </div>
+    </form>
+    <div class="form-loi" id="mt-loi"></div>
+  </div>
+</div>
+
+<!-- Hộp "+ Giao Mục Tiêu" — cùng kiểu modal với hộp Thêm mục tiêu ở trên, mở
+     ra giữa màn hình chứ không sổ dưới nút, nhất quán 2 chỗ với nhau. -->
+<div class="modal-nen" id="cvFormModalNen" hidden>
+  <div class="modal">
+    <h4>+ Giao Mục Tiêu</h4>
+    <p class="hint" style="margin:0 0 16px">Tự thêm việc cần làm cho bản thân (chọn "Tôi"), hoặc giao cho người khác rõ đầu ra. Mời thêm người phối hợp để làm cùng. Gắn vào mục tiêu (tuỳ chọn) để tự tính tiến độ.</p>
+    <form id="cv-form" class="form-luoi" autocomplete="off">
+      <div class="field field-rong">
+        <label>Giao cho ai * <span class="hint">(người chịu trách nhiệm chính)</span></label>
+        <select id="cv-nguoi-nhan" required><option value="">— Chọn người nhận việc —</option></select>
+      </div>
+      <div class="field field-rong">
+        <label>Tên việc *</label>
+        <input type="text" id="cv-tieu-de" required placeholder="Ví dụ: Rà soát tồn kho lô hàng chè chưng yến">
+      </div>
+      <div class="field field-rong">
+        <label>Đầu ra cụ thể cần đạt *</label>
+        <textarea id="cv-dau-ra" required rows="2" placeholder="Không ghi 'làm gì' — ghi rõ XONG thì kết quả trông như thế nào. Ví dụ: File Excel đối chiếu tồn thực tế vs sổ sách, khớp 100%, gửi trước 17h."></textarea>
+      </div>
+      <div class="field">
+        <label>Hạn chót (tuỳ chọn)</label>
+        <input type="date" id="cv-han-chot">
+      </div>
+
+      <div class="field field-rong" style="margin-bottom:0">
+        <button type="button" class="btn-nho" id="cv-nut-tuychon">+ Thêm tuỳ chọn (mục tiêu, người phối hợp, ghi chú)</button>
+      </div>
+      <div class="field-rong" id="cv-tuychon-them" hidden>
+        <div class="field field-rong">
+          <label>Thuộc mục tiêu <span class="hint">(tuỳ chọn — để tự tính tiến độ mục tiêu)</span></label>
+          <select id="cv-muc-tieu"><option value="">— Không gắn mục tiêu —</option></select>
+        </div>
+        <div class="field field-rong">
+          <label>Người phối hợp <span class="hint">(tuỳ chọn — chọn nhiều người hỗ trợ)</span></label>
+          <div class="search cv-ph-search">
+            <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+            </svg>
+            <input type="text" id="cv-phoi-hop-tim" placeholder="Gõ tên để lọc…">
+          </div>
+          <div id="cv-phoi-hop" class="cv-phoihop"></div>
+        </div>
+        <div class="field field-rong">
+          <label>Ghi chú thêm (tuỳ chọn)</label>
+          <textarea id="cv-mo-ta" rows="2" placeholder="Bối cảnh, cách làm gợi ý, ai cần phối hợp…"></textarea>
+        </div>
+      </div>
+
+      <div class="field field-nut" style="display:flex; gap:10px">
+        <button type="submit" class="btn-primary" id="cv-nut-luu" style="width:auto">Giao việc</button>
+        <button type="button" class="btn-phu" id="cv-nut-huy" style="width:auto">Hủy</button>
+      </div>
+    </form>
+    <div class="form-loi" id="cv-loi"></div>
   </div>
 </div>
 

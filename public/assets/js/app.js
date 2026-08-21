@@ -628,7 +628,6 @@ async function khoiDongVinhDanh() {
    công việc (Trạm Mục Tiêu) đã gắn vào mục tiêu mà trạng thái = hoàn_thành.
    ========================================================================== */
 async function khoiDongMucTieu() {
-  const oForm = $('#mt-form-body');
   const oCap = $('#mt-cap');
   const oBoPhanField = $('#mt-field-bophan');
 
@@ -642,16 +641,14 @@ async function khoiDongMucTieu() {
   oCap.addEventListener('change', capNhatBoPhanField);
   capNhatBoPhanField();
 
-  // Đổi chữ nút theo trạng thái mở/đóng — cùng khuôn mẫu với nút Giao Mục
-  // Tiêu (dongMoFormCv), tránh tình trạng mở form ra rồi không thấy nút đóng
-  // ở đâu, phải kéo xuống tận cuối form mới thấy "Hủy" (Sếp Ngọc bắt lỗi
-  // 21/08/2026: "sổ ra xong ko có nút đóng à").
-  const nutMoMt = $('#mt-nut-mo-form');
-  function dongMoFormMt(hienForm) {
-    oForm.hidden = !hienForm;
-    nutMoMt.textContent = hienForm ? '✕ Đóng' : '+ Thêm mục tiêu';
-  }
-  nutMoMt.addEventListener('click', () => dongMoFormMt(oForm.hidden));
+  // "+ Thêm mục tiêu" mở HỘP GIỮA MÀN HÌNH (modal), không sổ ngay dưới nút
+  // nữa — trước đây "+ Giao Mục Tiêu" lại sổ ở tít dưới cùng trang, 2 nút
+  // cạnh nhau mà 2 kiểu khác nhau (Sếp Ngọc bắt lỗi 21/08/2026: "ngáo đét,
+  // sổ ra màn hình phụ đi cho dễ làm") — giờ cả 2 cùng 1 kiểu modal.
+  const mtFormModal = $('#mtFormModalNen');
+  function dongMoFormMt(hienForm) { mtFormModal.hidden = !hienForm; }
+  $('#mt-nut-mo-form').addEventListener('click', () => dongMoFormMt(true));
+  mtFormModal.addEventListener('click', e => { if (e.target === mtFormModal) dongMoFormMt(false); });
   $('#mt-nut-huy').addEventListener('click', () => {
     $('#mt-form').reset();
     capNhatBoPhanField();
@@ -914,14 +911,13 @@ async function khoiDongCongViec() {
     });
   }
 
-  // Ẩn/hiện form giao việc — đổi chữ nút theo trạng thái + có nút "Hủy" riêng
-  // trong form, cùng lỗi/cùng sửa với Vinh danh (Sếp Ngọc bắt lỗi 20/08/2026).
-  const nutMoCv = $('#cv-nut-mo-form');
-  function dongMoFormCv(hienForm) {
-    $('#cv-form-body').hidden = !hienForm;
-    nutMoCv.textContent = hienForm ? '✕ Đóng' : '+ Giao Mục Tiêu';
-  }
-  nutMoCv.addEventListener('click', () => dongMoFormCv($('#cv-form-body').hidden));
+  // "+ Giao Mục Tiêu" mở HỘP GIỮA MÀN HÌNH (modal) — cùng kiểu với hộp
+  // "+ Thêm mục tiêu" cạnh nó, khỏi lệch chỗ sổ ra như trước (Sếp Ngọc bắt
+  // lỗi 21/08/2026: "ngáo đét, sổ ra màn hình phụ đi cho dễ làm").
+  const cvFormModal = $('#cvFormModalNen');
+  function dongMoFormCv(hienForm) { cvFormModal.hidden = !hienForm; }
+  $('#cv-nut-mo-form').addEventListener('click', () => dongMoFormCv(true));
+  cvFormModal.addEventListener('click', e => { if (e.target === cvFormModal) dongMoFormCv(false); });
   $('#cv-nut-huy').addEventListener('click', () => {
     $('#cv-form').reset();
     dongMoFormCv(false);
@@ -972,7 +968,6 @@ async function khoiDongCongViec() {
     const oMt = $('#cv-muc-tieu');
     if (oMt && mucTieuId) { oMt.value = mucTieuId; moTuyChon(true); }
     apDungCheDoTodo();
-    $('#cv-form-body').scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
   // Chuyển màn Việc tôi nhận / Việc tôi giao

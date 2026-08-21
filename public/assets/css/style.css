@@ -1532,6 +1532,8 @@ tr.kd-chiadoi td {
 .modal {
   width: 100%;
   max-width: 440px;
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
   background: var(--card);
   border-radius: var(--r-lg);
   padding: 26px;
