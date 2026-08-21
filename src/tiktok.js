@@ -314,9 +314,20 @@ async function coBangDonHang(env) {
   return _coBangDonHang;
 }
 
+/* Chưa có thì lấy ĐẦU NGÀY HÔM NAY (giờ VN) làm nền, không lùi cả tháng
+   (chị Huyền chốt 21/08/2026 — cũng nhẹ hơn cho giới hạn subrequest dưới đây). */
 function moGocDongBoDonHang(kn) {
-  return kn.dh_dong_bo_den ? Number(kn.dh_dong_bo_den) : nowSec() - 30 * 86400;
+  if (kn.dh_dong_bo_den) return Number(kn.dh_dong_bo_den);
+  const vn = new Date(Date.now() + 7 * 3600 * 1000);
+  return Math.floor(Date.UTC(vn.getUTCFullYear(), vn.getUTCMonth(), vn.getUTCDate()) / 1000) - 7 * 3600;
 }
+
+/* Cloudflare Workers giới hạn ~50 subrequest/lần chạy (gói free) — GHI NGAY
+   từng trang thay vì gom tới cuối, và mốc dh_dong_bo_den chỉ tiến tới đơn
+   cuối ĐÃ GHI XONG (không tiến tới "bây giờ" nếu chưa quét hết), giống hệt
+   cách sửa bên shopee.js (Claude 21/08/2026, sau khi shop thật báo lỗi
+   "Too many subrequests"). */
+const GIOI_HAN_SUBREQ = 35;
 
 export async function dongBoDonHangNen(env) {
   if (!daCauHinh(env)) return null;
@@ -335,10 +346,10 @@ export async function dongBoDonHangNen(env) {
   const tuGoc = moGocDongBoDonHang(kn);
   const denGoc = nowSec();
   const path = '/order/202309/orders/search';
-  let pageToken = '', con = true, trang = 0, them = 0;
-  const cauLenh = [];
+  let pageToken = '', con = true, trang = 0, them = 0, subReq = 0, mocMoi = null;
 
   while (con && trang < 20) {                        // chặn trần 20 trang cho an toàn
+    if (subReq >= GIOI_HAN_SUBREQ) break;
     const bodyStr = JSON.stringify({
       update_time_ge: tuGoc, update_time_lt: denGoc,
       sort_field: 'update_time', sort_order: 'DESC'
@@ -355,10 +366,12 @@ export async function dongBoDonHangNen(env) {
       headers: { 'x-tts-access-token': kn.access_token, 'Content-Type': 'application/json' },
       body: bodyStr
     });
+    subReq++;
     const kq = await res.json();
     if (kq.code && kq.code !== 0) throw new Error('TikTok báo lỗi (orders/search): ' + (kq.message || kq.code));
 
     const ds = (kq.data && kq.data.orders) || [];
+    const cauLenh = [];
     for (const o of ds) {
       const orderId = o.id || o.order_id;
       if (!orderId) continue;
@@ -382,7 +395,13 @@ export async function dongBoDonHangNen(env) {
         o.update_time ? String(o.update_time) : null,
         JSON.stringify(o)
       ));
+      const ut = Number(o.update_time) || 0;
+      if (ut && (mocMoi === null || ut > mocMoi)) mocMoi = ut;
       them++;
+    }
+    if (cauLenh.length) {
+      await env.DB.batch(cauLenh);
+      subReq++;
     }
 
     pageToken = (kq.data && kq.data.next_page_token) || '';
@@ -390,12 +409,11 @@ export async function dongBoDonHangNen(env) {
     trang++;
   }
 
-  for (let i = 0; i < cauLenh.length; i += 50) {
-    await env.DB.batch(cauLenh.slice(i, i + 50));
+  const mocLuu = con ? mocMoi : denGoc;
+  if (mocLuu) {
+    await env.DB.prepare('UPDATE tiktok_ket_noi SET dh_dong_bo_den = ? WHERE shop_id = ?')
+                .bind(String(mocLuu), kn.shop_id).run();
   }
-
-  await env.DB.prepare('UPDATE tiktok_ket_noi SET dh_dong_bo_den = ? WHERE shop_id = ?')
-              .bind(String(denGoc), kn.shop_id).run();
   return them;
 }
 
