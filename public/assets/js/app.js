@@ -464,10 +464,6 @@ const CV_TRANG_THAI = {
   huy:        { chu: 'Đã huỷ',      mau: 'danger' }
 };
 
-/* -- Tổng quan (còn là dữ liệu mẫu) -- */
-veThe('#tq-the', DB.tongQuan.the);
-veChart('#tq-chart', DB.tongQuan.doanhThu6Thang);
-veDanhSach('#tq-canhbao', DB.tongQuan.cannBaoDong);
 await khoiDongVinhDanh();
 await khoiDongMucTieu();
 
@@ -1502,26 +1498,10 @@ if (TOI.quyen.includes('nhansu')) {
       `<td class="sm">${esc(r.ngay_vao)}</td>` +
       (xem_luong ? `<td class="num">${esc(tienVN(r.luong))}</td>` : '');
   });
-
-  // Các khối dưới đây vẫn là dữ liệu mẫu
-  veThe('#ns-the', DB.nhanSu.the);
-  veTienDo('#ns-chuyendoi', DB.nhanSu.chuyenDoi);
-  veDanhSach('#ns-lich', DB.nhanSu.lich);
 }
 
 /* -- Kinh doanh -- */
 if (TOI.quyen.includes('kinhdoanh')) {
-  // Doanh thu theo kênh / đối thủ / sản phẩm bán chạy vẫn là dữ liệu mẫu
-  veThe('#kd-the', DB.kinhDoanh.the);
-  veChart('#kd-chart', DB.kinhDoanh.theoKenh);
-  veDanhSach('#kd-doithu', DB.kinhDoanh.doiThu);
-  veBang('#kd-bang', DB.kinhDoanh.topSanPham, r =>
-    `<td><div class="nm">${esc(r.sp)}</div></td>` +
-    `<td class="sm">${esc(r.dm)}</td>` +
-    `<td class="num">${esc(r.dh)}</td>` +
-    `<td class="num">${esc(r.dt)}</td>` +
-    `<td><span class="tag ${esc(r.tt)}">${esc(r.ttx)}</span></td>`);
-
   // Chuyển màn Vận hành sàn / R&D (giống bộ pills của Kho vận)
   $('#kdSeg')?.addEventListener('click', e => {
     const nut = e.target.closest('.seg-nut');
@@ -2733,20 +2713,8 @@ async function khoiDongLichSuHoan() {
   await veLichSu();
 }
 
-/* -- Kế toán (còn là dữ liệu mẫu) -- */
+/* -- Kế toán -- */
 if (TOI.quyen.includes('ketoan')) {
-  veThe('#kt-the', DB.keToan.the);
-  veChart('#kt-chart', DB.keToan.chiPhi);
-  veDanhSach('#kt-thue', DB.keToan.thue.map(x => ({
-    m: x.t === 'Hoàn thành' ? '' : (x.t === 'Đang xử lý' ? 'warn' : 'danger'),
-    b: x.b, s: x.s, t: x.t
-  })));
-  veBang('#kt-bang', DB.keToan.congNo, r =>
-    `<td><div class="nm">${esc(r.dt)}</div></td>` +
-    `<td><span class="tag ${r.loai === 'Phải thu' ? 'ok' : 'mute'}">${esc(r.loai)}</span></td>` +
-    `<td class="num">${esc(r.st)}</td>` +
-    `<td class="sm">${esc(r.han)}</td>` +
-    `<td><span class="tag ${esc(r.tt)}">${esc(r.ttx)}</span></td>`);
   khoiDongKeToanTraSoat();   // đơn hoàn Vận hành sàn đẩy sang (máy chủ thật)
   khoiDongKeToanHangHong();  // hàng hỏng do vận chuyển — biên bản hủy hàng tháng
 }
