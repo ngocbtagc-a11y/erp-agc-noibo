@@ -127,7 +127,6 @@
           <h4>🎯 Trạm Mục Tiêu (MBOs)</h4>
           <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; justify-content:flex-end">
             <span class="hint" id="mt-ky-hint"></span>
-            <button type="button" class="btn-phu" id="mt-nut-mo-form" style="width:auto">+ Thêm mục tiêu</button>
             <button type="button" class="btn-phu" id="cv-nut-mo-form" style="width:auto">+ Giao Mục Tiêu</button>
           </div>
         </div>
@@ -1266,26 +1265,17 @@
   </div>
 </div>
 
-<!-- Hộp "+ Thêm mục tiêu" — sổ ra màn hình phụ (modal) thay vì sổ ngay dưới
-     nút, để cùng chỗ với hộp "+ Giao Mục Tiêu" bên dưới, khỏi lúc thì trên
-     lúc thì dưới (Sếp Ngọc bắt lỗi 21/08/2026: "ngáo đét, sổ ra màn hình
-     phụ đi cho dễ làm"). -->
+<!-- Hộp SỬA mục tiêu (bấm nút "Sửa" trên thẻ mục tiêu) — KHÔNG dùng để tạo
+     mới nữa (Sếp Ngọc chốt 21/08/2026: "thêm mục tiêu và giao mục tiêu bản
+     chất như nhau, giao mục tiêu vẫn có mục giao cho tôi, đang trùng lặp
+     thừa thãi — gộp chung đi"). Tạo mục tiêu MỚI giờ nằm trong hộp "+ Giao
+     Mục Tiêu" bên dưới, phần "Thuộc mục tiêu" → "+ Tạo mục tiêu mới…". Cấp/
+     Phòng ban không sửa được sau khi tạo (mtCapNhat không nhận 2 trường
+     này) nên hộp này chỉ còn Tên + Mô tả. -->
 <div class="modal-nen" id="mtFormModalNen" hidden>
   <div class="modal">
-    <h4 id="mtFormTieuDe">+ Thêm mục tiêu</h4>
+    <h4>Sửa mục tiêu</h4>
     <form id="mt-form" class="form-luoi" autocomplete="off">
-      <div class="field" id="mt-field-cap">
-        <label>Cấp *</label>
-        <select id="mt-cap" required>
-          <option value="ca_nhan">Cá nhân (tôi)</option>
-          <option value="phong_ban">Phòng ban</option>
-          <option value="cong_ty" id="mt-opt-congty" hidden>Công ty</option>
-        </select>
-      </div>
-      <div class="field" id="mt-field-bophan">
-        <label>Phòng ban / bộ phận *</label>
-        <input type="text" id="mt-bo-phan" placeholder="VD: Kho vận, Kế toán, Vận hành sàn...">
-      </div>
       <div class="field field-rong">
         <label>Tên mục tiêu *</label>
         <input type="text" id="mt-tieu-de" required placeholder="VD: Doanh thu Shopee đạt 30 tỷ trong quý">
@@ -1295,7 +1285,7 @@
         <textarea id="mt-mo-ta" rows="2" placeholder="Bối cảnh, con số cụ thể, cách đo..."></textarea>
       </div>
       <div class="field field-nut" style="display:flex; gap:10px">
-        <button type="submit" class="btn-primary" id="mt-nut-luu" style="width:auto">Lưu mục tiêu</button>
+        <button type="submit" class="btn-primary" id="mt-nut-luu" style="width:auto">Lưu thay đổi</button>
         <button type="button" class="btn-phu" id="mt-nut-huy" style="width:auto">Hủy</button>
       </div>
     </form>
@@ -1303,12 +1293,15 @@
   </div>
 </div>
 
-<!-- Hộp "+ Giao Mục Tiêu" — cùng kiểu modal với hộp Thêm mục tiêu ở trên, mở
-     ra giữa màn hình chứ không sổ dưới nút, nhất quán 2 chỗ với nhau. -->
+<!-- Hộp "+ Giao Mục Tiêu" — GỘP CHUNG thêm mục tiêu + giao việc thành 1
+     (Sếp Ngọc: "bản chất nó như nhau, giao mục tiêu vẫn có mục giao cho
+     tôi, đang trùng lặp thừa thãi"). Mọi việc BẮT BUỘC có người chịu trách
+     nhiệm chính; mục tiêu (nếu cần) tạo NGAY tại đây thay vì phải làm 2
+     bước ở 2 chỗ khác nhau. -->
 <div class="modal-nen" id="cvFormModalNen" hidden>
   <div class="modal">
     <h4>+ Giao Mục Tiêu</h4>
-    <p class="hint" style="margin:0 0 16px">Tự thêm việc cần làm cho bản thân (chọn "Tôi"), hoặc giao cho người khác rõ đầu ra. Mời thêm người phối hợp để làm cùng. Gắn vào mục tiêu (tuỳ chọn) để tự tính tiến độ.</p>
+    <p class="hint" style="margin:0 0 16px">Tự thêm việc cần làm cho bản thân (chọn "Tôi"), hoặc giao cho người khác rõ đầu ra. Mời thêm người phối hợp để làm cùng. Cần mục tiêu mới thì tạo ngay trong mục "Thuộc mục tiêu" bên dưới.</p>
     <form id="cv-form" class="form-luoi" autocomplete="off">
       <div class="field field-rong">
         <label>Giao cho ai * <span class="hint">(người chịu trách nhiệm chính)</span></label>
@@ -1333,7 +1326,28 @@
       <div class="field-rong" id="cv-tuychon-them" hidden>
         <div class="field field-rong">
           <label>Thuộc mục tiêu <span class="hint">(tuỳ chọn — để tự tính tiến độ mục tiêu)</span></label>
-          <select id="cv-muc-tieu"><option value="">— Không gắn mục tiêu —</option></select>
+          <select id="cv-muc-tieu">
+            <option value="">— Không gắn mục tiêu —</option>
+            <option value="_moi_">+ Tạo mục tiêu mới…</option>
+          </select>
+        </div>
+        <div class="field-rong" id="cv-mtm-khoi" hidden>
+          <div class="field">
+            <label>Cấp mục tiêu mới *</label>
+            <select id="cv-mtm-cap">
+              <option value="ca_nhan">Cá nhân (tôi)</option>
+              <option value="phong_ban">Phòng ban</option>
+              <option value="cong_ty" id="cv-mtm-opt-congty" hidden>Công ty</option>
+            </select>
+          </div>
+          <div class="field" id="cv-mtm-field-bophan">
+            <label>Phòng ban / bộ phận *</label>
+            <input type="text" id="cv-mtm-bophan" placeholder="VD: Kho vận, Kế toán, Vận hành sàn...">
+          </div>
+          <div class="field field-rong">
+            <label>Tên mục tiêu mới *</label>
+            <input type="text" id="cv-mtm-tieude" placeholder="VD: Doanh thu Shopee đạt 30 tỷ trong quý">
+          </div>
         </div>
         <div class="field field-rong">
           <label>Người phối hợp <span class="hint">(tuỳ chọn — chọn nhiều người hỗ trợ)</span></label>
@@ -1346,7 +1360,7 @@
           <div id="cv-phoi-hop" class="cv-phoihop"></div>
         </div>
         <div class="field field-rong">
-          <label>Ghi chú thêm (tuỳ chọn)</label>
+          <label>Ghi chú thêm (tuỳ chọn) <span class="hint" id="cv-mo-ta-hint"></span></label>
           <textarea id="cv-mo-ta" rows="2" placeholder="Bối cảnh, cách làm gợi ý, ai cần phối hợp…"></textarea>
         </div>
       </div>

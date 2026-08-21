@@ -634,61 +634,27 @@ async function khoiDongVinhDanh() {
    công việc (Trạm Mục Tiêu) đã gắn vào mục tiêu mà trạng thái = hoàn_thành.
    ========================================================================== */
 async function khoiDongMucTieu() {
-  const oCap = $('#mt-cap');
-  const oFieldCap = $('#mt-field-cap');
-  const oBoPhanField = $('#mt-field-bophan');
-  const oTieuDeForm = $('#mtFormTieuDe');
-  const oNutLuu = $('#mt-nut-luu');
-
-  // Chỉ Giám đốc/Phó Giám đốc mới thấy lựa chọn "Công ty" khi tạo mục tiêu —
-  // máy chủ vẫn tự chặn lại nếu cố gửi thẳng (đây chỉ để gọn giao diện).
-  if (TOI.la_admin) $('#mt-opt-congty').hidden = false;
-
-  function capNhatBoPhanField() {
-    oBoPhanField.hidden = (oCap.value !== 'phong_ban');
-  }
-  oCap.addEventListener('change', capNhatBoPhanField);
-  capNhatBoPhanField();
-
-  // "+ Thêm mục tiêu" mở HỘP GIỮA MÀN HÌNH (modal), không sổ ngay dưới nút
-  // nữa — trước đây "+ Giao Mục Tiêu" lại sổ ở tít dưới cùng trang, 2 nút
-  // cạnh nhau mà 2 kiểu khác nhau (Sếp Ngọc bắt lỗi 21/08/2026: "ngáo đét,
-  // sổ ra màn hình phụ đi cho dễ làm") — giờ cả 2 cùng 1 kiểu modal.
-  // Form dùng chung cho THÊM và SỬA — mtDangSuaId null = đang thêm mới, có
-  // giá trị = đang sửa mục tiêu đó (Sếp Ngọc: "ko sửa được mục tiêu... nếu
-  // mục tiêu muốn sửa cho phù hợp tình hình cụ thể phải làm thế nào").
-  // Sửa thì KHOÁ Cấp/Phòng ban (mtCapNhat chỉ nhận tiêu_đề/mô tả/trạng thái,
-  // không đổi cấp được — đổi cấp coi như tạo mục tiêu khác hẳn).
+  // Tạo mục tiêu MỚI giờ nằm trong hộp "+ Giao Mục Tiêu" (khoiDongCongViec
+  // gọi thẳng API.mtTao rồi window.LAM_MOI_MUCTIEU() để làm mới thẻ ở đây)
+  // — Sếp Ngọc chốt 21/08/2026: "thêm mục tiêu và giao mục tiêu bản chất
+  // như nhau, giao mục tiêu vẫn có mục giao cho tôi, đang trùng lặp thừa
+  // thãi, gộp chung đi". Hộp mt-form ở đây giờ CHỈ CÒN dùng để SỬA mục tiêu
+  // đã có (mtCapNhat không đổi được cấp/phòng ban nên hộp sửa không cần 2
+  // trường đó nữa).
   const mtFormModal = $('#mtFormModalNen');
   let mtDangSuaId = null;
 
-  function moFormThem() {
-    mtDangSuaId = null;
-    $('#mt-form').reset();
-    oFieldCap.hidden = false;
-    capNhatBoPhanField();
-    oTieuDeForm.textContent = '+ Thêm mục tiêu';
-    oNutLuu.textContent = 'Lưu mục tiêu';
-    mtFormModal.hidden = false;
-  }
   function moFormSua(m) {
     mtDangSuaId = m.id;
-    oFieldCap.hidden = true;
-    oBoPhanField.hidden = true;
     $('#mt-tieu-de').value = m.tieu_de;
     $('#mt-mo-ta').value = m.mo_ta || '';
-    oTieuDeForm.textContent = 'Sửa mục tiêu';
-    oNutLuu.textContent = 'Lưu thay đổi';
     mtFormModal.hidden = false;
   }
   function dongMoFormMt() {
     mtFormModal.hidden = true;
     mtDangSuaId = null;
     $('#mt-form').reset();
-    oFieldCap.hidden = false;
-    capNhatBoPhanField();
   }
-  $('#mt-nut-mo-form').addEventListener('click', moFormThem);
   mtFormModal.addEventListener('click', e => { if (e.target === mtFormModal) dongMoFormMt(); });
   $('#mt-nut-huy').addEventListener('click', dongMoFormMt);
 
@@ -765,12 +731,15 @@ async function khoiDongMucTieu() {
     (kq.ca_nhan || []).forEach(m => oCN.appendChild(veThe1MucTieu(m)));
     $('#mt-canhan-trong').hidden = (kq.ca_nhan || []).length > 0;
 
-    // Đổ dropdown "Thuộc mục tiêu" trong form Giao việc mới
+    // Đổ dropdown "Thuộc mục tiêu" trong form Giao Mục Tiêu — giữ nguyên tuỳ
+    // chọn "+ Tạo mục tiêu mới…" (hardcode sẵn trong app.html) ở đầu danh
+    // sách, đổ lại tự động mỗi khi rebuild nên phải nối tay vào lại đây.
     const oSel = $('#cv-muc-tieu');
     if (oSel) {
       const dangChon = oSel.value;
       const nhanCap = m => m.cap === 'cong_ty' ? 'Công ty' : (m.cap === 'phong_ban' ? esc(m.bo_phan) : 'Cá nhân');
       oSel.innerHTML = '<option value="">— Không gắn mục tiêu —</option>' +
+        '<option value="_moi_">+ Tạo mục tiêu mới…</option>' +
         DS_MT.filter(m => m.trang_thai === 'dang_thuc_hien').map(m =>
           `<option value="${m.id}">[${nhanCap(m)}] ${esc(m.tieu_de)}</option>`).join('');
       oSel.value = dangChon;
@@ -783,27 +752,11 @@ async function khoiDongMucTieu() {
     $('#mt-loi').textContent = '';
     const nut = $('#mt-nut-luu');
     nut.disabled = true;
-    const tieuDe = $('#mt-tieu-de').value.trim();
-    const moTa = $('#mt-mo-ta').value.trim();
     try {
-      if (mtDangSuaId) {
-        await API.mtCapNhat(mtDangSuaId, { tieu_de: tieuDe, mo_ta: moTa });
-      } else {
-        const capChon = oCap.value;
-        const kq = await API.mtTao({ cap: capChon, bo_phan: $('#mt-bo-phan').value.trim(), tieu_de: tieuDe, mo_ta: moTa });
-        // Mục tiêu CÁ NHÂN về bản chất chính là 1 việc cần làm — tự tạo luôn
-        // việc gắn vào, khỏi phải mở thêm "+ Giao Mục Tiêu" cho cùng 1 thứ
-        // (Sếp Ngọc: "thêm mục tiêu với giao mục tiêu cho cá nhân thì khác
-        // mẹ gì nhau, tích hợp vào 1 đi"). Lỗi ở bước này không chặn người
-        // dùng — mục tiêu đã lưu xong, thêm việc sau vẫn được qua "+ Thêm
-        // việc cho mục tiêu này" ở hộp chi tiết.
-        if (capChon === 'ca_nhan' && kq && kq.id) {
-          try {
-            await API.cvTao({ nguoi_nhan_id: TOI.id, tieu_de: tieuDe, dau_ra: moTa, muc_tieu_id: kq.id });
-            if (window.LAM_MOI_CONGVIEC) window.LAM_MOI_CONGVIEC();
-          } catch { /* im lặng — mục tiêu vẫn tạo thành công */ }
-        }
-      }
+      await API.mtCapNhat(mtDangSuaId, {
+        tieu_de: $('#mt-tieu-de').value.trim(),
+        mo_ta: $('#mt-mo-ta').value.trim()
+      });
       dongMoFormMt();
       await taiLaiMucTieu();
     } catch (err) {
@@ -980,6 +933,7 @@ async function khoiDongCongViec() {
     $('#cv-form').reset();
     dongMoFormCv(false);
     moTuyChon(false);
+    capNhatMtmKhoi();
     apDungCheDoTodo();
   });
 
@@ -1011,6 +965,35 @@ async function khoiDongCongViec() {
   }
   nutTuyChon.addEventListener('click', () => moTuyChon(oTuyChon.hidden));
 
+  // "+ Tạo mục tiêu mới…" ngay trong dropdown "Thuộc mục tiêu" — gộp tạo
+  // mục tiêu vào thẳng đây, khỏi phải làm 2 bước ở 2 chỗ khác nhau (Sếp
+  // Ngọc chốt 21/08/2026: "thêm mục tiêu và giao mục tiêu bản chất như
+  // nhau, giao mục tiêu vẫn có mục giao cho tôi, đang trùng lặp thừa thãi
+  // — gộp chung đi"). Chỉ Giám đốc/Phó Giám đốc mới thấy lựa chọn "Công ty".
+  const oCvMucTieu = $('#cv-muc-tieu');
+  const oMtmKhoi = $('#cv-mtm-khoi');
+  const oMtmCap = $('#cv-mtm-cap');
+  const oMtmBoPhanField = $('#cv-mtm-field-bophan');
+  const oMtmTieuDe = $('#cv-mtm-tieude');
+  const oMoTaHint = $('#cv-mo-ta-hint');
+  if (TOI.la_admin) $('#cv-mtm-opt-congty').hidden = false;
+
+  function capNhatMtmBoPhan() {
+    oMtmBoPhanField.hidden = (oMtmCap.value !== 'phong_ban');
+  }
+  oMtmCap.addEventListener('change', capNhatMtmBoPhan);
+  capNhatMtmBoPhan();
+
+  function capNhatMtmKhoi() {
+    const taoMoi = oCvMucTieu.value === '_moi_';
+    oMtmKhoi.hidden = !taoMoi;
+    oMoTaHint.textContent = taoMoi ? '(cũng dùng làm mô tả cho mục tiêu mới)' : '';
+    // Gợi ý sẵn tên mục tiêu = tên việc — mục tiêu cá nhân thường trùng tên
+    // việc luôn, đỡ phải gõ lại; vẫn sửa được nếu muốn khác.
+    if (taoMoi && !oMtmTieuDe.value) oMtmTieuDe.value = $('#cv-tieu-de').value.trim();
+  }
+  oCvMucTieu.addEventListener('change', capNhatMtmKhoi);
+
   // Bấm "+ Thêm việc cho mục tiêu này" trong hộp chi tiết mục tiêu (Trạm Mục
   // Tiêu, khoiDongMucTieu bên dưới) → mở thẳng form giao việc, tự chọn sẵn
   // đúng mục tiêu đó (Sếp Ngọc: "mục tiêu 0/0 việc thì điền todo kiểu gì" —
@@ -1023,8 +1006,7 @@ async function khoiDongCongViec() {
   window.MO_FORM_GIAO_VIEC = (mucTieuId, nguoiNhanId) => {
     dongMoFormCv(true);
     if (nguoiNhanId) chonNguoiNhan.value = nguoiNhanId;
-    const oMt = $('#cv-muc-tieu');
-    if (oMt && mucTieuId) { oMt.value = mucTieuId; moTuyChon(true); }
+    if (mucTieuId) { oCvMucTieu.value = mucTieuId; capNhatMtmKhoi(); moTuyChon(true); }
     apDungCheDoTodo();
   };
 
@@ -1114,20 +1096,36 @@ async function khoiDongCongViec() {
     $('#cv-loi').textContent = '';
     const nut = $('#cv-nut-luu');
     nut.disabled = true;
+    const moTa = $('#cv-mo-ta').value.trim();
     try {
+      // Chọn "+ Tạo mục tiêu mới…" -> tạo mục tiêu TRƯỚC, lấy id xong mới
+      // gắn vào việc — 1 lần bấm ra cả 2 (Sếp Ngọc: gộp chung thêm mục tiêu
+      // + giao việc, khỏi phải làm 2 bước ở 2 chỗ khác nhau).
+      let mucTieuId = oCvMucTieu.value || null;
+      if (mucTieuId === '_moi_') {
+        const capMoi = oMtmCap.value;
+        const kqMt = await API.mtTao({
+          cap: capMoi,
+          bo_phan: $('#cv-mtm-bophan').value.trim(),
+          tieu_de: (oMtmTieuDe.value.trim() || $('#cv-tieu-de').value.trim()),
+          mo_ta: moTa
+        });
+        mucTieuId = kqMt.id;
+      }
       await API.cvTao({
         nguoi_nhan_id: chonNguoiNhan.value,
         phoi_hop: oPhoiHop ? [...oPhoiHop.querySelectorAll('input:checked')].map(i => i.value) : [],
-        muc_tieu_id: $('#cv-muc-tieu') ? $('#cv-muc-tieu').value || null : null,
+        muc_tieu_id: mucTieuId,
         tieu_de: $('#cv-tieu-de').value.trim(),
         dau_ra: $('#cv-dau-ra').value.trim(),
-        mo_ta: $('#cv-mo-ta').value.trim(),
+        mo_ta: moTa,
         han_chot: $('#cv-han-chot').value || null
       });
       // Gắn việc vào mục tiêu xong -> tiến độ mục tiêu đổi, tải lại luôn cho khớp
       if (window.LAM_MOI_MUCTIEU) window.LAM_MOI_MUCTIEU();
       $('#cv-form').reset();
       apDungCheDoTodo();
+      capNhatMtmKhoi();
       dongMoFormCv(false);
       moTuyChon(false);
       await taiLai();
