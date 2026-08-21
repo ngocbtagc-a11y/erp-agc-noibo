@@ -1432,12 +1432,21 @@ async function khoiDongDonHangHuy() {
     btn.disabled = true;
     const cu = btn.textContent;
     btn.textContent = 'Đang đồng bộ…';
-    $('#kd-dhh-loi').textContent = '';
+    const oLoi = $('#kd-dhh-loi');
+    oLoi.className = 'form-loi show';
+    oLoi.style.color = '';
+    oLoi.textContent = '';
     try {
-      await API.kdDongBoDonHang();
+      const kq = await API.kdDongBoDonHang();
+      if (kq.loi && kq.loi.length) {
+        oLoi.textContent = `Đồng bộ được ${kq.so_don} đơn, nhưng có lỗi: ${kq.loi.join(' · ')}`;
+      } else {
+        oLoi.style.color = 'var(--ok)';
+        oLoi.textContent = `Đã đồng bộ xong: ${kq.so_don} đơn hàng (Shopee + TikTok).`;
+      }
       await taiDonHangHuy();
     } catch (err) {
-      $('#kd-dhh-loi').textContent = err.message || 'Không đồng bộ được, thử lại nhé.';
+      oLoi.textContent = err.message || 'Không đồng bộ được, thử lại nhé.';
     } finally {
       btn.disabled = false;
       btn.textContent = cu;
