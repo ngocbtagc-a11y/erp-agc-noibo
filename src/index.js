@@ -1128,13 +1128,11 @@ async function cvCapNhat(req, env) {
   const cv = await env.DB.prepare('SELECT * FROM cong_viec WHERE id = ?').bind(id).first();
   if (!cv) return loi('Không tìm thấy công việc', 404);
 
-  // Người PHỐI HỢP (được mời làm cùng, phoi_hop_ids lưu dạng ",id1,id2,")
-  // phải làm được y hệt người nhận chính — trước đây chỉ kiểm nguoi_nhan_id
-  // nên ai được mời phối hợp bấm nút nào cũng bị chặn 403, dù đã được mời
-  // (Sếp Ngọc báo lỗi 20/08/2026: "phân quyền cho Huyền sửa nhưng Huyền cứ
-  // không sửa được" — đúng lỗ hổng này).
-  const laPhoiHop = !!(cv.phoi_hop_ids && cv.phoi_hop_ids.includes(',' + phien.nhan_su_id + ','));
-  const laNguoiNhan = cv.nguoi_nhan_id === phien.nhan_su_id || laPhoiHop;
+  // Người PHỐI HỢP CHỈ THEO DÕI, không được chuyển trạng thái/báo cáo thay —
+  // Sếp Ngọc chốt lại 20/08/2026: "cứ để người chính báo cáo đừng để người
+  // phối hợp làm" (đã thử cho phối hợp thao tác, Sếp yêu cầu hoàn tác lại,
+  // giữ đúng 1 đầu mối chịu trách nhiệm báo cáo cho mỗi việc — tinh thần MBOs).
+  const laNguoiNhan = cv.nguoi_nhan_id === phien.nhan_su_id;
   const laNguoiGiao = cv.nguoi_giao_id === phien.nhan_su_id || laAdmin(phien.vai_tro);
   const laTodoCaNhan = cv.nguoi_nhan_id === cv.nguoi_giao_id;
 

@@ -930,21 +930,17 @@ async function khoiDongCongViec() {
     });
     $('#cv-trong-giao').hidden = (kq.giao || []).length > 0;
 
-    // Việc mình được mời PHỐI HỢP — làm CÙNG người chính, không chỉ theo dõi
-    // (Sếp Ngọc yêu cầu 20/08/2026: mời Huyền phối hợp thì Huyền phải bấm
-    // được như người nhận chính — trước đây bảng này không có nút nào cả).
+    // Việc mình được mời PHỐI HỢP — CHỈ THEO DÕI, không báo cáo/chuyển trạng
+    // thái thay người chính (Sếp Ngọc chốt 20/08/2026: giữ đúng 1 đầu mối
+    // chịu trách nhiệm báo cáo cho mỗi việc, phối hợp chỉ để biết & hỗ trợ).
     veBang('#cv-bang-phoihop', kq.phoi_hop || [], r => {
       const tt = CV_TRANG_THAI[r.trang_thai] || CV_TRANG_THAI.moi;
-      let nut = '';
-      if (r.trang_thai === 'moi') nut = `<button type="button" class="btn-nho btn-primary" data-cv-batdau="${r.id}">Bắt đầu làm</button>`;
-      else if (r.trang_thai === 'dang_lam') nut = `<button type="button" class="btn-nho btn-primary" data-cv-nop="${r.id}">Nộp kết quả</button>`;
       return `<td><div class="nm">${esc(r.tieu_de)}</div>${r.mo_ta ? `<div class="sm">${esc(r.mo_ta)}</div>` : ''}</td>` +
         `<td class="sm">${esc(r.dau_ra)}</td>` +
         `<td class="sm">${esc(r.nguoi_nhan_ten)}</td>` +
         `<td class="sm">${esc(r.nguoi_giao_ten)}</td>` +
         `<td class="sm">${dongHan(r.han_chot)}</td>` +
-        `<td><span class="tag ${tt.mau}">${tt.chu}</span></td>` +
-        `<td style="white-space:nowrap">${nut}</td>`;
+        `<td><span class="tag ${tt.mau}">${tt.chu}</span></td>`;
     });
     $('#cv-trong-phoihop').hidden = (kq.phoi_hop || []).length > 0;
   }
@@ -1020,7 +1016,6 @@ async function khoiDongCongViec() {
   }
   $('#cv-bang-nhan').addEventListener('click', xuLyNut);
   $('#cv-bang-giao').addEventListener('click', xuLyNut);
-  $('#cv-bang-phoihop').addEventListener('click', xuLyNut);
 
   window.LAM_MOI_CONGVIEC = taiLai;   // để chuông thông báo gọi làm mới được
   await taiLai();
