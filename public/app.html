@@ -125,9 +125,10 @@
       <div class="panel mt-panel">
         <div class="panel-head">
           <h4>🎯 Trạm Mục Tiêu (MBOs)</h4>
-          <div style="display:flex; gap:10px; align-items:center">
+          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; justify-content:flex-end">
             <span class="hint" id="mt-ky-hint"></span>
             <button type="button" class="btn-phu" id="mt-nut-mo-form" style="width:auto">+ Thêm mục tiêu</button>
+            <button type="button" class="btn-phu" id="cv-nut-mo-form" style="width:auto">+ Giao Mục Tiêu</button>
           </div>
         </div>
         <div class="panel-body" id="mt-form-body" hidden>
@@ -160,7 +161,7 @@
           <div class="form-loi" id="mt-loi"></div>
         </div>
         <div class="panel-body" style="padding-top:0">
-          <p class="hint" style="margin:0 0 14px">Mục tiêu 3 cấp: Công ty → Phòng ban → Cá nhân. Tiến độ tự tính từ việc đã gắn ở phần "Giao việc" bên dưới (đã Hoàn thành), không nhập tay.</p>
+          <p class="hint" style="margin:0 0 14px">Mục tiêu 3 cấp: Công ty → Phòng ban → Cá nhân. Bấm vào 1 thẻ mục tiêu để xem chi tiết việc gắn vào. Tiến độ tự tính từ việc đã Hoàn thành, không nhập tay.</p>
 
           <div class="mt-nhom-nhan">Cấp công ty</div>
           <div id="mt-congty-list"></div>
@@ -176,9 +177,7 @@
         </div>
 
         <div class="panel-body mt-viec-body">
-          <h4 style="margin:0 0 4px">Thêm việc cần làm / Giao việc</h4>
-          <p class="hint" style="margin:0 0 12px">Tự thêm việc cần làm cho bản thân (chọn "Tôi"), hoặc giao cho người khác rõ đầu ra. Mời thêm người phối hợp để làm cùng. Gắn vào mục tiêu ở trên (tuỳ chọn) để tự tính tiến độ.</p>
-          <button type="button" class="btn-phu" id="cv-nut-mo-form" style="width:auto">+ Giao việc mới</button>
+          <p class="hint" style="margin:0">Tự thêm việc cần làm cho bản thân (chọn "Tôi"), hoặc giao cho người khác rõ đầu ra. Mời thêm người phối hợp để làm cùng. Gắn vào mục tiêu ở trên (tuỳ chọn) để tự tính tiến độ.</p>
         </div>
         <div class="panel-body" id="cv-form-body" hidden>
           <form id="cv-form" class="form-luoi" autocomplete="off">
@@ -1289,6 +1288,42 @@
     <div class="modal-nut">
       <button class="btn-phu" id="mkModalChep">Chép cả hai</button>
       <button class="btn-primary" id="mkModalDong">Đã chép, đóng lại</button>
+    </div>
+  </div>
+</div>
+
+<!-- Hộp chi tiết 1 mục tiêu MBOs: bấm vào thẻ mục tiêu ở Trạm Mục Tiêu → xem
+     toàn bộ việc đã gắn vào mục tiêu đó, ai làm, tiến độ tới đâu -->
+<div class="modal-nen" id="mtModalNen" hidden>
+  <div class="modal modal-rong">
+    <span class="mt-modal-cap" id="mtModalCap">—</span>
+    <h4 id="mtModalTen">Chi tiết mục tiêu</h4>
+    <div class="kv-md-sub" id="mtModalMo" hidden></div>
+
+    <div class="mt-modal-tien">
+      <div class="bar mt-modal-bar"><i id="mtModalBarI" style="width:0"></i></div>
+      <span class="mt-modal-pct" id="mtModalPct">0%</span>
+    </div>
+
+    <div class="kv-md-muc">Việc đã gắn vào mục tiêu này</div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Việc</th>
+            <th>Người nhận</th>
+            <th>Người giao</th>
+            <th>Hạn chót</th>
+            <th>Trạng thái</th>
+          </tr>
+        </thead>
+        <tbody id="mtModalViec"></tbody>
+      </table>
+    </div>
+    <div class="empty" id="mtModalViecTrong" hidden>Chưa có việc nào gắn vào mục tiêu này — bấm "+ Giao Mục Tiêu", chọn mục tiêu này khi tạo việc.</div>
+
+    <div class="modal-nut">
+      <button class="btn-primary" id="mtModalDong">Đóng</button>
     </div>
   </div>
 </div>

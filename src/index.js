@@ -1309,6 +1309,30 @@ async function mtCapNhat(req, env) {
   return json({ ok: true });
 }
 
+/* Bấm vào 1 thẻ mục tiêu ở Trạm Mục Tiêu (MBOs) → xem chi tiết TOÀN BỘ việc
+   đã gắn vào mục tiêu đó (Sếp Ngọc yêu cầu 21/08/2026: "click vào 1 mục tiêu
+   cụ thể thì hiện ra các thông tin chi tiết"). Lấy KHÔNG lọc theo người xem
+   — khớp đúng cách so_viec/so_viec_xong ở MT_COT phía trên đã đếm TOÀN CỤC
+   (không riêng người dùng hiện tại), để số trên thẻ và danh sách chi tiết
+   luôn khớp nhau. Mở cho mọi vai trò xem (giống mtDanhSach), đúng tinh thần
+   minh bạch MBOs — biết việc đang chạy tới đâu, ai phụ trách. */
+async function mtViec(req, env) {
+  const { loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  const u = new URL(req.url);
+  const id = parseInt(u.searchParams.get('id'), 10);
+  if (!id) return loi('Thiếu id mục tiêu');
+
+  const { results } = await env.DB.prepare(`
+    SELECT id, tieu_de, dau_ra, mo_ta, nguoi_giao_id, nguoi_giao_ten,
+           nguoi_nhan_id, nguoi_nhan_ten, phoi_hop_ten, han_chot, trang_thai, tao_luc
+      FROM cong_viec WHERE muc_tieu_id = ?
+     ORDER BY (trang_thai IN ('hoan_thanh','huy')), (han_chot IS NULL), han_chot ASC, id DESC
+  `).bind(id).all();
+
+  return json({ viec: results || [] });
+}
+
 /* ==========================================================================
    VINH DANH — bảng khen ngợi nhỏ ở Tổng quan, ai cũng thấy (Sếp Ngọc yêu
    cầu 20/08/2026, rèn thói quen ghi nhận đồng nghiệp). Mở cho mọi vai trò
@@ -2052,6 +2076,7 @@ const DUONG_DAN = {
   'POST /api/muc-tieu/tao':       mtTao,
   'POST /api/muc-tieu/chot':      mtChot,
   'POST /api/muc-tieu/cap-nhat':  mtCapNhat,
+  'GET  /api/muc-tieu/viec':      mtViec,
   'GET  /api/thong-bao':         layThongBao,
   'POST /api/thong-bao/da-xem':  thongBaoDaXem,
   'GET  /api/kinh-doanh/can-doi-soat': kdCanDoiSoat,
