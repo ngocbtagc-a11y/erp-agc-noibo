@@ -685,6 +685,7 @@ async function khoiDongMucTieu() {
 
     // Thẻ nhỏ gọn: hàng 1 = tên (cắt 1 dòng, rê chuột hiện đủ) + % nổi bật;
     // hàng 2 = thanh tiến độ; hàng 3 = mô tả 1 dòng; hàng 4 = badge + số việc + nút.
+    // Bấm vào thẻ (ngoài nút Xong/Huỷ/Chốt) → mở hộp chi tiết xem việc gắn vào.
     const r = el('div', 'mt-the ' + mucMau + (daHuy ? ' mo' : ''),
       `<div class="mt-the-top">` +
         `<div class="mt-the-tt" title="${esc(m.tieu_de)}">${esc(m.tieu_de)}</div>` +
@@ -696,6 +697,7 @@ async function khoiDongMucTieu() {
         `<span class="mt-the-viec">${m.so_viec_xong}/${m.so_viec} việc · ${esc(m.nguoi_tao_ten)}</span>` +
         nutSua +
       `</div>`);
+    r.dataset.mtId = m.id;
     requestAnimationFrame(() => { r.querySelector('.bar > i').style.width = pct + '%'; });
     return r;
   }
@@ -755,12 +757,65 @@ async function khoiDongMucTieu() {
     }
   });
 
+  // Hộp chi tiết mục tiêu (bấm vào thẻ .mt-the) — cùng khuôn mẫu modal-nen/
+  // modal dùng ở Kho (xem kvModal). Danh sách việc lấy TOÀN CỤC (không lọc
+  // theo người xem), khớp đúng cách so_viec/so_viec_xong đã đếm ở MT_COT.
+  const mtModal = $('#mtModalNen');
+  $('#mtModalDong').addEventListener('click', () => { mtModal.hidden = true; });
+  mtModal.addEventListener('click', e => { if (e.target === mtModal) mtModal.hidden = true; });
+
+  function dongHanMt(hanChot) {
+    if (!hanChot) return '—';
+    const quaHan = hanChot < new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
+    const [nam, thang, ngay] = hanChot.split('-');
+    return `<span class="${quaHan ? 'canh-bao-chu' : ''}">${ngay}/${thang}/${nam}</span>`;
+  }
+
+  async function moChiTietMucTieu(id) {
+    const m = DS_MT.find(x => String(x.id) === String(id));
+    if (!m) return;
+    const pct = m.so_viec > 0 ? Math.round((m.so_viec_xong / m.so_viec) * 100) : 0;
+    const mauBar = pct >= 70 ? '' : (pct >= 40 ? 'warn' : 'danger');
+    const nhanCap = m.cap === 'cong_ty' ? 'Cấp công ty'
+                  : (m.cap === 'phong_ban' ? `Cấp phòng ban · ${esc(m.bo_phan || '')}` : 'Cấp cá nhân');
+
+    $('#mtModalCap').textContent = nhanCap;
+    $('#mtModalTen').textContent = m.tieu_de;
+    $('#mtModalMo').textContent = m.mo_ta || '';
+    $('#mtModalMo').hidden = !m.mo_ta;
+    $('#mtModalPct').textContent = pct + '%';
+    $('#mtModalViec').innerHTML = '';
+    $('#mtModalViecTrong').hidden = true;
+    mtModal.hidden = false;
+    requestAnimationFrame(() => {
+      const i = $('#mtModalBarI');
+      i.className = mauBar;
+      i.style.width = pct + '%';
+    });
+
+    let viec = [];
+    try { ({ viec } = await API.mtViec(m.id)); } catch { /* im lặng — modal vẫn hiện phần đầu */ }
+    veBang('#mtModalViec', viec, v => {
+      const tt = CV_TRANG_THAI[v.trang_thai] || CV_TRANG_THAI.moi;
+      return `<td><div class="nm">${esc(v.tieu_de)}</div>${v.dau_ra ? `<div class="sm">${esc(v.dau_ra)}</div>` : ''}${v.phoi_hop_ten ? `<div class="sm">🤝 Phối hợp: ${esc(v.phoi_hop_ten)}</div>` : ''}</td>` +
+        `<td class="sm">${esc(v.nguoi_nhan_ten)}</td>` +
+        `<td class="sm">${esc(v.nguoi_giao_ten)}</td>` +
+        `<td class="sm">${dongHanMt(v.han_chot)}</td>` +
+        `<td><span class="tag ${tt.mau}">${tt.chu}</span></td>`;
+    });
+    $('#mtModalViecTrong').hidden = viec.length > 0;
+  }
+
   async function xuLyNutMucTieu(e) {
     const nutChot = e.target.closest('[data-mt-chot]');
     const nutXong = e.target.closest('[data-mt-xong]');
     const nutHuy = e.target.closest('[data-mt-huy]');
     const nut = nutChot || nutXong || nutHuy;
-    if (!nut) return;
+    if (!nut) {
+      const the = e.target.closest('.mt-the');
+      if (the && the.dataset.mtId) await moChiTietMucTieu(the.dataset.mtId);
+      return;
+    }
     const dangLam = nut.textContent;
     nut.disabled = true;
     try {
@@ -848,7 +903,7 @@ async function khoiDongCongViec() {
   const nutMoCv = $('#cv-nut-mo-form');
   function dongMoFormCv(hienForm) {
     $('#cv-form-body').hidden = !hienForm;
-    nutMoCv.textContent = hienForm ? '✕ Đóng' : '+ Giao việc mới';
+    nutMoCv.textContent = hienForm ? '✕ Đóng' : '+ Giao Mục Tiêu';
   }
   nutMoCv.addEventListener('click', () => dongMoFormCv($('#cv-form-body').hidden));
   $('#cv-nut-huy').addEventListener('click', () => {

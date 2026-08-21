@@ -603,14 +603,33 @@ img.av { object-fit: cover; display: block; cursor: default; }
   text-shadow: 0 1px 2px rgba(0,0,0,.15);
 }
 .mt-panel .panel-head .hint { color: rgba(255,255,255,.85); }
-.mt-panel .panel-head #mt-nut-mo-form {
+.mt-panel .panel-head #mt-nut-mo-form,
+.mt-panel .panel-head #cv-nut-mo-form {
   background: rgba(255,255,255,.22);
   color: #fff;
   font-weight: 600;
 }
-.mt-panel .panel-head #mt-nut-mo-form:hover { background: rgba(255,255,255,.32); }
+.mt-panel .panel-head #mt-nut-mo-form:hover,
+.mt-panel .panel-head #cv-nut-mo-form:hover { background: rgba(255,255,255,.32); }
 
 .mt-viec-body { border-top: 1px solid var(--line); }
+
+/* Hộp chi tiết mục tiêu (bấm vào .mt-the mở ra) */
+.mt-modal-cap {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--sage-dark);
+  background: var(--sage-wash);
+  border-radius: var(--r-pill);
+  padding: 3px 10px;
+  margin-bottom: 8px;
+}
+.mt-modal-tien { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+.mt-modal-bar  { flex: 1; height: 8px; }
+.mt-modal-pct  { font-size: 14px; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; min-width: 42px; text-align: right; }
 
 .mt-the {
   border: 1px solid var(--line);
@@ -619,6 +638,7 @@ img.av { object-fit: cover; display: block; cursor: default; }
   padding: 9px 12px;
   background: var(--surface);
   transition: box-shadow .16s, border-color .16s;
+  cursor: pointer;   /* bấm vào thẻ → xem chi tiết việc gắn vào mục tiêu này */
 }
 .mt-the:hover  { box-shadow: 0 2px 10px rgba(0,0,0,.05); }
 .mt-the.warn   { border-left-color: var(--warn); }

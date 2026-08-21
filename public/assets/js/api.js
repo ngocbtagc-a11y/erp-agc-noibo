@@ -77,6 +77,7 @@ export const API = {
   mtCapNhat: (id, truong) => goi('/api/muc-tieu/cap-nhat', {
     method: 'POST', body: JSON.stringify({ id, ...truong })
   }),
+  mtViec: (id) => goi('/api/muc-tieu/viec?id=' + id),
 
   /* ---- Chat nội bộ (kênh chung + chat riêng từng người) ---- */
   chatDanhSach: (sauId, voiId) => {
