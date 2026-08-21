@@ -68,6 +68,23 @@ async function coBangDonHang(env) {
   return _coBangDonHang;
 }
 
+/* Cột "Đơn hàng bị hủy" (huy_ly_do/huy_boi/huy_ly_do_khach/san_pham_ten/
+   san_pham_sku trên don_hang) có thể CHƯA nạp migration them-donhang-huy.sql
+   — tự kiểm tra 1 lần, giống coCotTinhTrangHang(). Chưa nạp thì đồng bộ vẫn
+   chạy bình thường, chỉ chưa lưu được các cột này (tự nâng cấp khi nạp xong,
+   không cần deploy lại code). */
+let _coCotDonHangHuy = null;
+export async function coCotDonHangHuy(env) {
+  if (_coCotDonHangHuy !== null) return _coCotDonHangHuy;
+  try {
+    await env.DB.prepare(`SELECT huy_ly_do FROM don_hang LIMIT 1`).first();
+    _coCotDonHangHuy = true;
+  } catch {
+    _coCotDonHangHuy = false;
+  }
+  return _coCotDonHangHuy;
+}
+
 function host(env) { return (env.SHOPEE_HOST || 'https://partner.shopeemobile.com').replace(/\/+$/, ''); }
 function redirect(env) { return env.SHOPEE_REDIRECT || 'https://erp-agc.noiboagc.workers.dev/api/shopee/callback'; }
 function nowSec() { return Math.floor(Date.now() / 1000); }
@@ -363,6 +380,7 @@ export async function dongBoDonHangNen(env) {
   const kn = await ketNoiConHan(env);
   if (!kn) return null;
 
+  const coHuy = await coCotDonHangHuy(env);
   const tuGoc = moGocDongBoDonHang(kn);
   const denGoc = nowSec();
   const cauLenh = [];
@@ -390,30 +408,50 @@ export async function dongBoDonHangNen(env) {
     // 2) Lấy chi tiết theo lô 50 mã — mới có total_amount để tính doanh thu
     for (let i = 0; i < dsOrderSn.length; i += 50) {
       const lo = dsOrderSn.slice(i, i + 50);
+      // cancel_reason/cancel_by/buyer_cancel_reason: chỉ Shopee trả cho đơn
+      // order_status=CANCELLED — đơn khác thì các field này rỗng, vô hại.
+      // ⚠️ CHƯA chạy thử với khóa thật — chưa chắc chắn giá trị cancel_by là
+      // 'buyer'/'seller'/'system' hay dạng khác (xem NHAN_HUY_BOI trong
+      // app.js > khoiDongDonHangHuy). Chạy thử xong cần đối chiếu lại.
       const kq = await goiTheoShop(env, '/api/v2/order/get_order_detail', kn, {
         order_sn_list: lo.join(','),
-        response_optional_fields: 'order_status,total_amount,currency,buyer_username,create_time,update_time,item_list'
+        response_optional_fields: 'order_status,total_amount,currency,buyer_username,create_time,update_time,item_list,cancel_reason,cancel_by,buyer_cancel_reason'
       });
       if (kq.error) throw new Error('Shopee báo lỗi (get_order_detail): ' + (kq.message || kq.error));
       const ds = (kq.response && kq.response.order_list) || [];
       for (const o of ds) {
-        const soSp = (o.item_list || []).reduce(
-          (s, it) => s + (Number(it.model_quantity_purchased || it.amount) || 0), 0);
+        const items = o.item_list || [];
+        const soSp = items.reduce((s, it) => s + (Number(it.model_quantity_purchased || it.amount) || 0), 0);
+        // Tên/SKU sản phẩm — cùng cách gộp + khử trùng lặp như Đơn hoàn (dongBoNen ở trên)
+        const tenArr = [...new Set(items.map(it => it.item_name || it.name).filter(Boolean))];
+        const skuArr = [...new Set(items.map(it => it.model_sku || it.item_sku).filter(Boolean))];
+        const spTen = tenArr.join(' | ') || null;
+        const spSku = skuArr.join(' | ') || null;
+
+        const cotHuy = coHuy ? `, san_pham_ten, san_pham_sku, huy_ly_do, huy_boi, huy_ly_do_khach` : '';
+        const gtHuy = coHuy ? `, ?, ?, ?, ?, ?` : '';
+        const capNhatHuy = coHuy
+          ? `, san_pham_ten=excluded.san_pham_ten, san_pham_sku=excluded.san_pham_sku,
+               huy_ly_do=excluded.huy_ly_do, huy_boi=excluded.huy_boi, huy_ly_do_khach=excluded.huy_ly_do_khach`
+          : '';
+        const thamSoHuy = coHuy ? [spTen, spSku, o.cancel_reason || null, o.cancel_by || null, o.buyer_cancel_reason || null] : [];
+
         cauLenh.push(env.DB.prepare(`
-          INSERT INTO don_hang (order_sn, nguon, trang_thai, tong_tien, tien_te, nguoi_mua, so_sp, tao_luc_san, cap_nhat_san, du_lieu_json, dong_bo_luc)
-          VALUES (?, 'shopee', ?, ?, ?, ?, ?, ?, ?, ?, datetime('now','+7 hours'))
+          INSERT INTO don_hang (order_sn, nguon, trang_thai, tong_tien, tien_te, nguoi_mua, so_sp, tao_luc_san, cap_nhat_san, du_lieu_json, dong_bo_luc${cotHuy})
+          VALUES (?, 'shopee', ?, ?, ?, ?, ?, ?, ?, ?, datetime('now','+7 hours')${gtHuy})
           ON CONFLICT(order_sn) DO UPDATE SET
             trang_thai=excluded.trang_thai, tong_tien=excluded.tong_tien, tien_te=excluded.tien_te,
             nguoi_mua=excluded.nguoi_mua, so_sp=excluded.so_sp,
             cap_nhat_san=excluded.cap_nhat_san, du_lieu_json=excluded.du_lieu_json,
-            dong_bo_luc=datetime('now','+7 hours')
+            dong_bo_luc=datetime('now','+7 hours')${capNhatHuy}
         `).bind(
           String(o.order_sn), o.order_status || null,
           Math.round((Number(o.total_amount) || 0) * 100000) || null, o.currency || null,
           o.buyer_username || null, soSp || null,
           o.create_time ? String(o.create_time) : null,
           o.update_time ? String(o.update_time) : null,
-          JSON.stringify(o)
+          JSON.stringify(o),
+          ...thamSoHuy
         ));
         them++;
       }

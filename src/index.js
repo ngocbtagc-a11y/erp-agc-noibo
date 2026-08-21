@@ -838,7 +838,14 @@ async function dayVeVanHanh(env, rsn, ghiChu, nguoi, loaiThongBao) {
 
 /* Kho bấm "Cần khiếu nại" -> đẩy đơn ngược về Vận hành sàn + báo vận hành.
    Lý do ghi luôn vào chính đơn hoàn (ly_do_khieu_nai/khieu_nai_luc/khieu_nai_boi)
-   để Vận hành sàn thấy ngay trong bảng "Cần đối soát", không phải lục chuông. */
+   để Vận hành sàn thấy ngay trong bảng "Cần đối soát", không phải lục chuông.
+   Kèm ẢNH minh chứng (nén ở trình duyệt, gửi base64) — lưu ở bảng
+   khieu_nai_minh_chung (xem migrations/them-khieunai-minhchung.sql). VIDEO
+   gửi riêng sau (multipart) qua hoanKhieuNaiVideo — chỉ cần return_sn, gọi
+   ngay sau khi hàm này chạy xong. */
+const GIOI_HAN_ANH_KN = 6;
+const GIOI_HAN_ANH_BYTE_KN = 1_500_000;   // ~1.1MB gốc sau khi mã hoá base64
+
 async function hoanKhieuNai(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
@@ -847,10 +854,121 @@ async function hoanKhieuNai(req, env) {
   const rsn = (b.return_sn || '').trim();
   const ghiChu = (b.ghi_chu || '').trim().slice(0, 300);
   if (!rsn) return loi('Thiếu mã đơn hoàn');
+
+  const anhDs = Array.isArray(b.anh) ? b.anh.slice(0, GIOI_HAN_ANH_KN) : [];
+  for (const a of anhDs) {
+    if (typeof a !== 'string' || !a.startsWith('data:image/')) return loi('Có ảnh gửi lên không hợp lệ');
+    if (a.length > GIOI_HAN_ANH_BYTE_KN) return loi('Có ảnh quá nặng — chụp lại hoặc để trình duyệt tự nén rồi thử lại');
+  }
+
   const nguoi = phien.ho_ten || phien.ten_dang_nhap;
   const ok = await dayVeVanHanh(env, rsn, ghiChu, nguoi);
   if (!ok) return loi('Không tìm thấy đơn (hoặc đã nhận đủ)', 404);
+
+  if (anhDs.length) {
+    const cauLenh = anhDs.map(a => env.DB.prepare(`
+      INSERT INTO khieu_nai_minh_chung (id, return_sn, loai, du_lieu, kich_thuoc, nguoi)
+      VALUES (?, ?, 'anh', ?, ?, ?)
+    `).bind('mc_' + crypto.randomUUID().slice(0, 12), rsn, a, a.length, nguoi));
+    await env.DB.batch(cauLenh);
+  }
+
   return json({ ok: true });
+}
+
+/* ---- Video minh chứng khiếu nại (multipart, lưu R2 vì D1 giới hạn 2MB) --
+   Gửi SAU hoanKhieuNai. Chưa cấu hình bucket MINH_CHUNG (chưa deploy R2) thì
+   báo lỗi rõ ràng, không sập máy chủ — lý do + ảnh vẫn lưu bình thường. */
+async function hoanKhieuNaiVideo(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  if (!duocThaoTacKho(phien.vai_tro)) return loi('Bạn không có quyền', 403);
+  if (!env.MINH_CHUNG) {
+    return loi('Máy chủ chưa cấu hình lưu trữ video (R2) — báo Sếp Ngọc tạo bucket. Lý do + ảnh vẫn lưu được bình thường.', 409);
+  }
+
+  let form;
+  try { form = await req.formData(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  const rsn = String(form.get('return_sn') || '').trim();
+  const file = form.get('file');
+  if (!rsn) return loi('Thiếu mã đơn hoàn');
+  if (!(file instanceof File)) return loi('Chưa chọn file video');
+  if (!String(file.type || '').startsWith('video/')) return loi('Chỉ nhận file video');
+  const GIOI_HAN_VIDEO = 50 * 1024 * 1024;
+  if (file.size > GIOI_HAN_VIDEO) return loi('Video quá lớn (tối đa 50MB) — quay ngắn lại hoặc giảm độ phân giải');
+
+  const don = await env.DB.prepare('SELECT return_sn FROM don_hoan WHERE return_sn = ?').bind(rsn).first();
+  if (!don) return loi('Không tìm thấy đơn hoàn này', 404);
+
+  const id = 'mc_' + crypto.randomUUID().slice(0, 12);
+  const tenAnToan = String(file.name || 'video').replace(/[^\w.\-]+/g, '_').slice(0, 80);
+  const r2Key = `khieu-nai/${rsn}/${id}-${tenAnToan}`;
+
+  await env.MINH_CHUNG.put(r2Key, file, { httpMetadata: { contentType: file.type || 'application/octet-stream' } });
+  await env.DB.prepare(`
+    INSERT INTO khieu_nai_minh_chung (id, return_sn, loai, r2_key, loai_mime, ten_file, kich_thuoc, nguoi)
+    VALUES (?, ?, 'video', ?, ?, ?, ?, ?)
+  `).bind(id, rsn, r2Key, file.type || null, tenAnToan, file.size || null,
+          phien.ho_ten || phien.ten_dang_nhap).run();
+
+  return json({ ok: true, id });
+}
+
+/* Tải lại video (hỗ trợ Range để trình duyệt tua được) */
+async function hoanKhieuNaiVideoXem(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  if (!duocXemDonHoan(phien.vai_tro) && !duocThaoTacKho(phien.vai_tro)) return loi('Bạn không có quyền', 403);
+  if (!env.MINH_CHUNG) return loi('Chưa cấu hình lưu trữ video trên máy chủ', 409);
+
+  const id = new URL(req.url).searchParams.get('id');
+  if (!id) return loi('Thiếu mã minh chứng');
+  const mc = await env.DB.prepare(
+    `SELECT r2_key, loai_mime, ten_file, kich_thuoc FROM khieu_nai_minh_chung WHERE id = ? AND loai = 'video'`
+  ).bind(id).first();
+  if (!mc) return new Response('Không tìm thấy video', { status: 404 });
+
+  const rangeHeader = req.headers.get('Range');
+  const tuyChon = {};
+  if (rangeHeader) {
+    const m = /bytes=(\d+)-(\d*)/.exec(rangeHeader);
+    if (m) {
+      const start = parseInt(m[1], 10);
+      const end = m[2] ? parseInt(m[2], 10) : undefined;
+      tuyChon.range = (end != null) ? { offset: start, length: end - start + 1 } : { offset: start };
+    }
+  }
+  const obj = await env.MINH_CHUNG.get(mc.r2_key, tuyChon);
+  if (!obj) return new Response('Video không còn trong kho lưu trữ', { status: 404 });
+
+  const dungRange = !!(rangeHeader && obj.range);
+  const headers = {
+    'Content-Type': mc.loai_mime || 'video/mp4',
+    'Cache-Control': 'private, max-age=3600',
+    'Accept-Ranges': 'bytes'
+  };
+  if (dungRange) {
+    const tong = mc.kich_thuoc || obj.size || 0;
+    const offset = obj.range.offset ?? 0;
+    const len = obj.range.length ?? (tong - offset);
+    headers['Content-Range'] = `bytes ${offset}-${offset + len - 1}/${tong}`;
+  }
+  return new Response(obj.body, { status: dungRange ? 206 : 200, headers });
+}
+
+/* Chi tiết minh chứng (ảnh inline base64 + danh sách video) của 1 đơn hoàn —
+   Vận hành sàn bấm "Xem minh chứng" ở bảng Cần đối soát để gọi cái này. */
+async function hoanKhieuNaiMinhChung(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  if (!duocXemDonHoan(phien.vai_tro) && !duocThaoTacKho(phien.vai_tro)) return loi('Bạn không có quyền', 403);
+  const rsn = new URL(req.url).searchParams.get('return_sn');
+  if (!rsn) return loi('Thiếu mã đơn hoàn');
+  const { results } = await env.DB.prepare(
+    `SELECT id, loai, du_lieu, ten_file, kich_thuoc, nguoi, tao_luc
+       FROM khieu_nai_minh_chung WHERE return_sn = ? ORDER BY tao_luc ASC`
+  ).bind(rsn).all();
+  return json({ minh_chung: results || [] });
 }
 
 /* Kho bấm "Chưa nhận được" -> 1 click đẩy ngay về Vận hành sàn, không cần gõ
@@ -1383,7 +1501,9 @@ async function kdCanDoiSoat(req, env) {
            d.nguon, d.trang_thai, d.ly_do, d.so_tien, d.tien_te, d.nguoi_mua, d.dang_cho,
            d.cho_kho_nhan_tu, d.lan_tra_soat, d.doi_soat_luc, d.doi_soat_boi,
            d.tao_luc_shopee, d.dong_bo_luc,
-           d.ly_do_khieu_nai, d.khieu_nai_luc, d.khieu_nai_boi
+           d.ly_do_khieu_nai, d.khieu_nai_luc, d.khieu_nai_boi,
+           (SELECT COUNT(*) FROM khieu_nai_minh_chung WHERE return_sn = d.return_sn AND loai = 'anh')   AS so_anh,
+           (SELECT COUNT(*) FROM khieu_nai_minh_chung WHERE return_sn = d.return_sn AND loai = 'video') AS so_video
       FROM don_hoan d
       LEFT JOIN sku_map m ON m.ten_san_pham = d.san_pham_ten
      WHERE d.kho_nhan_luc IS NULL
@@ -1640,6 +1760,36 @@ async function kdTongQuanDoanhThu(req, env) {
 }
 
 /* ==========================================================================
+   ĐƠN HÀNG BỊ HỦY trước khi giao (Order API — KHÁC "Đơn hoàn/Trả hàng" ở
+   bảng don_hoan). Đơn khách hủy khi CHƯA từng xuất kho, hoặc hệ thống/người
+   bán tự hủy — hàng vẫn nguyên trong kho, không phải luồng xử lý của Kho vận.
+   Chỉ có Shopee (đã lấy được cancel_reason/cancel_by) — TikTok làm sau.
+   Xem migrations/them-donhang-huy.sql + dongBoDonHangNen() trong shopee.js.
+   ========================================================================== */
+async function donHangHuy(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  if (!duocXemTab(phien.vai_tro, 'kinhdoanh')) return loi('Bạn không có quyền', 403);
+
+  const _vn = new Date(Date.now() + 7 * 3600 * 1000);
+  const dauThangSec = Math.floor(Date.UTC(_vn.getUTCFullYear(), _vn.getUTCMonth(), 1) / 1000) - 7 * 3600;
+
+  try {
+    const { results } = await env.DB.prepare(`
+      SELECT order_sn, nguon, tong_tien, tien_te, nguoi_mua, so_sp,
+             san_pham_ten, san_pham_sku, huy_ly_do, huy_boi, huy_ly_do_khach,
+             tao_luc_san, cap_nhat_san
+        FROM don_hang
+       WHERE trang_thai = 'CANCELLED' AND CAST(tao_luc_san AS INTEGER) >= ?
+       ORDER BY cap_nhat_san DESC LIMIT 300
+    `).bind(dauThangSec).all();
+    return json({ don_huy: results, co_bang: true });
+  } catch {
+    return json({ don_huy: [], co_bang: false });   // chưa nạp migration them-donhang-huy.sql
+  }
+}
+
+/* ==========================================================================
    HÀNG HỎNG DO VẬN CHUYỂN (đơn huỷ) — Kho phân loại xong đẩy sang đây, Kế
    toán + Kho cứ cuối tháng gom lại lập 1 biên bản hủy chung (Sếp Ngọc chốt
    20/08/2026). Khác "Đơn hoàn cần tra soát tiền" (đó là tiền hoàn, đây là
@@ -1854,6 +2004,9 @@ const DUONG_DAN = {
   'POST /api/hoan/sku-map':      hoanSkuMapGan,
   'POST /api/hoan/da-nhan':      hoanDaNhan,
   'POST /api/hoan/khieu-nai':    hoanKhieuNai,
+  'POST /api/hoan/khieu-nai/video':  hoanKhieuNaiVideo,
+  'GET  /api/hoan/khieu-nai/video':  hoanKhieuNaiVideoXem,
+  'GET  /api/hoan/khieu-nai/minh-chung': hoanKhieuNaiMinhChung,
   'POST /api/hoan/chua-nhan':    hoanChuaNhan,
   'POST /api/hoan/phan-loai':    hoanPhanLoai,
   'GET  /api/vinh-danh': vdDanhSach,
@@ -1874,6 +2027,7 @@ const DUONG_DAN = {
   'POST /api/kinh-doanh/day-ke-toan':  kdDayKeToan,
   'GET  /api/kinh-doanh/tong-quan-doanh-thu': kdTongQuanDoanhThu,
   'POST /api/kinh-doanh/dong-bo-don-hang':    kdDongBoDonHang,
+  'GET  /api/kinh-doanh/don-hang-huy':        donHangHuy,
   'GET  /api/ke-toan/can-tra-soat':    ktCanTraSoat,
   'POST /api/ke-toan/da-tra-soat':     ktDaTraSoat,
   'GET  /api/ke-toan/hang-hong':       ktHangHong,

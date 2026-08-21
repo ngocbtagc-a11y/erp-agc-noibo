@@ -24,6 +24,15 @@ enabled = true
 [ai]
 binding = "AI"
 
+# R2 — lưu VIDEO minh chứng khiếu nại đơn hoàn (ảnh thì nén nhỏ, lưu D1).
+# ⚠️ CẦN TẠO BUCKET 1 LẦN trước khi `npm run dua-len` (deploy thật), không thì
+# lệnh deploy sẽ báo lỗi không thấy bucket:
+#     npx wrangler r2 bucket create erp-agc-minh-chung
+# Chạy thử ở máy (npm run chay) KHÔNG cần bucket thật — wrangler tự giả lập.
+[[r2_buckets]]
+binding = "MINH_CHUNG"
+bucket_name = "erp-agc-minh-chung"
+
 # Biến công khai (KHÔNG bí mật). App Secret KHÔNG để đây — nó nằm trong
 # "két" Cloudflare (Settings → Variables and Secrets → Secret TIKTOK_APP_SECRET).
 [vars]

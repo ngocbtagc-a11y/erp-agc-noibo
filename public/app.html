@@ -516,6 +516,35 @@
         <div class="empty" id="kd-ds-trong" hidden>Không có đơn hoàn nào cần đối soát — kho đã xác nhận nhận hết.</div>
       </div>
 
+      <!-- ---------- Vận hành sàn: đơn hàng bị HỦY trước khi giao (khác Đơn hoàn/Trả hàng) ---------- -->
+      <div class="panel" id="kd-donhanghuy-panel" hidden>
+        <div class="panel-head">
+          <h4>Vận hành sàn — Đơn hàng bị hủy (trước khi giao)</h4>
+          <span class="hint" id="kd-dhh-dem"></span>
+        </div>
+        <div class="panel-body" style="padding-bottom:0; padding-top:0">
+          <p class="hint" style="margin:14px 0 0">Đơn khách/hệ thống hủy <b>trước khi kho xuất hàng</b> — khác hẳn "Đơn hoàn/Trả hàng" ở trên (đó là khách nhận hàng rồi mới trả). Hàng vẫn nguyên trong kho, không cần kho xử lý gì — mục này chỉ để theo dõi lý do hủy. Hiện <b>chỉ có Shopee</b>, TikTok làm sau.</p>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Nguồn</th>
+                <th>Ngày</th>
+                <th>Mã đơn hàng</th>
+                <th>Người mua</th>
+                <th>Sản phẩm</th>
+                <th class="num">Giá trị đơn</th>
+                <th>Ai hủy</th>
+                <th>Lý do hủy</th>
+              </tr>
+            </thead>
+            <tbody id="kd-dhh-bang"></tbody>
+          </table>
+        </div>
+        <div class="empty" id="kd-dhh-trong" hidden>Không có đơn hàng nào bị hủy trong tháng này.</div>
+      </div>
+
       <div class="stats" id="kd-the"></div>
 
       <div class="grid-2">
@@ -1292,6 +1321,56 @@
 
     <div class="modal-nut">
       <button class="btn-primary" id="kvModalDong">Đóng</button>
+    </div>
+  </div>
+</div>
+
+<!-- Hộp Kho nhập khiếu nại: lý do + ảnh + video minh chứng -->
+<div class="modal-nen" id="knModalNen" hidden>
+  <div class="modal modal-rong">
+    <h4>Báo khiếu nại — hàng hoàn có vấn đề</h4>
+    <div class="kv-md-sub" id="knModalDon">—</div>
+
+    <form id="knForm" autocomplete="off">
+      <div class="field" style="margin-top:14px">
+        <label>Lý do / mô tả vấn đề *</label>
+        <textarea id="knLyDo" rows="3" required placeholder="VD: Hộp bị móp méo, hàng bên trong vỡ vụn, thiếu 2/5 sản phẩm..."></textarea>
+      </div>
+      <div class="field">
+        <label>Ảnh minh chứng (tối đa 6 ảnh, không bắt buộc)</label>
+        <input type="file" id="knAnh" accept="image/*" multiple>
+        <div class="kn-luoi-anh" id="knAnhLuoi"></div>
+      </div>
+      <div class="field">
+        <label>Video minh chứng (không bắt buộc, tối đa 50MB)</label>
+        <input type="file" id="knVideo" accept="video/*">
+        <div class="hint" id="knVideoTen"></div>
+      </div>
+      <div class="form-loi" id="knLoi"></div>
+      <div class="modal-nut" style="margin-top:14px">
+        <button type="button" class="btn-phu" id="knHuy">Huỷ</button>
+        <button type="submit" class="btn-primary" id="knNutGui">Gửi khiếu nại</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Hộp Vận hành sàn xem ảnh/video minh chứng kho gửi kèm khiếu nại -->
+<div class="modal-nen" id="knXemModalNen" hidden>
+  <div class="modal modal-rong">
+    <h4>Ảnh/video minh chứng</h4>
+    <div class="kv-md-sub" id="knXemDon">—</div>
+
+    <div class="kv-md-muc">Ảnh</div>
+    <div class="kn-luoi-anh" id="knXemAnh"></div>
+    <div class="empty" id="knXemAnhTrong" hidden>Kho chưa gửi ảnh.</div>
+
+    <div class="kv-md-muc">Video</div>
+    <div id="knXemVideo"></div>
+    <div class="empty" id="knXemVideoTrong" hidden>Kho chưa gửi video.</div>
+
+    <div class="modal-nut" style="margin-top:14px">
+      <button type="button" class="btn-primary" id="knXemDong">Đóng</button>
     </div>
   </div>
 </div>
