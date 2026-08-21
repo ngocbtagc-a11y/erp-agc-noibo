@@ -9,8 +9,11 @@
 
 /* Các mảng dữ liệu trong hệ thống.
    "quantri" = tab quản trị: thêm nhân sự, tạo tài khoản, đặt lại mật khẩu.
-   Chỉ admin (Giám đốc, Phó Giám đốc) thấy. */
-export const TAB = ['tongquan', 'danhba', 'chat', 'congviec', 'nhansu', 'kinhdoanh', 'khovan', 'donhoan', 'ketoan', 'quantri'];
+   Chỉ admin (Giám đốc, Phó Giám đốc) thấy.
+   "lichsuviec" = Lịch sử làm việc (Sếp Ngọc yêu cầu 21/08/2026: lưu trữ quá
+   trình làm việc của nhân sự, ai làm gì, xong task nào ra sao) — mở cho MỌI
+   vai trò, đúng tinh thần minh bạch đã áp dụng cho Trạm Mục Tiêu (MBOs). */
+export const TAB = ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'nhansu', 'kinhdoanh', 'khovan', 'donhoan', 'ketoan', 'quantri'];
 
 /* Vai trò → được xem mảng nào và làm được gì.
    Danh bạ VÀ Chat nội bộ mở cho tất cả (Sếp Ngọc yêu cầu: ai cũng tra được
@@ -22,24 +25,24 @@ export const TAB = ['tongquan', 'danhba', 'chat', 'congviec', 'nhansu', 'kinhdoa
                     được tài khoản). HCNS có mức này.
    - xem_luong    : xem cột lương. HCNS KHÔNG có — đây là ranh giới cứng. */
 const QUYEN_THEO_VAI_TRO = {
-  giam_doc:        { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'nhansu', 'kinhdoanh', 'khovan', 'donhoan', 'ketoan', 'quantri'], xem_luong: true,  admin: true,  them_nhan_su: true  },
-  pho_giam_doc:    { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'nhansu', 'kinhdoanh', 'khovan', 'donhoan', 'ketoan', 'quantri'], xem_luong: true,  admin: true,  them_nhan_su: true  },
-  ke_toan_truong:  { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'khovan', 'donhoan', 'ketoan'],                                   xem_luong: true,  admin: false, them_nhan_su: false },
-  quan_ly_kho:     { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'khovan', 'nhansu'],                                              xem_luong: false, admin: false, them_nhan_su: false },
-  nhan_vien_kho:   { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'khovan'],                                                        xem_luong: false, admin: false, them_nhan_su: false },
-  hcns:            { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'nhansu', 'quantri'],                                             xem_luong: false, admin: false, them_nhan_su: true  },
-  van_hanh_san:    { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'kinhdoanh', 'donhoan'],                                          xem_luong: false, admin: false, them_nhan_su: false },
+  giam_doc:        { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'nhansu', 'kinhdoanh', 'khovan', 'donhoan', 'ketoan', 'quantri'], xem_luong: true,  admin: true,  them_nhan_su: true  },
+  pho_giam_doc:    { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'nhansu', 'kinhdoanh', 'khovan', 'donhoan', 'ketoan', 'quantri'], xem_luong: true,  admin: true,  them_nhan_su: true  },
+  ke_toan_truong:  { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'khovan', 'donhoan', 'ketoan'],                                   xem_luong: true,  admin: false, them_nhan_su: false },
+  quan_ly_kho:     { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'khovan', 'nhansu'],                                              xem_luong: false, admin: false, them_nhan_su: false },
+  nhan_vien_kho:   { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'khovan'],                                                        xem_luong: false, admin: false, them_nhan_su: false },
+  hcns:            { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'nhansu', 'quantri'],                                             xem_luong: false, admin: false, them_nhan_su: true  },
+  van_hanh_san:    { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'kinhdoanh', 'donhoan'],                                          xem_luong: false, admin: false, them_nhan_su: false },
   // NV Chăm sóc khách hàng (Sếp Ngọc yêu cầu 20/08/2026): xem tab Kinh doanh
   // (đặc biệt pill "Chăm sóc KH" — xếp hạng khách hoàn/hủy nhiều) + Đơn hoàn
   // để nắm tình trạng đơn khi trả lời khách, nhưng KHÔNG được thao tác luồng
   // 3 chặng (không nằm trong CO_THAO_TAC_VAN_HANH bên dưới) — chỉ xem, việc
   // xử lý vẫn của Vận hành sàn/Kho/Kế toán đúng ranh giới bộ phận đã chốt.
-  cskh:            { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'kinhdoanh', 'donhoan'],                                          xem_luong: false, admin: false, them_nhan_su: false },
+  cskh:            { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'kinhdoanh', 'donhoan'],                                          xem_luong: false, admin: false, them_nhan_su: false },
   // Vai trò TEST (Sếp Ngọc chốt 19/08/2026): cho nhân viên vào bấm thử để
   // hiểu luồng 3 chặng Kho -> Vận hành sàn -> Kế toán, KHÔNG dính quyền admin
   // (không cấp/khoá tài khoản, không xem lương, không thêm nhân sự). Xem
   // được đủ các tab liên quan tới luồng đơn hoàn để test trọn vẹn từ đầu tới cuối.
-  nv_test:         { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'kinhdoanh', 'khovan', 'donhoan', 'ketoan'],                      xem_luong: false, admin: false, them_nhan_su: false }
+  nv_test:         { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'kinhdoanh', 'khovan', 'donhoan', 'ketoan'],                      xem_luong: false, admin: false, them_nhan_su: false }
 };
 
 /* ---- Quyền trong module Kho --------------------------------------------

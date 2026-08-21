@@ -236,6 +236,54 @@
       </div>
     </section>
 
+    <!-- ---------- Lịch sử làm việc — kho lưu trữ TOÀN CỤC mọi việc trong Trạm
+         Mục Tiêu, ai làm gì, xong khi nào, kết quả ra sao. Sếp Ngọc yêu cầu
+         21/08/2026, mở cho mọi vai trò xem (đúng tinh thần minh bạch MBOs). ---------- -->
+    <section class="view" id="v-lichsuviec" hidden>
+      <div class="view-head">
+        <h3>Lịch sử làm việc</h3>
+        <p>Toàn bộ việc trong Trạm Mục Tiêu — của tất cả mọi người, không riêng của bạn. Ai làm gì, xong khi nào, kết quả ra sao đều lưu lại ở đây.</p>
+      </div>
+
+      <div class="panel">
+        <div class="panel-body" style="padding-bottom:0">
+          <div class="dh-timkiem">
+            <div class="search">
+              <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+              </svg>
+              <input type="search" id="ls-cv-tim" placeholder="Tìm: tên việc · người nhận · người giao · mục tiêu">
+            </div>
+            <select id="ls-cv-loctt" class="chon-nho" title="Lọc theo trạng thái">
+              <option value="">Tất cả trạng thái</option>
+              <option value="hoan_thanh">Hoàn thành</option>
+              <option value="dang_lam">Đang làm</option>
+              <option value="cho_duyet">Chờ duyệt</option>
+              <option value="moi">Mới giao</option>
+              <option value="huy">Đã huỷ</option>
+            </select>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Việc</th>
+                <th>Người nhận</th>
+                <th>Người giao</th>
+                <th>Mục tiêu</th>
+                <th>Hạn chót</th>
+                <th>Trạng thái</th>
+                <th>Cập nhật</th>
+              </tr>
+            </thead>
+            <tbody id="ls-cv-bang"></tbody>
+          </table>
+        </div>
+        <div class="empty" id="ls-cv-trong" hidden>Không tìm thấy việc nào khớp.</div>
+      </div>
+    </section>
+
     <!-- ---------- Danh bạ ---------- -->
     <section class="view" id="v-danhba" hidden>
       <div class="view-head">

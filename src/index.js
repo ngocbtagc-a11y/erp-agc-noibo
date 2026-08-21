@@ -1179,6 +1179,23 @@ async function cvCapNhat(req, env) {
   return json({ ok: true });
 }
 
+/* Lịch sử làm việc — kho lưu trữ TOÀN CỤC mọi việc trong Trạm Mục Tiêu,
+   không chỉ việc của riêng người xem (Sếp Ngọc yêu cầu 21/08/2026: "lưu trữ
+   lại quá trình làm việc của nhân sự, ai làm gì, xong task gì như nào").
+   Mở cho mọi vai trò xem (tab 'lichsuviec' — xem quyen.js), đúng tinh thần
+   minh bạch đã áp dụng cho Trạm Mục Tiêu (MBOs): ai cũng thấy tiến độ của
+   tất cả thành viên. Giới hạn 500 việc gần cập nhật nhất — team ~20 người,
+   đủ dùng, tránh kéo quá nhiều dữ liệu 1 lần. */
+async function cvLichSu(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  if (!duocXemTab(phien.vai_tro, 'lichsuviec')) return loi('Bạn không có quyền', 403);
+  const { results } = await env.DB.prepare(
+    `SELECT ${CV_COT} FROM ${CV_TU} ORDER BY c.cap_nhat_luc DESC, c.id DESC LIMIT 500`
+  ).all();
+  return json({ viec: results || [] });
+}
+
 /* ==========================================================================
    MỤC TIÊU — MBOs 3 tầng: Công ty -> Phòng ban -> Cá nhân (Sếp Phong chốt
    20/08/2026, Sếp Ngọc bổ sung tầng cá nhân + gộp chung 1 khối "Trạm Mục
@@ -2072,6 +2089,7 @@ const DUONG_DAN = {
   'GET  /api/cong-viec/danh-sach': cvDanhSach,
   'POST /api/cong-viec/tao':       cvTao,
   'POST /api/cong-viec/cap-nhat':  cvCapNhat,
+  'GET  /api/cong-viec/lich-su':   cvLichSu,
   'GET  /api/muc-tieu/danh-sach': mtDanhSach,
   'POST /api/muc-tieu/tao':       mtTao,
   'POST /api/muc-tieu/chot':      mtChot,

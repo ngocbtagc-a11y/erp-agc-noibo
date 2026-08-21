@@ -15,6 +15,7 @@ import { API } from './api.js';
 /* ---- Danh mục tab ------------------------------------------------------- */
 const TAB = [
   { id: 'tongquan',  ten: 'Trạm Mục Tiêu', icon: 'M3 12l9-9 9 9M5 10v10h14V10' },
+  { id: 'lichsuviec', ten: 'Lịch sử làm việc', icon: 'M12 8v4l3 3M21 12a9 9 0 11-9-9 9 9 0 019 9z' },
   { id: 'danhba',    ten: 'Danh bạ',    icon: 'M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8' },
   { id: 'nhansu',    ten: 'Nhân sự',    icon: 'M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75' },
   { id: 'kinhdoanh', ten: 'Kinh doanh', icon: 'M23 6l-9.5 9.5-5-5L1 18M17 6h6v6' },
@@ -512,6 +513,11 @@ if (TOI.quyen.includes('danhba')) {
 /* -- Trạm Mục Tiêu: giao việc cho nhân viên (máy chủ thật) -- */
 if (TOI.quyen.includes('congviec')) {
   try { await khoiDongCongViec(); } catch (e) { console.error('Trạm Mục Tiêu:', e); }
+}
+
+/* -- Lịch sử làm việc (máy chủ thật) -- */
+if (TOI.quyen.includes('lichsuviec')) {
+  try { await khoiDongLichSuViec(); } catch (e) { console.error('Lịch sử làm việc:', e); }
 }
 
 /* -- Chat nội bộ (máy chủ thật) -- */
@@ -1178,6 +1184,58 @@ async function khoiDongCongViec() {
 
   window.LAM_MOI_CONGVIEC = taiLai;   // để chuông thông báo gọi làm mới được
   await taiLai();
+}
+
+/* ==========================================================================
+   LỊCH SỬ LÀM VIỆC — kho lưu trữ TOÀN CỤC mọi việc trong Trạm Mục Tiêu, của
+   TẤT CẢ mọi người chứ không riêng người xem (Sếp Ngọc yêu cầu 21/08/2026:
+   "lưu trữ lại quá trình làm việc của nhân sự, ai làm gì, xong task gì như
+   nào"). Chỉ đọc — không có nút thao tác nào ở đây, đúng vai trò 1 cuốn sổ
+   lưu trữ, không phải nơi làm việc (đó là Trạm Mục Tiêu).
+   ========================================================================== */
+async function khoiDongLichSuViec() {
+  let DS_LSCV = [];
+
+  function capNhatVN(s) {
+    if (!s) return '—';
+    const [ngay, gio] = String(s).split(' ');
+    const [nam, thang, ng] = (ngay || '').split('-');
+    return ng && thang ? `${ng}/${thang}/${nam} ${(gio || '').slice(0, 5)}` : s;
+  }
+  function hanChotVN(hanChot) {
+    if (!hanChot) return '—';
+    const quaHan = hanChot < new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
+    const [nam, thang, ngay] = hanChot.split('-');
+    return `<span class="${quaHan ? 'canh-bao-chu' : ''}">${ngay}/${thang}/${nam}</span>`;
+  }
+
+  function veBangLsCv() {
+    const k = boDau(($('#ls-cv-tim').value || '').trim());
+    const locTt = $('#ls-cv-loctt').value;
+    const ds = DS_LSCV.filter(r =>
+      (!locTt || r.trang_thai === locTt) &&
+      (!k || boDau(`${r.tieu_de} ${r.nguoi_nhan_ten || ''} ${r.nguoi_giao_ten || ''} ${r.muc_tieu_ten || ''}`).includes(k)));
+    veBang('#ls-cv-bang', ds, r => {
+      const tt = CV_TRANG_THAI[r.trang_thai] || CV_TRANG_THAI.moi;
+      return `<td><div class="nm">${esc(r.tieu_de)}</div>${r.dau_ra ? `<div class="sm">${esc(r.dau_ra)}</div>` : ''}${r.ket_qua ? `<div class="sm"><b>Kết quả:</b> ${esc(r.ket_qua)}</div>` : ''}</td>` +
+        `<td class="sm">${esc(r.nguoi_nhan_ten)}</td>` +
+        `<td class="sm">${esc(r.nguoi_giao_ten)}</td>` +
+        `<td class="sm">${esc(r.muc_tieu_ten || '—')}</td>` +
+        `<td class="sm">${hanChotVN(r.han_chot)}</td>` +
+        `<td><span class="tag ${tt.mau}">${tt.chu}</span></td>` +
+        `<td class="sm">${capNhatVN(r.cap_nhat_luc)}</td>`;
+    });
+    $('#ls-cv-trong').hidden = ds.length > 0;
+  }
+
+  try {
+    const { viec } = await API.cvLichSu();
+    DS_LSCV = viec || [];
+  } catch { /* trống — hiện bảng rỗng, không chặn cả trang */ }
+  veBangLsCv();
+
+  $('#ls-cv-tim').addEventListener('input', veBangLsCv);
+  $('#ls-cv-loctt').addEventListener('change', veBangLsCv);
 }
 
 /* ==========================================================================
