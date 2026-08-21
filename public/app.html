@@ -186,20 +186,6 @@
               <select id="cv-nguoi-nhan" required><option value="">— Chọn người nhận việc —</option></select>
             </div>
             <div class="field field-rong">
-              <label>Người phối hợp <span class="hint">(tuỳ chọn — chọn nhiều người hỗ trợ)</span></label>
-              <div class="search cv-ph-search">
-                <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-                  <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
-                </svg>
-                <input type="text" id="cv-phoi-hop-tim" placeholder="Gõ tên để lọc…">
-              </div>
-              <div id="cv-phoi-hop" class="cv-phoihop"></div>
-            </div>
-            <div class="field field-rong">
-              <label>Thuộc mục tiêu <span class="hint">(tuỳ chọn — để tự tính tiến độ mục tiêu)</span></label>
-              <select id="cv-muc-tieu"><option value="">— Không gắn mục tiêu —</option></select>
-            </div>
-            <div class="field field-rong">
               <label>Tên việc *</label>
               <input type="text" id="cv-tieu-de" required placeholder="Ví dụ: Rà soát tồn kho lô hàng chè chưng yến">
             </div>
@@ -207,14 +193,35 @@
               <label>Đầu ra cụ thể cần đạt *</label>
               <textarea id="cv-dau-ra" required rows="2" placeholder="Không ghi 'làm gì' — ghi rõ XONG thì kết quả trông như thế nào. Ví dụ: File Excel đối chiếu tồn thực tế vs sổ sách, khớp 100%, gửi trước 17h."></textarea>
             </div>
-            <div class="field field-rong">
-              <label>Ghi chú thêm (tuỳ chọn)</label>
-              <textarea id="cv-mo-ta" rows="2" placeholder="Bối cảnh, cách làm gợi ý, ai cần phối hợp…"></textarea>
-            </div>
             <div class="field">
               <label>Hạn chót (tuỳ chọn)</label>
               <input type="date" id="cv-han-chot">
             </div>
+
+            <div class="field field-rong" style="margin-bottom:0">
+              <button type="button" class="btn-nho" id="cv-nut-tuychon">+ Thêm tuỳ chọn (mục tiêu, người phối hợp, ghi chú)</button>
+            </div>
+            <div class="field-rong" id="cv-tuychon-them" hidden>
+              <div class="field field-rong">
+                <label>Thuộc mục tiêu <span class="hint">(tuỳ chọn — để tự tính tiến độ mục tiêu)</span></label>
+                <select id="cv-muc-tieu"><option value="">— Không gắn mục tiêu —</option></select>
+              </div>
+              <div class="field field-rong">
+                <label>Người phối hợp <span class="hint">(tuỳ chọn — chọn nhiều người hỗ trợ)</span></label>
+                <div class="search cv-ph-search">
+                  <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                    <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+                  </svg>
+                  <input type="text" id="cv-phoi-hop-tim" placeholder="Gõ tên để lọc…">
+                </div>
+                <div id="cv-phoi-hop" class="cv-phoihop"></div>
+              </div>
+              <div class="field field-rong">
+                <label>Ghi chú thêm (tuỳ chọn)</label>
+                <textarea id="cv-mo-ta" rows="2" placeholder="Bối cảnh, cách làm gợi ý, ai cần phối hợp…"></textarea>
+              </div>
+            </div>
+
             <div class="field field-nut" style="display:flex; gap:10px">
               <button type="submit" class="btn-primary" id="cv-nut-luu" style="width:auto">Giao việc</button>
               <button type="button" class="btn-phu" id="cv-nut-huy" style="width:auto">Hủy</button>

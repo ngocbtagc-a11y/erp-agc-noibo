@@ -642,13 +642,20 @@ async function khoiDongMucTieu() {
   oCap.addEventListener('change', capNhatBoPhanField);
   capNhatBoPhanField();
 
-  $('#mt-nut-mo-form').addEventListener('click', () => {
-    oForm.hidden = !oForm.hidden;
-  });
+  // Đổi chữ nút theo trạng thái mở/đóng — cùng khuôn mẫu với nút Giao Mục
+  // Tiêu (dongMoFormCv), tránh tình trạng mở form ra rồi không thấy nút đóng
+  // ở đâu, phải kéo xuống tận cuối form mới thấy "Hủy" (Sếp Ngọc bắt lỗi
+  // 21/08/2026: "sổ ra xong ko có nút đóng à").
+  const nutMoMt = $('#mt-nut-mo-form');
+  function dongMoFormMt(hienForm) {
+    oForm.hidden = !hienForm;
+    nutMoMt.textContent = hienForm ? '✕ Đóng' : '+ Thêm mục tiêu';
+  }
+  nutMoMt.addEventListener('click', () => dongMoFormMt(oForm.hidden));
   $('#mt-nut-huy').addEventListener('click', () => {
     $('#mt-form').reset();
     capNhatBoPhanField();
-    oForm.hidden = true;
+    dongMoFormMt(false);
   });
 
   function veThe1MucTieu(m) {
@@ -748,7 +755,7 @@ async function khoiDongMucTieu() {
       });
       $('#mt-form').reset();
       capNhatBoPhanField();
-      oForm.hidden = true;
+      dongMoFormMt(false);
       await taiLaiMucTieu();
     } catch (err) {
       $('#mt-loi').textContent = err.message || 'Không lưu được, thử lại nhé.';
@@ -918,6 +925,7 @@ async function khoiDongCongViec() {
   $('#cv-nut-huy').addEventListener('click', () => {
     $('#cv-form').reset();
     dongMoFormCv(false);
+    moTuyChon(false);
     apDungCheDoTodo();
   });
 
@@ -937,6 +945,18 @@ async function khoiDongCongViec() {
   chonNguoiNhan.addEventListener('change', apDungCheDoTodo);
   apDungCheDoTodo();
 
+  // Form gọn: mục tiêu/phối hợp/ghi chú thêm gộp sau 1 nút "+ Thêm tuỳ chọn",
+  // ẩn mặc định — 4 ô chính (Giao cho ai/Tên việc/Đầu ra/Hạn chót) là đủ cho
+  // phần lớn việc, đỡ rối mắt (Sếp Ngọc chốt 21/08/2026: "thiết kế gọn, dễ
+  // làm, dễ hiểu thôi nhé").
+  const oTuyChon = $('#cv-tuychon-them');
+  const nutTuyChon = $('#cv-nut-tuychon');
+  function moTuyChon(hien) {
+    oTuyChon.hidden = !hien;
+    nutTuyChon.textContent = hien ? '− Ẩn tuỳ chọn thêm' : '+ Thêm tuỳ chọn (mục tiêu, người phối hợp, ghi chú)';
+  }
+  nutTuyChon.addEventListener('click', () => moTuyChon(oTuyChon.hidden));
+
   // Bấm "+ Thêm việc cho mục tiêu này" trong hộp chi tiết mục tiêu (Trạm Mục
   // Tiêu, khoiDongMucTieu bên dưới) → mở thẳng form giao việc, tự chọn sẵn
   // đúng mục tiêu đó (Sếp Ngọc: "mục tiêu 0/0 việc thì điền todo kiểu gì" —
@@ -944,12 +964,13 @@ async function khoiDongCongViec() {
   // Mục tiêu CÁ NHÂN thì chọn luôn sẵn người nhận = chủ mục tiêu đó — vừa
   // đúng người khi chính họ tự thêm việc, vừa đúng khi quản lý trực tiếp mở
   // mục tiêu của nhân viên rồi thêm việc thay (Sếp Ngọc yêu cầu 21/08/2026:
-  // "cá nhân đó hoặc quản lý trực tiếp thêm vào đó").
+  // "cá nhân đó hoặc quản lý trực tiếp thêm vào đó"). Mở sẵn khối "tuỳ chọn"
+  // để thấy rõ mục tiêu đã được chọn — không thì ẩn đi, tưởng chưa gắn.
   window.MO_FORM_GIAO_VIEC = (mucTieuId, nguoiNhanId) => {
     dongMoFormCv(true);
     if (nguoiNhanId) chonNguoiNhan.value = nguoiNhanId;
     const oMt = $('#cv-muc-tieu');
-    if (oMt && mucTieuId) oMt.value = mucTieuId;
+    if (oMt && mucTieuId) { oMt.value = mucTieuId; moTuyChon(true); }
     apDungCheDoTodo();
     $('#cv-form-body').scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
@@ -1055,6 +1076,7 @@ async function khoiDongCongViec() {
       $('#cv-form').reset();
       apDungCheDoTodo();
       dongMoFormCv(false);
+      moTuyChon(false);
       await taiLai();
     } catch (err) {
       $('#cv-loi').textContent = err.message || 'Không giao được việc, thử lại nhé.';
