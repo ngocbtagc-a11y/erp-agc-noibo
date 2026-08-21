@@ -764,6 +764,14 @@ async function khoiDongMucTieu() {
   $('#mtModalDong').addEventListener('click', () => { mtModal.hidden = true; });
   mtModal.addEventListener('click', e => { if (e.target === mtModal) mtModal.hidden = true; });
 
+  let mtDangXem = null;   // mục tiêu đang mở trong hộp chi tiết — để nút "+ Thêm việc" biết gắn vào đâu
+  $('#mtModalThemViec').addEventListener('click', () => {
+    if (!mtDangXem) return;
+    mtModal.hidden = true;
+    const nguoiNhan = mtDangXem.cap === 'ca_nhan' ? mtDangXem.nguoi_tao_id : null;
+    if (window.MO_FORM_GIAO_VIEC) window.MO_FORM_GIAO_VIEC(mtDangXem.id, nguoiNhan);
+  });
+
   function dongHanMt(hanChot) {
     if (!hanChot) return '—';
     const quaHan = hanChot < new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
@@ -774,6 +782,7 @@ async function khoiDongMucTieu() {
   async function moChiTietMucTieu(id) {
     const m = DS_MT.find(x => String(x.id) === String(id));
     if (!m) return;
+    mtDangXem = m;
     const pct = m.so_viec > 0 ? Math.round((m.so_viec_xong / m.so_viec) * 100) : 0;
     const mauBar = pct >= 70 ? '' : (pct >= 40 ? 'warn' : 'danger');
     const nhanCap = m.cap === 'cong_ty' ? 'Cấp công ty'
@@ -927,6 +936,23 @@ async function khoiDongCongViec() {
   }
   chonNguoiNhan.addEventListener('change', apDungCheDoTodo);
   apDungCheDoTodo();
+
+  // Bấm "+ Thêm việc cho mục tiêu này" trong hộp chi tiết mục tiêu (Trạm Mục
+  // Tiêu, khoiDongMucTieu bên dưới) → mở thẳng form giao việc, tự chọn sẵn
+  // đúng mục tiêu đó (Sếp Ngọc: "mục tiêu 0/0 việc thì điền todo kiểu gì" —
+  // trước đây phải tự mở form rồi tự tìm đúng mục tiêu trong dropdown).
+  // Mục tiêu CÁ NHÂN thì chọn luôn sẵn người nhận = chủ mục tiêu đó — vừa
+  // đúng người khi chính họ tự thêm việc, vừa đúng khi quản lý trực tiếp mở
+  // mục tiêu của nhân viên rồi thêm việc thay (Sếp Ngọc yêu cầu 21/08/2026:
+  // "cá nhân đó hoặc quản lý trực tiếp thêm vào đó").
+  window.MO_FORM_GIAO_VIEC = (mucTieuId, nguoiNhanId) => {
+    dongMoFormCv(true);
+    if (nguoiNhanId) chonNguoiNhan.value = nguoiNhanId;
+    const oMt = $('#cv-muc-tieu');
+    if (oMt && mucTieuId) oMt.value = mucTieuId;
+    apDungCheDoTodo();
+    $('#cv-form-body').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   // Chuyển màn Việc tôi nhận / Việc tôi giao
   $('#cvSeg').addEventListener('click', (e) => {
