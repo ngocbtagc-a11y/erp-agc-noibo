@@ -629,7 +629,10 @@ async function khoiDongVinhDanh() {
    ========================================================================== */
 async function khoiDongMucTieu() {
   const oCap = $('#mt-cap');
+  const oFieldCap = $('#mt-field-cap');
   const oBoPhanField = $('#mt-field-bophan');
+  const oTieuDeForm = $('#mtFormTieuDe');
+  const oNutLuu = $('#mt-nut-luu');
 
   // Chỉ Giám đốc/Phó Giám đốc mới thấy lựa chọn "Công ty" khi tạo mục tiêu —
   // máy chủ vẫn tự chặn lại nếu cố gửi thẳng (đây chỉ để gọn giao diện).
@@ -645,15 +648,43 @@ async function khoiDongMucTieu() {
   // nữa — trước đây "+ Giao Mục Tiêu" lại sổ ở tít dưới cùng trang, 2 nút
   // cạnh nhau mà 2 kiểu khác nhau (Sếp Ngọc bắt lỗi 21/08/2026: "ngáo đét,
   // sổ ra màn hình phụ đi cho dễ làm") — giờ cả 2 cùng 1 kiểu modal.
+  // Form dùng chung cho THÊM và SỬA — mtDangSuaId null = đang thêm mới, có
+  // giá trị = đang sửa mục tiêu đó (Sếp Ngọc: "ko sửa được mục tiêu... nếu
+  // mục tiêu muốn sửa cho phù hợp tình hình cụ thể phải làm thế nào").
+  // Sửa thì KHOÁ Cấp/Phòng ban (mtCapNhat chỉ nhận tiêu_đề/mô tả/trạng thái,
+  // không đổi cấp được — đổi cấp coi như tạo mục tiêu khác hẳn).
   const mtFormModal = $('#mtFormModalNen');
-  function dongMoFormMt(hienForm) { mtFormModal.hidden = !hienForm; }
-  $('#mt-nut-mo-form').addEventListener('click', () => dongMoFormMt(true));
-  mtFormModal.addEventListener('click', e => { if (e.target === mtFormModal) dongMoFormMt(false); });
-  $('#mt-nut-huy').addEventListener('click', () => {
+  let mtDangSuaId = null;
+
+  function moFormThem() {
+    mtDangSuaId = null;
     $('#mt-form').reset();
+    oFieldCap.hidden = false;
     capNhatBoPhanField();
-    dongMoFormMt(false);
-  });
+    oTieuDeForm.textContent = '+ Thêm mục tiêu';
+    oNutLuu.textContent = 'Lưu mục tiêu';
+    mtFormModal.hidden = false;
+  }
+  function moFormSua(m) {
+    mtDangSuaId = m.id;
+    oFieldCap.hidden = true;
+    oBoPhanField.hidden = true;
+    $('#mt-tieu-de').value = m.tieu_de;
+    $('#mt-mo-ta').value = m.mo_ta || '';
+    oTieuDeForm.textContent = 'Sửa mục tiêu';
+    oNutLuu.textContent = 'Lưu thay đổi';
+    mtFormModal.hidden = false;
+  }
+  function dongMoFormMt() {
+    mtFormModal.hidden = true;
+    mtDangSuaId = null;
+    $('#mt-form').reset();
+    oFieldCap.hidden = false;
+    capNhatBoPhanField();
+  }
+  $('#mt-nut-mo-form').addEventListener('click', moFormThem);
+  mtFormModal.addEventListener('click', e => { if (e.target === mtFormModal) dongMoFormMt(); });
+  $('#mt-nut-huy').addEventListener('click', dongMoFormMt);
 
   function veThe1MucTieu(m) {
     const pct = m.so_viec > 0 ? Math.round((m.so_viec_xong / m.so_viec) * 100) : 0;
@@ -682,9 +713,12 @@ async function khoiDongMucTieu() {
     if (daXong) badge += ` <span class="mt-chip ok">Hoàn thành</span>`;
     else if (daHuy) badge += ` <span class="mt-chip danger">Đã huỷ</span>`;
 
+    // Sửa được khi chưa xong/huỷ/chốt (mục tiêu công ty ĐÃ CHỐT thì khoá hẳn —
+    // Sếp Ngọc xác nhận 21/08/2026: "cấp công ty thì tôi sẽ không sửa vì đã
+    // chốt rồi nhưng bình thường sẽ phải chỉnh cho phù hợp tình hình cụ thể").
     const duocSua = (m.nguoi_tao_id === TOI.id || TOI.la_admin) && !daXong && !daHuy && !m.da_chot;
     const nutSua = duocSua
-      ? `<span class="mt-the-nut"><button type="button" class="btn-nho" data-mt-xong="${m.id}">Xong</button> <button type="button" class="btn-nho" data-mt-huy="${m.id}">Huỷ</button></span>`
+      ? `<span class="mt-the-nut"><button type="button" class="btn-nho" data-mt-sua="${m.id}">Sửa</button> <button type="button" class="btn-nho" data-mt-xong="${m.id}">Xong</button> <button type="button" class="btn-nho" data-mt-huy="${m.id}">Huỷ</button></span>`
       : '';
 
     // Thẻ nhỏ gọn: hàng 1 = tên (cắt 1 dòng, rê chuột hiện đủ) + % nổi bật;
@@ -743,16 +777,28 @@ async function khoiDongMucTieu() {
     $('#mt-loi').textContent = '';
     const nut = $('#mt-nut-luu');
     nut.disabled = true;
+    const tieuDe = $('#mt-tieu-de').value.trim();
+    const moTa = $('#mt-mo-ta').value.trim();
     try {
-      await API.mtTao({
-        cap: oCap.value,
-        bo_phan: $('#mt-bo-phan').value.trim(),
-        tieu_de: $('#mt-tieu-de').value.trim(),
-        mo_ta: $('#mt-mo-ta').value.trim()
-      });
-      $('#mt-form').reset();
-      capNhatBoPhanField();
-      dongMoFormMt(false);
+      if (mtDangSuaId) {
+        await API.mtCapNhat(mtDangSuaId, { tieu_de: tieuDe, mo_ta: moTa });
+      } else {
+        const capChon = oCap.value;
+        const kq = await API.mtTao({ cap: capChon, bo_phan: $('#mt-bo-phan').value.trim(), tieu_de: tieuDe, mo_ta: moTa });
+        // Mục tiêu CÁ NHÂN về bản chất chính là 1 việc cần làm — tự tạo luôn
+        // việc gắn vào, khỏi phải mở thêm "+ Giao Mục Tiêu" cho cùng 1 thứ
+        // (Sếp Ngọc: "thêm mục tiêu với giao mục tiêu cho cá nhân thì khác
+        // mẹ gì nhau, tích hợp vào 1 đi"). Lỗi ở bước này không chặn người
+        // dùng — mục tiêu đã lưu xong, thêm việc sau vẫn được qua "+ Thêm
+        // việc cho mục tiêu này" ở hộp chi tiết.
+        if (capChon === 'ca_nhan' && kq && kq.id) {
+          try {
+            await API.cvTao({ nguoi_nhan_id: TOI.id, tieu_de: tieuDe, dau_ra: moTa, muc_tieu_id: kq.id });
+            if (window.LAM_MOI_CONGVIEC) window.LAM_MOI_CONGVIEC();
+          } catch { /* im lặng — mục tiêu vẫn tạo thành công */ }
+        }
+      }
+      dongMoFormMt();
       await taiLaiMucTieu();
     } catch (err) {
       $('#mt-loi').textContent = err.message || 'Không lưu được, thử lại nhé.';
@@ -820,6 +866,12 @@ async function khoiDongMucTieu() {
   }
 
   async function xuLyNutMucTieu(e) {
+    const nutSua = e.target.closest('[data-mt-sua]');
+    if (nutSua) {
+      const m = DS_MT.find(x => String(x.id) === String(nutSua.getAttribute('data-mt-sua')));
+      if (m) moFormSua(m);
+      return;
+    }
     const nutChot = e.target.closest('[data-mt-chot]');
     const nutXong = e.target.closest('[data-mt-xong]');
     const nutHuy = e.target.closest('[data-mt-huy]');
