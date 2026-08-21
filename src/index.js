@@ -1895,19 +1895,20 @@ export default {
     // dongBoNen tự bỏ qua nếu sàn chưa cấu hình/chưa kết nối, và tự làm mới
     // token khi sắp hết hạn — nên Sếp không phải bấm tay, không phải nối lại.
     ctx.waitUntil((async () => {
+      // --- MỖI 5 PHÚT (nhẹ, cần tươi cho luồng đơn hoàn) ---
       try { await shopee.dongBoNen(env); } catch (e) { console.error('Cron Shopee:', e.message); }
       try { await tiktok.dongBoNen(env); } catch (e) { console.error('Cron TikTok:', e.message); }
-      // Doanh thu + số đơn (đơn hàng, khác đơn hoàn) — tự bỏ qua êm nếu chưa
-      // nạp migration them-donhang.sql hoặc chưa cấu hình/kết nối sàn.
-      try { await shopee.dongBoDonHangNen(env); } catch (e) { console.error('Cron Shopee đơn hàng:', e.message); }
-      try { await tiktok.dongBoDonHangNen(env); } catch (e) { console.error('Cron TikTok đơn hàng:', e.message); }
-      // Sau khi đồng bộ xong mới quét cảnh báo (mốc 12h đã được cập nhật)
       try { await kiemTraCanhBaoHoan(env); } catch (e) { console.error('Cron cảnh báo:', e.message); }
-      // Lý do hoàn nghiêm trọng (nghi hàng giả/nhái, hộp hàng rỗng) — báo NGAY
       try { await kiemTraLyDoNghiemTrong(env); } catch (e) { console.error('Cron cảnh báo nghiêm trọng:', e.message); }
-      // (Đã bỏ tự-đẩy-24h: luồng mới cho Vận hành sàn CHỦ ĐỘNG đẩy từng đơn sang kho)
-      // Luật cứng: đơn hoàn chỉ giữ trong tháng làm việc hiện tại
-      try { await donDepDuLieuNgoaiThang(env); } catch (e) { console.error('Cron dọn dữ liệu ngoài tháng:', e.message); }
+
+      // --- 1 GIỜ/LẦN (nặng: đồng bộ HÀNG NGÀN đơn hàng doanh thu + dọn dữ liệu) ---
+      // Doanh thu không cần tươi từng 5 phút; chạy quá thường xuyên làm hệ thống
+      // đơ. Chỉ chạy ở lần cron đầu giờ (phút 0). (Sếp Ngọc báo đơ 20/08/2026.)
+      if (new Date().getUTCMinutes() < 5) {
+        try { await shopee.dongBoDonHangNen(env); } catch (e) { console.error('Cron Shopee đơn hàng:', e.message); }
+        try { await tiktok.dongBoDonHangNen(env); } catch (e) { console.error('Cron TikTok đơn hàng:', e.message); }
+        try { await donDepDuLieuNgoaiThang(env); } catch (e) { console.error('Cron dọn dữ liệu ngoài tháng:', e.message); }
+      }
     })());
   },
 
