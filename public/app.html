@@ -164,13 +164,13 @@
 
       <!-- ---------- Trạm Mục Tiêu — giao việc cho nhân viên (gộp vào Tổng quan) ---------- -->
       <div class="view-head" style="margin-top:8px">
-        <h3>Trạm Mục Tiêu — giao việc</h3>
-        <p>Giao việc rõ đầu ra, theo dõi tới khi xong — không chỉ mô tả làm gì mà phải rõ kết quả cần đạt. Gắn vào mục tiêu ở trên (tuỳ chọn) để tự tính tiến độ.</p>
+        <h3>Trạm Mục Tiêu — việc cần làm &amp; giao việc</h3>
+        <p>Tự thêm việc cần làm cho bản thân (chọn "Tôi"), hoặc giao cho người khác rõ đầu ra. Mời thêm người phối hợp để làm cùng. Gắn vào mục tiêu ở trên (tuỳ chọn) để tự tính tiến độ.</p>
       </div>
 
       <div class="panel">
         <div class="panel-head">
-          <h4>Giao việc mới</h4>
+          <h4>Thêm việc cần làm / Giao việc</h4>
           <button type="button" class="btn-phu" id="cv-nut-mo-form" style="width:auto">+ Giao việc mới</button>
         </div>
         <div class="panel-body" id="cv-form-body" hidden>
@@ -219,7 +219,7 @@
       </div>
 
       <div class="seg" id="cvSeg">
-        <button class="seg-nut active" data-cv="nhan">Việc tôi nhận</button>
+        <button class="seg-nut active" data-cv="nhan">Việc cần làm</button>
         <button class="seg-nut" data-cv="phoihop">Việc phối hợp</button>
         <button class="seg-nut" data-cv="giao">Việc tôi giao</button>
       </div>
@@ -257,6 +257,7 @@
                   <th>Người giao</th>
                   <th>Hạn chót</th>
                   <th>Trạng thái</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody id="cv-bang-phoihop"></tbody>

@@ -789,6 +789,14 @@ async function khoiDongCongViec() {
   const { danh_ba } = await API.danhBa();
   const chonNguoiNhan = $('#cv-nguoi-nhan');
   const oPhoiHop = $('#cv-phoi-hop');
+
+  // Cho tự giao cho MÌNH = todo cá nhân (việc cần làm của bản thân). Ghim lên
+  // đầu danh sách cho dễ thấy.
+  const oToi = document.createElement('option');
+  oToi.value = TOI.id;
+  oToi.textContent = '🙋 Tôi — việc cần làm của tôi (todo cá nhân)';
+  chonNguoiNhan.appendChild(oToi);
+
   danh_ba.filter(n => n.id !== TOI.id).forEach(n => {
     const o = document.createElement('option');
     o.value = n.id; o.textContent = `${n.ho_ten} — ${n.chuc_vu || ''}`;
@@ -837,7 +845,24 @@ async function khoiDongCongViec() {
   $('#cv-nut-huy').addEventListener('click', () => {
     $('#cv-form').reset();
     dongMoFormCv(false);
+    apDungCheDoTodo();
   });
+
+  // Form THÍCH ỨNG: chọn "Tôi" -> todo cá nhân, đầu ra để tuỳ chọn + đổi chữ
+  // nút cho đúng ngữ cảnh (thêm việc cho mình chứ không phải "giao" cho ai).
+  const oDauRa = $('#cv-dau-ra');
+  const nhanDauRa = oDauRa ? oDauRa.closest('.field')?.querySelector('label') : null;
+  const chuDauRaGoc = nhanDauRa ? nhanDauRa.innerHTML : '';
+  function apDungCheDoTodo() {
+    const laToi = chonNguoiNhan.value === TOI.id;
+    if (oDauRa) oDauRa.required = !laToi;
+    if (nhanDauRa) nhanDauRa.innerHTML = laToi
+      ? 'Đầu ra cụ thể cần đạt <span class="hint">(tuỳ chọn với việc của mình)</span>'
+      : chuDauRaGoc;
+    $('#cv-nut-luu').textContent = laToi ? '+ Thêm việc cần làm' : 'Giao việc';
+  }
+  chonNguoiNhan.addEventListener('change', apDungCheDoTodo);
+  apDungCheDoTodo();
 
   // Chuyển màn Việc tôi nhận / Việc tôi giao
   $('#cvSeg').addEventListener('click', (e) => {
@@ -863,12 +888,23 @@ async function khoiDongCongViec() {
 
     veBang('#cv-bang-nhan', kq.nhan || [], r => {
       const tt = CV_TRANG_THAI[r.trang_thai] || CV_TRANG_THAI.moi;
+      // Trong "Việc cần làm", người nhận luôn là tôi; nếu người giao cũng là
+      // tôi => TODO CÁ NHÂN: bấm 1 phát là XONG, khỏi nộp + chờ duyệt.
+      const laTodo = r.nguoi_giao_id === TOI.id;
+      const chuaXong = ['moi', 'dang_lam', 'cho_duyet'].includes(r.trang_thai);
       let nut = '';
-      if (r.trang_thai === 'moi') nut = `<button type="button" class="btn-nho btn-primary" data-cv-batdau="${r.id}">Bắt đầu làm</button>`;
-      else if (r.trang_thai === 'dang_lam') nut = `<button type="button" class="btn-nho btn-primary" data-cv-nop="${r.id}">Nộp kết quả</button>`;
-      return `<td><div class="nm">${esc(r.tieu_de)}</div>${r.mo_ta ? `<div class="sm">${esc(r.mo_ta)}</div>` : ''}${r.phoi_hop_ten ? `<div class="sm">🤝 Phối hợp: ${esc(r.phoi_hop_ten)}</div>` : ''}${r.ket_qua ? `<div class="sm"><b>Kết quả:</b> ${esc(r.ket_qua)}</div>` : ''}</td>` +
-        `<td class="sm">${esc(r.dau_ra)}</td>` +
-        `<td class="sm">${esc(r.nguoi_giao_ten)}</td>` +
+      if (laTodo) {
+        if (chuaXong) nut = `<button type="button" class="btn-nho btn-primary" data-cv-xongngay="${r.id}">✓ Xong</button>` +
+          ` <button type="button" class="btn-nho" data-cv-huy="${r.id}">Bỏ</button>`;
+      } else if (r.trang_thai === 'moi') {
+        nut = `<button type="button" class="btn-nho btn-primary" data-cv-batdau="${r.id}">Bắt đầu làm</button>`;
+      } else if (r.trang_thai === 'dang_lam') {
+        nut = `<button type="button" class="btn-nho btn-primary" data-cv-nop="${r.id}">Nộp kết quả</button>`;
+      }
+      const nhanTodo = laTodo ? ` <span class="tag sage">🙋 Việc của tôi</span>` : '';
+      return `<td><div class="nm">${esc(r.tieu_de)}${nhanTodo}</div>${r.mo_ta ? `<div class="sm">${esc(r.mo_ta)}</div>` : ''}${r.phoi_hop_ten ? `<div class="sm">🤝 Phối hợp: ${esc(r.phoi_hop_ten)}</div>` : ''}${r.ket_qua ? `<div class="sm"><b>Kết quả:</b> ${esc(r.ket_qua)}</div>` : ''}</td>` +
+        `<td class="sm">${esc(r.dau_ra) || '—'}</td>` +
+        `<td class="sm">${laTodo ? '— (của tôi)' : esc(r.nguoi_giao_ten)}</td>` +
         `<td class="sm">${dongHan(r.han_chot)}</td>` +
         `<td><span class="tag ${tt.mau}">${tt.chu}</span></td>` +
         `<td style="white-space:nowrap">${nut}</td>`;
@@ -894,15 +930,21 @@ async function khoiDongCongViec() {
     });
     $('#cv-trong-giao').hidden = (kq.giao || []).length > 0;
 
-    // Việc mình được mời PHỐI HỢP (không phải người chính) — chỉ theo dõi
+    // Việc mình được mời PHỐI HỢP — làm CÙNG người chính, không chỉ theo dõi
+    // (Sếp Ngọc yêu cầu 20/08/2026: mời Huyền phối hợp thì Huyền phải bấm
+    // được như người nhận chính — trước đây bảng này không có nút nào cả).
     veBang('#cv-bang-phoihop', kq.phoi_hop || [], r => {
       const tt = CV_TRANG_THAI[r.trang_thai] || CV_TRANG_THAI.moi;
+      let nut = '';
+      if (r.trang_thai === 'moi') nut = `<button type="button" class="btn-nho btn-primary" data-cv-batdau="${r.id}">Bắt đầu làm</button>`;
+      else if (r.trang_thai === 'dang_lam') nut = `<button type="button" class="btn-nho btn-primary" data-cv-nop="${r.id}">Nộp kết quả</button>`;
       return `<td><div class="nm">${esc(r.tieu_de)}</div>${r.mo_ta ? `<div class="sm">${esc(r.mo_ta)}</div>` : ''}</td>` +
         `<td class="sm">${esc(r.dau_ra)}</td>` +
         `<td class="sm">${esc(r.nguoi_nhan_ten)}</td>` +
         `<td class="sm">${esc(r.nguoi_giao_ten)}</td>` +
         `<td class="sm">${dongHan(r.han_chot)}</td>` +
-        `<td><span class="tag ${tt.mau}">${tt.chu}</span></td>`;
+        `<td><span class="tag ${tt.mau}">${tt.chu}</span></td>` +
+        `<td style="white-space:nowrap">${nut}</td>`;
     });
     $('#cv-trong-phoihop').hidden = (kq.phoi_hop || []).length > 0;
   }
@@ -925,6 +967,7 @@ async function khoiDongCongViec() {
       // Gắn việc vào mục tiêu xong -> tiến độ mục tiêu đổi, tải lại luôn cho khớp
       if (window.LAM_MOI_MUCTIEU) window.LAM_MOI_MUCTIEU();
       $('#cv-form').reset();
+      apDungCheDoTodo();
       dongMoFormCv(false);
       await taiLai();
     } catch (err) {
@@ -937,14 +980,16 @@ async function khoiDongCongViec() {
   async function xuLyNut(e) {
     const nutBatDau = e.target.closest('[data-cv-batdau]');
     const nutNop = e.target.closest('[data-cv-nop]');
+    const nutXongNgay = e.target.closest('[data-cv-xongngay]');
     const nutDuyet = e.target.closest('[data-cv-duyet]');
     const nutTraLai = e.target.closest('[data-cv-tralai]');
     const nutHuy = e.target.closest('[data-cv-huy]');
-    const btn = nutBatDau || nutNop || nutDuyet || nutTraLai || nutHuy;
+    const btn = nutBatDau || nutNop || nutXongNgay || nutDuyet || nutTraLai || nutHuy;
     if (!btn) return;
 
     let id, trangThai, ketQua;
     if (nutBatDau) { id = btn.getAttribute('data-cv-batdau'); trangThai = 'dang_lam'; }
+    else if (nutXongNgay) { id = btn.getAttribute('data-cv-xongngay'); trangThai = 'hoan_thanh'; }
     else if (nutNop) {
       id = btn.getAttribute('data-cv-nop'); trangThai = 'cho_duyet';
       const nhap = prompt('Kết quả thực tế đạt được (so với đầu ra đã giao):', '');
@@ -975,6 +1020,7 @@ async function khoiDongCongViec() {
   }
   $('#cv-bang-nhan').addEventListener('click', xuLyNut);
   $('#cv-bang-giao').addEventListener('click', xuLyNut);
+  $('#cv-bang-phoihop').addEventListener('click', xuLyNut);
 
   window.LAM_MOI_CONGVIEC = taiLai;   // để chuông thông báo gọi làm mới được
   await taiLai();

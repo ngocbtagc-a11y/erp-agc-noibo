@@ -1040,7 +1040,10 @@ async function cvDanhSach(req, env) {
         ORDER BY (c.trang_thai IN ('hoan_thanh','huy')), (c.han_chot IS NULL), c.han_chot ASC, c.id DESC`
     ).bind(phien.nhan_su_id).all(),
     env.DB.prepare(
-      `SELECT ${CV_COT} FROM ${CV_TU} WHERE c.nguoi_giao_id = ?
+      // Việc GIAO cho người khác. Todo cá nhân (tự giao cho mình) không tính
+      // vào đây — nó nằm ở "Việc cần làm" — nên loại nguoi_nhan = nguoi_giao.
+      `SELECT ${CV_COT} FROM ${CV_TU}
+         WHERE c.nguoi_giao_id = ? AND c.nguoi_nhan_id <> c.nguoi_giao_id
         ORDER BY (c.trang_thai IN ('hoan_thanh','huy')), c.id DESC`
     ).bind(phien.nhan_su_id).all(),
     env.DB.prepare(
@@ -1062,10 +1065,13 @@ async function cvTao(req, env) {
   const hanChot = String(b.han_chot || '').trim() || null;
   const mucTieuId = b.muc_tieu_id ? parseInt(b.muc_tieu_id, 10) : null;
 
+  // Tự giao cho mình = TODO CÁ NHÂN (việc cần làm của bản thân) — được phép.
+  const laTodoCaNhan = nguoiNhanId === phien.nhan_su_id;
   if (!nguoiNhanId) return loi('Chưa chọn người nhận việc');
-  if (nguoiNhanId === phien.nhan_su_id) return loi('Không tự giao việc cho chính mình');
   if (!tieuDe) return loi('Thiếu tên việc');
-  if (!dauRa) return loi('Thiếu đầu ra cụ thể cần đạt — đừng chỉ ghi "làm gì", ghi rõ xong thì kết quả ra sao');
+  // Giao cho người KHÁC bắt buộc có đầu ra (tinh thần MBOs). Todo cá nhân thì
+  // đầu ra để tuỳ chọn cho nhẹ — todo kiểu "gọi NCC chè" không cần đặc tả.
+  if (!dauRa && !laTodoCaNhan) return loi('Thiếu đầu ra cụ thể cần đạt — đừng chỉ ghi "làm gì", ghi rõ xong thì kết quả ra sao');
 
   const ns = await env.DB.prepare('SELECT ho_ten FROM nhan_su WHERE id = ?').bind(nguoiNhanId).first();
   if (!ns) return loi('Không tìm thấy người nhận việc', 404);
@@ -1097,7 +1103,10 @@ async function cvTao(req, env) {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'moi', datetime('now','+7 hours'))
   `).bind(tieuDe, dauRa, moTa, phien.nhan_su_id, nguoiGiao, nguoiNhanId, ns.ho_ten, phoiHopIds, phoiHopTen, hanChot, mtIdHopLe).run();
 
-  await guiThongBao(env, null, `${nguoiGiao} giao việc mới: "${tieuDe}"`, 'cong_viec_moi', String(r.meta.last_row_id), nguoiNhanId);
+  // Todo cá nhân thì khỏi tự bắn thông báo cho chính mình.
+  if (!laTodoCaNhan) {
+    await guiThongBao(env, null, `${nguoiGiao} giao việc mới: "${tieuDe}"`, 'cong_viec_moi', String(r.meta.last_row_id), nguoiNhanId);
+  }
   for (const p of phList) {
     await guiThongBao(env, null, `${nguoiGiao} mời bạn PHỐI HỢP việc: "${tieuDe}" (người chính: ${ns.ho_ten})`, 'cong_viec_phoi_hop', String(r.meta.last_row_id), p.id);
   }
@@ -1119,14 +1128,27 @@ async function cvCapNhat(req, env) {
   const cv = await env.DB.prepare('SELECT * FROM cong_viec WHERE id = ?').bind(id).first();
   if (!cv) return loi('Không tìm thấy công việc', 404);
 
-  const laNguoiNhan = cv.nguoi_nhan_id === phien.nhan_su_id;
+  // Người PHỐI HỢP (được mời làm cùng, phoi_hop_ids lưu dạng ",id1,id2,")
+  // phải làm được y hệt người nhận chính — trước đây chỉ kiểm nguoi_nhan_id
+  // nên ai được mời phối hợp bấm nút nào cũng bị chặn 403, dù đã được mời
+  // (Sếp Ngọc báo lỗi 20/08/2026: "phân quyền cho Huyền sửa nhưng Huyền cứ
+  // không sửa được" — đúng lỗ hổng này).
+  const laPhoiHop = !!(cv.phoi_hop_ids && cv.phoi_hop_ids.includes(',' + phien.nhan_su_id + ','));
+  const laNguoiNhan = cv.nguoi_nhan_id === phien.nhan_su_id || laPhoiHop;
   const laNguoiGiao = cv.nguoi_giao_id === phien.nhan_su_id || laAdmin(phien.vai_tro);
+  const laTodoCaNhan = cv.nguoi_nhan_id === cv.nguoi_giao_id;
 
+  // TODO CÁ NHÂN: tự giao cho mình thì được đánh dấu XONG thẳng từ bất kỳ đâu
+  // (moi/dang_lam/cho_duyet), khỏi qua bước nộp + duyệt, không bắt điền kết quả.
+  if (laTodoCaNhan && laNguoiNhan && trangThaiMoi === 'hoan_thanh'
+      && ['moi', 'dang_lam', 'cho_duyet'].includes(cv.trang_thai)) {
+    // hợp lệ — bỏ qua luật dưới
+  }
   // Trả lại làm tiếp (cho_duyet -> dang_lam) — CHỈ người giao được bấm, tách
   // riêng khỏi bảng dưới vì đích đến 'dang_lam' còn dùng chung với nhánh
   // "Bắt đầu làm" (moi -> dang_lam, người NHẬN bấm) — 2 luật khác hẳn nhau
   // dù cùng đích đến, phải phân biệt bằng trạng thái NGUỒN.
-  if (trangThaiMoi === 'dang_lam' && cv.trang_thai === 'cho_duyet') {
+  else if (trangThaiMoi === 'dang_lam' && cv.trang_thai === 'cho_duyet') {
     if (!laNguoiGiao) return loi('Chỉ người giao việc mới trả lại được', 403);
   } else {
     const CHUYEN_HOP_LE = {
