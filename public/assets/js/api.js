@@ -119,11 +119,23 @@ export const API = {
     method: 'POST', body: JSON.stringify({ tai_khoan_id: taiKhoanId, kich_hoat: kichHoat })
   }),
 
+  qtSuaNhanSu: (ns) => goi('/api/quan-tri/sua-nhan-su', {
+    method: 'POST', body: JSON.stringify(ns)
+  }),
+
   /* ---- Kho: Xuất / Nhập / Tồn ---- */
   khoSanPham: () => goi('/api/kho/san-pham'),
 
   khoThemSanPham: (sp) => goi('/api/kho/them-san-pham', {
     method: 'POST', body: JSON.stringify(sp)
+  }),
+
+  khoSuaSanPham: (sp) => goi('/api/kho/sua-san-pham', {
+    method: 'POST', body: JSON.stringify(sp)
+  }),
+
+  khoAnHienSanPham: (id, dangBan) => goi('/api/kho/an-hien-san-pham', {
+    method: 'POST', body: JSON.stringify({ id, dang_ban: dangBan })
   }),
 
   khoNhap: (d) => goi('/api/kho/nhap', { method: 'POST', body: JSON.stringify(d) }),
@@ -138,6 +150,21 @@ export const API = {
 
   khoLichSu: (sanPhamId, gioiHan = 30) =>
     goi('/api/kho/lich-su?san_pham_id=' + encodeURIComponent(sanPhamId) + '&gioi_han=' + gioiHan),
+
+  /* ---- Dữ liệu nền: Phòng ban / Chức danh / Đơn vị tính ---- */
+  dlnPhongBan: () => goi('/api/dulieunen/phong-ban'),
+  dlnThemPhongBan: (ten) => goi('/api/dulieunen/phong-ban/them', { method: 'POST', body: JSON.stringify({ ten }) }),
+  dlnSuaPhongBan: (id, d) => goi('/api/dulieunen/phong-ban/sua', { method: 'POST', body: JSON.stringify({ id, ...d }) }),
+
+  dlnChucDanh: () => goi('/api/dulieunen/chuc-danh'),
+  dlnThemChucDanh: (ten) => goi('/api/dulieunen/chuc-danh/them', { method: 'POST', body: JSON.stringify({ ten }) }),
+  dlnSuaChucDanh: (id, d) => goi('/api/dulieunen/chuc-danh/sua', { method: 'POST', body: JSON.stringify({ id, ...d }) }),
+
+  dlnDonVi: () => goi('/api/dulieunen/don-vi'),
+  dlnThemDonVi: (ten) => goi('/api/dulieunen/don-vi/them', { method: 'POST', body: JSON.stringify({ ten }) }),
+  dlnSuaDonVi: (id, d) => goi('/api/dulieunen/don-vi/sua', { method: 'POST', body: JSON.stringify({ id, ...d }) }),
+
+  dlnTinhTrang: () => goi('/api/dulieunen/tinh-trang'),
 
   /* ---- Đón nhân sự mới (ảnh CCCD) ---- */
   nsDocCCCD: (anhBase64) => goi('/api/nhan-su/doc-cccd', {

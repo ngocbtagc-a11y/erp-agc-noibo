@@ -66,7 +66,7 @@ export async function danhSachSanPham(env, phien) {
 
   // (A) Danh mục sản phẩm đang bán
   const { results: sps } = await env.DB.prepare(`
-    SELECT id, ma_sku, ten, danh_muc, don_vi, theo_doi_hsd, ton_toi_thieu
+    SELECT id, ma_sku, ten, danh_muc, don_vi, don_vi_id, theo_doi_hsd, ton_toi_thieu
       FROM san_pham WHERE dang_ban = 1 ORDER BY ten
   `).all();
 
@@ -145,6 +145,17 @@ export async function danhSachSanPham(env, phien) {
    2. THÊM SẢN PHẨM (SKU)  — chỉ người có quyền quản lý kho
    ========================================================================== */
 
+/* Đơn vị tính: nếu body gửi don_vi_id (chọn từ danh mục chuẩn Dữ liệu nền)
+   thì lấy TÊN thật từ đó ghi luôn vào cột don_vi (chữ) để mọi màn hình cũ
+   đọc don_vi vẫn hiển thị đúng — không phải sửa lại chỗ khác. Id không hợp
+   lệ/đã ẩn thì âm thầm bỏ qua, không chặn thêm/sửa sản phẩm. */
+async function donViTuId(env, donViId) {
+  if (!donViId) return null;
+  const dv = await env.DB.prepare('SELECT id, ten FROM don_vi_tinh WHERE id = ? AND hoat_dong = 1')
+    .bind(donViId).first();
+  return dv || null;
+}
+
 export async function themSanPham(env, phien, body) {
   if (!duocQuanLyKho(phien.vai_tro)) return loi('Bạn không có quyền thêm mã hàng', 403);
 
@@ -159,18 +170,69 @@ export async function themSanPham(env, phien, body) {
   const id = 'sp_' + crypto.randomUUID().slice(0, 12);
   const theoDoiHsd = body.theo_doi_hsd === false ? 0 : 1;
   const tonToiThieu = soNguyenDuong(body.ton_toi_thieu) || 0;
+  const dv = await donViTuId(env, body.don_vi_id ? parseInt(body.don_vi_id, 10) : null);
 
   await env.DB.prepare(`
-    INSERT INTO san_pham (id, ma_sku, ten, danh_muc, don_vi, theo_doi_hsd, ton_toi_thieu)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO san_pham (id, ma_sku, ten, danh_muc, don_vi, don_vi_id, theo_doi_hsd, ton_toi_thieu)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `).bind(
     id, maSku, ten,
     String(body.danh_muc || '').trim() || null,
-    String(body.don_vi || '').trim() || 'sản phẩm',
+    dv ? dv.ten : (String(body.don_vi || '').trim() || 'sản phẩm'),
+    dv ? dv.id : null,
     theoDoiHsd, tonToiThieu
   ).run();
 
   return json({ ok: true, id });
+}
+
+/* Sửa sản phẩm đã có — cùng quyền với Thêm (duocQuanLyKho). Không cho đổi
+   mã SKU (khoá tự nhiên, đổi sẽ vỡ liên kết giao_dich_kho/lo_hang/sku_map
+   đang trỏ theo id chứ không theo mã, nên thực ra đổi mã vẫn an toàn về mặt
+   dữ liệu — nhưng CỐ TÌNH khoá lại để tránh gõ nhầm mã đang dùng thật). */
+export async function suaSanPham(env, phien, body) {
+  if (!duocQuanLyKho(phien.vai_tro)) return loi('Bạn không có quyền sửa mã hàng', 403);
+
+  const id = String(body.id || '').trim();
+  if (!id) return loi('Thiếu id sản phẩm');
+
+  const hienCo = await env.DB.prepare('SELECT id FROM san_pham WHERE id = ?').bind(id).first();
+  if (!hienCo) return loi('Không tìm thấy sản phẩm', 404);
+
+  const ten = String(body.ten || '').trim();
+  if (ten.length < 2) return loi('Vui lòng nhập tên sản phẩm');
+
+  const theoDoiHsd = body.theo_doi_hsd === false ? 0 : 1;
+  const tonToiThieu = soNguyenDuong(body.ton_toi_thieu) || 0;
+  const dv = await donViTuId(env, body.don_vi_id ? parseInt(body.don_vi_id, 10) : null);
+
+  await env.DB.prepare(`
+    UPDATE san_pham SET ten = ?, danh_muc = ?, don_vi = ?, don_vi_id = ?,
+           theo_doi_hsd = ?, ton_toi_thieu = ?
+     WHERE id = ?
+  `).bind(
+    ten,
+    String(body.danh_muc || '').trim() || null,
+    dv ? dv.ten : (String(body.don_vi || '').trim() || 'sản phẩm'),
+    dv ? dv.id : null,
+    theoDoiHsd, tonToiThieu, id
+  ).run();
+
+  return json({ ok: true });
+}
+
+/* Ẩn/hiện sản phẩm (dang_ban) — KHÔNG xoá vật lý, vì lô hàng/giao dịch kho
+   cũ vẫn tham chiếu tới id này (đúng nguyên tắc "không DELETE nếu đã dùng"). */
+export async function anHienSanPham(env, phien, body) {
+  if (!duocQuanLyKho(phien.vai_tro)) return loi('Bạn không có quyền ẩn/hiện mã hàng', 403);
+
+  const id = String(body.id || '').trim();
+  if (!id) return loi('Thiếu id sản phẩm');
+
+  await env.DB.prepare('UPDATE san_pham SET dang_ban = ? WHERE id = ?')
+    .bind(body.dang_ban ? 1 : 0, id).run();
+
+  return json({ ok: true });
 }
 
 /* ==========================================================================

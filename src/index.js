@@ -21,6 +21,7 @@ import * as kho from './kho.js';
 import * as shopee from './shopee.js';
 import * as tiktok from './tiktok.js';
 import * as nhansu from './nhansu.js';
+import * as dulieunen from './dulieunen.js';
 
 /* ---- Trả lời dạng JSON -------------------------------------------------- */
 
@@ -406,7 +407,8 @@ async function qtDanhSach(req, env) {
   if (l) return l;
 
   const { results } = await env.DB.prepare(`
-    SELECT n.id, n.ho_ten, n.viet_tat, n.chuc_vu, n.bo_phan, n.sdt, n.email,
+    SELECT n.id, n.ho_ten, n.viet_tat, n.chuc_vu, n.bo_phan, n.phong_ban_id, n.chuc_danh_id,
+           n.sdt, n.email, n.quan_ly_id,
            n.phap_nhan, n.trang_thai, n.dang_lam, (n.anh_chan_dung IS NOT NULL) AS co_anh,
            t.id AS tai_khoan_id, t.ten_dang_nhap, t.vai_tro, t.kich_hoat, t.phai_doi_mk
       FROM nhan_su n
@@ -418,6 +420,18 @@ async function qtDanhSach(req, env) {
     nhan_su: results,
     vai_tro: VAI_TRO_HOP_LE.map(v => ({ ma: v, ten: TEN_VAI_TRO[v] }))
   });
+}
+
+/* Phòng ban/Chức danh: nếu body gửi *_id (chọn từ danh mục chuẩn Dữ liệu
+   nền) thì lấy TÊN thật ghi vào cột chữ cũ (bo_phan/chuc_vu) để màn hình cũ
+   đọc cột chữ vẫn hiển thị đúng. Id không hợp lệ/đã ẩn thì âm thầm bỏ qua. */
+async function phongBanTuId(env, id) {
+  if (!id) return null;
+  return env.DB.prepare('SELECT id, ten FROM phong_ban WHERE id = ? AND hoat_dong = 1').bind(id).first();
+}
+async function chucDanhTuId(env, id) {
+  if (!id) return null;
+  return env.DB.prepare('SELECT id, ten FROM chuc_danh WHERE id = ? AND hoat_dong = 1').bind(id).first();
 }
 
 /* Thêm một nhân sự mới (chưa có tài khoản). Admin và HCNS đều thêm được. */
@@ -439,15 +453,20 @@ async function qtThemNhanSu(req, env) {
     ? ((b.luong === '' || b.luong == null) ? null : parseInt(String(b.luong).replace(/\D/g, ''), 10) || null)
     : null;
 
+  const pb = await phongBanTuId(env, b.phong_ban_id ? parseInt(b.phong_ban_id, 10) : null);
+  const cd = await chucDanhTuId(env, b.chuc_danh_id ? parseInt(b.chuc_danh_id, 10) : null);
+
   // phap_nhan luôn là 'Công ty' — công ty đang đóng HKD, không còn phân biệt.
   await env.DB.prepare(`
-    INSERT INTO nhan_su (id, ho_ten, viet_tat, chuc_vu, bo_phan, sdt, email,
-                         quan_ly_id, phap_nhan, trang_thai, ngay_vao, luong)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Công ty', ?, ?, ?)
+    INSERT INTO nhan_su (id, ho_ten, viet_tat, chuc_vu, bo_phan, phong_ban_id, chuc_danh_id,
+                         sdt, email, quan_ly_id, phap_nhan, trang_thai, ngay_vao, luong)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Công ty', ?, ?, ?)
   `).bind(
     id, hoTen, vietTatTen(hoTen),
-    String(b.chuc_vu || '').trim(),
-    String(b.bo_phan || '').trim(),
+    cd ? cd.ten : String(b.chuc_vu || '').trim(),
+    pb ? pb.ten : String(b.bo_phan || '').trim(),
+    pb ? pb.id : null,
+    cd ? cd.id : null,
     String(b.sdt || '').trim() || null,
     String(b.email || '').trim() || null,
     String(b.quan_ly_id || '').trim() || null,
@@ -457,6 +476,57 @@ async function qtThemNhanSu(req, env) {
   ).run();
 
   return json({ ok: true, id });
+}
+
+/* Sửa hồ sơ nhân sự đã có (Admin/HCNS) — trước đây CHƯA có, chỉ thêm mới
+   được. Cùng ranh giới lương như Thêm: HCNS gửi lương lên cũng bị bỏ qua. */
+async function qtSuaNhanSu(req, env) {
+  const { phien, loi: l } = await batBuocThemNhanSu(req, env);
+  if (l) return l;
+
+  let b;
+  try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+
+  const id = String(b.id || '').trim();
+  if (!id) return loi('Thiếu id nhân sự');
+
+  const hienCo = await env.DB.prepare('SELECT id FROM nhan_su WHERE id = ?').bind(id).first();
+  if (!hienCo) return loi('Không tìm thấy nhân sự', 404);
+
+  const hoTen = String(b.ho_ten || '').trim();
+  if (hoTen.length < 2) return loi('Vui lòng nhập họ tên');
+
+  const pb = await phongBanTuId(env, b.phong_ban_id ? parseInt(b.phong_ban_id, 10) : null);
+  const cd = await chucDanhTuId(env, b.chuc_danh_id ? parseInt(b.chuc_danh_id, 10) : null);
+
+  const coCapNhatLuong = laAdmin(phien.vai_tro) && b.luong !== undefined;
+  const luong = coCapNhatLuong
+    ? ((b.luong === '' || b.luong == null) ? null : parseInt(String(b.luong).replace(/\D/g, ''), 10) || null)
+    : null;
+
+  await env.DB.prepare(`
+    UPDATE nhan_su SET ho_ten = ?, viet_tat = ?, chuc_vu = ?, bo_phan = ?,
+           phong_ban_id = ?, chuc_danh_id = ?, sdt = ?, email = ?, quan_ly_id = ?,
+           trang_thai = ?, ngay_vao = ?${coCapNhatLuong ? ', luong = ?' : ''}
+     WHERE id = ?
+  `).bind(
+    ...[
+      hoTen, vietTatTen(hoTen),
+      cd ? cd.ten : String(b.chuc_vu || '').trim(),
+      pb ? pb.ten : String(b.bo_phan || '').trim(),
+      pb ? pb.id : null,
+      cd ? cd.id : null,
+      String(b.sdt || '').trim() || null,
+      String(b.email || '').trim() || null,
+      String(b.quan_ly_id || '').trim() || null,
+      String(b.trang_thai || 'da_ky').trim(),
+      String(b.ngay_vao || '').trim() || null,
+      ...(coCapNhatLuong ? [luong] : []),
+      id
+    ]
+  ).run();
+
+  return json({ ok: true });
 }
 
 /* Tạo tài khoản đăng nhập cho một nhân sự → trả mật khẩu tạm MỘT LẦN */
@@ -608,6 +678,95 @@ async function khoLichSu(req, env) {
   if (l) return l;
   const u = new URL(req.url);
   return kho.lichSu(env, phien, u.searchParams.get('san_pham_id'), u.searchParams.get('gioi_han'));
+}
+
+async function khoSuaSP(req, env) {
+  const { phien, loi: l } = await batBuocXemKho(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return kho.suaSanPham(env, phien, b);
+}
+
+async function khoAnHienSP(req, env) {
+  const { phien, loi: l } = await batBuocXemKho(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return kho.anHienSanPham(env, phien, b);
+}
+
+/* ==========================================================================
+   DỮ LIỆU NỀN — Phòng ban / Chức danh / Đơn vị tính + tình trạng sẵn sàng.
+   Nghiệp vụ nằm trong src/dulieunen.js. Ai có tab 'dulieunen' đều XEM được
+   (danh sách + tình trạng); THÊM/SỬA thì dulieunen.js tự kiểm quyền chi
+   tiết theo đúng chủ sở hữu từng nhóm (HCNS cho Tổ chức, Quản lý kho cho
+   Đơn vị tính) — giống cách kho.js chặn kép.
+   ========================================================================== */
+
+async function batBuocXemDuLieuNen(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return { loi: l };
+  if (!duocXemTab(phien.vai_tro, 'dulieunen')) return { loi: loi('Bạn không có quyền xem Dữ liệu nền', 403) };
+  return { phien };
+}
+
+async function dlnDanhSachPhongBan(req, env) {
+  const { loi: l } = await batBuocXemDuLieuNen(req, env);
+  if (l) return l;
+  return dulieunen.danhSachPhongBan(env);
+}
+async function dlnThemPhongBan(req, env) {
+  const { phien, loi: l } = await batBuocXemDuLieuNen(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return dulieunen.themPhongBan(env, phien, b);
+}
+async function dlnSuaPhongBan(req, env) {
+  const { phien, loi: l } = await batBuocXemDuLieuNen(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return dulieunen.suaPhongBan(env, phien, b);
+}
+
+async function dlnDanhSachChucDanh(req, env) {
+  const { loi: l } = await batBuocXemDuLieuNen(req, env);
+  if (l) return l;
+  return dulieunen.danhSachChucDanh(env);
+}
+async function dlnThemChucDanh(req, env) {
+  const { phien, loi: l } = await batBuocXemDuLieuNen(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return dulieunen.themChucDanh(env, phien, b);
+}
+async function dlnSuaChucDanh(req, env) {
+  const { phien, loi: l } = await batBuocXemDuLieuNen(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return dulieunen.suaChucDanh(env, phien, b);
+}
+
+async function dlnDanhSachDonVi(req, env) {
+  const { loi: l } = await batBuocXemDuLieuNen(req, env);
+  if (l) return l;
+  return dulieunen.danhSachDonVi(env);
+}
+async function dlnThemDonVi(req, env) {
+  const { phien, loi: l } = await batBuocXemDuLieuNen(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return dulieunen.themDonVi(env, phien, b);
+}
+async function dlnSuaDonVi(req, env) {
+  const { phien, loi: l } = await batBuocXemDuLieuNen(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return dulieunen.suaDonVi(env, phien, b);
+}
+
+async function dlnTinhTrang(req, env) {
+  const { loi: l } = await batBuocXemDuLieuNen(req, env);
+  if (l) return l;
+  return dulieunen.tinhTrangSanSang(env);
 }
 
 /* ==========================================================================
@@ -2084,16 +2243,29 @@ const DUONG_DAN = {
   'GET  /api/chat/tep':      chatTepDinhKem,
   'GET  /api/quan-tri/danh-sach':      qtDanhSach,
   'POST /api/quan-tri/them-nhan-su':   qtThemNhanSu,
+  'POST /api/quan-tri/sua-nhan-su':    qtSuaNhanSu,
   'POST /api/quan-tri/tao-tai-khoan':  qtTaoTaiKhoan,
   'POST /api/quan-tri/dat-lai-mat-khau': qtDatLaiMatKhau,
   'POST /api/quan-tri/khoa-tai-khoan': qtKhoaTaiKhoan,
   'GET  /api/kho/san-pham':      khoDanhSachSP,
   'POST /api/kho/them-san-pham': khoThemSP,
+  'POST /api/kho/sua-san-pham':  khoSuaSP,
+  'POST /api/kho/an-hien-san-pham': khoAnHienSP,
   'POST /api/kho/nhap':          khoNhap,
   'POST /api/kho/xuat':          khoXuat,
   'GET  /api/kho/lo':            khoLo,
   'GET  /api/kho/bao-cao':       khoBaoCao,
   'GET  /api/kho/lich-su':       khoLichSu,
+  'GET  /api/dulieunen/phong-ban':      dlnDanhSachPhongBan,
+  'POST /api/dulieunen/phong-ban/them': dlnThemPhongBan,
+  'POST /api/dulieunen/phong-ban/sua':  dlnSuaPhongBan,
+  'GET  /api/dulieunen/chuc-danh':      dlnDanhSachChucDanh,
+  'POST /api/dulieunen/chuc-danh/them': dlnThemChucDanh,
+  'POST /api/dulieunen/chuc-danh/sua':  dlnSuaChucDanh,
+  'GET  /api/dulieunen/don-vi':         dlnDanhSachDonVi,
+  'POST /api/dulieunen/don-vi/them':    dlnThemDonVi,
+  'POST /api/dulieunen/don-vi/sua':     dlnSuaDonVi,
+  'GET  /api/dulieunen/tinh-trang':     dlnTinhTrang,
   'GET  /api/shopee/trang-thai': shopeeTrangThai,
   'GET  /api/shopee/connect':    shopeeConnect,
   'GET  /api/shopee/callback':   shopeeCallback,

@@ -593,8 +593,8 @@
                 <input type="text" id="kvDanhMuc" placeholder="Hạt dinh dưỡng">
               </div>
               <div class="field">
-                <label>Đơn vị tính</label>
-                <input type="text" id="kvDonVi" placeholder="túi / hộp / kg">
+                <label>Đơn vị tính <span class="hint">· <a href="#" data-mo-tab="dulieunen">quản lý ở Dữ liệu nền</a></span></label>
+                <select id="kvDonVi"><option value="">— Chưa chọn —</option></select>
               </div>
               <div class="field">
                 <label>Mức tồn tối thiểu</label>
@@ -953,6 +953,79 @@
       </div>
     </section>
 
+    <!-- ---------- Dữ liệu nền: danh mục chuẩn dùng chung toàn hệ thống ---------- -->
+    <section class="view" id="v-dulieunen" hidden>
+      <div class="view-head">
+        <h3>Dữ liệu nền</h3>
+        <p>Danh mục chuẩn dùng chung — nhập một lần ở đây, dùng lại khắp ERP thay vì gõ tự do từng chỗ (tránh trùng lặp kiểu "kg"/"KG"/"Kg").</p>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h4>Tình trạng dữ liệu nền</h4>
+          <span class="hint">Còn thiếu gì để ERP bắt đầu chạy thật</span>
+        </div>
+        <div class="panel-body">
+          <div class="stats" id="dln-tinhtrang"></div>
+          <p class="hint" style="margin:16px 0 8px">Việc tiếp theo</p>
+          <div class="list" id="dln-viectieptheo"></div>
+        </div>
+      </div>
+
+      <div class="seg" id="dlnSeg">
+        <button class="seg-nut active" data-dln="tochuc">Tổ chức</button>
+        <button class="seg-nut" data-dln="hanghoa">Hàng hoá</button>
+      </div>
+
+      <div class="kv-pane" id="dln-pane-tochuc">
+        <div class="grid-2">
+          <div class="panel">
+            <div class="panel-head"><h4>Phòng ban</h4><span class="hint" id="dln-pb-dem"></span></div>
+            <div class="panel-body">
+              <form id="dln-pb-form" style="display:flex; gap:8px" autocomplete="off">
+                <input type="text" id="dln-pb-ten" placeholder="Tên phòng ban mới, VD: Kho vận" required style="flex:1">
+                <button type="submit" class="btn-nho btn-primary" style="width:auto">+ Thêm</button>
+              </form>
+              <div class="form-loi" id="dln-pb-loi"></div>
+              <div id="dln-pb-list" style="margin-top:10px"></div>
+              <div class="empty" id="dln-pb-trong" hidden>Chưa có phòng ban nào — thêm ở trên.</div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-head"><h4>Chức danh</h4><span class="hint" id="dln-cd-dem"></span></div>
+            <div class="panel-body">
+              <form id="dln-cd-form" style="display:flex; gap:8px" autocomplete="off">
+                <input type="text" id="dln-cd-ten" placeholder="Tên chức danh mới, VD: Nhân viên kho" required style="flex:1">
+                <button type="submit" class="btn-nho btn-primary" style="width:auto">+ Thêm</button>
+              </form>
+              <div class="form-loi" id="dln-cd-loi"></div>
+              <div id="dln-cd-list" style="margin-top:10px"></div>
+              <div class="empty" id="dln-cd-trong" hidden>Chưa có chức danh nào — thêm ở trên.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="kv-pane" id="dln-pane-hanghoa" hidden>
+        <div class="panel">
+          <div class="panel-head"><h4>Đơn vị tính</h4><span class="hint" id="dln-dv-dem"></span></div>
+          <div class="panel-body">
+            <form id="dln-dv-form" style="display:flex; gap:8px" autocomplete="off">
+              <input type="text" id="dln-dv-ten" placeholder="Tên đơn vị mới, VD: kg" required style="flex:1">
+              <button type="submit" class="btn-nho btn-primary" style="width:auto">+ Thêm</button>
+            </form>
+            <div class="form-loi" id="dln-dv-loi"></div>
+            <div id="dln-dv-list" style="margin-top:10px"></div>
+            <div class="empty" id="dln-dv-trong" hidden>Chưa có đơn vị tính nào — thêm ở trên.</div>
+          </div>
+          <div class="panel-body" style="padding-top:0">
+            <p class="hint">Quản lý Sản phẩm/SKU nằm ở tab <b>Kho vận → Tồn kho</b>.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- ---------- Quản trị (chỉ admin) ---------- -->
     <section class="view" id="v-quantri" hidden>
       <div class="view-head">
@@ -1071,12 +1144,12 @@
               <input type="text" id="qtHoTen" required placeholder="Ví dụ: Trần Văn Nam">
             </div>
             <div class="field">
-              <label>Chức vụ</label>
-              <input type="text" id="qtChucVu" placeholder="Nhân viên kho">
+              <label>Chức danh <span class="hint">· <a href="#" data-mo-tab="dulieunen">quản lý ở Dữ liệu nền</a></span></label>
+              <select id="qtChucDanh"><option value="">— Chưa chọn —</option></select>
             </div>
             <div class="field">
-              <label>Bộ phận</label>
-              <input type="text" id="qtBoPhan" placeholder="Kho vận">
+              <label>Phòng ban <span class="hint">· <a href="#" data-mo-tab="dulieunen">quản lý ở Dữ liệu nền</a></span></label>
+              <select id="qtPhongBan"><option value="">— Chưa chọn —</option></select>
             </div>
             <div class="field">
               <label>Số điện thoại</label>
@@ -1125,6 +1198,58 @@
       </div>
     </section>
 
+  </div>
+</div>
+
+<!-- Hộp Sửa hồ sơ nhân sự -->
+<div class="modal-nen" id="nsSuaModalNen" hidden>
+  <div class="modal">
+    <h4>Sửa hồ sơ nhân sự</h4>
+    <form id="nsSuaForm" class="form-luoi" autocomplete="off">
+      <input type="hidden" id="nsSua-id">
+      <div class="field field-rong">
+        <label>Họ tên *</label>
+        <input type="text" id="nsSua-hoten" required>
+      </div>
+      <div class="field">
+        <label>Chức danh <span class="hint">· <a href="#" data-mo-tab="dulieunen">quản lý ở Dữ liệu nền</a></span></label>
+        <select id="nsSua-chucdanh"><option value="">— Chưa chọn —</option></select>
+      </div>
+      <div class="field">
+        <label>Phòng ban <span class="hint">· <a href="#" data-mo-tab="dulieunen">quản lý ở Dữ liệu nền</a></span></label>
+        <select id="nsSua-phongban"><option value="">— Chưa chọn —</option></select>
+      </div>
+      <div class="field">
+        <label>Số điện thoại</label>
+        <input type="text" id="nsSua-sdt">
+      </div>
+      <div class="field">
+        <label>Email</label>
+        <input type="text" id="nsSua-email">
+      </div>
+      <div class="field">
+        <label>Quản lý trực tiếp</label>
+        <select id="nsSua-quanly"><option value="">— Không —</option></select>
+      </div>
+      <div class="field">
+        <label>Trạng thái</label>
+        <select id="nsSua-trangthai">
+          <option value="thu_viec">Thử việc</option>
+          <option value="cho_ky">Chờ ký</option>
+          <option value="da_ky">Đã ký HĐ</option>
+          <option value="parttime">Parttime</option>
+        </select>
+      </div>
+      <div class="field" id="nsSua-fieldluong">
+        <label>Đổi lương (đồng/tháng) <span class="goi-y">· để trống = giữ nguyên</span></label>
+        <input type="text" id="nsSua-luong" inputmode="numeric" placeholder="Chỉ gõ nếu muốn đổi">
+      </div>
+      <div class="field field-nut" style="display:flex; gap:10px">
+        <button type="submit" class="btn-primary" id="nsSua-nutluu" style="width:auto">Lưu thay đổi</button>
+        <button type="button" class="btn-phu" id="nsSua-nuthuy" style="width:auto">Hủy</button>
+      </div>
+    </form>
+    <div class="form-loi" id="nsSua-loi"></div>
   </div>
 </div>
 
@@ -1322,7 +1447,38 @@
       </table>
     </div>
 
+    <!-- Sửa mã hàng (chỉ Quản lý kho/Admin — ẩn ở app.js nếu không có quyền) -->
+    <form id="kvSuaForm" class="form-luoi" autocomplete="off" hidden style="margin-top:16px">
+      <input type="hidden" id="kvSua-id">
+      <div class="field field-rong">
+        <label>Tên sản phẩm *</label>
+        <input type="text" id="kvSua-ten" required>
+      </div>
+      <div class="field">
+        <label>Nhóm hàng</label>
+        <input type="text" id="kvSua-danhmuc">
+      </div>
+      <div class="field">
+        <label>Đơn vị tính</label>
+        <select id="kvSua-donvi"><option value="">— Chưa chọn —</option></select>
+      </div>
+      <div class="field">
+        <label>Mức tồn tối thiểu</label>
+        <input type="text" id="kvSua-tonmin" inputmode="numeric">
+      </div>
+      <div class="field">
+        <label class="ck"><input type="checkbox" id="kvSua-theodoihsd"> Theo dõi hạn sử dụng</label>
+      </div>
+      <div class="field field-nut" style="display:flex; gap:10px">
+        <button type="submit" class="btn-primary" id="kvSua-nutluu" style="width:auto">Lưu thay đổi</button>
+        <button type="button" class="btn-phu" id="kvSua-nuthuy" style="width:auto">Hủy</button>
+      </div>
+    </form>
+    <div class="form-loi" id="kvSua-loi"></div>
+
     <div class="modal-nut">
+      <button class="btn-phu" id="kvModalSua" hidden style="width:auto">Sửa mã hàng</button>
+      <button class="btn-phu" id="kvModalAnHien" hidden style="width:auto">Ẩn mã hàng</button>
       <button class="btn-primary" id="kvModalDong">Đóng</button>
     </div>
   </div>
