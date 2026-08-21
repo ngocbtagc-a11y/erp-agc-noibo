@@ -85,6 +85,22 @@ export async function coCotDonHangHuy(env) {
   return _coCotDonHangHuy;
 }
 
+/* Cột ma_van_don (mã vận đơn) nạp SAU, bằng migration riêng
+   (them-donhang-mavandon.sql) — kiểm tra ĐỘC LẬP với coCotDonHangHuy() ở
+   trên, vì máy chủ đã nạp xong migration cũ (không có cột này) rồi mới thêm
+   migration mới; gộp chung 1 cờ sẽ ghi nhầm vào cột chưa tồn tại. */
+let _coCotMaVanDon = null;
+export async function coCotMaVanDon(env) {
+  if (_coCotMaVanDon !== null) return _coCotMaVanDon;
+  try {
+    await env.DB.prepare(`SELECT ma_van_don FROM don_hang LIMIT 1`).first();
+    _coCotMaVanDon = true;
+  } catch {
+    _coCotMaVanDon = false;
+  }
+  return _coCotMaVanDon;
+}
+
 function host(env) { return (env.SHOPEE_HOST || 'https://partner.shopeemobile.com').replace(/\/+$/, ''); }
 function redirect(env) { return env.SHOPEE_REDIRECT || 'https://erp-agc.noiboagc.workers.dev/api/shopee/callback'; }
 function nowSec() { return Math.floor(Date.now() / 1000); }
@@ -381,6 +397,7 @@ export async function dongBoDonHangNen(env) {
   if (!kn) return null;
 
   const coHuy = await coCotDonHangHuy(env);
+  const coVanDon = await coCotMaVanDon(env);
   const tuGoc = moGocDongBoDonHang(kn);
   const denGoc = nowSec();
   const cauLenh = [];
@@ -413,9 +430,13 @@ export async function dongBoDonHangNen(env) {
       // ⚠️ CHƯA chạy thử với khóa thật — chưa chắc chắn giá trị cancel_by là
       // 'buyer'/'seller'/'system' hay dạng khác (xem NHAN_HUY_BOI trong
       // app.js > khoiDongDonHangHuy). Chạy thử xong cần đối chiếu lại.
+      // ⚠️ tracking_number CHƯA chạy thử với khóa thật — chưa chắc chắn tên
+      // field đúng (có thể nằm trong package_list/logistics_info thay vì ở
+      // gốc). Chạy thử xong cần đối chiếu, xem NHAN_HUY_BOI/cột Mã vận đơn
+      // trong app.js > khoiDongDonHangHuy nếu thấy trống hết dù đơn có ship.
       const kq = await goiTheoShop(env, '/api/v2/order/get_order_detail', kn, {
         order_sn_list: lo.join(','),
-        response_optional_fields: 'order_status,total_amount,currency,buyer_username,create_time,update_time,item_list,cancel_reason,cancel_by,buyer_cancel_reason'
+        response_optional_fields: 'order_status,total_amount,currency,buyer_username,create_time,update_time,item_list,cancel_reason,cancel_by,buyer_cancel_reason,tracking_number'
       });
       if (kq.error) throw new Error('Shopee báo lỗi (get_order_detail): ' + (kq.message || kq.error));
       const ds = (kq.response && kq.response.order_list) || [];
@@ -427,6 +448,8 @@ export async function dongBoDonHangNen(env) {
         const skuArr = [...new Set(items.map(it => it.model_sku || it.item_sku).filter(Boolean))];
         const spTen = tenArr.join(' | ') || null;
         const spSku = skuArr.join(' | ') || null;
+        const maVanDon = o.tracking_number ||
+          (o.package_list && o.package_list[0] && o.package_list[0].tracking_number) || null;
 
         const cotHuy = coHuy ? `, san_pham_ten, san_pham_sku, huy_ly_do, huy_boi, huy_ly_do_khach` : '';
         const gtHuy = coHuy ? `, ?, ?, ?, ?, ?` : '';
@@ -436,14 +459,19 @@ export async function dongBoDonHangNen(env) {
           : '';
         const thamSoHuy = coHuy ? [spTen, spSku, o.cancel_reason || null, o.cancel_by || null, o.buyer_cancel_reason || null] : [];
 
+        const cotVanDon = coVanDon ? `, ma_van_don` : '';
+        const gtVanDon = coVanDon ? `, ?` : '';
+        const capNhatVanDon = coVanDon ? `, ma_van_don=excluded.ma_van_don` : '';
+        const thamSoVanDon = coVanDon ? [maVanDon] : [];
+
         cauLenh.push(env.DB.prepare(`
-          INSERT INTO don_hang (order_sn, nguon, trang_thai, tong_tien, tien_te, nguoi_mua, so_sp, tao_luc_san, cap_nhat_san, du_lieu_json, dong_bo_luc${cotHuy})
-          VALUES (?, 'shopee', ?, ?, ?, ?, ?, ?, ?, ?, datetime('now','+7 hours')${gtHuy})
+          INSERT INTO don_hang (order_sn, nguon, trang_thai, tong_tien, tien_te, nguoi_mua, so_sp, tao_luc_san, cap_nhat_san, du_lieu_json, dong_bo_luc${cotHuy}${cotVanDon})
+          VALUES (?, 'shopee', ?, ?, ?, ?, ?, ?, ?, ?, datetime('now','+7 hours')${gtHuy}${gtVanDon})
           ON CONFLICT(order_sn) DO UPDATE SET
             trang_thai=excluded.trang_thai, tong_tien=excluded.tong_tien, tien_te=excluded.tien_te,
             nguoi_mua=excluded.nguoi_mua, so_sp=excluded.so_sp,
             cap_nhat_san=excluded.cap_nhat_san, du_lieu_json=excluded.du_lieu_json,
-            dong_bo_luc=datetime('now','+7 hours')${capNhatHuy}
+            dong_bo_luc=datetime('now','+7 hours')${capNhatHuy}${capNhatVanDon}
         `).bind(
           String(o.order_sn), o.order_status || null,
           Math.round((Number(o.total_amount) || 0) * 100000) || null, o.currency || null,
@@ -451,7 +479,8 @@ export async function dongBoDonHangNen(env) {
           o.create_time ? String(o.create_time) : null,
           o.update_time ? String(o.update_time) : null,
           JSON.stringify(o),
-          ...thamSoHuy
+          ...thamSoHuy,
+          ...thamSoVanDon
         ));
         them++;
       }

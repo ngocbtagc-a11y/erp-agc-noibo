@@ -1342,7 +1342,7 @@ async function khoiDongDonHangHuy() {
     return d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: '2-digit' });
   }
 
-  const { don_huy, co_bang } = await API.kdDonHangHuy();
+  const { don_huy, co_bang, co_van_don } = await API.kdDonHangHuy();
   $('#kd-donhanghuy-panel').hidden = false;
   if (!co_bang) {
     $('#kd-dhh-dem').textContent = 'Chưa nạp migration them-donhang-huy.sql';
@@ -1363,17 +1363,26 @@ async function khoiDongDonHangHuy() {
     const spCell = `<td class="sm" title="${esc(spTen)}">${esc(spTen)}` +
       (spSku ? `<div class="phu">${esc(spSku)}</div>` : '') + `</td>`;
     const lyDo = r.huy_ly_do_khach || r.huy_ly_do || '—';
+    // Cột Mã vận đơn chỉ hiện khi máy chủ đã nạp migration them-donhang-mavandon.sql
+    const vanDonCell = co_van_don ? `<td class="sm">${esc(r.ma_van_don || '—')}</td>` : '';
     return `<td>${ngTag}</td>` +
       `<td class="sm">${ngayVN(r.tao_luc_san)}</td>` +
       `<td class="sm">${esc(r.order_sn)}</td>` +
+      vanDonCell +
       `<td class="sm">${esc(r.nguoi_mua || '—')}</td>` +
       spCell +
       `<td class="num">${tien}</td>` +
       `<td class="sm">${esc(NHAN_HUY_BOI[r.huy_boi] || r.huy_boi || '—')}</td>` +
       `<td class="sm">${esc(lyDo)}</td>`;
   });
+  // Ẩn cột "Mã vận đơn" trên tiêu đề bảng khi máy chủ CHƯA nạp migration
+  // them-donhang-mavandon.sql (server bỏ hẳn cột đó khỏi dữ liệu trả về).
+  const thVanDon = $('#kd-dhh-th-mavandon');
+  if (thVanDon) thVanDon.hidden = !co_van_don;
   $('#kd-dhh-trong').hidden = don_huy.length > 0;
-  $('#kd-dhh-dem').textContent = `${don_huy.length} đơn bị hủy tháng này`;
+  $('#kd-dhh-dem').textContent = co_van_don
+    ? `${don_huy.length} đơn bị hủy sau khi đã chuẩn bị (có mã vận đơn) tháng này`
+    : `${don_huy.length} đơn bị hủy tháng này`;
 }
 
 /* Chăm sóc khách hàng — bảng xếp hạng khách hoàn/hủy nhiều nhất 6 tháng gần đây */

@@ -1796,18 +1796,25 @@ async function donHangHuy(req, env) {
   const _vn = new Date(Date.now() + 7 * 3600 * 1000);
   const dauThangSec = Math.floor(Date.UTC(_vn.getUTCFullYear(), _vn.getUTCMonth(), 1) / 1000) - 7 * 3600;
 
+  // Chỉ lấy đơn ĐÃ CÓ mã vận đơn (Sếp/chị Huyền chốt 21/08/2026): nghĩa là
+  // đã chuẩn bị/đóng gói xong rồi mới bị hủy — khác đơn hủy ngay từ đầu,
+  // chưa từng chuẩn bị. Cột ma_van_don nạp SAU (migrations/them-donhang-
+  // mavandon.sql) nên kiểm tra riêng, chưa nạp thì lọc êm bằng bộ lọc cũ
+  // (không có điều kiện mã vận đơn) thay vì báo lỗi cả mục.
+  const coVanDon = await shopee.coCotMaVanDon(env);
   try {
     const { results } = await env.DB.prepare(`
       SELECT order_sn, nguon, tong_tien, tien_te, nguoi_mua, so_sp,
              san_pham_ten, san_pham_sku, huy_ly_do, huy_boi, huy_ly_do_khach,
-             tao_luc_san, cap_nhat_san
+             ${coVanDon ? 'ma_van_don,' : ''} tao_luc_san, cap_nhat_san
         FROM don_hang
        WHERE trang_thai = 'CANCELLED' AND CAST(tao_luc_san AS INTEGER) >= ?
+         ${coVanDon ? 'AND ma_van_don IS NOT NULL' : ''}
        ORDER BY cap_nhat_san DESC LIMIT 300
     `).bind(dauThangSec).all();
-    return json({ don_huy: results, co_bang: true });
+    return json({ don_huy: results, co_bang: true, co_van_don: coVanDon });
   } catch {
-    return json({ don_huy: [], co_bang: false });   // chưa nạp migration them-donhang-huy.sql
+    return json({ don_huy: [], co_bang: false, co_van_don: false });   // chưa nạp migration them-donhang-huy.sql
   }
 }
 
