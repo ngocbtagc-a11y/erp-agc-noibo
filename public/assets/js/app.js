@@ -30,6 +30,10 @@ const TAB = [
    Nạp 1 lần, dùng lại cho cả dropdown ở Nhân sự, Kho vận, VÀ màn Dữ liệu
    nền tự quản lý — tránh mỗi màn tự gọi API riêng. window.LAM_MOI_DANHMUC_NEN
    để nơi khác gọi lại sau khi Thêm/Sửa 1 danh mục. */
+// Giữ NGUYÊN cả hàng đã ẩn trong 3 mảng này (Dữ liệu nền cần thấy hàng ẩn
+// mới bấm "Hiện" lại được — lỗi thật đã gặp: ẩn xong hàng biến mất luôn,
+// không có đường quay lại). Chỗ nào đổ DROPDOWN để CHỌN (Thêm/Sửa Nhân sự,
+// Thêm/Sửa Sản phẩm...) thì tự lọc .hoat_dong ngay tại chỗ dùng.
 let DS_PHONG_BAN = [], DS_CHUC_DANH = [], DS_DON_VI = [];
 async function taiDanhMucNen() {
   const [pb, cd, dv] = await Promise.all([
@@ -37,9 +41,9 @@ async function taiDanhMucNen() {
     API.dlnChucDanh().catch(() => ({ ds: [] })),
     API.dlnDonVi().catch(() => ({ ds: [] }))
   ]);
-  DS_PHONG_BAN = (pb.ds || []).filter(x => x.hoat_dong);
-  DS_CHUC_DANH = (cd.ds || []).filter(x => x.hoat_dong);
-  DS_DON_VI = (dv.ds || []).filter(x => x.hoat_dong);
+  DS_PHONG_BAN = pb.ds || [];
+  DS_CHUC_DANH = cd.ds || [];
+  DS_DON_VI = dv.ds || [];
 }
 window.LAM_MOI_DANHMUC_NEN = taiDanhMucNen;
 
@@ -107,6 +111,17 @@ function ngayVN(unix) {
   const d = new Date(Number(unix) * 1000);
   if (isNaN(d)) return '';
   return d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: '2-digit' });
+}
+
+/* Dựng option cho dropdown Phòng ban/Chức danh/Đơn vị tính — lọc bỏ hàng
+   đã ẩn NHƯNG vẫn giữ đúng hàng đang được chọn hiện tại (nếu record đang
+   sửa lỡ gắn vào 1 mục đã bị ẩn sau đó, để mất trắng lựa chọn hiện tại còn
+   tệ hơn là cho thấy nó kèm nhãn "(đã ẩn)"). */
+function tuyChonDanhMuc(ds, hienTaiId) {
+  const hienTai = String(hienTaiId || '');
+  const list = ds.filter(x => x.hoat_dong || String(x.id) === hienTai);
+  return '<option value="">— Chưa chọn —</option>' +
+    list.map(x => `<option value="${x.id}">${esc(x.ten)}${x.hoat_dong ? '' : ' (đã ẩn)'}</option>`).join('');
 }
 
 /* Bỏ dấu để gõ "ke toan" cũng tìm ra "Kế toán" */
@@ -2369,7 +2384,7 @@ async function khoiDongKho() {
   if (qKho.quan_ly) {
     $('#kv-panel-them').hidden = false;
     $('#kvDonVi').innerHTML = '<option value="">— Chưa chọn —</option>' +
-      DS_DON_VI.map(d => `<option value="${d.id}">${esc(d.ten)}</option>`).join('');
+      DS_DON_VI.filter(x => x.hoat_dong).map(d => `<option value="${d.id}">${esc(d.ten)}</option>`).join('');
   }
   // Không xem được giá vốn → bỏ cột giá trị tồn và ô đơn giá
   if (!qKho.gia_von) {
@@ -2568,8 +2583,7 @@ async function khoiDongKho() {
       $('#kvSua-danhmuc').value = sp.danh_muc || '';
       $('#kvSua-tonmin').value = sp.ton_toi_thieu ?? '';
       $('#kvSua-theodoihsd').checked = !!sp.theo_doi_hsd;
-      $('#kvSua-donvi').innerHTML = '<option value="">— Chưa chọn —</option>' +
-        DS_DON_VI.map(d => `<option value="${d.id}">${esc(d.ten)}</option>`).join('');
+      $('#kvSua-donvi').innerHTML = tuyChonDanhMuc(DS_DON_VI, sp.don_vi_id);
       $('#kvSua-donvi').value = sp.don_vi_id || '';
       $('#kvSua-loi').textContent = '';
       $('#kvSuaForm').hidden = false;
@@ -3415,9 +3429,9 @@ if (TOI.quyen.includes('quantri')) {
   function doDanhMucNhanSu() {
     const oCd = $('#qtChucDanh'), oPb = $('#qtPhongBan');
     oCd.innerHTML = '<option value="">— Chưa chọn —</option>' +
-      DS_CHUC_DANH.map(c => `<option value="${c.id}">${esc(c.ten)}</option>`).join('');
+      DS_CHUC_DANH.filter(x => x.hoat_dong).map(c => `<option value="${c.id}">${esc(c.ten)}</option>`).join('');
     oPb.innerHTML = '<option value="">— Chưa chọn —</option>' +
-      DS_PHONG_BAN.map(p => `<option value="${p.id}">${esc(p.ten)}</option>`).join('');
+      DS_PHONG_BAN.filter(x => x.hoat_dong).map(p => `<option value="${p.id}">${esc(p.ten)}</option>`).join('');
   }
   doDanhMucNhanSu();
 
@@ -3584,10 +3598,8 @@ if (TOI.quyen.includes('quantri')) {
     $('#nsSua-trangthai').value = n.trang_thai || 'da_ky';
 
     const oCd = $('#nsSua-chucdanh'), oPb = $('#nsSua-phongban');
-    oCd.innerHTML = '<option value="">— Chưa chọn —</option>' +
-      DS_CHUC_DANH.map(c => `<option value="${c.id}">${esc(c.ten)}</option>`).join('');
-    oPb.innerHTML = '<option value="">— Chưa chọn —</option>' +
-      DS_PHONG_BAN.map(p => `<option value="${p.id}">${esc(p.ten)}</option>`).join('');
+    oCd.innerHTML = tuyChonDanhMuc(DS_CHUC_DANH, n.chuc_danh_id);
+    oPb.innerHTML = tuyChonDanhMuc(DS_PHONG_BAN, n.phong_ban_id);
     oCd.value = n.chuc_danh_id || '';
     oPb.value = n.phong_ban_id || '';
 
