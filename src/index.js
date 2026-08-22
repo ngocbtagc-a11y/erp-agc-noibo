@@ -825,6 +825,48 @@ async function dlnTinhTrang(req, env) {
   return dulieunen.tinhTrangSanSang(env);
 }
 
+async function dlnDanhSachNCC(req, env) {
+  const { loi: l } = await batBuocXemDuLieuNen(req, env);
+  if (l) return l;
+  return dulieunen.danhSachNhaCungCap(env);
+}
+async function dlnThemNCC(req, env) {
+  const { phien, loi: l } = await batBuocXemDuLieuNen(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return dulieunen.themNhaCungCap(env, phien, b);
+}
+async function dlnSuaNCC(req, env) {
+  const { phien, loi: l } = await batBuocXemDuLieuNen(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return dulieunen.suaNhaCungCap(env, phien, b);
+}
+async function dlnKhoaNCC(req, env) {
+  const { phien, loi: l } = await batBuocXemDuLieuNen(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return dulieunen.khoaNhaCungCap(env, phien, b);
+}
+
+async function dlnDanhSachKho(req, env) {
+  const { loi: l } = await batBuocXemDuLieuNen(req, env);
+  if (l) return l;
+  return dulieunen.danhSachKho(env);
+}
+async function dlnThemKho(req, env) {
+  const { phien, loi: l } = await batBuocXemDuLieuNen(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return dulieunen.themKho(env, phien, b);
+}
+async function dlnSuaKho(req, env) {
+  const { phien, loi: l } = await batBuocXemDuLieuNen(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return dulieunen.suaKho(env, phien, b);
+}
+
 /* ==========================================================================
    SHOPEE — Đơn hoàn (Returns)
    ---------------------------------------------------------------------------
@@ -2326,6 +2368,13 @@ const DUONG_DAN = {
   'POST /api/dulieunen/don-vi/them':    dlnThemDonVi,
   'POST /api/dulieunen/don-vi/sua':     dlnSuaDonVi,
   'POST /api/dulieunen/don-vi/khoa':    dlnKhoaDonVi,
+  'GET  /api/dulieunen/ncc':      dlnDanhSachNCC,
+  'POST /api/dulieunen/ncc/them': dlnThemNCC,
+  'POST /api/dulieunen/ncc/sua':  dlnSuaNCC,
+  'POST /api/dulieunen/ncc/khoa': dlnKhoaNCC,
+  'GET  /api/dulieunen/kho':      dlnDanhSachKho,
+  'POST /api/dulieunen/kho/them': dlnThemKho,
+  'POST /api/dulieunen/kho/sua':  dlnSuaKho,
   'GET  /api/dulieunen/tinh-trang':     dlnTinhTrang,
   'GET  /api/shopee/trang-thai': shopeeTrangThai,
   'GET  /api/shopee/connect':    shopeeConnect,

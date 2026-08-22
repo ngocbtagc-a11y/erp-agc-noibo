@@ -161,21 +161,30 @@ export const API = {
 
   /* ---- Dữ liệu nền: Phòng ban / Chức danh / Đơn vị tính ---- */
   dlnPhongBan: () => goi('/api/dulieunen/phong-ban'),
-  dlnThemPhongBan: (ten) => goi('/api/dulieunen/phong-ban/them', { method: 'POST', body: JSON.stringify({ ten }) }),
+  dlnThemPhongBan: (ten, xacNhan) => goi('/api/dulieunen/phong-ban/them', { method: 'POST', body: JSON.stringify({ ten, xac_nhan: !!xacNhan }) }),
   dlnSuaPhongBan: (id, d) => goi('/api/dulieunen/phong-ban/sua', { method: 'POST', body: JSON.stringify({ id, ...d }) }),
   dlnKhoaPhongBan: (id, trangThai) => goi('/api/dulieunen/phong-ban/khoa', { method: 'POST', body: JSON.stringify({ id, trang_thai: trangThai }) }),
 
   dlnChucDanh: () => goi('/api/dulieunen/chuc-danh'),
-  dlnThemChucDanh: (ten) => goi('/api/dulieunen/chuc-danh/them', { method: 'POST', body: JSON.stringify({ ten }) }),
+  dlnThemChucDanh: (ten, xacNhan) => goi('/api/dulieunen/chuc-danh/them', { method: 'POST', body: JSON.stringify({ ten, xac_nhan: !!xacNhan }) }),
   dlnSuaChucDanh: (id, d) => goi('/api/dulieunen/chuc-danh/sua', { method: 'POST', body: JSON.stringify({ id, ...d }) }),
   dlnKhoaChucDanh: (id, trangThai) => goi('/api/dulieunen/chuc-danh/khoa', { method: 'POST', body: JSON.stringify({ id, trang_thai: trangThai }) }),
 
   dlnDonVi: () => goi('/api/dulieunen/don-vi'),
-  dlnThemDonVi: (ten) => goi('/api/dulieunen/don-vi/them', { method: 'POST', body: JSON.stringify({ ten }) }),
+  dlnThemDonVi: (ten, xacNhan) => goi('/api/dulieunen/don-vi/them', { method: 'POST', body: JSON.stringify({ ten, xac_nhan: !!xacNhan }) }),
   dlnSuaDonVi: (id, d) => goi('/api/dulieunen/don-vi/sua', { method: 'POST', body: JSON.stringify({ id, ...d }) }),
   dlnKhoaDonVi: (id, trangThai) => goi('/api/dulieunen/don-vi/khoa', { method: 'POST', body: JSON.stringify({ id, trang_thai: trangThai }) }),
 
   dlnTinhTrang: () => goi('/api/dulieunen/tinh-trang'),
+
+  dlnNCC: () => goi('/api/dulieunen/ncc'),
+  dlnThemNCC: (d) => goi('/api/dulieunen/ncc/them', { method: 'POST', body: JSON.stringify(d) }),
+  dlnSuaNCC: (id, d) => goi('/api/dulieunen/ncc/sua', { method: 'POST', body: JSON.stringify({ id, ...d }) }),
+  dlnKhoaNCC: (id, trangThai) => goi('/api/dulieunen/ncc/khoa', { method: 'POST', body: JSON.stringify({ id, trang_thai: trangThai }) }),
+
+  dlnKho: () => goi('/api/dulieunen/kho'),
+  dlnThemKho: (d) => goi('/api/dulieunen/kho/them', { method: 'POST', body: JSON.stringify(d) }),
+  dlnSuaKho: (id, d) => goi('/api/dulieunen/kho/sua', { method: 'POST', body: JSON.stringify({ id, ...d }) }),
 
   /* ---- Đón nhân sự mới (ảnh CCCD) ---- */
   nsDocCCCD: (anhBase64) => goi('/api/nhan-su/doc-cccd', {

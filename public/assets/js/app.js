@@ -2002,8 +2002,8 @@ async function khoiDongDuLieuNen() {
       r.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)';
       const nutSua = `<button type="button" class="btn-nho" data-sua="${m.id}">Sửa</button> `;
       const nutKhoa = daKhoa
-        ? (TOI.la_admin ? `<button type="button" class="btn-nho" data-mokhoa="${m.id}">Mở khoá</button> ` : '')
-        : `<button type="button" class="btn-nho" data-khoa="${m.id}">Xác nhận &amp; khoá</button> `;
+        ? (TOI.la_admin ? `<button type="button" class="btn-nho" data-mokhoa="${m.id}">Mở lại</button> ` : '')
+        : `<button type="button" class="btn-nho" data-khoa="${m.id}">Hoàn tất</button> `;
       r.innerHTML =
         `<span>${esc(m.ten)}${m.hoat_dong ? '' : ' <span class="tag mute">Đã ẩn</span>'}` +
           `${daKhoa ? ' <span class="tag warn">🔒 Đã khoá</span>' : ''}</span>` +
@@ -2033,7 +2033,7 @@ async function khoiDongDuLieuNen() {
         try { await xuLyAn(btnAn.dataset.an, btnAn.dataset.hd === '1'); await lamMoiTatCa(); }
         catch (err) { alert(err.message || 'Không lưu được, thử lại nhé.'); }
       } else if (btnKhoa) {
-        if (!confirm('Xác nhận & khoá mục này? Sau khi khoá, người thường sẽ không sửa tên được nữa — chỉ Giám đốc/Phó GĐ mới sửa hoặc mở khoá lại.')) return;
+        if (!confirm('Hoàn tất mục này? Sau đó người thường sẽ không sửa tên được nữa — chỉ Giám đốc/Phó GĐ mới sửa hoặc mở lại.')) return;
         try { await xuLyKhoa(btnKhoa.dataset.khoa, 'da_khoa'); await lamMoiTatCa(); }
         catch (err) { alert(err.message || 'Không thực hiện được, thử lại nhé.'); }
       } else if (btnMoKhoa) {
@@ -2057,31 +2057,205 @@ async function khoiDongDuLieuNen() {
     await veTinhTrang();
   }
 
+  // Thêm mới có kiểm tra "gần giống" (Search Before Create) — API trả về
+  // {canh_bao, giong:[...]} thay vì lỗi khi nghi trùng; hỏi xác nhận rồi gọi
+  // lại với xac_nhan=true để thực sự tạo. goiApi(ten, xacNhan) là 1 trong
+  // các hàm API.dlnThem* — dùng chung logic này cho cả 3 danh mục dưới.
+  async function themCoCanhBaoTrung(goiApi, ten, oLoi) {
+    let kq = await goiApi(ten, false);
+    if (kq && kq.canh_bao) {
+      const ok = confirm(`Đã có mục gần giống: "${kq.giong.join('", "')}".\nVẫn tạo "${ten}" là mục MỚI riêng?`);
+      if (!ok) return false;
+      kq = await goiApi(ten, true);
+    }
+    return true;
+  }
+
   $('#dln-pb-form').addEventListener('submit', async e => {
     e.preventDefault();
     const oLoi = $('#dln-pb-loi'); oLoi.textContent = '';
-    try { await API.dlnThemPhongBan($('#dln-pb-ten').value.trim()); $('#dln-pb-form').reset(); await lamMoiTatCa(); }
-    catch (err) { oLoi.textContent = err.message; }
+    try {
+      const ten = $('#dln-pb-ten').value.trim();
+      if (await themCoCanhBaoTrung(API.dlnThemPhongBan, ten, oLoi)) { $('#dln-pb-form').reset(); await lamMoiTatCa(); }
+    } catch (err) { oLoi.textContent = err.message; }
   });
   $('#dln-cd-form').addEventListener('submit', async e => {
     e.preventDefault();
     const oLoi = $('#dln-cd-loi'); oLoi.textContent = '';
-    try { await API.dlnThemChucDanh($('#dln-cd-ten').value.trim()); $('#dln-cd-form').reset(); await lamMoiTatCa(); }
-    catch (err) { oLoi.textContent = err.message; }
+    try {
+      const ten = $('#dln-cd-ten').value.trim();
+      if (await themCoCanhBaoTrung(API.dlnThemChucDanh, ten, oLoi)) { $('#dln-cd-form').reset(); await lamMoiTatCa(); }
+    } catch (err) { oLoi.textContent = err.message; }
   });
   $('#dln-dv-form').addEventListener('submit', async e => {
     e.preventDefault();
     const oLoi = $('#dln-dv-loi'); oLoi.textContent = '';
-    try { await API.dlnThemDonVi($('#dln-dv-ten').value.trim()); $('#dln-dv-form').reset(); await lamMoiTatCa(); }
-    catch (err) { oLoi.textContent = err.message; }
+    try {
+      const ten = $('#dln-dv-ten').value.trim();
+      if (await themCoCanhBaoTrung(API.dlnThemDonVi, ten, oLoi)) { $('#dln-dv-form').reset(); await lamMoiTatCa(); }
+    } catch (err) { oLoi.textContent = err.message; }
   });
 
-  // Chuyển màn Tổ chức / Hàng hoá
+  /* ---- Nhà cung cấp ---- */
+  let dsNCC = [], nccDangSua = null;
+  async function veNCC() {
+    const kq = await API.dlnNCC().catch(() => ({ ds: [] }));
+    dsNCC = kq.ds || [];
+    const box = $('#dln-ncc-list');
+    box.innerHTML = '';
+    dsNCC.forEach(n => {
+      const daKhoa = n.trang_thai === 'da_khoa';
+      const r = el('div', '', '');
+      r.style.cssText = 'display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)';
+      const phu = [n.ma_so_thue ? `MST: ${esc(n.ma_so_thue)}` : '', n.dien_thoai ? esc(n.dien_thoai) : '', n.dia_chi ? esc(n.dia_chi) : '']
+        .filter(Boolean).join(' · ');
+      const nutKhoa = daKhoa
+        ? (TOI.la_admin ? `<button type="button" class="btn-nho" data-ncc-mokhoa="${n.id}">Mở lại</button> ` : '')
+        : `<button type="button" class="btn-nho" data-ncc-khoa="${n.id}">Hoàn tất</button> `;
+      r.innerHTML =
+        `<div><div>${esc(n.ten)}${n.hoat_dong ? '' : ' <span class="tag mute">Đã ẩn</span>'}${daKhoa ? ' <span class="tag warn">🔒 Đã khoá</span>' : ''}</div>` +
+          (phu ? `<div class="sm" style="color:var(--text-mute)">${phu}</div>` : '') + `</div>` +
+        `<span style="white-space:nowrap"><button type="button" class="btn-nho" data-ncc-sua="${n.id}">Sửa</button> ${nutKhoa}` +
+        `<button type="button" class="btn-nho" data-ncc-an="${n.id}" data-hd="${n.hoat_dong ? 0 : 1}">${n.hoat_dong ? 'Ẩn' : 'Hiện'}</button></span>`;
+      box.appendChild(r);
+    });
+    $('#dln-ncc-dem').textContent = dsNCC.length ? `${dsNCC.length} nhà cung cấp` : '';
+    $('#dln-ncc-trong').hidden = dsNCC.length > 0;
+  }
+
+  function dienFormNCC(n) {
+    nccDangSua = n || null;
+    $('#dln-ncc-id').value = n ? n.id : '';
+    $('#dln-ncc-ten').value = n ? n.ten : '';
+    $('#dln-ncc-mst').value = n ? (n.ma_so_thue || '') : '';
+    $('#dln-ncc-dt').value = n ? (n.dien_thoai || '') : '';
+    $('#dln-ncc-diachi').value = n ? (n.dia_chi || '') : '';
+    $('#dln-ncc-nutluu').textContent = n ? 'Lưu' : '+ Thêm';
+    $('#dln-ncc-nuthuy').hidden = !n;
+    $('#dln-ncc-loi').textContent = '';
+  }
+
+  $('#dln-ncc-nuthuy').addEventListener('click', () => { $('#dln-ncc-form').reset(); dienFormNCC(null); });
+
+  $('#dln-ncc-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    const oLoi = $('#dln-ncc-loi'); oLoi.textContent = '';
+    if (nccDangSua && nccDangSua.trang_thai === 'da_khoa' && !TOI.la_admin) {
+      oLoi.textContent = 'Nhà cung cấp này đã khoá — cần Giám đốc/Phó Giám đốc sửa hoặc mở lại.';
+      return;
+    }
+    const du = {
+      ten: $('#dln-ncc-ten').value.trim(),
+      ma_so_thue: $('#dln-ncc-mst').value.trim(),
+      dien_thoai: $('#dln-ncc-dt').value.trim(),
+      dia_chi: $('#dln-ncc-diachi').value.trim()
+    };
+    try {
+      const goi = (xac) => nccDangSua
+        ? API.dlnSuaNCC(nccDangSua.id, { ...du, xac_nhan: xac })
+        : API.dlnThemNCC({ ...du, xac_nhan: xac });
+      let kq = await goi(false);
+      if (kq && kq.canh_bao) {
+        if (!confirm(`Đã có NCC gần giống: "${kq.giong.join('", "')}".\nVẫn lưu "${du.ten}" là mục MỚI riêng?`)) return;
+        kq = await goi(true);
+      }
+      $('#dln-ncc-form').reset(); dienFormNCC(null);
+      await veNCC();
+    } catch (err) { oLoi.textContent = err.message || 'Không lưu được, thử lại nhé.'; }
+  });
+
+  $('#dln-ncc-list').addEventListener('click', async e => {
+    const btnSua = e.target.closest('[data-ncc-sua]');
+    const btnAn = e.target.closest('[data-ncc-an]');
+    const btnKhoa = e.target.closest('[data-ncc-khoa]');
+    const btnMoKhoa = e.target.closest('[data-ncc-mokhoa]');
+    if (btnSua) {
+      const n = dsNCC.find(x => String(x.id) === btnSua.dataset.nccSua);
+      if (n.trang_thai === 'da_khoa' && !TOI.la_admin) {
+        alert('Nhà cung cấp này đã khoá — cần Giám đốc/Phó Giám đốc sửa hoặc mở lại.');
+        return;
+      }
+      dienFormNCC(n);
+      $('#dln-ncc-ten').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } else if (btnAn) {
+      try { await API.dlnSuaNCC(btnAn.dataset.nccAn, { hoat_dong: btnAn.dataset.hd === '1' }); await veNCC(); }
+      catch (err) { alert(err.message || 'Không thực hiện được, thử lại nhé.'); }
+    } else if (btnKhoa) {
+      if (!confirm('Hoàn tất nhà cung cấp này? Sau đó người thường sẽ không sửa được nữa — chỉ Giám đốc/Phó GĐ mới sửa hoặc mở lại.')) return;
+      try { await API.dlnKhoaNCC(btnKhoa.dataset.nccKhoa, 'da_khoa'); await veNCC(); }
+      catch (err) { alert(err.message || 'Không thực hiện được, thử lại nhé.'); }
+    } else if (btnMoKhoa) {
+      try { await API.dlnKhoaNCC(btnMoKhoa.dataset.nccMokhoa, 'nhap'); await veNCC(); }
+      catch (err) { alert(err.message || 'Không thực hiện được, thử lại nhé.'); }
+    }
+  });
+
+  /* ---- Kho (nhiều kho vật lý — chỉ Admin quản lý) ---- */
+  let dsKho = [], khoDangSua = null;
+  async function veKhoList() {
+    const kq = await API.dlnKho().catch(() => ({ ds: [] }));
+    dsKho = kq.ds || [];
+    const box = $('#dln-kho-list');
+    box.innerHTML = '';
+    dsKho.forEach(k => {
+      const r = el('div', '', '');
+      r.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)';
+      r.innerHTML =
+        `<span>${esc(k.ten)}${k.dia_chi ? ` <span class="sm" style="color:var(--text-mute)">— ${esc(k.dia_chi)}</span>` : ''}` +
+          `${k.hoat_dong ? '' : ' <span class="tag mute">Đã ẩn</span>'}</span>` +
+        (TOI.la_admin
+          ? `<span><button type="button" class="btn-nho" data-kho-sua="${k.id}">Sửa</button> ` +
+            `<button type="button" class="btn-nho" data-kho-an="${k.id}" data-hd="${k.hoat_dong ? 0 : 1}">${k.hoat_dong ? 'Ẩn' : 'Hiện'}</button></span>`
+          : '');
+      box.appendChild(r);
+    });
+    $('#dln-kho-dem').textContent = dsKho.length ? `${dsKho.length} kho` : '';
+    $('#dln-kho-trong').hidden = dsKho.length > 0;
+    if (!TOI.la_admin) $('#dln-kho-form').hidden = true;
+  }
+
+  function dienFormKho(k) {
+    khoDangSua = k || null;
+    $('#dln-kho-id').value = k ? k.id : '';
+    $('#dln-kho-ten').value = k ? k.ten : '';
+    $('#dln-kho-diachi').value = k ? (k.dia_chi || '') : '';
+    $('#dln-kho-nutluu').textContent = k ? 'Lưu' : '+ Thêm';
+    $('#dln-kho-nuthuy').hidden = !k;
+    $('#dln-kho-loi').textContent = '';
+  }
+
+  $('#dln-kho-nuthuy').addEventListener('click', () => { $('#dln-kho-form').reset(); dienFormKho(null); });
+
+  $('#dln-kho-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    const oLoi = $('#dln-kho-loi'); oLoi.textContent = '';
+    const du = { ten: $('#dln-kho-ten').value.trim(), dia_chi: $('#dln-kho-diachi').value.trim() };
+    try {
+      if (khoDangSua) await API.dlnSuaKho(khoDangSua.id, du);
+      else await API.dlnThemKho(du);
+      $('#dln-kho-form').reset(); dienFormKho(null);
+      await veKhoList();
+    } catch (err) { oLoi.textContent = err.message || 'Không lưu được, thử lại nhé.'; }
+  });
+
+  $('#dln-kho-list').addEventListener('click', async e => {
+    const btnSua = e.target.closest('[data-kho-sua]');
+    const btnAn = e.target.closest('[data-kho-an]');
+    if (btnSua) {
+      dienFormKho(dsKho.find(x => String(x.id) === btnSua.dataset.khoSua));
+      $('#dln-kho-ten').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } else if (btnAn) {
+      try { await API.dlnSuaKho(btnAn.dataset.khoAn, { hoat_dong: btnAn.dataset.hd === '1' }); await veKhoList(); }
+      catch (err) { alert(err.message || 'Không thực hiện được, thử lại nhé.'); }
+    }
+  });
+
+  // Chuyển màn Tổ chức / Hàng hoá / Đối tác / Kho
   $('#dlnSeg').addEventListener('click', e => {
     const nut = e.target.closest('.seg-nut');
     if (!nut) return;
     document.querySelectorAll('#dlnSeg .seg-nut').forEach(b => b.classList.toggle('active', b === nut));
-    ['tochuc', 'hanghoa'].forEach(k => {
+    ['tochuc', 'hanghoa', 'doitac', 'kho'].forEach(k => {
       const pane = document.getElementById('dln-pane-' + k);
       if (pane) pane.hidden = (k !== nut.dataset.dln);
     });
@@ -2093,6 +2267,8 @@ async function khoiDongDuLieuNen() {
   });
 
   await lamMoiTatCa();
+  await veNCC();
+  await veKhoList();
 }
 
 async function khoiDongKho() {
@@ -2283,10 +2459,10 @@ async function khoiDongKho() {
       const btnKhoa = $('#kvModalKhoa');
       if (daKhoaSp) {
         btnKhoa.hidden = !TOI.la_admin;
-        btnKhoa.textContent = 'Mở khoá';
+        btnKhoa.textContent = 'Mở lại';
       } else {
         btnKhoa.hidden = false;
-        btnKhoa.textContent = 'Xác nhận & khoá';
+        btnKhoa.textContent = 'Hoàn tất';
       }
     }
     kvModal.hidden = false;
@@ -2375,7 +2551,7 @@ async function khoiDongKho() {
     $('#kvModalKhoa').addEventListener('click', async () => {
       if (!spDangXem) return;
       const dangKhoa = spDangXem.trang_thai === 'da_khoa';
-      if (!dangKhoa && !confirm(`Xác nhận & khoá "${spDangXem.ten}"? Sau khi khoá, chỉ Giám đốc/Phó GĐ mới sửa hoặc mở khoá lại.`)) return;
+      if (!dangKhoa && !confirm(`Hoàn tất "${spDangXem.ten}"? Sau đó chỉ Giám đốc/Phó GĐ mới sửa hoặc mở lại.`)) return;
       try {
         await API.khoKhoaSanPham(spDangXem.id, dangKhoa ? 'nhap' : 'da_khoa');
         await taiLai();
@@ -3224,8 +3400,8 @@ if (TOI.quyen.includes('quantri')) {
       const daKhoaNs = n.trang_thai_dl === 'da_khoa';
       let thaoTac = `<button class="btn-nho" data-sua-ns="${esc(n.id)}">Sửa</button> ` +
         (daKhoaNs
-          ? (TOI.la_admin ? `<button class="btn-nho" data-mokhoa-ns="${esc(n.id)}">Mở khoá</button>` : '')
-          : `<button class="btn-nho" data-khoa-ns="${esc(n.id)}">Xác nhận &amp; khoá</button>`);
+          ? (TOI.la_admin ? `<button class="btn-nho" data-mokhoa-ns="${esc(n.id)}">Mở lại</button>` : '')
+          : `<button class="btn-nho" data-khoa-ns="${esc(n.id)}">Hoàn tất</button>`);
       if (TOI.la_admin) {
         if (!coTK) {
           // Gợi ý tên đăng nhập = số điện thoại (chỉ chữ số); chưa có SĐT thì để trống
@@ -3284,7 +3460,7 @@ if (TOI.quyen.includes('quantri')) {
     if (btn.dataset.suaNs) {
       moHopSuaNhanSu(btn.dataset.suaNs);
     } else if (btn.dataset.khoaNs) {
-      if (!confirm('Xác nhận & khoá hồ sơ này? Sau khi khoá, chỉ Giám đốc/Phó GĐ mới sửa hoặc mở khoá lại được.')) return;
+      if (!confirm('Hoàn tất hồ sơ này? Sau đó chỉ Giám đốc/Phó GĐ mới sửa hoặc mở lại được.')) return;
       try { await API.qtKhoaNhanSu(btn.dataset.khoaNs, 'da_khoa'); await veQuanTri(); }
       catch (err) { alert(err.message || 'Không thực hiện được, thử lại nhé.'); }
     } else if (btn.dataset.mokhoaNs) {

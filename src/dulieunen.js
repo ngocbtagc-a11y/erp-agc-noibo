@@ -50,11 +50,34 @@ function batBuocDuocSuaKhoa(phien, hienCo) {
   return loi('Dữ liệu này đã khoá — cần Giám đốc/Phó Giám đốc sửa hoặc mở khoá lại', 403);
 }
 
-/* ---- Tiện ích dùng chung cho cả 3 danh mục (Phòng ban/Chức danh/Đơn vị) -- */
+/* Chuẩn hoá tên để so "gần giống" — bỏ dấu, thường hoá, gộp khoảng trắng.
+   Cùng logic với boDau() ở app.js (giữ nhất quán 2 phía), cộng thêm gộp
+   khoảng trắng vì đây là so trùng chứ không phải tìm kiếm. */
+function chuanHoaTen(s) {
+  return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase()
+    .replace(/\s+/g, ' ').trim();
+}
 
-async function danhSachDanhMuc(env, bang) {
+/* Search Before Create: tìm bản ghi TRÙNG hẳn (chặn) và GẦN GIỐNG (chỉ cảnh
+   báo, cho phép xác nhận tạo tiếp — vd "Kho vận" vs "Kho  vận" vs "kho VẬN"
+   là cùng 1 chỗ, nhưng "Công ty TNHH ABC" vs "Công ty CP ABC" là 2 NCC khác
+   nhau thật, không nên chặn cứng). */
+async function timTrungTen(env, bang, ten, boQuaId) {
   const { results } = await env.DB.prepare(
-    `SELECT id, ten, hoat_dong, trang_thai FROM ${bang} ORDER BY hoat_dong DESC, ten`
+    `SELECT id, ten FROM ${bang} WHERE hoat_dong = 1${boQuaId ? ' AND id <> ?' : ''}`
+  ).bind(...(boQuaId ? [boQuaId] : [])).all();
+  const chuan = chuanHoaTen(ten);
+  const trungHan = (results || []).find(r => r.ten === ten);
+  const ganGiong = (results || []).filter(r => r.ten !== ten && chuanHoaTen(r.ten) === chuan);
+  return { trungHan, ganGiong };
+}
+
+/* ---- Tiện ích dùng chung cho cả 5 danh mục (Phòng ban/Chức danh/Đơn vị/NCC/Kho) -- */
+
+async function danhSachDanhMuc(env, bang, cotThem = '') {
+  const { results } = await env.DB.prepare(
+    `SELECT id, ten, hoat_dong, trang_thai${cotThem} FROM ${bang} ORDER BY hoat_dong DESC, ten`
   ).all();
   return json({ ds: results || [] });
 }
@@ -63,8 +86,11 @@ async function themDanhMuc(env, bang, body, tenLoi) {
   const ten = String(body?.ten || '').trim();
   if (ten.length < 2) return loi(`Vui lòng nhập ${tenLoi}`);
 
-  const trung = await env.DB.prepare(`SELECT id FROM ${bang} WHERE ten = ?`).bind(ten).first();
-  if (trung) return loi(`"${ten}" đã tồn tại`);
+  const { trungHan, ganGiong } = await timTrungTen(env, bang, ten);
+  if (trungHan) return loi(`"${ten}" đã tồn tại`);
+  if (ganGiong.length && !body.xac_nhan) {
+    return json({ canh_bao: true, giong: ganGiong.map(g => g.ten) }, 200);
+  }
 
   const r = await env.DB.prepare(`INSERT INTO ${bang} (ten) VALUES (?)`).bind(ten).run();
   return json({ ok: true, id: r.meta.last_row_id });
@@ -83,8 +109,11 @@ async function suaDanhMuc(env, phien, bang, body, tenLoi) {
   if (body.ten != null) {
     const ten = String(body.ten).trim();
     if (ten.length < 2) return loi(`Vui lòng nhập ${tenLoi}`);
-    const trung = await env.DB.prepare(`SELECT id FROM ${bang} WHERE ten = ? AND id <> ?`).bind(ten, id).first();
-    if (trung) return loi(`"${ten}" đã tồn tại`);
+    const { trungHan, ganGiong } = await timTrungTen(env, bang, ten, id);
+    if (trungHan) return loi(`"${ten}" đã tồn tại`);
+    if (ganGiong.length && !body.xac_nhan) {
+      return json({ canh_bao: true, giong: ganGiong.map(g => g.ten) }, 200);
+    }
     await env.DB.prepare(`UPDATE ${bang} SET ten = ? WHERE id = ?`).bind(ten, id).run();
     if (hienCo.trang_thai === 'da_khoa') {
       await ghiLichSuThayDoi(env, phien, bang, id, { ten: [hienCo.ten, ten] });
@@ -155,6 +184,119 @@ export const khoaDonVi = (env, phien, body) =>
   batBuocHangHoa(phien) || khoaDanhMuc(env, phien, 'don_vi_tinh', body);
 
 /* ==========================================================================
+   NHÀ CUNG CẤP — chủ sở hữu Quản lý kho + Admin (đúng nơi NCC được dùng
+   hiện tại: giao_dich_kho.doi_tac lúc nhập hàng, thuộc quy trình Kho vận).
+   Tên KHÔNG bắt buộc trùng khít mới cảnh báo — công ty có thể có 2 NCC tên
+   gần giống thật (VD "Công ty TNHH ABC" khác "Công ty CP ABC") nên chỉ
+   cảnh báo (Search Before Create), không chặn cứng như phong_ban/chuc_danh.
+   ========================================================================== */
+export async function danhSachNhaCungCap(env) {
+  return danhSachDanhMuc(env, 'nha_cung_cap', ', ma_so_thue, dien_thoai, dia_chi');
+}
+export async function themNhaCungCap(env, phien, body) {
+  const chan = batBuocHangHoa(phien);
+  if (chan) return chan;
+  const ten = String(body?.ten || '').trim();
+  if (ten.length < 2) return loi('Vui lòng nhập tên nhà cung cấp');
+
+  const { trungHan, ganGiong } = await timTrungTen(env, 'nha_cung_cap', ten);
+  if (trungHan) return loi(`"${ten}" đã tồn tại`);
+  if (ganGiong.length && !body.xac_nhan) return json({ canh_bao: true, giong: ganGiong.map(g => g.ten) });
+
+  const r = await env.DB.prepare(`
+    INSERT INTO nha_cung_cap (ten, ma_so_thue, dien_thoai, dia_chi) VALUES (?, ?, ?, ?)
+  `).bind(ten, String(body.ma_so_thue || '').trim() || null,
+    String(body.dien_thoai || '').trim() || null, String(body.dia_chi || '').trim() || null).run();
+  return json({ ok: true, id: r.meta.last_row_id });
+}
+export async function suaNhaCungCap(env, phien, body) {
+  const chan = batBuocHangHoa(phien);
+  if (chan) return chan;
+  const id = parseInt(body?.id, 10) || 0;
+  if (!id) return loi('Thiếu id');
+
+  const hienCo = await env.DB.prepare('SELECT id, ten, ma_so_thue, dien_thoai, dia_chi, trang_thai FROM nha_cung_cap WHERE id = ?').bind(id).first();
+  if (!hienCo) return loi('Không tìm thấy', 404);
+  const chanKhoa = batBuocDuocSuaKhoa(phien, hienCo);
+  if (chanKhoa) return chanKhoa;
+
+  if (body.ten != null) {
+    const ten = String(body.ten).trim();
+    if (ten.length < 2) return loi('Vui lòng nhập tên nhà cung cấp');
+    const { trungHan, ganGiong } = await timTrungTen(env, 'nha_cung_cap', ten, id);
+    if (trungHan) return loi(`"${ten}" đã tồn tại`);
+    if (ganGiong.length && !body.xac_nhan) return json({ canh_bao: true, giong: ganGiong.map(g => g.ten) });
+
+    const moi = {
+      ten, ma_so_thue: String(body.ma_so_thue || '').trim() || null,
+      dien_thoai: String(body.dien_thoai || '').trim() || null,
+      dia_chi: String(body.dia_chi || '').trim() || null
+    };
+    await env.DB.prepare('UPDATE nha_cung_cap SET ten=?, ma_so_thue=?, dien_thoai=?, dia_chi=? WHERE id=?')
+      .bind(moi.ten, moi.ma_so_thue, moi.dien_thoai, moi.dia_chi, id).run();
+    if (hienCo.trang_thai === 'da_khoa') {
+      await ghiLichSuThayDoi(env, phien, 'nha_cung_cap', id, {
+        ten: [hienCo.ten, moi.ten], ma_so_thue: [hienCo.ma_so_thue, moi.ma_so_thue],
+        dien_thoai: [hienCo.dien_thoai, moi.dien_thoai], dia_chi: [hienCo.dia_chi, moi.dia_chi]
+      });
+    }
+  }
+  if (body.hoat_dong != null) {
+    await env.DB.prepare('UPDATE nha_cung_cap SET hoat_dong = ? WHERE id = ?').bind(body.hoat_dong ? 1 : 0, id).run();
+  }
+  return json({ ok: true });
+}
+export const khoaNhaCungCap = (env, phien, body) => {
+  const chan = batBuocHangHoa(phien);
+  return chan || khoaDanhMuc(env, phien, 'nha_cung_cap', body);
+};
+
+/* ==========================================================================
+   KHO (nhiều kho vật lý) — chủ sở hữu Admin, vì đây là cấu hình cấp công
+   ty, hiếm khi đổi (hiện thực tế công ty chỉ có 1 kho, nhưng cứ chuẩn bị
+   sẵn để mở kho 2 không cần sửa code).
+   ========================================================================== */
+function batBuocKho(phien) {
+  return laAdmin(phien.vai_tro) ? null : loi('Chỉ Giám đốc/Phó Giám đốc mới quản lý được danh sách Kho', 403);
+}
+export async function danhSachKho(env) {
+  return danhSachDanhMuc(env, 'kho', ', dia_chi');
+}
+export async function themKho(env, phien, body) {
+  const chan = batBuocKho(phien);
+  if (chan) return chan;
+  const ten = String(body?.ten || '').trim();
+  if (ten.length < 2) return loi('Vui lòng nhập tên kho');
+  const { trungHan } = await timTrungTen(env, 'kho', ten);
+  if (trungHan) return loi(`"${ten}" đã tồn tại`);
+  const r = await env.DB.prepare('INSERT INTO kho (ten, dia_chi) VALUES (?, ?)')
+    .bind(ten, String(body.dia_chi || '').trim() || null).run();
+  return json({ ok: true, id: r.meta.last_row_id });
+}
+export async function suaKho(env, phien, body) {
+  const chan = batBuocKho(phien);
+  if (chan) return chan;
+  const id = parseInt(body?.id, 10) || 0;
+  if (!id) return loi('Thiếu id');
+  const hienCo = await env.DB.prepare('SELECT id, ten, dia_chi FROM kho WHERE id = ?').bind(id).first();
+  if (!hienCo) return loi('Không tìm thấy', 404);
+  // Kho luôn do Admin quản lý nên không cần chặn khoá riêng — Admin sửa được luôn.
+
+  if (body.ten != null) {
+    const ten = String(body.ten).trim();
+    if (ten.length < 2) return loi('Vui lòng nhập tên kho');
+    const { trungHan } = await timTrungTen(env, 'kho', ten, id);
+    if (trungHan) return loi(`"${ten}" đã tồn tại`);
+    await env.DB.prepare('UPDATE kho SET ten=?, dia_chi=? WHERE id=?')
+      .bind(ten, String(body.dia_chi || '').trim() || null, id).run();
+  }
+  if (body.hoat_dong != null) {
+    await env.DB.prepare('UPDATE kho SET hoat_dong = ? WHERE id = ?').bind(body.hoat_dong ? 1 : 0, id).run();
+  }
+  return json({ ok: true });
+}
+
+/* ==========================================================================
    TÌNH TRẠNG SẴN SÀNG DỮ LIỆU NỀN — cho admin biết còn thiếu gì, không phải
    dashboard phức tạp, chỉ đếm số dòng thật + tính trạng thái đơn giản.
    ========================================================================== */
@@ -164,7 +306,8 @@ export async function tinhTrangSanSang(env) {
   const [
     phongBan, chucDanh, donVi,
     nhanSuTong, nhanSuDaGanPB,
-    sanPhamTong, sanPhamDaGanDV
+    sanPhamTong, sanPhamDaGanDV,
+    nccTong, khoTong
   ] = await Promise.all([
     dem('SELECT COUNT(*) AS n FROM phong_ban WHERE hoat_dong = 1'),
     dem('SELECT COUNT(*) AS n FROM chuc_danh WHERE hoat_dong = 1'),
@@ -172,7 +315,9 @@ export async function tinhTrangSanSang(env) {
     dem('SELECT COUNT(*) AS n FROM nhan_su WHERE dang_lam = 1'),
     dem('SELECT COUNT(*) AS n FROM nhan_su WHERE dang_lam = 1 AND phong_ban_id IS NOT NULL'),
     dem('SELECT COUNT(*) AS n FROM san_pham WHERE dang_ban = 1'),
-    dem('SELECT COUNT(*) AS n FROM san_pham WHERE dang_ban = 1 AND don_vi_id IS NOT NULL')
+    dem('SELECT COUNT(*) AS n FROM san_pham WHERE dang_ban = 1 AND don_vi_id IS NOT NULL'),
+    dem('SELECT COUNT(*) AS n FROM nha_cung_cap WHERE hoat_dong = 1'),
+    dem('SELECT COUNT(*) AS n FROM kho WHERE hoat_dong = 1')
   ]);
 
   // Trạng thái đơn giản: 0 dòng = NOT_STARTED, có nhưng chưa gắn hết = IN_PROGRESS, xong = READY.
@@ -190,8 +335,8 @@ export async function tinhTrangSanSang(env) {
       trang_thai: tt(nhanSuTong, nhanSuDaGanPB) },
     { ma: 'san_pham',   ten: 'Sản phẩm/SKU', tong: sanPhamTong, da_gan: sanPhamDaGanDV,
       trang_thai: tt(sanPhamTong, sanPhamDaGanDV) },
-    { ma: 'nha_cung_cap', ten: 'Nhà cung cấp', tong: 0, trang_thai: 'NOT_STARTED' },
-    { ma: 'kho',        ten: 'Kho',          tong: 0, trang_thai: 'NOT_STARTED' },
+    { ma: 'nha_cung_cap', ten: 'Nhà cung cấp', tong: nccTong, trang_thai: tt(nccTong) },
+    { ma: 'kho',        ten: 'Kho',          tong: khoTong,  trang_thai: tt(khoTong) },
     { ma: 'mapping',    ten: 'Mapping mã ngoài', tong: 0, trang_thai: 'NOT_STARTED' }
   ];
 

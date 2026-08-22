@@ -975,6 +975,8 @@
       <div class="seg" id="dlnSeg">
         <button class="seg-nut active" data-dln="tochuc">Tổ chức</button>
         <button class="seg-nut" data-dln="hanghoa">Hàng hoá</button>
+        <button class="seg-nut" data-dln="doitac">Đối tác</button>
+        <button class="seg-nut" data-dln="kho">Kho</button>
       </div>
 
       <div class="kv-pane" id="dln-pane-tochuc">
@@ -1021,6 +1023,67 @@
           </div>
           <div class="panel-body" style="padding-top:0">
             <p class="hint">Quản lý Sản phẩm/SKU nằm ở tab <b>Kho vận → Tồn kho</b>.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="kv-pane" id="dln-pane-doitac" hidden>
+        <div class="panel">
+          <div class="panel-head"><h4>Nhà cung cấp</h4><span class="hint" id="dln-ncc-dem"></span></div>
+          <div class="panel-body">
+            <form id="dln-ncc-form" class="form-luoi" autocomplete="off">
+              <input type="hidden" id="dln-ncc-id">
+              <div class="field field-rong">
+                <label>Tên nhà cung cấp *</label>
+                <input type="text" id="dln-ncc-ten" required>
+              </div>
+              <div class="field">
+                <label>Mã số thuế</label>
+                <input type="text" id="dln-ncc-mst">
+              </div>
+              <div class="field">
+                <label>Điện thoại</label>
+                <input type="text" id="dln-ncc-dt">
+              </div>
+              <div class="field field-rong">
+                <label>Địa chỉ</label>
+                <input type="text" id="dln-ncc-diachi">
+              </div>
+              <div class="field field-nut" style="display:flex; gap:10px">
+                <button type="submit" class="btn-primary" id="dln-ncc-nutluu" style="width:auto">+ Thêm</button>
+                <button type="button" class="btn-phu" id="dln-ncc-nuthuy" style="width:auto" hidden>Hủy sửa</button>
+              </div>
+            </form>
+            <div class="form-loi" id="dln-ncc-loi"></div>
+            <div id="dln-ncc-list" style="margin-top:10px"></div>
+            <div class="empty" id="dln-ncc-trong" hidden>Chưa có nhà cung cấp nào — thêm ở trên.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="kv-pane" id="dln-pane-kho" hidden>
+        <div class="panel">
+          <div class="panel-head"><h4>Kho</h4><span class="hint" id="dln-kho-dem"></span></div>
+          <div class="panel-body">
+            <p class="hint" style="margin:0 0 14px">Hiện công ty vận hành 1 kho — chuẩn bị sẵn danh mục để mở kho mới không cần sửa code. Quản lý bởi Giám đốc/Phó Giám đốc.</p>
+            <form id="dln-kho-form" class="form-luoi" autocomplete="off">
+              <input type="hidden" id="dln-kho-id">
+              <div class="field field-rong">
+                <label>Tên kho *</label>
+                <input type="text" id="dln-kho-ten" required placeholder="VD: Kho chính Hoài Đức">
+              </div>
+              <div class="field field-rong">
+                <label>Địa chỉ</label>
+                <input type="text" id="dln-kho-diachi">
+              </div>
+              <div class="field field-nut" style="display:flex; gap:10px">
+                <button type="submit" class="btn-primary" id="dln-kho-nutluu" style="width:auto">+ Thêm</button>
+                <button type="button" class="btn-phu" id="dln-kho-nuthuy" style="width:auto" hidden>Hủy sửa</button>
+              </div>
+            </form>
+            <div class="form-loi" id="dln-kho-loi"></div>
+            <div id="dln-kho-list" style="margin-top:10px"></div>
+            <div class="empty" id="dln-kho-trong" hidden>Chưa có kho nào — thêm ở trên.</div>
           </div>
         </div>
       </div>
@@ -1478,7 +1541,7 @@
 
     <div class="modal-nut">
       <button class="btn-phu" id="kvModalSua" hidden style="width:auto">Sửa mã hàng</button>
-      <button class="btn-phu" id="kvModalKhoa" hidden style="width:auto">Xác nhận &amp; khoá</button>
+      <button class="btn-phu" id="kvModalKhoa" hidden style="width:auto">Hoàn tất</button>
       <button class="btn-phu" id="kvModalAnHien" hidden style="width:auto">Ẩn mã hàng</button>
       <button class="btn-primary" id="kvModalDong">Đóng</button>
     </div>
