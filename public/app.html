@@ -373,11 +373,31 @@
             </div>
             <div class="field">
               <label>Chức danh <span class="hint">· <a href="#" data-mo-tab="quantri">quản lý ở Quản trị</a></span></label>
-              <select id="qtChucDanh"><option value="">— Chưa chọn —</option></select>
+              <div class="combo1" id="qtChucDanhCombo">
+                <button type="button" class="combo1-hienthi rong" id="qtChucDanhHienThi">
+                  <span>Chọn chức danh...</span>
+                  <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+                </button>
+                <div class="combo1-panel" id="qtChucDanhPanel" hidden>
+                  <input type="search" id="qtChucDanhTim" placeholder="Tìm chức danh...">
+                  <div class="ql-goiy" id="qtChucDanhGoiY"></div>
+                </div>
+              </div>
+              <input type="hidden" id="qtChucDanh">
             </div>
             <div class="field">
               <label>Phòng ban <span class="hint">· <a href="#" data-mo-tab="quantri">quản lý ở Quản trị</a></span></label>
-              <select id="qtPhongBan"><option value="">— Chưa chọn —</option></select>
+              <div class="combo1" id="qtPhongBanCombo">
+                <button type="button" class="combo1-hienthi rong" id="qtPhongBanHienThi">
+                  <span>Chọn phòng ban...</span>
+                  <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+                </button>
+                <div class="combo1-panel" id="qtPhongBanPanel" hidden>
+                  <input type="search" id="qtPhongBanTim" placeholder="Tìm phòng ban...">
+                  <div class="ql-goiy" id="qtPhongBanGoiY"></div>
+                </div>
+              </div>
+              <input type="hidden" id="qtPhongBan">
             </div>
             <div class="field">
               <label>Số điện thoại</label>
@@ -1701,11 +1721,31 @@
       </div>
       <div class="field">
         <label>Chức danh <span class="hint">· <a href="#" data-mo-tab="quantri">quản lý ở Quản trị</a></span></label>
-        <select id="nsSua-chucdanh"><option value="">— Chưa chọn —</option></select>
+        <div class="combo1" id="nsSua-chucdanhcombo">
+          <button type="button" class="combo1-hienthi rong" id="nsSua-chucdanhhienthi">
+            <span>Chọn chức danh...</span>
+            <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+          <div class="combo1-panel" id="nsSua-chucdanhpanel" hidden>
+            <input type="search" id="nsSua-chucdanhtim" placeholder="Tìm chức danh...">
+            <div class="ql-goiy" id="nsSua-chucdanhgoiy"></div>
+          </div>
+        </div>
+        <input type="hidden" id="nsSua-chucdanh">
       </div>
       <div class="field">
         <label>Phòng ban <span class="hint">· <a href="#" data-mo-tab="quantri">quản lý ở Quản trị</a></span></label>
-        <select id="nsSua-phongban"><option value="">— Chưa chọn —</option></select>
+        <div class="combo1" id="nsSua-phongbancombo">
+          <button type="button" class="combo1-hienthi rong" id="nsSua-phongbanhienthi">
+            <span>Chọn phòng ban...</span>
+            <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+          <div class="combo1-panel" id="nsSua-phongbanpanel" hidden>
+            <input type="search" id="nsSua-phongbantim" placeholder="Tìm phòng ban...">
+            <div class="ql-goiy" id="nsSua-phongbangoiy"></div>
+          </div>
+        </div>
+        <input type="hidden" id="nsSua-phongban">
       </div>
       <div class="field">
         <label>Số điện thoại</label>

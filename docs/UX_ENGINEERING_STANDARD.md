@@ -21,18 +21,24 @@ Trước khi chọn component, luôn hỏi theo thứ tự:
 - Một nhiệm vụ chỉ nên có **một** control (không tách ô tìm + ô chọn
   riêng nếu gộp được).
 
-## Ngưỡng chọn component cho field lựa chọn
+## Ngưỡng chọn component cho field lựa chọn — "Long List = Searchable"
 
 | Số lựa chọn hợp lệ | Component |
 |---|---|
 | 1 | Auto-fill (có thể cho "Thay đổi") |
-| 2–7 | Simple `<select>` |
-| ≥8 hoặc có khả năng tăng | Searchable Combobox (xem `ganComboNhanSu()` trong `app.js`) |
-| Hàng trăm/nghìn dòng | Search server-side, không load hết ra frontend |
+| 2–6, cố định (enum) | Simple `<select>` |
+| ≥7, hoặc danh mục có khả năng tăng dù hiện tại <7 | Searchable Combobox (`ganCombo()` trong `app.js` — 1 control, bấm mở mới hiện ô tìm + kết quả, không tách ô tìm riêng bên ngoài) |
+| Hàng trăm/nghìn dòng (Nhân sự/SKU/Đơn hàng ở quy mô lớn hơn hiện tại) | Search server-side, không load hết ra frontend |
 
-Enum cố định nhỏ (Trạng thái, Loại lao động...) luôn dùng Simple Select,
-**không** biến thành combobox tìm kiếm dù nguyên tắc trên có vẻ áp dụng
-được — over-engineer cho enum là smell (xem danh sách dưới).
+Không chờ nhắc từng màn hình — mọi danh sách Entity/danh mục động (Nhân
+sự, Chức danh, Phòng ban, Tài sản...) đủ ngưỡng trên thì tự chuyển sang
+`ganCombo()` khi đụng tới module đó. Enum cố định thật sự nhỏ (Trạng
+thái, Loại lao động, Giới tính...) luôn dùng Simple Select, **không**
+biến thành combobox tìm kiếm dù có vẻ áp dụng được — over-engineer cho
+enum là smell (xem danh sách dưới). Danh sách các entity/module **chưa
+tồn tại** trong ERP này (SKU riêng, Nhà cung cấp dạng picker, Khách
+hàng, Skill, Role UI...) thì không tạo trước — xem
+[LIST_UX_AUDIT.md](./LIST_UX_AUDIT.md).
 
 ## Parent lọc Child
 

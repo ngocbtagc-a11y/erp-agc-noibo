@@ -89,7 +89,7 @@ async function taiLaiNhanSuQuanTri() {
   if (oQtBang) {
     const oQuanLy = $('#qtQuanLy');
     if (oQuanLy) {
-      const { capNhatHienThi: veQuanLy } = ganComboNhanSu({
+      const { capNhatHienThi: veQuanLy } = ganCombo({
         hienThi: $('#qtQuanLyHienThi'), panel: $('#qtQuanLyPanel'),
         tim: $('#qtQuanLyTim'), goiY: $('#qtQuanLyGoiY'), giaTri: oQuanLy
       }, () => uuTienCungPhongBan(nhan_su.filter(n => n.dang_lam), $('#qtPhongBan')?.value).map(n => ({ gia_tri: n.id, nhan: nhanNhanSu(n) })),
@@ -331,15 +331,17 @@ function uuTienCungPhongBan(ds, phongBanId) {
   });
 }
 
-/* Ô tìm + gợi ý hiện NGAY dưới ô (không phải <select> phải bấm mở mới thấy)
-   — dùng cho mọi chỗ chọn 1 nhân sự (Quản lý trực tiếp, Trưởng phòng, Cấp
-   phát tài sản...). MỘT control duy nhất: nút hiển thị giá trị đã chọn,
-   bấm vào mới mở khung tìm+chọn (không phải 2 control tách rời). oGiaTri
-   là <input type="hidden"> giữ id đã chọn (giữ nguyên .value để chỗ đọc/
-   ghi cũ không phải đổi). Gõ lọc theo boDau() (không dấu, không phân biệt
-   hoa-thường). Enter chọn dòng đầu, Escape đóng. Trả về { capNhatHienThi }
-   để gọi lại khi nạp danh sách/giá trị mới. */
-function ganComboNhanSu({ hienThi, panel, tim, goiY, giaTri }, layTuyChon, coRong, rongChu) {
+/* Searchable Combobox dùng chung toàn ERP (xem docs/UX_ENGINEERING_STANDARD.md
+   — "Long List = Searchable", 1 control duy nhất, không tách ô tìm/dropdown
+   riêng). Dùng cho MỌI danh sách dài/có thể tăng: chọn nhân sự (Quản lý
+   trực tiếp, Trưởng phòng, Cấp phát tài sản), danh mục nền (Chức danh,
+   Phòng ban)... — chỉ cần layTuyChon() trả mảng {gia_tri, nhan}.
+   giaTri là <input type="hidden"> giữ id đã chọn (giữ nguyên .value để chỗ
+   đọc/ghi cũ không phải đổi). Gõ lọc theo boDau() (không dấu, không phân
+   biệt hoa-thường) trên CẢ label hiển thị (đã gồm mã nếu có, VD "01-0003 ·
+   Tên" — gõ mã hay tên đều tìm được). Enter chọn dòng đầu, Escape đóng.
+   Trả về { capNhatHienThi } để gọi lại khi nạp danh sách/giá trị mới. */
+function ganCombo({ hienThi, panel, tim, goiY, giaTri }, layTuyChon, coRong, rongChu) {
   const combo = hienThi.closest('.combo1');
   function capNhatHienThi() {
     const hienTai = layTuyChon().find(t => String(t.gia_tri) === giaTri.value);
@@ -418,7 +420,7 @@ function moHopNhap({ tieuDe, loai = 'text', nhan = '', giaTri = '', placeholder 
   let o;
   if (loai === 'select') {
     oSelect.value = giaTri || '';
-    ganComboNhanSu({
+    ganCombo({
       hienThi: $('#hopNhap-selecthienthi'), panel: $('#hopNhap-selectpanel'),
       tim: $('#hopNhap-selecttim'), goiY: $('#hopNhap-selectgoiy'), giaTri: oSelect
     }, () => tuyChon, null, 'Chọn...');
@@ -504,6 +506,16 @@ function tuyChonDanhMuc(ds, hienTaiId) {
   const list = ds.filter(x => x.hoat_dong || String(x.id) === hienTai);
   return '<option value="">— Chưa chọn —</option>' +
     list.map(x => `<option value="${x.id}">${esc(x.ten)}${x.hoat_dong ? '' : ' (đã ẩn)'}</option>`).join('');
+}
+
+/* Cùng logic lọc với tuyChonDanhMuc() nhưng trả {gia_tri, nhan} cho
+   ganCombo() thay vì chuỗi <option> — dùng cho Chức danh/Phòng ban khi
+   hiển thị dạng Searchable Combobox (≥8 dòng hoặc danh mục có thể tăng —
+   xem docs/UX_ENGINEERING_STANDARD.md). */
+function dsCandidateDanhMuc(ds, hienTaiId) {
+  const hienTai = String(hienTaiId || '');
+  return ds.filter(x => x.hoat_dong || String(x.id) === hienTai)
+    .map(x => ({ gia_tri: x.id, nhan: x.ten + (x.hoat_dong ? '' : ' (đã ẩn)') }));
 }
 
 /* Bỏ dấu để gõ "ke toan" cũng tìm ra "Kế toán" */
@@ -1990,11 +2002,14 @@ if (TOI.quyen.includes('nhansu')) {
       $('#nsMoTa').textContent = 'Thêm/sửa hồ sơ nhân sự. Cấp tài khoản đăng nhập và lương do Admin phụ trách (tab Quản trị).';
     }
 
-    const oCd0 = $('#qtChucDanh'), oPb0 = $('#qtPhongBan');
-    oCd0.innerHTML = '<option value="">— Chưa chọn —</option>' +
-      DS_CHUC_DANH.filter(x => x.hoat_dong).map(c => `<option value="${c.id}">${esc(c.ten)}</option>`).join('');
-    oPb0.innerHTML = '<option value="">— Chưa chọn —</option>' +
-      DS_PHONG_BAN.filter(x => x.hoat_dong).map(p => `<option value="${p.id}">${esc(p.ten)}</option>`).join('');
+    const { capNhatHienThi: veQtChucDanh } = ganCombo({
+      hienThi: $('#qtChucDanhHienThi'), panel: $('#qtChucDanhPanel'),
+      tim: $('#qtChucDanhTim'), goiY: $('#qtChucDanhGoiY'), giaTri: $('#qtChucDanh')
+    }, () => dsCandidateDanhMuc(DS_CHUC_DANH, $('#qtChucDanh').value), null, 'Chọn chức danh...');
+    const { capNhatHienThi: veQtPhongBan } = ganCombo({
+      hienThi: $('#qtPhongBanHienThi'), panel: $('#qtPhongBanPanel'),
+      tim: $('#qtPhongBanTim'), goiY: $('#qtPhongBanGoiY'), giaTri: $('#qtPhongBan')
+    }, () => dsCandidateDanhMuc(DS_PHONG_BAN, $('#qtPhongBan').value), null, 'Chọn phòng ban...');
 
     $('#qtFormThem').addEventListener('submit', async e => {
       e.preventDefault();
@@ -2015,6 +2030,7 @@ if (TOI.quyen.includes('nhansu')) {
           luong: $('#qtLuong').value
         });
         $('#qtFormThem').reset();
+        veQtChucDanh(); veQtPhongBan();
         await taiLaiNhanSuQuanTri();
       } catch (err) {
         oLoi.textContent = err.message; oLoi.classList.add('show');
@@ -2045,14 +2061,20 @@ if (TOI.quyen.includes('nhansu')) {
       $('#nsSua-manv').value = n.ma_nv || '';
 
       const oCd = $('#nsSua-chucdanh'), oPb = $('#nsSua-phongban');
-      oCd.innerHTML = tuyChonDanhMuc(DS_CHUC_DANH, n.chuc_danh_id);
-      oPb.innerHTML = tuyChonDanhMuc(DS_PHONG_BAN, n.phong_ban_id);
       oCd.value = n.chuc_danh_id || '';
       oPb.value = n.phong_ban_id || '';
+      ganCombo({
+        hienThi: $('#nsSua-chucdanhhienthi'), panel: $('#nsSua-chucdanhpanel'),
+        tim: $('#nsSua-chucdanhtim'), goiY: $('#nsSua-chucdanhgoiy'), giaTri: oCd
+      }, () => dsCandidateDanhMuc(DS_CHUC_DANH, n.chuc_danh_id), null, 'Chọn chức danh...');
+      ganCombo({
+        hienThi: $('#nsSua-phongbanhienthi'), panel: $('#nsSua-phongbanpanel'),
+        tim: $('#nsSua-phongbantim'), goiY: $('#nsSua-phongbangoiy'), giaTri: oPb
+      }, () => dsCandidateDanhMuc(DS_PHONG_BAN, n.phong_ban_id), null, 'Chọn phòng ban...');
 
       const oQl = $('#nsSua-quanly');
       oQl.value = n.quan_ly_id || '';
-      ganComboNhanSu({
+      ganCombo({
         hienThi: $('#nsSua-quanlyhienthi'), panel: $('#nsSua-quanlypanel'),
         tim: $('#nsSua-quanlytim'), goiY: $('#nsSua-quanlygoiy'), giaTri: oQl
       }, () => uuTienCungPhongBan(DS_NHAN_SU_QT.filter(x => x.dang_lam && x.id !== n.id), n.phong_ban_id)
@@ -3160,7 +3182,7 @@ async function khoiDongTaiSan() {
     $('#tsCapPhatId').value = id;
     $('#tsCapPhatTieuDe').textContent = 'Cấp phát: ' + (t ? t.ten : '');
     $('#tsCapPhatNguoi').value = '';
-    ganComboNhanSu({
+    ganCombo({
       hienThi: $('#tsCapPhatNguoiHienThi'), panel: $('#tsCapPhatNguoiPanel'),
       tim: $('#tsCapPhatNguoiTim'), goiY: $('#tsCapPhatNguoiGoiY'), giaTri: $('#tsCapPhatNguoi')
     }, () => dsNhanSuChon.map(n => ({ gia_tri: n.id, nhan: nhanNhanSu(n) })),
