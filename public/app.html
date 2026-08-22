@@ -425,6 +425,34 @@
           <h4>Danh sách nhân sự</h4>
           <span class="hint" id="ns-hint"></span>
         </div>
+        <div class="panel-body" style="padding-bottom:0">
+          <div class="dh-timkiem">
+            <div class="search">
+              <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+              </svg>
+              <input type="search" id="ns-tim" placeholder="Tìm theo mã, họ tên, SĐT hoặc email...">
+            </div>
+            <select id="ns-locbophan" class="chon-nho" title="Lọc theo bộ phận">
+              <option value="">Tất cả bộ phận</option>
+            </select>
+            <select id="ns-loctrangthai" class="chon-nho" title="Lọc theo trạng thái">
+              <option value="">Tất cả trạng thái</option>
+              <option value="da_ky">Đã ký HĐ</option>
+              <option value="thu_viec">Thử việc</option>
+              <option value="cho_ky">Chờ ký</option>
+              <option value="can_trao_doi">Cần trao đổi</option>
+              <option value="parttime">Bán thời gian</option>
+            </select>
+            <select id="ns-locloaild" class="chon-nho" title="Lọc theo loại lao động">
+              <option value="">Tất cả loại LĐ</option>
+              <option value="toan_thoi_gian">Toàn thời gian</option>
+              <option value="ban_thoi_gian">Part-time</option>
+              <option value="thoi_vu">Thời vụ</option>
+            </select>
+            <button type="button" class="btn-nho btn-phu" id="ns-xoaloc" hidden>Xoá bộ lọc</button>
+          </div>
+        </div>
         <div class="table-wrap">
           <table>
             <thead>
@@ -440,6 +468,7 @@
             <tbody id="ns-bang"></tbody>
           </table>
         </div>
+        <div class="empty" id="ns-trong" hidden></div>
       </div>
     </section>
 
@@ -1028,7 +1057,7 @@
           <div class="panel">
             <div class="panel-head"><h4>Kho</h4><span class="hint" id="dln-kho-dem"></span></div>
             <div class="panel-body">
-              <p class="hint" style="margin:0 0 14px">Hiện công ty vận hành 1 kho — chuẩn bị sẵn danh mục để mở kho mới không cần sửa code. Quản lý bởi Giám đốc/Phó Giám đốc.</p>
+              <p class="hint" style="margin:0 0 14px">Hiện công ty vận hành 1 kho — chuẩn bị sẵn danh mục để mở kho mới không cần sửa code. Quản lý bởi Admin.</p>
               <form id="dln-kho-form" class="form-luoi" autocomplete="off">
                 <input type="hidden" id="dln-kho-id">
                 <div class="field field-rong">
@@ -1169,6 +1198,24 @@
         <div class="panel-head">
           <h4>Danh sách tài sản</h4>
           <span class="hint" id="tsDem"></span>
+        </div>
+        <div class="panel-body" style="padding-bottom:0">
+          <div class="dh-timkiem">
+            <div class="search">
+              <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+              </svg>
+              <input type="search" id="ts-tim" placeholder="Tìm theo mã, tên hoặc danh mục...">
+            </div>
+            <select id="ts-loctrangthai" class="chon-nho" title="Lọc theo trạng thái">
+              <option value="">Tất cả trạng thái</option>
+              <option value="san_sang">Sẵn sàng</option>
+              <option value="da_cap_phat">Đã cấp phát</option>
+              <option value="bao_hong">Báo hỏng</option>
+              <option value="da_thanh_ly">Đã thanh lý</option>
+            </select>
+            <button type="button" class="btn-nho btn-phu" id="ts-xoaloc" hidden>Xoá bộ lọc</button>
+          </div>
         </div>
         <div class="table-wrap">
           <table>
@@ -1560,6 +1607,20 @@
           <h4>Nhân sự &amp; tài khoản</h4>
           <span class="hint" id="qtDem"></span>
         </div>
+        <div class="panel-body" style="padding-bottom:0">
+          <div class="dh-timkiem">
+            <div class="search">
+              <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+              </svg>
+              <input type="search" id="qt-tim" placeholder="Tìm theo mã, họ tên hoặc tên đăng nhập...">
+            </div>
+            <select id="qt-locvaitro" class="chon-nho" title="Lọc theo vai trò">
+              <option value="">Tất cả vai trò</option>
+            </select>
+            <button type="button" class="btn-nho btn-phu" id="qt-xoaloc" hidden>Xoá bộ lọc</button>
+          </div>
+        </div>
         <div class="table-wrap">
           <table>
             <thead>
@@ -1574,10 +1635,33 @@
             <tbody id="qtBang"></tbody>
           </table>
         </div>
+        <div class="empty" id="qt-trong" hidden></div>
       </div>
       </div><!-- /qt-pane-taikhoan -->
     </section>
 
+  </div>
+</div>
+
+<!-- Hộp nhập nhanh dùng chung — thay cho prompt() của trình duyệt (Gán
+     trưởng phòng, Sửa tên danh mục nền, Ghi chú báo hỏng, Kết quả công
+     việc...). Cùng khuôn mẫu với Sửa hồ sơ nhân sự. -->
+<div class="modal-nen" id="hopNhapModalNen" hidden>
+  <div class="modal">
+    <h4 id="hopNhap-tieude">Nhập</h4>
+    <form id="hopNhapForm" class="form-luoi" autocomplete="off">
+      <div class="field field-rong">
+        <label id="hopNhap-nhan"></label>
+        <input type="text" id="hopNhap-input" hidden>
+        <select id="hopNhap-select" hidden></select>
+        <textarea id="hopNhap-textarea" hidden rows="3"></textarea>
+      </div>
+      <div class="form-loi" id="hopNhap-loi"></div>
+      <div class="field field-nut" style="display:flex; gap:10px; justify-content:flex-end">
+        <button type="button" class="btn-phu" id="hopNhap-huy" style="width:auto">Huỷ</button>
+        <button type="submit" class="btn-primary" id="hopNhap-luu" style="width:auto">Lưu</button>
+      </div>
+    </form>
   </div>
 </div>
 

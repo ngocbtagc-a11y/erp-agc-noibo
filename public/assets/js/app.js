@@ -43,6 +43,10 @@ let DS_PHONG_BAN = [], DS_CHUC_DANH = [], DS_DON_VI = [];
 // chung cho cả bảng Nhân sự (hồ sơ) lẫn Quản trị (tài khoản), 1 API duy
 // nhất thay vì mỗi tab tự gọi riêng.
 let DS_NHAN_SU_QT = [], DS_VAI_TRO_QT = [];
+// Người xem thường (không có them_nhan_su) chỉ có bảng hồ sơ, dữ liệu ít hơn
+// (không cột lương nếu không có quyền) — vẫn cần lưu lại để Search/Filter
+// lọc phía client không phải gọi lại API mỗi lần gõ.
+let DS_NHAN_SU_DOC = [], NS_XEM_LUONG_DOC = true;
 async function taiDanhMucNen() {
   const [pb, cd, dv] = await Promise.all([
     API.dlnPhongBan().catch(() => ({ ds: [] })),
@@ -62,21 +66,13 @@ window.LAM_MOI_DANHMUC_NEN = taiDanhMucNen;
 async function taiLaiNhanSuQuanTri() {
   if (!TOI.them_nhan_su) {
     const { nhan_su, xem_luong } = await API.nhanSu();
+    NS_XEM_LUONG_DOC = xem_luong;
     if (!xem_luong) {
       const th = $('#ns-thLuong'); if (th) th.remove();
-      $('#ns-hint').textContent = 'Chức vụ của bạn không xem được cột lương';
     }
-    veBang('#ns-bang', nhan_su, r => {
-      const tt = TRANG_THAI[r.trang_thai] || { chu: r.trang_thai, mau: 'mute' };
-      return '' +
-        `<td><div class="person">${avHtml(r.id, r.viet_tat, r.co_anh)}` +
-          `<div><div class="nm">${esc(r.ho_ten)}${r.ma_nv ? ` <span class="sm" style="font-weight:400">· ${esc(r.ma_nv)}</span>` : ''}</div>` +
-          `<div class="sm">${esc(r.chuc_vu)}</div></div></div></td>` +
-        `<td>${esc(r.bo_phan)}</td>` +
-        `<td><span class="tag ${tt.mau}">${esc(tt.chu)}</span></td>` +
-        `<td class="sm">${esc(r.ngay_vao)}</td>` +
-        (xem_luong ? `<td class="num">${esc(tienVN(r.luong))}</td>` : '');
-    });
+    DS_NHAN_SU_DOC = nhan_su;
+    napBoLocBoPhanNS(nhan_su);
+    veBangNsDoc();
     return;
   }
 
@@ -85,8 +81,106 @@ async function taiLaiNhanSuQuanTri() {
   DS_VAI_TRO_QT = vai_tro;
 
   const oLuongTh = $('#ns-thLuong'); if (oLuongTh) oLuongTh.hidden = true;
-  $('#ns-hint').textContent = `${nhan_su.length} nhân sự`;
-  veBang('#ns-bang', nhan_su, n => {
+  napBoLocBoPhanNS(nhan_su);
+  veBangNsQuanTri();
+
+  // Quản trị (tài khoản) — chỉ hiện nếu tab đó tồn tại trong DOM cho vai trò này.
+  const oQtBang = $('#qtBang');
+  if (oQtBang) {
+    const oQuanLy = $('#qtQuanLy');
+    if (oQuanLy) {
+      oQuanLy.innerHTML = '<option value="">— Không —</option>' +
+        nhan_su.filter(n => n.dang_lam).map(n =>
+          `<option value="${esc(n.id)}">${esc(n.ho_ten)} — ${esc(n.chuc_vu || '')}</option>`).join('');
+    }
+    napBoLocVaiTroQT(vai_tro);
+    veBangQtTaiKhoan();
+  }
+}
+
+/* ---- Search + Filter: Nhân sự / Tài khoản --------------------------------
+   Dữ liệu nhỏ (chục dòng, không phải nghìn) nên lọc thẳng phía client, không
+   cần debounce/pagination/gọi lại API. boDau() (đã có sẵn, dùng chung toàn
+   app) lo phần không dấu/không phân biệt hoa-thường. ------------------------- */
+
+// Bộ phận filter lấy từ DỮ LIỆU THẬT đang có (không phải danh mục Phòng ban
+// chuẩn) — nhiều nhân sự chưa gán phòng_ban_id, lọc theo giá trị bo_phan
+// đang hiển thị trên bảng mới đúng với cái người dùng nhìn thấy.
+function napBoLocBoPhanNS(ds) {
+  const o = $('#ns-locbophan'); if (!o) return;
+  const hienTai = o.value;
+  const dsBoPhan = [...new Set(ds.map(n => (n.bo_phan || '').trim()).filter(Boolean))].sort();
+  o.innerHTML = '<option value="">Tất cả bộ phận</option>' +
+    dsBoPhan.map(b => `<option value="${esc(b)}">${esc(b)}</option>`).join('');
+  o.value = hienTai;
+}
+
+function napBoLocVaiTroQT(dsVaiTro) {
+  const o = $('#qt-locvaitro'); if (!o) return;
+  const hienTai = o.value;
+  o.innerHTML = '<option value="">Tất cả vai trò</option>' +
+    dsVaiTro.map(v => `<option value="${esc(v.ma)}">${esc(v.ten)}</option>`).join('');
+  o.value = hienTai;
+}
+
+function locNhanSu(ds) {
+  const k = boDau(($('#ns-tim')?.value || '').trim());
+  const boPhan = $('#ns-locbophan')?.value || '';
+  const trangThai = $('#ns-loctrangthai')?.value || '';
+  const loaiLd = $('#ns-locloaild')?.value || '';
+  return ds.filter(n => {
+    if (boPhan && (n.bo_phan || '').trim() !== boPhan) return false;
+    if (trangThai && n.trang_thai !== trangThai) return false;
+    if (loaiLd && n.loai_lao_dong !== loaiLd) return false;
+    if (k && !boDau(`${n.ma_nv || ''} ${n.ho_ten} ${n.sdt || ''} ${n.email || ''}`).includes(k)) return false;
+    return true;
+  });
+}
+
+function xoaLocNS() {
+  if ($('#ns-tim')) $('#ns-tim').value = '';
+  if ($('#ns-locbophan')) $('#ns-locbophan').value = '';
+  if ($('#ns-loctrangthai')) $('#ns-loctrangthai').value = '';
+  if ($('#ns-locloaild')) $('#ns-locloaild').value = '';
+  TOI.them_nhan_su ? veBangNsQuanTri() : veBangNsDoc();
+}
+
+function veTrongNS(tong, sauLoc) {
+  const o = $('#ns-trong'); if (!o) return;
+  o.hidden = sauLoc.length > 0;
+  if (sauLoc.length === 0) {
+    o.innerHTML = tong.length === 0
+      ? 'Chưa có nhân sự nào.'
+      : 'Không tìm thấy kết quả phù hợp. <button type="button" class="btn-nho" id="ns-trongxoaloc">Xoá bộ lọc</button>';
+    $('#ns-trongxoaloc')?.addEventListener('click', xoaLocNS);
+  }
+  const nutLoc = $('#ns-xoaloc');
+  if (nutLoc) nutLoc.hidden = !($('#ns-tim')?.value || $('#ns-locbophan')?.value || $('#ns-loctrangthai')?.value || $('#ns-locloaild')?.value);
+}
+
+function veBangNsDoc() {
+  const ds = locNhanSu(DS_NHAN_SU_DOC);
+  $('#ns-hint').textContent = NS_XEM_LUONG_DOC
+    ? `${ds.length}/${DS_NHAN_SU_DOC.length} nhân sự`
+    : `${ds.length}/${DS_NHAN_SU_DOC.length} nhân sự · Chức vụ của bạn không xem được cột lương`;
+  veBang('#ns-bang', ds, r => {
+    const tt = TRANG_THAI[r.trang_thai] || { chu: r.trang_thai, mau: 'mute' };
+    return '' +
+      `<td><div class="person">${avHtml(r.id, r.viet_tat, r.co_anh)}` +
+        `<div><div class="nm">${esc(r.ho_ten)}${r.ma_nv ? ` <span class="sm" style="font-weight:400">· ${esc(r.ma_nv)}</span>` : ''}</div>` +
+        `<div class="sm">${esc(r.chuc_vu)}</div></div></div></td>` +
+      `<td>${esc(r.bo_phan)}</td>` +
+      `<td><span class="tag ${tt.mau}">${esc(tt.chu)}</span></td>` +
+      `<td class="sm">${esc(r.ngay_vao)}</td>` +
+      (NS_XEM_LUONG_DOC ? `<td class="num">${esc(tienVN(r.luong))}</td>` : '');
+  });
+  veTrongNS(DS_NHAN_SU_DOC, ds);
+}
+
+function veBangNsQuanTri() {
+  const ds = locNhanSu(DS_NHAN_SU_QT);
+  $('#ns-hint').textContent = `${ds.length}/${DS_NHAN_SU_QT.length} nhân sự`;
+  veBang('#ns-bang', ds, n => {
     const tt = TRANG_THAI[n.trang_thai] || { chu: n.trang_thai, mau: 'mute' };
     const daKhoaNs = n.trang_thai_dl === 'da_khoa';
     const thaoTac = `<button class="btn-nho" data-sua-ns="${esc(n.id)}">Sửa</button> ` +
@@ -103,51 +197,75 @@ async function taiLaiNhanSuQuanTri() {
       `<td class="sm">${esc(n.ngay_vao || '')}</td>` +
       `<td>${thaoTac}</td>`;
   });
+  veTrongNS(DS_NHAN_SU_QT, ds);
+}
 
-  // Quản trị (tài khoản) — chỉ hiện nếu tab đó tồn tại trong DOM cho vai trò này.
-  const oQtBang = $('#qtBang');
-  if (oQtBang) {
-    const oQuanLy = $('#qtQuanLy');
-    if (oQuanLy) {
-      oQuanLy.innerHTML = '<option value="">— Không —</option>' +
-        nhan_su.filter(n => n.dang_lam).map(n =>
-          `<option value="${esc(n.id)}">${esc(n.ho_ten)} — ${esc(n.chuc_vu || '')}</option>`).join('');
-    }
-    $('#qtDem').textContent = `${nhan_su.length} nhân sự · ${nhan_su.filter(n => n.tai_khoan_id).length} có tài khoản`;
+function locTaiKhoanQT(ds) {
+  const k = boDau(($('#qt-tim')?.value || '').trim());
+  const vaiTro = $('#qt-locvaitro')?.value || '';
+  return ds.filter(n => {
+    if (vaiTro && n.vai_tro !== vaiTro) return false;
+    if (k && !boDau(`${n.ma_nv || ''} ${n.ho_ten} ${n.ten_dang_nhap || ''}`).includes(k)) return false;
+    return true;
+  });
+}
 
-    veBang('#qtBang', nhan_su, n => {
-      const coTK = !!n.tai_khoan_id;
-      const tt = TRANG_THAI[n.trang_thai] || { chu: n.trang_thai, mau: 'mute' };
-      const tenVaiTro = coTK ? (vai_tro.find(v => v.ma === n.vai_tro)?.ten || n.vai_tro) : '';
-      let cotTK;
-      if (!coTK) cotTK = '<span class="tag mute">Chưa có</span>';
-      else if (!n.kich_hoat) cotTK = `<span class="tag danger">Đã khoá</span> <span class="sm">${esc(n.ten_dang_nhap)}</span>`;
-      else cotTK = `<span class="nm">${esc(n.ten_dang_nhap)}</span>` + (n.phai_doi_mk ? ' <span class="tag warn">chờ đổi MK</span>' : '');
+function xoaLocQT() {
+  if ($('#qt-tim')) $('#qt-tim').value = '';
+  if ($('#qt-locvaitro')) $('#qt-locvaitro').value = '';
+  veBangQtTaiKhoan();
+}
 
-      let thaoTac = '<span class="sm">—</span>';
-      if (!coTK) {
-        if (TOI.duoc_tao_tai_khoan) {
-          const goiY = String(n.sdt || '').replace(/\D/g, '');
-          thaoTac = `<button class="btn-nho btn-primary" data-tao="${esc(n.id)}" data-ten-goi-y="${esc(goiY)}" data-ten="${esc(n.ho_ten)}">Tạo tài khoản</button>`;
-        }
-      } else if (TOI.la_admin) {
-        thaoTac = `<button class="btn-nho btn-phu" data-doivaitro="${n.tai_khoan_id}" data-doivaitro-ten="${esc(n.ho_ten)}" data-doivaitro-hientai="${esc(n.vai_tro || '')}">Đổi vai trò</button> ` +
-          `<button class="btn-nho btn-phu" data-datlai="${n.tai_khoan_id}">Đặt lại MK</button> ` +
-          (n.kich_hoat
-            ? `<button class="btn-nho btn-phu" data-khoa="${n.tai_khoan_id}" data-kh="0">Khoá</button>`
-            : `<button class="btn-nho btn-phu" data-khoa="${n.tai_khoan_id}" data-kh="1">Mở lại</button>`) +
-          ` <button class="btn-nho btn-phu" data-xoatk="${n.tai_khoan_id}" data-xoatk-ten="${esc(n.ho_ten)}">Xoá</button>`;
+function veBangQtTaiKhoan() {
+  const nhan_su = DS_NHAN_SU_QT, vai_tro = DS_VAI_TRO_QT;
+  const ds = locTaiKhoanQT(nhan_su);
+  $('#qtDem').textContent = `${ds.length}/${nhan_su.length} nhân sự · ${nhan_su.filter(n => n.tai_khoan_id).length} có tài khoản`;
+
+  veBang('#qtBang', ds, n => {
+    const coTK = !!n.tai_khoan_id;
+    const tt = TRANG_THAI[n.trang_thai] || { chu: n.trang_thai, mau: 'mute' };
+    const tenVaiTro = coTK ? (vai_tro.find(v => v.ma === n.vai_tro)?.ten || n.vai_tro) : '';
+    let cotTK;
+    if (!coTK) cotTK = '<span class="tag mute">Chưa có</span>';
+    else if (!n.kich_hoat) cotTK = `<span class="tag danger">Đã khoá</span> <span class="sm">${esc(n.ten_dang_nhap)}</span>`;
+    else cotTK = `<span class="nm">${esc(n.ten_dang_nhap)}</span>` + (n.phai_doi_mk ? ' <span class="tag warn">chờ đổi MK</span>' : '');
+
+    let thaoTac = '<span class="sm">—</span>';
+    if (!coTK) {
+      if (TOI.duoc_tao_tai_khoan) {
+        const goiY = String(n.sdt || '').replace(/\D/g, '');
+        thaoTac = `<button class="btn-nho btn-primary" data-tao="${esc(n.id)}" data-ten-goi-y="${esc(goiY)}" data-ten="${esc(n.ho_ten)}">Tạo tài khoản</button>`;
       }
-      return '' +
-        `<td><div class="person">${avHtml(n.id, n.viet_tat, n.co_anh)}` +
-          `<div><div class="nm">${esc(n.ho_ten)}${n.ma_nv ? ` <span class="sm" style="font-weight:400">· ${esc(n.ma_nv)}</span>` : ''}</div>` +
-          `<div class="sm">${esc(n.chuc_vu || tt.chu || '')}</div></div></div></td>` +
-        `<td>${esc(n.bo_phan || '—')}</td>` +
-        `<td>${cotTK}</td>` +
-        `<td class="sm">${esc(tenVaiTro || '—')}</td>` +
-        `<td class="qt-thaotac">${thaoTac}</td>`;
-    });
+    } else if (TOI.la_admin) {
+      thaoTac = `<button class="btn-nho btn-phu" data-doivaitro="${n.tai_khoan_id}" data-doivaitro-ten="${esc(n.ho_ten)}" data-doivaitro-hientai="${esc(n.vai_tro || '')}">Đổi vai trò</button> ` +
+        `<button class="btn-nho btn-phu" data-datlai="${n.tai_khoan_id}">Đặt lại MK</button> ` +
+        (n.kich_hoat
+          ? `<button class="btn-nho btn-phu" data-khoa="${n.tai_khoan_id}" data-kh="0">Khoá</button>`
+          : `<button class="btn-nho btn-phu" data-khoa="${n.tai_khoan_id}" data-kh="1">Mở lại</button>`) +
+        ` <button class="btn-nho btn-phu" data-xoatk="${n.tai_khoan_id}" data-xoatk-ten="${esc(n.ho_ten)}">Xoá</button>`;
+    }
+    return '' +
+      `<td><div class="person">${avHtml(n.id, n.viet_tat, n.co_anh)}` +
+        `<div><div class="nm">${esc(n.ho_ten)}${n.ma_nv ? ` <span class="sm" style="font-weight:400">· ${esc(n.ma_nv)}</span>` : ''}</div>` +
+        `<div class="sm">${esc(n.chuc_vu || tt.chu || '')}</div></div></div></td>` +
+      `<td>${esc(n.bo_phan || '—')}</td>` +
+      `<td>${cotTK}</td>` +
+      `<td class="sm">${esc(tenVaiTro || '—')}</td>` +
+      `<td class="qt-thaotac">${thaoTac}</td>`;
+  });
+
+  const o = $('#qt-trong');
+  if (o) {
+    o.hidden = ds.length > 0;
+    if (ds.length === 0) {
+      o.innerHTML = nhan_su.length === 0
+        ? 'Chưa có nhân sự nào.'
+        : 'Không tìm thấy kết quả phù hợp. <button type="button" class="btn-nho" id="qt-trongxoaloc">Xoá bộ lọc</button>';
+      $('#qt-trongxoaloc')?.addEventListener('click', xoaLocQT);
+    }
   }
+  const nutLoc = $('#qt-xoaloc');
+  if (nutLoc) nutLoc.hidden = !($('#qt-tim')?.value || $('#qt-locvaitro')?.value);
 }
 
 /* Mã trạng thái trong database → chữ hiển thị + màu nhãn */
@@ -183,6 +301,61 @@ function avHtml(id, vietTat, coAnh) {
   return coAnh
     ? `<img class="av" src="/api/nhan-su/anh?id=${encodeURIComponent(id)}" alt="">`
     : `<div class="av">${esc(vietTat)}</div>`;
+}
+
+/* Hộp nhập nhanh dùng chung — thay prompt()/confirm() tự do của trình
+   duyệt bằng modal cùng khuôn với Sửa hồ sơ nhân sự. loai: 'text' | 'select'
+   | 'textarea'. xuLyLuu(giaTri) ném lỗi thì hiện form-loi, không đóng hộp. */
+function moHopNhap({ tieuDe, loai = 'text', nhan = '', giaTri = '', placeholder = '', tuyChon = [], xuLyLuu }) {
+  const nen = $('#hopNhapModalNen');
+  $('#hopNhap-tieude').textContent = tieuDe;
+  const oNhan = $('#hopNhap-nhan');
+  oNhan.textContent = nhan; oNhan.hidden = !nhan;
+
+  const oInput = $('#hopNhap-input'), oSelect = $('#hopNhap-select'), oTextarea = $('#hopNhap-textarea');
+  oInput.hidden = true; oSelect.hidden = true; oTextarea.hidden = true;
+  let o;
+  if (loai === 'select') {
+    o = oSelect;
+    oSelect.innerHTML = tuyChon.map(t => `<option value="${esc(t.gia_tri)}">${esc(t.nhan)}</option>`).join('');
+    oSelect.value = giaTri || '';
+  } else if (loai === 'textarea') {
+    o = oTextarea; oTextarea.value = giaTri || ''; oTextarea.placeholder = placeholder;
+  } else {
+    o = oInput; oInput.value = giaTri || ''; oInput.placeholder = placeholder;
+  }
+  o.hidden = false;
+  $('#hopNhap-loi').textContent = '';
+  nen.hidden = false;
+  o.focus();
+
+  const form = $('#hopNhapForm');
+  const nut = $('#hopNhap-luu');
+  function dong() {
+    nen.hidden = true;
+    form.removeEventListener('submit', onSubmit);
+    $('#hopNhap-huy').removeEventListener('click', dong);
+    nen.removeEventListener('click', onNenClick);
+  }
+  async function onSubmit(e) {
+    e.preventDefault();
+    const val = loai === 'select' ? oSelect.value
+      : loai === 'textarea' ? oTextarea.value.trim()
+      : oInput.value.trim();
+    nut.disabled = true;
+    try {
+      await xuLyLuu(val);
+      dong();
+    } catch (err) {
+      $('#hopNhap-loi').textContent = err.message || 'Không lưu được, thử lại nhé.';
+    } finally {
+      nut.disabled = false;
+    }
+  }
+  function onNenClick(e) { if (e.target === nen) dong(); }
+  form.addEventListener('submit', onSubmit);
+  $('#hopNhap-huy').addEventListener('click', dong);
+  nen.addEventListener('click', onNenClick);
 }
 
 /* 22000000 → "22.000.000" */
@@ -1169,7 +1342,7 @@ async function khoiDongCongViec() {
   // mục tiêu vào thẳng đây, khỏi phải làm 2 bước ở 2 chỗ khác nhau (Sếp
   // Ngọc chốt 21/08/2026: "thêm mục tiêu và giao mục tiêu bản chất như
   // nhau, giao mục tiêu vẫn có mục giao cho tôi, đang trùng lặp thừa thãi
-  // — gộp chung đi"). Chỉ Giám đốc/Phó Giám đốc mới thấy lựa chọn "Công ty".
+  // — gộp chung đi"). Chỉ Admin mới thấy lựa chọn "Công ty".
   const oCvMucTieu = $('#cv-muc-tieu');
   const oMtmKhoi = $('#cv-mtm-khoi');
   const oMtmCap = $('#cv-mtm-cap');
@@ -1346,16 +1519,24 @@ async function khoiDongCongViec() {
     const btn = nutBatDau || nutNop || nutXongNgay || nutDuyet || nutTraLai || nutHuy;
     if (!btn) return;
 
+    if (nutNop) {
+      const idNop = btn.getAttribute('data-cv-nop');
+      moHopNhap({
+        tieuDe: 'Nộp kết quả công việc',
+        loai: 'textarea',
+        nhan: 'Kết quả thực tế đạt được (so với đầu ra đã giao) *',
+        xuLyLuu: async val => {
+          if (!val) throw new Error('Cần điền kết quả trước khi nộp.');
+          await API.cvCapNhat(idNop, 'cho_duyet', val);
+          await taiLai();
+        }
+      });
+      return;
+    }
+
     let id, trangThai, ketQua;
     if (nutBatDau) { id = btn.getAttribute('data-cv-batdau'); trangThai = 'dang_lam'; }
     else if (nutXongNgay) { id = btn.getAttribute('data-cv-xongngay'); trangThai = 'hoan_thanh'; }
-    else if (nutNop) {
-      id = btn.getAttribute('data-cv-nop'); trangThai = 'cho_duyet';
-      const nhap = prompt('Kết quả thực tế đạt được (so với đầu ra đã giao):', '');
-      if (nhap === null) return;
-      if (!nhap.trim()) { alert('Cần điền kết quả trước khi nộp.'); return; }
-      ketQua = nhap.trim();
-    }
     else if (nutDuyet) { id = btn.getAttribute('data-cv-duyet'); trangThai = 'hoan_thanh'; }
     else if (nutTraLai) {
       id = btn.getAttribute('data-cv-tralai'); trangThai = 'dang_lam';
@@ -1685,13 +1866,22 @@ async function khoiDongChat() {
 // quản lý TÀI KHOẢN đăng nhập (Data Ownership: HR sở hữu hồ sơ con người,
 // Admin sở hữu tài khoản hệ thống — 2 thứ khác nhau, xem docs/DATA_OWNERSHIP_MATRIX.md).
 if (TOI.quyen.includes('nhansu')) {
+  // Search + Filter danh sách nhân sự — dùng chung cho cả 2 chế độ xem
+  // (đọc / quản trị), gắn 1 lần duy nhất ở đây.
+  const veLaiBangNs = () => (TOI.them_nhan_su ? veBangNsQuanTri() : veBangNsDoc());
+  $('#ns-tim').addEventListener('input', veLaiBangNs);
+  $('#ns-locbophan').addEventListener('change', veLaiBangNs);
+  $('#ns-loctrangthai').addEventListener('change', veLaiBangNs);
+  $('#ns-locloaild').addEventListener('change', veLaiBangNs);
+  $('#ns-xoaloc').addEventListener('click', xoaLocNS);
+
   if (TOI.them_nhan_su) {
     $('#ns-panel-them').hidden = false;
     $('#ns-thThaoTac').hidden = false;
     if (!TOI.la_admin) {
       const oLuong = document.getElementById('qtFieldLuong');
       if (oLuong) oLuong.remove();
-      $('#nsMoTa').textContent = 'Thêm/sửa hồ sơ nhân sự. Cấp tài khoản đăng nhập và lương do Giám đốc phụ trách (tab Quản trị).';
+      $('#nsMoTa').textContent = 'Thêm/sửa hồ sơ nhân sự. Cấp tài khoản đăng nhập và lương do Admin phụ trách (tab Quản trị).';
     }
 
     const oCd0 = $('#qtChucDanh'), oPb0 = $('#qtPhongBan');
@@ -1736,7 +1926,7 @@ if (TOI.quyen.includes('nhansu')) {
       const n = DS_NHAN_SU_QT.find(x => x.id === id);
       if (!n) return;
       if (n.trang_thai_dl === 'da_khoa' && !TOI.la_admin) {
-        alert('Hồ sơ này đã khoá — cần Giám đốc/Phó Giám đốc sửa hoặc mở khoá lại.');
+        alert('Hồ sơ này đã khoá — cần Admin sửa hoặc mở khoá lại.');
         return;
       }
       $('#nsSua-id').value = n.id;
@@ -1806,7 +1996,7 @@ if (TOI.quyen.includes('nhansu')) {
       if (btnSua) {
         moHopSuaNhanSu(btnSua.dataset.suaNs);
       } else if (btnKhoa) {
-        if (!confirm('Hoàn tất hồ sơ này? Sau đó chỉ Giám đốc/Phó GĐ mới sửa hoặc mở lại được.')) return;
+        if (!confirm('Hoàn tất hồ sơ này? Sau đó chỉ Admin mới sửa hoặc mở lại được.')) return;
         try { await API.qtKhoaNhanSu(btnKhoa.dataset.khoaNs, 'da_khoa'); await taiLaiNhanSuQuanTri(); }
         catch (err) { alert(err.message || 'Không thực hiện được, thử lại nhé.'); }
       } else if (btnMoKhoa) {
@@ -2448,31 +2638,40 @@ async function khoiDongDuLieuNen() {
       if (btnGanTruong) {
         const m = ds.find(x => String(x.id) === btnGanTruong.dataset.ganTruong);
         const dsChon = DS_NHAN_SU_QT.length ? DS_NHAN_SU_QT : (await API.danhBa().catch(() => ({ danh_ba: [] }))).danh_ba || [];
-        const goiY = dsChon.map(n => `${n.ma_nv ? n.ma_nv + ' — ' : ''}${n.ho_ten}`).join('\n');
-        const nhap = prompt(`Gõ đúng Mã NV của người làm trưởng phòng "${m.ten}" (để trống = bỏ gán):\n\n${goiY}`, m.truong_phong_ma_nv || '');
-        if (nhap === null) return;
-        const maGo = nhap.trim();
-        const nguoi = maGo ? dsChon.find(n => (n.ma_nv || '').toLowerCase() === maGo.toLowerCase()) : null;
-        if (maGo && !nguoi) { alert('Không tìm thấy mã nhân sự này.'); return; }
-        try { await API.dlnGanTruongPhong(m.id, nguoi ? nguoi.id : null); await lamMoiTatCa(); }
-        catch (err) { alert(err.message || 'Không lưu được, thử lại nhé.'); }
+        moHopNhap({
+          tieuDe: `Trưởng phòng — ${m.ten}`,
+          loai: 'select',
+          nhan: 'Người làm trưởng phòng',
+          giaTri: m.truong_phong_id || '',
+          tuyChon: [
+            { gia_tri: '', nhan: '— Không gán —' },
+            ...dsChon.map(n => ({ gia_tri: n.id, nhan: `${n.ma_nv ? n.ma_nv + ' — ' : ''}${n.ho_ten}` }))
+          ],
+          xuLyLuu: async val => { await API.dlnGanTruongPhong(m.id, val || null); await lamMoiTatCa(); }
+        });
         return;
       }
       if (btnSua) {
         const m = ds.find(x => String(x.id) === btnSua.dataset.sua);
         if (m.trang_thai === 'da_khoa' && !TOI.la_admin) {
-          alert('Mục này đã khoá — cần Giám đốc/Phó Giám đốc sửa hoặc mở khoá lại.');
+          alert('Mục này đã khoá — cần Admin sửa hoặc mở khoá lại.');
           return;
         }
-        const tenMoi = prompt('Sửa tên:', m.ten);
-        if (tenMoi === null || !tenMoi.trim()) return;
-        try { await xuLySua(m.id, tenMoi.trim()); await lamMoiTatCa(); }
-        catch (err) { alert(err.message || 'Không lưu được, thử lại nhé.'); }
+        moHopNhap({
+          tieuDe: `Sửa tên — ${m.ten}`,
+          nhan: 'Tên mới *',
+          giaTri: m.ten,
+          xuLyLuu: async val => {
+            if (!val) throw new Error('Vui lòng nhập tên.');
+            await xuLySua(m.id, val);
+            await lamMoiTatCa();
+          }
+        });
       } else if (btnAn) {
         try { await xuLyAn(btnAn.dataset.an, btnAn.dataset.hd === '1'); await lamMoiTatCa(); }
         catch (err) { alert(err.message || 'Không lưu được, thử lại nhé.'); }
       } else if (btnKhoa) {
-        if (!confirm('Hoàn tất mục này? Sau đó người thường sẽ không sửa tên được nữa — chỉ Giám đốc/Phó GĐ mới sửa hoặc mở lại.')) return;
+        if (!confirm('Hoàn tất mục này? Sau đó người thường sẽ không sửa tên được nữa — chỉ Admin mới sửa hoặc mở lại.')) return;
         try { await xuLyKhoa(btnKhoa.dataset.khoa, 'da_khoa'); await lamMoiTatCa(); }
         catch (err) { alert(err.message || 'Không thực hiện được, thử lại nhé.'); }
       } else if (btnMoKhoa) {
@@ -2582,7 +2781,7 @@ async function khoiDongDuLieuNen() {
     e.preventDefault();
     const oLoi = $('#dln-ncc-loi'); oLoi.textContent = '';
     if (nccDangSua && nccDangSua.trang_thai === 'da_khoa' && !TOI.la_admin) {
-      oLoi.textContent = 'Nhà cung cấp này đã khoá — cần Giám đốc/Phó Giám đốc sửa hoặc mở lại.';
+      oLoi.textContent = 'Nhà cung cấp này đã khoá — cần Admin sửa hoặc mở lại.';
       return;
     }
     const du = {
@@ -2613,7 +2812,7 @@ async function khoiDongDuLieuNen() {
     if (btnSua) {
       const n = dsNCC.find(x => String(x.id) === btnSua.dataset.nccSua);
       if (n.trang_thai === 'da_khoa' && !TOI.la_admin) {
-        alert('Nhà cung cấp này đã khoá — cần Giám đốc/Phó Giám đốc sửa hoặc mở lại.');
+        alert('Nhà cung cấp này đã khoá — cần Admin sửa hoặc mở lại.');
         return;
       }
       dienFormNCC(n);
@@ -2622,7 +2821,7 @@ async function khoiDongDuLieuNen() {
       try { await API.dlnSuaNCC(btnAn.dataset.nccAn, { hoat_dong: btnAn.dataset.hd === '1' }); await veNCC(); }
       catch (err) { alert(err.message || 'Không thực hiện được, thử lại nhé.'); }
     } else if (btnKhoa) {
-      if (!confirm('Hoàn tất nhà cung cấp này? Sau đó người thường sẽ không sửa được nữa — chỉ Giám đốc/Phó GĐ mới sửa hoặc mở lại.')) return;
+      if (!confirm('Hoàn tất nhà cung cấp này? Sau đó người thường sẽ không sửa được nữa — chỉ Admin mới sửa hoặc mở lại.')) return;
       try { await API.dlnKhoaNCC(btnKhoa.dataset.nccKhoa, 'da_khoa'); await veNCC(); }
       catch (err) { alert(err.message || 'Không thực hiện được, thử lại nhé.'); }
     } else if (btnMoKhoa) {
@@ -2758,10 +2957,29 @@ async function khoiDongTaiSan() {
     bao_hong: 'Báo hỏng', bao_tri: 'Bảo trì xong', thanh_ly: 'Thanh lý'
   };
 
+  function locTS() {
+    const k = boDau(($('#ts-tim')?.value || '').trim());
+    const trangThai = $('#ts-loctrangthai')?.value || '';
+    return DS_TS.filter(t => {
+      if (trangThai && t.trang_thai !== trangThai) return false;
+      if (k && !boDau(`${t.ma_ts} ${t.ten} ${t.danh_muc || ''}`).includes(k)) return false;
+      return true;
+    });
+  }
+
   function ve() {
-    $('#tsDem').textContent = DS_TS.length ? `${DS_TS.length} tài sản` : '';
-    $('#ts-trong').hidden = DS_TS.length > 0;
-    veBang('#ts-bang', DS_TS, t => {
+    const ds = locTS();
+    $('#tsDem').textContent = DS_TS.length ? `${ds.length}/${DS_TS.length} tài sản` : '';
+    $('#ts-trong').hidden = ds.length > 0;
+    if (ds.length === 0) {
+      $('#ts-trong').innerHTML = DS_TS.length === 0
+        ? 'Chưa có tài sản nào.'
+        : 'Không tìm thấy kết quả phù hợp. <button type="button" class="btn-nho" id="ts-trongxoaloc">Xoá bộ lọc</button>';
+      $('#ts-trongxoaloc')?.addEventListener('click', xoaLocTS);
+    }
+    const nutLoc = $('#ts-xoaloc');
+    if (nutLoc) nutLoc.hidden = !($('#ts-tim')?.value || $('#ts-loctrangthai')?.value);
+    veBang('#ts-bang', ds, t => {
       const tt = NHAN_TT_TS[t.trang_thai] || { chu: t.trang_thai, mau: 'mute' };
       const laNguoiGiu = t.nguoi_giu_id && t.nguoi_giu_id === TOI.id;
       let nut = '';
@@ -2798,6 +3016,15 @@ async function khoiDongTaiSan() {
     $('#ts-panel-them').hidden = !quanLy;
     ve();
   }
+
+  function xoaLocTS() {
+    if ($('#ts-tim')) $('#ts-tim').value = '';
+    if ($('#ts-loctrangthai')) $('#ts-loctrangthai').value = '';
+    ve();
+  }
+  $('#ts-tim').addEventListener('input', ve);
+  $('#ts-loctrangthai').addEventListener('change', ve);
+  $('#ts-xoaloc').addEventListener('click', xoaLocTS);
 
   $('#tsThemForm').addEventListener('submit', async e => {
     e.preventDefault();
@@ -2880,8 +3107,13 @@ async function khoiDongTaiSan() {
         if (!confirm('Thu hồi tài sản này về kho?')) return;
         await API.taiSanThuHoi({ id: btnThuHoi.dataset.tsThuhoi }); await taiLai();
       } else if (btnBaoHong) {
-        const ghiChu = prompt('Mô tả tình trạng hỏng (không bắt buộc):') || '';
-        await API.taiSanBaoHong({ id: btnBaoHong.dataset.tsBaohong, ghi_chu: ghiChu }); await taiLai();
+        moHopNhap({
+          tieuDe: 'Báo hỏng tài sản',
+          loai: 'textarea',
+          nhan: 'Mô tả tình trạng hỏng',
+          placeholder: 'Không bắt buộc',
+          xuLyLuu: async val => { await API.taiSanBaoHong({ id: btnBaoHong.dataset.tsBaohong, ghi_chu: val }); await taiLai(); }
+        });
       } else if (btnBaoTriXong) {
         if (!confirm('Xác nhận đã sửa xong — tài sản về trạng thái sẵn sàng?')) return;
         await API.taiSanBaoTriXong({ id: btnBaoTriXong.dataset.tsBaotrixong }); await taiLai();
@@ -3637,7 +3869,7 @@ async function khoiDongKho() {
       if (!spDangXem) return;
       const sp = spDangXem;
       if (sp.trang_thai === 'da_khoa' && !TOI.la_admin) {
-        alert('Mã hàng này đã khoá — cần Giám đốc/Phó Giám đốc sửa hoặc mở khoá lại.');
+        alert('Mã hàng này đã khoá — cần Admin sửa hoặc mở khoá lại.');
         return;
       }
       $('#kvSua-id').value = sp.id;
@@ -3689,7 +3921,7 @@ async function khoiDongKho() {
     $('#kvModalKhoa').addEventListener('click', async () => {
       if (!spDangXem) return;
       const dangKhoa = spDangXem.trang_thai === 'da_khoa';
-      if (!dangKhoa && !confirm(`Hoàn tất "${spDangXem.ten}"? Sau đó chỉ Giám đốc/Phó GĐ mới sửa hoặc mở lại.`)) return;
+      if (!dangKhoa && !confirm(`Hoàn tất "${spDangXem.ten}"? Sau đó chỉ Admin mới sửa hoặc mở lại.`)) return;
       try {
         await API.khoKhoaSanPham(spDangXem.id, dangKhoa ? 'nhap' : 'da_khoa');
         await taiLai();
@@ -4144,7 +4376,7 @@ async function khoiDongDonHoan() {
       }
       if (!tt.da_ket_noi) {
         oTrang.innerHTML = `🔌 <b>Chưa kết nối shop ${cfg.ten}.</b> ` +
-          (tt.quyen.quan_ly ? `Bấm “Kết nối ${cfg.ten}” để ủy quyền một lần.` : 'Nhờ Giám đốc bấm kết nối.');
+          (tt.quyen.quan_ly ? `Bấm “Kết nối ${cfg.ten}” để ủy quyền một lần.` : 'Nhờ Admin bấm kết nối.');
         oHint.textContent = 'Chưa kết nối';
         if (tt.quyen.quan_ly) { nutKN.hidden = false; nutKN.textContent = `Kết nối ${cfg.ten}`; }
         return;
@@ -4476,6 +4708,10 @@ if (TOI.quyen.includes('quantri')) {
   // HỒ SƠ nhân sự đã chuyển sang tab Nhân sự (xem docs/DATA_OWNERSHIP_MATRIX.md).
   // Bảng qtBang được taiLaiNhanSuQuanTri() (gọi từ khối 'nhansu' phía trên)
   // vẽ sẵn — ở đây chỉ cần gắn sự kiện.
+  $('#qt-tim')?.addEventListener('input', veBangQtTaiKhoan);
+  $('#qt-locvaitro')?.addEventListener('change', veBangQtTaiKhoan);
+  $('#qt-xoaloc')?.addEventListener('click', xoaLocQT);
+
   $('#qtBang').addEventListener('click', async e => {
     const btn = e.target.closest('button');
     if (!btn) return;
