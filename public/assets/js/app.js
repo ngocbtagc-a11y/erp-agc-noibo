@@ -527,6 +527,7 @@ if (TOI.quyen.includes('danhba')) {
 /* -- Trạm Mục Tiêu: giao việc cho nhân viên (máy chủ thật) -- */
 if (TOI.quyen.includes('congviec')) {
   try { await khoiDongCongViec(); } catch (e) { console.error('Trạm Mục Tiêu:', e); }
+  try { await veTongQuanTheoVaiTro(); } catch (e) { console.error('Tóm tắt Tổng quan:', e); }
 }
 
 /* -- Lịch sử làm việc (máy chủ thật) -- */
@@ -641,6 +642,67 @@ async function khoiDongVinhDanh() {
   });
 
   await taiLai();
+}
+
+/* ==========================================================================
+   TÓM TẮT TRẠM MỤC TIÊU THEO VAI TRÒ — Employee/Manager = Action/Exception
+   First (Việc cần làm lên trước Mục Tiêu); Admin = Decision First (giữ Mục
+   Tiêu trước, thêm cảnh báo mục tiêu công ty chưa chốt + doanh thu thật).
+   CHỈ dùng dữ liệu thật đã có sẵn (cvDanhSach/mtDanhSach/doanh thu) —
+   không tự bịa số liệu; rỗng thì ẩn hẳn khối, không hiện khối trống.
+   ========================================================================== */
+async function veTongQuanTheoVaiTro() {
+  if (!TOI.quyen.includes('congviec')) return;
+
+  let cv, mt;
+  try { [cv, mt] = await Promise.all([API.cvDanhSach(), API.mtDanhSach()]); }
+  catch { return; }
+
+  const homNay = new Date().toISOString().slice(0, 10);
+  const chuaXong = c => !['hoan_thanh', 'huy'].includes(c.trang_thai);
+  const nhan = (cv.nhan || []).filter(chuaXong);
+  const giao = (cv.giao || []).filter(chuaXong);
+  const quaHanNhan = nhan.filter(c => c.han_chot && c.han_chot < homNay).length;
+  const quaHanGiao = giao.filter(c => c.han_chot && c.han_chot < homNay).length;
+  const choDuyetGiao = giao.filter(c => c.trang_thai === 'cho_duyet').length;
+
+  const the = [];
+  const canhBao = [];
+
+  if (TOI.la_admin) {
+    ((mt.cong_ty || [])).filter(m => m.trang_thai === 'dang_thuc_hien' && !m.da_chot)
+      .forEach(m => canhBao.push({ m: 'warn', b: `Mục tiêu công ty "${m.tieu_de}" chưa chốt`, s: 'Vào khối Trạm Mục Tiêu bên dưới để chốt', t: 'Mục tiêu' }));
+    if (quaHanGiao > 0) canhBao.push({ m: 'danger', b: `${quaHanGiao} việc đã giao đang quá hạn`, s: '', t: 'Công việc' });
+    if (choDuyetGiao > 0) canhBao.push({ m: 'warn', b: `${choDuyetGiao} việc đang chờ Sếp duyệt`, s: '', t: 'Công việc' });
+
+    try {
+      const dt = await API.kdTongQuanDoanhThu();
+      if (dt.co_bang) {
+        the.push({ k: 'Doanh thu hôm nay', v: tienVN(dt.hom_nay.tong_tien) + ' đ', d: `${dt.hom_nay.so_don} đơn` });
+      }
+    } catch { /* chưa nạp migration đơn hàng ở môi trường này — im lặng bỏ qua */ }
+  } else {
+    the.push({ k: 'Việc đang mở', v: String(nhan.length), d: 'Việc cần làm của tôi' });
+    the.push({ k: 'Việc quá hạn', v: String(quaHanNhan), d: quaHanNhan ? 'Cần xử lý ngay' : 'Không có', dir: quaHanNhan ? 'down' : '' });
+    if (giao.length > 0) the.push({ k: 'Việc tôi giao — chờ duyệt', v: String(choDuyetGiao), d: `${giao.length} việc đang giao` });
+  }
+
+  if (the.length) { veThe('#tq-tomtat', the); $('#tq-tomtat').hidden = false; }
+  if (canhBao.length) { veDanhSach('#tq-canhbao-that', canhBao); $('#tq-canhbao-panel').hidden = false; }
+
+  // Employee/Manager: đẩy "Việc cần làm" lên TRƯỚC khối Mục Tiêu (Action/
+  // Exception First). Admin giữ nguyên thứ tự mặc định trong HTML (Mục
+  // Tiêu trước — Decision First). Chỉ đổi VỊ TRÍ hiển thị, không đổi dữ
+  // liệu/logic — .mt-panel/#cvSeg là các khối DOM đã render sẵn.
+  if (!TOI.la_admin) {
+    const khoiMucTieu = document.querySelector('.mt-panel');
+    const segViec = $('#cvSeg');
+    if (khoiMucTieu && segViec) {
+      [segViec, $('#cv-pane-nhan'), $('#cv-pane-phoihop'), $('#cv-pane-giao')].forEach(el => {
+        if (el) khoiMucTieu.parentNode.insertBefore(el, khoiMucTieu);
+      });
+    }
+  }
 }
 
 /* ==========================================================================
