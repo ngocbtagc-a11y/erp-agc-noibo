@@ -358,7 +358,50 @@
     <section class="view" id="v-nhansu" hidden>
       <div class="view-head">
         <h3>Nhân sự</h3>
-        <p>Danh sách nhân sự, tiến độ chuyển đổi từ HKD Onfod lên Công ty TNHH và lịch làm việc 1:1.</p>
+        <p id="nsMoTa">Danh sách nhân sự, tiến độ chuyển đổi từ HKD Onfod lên Công ty TNHH và lịch làm việc 1:1.</p>
+      </div>
+
+      <!-- Thêm nhân sự — chỉ hiện với HCNS/Admin (đã chuyển từ tab Quản trị
+           về đây, vì đây mới đúng chỗ người phụ trách nhân sự tìm tới đầu
+           tiên; Quản trị giờ chỉ còn quản lý TÀI KHOẢN đăng nhập). -->
+      <div class="panel" id="ns-panel-them" hidden>
+        <div class="panel-head"><h4>Thêm nhân sự nhanh</h4></div>
+        <div class="panel-body">
+          <form id="qtFormThem" class="form-luoi" autocomplete="off">
+            <div class="field">
+              <label>Họ tên *</label>
+              <input type="text" id="qtHoTen" required placeholder="Ví dụ: Trần Văn Nam">
+            </div>
+            <div class="field">
+              <label>Chức danh <span class="hint">· <a href="#" data-mo-tab="dulieunen">quản lý ở Dữ liệu nền</a></span></label>
+              <select id="qtChucDanh"><option value="">— Chưa chọn —</option></select>
+            </div>
+            <div class="field">
+              <label>Phòng ban <span class="hint">· <a href="#" data-mo-tab="dulieunen">quản lý ở Dữ liệu nền</a></span></label>
+              <select id="qtPhongBan"><option value="">— Chưa chọn —</option></select>
+            </div>
+            <div class="field">
+              <label>Số điện thoại</label>
+              <input type="text" id="qtSdt" placeholder="09xx xxx xxx">
+            </div>
+            <div class="field">
+              <label>Email</label>
+              <input type="text" id="qtEmail" placeholder="ten@alphagreen.vn">
+            </div>
+            <div class="field">
+              <label>Quản lý trực tiếp</label>
+              <select id="qtQuanLy"><option value="">— Không —</option></select>
+            </div>
+            <div class="field" id="qtFieldLuong">
+              <label>Lương (đồng/tháng)</label>
+              <input type="text" id="qtLuong" inputmode="numeric" placeholder="Để trống nếu chưa có">
+            </div>
+            <div class="field field-nut">
+              <button type="submit" class="btn-primary" id="qtNutThem">Thêm nhân sự</button>
+            </div>
+          </form>
+          <div class="form-loi" id="qtLoiThem"></div>
+        </div>
       </div>
 
       <div class="panel">
@@ -375,6 +418,7 @@
                 <th>Trạng thái</th>
                 <th>Vào làm</th>
                 <th class="num" id="ns-thLuong">Lương</th>
+                <th id="ns-thThaoTac" hidden></th>
               </tr>
             </thead>
             <tbody id="ns-bang"></tbody>
@@ -1102,7 +1146,7 @@
     <section class="view" id="v-quantri" hidden>
       <div class="view-head">
         <h3>Quản trị</h3>
-        <p id="qtMoTa">Thêm nhân sự, tạo tài khoản đăng nhập và đặt lại mật khẩu.</p>
+        <p id="qtMoTa">Tạo tài khoản đăng nhập, đặt lại mật khẩu và khoá/mở tài khoản. Thêm/sửa hồ sơ nhân sự đã chuyển sang tab Nhân sự.</p>
       </div>
 
       <!-- ===== Đón nhân sự mới từ ảnh CCCD (đang hoàn thiện — tạm ẩn) ===== -->
@@ -1203,47 +1247,6 @@
           </form>
           <div class="form-loi" id="dmLoi"></div>
           <div class="form-ok" id="dmOk" hidden></div>
-        </div>
-      </div>
-
-      <!-- Thêm nhân sự -->
-      <div class="panel">
-        <div class="panel-head"><h4>Thêm nhân sự nhanh (không ảnh)</h4></div>
-        <div class="panel-body">
-          <form id="qtFormThem" class="form-luoi" autocomplete="off">
-            <div class="field">
-              <label>Họ tên *</label>
-              <input type="text" id="qtHoTen" required placeholder="Ví dụ: Trần Văn Nam">
-            </div>
-            <div class="field">
-              <label>Chức danh <span class="hint">· <a href="#" data-mo-tab="dulieunen">quản lý ở Dữ liệu nền</a></span></label>
-              <select id="qtChucDanh"><option value="">— Chưa chọn —</option></select>
-            </div>
-            <div class="field">
-              <label>Phòng ban <span class="hint">· <a href="#" data-mo-tab="dulieunen">quản lý ở Dữ liệu nền</a></span></label>
-              <select id="qtPhongBan"><option value="">— Chưa chọn —</option></select>
-            </div>
-            <div class="field">
-              <label>Số điện thoại</label>
-              <input type="text" id="qtSdt" placeholder="09xx xxx xxx">
-            </div>
-            <div class="field">
-              <label>Email</label>
-              <input type="text" id="qtEmail" placeholder="ten@alphagreen.vn">
-            </div>
-            <div class="field">
-              <label>Quản lý trực tiếp</label>
-              <select id="qtQuanLy"><option value="">— Không —</option></select>
-            </div>
-            <div class="field" id="qtFieldLuong">
-              <label>Lương (đồng/tháng)</label>
-              <input type="text" id="qtLuong" inputmode="numeric" placeholder="Để trống nếu chưa có">
-            </div>
-            <div class="field field-nut">
-              <button type="submit" class="btn-primary" id="qtNutThem">Thêm nhân sự</button>
-            </div>
-          </form>
-          <div class="form-loi" id="qtLoiThem"></div>
         </div>
       </div>
 
