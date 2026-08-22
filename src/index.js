@@ -408,7 +408,7 @@ async function qtDanhSach(req, env) {
 
   const { results } = await env.DB.prepare(`
     SELECT n.id, n.ho_ten, n.viet_tat, n.chuc_vu, n.bo_phan, n.phong_ban_id, n.chuc_danh_id,
-           n.sdt, n.email, n.quan_ly_id,
+           n.sdt, n.email, n.quan_ly_id, n.trang_thai_dl,
            n.phap_nhan, n.trang_thai, n.dang_lam, (n.anh_chan_dung IS NOT NULL) AS co_anh,
            t.id AS tai_khoan_id, t.ten_dang_nhap, t.vai_tro, t.kich_hoat, t.phai_doi_mk
       FROM nhan_su n
@@ -490,14 +490,21 @@ async function qtSuaNhanSu(req, env) {
   const id = String(b.id || '').trim();
   if (!id) return loi('Thiếu id nhân sự');
 
-  const hienCo = await env.DB.prepare('SELECT id FROM nhan_su WHERE id = ?').bind(id).first();
+  const hienCo = await env.DB.prepare('SELECT id, ho_ten, chuc_vu, bo_phan, trang_thai_dl FROM nhan_su WHERE id = ?').bind(id).first();
   if (!hienCo) return loi('Không tìm thấy nhân sự', 404);
+
+  // Đã khoá thì chỉ Admin sửa được (Data Lock — xem migration them-khoa-danhmuc-nen.sql)
+  if (hienCo.trang_thai_dl === 'da_khoa' && !laAdmin(phien.vai_tro)) {
+    return loi('Hồ sơ này đã khoá — cần Giám đốc/Phó Giám đốc sửa hoặc mở khoá lại', 403);
+  }
 
   const hoTen = String(b.ho_ten || '').trim();
   if (hoTen.length < 2) return loi('Vui lòng nhập họ tên');
 
   const pb = await phongBanTuId(env, b.phong_ban_id ? parseInt(b.phong_ban_id, 10) : null);
   const cd = await chucDanhTuId(env, b.chuc_danh_id ? parseInt(b.chuc_danh_id, 10) : null);
+  const chucVuMoi = cd ? cd.ten : String(b.chuc_vu || '').trim();
+  const boPhanMoi = pb ? pb.ten : String(b.bo_phan || '').trim();
 
   const coCapNhatLuong = laAdmin(phien.vai_tro) && b.luong !== undefined;
   const luong = coCapNhatLuong
@@ -512,8 +519,7 @@ async function qtSuaNhanSu(req, env) {
   `).bind(
     ...[
       hoTen, vietTatTen(hoTen),
-      cd ? cd.ten : String(b.chuc_vu || '').trim(),
-      pb ? pb.ten : String(b.bo_phan || '').trim(),
+      chucVuMoi, boPhanMoi,
       pb ? pb.id : null,
       cd ? cd.id : null,
       String(b.sdt || '').trim() || null,
@@ -526,6 +532,31 @@ async function qtSuaNhanSu(req, env) {
     ]
   ).run();
 
+  if (hienCo.trang_thai_dl === 'da_khoa') {
+    await dulieunen.ghiLichSuThayDoi(env, phien, 'nhan_su', id, {
+      ho_ten: [hienCo.ho_ten, hoTen],
+      chuc_vu: [hienCo.chuc_vu, chucVuMoi],
+      bo_phan: [hienCo.bo_phan, boPhanMoi]
+    });
+  }
+
+  return json({ ok: true });
+}
+
+/* Khoá (HCNS/Admin bấm "Xác nhận & khoá") / Mở khoá (chỉ Admin). */
+async function qtKhoaNhanSu(req, env) {
+  const { phien, loi: l } = await batBuocThemNhanSu(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+
+  const id = String(b.id || '').trim();
+  if (!id) return loi('Thiếu id nhân sự');
+  const muon = b.trang_thai_dl === 'da_khoa' ? 'da_khoa' : 'nhap';
+  if (muon === 'nhap' && !laAdmin(phien.vai_tro)) {
+    return loi('Chỉ Giám đốc/Phó Giám đốc mới mở khoá lại được', 403);
+  }
+
+  await env.DB.prepare('UPDATE nhan_su SET trang_thai_dl = ? WHERE id = ?').bind(muon, id).run();
   return json({ ok: true });
 }
 
@@ -694,6 +725,13 @@ async function khoAnHienSP(req, env) {
   return kho.anHienSanPham(env, phien, b);
 }
 
+async function khoKhoaSP(req, env) {
+  const { phien, loi: l } = await batBuocXemKho(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return kho.khoaSanPham(env, phien, b);
+}
+
 /* ==========================================================================
    DỮ LIỆU NỀN — Phòng ban / Chức danh / Đơn vị tính + tình trạng sẵn sàng.
    Nghiệp vụ nằm trong src/dulieunen.js. Ai có tab 'dulieunen' đều XEM được
@@ -726,6 +764,12 @@ async function dlnSuaPhongBan(req, env) {
   let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
   return dulieunen.suaPhongBan(env, phien, b);
 }
+async function dlnKhoaPhongBan(req, env) {
+  const { phien, loi: l } = await batBuocXemDuLieuNen(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return dulieunen.khoaPhongBan(env, phien, b);
+}
 
 async function dlnDanhSachChucDanh(req, env) {
   const { loi: l } = await batBuocXemDuLieuNen(req, env);
@@ -744,6 +788,12 @@ async function dlnSuaChucDanh(req, env) {
   let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
   return dulieunen.suaChucDanh(env, phien, b);
 }
+async function dlnKhoaChucDanh(req, env) {
+  const { phien, loi: l } = await batBuocXemDuLieuNen(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return dulieunen.khoaChucDanh(env, phien, b);
+}
 
 async function dlnDanhSachDonVi(req, env) {
   const { loi: l } = await batBuocXemDuLieuNen(req, env);
@@ -761,6 +811,12 @@ async function dlnSuaDonVi(req, env) {
   if (l) return l;
   let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
   return dulieunen.suaDonVi(env, phien, b);
+}
+async function dlnKhoaDonVi(req, env) {
+  const { phien, loi: l } = await batBuocXemDuLieuNen(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return dulieunen.khoaDonVi(env, phien, b);
 }
 
 async function dlnTinhTrang(req, env) {
@@ -2244,6 +2300,7 @@ const DUONG_DAN = {
   'GET  /api/quan-tri/danh-sach':      qtDanhSach,
   'POST /api/quan-tri/them-nhan-su':   qtThemNhanSu,
   'POST /api/quan-tri/sua-nhan-su':    qtSuaNhanSu,
+  'POST /api/quan-tri/khoa-nhan-su':   qtKhoaNhanSu,
   'POST /api/quan-tri/tao-tai-khoan':  qtTaoTaiKhoan,
   'POST /api/quan-tri/dat-lai-mat-khau': qtDatLaiMatKhau,
   'POST /api/quan-tri/khoa-tai-khoan': qtKhoaTaiKhoan,
@@ -2251,6 +2308,7 @@ const DUONG_DAN = {
   'POST /api/kho/them-san-pham': khoThemSP,
   'POST /api/kho/sua-san-pham':  khoSuaSP,
   'POST /api/kho/an-hien-san-pham': khoAnHienSP,
+  'POST /api/kho/khoa-san-pham':    khoKhoaSP,
   'POST /api/kho/nhap':          khoNhap,
   'POST /api/kho/xuat':          khoXuat,
   'GET  /api/kho/lo':            khoLo,
@@ -2259,12 +2317,15 @@ const DUONG_DAN = {
   'GET  /api/dulieunen/phong-ban':      dlnDanhSachPhongBan,
   'POST /api/dulieunen/phong-ban/them': dlnThemPhongBan,
   'POST /api/dulieunen/phong-ban/sua':  dlnSuaPhongBan,
+  'POST /api/dulieunen/phong-ban/khoa': dlnKhoaPhongBan,
   'GET  /api/dulieunen/chuc-danh':      dlnDanhSachChucDanh,
   'POST /api/dulieunen/chuc-danh/them': dlnThemChucDanh,
   'POST /api/dulieunen/chuc-danh/sua':  dlnSuaChucDanh,
+  'POST /api/dulieunen/chuc-danh/khoa': dlnKhoaChucDanh,
   'GET  /api/dulieunen/don-vi':         dlnDanhSachDonVi,
   'POST /api/dulieunen/don-vi/them':    dlnThemDonVi,
   'POST /api/dulieunen/don-vi/sua':     dlnSuaDonVi,
+  'POST /api/dulieunen/don-vi/khoa':    dlnKhoaDonVi,
   'GET  /api/dulieunen/tinh-trang':     dlnTinhTrang,
   'GET  /api/shopee/trang-thai': shopeeTrangThai,
   'GET  /api/shopee/connect':    shopeeConnect,

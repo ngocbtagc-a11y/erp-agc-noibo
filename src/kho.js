@@ -11,7 +11,8 @@
       vốn thì đơn giá KHÔNG được chọn ra khỏi database (giống cách giấu lương).
    ========================================================================== */
 
-import { duocThaoTacKho, duocQuanLyKho, duocXemGiaVon } from './quyen.js';
+import { duocThaoTacKho, duocQuanLyKho, duocXemGiaVon, laAdmin } from './quyen.js';
+import { ghiLichSuThayDoi } from './dulieunen.js';
 
 /* ---- Trả lời dạng JSON (bản riêng của module, để file tự đứng được) ----- */
 
@@ -66,7 +67,7 @@ export async function danhSachSanPham(env, phien) {
 
   // (A) Danh mục sản phẩm đang bán
   const { results: sps } = await env.DB.prepare(`
-    SELECT id, ma_sku, ten, danh_muc, don_vi, don_vi_id, theo_doi_hsd, ton_toi_thieu
+    SELECT id, ma_sku, ten, danh_muc, don_vi, don_vi_id, theo_doi_hsd, ton_toi_thieu, trang_thai
       FROM san_pham WHERE dang_ban = 1 ORDER BY ten
   `).all();
 
@@ -196,8 +197,13 @@ export async function suaSanPham(env, phien, body) {
   const id = String(body.id || '').trim();
   if (!id) return loi('Thiếu id sản phẩm');
 
-  const hienCo = await env.DB.prepare('SELECT id FROM san_pham WHERE id = ?').bind(id).first();
+  const hienCo = await env.DB.prepare('SELECT id, ten, danh_muc, don_vi, trang_thai FROM san_pham WHERE id = ?').bind(id).first();
   if (!hienCo) return loi('Không tìm thấy sản phẩm', 404);
+
+  // Đã khoá thì chỉ Admin sửa được (Data Lock — xem migration them-khoa-danhmuc-nen.sql)
+  if (hienCo.trang_thai === 'da_khoa' && !laAdmin(phien.vai_tro)) {
+    return loi('Mã hàng này đã khoá — cần Giám đốc/Phó Giám đốc sửa hoặc mở khoá lại', 403);
+  }
 
   const ten = String(body.ten || '').trim();
   if (ten.length < 2) return loi('Vui lòng nhập tên sản phẩm');
@@ -205,24 +211,30 @@ export async function suaSanPham(env, phien, body) {
   const theoDoiHsd = body.theo_doi_hsd === false ? 0 : 1;
   const tonToiThieu = soNguyenDuong(body.ton_toi_thieu) || 0;
   const dv = await donViTuId(env, body.don_vi_id ? parseInt(body.don_vi_id, 10) : null);
+  const danhMucMoi = String(body.danh_muc || '').trim() || null;
+  const donViMoi = dv ? dv.ten : (String(body.don_vi || '').trim() || 'sản phẩm');
 
   await env.DB.prepare(`
     UPDATE san_pham SET ten = ?, danh_muc = ?, don_vi = ?, don_vi_id = ?,
            theo_doi_hsd = ?, ton_toi_thieu = ?
      WHERE id = ?
-  `).bind(
-    ten,
-    String(body.danh_muc || '').trim() || null,
-    dv ? dv.ten : (String(body.don_vi || '').trim() || 'sản phẩm'),
-    dv ? dv.id : null,
-    theoDoiHsd, tonToiThieu, id
-  ).run();
+  `).bind(ten, danhMucMoi, donViMoi, dv ? dv.id : null, theoDoiHsd, tonToiThieu, id).run();
+
+  if (hienCo.trang_thai === 'da_khoa') {
+    await ghiLichSuThayDoi(env, phien, 'san_pham', id, {
+      ten: [hienCo.ten, ten],
+      danh_muc: [hienCo.danh_muc, danhMucMoi],
+      don_vi: [hienCo.don_vi, donViMoi]
+    });
+  }
 
   return json({ ok: true });
 }
 
 /* Ẩn/hiện sản phẩm (dang_ban) — KHÔNG xoá vật lý, vì lô hàng/giao dịch kho
-   cũ vẫn tham chiếu tới id này (đúng nguyên tắc "không DELETE nếu đã dùng"). */
+   cũ vẫn tham chiếu tới id này (đúng nguyên tắc "không DELETE nếu đã dùng").
+   Ẩn/hiện KHÔNG bị chặn bởi khoá — đây là việc vận hành (còn bán hay
+   không), không phải đổi định nghĩa mã hàng. */
 export async function anHienSanPham(env, phien, body) {
   if (!duocQuanLyKho(phien.vai_tro)) return loi('Bạn không có quyền ẩn/hiện mã hàng', 403);
 
@@ -232,6 +244,21 @@ export async function anHienSanPham(env, phien, body) {
   await env.DB.prepare('UPDATE san_pham SET dang_ban = ? WHERE id = ?')
     .bind(body.dang_ban ? 1 : 0, id).run();
 
+  return json({ ok: true });
+}
+
+/* Khoá (Quản lý kho/Admin bấm "Xác nhận & khoá") / Mở khoá (chỉ Admin). */
+export async function khoaSanPham(env, phien, body) {
+  if (!duocQuanLyKho(phien.vai_tro)) return loi('Bạn không có quyền khoá/mở khoá mã hàng', 403);
+
+  const id = String(body.id || '').trim();
+  if (!id) return loi('Thiếu id sản phẩm');
+  const muon = body.trang_thai === 'da_khoa' ? 'da_khoa' : 'nhap';
+  if (muon === 'nhap' && !laAdmin(phien.vai_tro)) {
+    return loi('Chỉ Giám đốc/Phó Giám đốc mới mở khoá lại được', 403);
+  }
+
+  await env.DB.prepare('UPDATE san_pham SET trang_thai = ? WHERE id = ?').bind(muon, id).run();
   return json({ ok: true });
 }
 

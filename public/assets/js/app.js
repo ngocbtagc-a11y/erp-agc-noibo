@@ -1993,15 +1993,21 @@ async function khoiDongDuLieuNen() {
   }
 
   // Render 1 danh mục (Phòng ban/Chức danh/Đơn vị tính) — cùng khuôn cho cả 3.
-  function veDanhMuc(dsId, demId, trongId, ds, xuLySua, xuLyAn) {
+  function veDanhMuc(dsId, demId, trongId, ds, xuLySua, xuLyAn, xuLyKhoa) {
     const box = $(dsId);
     box.innerHTML = '';
     ds.forEach(m => {
+      const daKhoa = m.trang_thai === 'da_khoa';
       const r = el('div', '', '');
       r.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)';
+      const nutSua = `<button type="button" class="btn-nho" data-sua="${m.id}">Sửa</button> `;
+      const nutKhoa = daKhoa
+        ? (TOI.la_admin ? `<button type="button" class="btn-nho" data-mokhoa="${m.id}">Mở khoá</button> ` : '')
+        : `<button type="button" class="btn-nho" data-khoa="${m.id}">Xác nhận &amp; khoá</button> `;
       r.innerHTML =
-        `<span>${esc(m.ten)}${m.hoat_dong ? '' : ' <span class="tag mute">Đã ẩn</span>'}</span>` +
-        `<span><button type="button" class="btn-nho" data-sua="${m.id}">Sửa</button> ` +
+        `<span>${esc(m.ten)}${m.hoat_dong ? '' : ' <span class="tag mute">Đã ẩn</span>'}` +
+          `${daKhoa ? ' <span class="tag warn">🔒 Đã khoá</span>' : ''}</span>` +
+        `<span>${nutSua}${nutKhoa}` +
         `<button type="button" class="btn-nho" data-an="${m.id}" data-hd="${m.hoat_dong ? 0 : 1}">${m.hoat_dong ? 'Ẩn' : 'Hiện'}</button></span>`;
       box.appendChild(r);
     });
@@ -2011,8 +2017,14 @@ async function khoiDongDuLieuNen() {
     box.onclick = async (e) => {
       const btnSua = e.target.closest('[data-sua]');
       const btnAn = e.target.closest('[data-an]');
+      const btnKhoa = e.target.closest('[data-khoa]');
+      const btnMoKhoa = e.target.closest('[data-mokhoa]');
       if (btnSua) {
         const m = ds.find(x => String(x.id) === btnSua.dataset.sua);
+        if (m.trang_thai === 'da_khoa' && !TOI.la_admin) {
+          alert('Mục này đã khoá — cần Giám đốc/Phó Giám đốc sửa hoặc mở khoá lại.');
+          return;
+        }
         const tenMoi = prompt('Sửa tên:', m.ten);
         if (tenMoi === null || !tenMoi.trim()) return;
         try { await xuLySua(m.id, tenMoi.trim()); await lamMoiTatCa(); }
@@ -2020,6 +2032,13 @@ async function khoiDongDuLieuNen() {
       } else if (btnAn) {
         try { await xuLyAn(btnAn.dataset.an, btnAn.dataset.hd === '1'); await lamMoiTatCa(); }
         catch (err) { alert(err.message || 'Không lưu được, thử lại nhé.'); }
+      } else if (btnKhoa) {
+        if (!confirm('Xác nhận & khoá mục này? Sau khi khoá, người thường sẽ không sửa tên được nữa — chỉ Giám đốc/Phó GĐ mới sửa hoặc mở khoá lại.')) return;
+        try { await xuLyKhoa(btnKhoa.dataset.khoa, 'da_khoa'); await lamMoiTatCa(); }
+        catch (err) { alert(err.message || 'Không thực hiện được, thử lại nhé.'); }
+      } else if (btnMoKhoa) {
+        try { await xuLyKhoa(btnMoKhoa.dataset.mokhoa, 'nhap'); await lamMoiTatCa(); }
+        catch (err) { alert(err.message || 'Không thực hiện được, thử lại nhé.'); }
       }
     };
   }
@@ -2027,11 +2046,14 @@ async function khoiDongDuLieuNen() {
   async function lamMoiTatCa() {
     await taiDanhMucNen();   // làm mới cache dùng chung (Nhân sự/Kho vận cũng đọc từ đây)
     veDanhMuc('#dln-pb-list', '#dln-pb-dem', '#dln-pb-trong', DS_PHONG_BAN,
-      (id, ten) => API.dlnSuaPhongBan(id, { ten }), (id, hd) => API.dlnSuaPhongBan(id, { hoat_dong: hd }));
+      (id, ten) => API.dlnSuaPhongBan(id, { ten }), (id, hd) => API.dlnSuaPhongBan(id, { hoat_dong: hd }),
+      (id, tt) => API.dlnKhoaPhongBan(id, tt));
     veDanhMuc('#dln-cd-list', '#dln-cd-dem', '#dln-cd-trong', DS_CHUC_DANH,
-      (id, ten) => API.dlnSuaChucDanh(id, { ten }), (id, hd) => API.dlnSuaChucDanh(id, { hoat_dong: hd }));
+      (id, ten) => API.dlnSuaChucDanh(id, { ten }), (id, hd) => API.dlnSuaChucDanh(id, { hoat_dong: hd }),
+      (id, tt) => API.dlnKhoaChucDanh(id, tt));
     veDanhMuc('#dln-dv-list', '#dln-dv-dem', '#dln-dv-trong', DS_DON_VI,
-      (id, ten) => API.dlnSuaDonVi(id, { ten }), (id, hd) => API.dlnSuaDonVi(id, { hoat_dong: hd }));
+      (id, ten) => API.dlnSuaDonVi(id, { ten }), (id, hd) => API.dlnSuaDonVi(id, { hoat_dong: hd }),
+      (id, tt) => API.dlnKhoaDonVi(id, tt));
     await veTinhTrang();
   }
 
@@ -2244,8 +2266,10 @@ async function khoiDongKho() {
     const sp = DS_SP.find(s => s.id === spId);
     if (!sp) return;
     spDangXem = sp;
+    const daKhoaSp = sp.trang_thai === 'da_khoa';
     $('#kvModalTen').textContent = sp.ten;
-    $('#kvModalMa').textContent = `Mã ${sp.ma_sku} · tồn ${sp.ton} ${sp.don_vi}`;
+    $('#kvModalMa').innerHTML = `Mã ${esc(sp.ma_sku)} · tồn ${esc(tienVN(sp.ton))} ${esc(sp.don_vi)}` +
+      (daKhoaSp ? ' <span class="tag warn">🔒 Đã khoá</span>' : '');
     $('#kvModalLo').innerHTML = '';
     $('#kvModalLichSu').innerHTML = '';
     $('#kvSuaForm').hidden = true;
@@ -2256,6 +2280,14 @@ async function khoiDongKho() {
     if (qKho.quan_ly) {
       $('#kvModalSua').hidden = false;
       $('#kvModalAnHien').hidden = false;
+      const btnKhoa = $('#kvModalKhoa');
+      if (daKhoaSp) {
+        btnKhoa.hidden = !TOI.la_admin;
+        btnKhoa.textContent = 'Mở khoá';
+      } else {
+        btnKhoa.hidden = false;
+        btnKhoa.textContent = 'Xác nhận & khoá';
+      }
     }
     kvModal.hidden = false;
 
@@ -2289,6 +2321,10 @@ async function khoiDongKho() {
     $('#kvModalSua').addEventListener('click', () => {
       if (!spDangXem) return;
       const sp = spDangXem;
+      if (sp.trang_thai === 'da_khoa' && !TOI.la_admin) {
+        alert('Mã hàng này đã khoá — cần Giám đốc/Phó Giám đốc sửa hoặc mở khoá lại.');
+        return;
+      }
       $('#kvSua-id').value = sp.id;
       $('#kvSua-ten').value = sp.ten;
       $('#kvSua-danhmuc').value = sp.danh_muc || '';
@@ -2333,6 +2369,17 @@ async function khoiDongKho() {
         await API.khoAnHienSanPham(spDangXem.id, false);
         dongKvModal();
         await taiLai();
+      } catch (err) { alert(err.message || 'Không thực hiện được, thử lại nhé.'); }
+    });
+
+    $('#kvModalKhoa').addEventListener('click', async () => {
+      if (!spDangXem) return;
+      const dangKhoa = spDangXem.trang_thai === 'da_khoa';
+      if (!dangKhoa && !confirm(`Xác nhận & khoá "${spDangXem.ten}"? Sau khi khoá, chỉ Giám đốc/Phó GĐ mới sửa hoặc mở khoá lại.`)) return;
+      try {
+        await API.khoKhoaSanPham(spDangXem.id, dangKhoa ? 'nhap' : 'da_khoa');
+        await taiLai();
+        await moChiTiet(spDangXem.id);
       } catch (err) { alert(err.message || 'Không thực hiện được, thử lại nhé.'); }
     });
   }
@@ -3171,9 +3218,14 @@ if (TOI.quyen.includes('quantri')) {
       }
 
       // Cột thao tác: "Sửa" hồ sơ ai trong Quản trị cũng bấm được (HCNS lẫn
-      // Admin — máy chủ tự ẩn lương với HCNS). Cấp/khoá/đặt lại tài khoản
-      // thì CHỈ admin — HCNS chỉ thấy dấu gạch (máy chủ cũng chặn nếu cố gọi).
-      let thaoTac = `<button class="btn-nho" data-sua-ns="${esc(n.id)}">Sửa</button>`;
+      // Admin — máy chủ tự ẩn lương với HCNS, và tự chặn nếu hồ sơ đã khoá).
+      // Khoá/mở khoá hồ sơ: HCNS khoá được, mở lại thì chỉ Admin (data-khoa-ns
+      // tách riêng data-khoa vốn đã dùng cho khoá TÀI KHOẢN đăng nhập, khác ý).
+      const daKhoaNs = n.trang_thai_dl === 'da_khoa';
+      let thaoTac = `<button class="btn-nho" data-sua-ns="${esc(n.id)}">Sửa</button> ` +
+        (daKhoaNs
+          ? (TOI.la_admin ? `<button class="btn-nho" data-mokhoa-ns="${esc(n.id)}">Mở khoá</button>` : '')
+          : `<button class="btn-nho" data-khoa-ns="${esc(n.id)}">Xác nhận &amp; khoá</button>`);
       if (TOI.la_admin) {
         if (!coTK) {
           // Gợi ý tên đăng nhập = số điện thoại (chỉ chữ số); chưa có SĐT thì để trống
@@ -3189,7 +3241,7 @@ if (TOI.quyen.includes('quantri')) {
 
       return '' +
         `<td><div class="person">${avHtml(n.id, n.viet_tat, n.co_anh)}` +
-          `<div><div class="nm">${esc(n.ho_ten)}</div>` +
+          `<div><div class="nm">${esc(n.ho_ten)}${daKhoaNs ? ' <span class="tag warn">🔒</span>' : ''}</div>` +
           `<div class="sm">${esc(n.chuc_vu || TT_QT[n.trang_thai] || '')}</div></div></div></td>` +
         `<td>${esc(n.bo_phan || '—')}</td>` +
         `<td>${cotTK}</td>` +
@@ -3231,6 +3283,13 @@ if (TOI.quyen.includes('quantri')) {
 
     if (btn.dataset.suaNs) {
       moHopSuaNhanSu(btn.dataset.suaNs);
+    } else if (btn.dataset.khoaNs) {
+      if (!confirm('Xác nhận & khoá hồ sơ này? Sau khi khoá, chỉ Giám đốc/Phó GĐ mới sửa hoặc mở khoá lại được.')) return;
+      try { await API.qtKhoaNhanSu(btn.dataset.khoaNs, 'da_khoa'); await veQuanTri(); }
+      catch (err) { alert(err.message || 'Không thực hiện được, thử lại nhé.'); }
+    } else if (btn.dataset.mokhoaNs) {
+      try { await API.qtKhoaNhanSu(btn.dataset.mokhoaNs, 'nhap'); await veQuanTri(); }
+      catch (err) { alert(err.message || 'Không thực hiện được, thử lại nhé.'); }
     } else if (btn.dataset.tao) {
       moHopTaoTaiKhoan(btn.dataset.tao, btn.dataset.tenGoiY);
     } else if (btn.dataset.datlai) {
@@ -3279,6 +3338,10 @@ if (TOI.quyen.includes('quantri')) {
   function moHopSuaNhanSu(id) {
     const n = DS_NHAN_SU_QT.find(x => x.id === id);
     if (!n) return;
+    if (n.trang_thai_dl === 'da_khoa' && !TOI.la_admin) {
+      alert('Hồ sơ này đã khoá — cần Giám đốc/Phó Giám đốc sửa hoặc mở khoá lại.');
+      return;
+    }
 
     $('#nsSua-id').value = n.id;
     $('#nsSua-hoten').value = n.ho_ten;

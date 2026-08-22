@@ -123,6 +123,10 @@ export const API = {
     method: 'POST', body: JSON.stringify(ns)
   }),
 
+  qtKhoaNhanSu: (id, trangThaiDl) => goi('/api/quan-tri/khoa-nhan-su', {
+    method: 'POST', body: JSON.stringify({ id, trang_thai_dl: trangThaiDl })
+  }),
+
   /* ---- Kho: Xuất / Nhập / Tồn ---- */
   khoSanPham: () => goi('/api/kho/san-pham'),
 
@@ -136,6 +140,10 @@ export const API = {
 
   khoAnHienSanPham: (id, dangBan) => goi('/api/kho/an-hien-san-pham', {
     method: 'POST', body: JSON.stringify({ id, dang_ban: dangBan })
+  }),
+
+  khoKhoaSanPham: (id, trangThai) => goi('/api/kho/khoa-san-pham', {
+    method: 'POST', body: JSON.stringify({ id, trang_thai: trangThai })
   }),
 
   khoNhap: (d) => goi('/api/kho/nhap', { method: 'POST', body: JSON.stringify(d) }),
@@ -155,14 +163,17 @@ export const API = {
   dlnPhongBan: () => goi('/api/dulieunen/phong-ban'),
   dlnThemPhongBan: (ten) => goi('/api/dulieunen/phong-ban/them', { method: 'POST', body: JSON.stringify({ ten }) }),
   dlnSuaPhongBan: (id, d) => goi('/api/dulieunen/phong-ban/sua', { method: 'POST', body: JSON.stringify({ id, ...d }) }),
+  dlnKhoaPhongBan: (id, trangThai) => goi('/api/dulieunen/phong-ban/khoa', { method: 'POST', body: JSON.stringify({ id, trang_thai: trangThai }) }),
 
   dlnChucDanh: () => goi('/api/dulieunen/chuc-danh'),
   dlnThemChucDanh: (ten) => goi('/api/dulieunen/chuc-danh/them', { method: 'POST', body: JSON.stringify({ ten }) }),
   dlnSuaChucDanh: (id, d) => goi('/api/dulieunen/chuc-danh/sua', { method: 'POST', body: JSON.stringify({ id, ...d }) }),
+  dlnKhoaChucDanh: (id, trangThai) => goi('/api/dulieunen/chuc-danh/khoa', { method: 'POST', body: JSON.stringify({ id, trang_thai: trangThai }) }),
 
   dlnDonVi: () => goi('/api/dulieunen/don-vi'),
   dlnThemDonVi: (ten) => goi('/api/dulieunen/don-vi/them', { method: 'POST', body: JSON.stringify({ ten }) }),
   dlnSuaDonVi: (id, d) => goi('/api/dulieunen/don-vi/sua', { method: 'POST', body: JSON.stringify({ id, ...d }) }),
+  dlnKhoaDonVi: (id, trangThai) => goi('/api/dulieunen/don-vi/khoa', { method: 'POST', body: JSON.stringify({ id, trang_thai: trangThai }) }),
 
   dlnTinhTrang: () => goi('/api/dulieunen/tinh-trang'),
 
