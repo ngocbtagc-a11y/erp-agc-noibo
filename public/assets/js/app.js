@@ -87,11 +87,11 @@ async function taiLaiNhanSuQuanTri() {
   // Quản trị (tài khoản) — chỉ hiện nếu tab đó tồn tại trong DOM cho vai trò này.
   const oQtBang = $('#qtBang');
   if (oQtBang) {
-    const oQuanLy = $('#qtQuanLy');
-    if (oQuanLy) {
-      oQuanLy.innerHTML = '<option value="">— Không —</option>' +
-        nhan_su.filter(n => n.dang_lam).map(n =>
-          `<option value="${esc(n.id)}">${esc(n.ho_ten)} — ${esc(n.chuc_vu || '')}</option>`).join('');
+    const oQuanLy = $('#qtQuanLy'), oQuanLyTim = $('#qtQuanLyTim');
+    if (oQuanLy && oQuanLyTim) {
+      ganTimChoSelect(oQuanLyTim, oQuanLy,
+        () => nhan_su.filter(n => n.dang_lam).map(n => ({ gia_tri: n.id, nhan: nhanNhanSu(n) })),
+        '— Không —')();
     }
     napBoLocVaiTroQT(vai_tro);
     veBangQtTaiKhoan();
@@ -303,6 +303,34 @@ function avHtml(id, vietTat, coAnh) {
     : `<div class="av">${esc(vietTat)}</div>`;
 }
 
+/* Nhãn 1 dòng cho nhân sự trong dropdown/option — "Mã · Họ tên — Chức vụ".
+   Không render dấu "—" trống nếu không có chức vụ (tránh "Tên –" rỗng). */
+function nhanNhanSu(n) {
+  const ma = n.ma_nv ? `${n.ma_nv} · ` : '';
+  const cv = (n.chuc_vu || '').trim();
+  return ma + n.ho_ten + (cv ? ` — ${cv}` : '');
+}
+
+/* Gắn ô tìm kiếm phía trên 1 <select> nhiều lựa chọn (chọn nhân sự...) —
+   gõ chữ gì lọc option còn lại theo boDau() (không dấu, không phân biệt
+   hoa-thường), giữ lại lựa chọn đang chọn nếu vẫn còn hợp lệ sau khi lọc.
+   Trả về hàm ve() để gọi lại mỗi khi nạp danh sách gốc mới. */
+function ganTimChoSelect(oTim, oSelect, layTuyChon, coRong) {
+  function ve() {
+    const k = boDau((oTim.value || '').trim());
+    const dsGoc = layTuyChon();
+    const hienTai = oSelect.value;
+    const loc = k ? dsGoc.filter(t => boDau(t.nhan).includes(k)) : dsGoc;
+    oSelect.innerHTML = (coRong ? `<option value="">${esc(coRong)}</option>` : '') +
+      loc.map(t => `<option value="${esc(t.gia_tri)}">${esc(t.nhan)}</option>`).join('');
+    if (loc.some(t => String(t.gia_tri) === hienTai)) oSelect.value = hienTai;
+  }
+  // Gán qua .oninput (không addEventListener) — gọi hàm này nhiều lần (mỗi lần
+  // mở modal/nạp lại data) vẫn an toàn, không bị chồng nhiều listener.
+  oTim.oninput = ve;
+  return ve;
+}
+
 /* Hộp nhập nhanh dùng chung — thay prompt()/confirm() tự do của trình
    duyệt bằng modal cùng khuôn với Sửa hồ sơ nhân sự. loai: 'text' | 'select'
    | 'textarea'. xuLyLuu(giaTri) ném lỗi thì hiện form-loi, không đóng hộp. */
@@ -313,18 +341,35 @@ function moHopNhap({ tieuDe, loai = 'text', nhan = '', giaTri = '', placeholder 
   oNhan.textContent = nhan; oNhan.hidden = !nhan;
 
   const oInput = $('#hopNhap-input'), oSelect = $('#hopNhap-select'), oTextarea = $('#hopNhap-textarea');
-  oInput.hidden = true; oSelect.hidden = true; oTextarea.hidden = true;
+  const oSelectTim = $('#hopNhap-selecttim');
+  oInput.hidden = true; oSelect.hidden = true; oTextarea.hidden = true; oSelectTim.hidden = true;
   let o;
+  oSelectTim.oninput = null;
   if (loai === 'select') {
-    o = oSelect;
-    oSelect.innerHTML = tuyChon.map(t => `<option value="${esc(t.gia_tri)}">${esc(t.nhan)}</option>`).join('');
+    const veChon = () => {
+      const k = boDau((oSelectTim.value || '').trim());
+      const hienTai = oSelect.value;
+      const loc = k ? tuyChon.filter(t => boDau(t.nhan).includes(k)) : tuyChon;
+      oSelect.innerHTML = loc.length
+        ? loc.map(t => `<option value="${esc(t.gia_tri)}">${esc(t.nhan)}</option>`).join('')
+        : '<option value="" disabled>Không tìm thấy</option>';
+      if (loc.some(t => String(t.gia_tri) === hienTai)) oSelect.value = hienTai;
+    };
+    // Chỉ hiện ô tìm khi danh sách đủ dài — danh sách ngắn gõ tìm không cần thiết.
+    oSelectTim.hidden = tuyChon.length <= 8;
+    oSelectTim.value = '';
+    veChon();
     oSelect.value = giaTri || '';
+    oSelect.hidden = false;
+    if (!oSelectTim.hidden) oSelectTim.oninput = veChon;
+    o = oSelectTim.hidden ? oSelect : oSelectTim;
   } else if (loai === 'textarea') {
     o = oTextarea; oTextarea.value = giaTri || ''; oTextarea.placeholder = placeholder;
+    o.hidden = false;
   } else {
     o = oInput; oInput.value = giaTri || ''; oInput.placeholder = placeholder;
+    o.hidden = false;
   }
-  o.hidden = false;
   $('#hopNhap-loi').textContent = '';
   nen.hidden = false;
   o.focus();
@@ -1944,10 +1989,11 @@ if (TOI.quyen.includes('nhansu')) {
       oCd.value = n.chuc_danh_id || '';
       oPb.value = n.phong_ban_id || '';
 
-      const oQl = $('#nsSua-quanly');
-      oQl.innerHTML = '<option value="">— Không —</option>' +
-        DS_NHAN_SU_QT.filter(x => x.dang_lam && x.id !== n.id).map(x =>
-          `<option value="${esc(x.id)}">${esc(x.ho_ten)} — ${esc(x.chuc_vu || '')}</option>`).join('');
+      const oQl = $('#nsSua-quanly'), oQlTim = $('#nsSua-quanlytim');
+      ganTimChoSelect(oQlTim, oQl,
+        () => DS_NHAN_SU_QT.filter(x => x.dang_lam && x.id !== n.id).map(x => ({ gia_tri: x.id, nhan: nhanNhanSu(x) })),
+        '— Không —')();
+      oQlTim.value = '';
       oQl.value = n.quan_ly_id || '';
 
       const oFieldLuong = $('#nsSua-fieldluong');
@@ -2645,7 +2691,7 @@ async function khoiDongDuLieuNen() {
           giaTri: m.truong_phong_id || '',
           tuyChon: [
             { gia_tri: '', nhan: '— Không gán —' },
-            ...dsChon.map(n => ({ gia_tri: n.id, nhan: `${n.ma_nv ? n.ma_nv + ' — ' : ''}${n.ho_ten}` }))
+            ...dsChon.map(n => ({ gia_tri: n.id, nhan: nhanNhanSu(n) }))
           ],
           xuLyLuu: async val => { await API.dlnGanTruongPhong(m.id, val || null); await lamMoiTatCa(); }
         });
@@ -3050,8 +3096,11 @@ async function khoiDongTaiSan() {
     const t = DS_TS.find(x => x.id === id);
     $('#tsCapPhatId').value = id;
     $('#tsCapPhatTieuDe').textContent = 'Cấp phát: ' + (t ? t.ten : '');
-    $('#tsCapPhatNguoi').innerHTML = '<option value="">— Chọn nhân sự —</option>' +
-      dsNhanSuChon.map(n => `<option value="${esc(n.id)}">${esc(n.ho_ten)} — ${esc(n.chuc_vu || '')}</option>`).join('');
+    const oTsNguoiTim = $('#tsCapPhatNguoiTim');
+    oTsNguoiTim.value = '';
+    ganTimChoSelect(oTsNguoiTim, $('#tsCapPhatNguoi'),
+      () => dsNhanSuChon.map(n => ({ gia_tri: n.id, nhan: nhanNhanSu(n) })),
+      '— Chọn nhân sự —')();
     $('#tsCapPhatViTri').value = t ? (t.vi_tri || '') : '';
     $('#tsCapPhatGhiChu').value = '';
     $('#tsCapPhatLoi').textContent = '';
