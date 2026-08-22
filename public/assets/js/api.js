@@ -119,6 +119,10 @@ export const API = {
     method: 'POST', body: JSON.stringify({ tai_khoan_id: taiKhoanId, kich_hoat: kichHoat })
   }),
 
+  qtXoaTaiKhoan: (taiKhoanId) => goi('/api/quan-tri/xoa-tai-khoan', {
+    method: 'POST', body: JSON.stringify({ tai_khoan_id: taiKhoanId })
+  }),
+
   qtSuaNhanSu: (ns) => goi('/api/quan-tri/sua-nhan-su', {
     method: 'POST', body: JSON.stringify(ns)
   }),
@@ -190,6 +194,8 @@ export const API = {
   /* ---- Đăng ký ca / Xếp ca ---- */
   caMauCa: () => goi('/api/ca/mau-ca'),
   caThemMauCa: (d) => goi('/api/ca/mau-ca/them', { method: 'POST', body: JSON.stringify(d) }),
+  caSuaMauCa: (d) => goi('/api/ca/mau-ca/sua', { method: 'POST', body: JSON.stringify(d) }),
+  caXoaMauCa: (id) => goi('/api/ca/mau-ca/xoa', { method: 'POST', body: JSON.stringify({ id }) }),
   caThemCaMo: (d) => goi('/api/ca/mo/them', { method: 'POST', body: JSON.stringify(d) }),
   caMoDangKyTuan: (d) => goi('/api/ca/mo/mo-tuan', { method: 'POST', body: JSON.stringify(d) }),
   caKhoaCaMo: (id) => goi('/api/ca/mo/khoa', { method: 'POST', body: JSON.stringify({ id }) }),

@@ -68,6 +68,42 @@ export async function themMauCa(env, phien, body) {
   return json({ ok: true, id });
 }
 
+export async function suaMauCa(env, phien, body) {
+  if (!duocQuanLyChinhSachCa(phien.vai_tro)) return loi('Bạn không có quyền quản lý Mẫu ca', 403);
+  const id = chuoi(body.id);
+  if (!id) return loi('Thiếu id mẫu ca');
+  const maCa = chuoi(body.ma_ca), tenCa = chuoi(body.ten_ca);
+  const gioBd = chuoi(body.gio_bat_dau), gioKt = chuoi(body.gio_ket_thuc);
+  if (!maCa || !tenCa || !gioBd || !gioKt) return loi('Vui lòng nhập đủ mã ca, tên ca, giờ bắt đầu/kết thúc');
+
+  try {
+    await env.DB.prepare(`
+      UPDATE mau_ca SET ma_ca = ?, ten_ca = ?, gio_bat_dau = ?, gio_ket_thuc = ?, phut_nghi = ? WHERE id = ?
+    `).bind(maCa, tenCa, gioBd, gioKt, parseInt(body.phut_nghi, 10) || 0, id).run();
+  } catch (e) {
+    return loi(String(e.message || '').includes('UNIQUE') ? `Mã ca "${maCa}" đã tồn tại` : 'Không lưu được, thử lại nhé.');
+  }
+  return json({ ok: true });
+}
+
+/* Xoá HẲN — chỉ khi chưa có Ca mở nào dùng mẫu này (đúng nguyên tắc không
+   được xoá Entity đã có dữ liệu gắn vào — xem docs/ENTITY_IDENTITY.md).
+   Mẫu ca đã dùng rồi thì "Ẩn" (dang_dung=0) thay vì xoá, để không phá vỡ
+   liên kết dữ liệu lịch sử. */
+export async function xoaMauCa(env, phien, body) {
+  if (!duocQuanLyChinhSachCa(phien.vai_tro)) return loi('Bạn không có quyền quản lý Mẫu ca', 403);
+  const id = chuoi(body.id);
+  if (!id) return loi('Thiếu id mẫu ca');
+
+  const dangDung = await env.DB.prepare('SELECT COUNT(*) AS n FROM ca_mo WHERE mau_ca_id = ?').bind(id).first();
+  if (dangDung.n > 0) {
+    await env.DB.prepare('UPDATE mau_ca SET dang_dung = 0 WHERE id = ?').bind(id).run();
+    return json({ ok: true, da_an: true });
+  }
+  await env.DB.prepare('DELETE FROM mau_ca WHERE id = ?').bind(id).run();
+  return json({ ok: true, da_an: false });
+}
+
 /* ==========================================================================
    CA MỞ — 1 mẫu ca x 1 ngày x 1 phòng ban. CHỈ trưởng phòng của đúng phòng
    ban đó (Admin luôn được, xem laTruongPhong) — HR KHÔNG mở ca thay phòng,

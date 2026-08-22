@@ -132,7 +132,8 @@ async function taiLaiNhanSuQuanTri() {
           thaoTac = `<button class="btn-nho btn-phu" data-datlai="${n.tai_khoan_id}">Đặt lại MK</button> ` +
             (n.kich_hoat
               ? `<button class="btn-nho btn-phu" data-khoa="${n.tai_khoan_id}" data-kh="0">Khoá</button>`
-              : `<button class="btn-nho btn-phu" data-khoa="${n.tai_khoan_id}" data-kh="1">Mở lại</button>`);
+              : `<button class="btn-nho btn-phu" data-khoa="${n.tai_khoan_id}" data-kh="1">Mở lại</button>`) +
+            ` <button class="btn-nho btn-phu" data-xoatk="${n.tai_khoan_id}" data-xoatk-ten="${esc(n.ho_ten)}">Xoá</button>`;
         }
       }
       return '' +
@@ -1742,6 +1743,8 @@ if (TOI.quyen.includes('nhansu')) {
       $('#nsSua-email').value = n.email || '';
       $('#nsSua-trangthai').value = n.trang_thai || 'da_ky';
       $('#nsSua-loailaodong').value = n.loai_lao_dong || 'toan_thoi_gian';
+      $('#nsSua-fieldmanv').hidden = !TOI.la_admin;
+      $('#nsSua-manv').value = n.ma_nv || '';
 
       const oCd = $('#nsSua-chucdanh'), oPb = $('#nsSua-phongban');
       oCd.innerHTML = tuyChonDanhMuc(DS_CHUC_DANH, n.chuc_danh_id);
@@ -1782,6 +1785,7 @@ if (TOI.quyen.includes('nhansu')) {
         };
         const luongMoi = $('#nsSua-luong').value.trim();
         if (TOI.la_admin && luongMoi) body.luong = luongMoi;
+        if (TOI.la_admin) body.ma_nv = $('#nsSua-manv').value.trim();
         await API.qtSuaNhanSu(body);
         dongHopSuaNhanSu();
         await taiLaiNhanSuQuanTri();
@@ -2947,26 +2951,62 @@ async function khoiDongXepCa() {
       box.innerHTML = '';
       dsMauCa.forEach(m => {
         box.appendChild(el('div', 'list-item',
-          `<div class="body"><b>${esc(m.ma_ca)} — ${esc(m.ten_ca)}</b><span>${esc(m.gio_bat_dau)}–${esc(m.gio_ket_thuc)}</span></div>`
+          `<div class="body"><b>${esc(m.ma_ca)} — ${esc(m.ten_ca)}</b><span>${esc(m.gio_bat_dau)}–${esc(m.gio_ket_thuc)}</span></div>` +
+          `<div class="meta"><button type="button" class="btn-nho" data-mc-sua="${esc(m.id)}">Sửa</button> ` +
+          `<button type="button" class="btn-nho btn-phu" data-mc-xoa="${esc(m.id)}">Xoá</button></div>`
         ));
       });
     }
     veMauCaList();
 
+    function dienFormMauCa(m) {
+      $('#xcMcId').value = m ? m.id : '';
+      $('#xcMcMa').value = m ? m.ma_ca : '';
+      $('#xcMcTen').value = m ? m.ten_ca : '';
+      $('#xcMcBatDau').value = m ? m.gio_bat_dau : '';
+      $('#xcMcKetThuc').value = m ? m.gio_ket_thuc : '';
+      $('#xcMcNutThem').textContent = m ? 'Lưu thay đổi' : '+ Thêm mẫu ca';
+      $('#xcMcNutHuy').hidden = !m;
+      $('#xcMcLoi').textContent = '';
+    }
+
+    $('#xcMcNutHuy').addEventListener('click', () => { $('#xcMauCaForm').reset(); dienFormMauCa(null); });
+
     $('#xcMauCaForm').addEventListener('submit', async e => {
       e.preventDefault();
       const oLoi = $('#xcMcLoi'); oLoi.textContent = '';
+      const dangSua = $('#xcMcId').value;
+      const du = {
+        ma_ca: $('#xcMcMa').value.trim(),
+        ten_ca: $('#xcMcTen').value.trim(),
+        gio_bat_dau: $('#xcMcBatDau').value,
+        gio_ket_thuc: $('#xcMcKetThuc').value
+      };
       try {
-        await API.caThemMauCa({
-          ma_ca: $('#xcMcMa').value.trim(),
-          ten_ca: $('#xcMcTen').value.trim(),
-          gio_bat_dau: $('#xcMcBatDau').value,
-          gio_ket_thuc: $('#xcMcKetThuc').value
-        });
+        if (dangSua) await API.caSuaMauCa({ id: dangSua, ...du });
+        else await API.caThemMauCa(du);
         $('#xcMauCaForm').reset();
+        dienFormMauCa(null);
         await taiMauCaDungChung();
         veMauCaList();
       } catch (err) { oLoi.textContent = err.message || 'Không lưu được, thử lại nhé.'; }
+    });
+
+    $('#xcMcList').addEventListener('click', async e => {
+      const btnSua = e.target.closest('[data-mc-sua]');
+      const btnXoa = e.target.closest('[data-mc-xoa]');
+      if (btnSua) {
+        const m = dsMauCa.find(x => x.id === btnSua.dataset.mcSua);
+        if (m) dienFormMauCa(m);
+      } else if (btnXoa) {
+        if (!confirm('Xoá mẫu ca này? Nếu đã có ca mở dùng mẫu này thì hệ thống sẽ tự ẩn thay vì xoá hẳn.')) return;
+        try {
+          const kq = await API.caXoaMauCa(btnXoa.dataset.mcXoa);
+          if (kq.da_an) alert('Mẫu ca này đã có Ca mở dùng rồi nên chỉ ẩn đi, không xoá hẳn được (giữ đúng dữ liệu lịch sử).');
+          await taiMauCaDungChung();
+          veMauCaList();
+        } catch (err) { alert(err.message || 'Không xoá được, thử lại nhé.'); }
+      }
     });
   }
 
@@ -3074,6 +3114,10 @@ async function khoiDongXepCa() {
        người cần. Trưởng phòng nhập xong bấm "Mở đăng ký cho tuần" 1 lần —
        không phải mở từng ca một (đúng nguyên tắc Data Ownership ERP V2). */
     function veKeHoach(tuNgay) {
+      $('#xc-kehoach-chuacomauca').hidden = dsMauCa.length > 0;
+      $('#xc-kehoach-noidung').hidden = dsMauCa.length === 0;
+      if (!dsMauCa.length) return;
+
       const cacNgay = Array.from({ length: 7 }, (_, i) => {
         const d = new Date(tuNgay + 'T00:00:00'); d.setDate(d.getDate() + i); return ngayISO(d);
       });
@@ -3087,7 +3131,7 @@ async function khoiDongXepCa() {
           const gtri = cm ? cm.can_bao_nhieu_nguoi : '';
           return `<td><input type="text" inputmode="numeric" class="xc-kh-o" data-xc-kh-ngay="${ng}" data-xc-kh-mauca="${mc.id}" value="${gtri}" style="width:44px;text-align:center;border:1px solid var(--line);border-radius:6px;padding:3px"></td>`;
         }).join('');
-        return `<tr><td class="xc-col-fixed sm">${esc(mc.ma_ca)} — ${esc(mc.ten_ca)}</td>${oCells}</tr>`;
+        return `<tr><td class="xc-col-fixed sm">${esc(mc.ma_ca)} — ${esc(mc.ten_ca)}<br><span style="font-weight:400">${esc(mc.gio_bat_dau)}–${esc(mc.gio_ket_thuc)}</span></td>${oCells}</tr>`;
       }).join('');
     }
 
@@ -4410,6 +4454,13 @@ if (TOI.quyen.includes('quantri')) {
       btn.disabled = true;
       try {
         await API.qtKhoaTaiKhoan(parseInt(btn.dataset.khoa, 10), kh);
+        await taiLaiNhanSuQuanTri();
+      } catch (err) { alert(err.message); btn.disabled = false; }
+    } else if (btn.dataset.xoatk) {
+      if (!confirm(`Xoá HẲN tài khoản đăng nhập của "${btn.dataset.xoatkTen}"? Không thể hoàn tác — nếu chỉ muốn tạm ngừng đăng nhập, dùng nút "Khoá" thay vì Xoá.`)) return;
+      btn.disabled = true;
+      try {
+        await API.qtXoaTaiKhoan(parseInt(btn.dataset.xoatk, 10));
         await taiLaiNhanSuQuanTri();
       } catch (err) { alert(err.message); btn.disabled = false; }
     }

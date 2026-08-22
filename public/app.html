@@ -1257,17 +1257,20 @@
               <span class="hint">Nhập số người cần theo Ca × Ngày, rồi bấm "Mở đăng ký" — ô để trống/0 sẽ không mở</span>
             </div>
             <div class="panel-body">
-              <div class="table-wrap">
-                <table class="xc-matrix" id="xc-kehoach-table"><thead id="xc-kehoach-thead"></thead><tbody id="xc-kehoach-tbody"></tbody></table>
-              </div>
-              <div style="display:flex; gap:10px; align-items:center; margin-top:12px; flex-wrap:wrap">
-                <div class="field" style="margin:0">
-                  <label>Hạn đăng ký (không bắt buộc)</label>
-                  <input type="date" id="xcKeHoachHan">
+              <div class="empty" id="xc-kehoach-chuacomauca" hidden>Chưa có Mẫu ca nào — vào tab "Cấu hình ca" để thêm trước (VD: Ca sáng, Ca chiều...), rồi quay lại đây nhập số người cần.</div>
+              <div id="xc-kehoach-noidung">
+                <div class="table-wrap">
+                  <table class="xc-matrix" id="xc-kehoach-table"><thead id="xc-kehoach-thead"></thead><tbody id="xc-kehoach-tbody"></tbody></table>
                 </div>
-                <button type="button" class="btn-primary" id="xcMoDangKyTuan" style="width:auto; align-self:flex-end">Mở đăng ký cho tuần</button>
+                <div style="display:flex; gap:10px; align-items:center; margin-top:12px; flex-wrap:wrap">
+                  <div class="field" style="margin:0">
+                    <label>Hạn đăng ký (không bắt buộc)</label>
+                    <input type="date" id="xcKeHoachHan">
+                  </div>
+                  <button type="button" class="btn-primary" id="xcMoDangKyTuan" style="width:auto; align-self:flex-end">Mở đăng ký cho tuần</button>
+                </div>
+                <div class="form-loi" id="xcKeHoachLoi"></div>
               </div>
-              <div class="form-loi" id="xcKeHoachLoi"></div>
             </div>
           </div>
 
@@ -1299,6 +1302,7 @@
           <div class="panel-head"><h4>Mẫu ca</h4><span class="hint" id="xcMauCaDem"></span></div>
           <div class="panel-body">
             <form id="xcMauCaForm" class="form-luoi" autocomplete="off">
+              <input type="hidden" id="xcMcId">
               <div class="field">
                 <label>Ký hiệu ngắn *</label>
                 <input type="text" id="xcMcMa" required placeholder="VD: S">
@@ -1315,8 +1319,9 @@
                 <label>Giờ kết thúc *</label>
                 <input type="time" id="xcMcKetThuc" required>
               </div>
-              <div class="field field-nut">
+              <div class="field field-nut" style="display:flex; gap:10px">
                 <button type="submit" class="btn-primary" id="xcMcNutThem">+ Thêm mẫu ca</button>
+                <button type="button" class="btn-phu" id="xcMcNutHuy" style="width:auto" hidden>Hủy sửa</button>
               </div>
             </form>
             <div class="form-loi" id="xcMcLoi"></div>
@@ -1567,6 +1572,10 @@
       <div class="field field-rong">
         <label>Họ tên *</label>
         <input type="text" id="nsSua-hoten" required>
+      </div>
+      <div class="field" id="nsSua-fieldmanv" hidden>
+        <label>Mã nhân sự <span class="goi-y">· chỉ Admin sửa được, hiếm khi cần đổi</span></label>
+        <input type="text" id="nsSua-manv" placeholder="VD: 01-0001">
       </div>
       <div class="field">
         <label>Chức danh <span class="hint">· <a href="#" data-mo-tab="quantri">quản lý ở Quản trị</a></span></label>

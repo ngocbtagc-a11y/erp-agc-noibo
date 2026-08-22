@@ -515,7 +515,7 @@ async function qtSuaNhanSu(req, env) {
   const id = String(b.id || '').trim();
   if (!id) return loi('Thiếu id nhân sự');
 
-  const hienCo = await env.DB.prepare('SELECT id, ho_ten, chuc_vu, bo_phan, trang_thai_dl FROM nhan_su WHERE id = ?').bind(id).first();
+  const hienCo = await env.DB.prepare('SELECT id, ho_ten, chuc_vu, bo_phan, trang_thai_dl, ma_nv FROM nhan_su WHERE id = ?').bind(id).first();
   if (!hienCo) return loi('Không tìm thấy nhân sự', 404);
 
   // Đã khoá thì chỉ Admin sửa được (Data Lock — xem migration them-khoa-danhmuc-nen.sql)
@@ -536,27 +536,40 @@ async function qtSuaNhanSu(req, env) {
     ? ((b.luong === '' || b.luong == null) ? null : parseInt(String(b.luong).replace(/\D/g, ''), 10) || null)
     : null;
 
-  await env.DB.prepare(`
-    UPDATE nhan_su SET ho_ten = ?, viet_tat = ?, chuc_vu = ?, bo_phan = ?,
-           phong_ban_id = ?, chuc_danh_id = ?, sdt = ?, email = ?, quan_ly_id = ?,
-           trang_thai = ?, ngay_vao = ?, loai_lao_dong = ?${coCapNhatLuong ? ', luong = ?' : ''}
-     WHERE id = ?
-  `).bind(
-    ...[
-      hoTen, vietTatTen(hoTen),
-      chucVuMoi, boPhanMoi,
-      pb ? pb.id : null,
-      cd ? cd.id : null,
-      String(b.sdt || '').trim() || null,
-      String(b.email || '').trim() || null,
-      String(b.quan_ly_id || '').trim() || null,
-      String(b.trang_thai || 'da_ky').trim(),
-      String(b.ngay_vao || '').trim() || null,
-      loaiLaoDongTuBody(b),
-      ...(coCapNhatLuong ? [luong] : []),
-      id
-    ]
-  ).run();
+  // Mã nhân sự BÌNH THƯỜNG là bất biến (xem docs/ENTITY_IDENTITY.md) — chỉ
+  // Admin mới sửa lại được, dùng cho trường hợp cấp nhầm (VD chọn nhầm Loại
+  // lao động lúc tạo nên sai tiền tố). Luôn ghi lịch sử vì đây là hành động
+  // hiếm, nhạy cảm — không chờ hồ sơ đã khoá mới ghi như các trường khác.
+  const coCapNhatMaNv = laAdmin(phien.vai_tro) && b.ma_nv !== undefined && String(b.ma_nv).trim() && String(b.ma_nv).trim() !== hienCo.ma_nv;
+  const maNvMoi = coCapNhatMaNv ? String(b.ma_nv).trim() : null;
+
+  try {
+    await env.DB.prepare(`
+      UPDATE nhan_su SET ho_ten = ?, viet_tat = ?, chuc_vu = ?, bo_phan = ?,
+             phong_ban_id = ?, chuc_danh_id = ?, sdt = ?, email = ?, quan_ly_id = ?,
+             trang_thai = ?, ngay_vao = ?, loai_lao_dong = ?${coCapNhatLuong ? ', luong = ?' : ''}${coCapNhatMaNv ? ', ma_nv = ?' : ''}
+       WHERE id = ?
+    `).bind(
+      ...[
+        hoTen, vietTatTen(hoTen),
+        chucVuMoi, boPhanMoi,
+        pb ? pb.id : null,
+        cd ? cd.id : null,
+        String(b.sdt || '').trim() || null,
+        String(b.email || '').trim() || null,
+        String(b.quan_ly_id || '').trim() || null,
+        String(b.trang_thai || 'da_ky').trim(),
+        String(b.ngay_vao || '').trim() || null,
+        loaiLaoDongTuBody(b),
+        ...(coCapNhatLuong ? [luong] : []),
+        ...(coCapNhatMaNv ? [maNvMoi] : []),
+        id
+      ]
+    ).run();
+  } catch (e) {
+    if (String(e.message || '').includes('UNIQUE')) return loi(`Mã nhân sự "${maNvMoi}" đã có người dùng`, 409);
+    throw e;
+  }
 
   if (hienCo.trang_thai_dl === 'da_khoa') {
     await dulieunen.ghiLichSuThayDoi(env, phien, 'nhan_su', id, {
@@ -564,6 +577,9 @@ async function qtSuaNhanSu(req, env) {
       chuc_vu: [hienCo.chuc_vu, chucVuMoi],
       bo_phan: [hienCo.bo_phan, boPhanMoi]
     });
+  }
+  if (coCapNhatMaNv) {
+    await dulieunen.ghiLichSuThayDoi(env, phien, 'nhan_su', id, { ma_nv: [hienCo.ma_nv, maNvMoi] });
   }
 
   return json({ ok: true });
@@ -670,6 +686,40 @@ async function qtKhoaTaiKhoan(req, env) {
   if (!kichHoat) {
     await env.DB.prepare('DELETE FROM phien WHERE tai_khoan_id = ?').bind(tkId).run();
   }
+  return json({ ok: true });
+}
+
+/* Xoá HẲN tài khoản đăng nhập (khác "Khoá" — Khoá chỉ chặn đăng nhập, giữ
+   nguyên lịch sử; Xoá dùng khi tạo nhầm và cần cấp lại tài khoản đúng cho
+   đúng nhân sự đó — "Nhân sự này đã có tài khoản rồi" sẽ chặn tạo lại nếu
+   không xoá cái cũ trước). KHÔNG đụng tới hồ sơ nhân_su — chỉ xoá phần
+   đăng nhập. Chặn tự xoá chính mình và chặn xoá Admin cuối cùng còn hoạt
+   động, tránh hệ thống mất hết người quản trị được. */
+async function qtXoaTaiKhoan(req, env) {
+  const { phien, loi: l } = await batBuocAdmin(req, env);
+  if (l) return l;
+
+  let b;
+  try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+
+  const tkId = parseInt(b.tai_khoan_id, 10);
+  if (!tkId) return loi('Thiếu tài khoản');
+
+  if (tkId === phien.tai_khoan_id) {
+    return loi('Không thể tự xoá tài khoản đang đăng nhập');
+  }
+
+  const tk = await env.DB.prepare('SELECT id, vai_tro FROM tai_khoan WHERE id = ?').bind(tkId).first();
+  if (!tk) return loi('Không tìm thấy tài khoản', 404);
+
+  if (laAdmin(tk.vai_tro)) {
+    const { results } = await env.DB.prepare('SELECT vai_tro FROM tai_khoan WHERE kich_hoat = 1 AND id != ?').bind(tkId).all();
+    if (!results.some(x => laAdmin(x.vai_tro))) {
+      return loi('Không thể xoá — đây là tài khoản Admin cuối cùng còn hoạt động', 409);
+    }
+  }
+
+  await env.DB.prepare('DELETE FROM tai_khoan WHERE id = ?').bind(tkId).run();
   return json({ ok: true });
 }
 
@@ -1002,6 +1052,18 @@ async function caThemMauCa(req, env) {
   if (l) return l;
   let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
   return ca.themMauCa(env, phien, b);
+}
+async function caSuaMauCa(req, env) {
+  const { phien, loi: l } = await batBuocXemXepCa(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return ca.suaMauCa(env, phien, b);
+}
+async function caXoaMauCa(req, env) {
+  const { phien, loi: l } = await batBuocXemXepCa(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return ca.xoaMauCa(env, phien, b);
 }
 async function caThemCaMo(req, env) {
   const { phien, loi: l } = await batBuocXemXepCa(req, env);
@@ -2565,6 +2627,7 @@ const DUONG_DAN = {
   'POST /api/quan-tri/tao-tai-khoan':  qtTaoTaiKhoan,
   'POST /api/quan-tri/dat-lai-mat-khau': qtDatLaiMatKhau,
   'POST /api/quan-tri/khoa-tai-khoan': qtKhoaTaiKhoan,
+  'POST /api/quan-tri/xoa-tai-khoan': qtXoaTaiKhoan,
   'GET  /api/kho/san-pham':      khoDanhSachSP,
   'POST /api/kho/them-san-pham': khoThemSP,
   'POST /api/kho/sua-san-pham':  khoSuaSP,
@@ -2605,6 +2668,8 @@ const DUONG_DAN = {
   'POST /api/tai-san/thanh-ly':   tsThanhLy,
   'GET  /api/ca/mau-ca':          caDanhSachMauCa,
   'POST /api/ca/mau-ca/them':     caThemMauCa,
+  'POST /api/ca/mau-ca/sua':      caSuaMauCa,
+  'POST /api/ca/mau-ca/xoa':      caXoaMauCa,
   'POST /api/ca/mo/them':         caThemCaMo,
   'POST /api/ca/mo/mo-tuan':      caMoDangKyTuan,
   'POST /api/ca/mo/khoa':         caKhoaCaMo,
