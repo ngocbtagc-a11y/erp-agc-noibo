@@ -13,7 +13,7 @@
    "lichsuviec" = Lịch sử làm việc (Sếp Ngọc yêu cầu 21/08/2026: lưu trữ quá
    trình làm việc của nhân sự, ai làm gì, xong task nào ra sao) — mở cho MỌI
    vai trò, đúng tinh thần minh bạch đã áp dụng cho Trạm Mục Tiêu (MBOs). */
-export const TAB = ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'nhansu', 'kinhdoanh', 'khovan', 'donhoan', 'ketoan', 'dulieunen', 'quantri', 'taisan'];
+export const TAB = ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'nhansu', 'kinhdoanh', 'khovan', 'donhoan', 'ketoan', 'dulieunen', 'quantri', 'taisan', 'xepca'];
 
 /* Vai trò → được xem mảng nào và làm được gì.
    Danh bạ VÀ Chat nội bộ mở cho tất cả (Sếp Ngọc yêu cầu: ai cũng tra được
@@ -25,24 +25,24 @@ export const TAB = ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'nha
                     được tài khoản). HCNS có mức này.
    - xem_luong    : xem cột lương. HCNS KHÔNG có — đây là ranh giới cứng. */
 const QUYEN_THEO_VAI_TRO = {
-  giam_doc:        { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'nhansu', 'kinhdoanh', 'khovan', 'donhoan', 'ketoan', 'dulieunen', 'quantri', 'taisan'], xem_luong: true,  admin: true,  them_nhan_su: true  },
-  pho_giam_doc:    { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'nhansu', 'kinhdoanh', 'khovan', 'donhoan', 'ketoan', 'dulieunen', 'quantri', 'taisan'], xem_luong: true,  admin: true,  them_nhan_su: true  },
-  ke_toan_truong:  { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'khovan', 'donhoan', 'ketoan', 'taisan'],                                   xem_luong: true,  admin: false, them_nhan_su: false },
-  quan_ly_kho:     { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'khovan', 'nhansu', 'dulieunen', 'taisan'],                                 xem_luong: false, admin: false, them_nhan_su: false },
-  nhan_vien_kho:   { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'khovan', 'taisan'],                                                        xem_luong: false, admin: false, them_nhan_su: false },
-  hcns:            { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'nhansu', 'dulieunen', 'quantri', 'taisan'],                                xem_luong: false, admin: false, them_nhan_su: true  },
-  van_hanh_san:    { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'kinhdoanh', 'donhoan', 'taisan'],                                          xem_luong: false, admin: false, them_nhan_su: false },
+  giam_doc:        { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'nhansu', 'kinhdoanh', 'khovan', 'donhoan', 'ketoan', 'dulieunen', 'quantri', 'taisan', 'xepca'], xem_luong: true,  admin: true,  them_nhan_su: true  },
+  pho_giam_doc:    { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'nhansu', 'kinhdoanh', 'khovan', 'donhoan', 'ketoan', 'dulieunen', 'quantri', 'taisan', 'xepca'], xem_luong: true,  admin: true,  them_nhan_su: true  },
+  ke_toan_truong:  { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'khovan', 'donhoan', 'ketoan', 'taisan', 'xepca'],                                   xem_luong: true,  admin: false, them_nhan_su: false },
+  quan_ly_kho:     { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'khovan', 'nhansu', 'dulieunen', 'taisan', 'xepca'],                                 xem_luong: false, admin: false, them_nhan_su: false },
+  nhan_vien_kho:   { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'khovan', 'taisan', 'xepca'],                                                        xem_luong: false, admin: false, them_nhan_su: false },
+  hcns:            { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'nhansu', 'dulieunen', 'quantri', 'taisan', 'xepca'],                                xem_luong: false, admin: false, them_nhan_su: true  },
+  van_hanh_san:    { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'kinhdoanh', 'donhoan', 'taisan', 'xepca'],                                          xem_luong: false, admin: false, them_nhan_su: false },
   // NV Chăm sóc khách hàng (Sếp Ngọc yêu cầu 20/08/2026): xem tab Kinh doanh
   // (đặc biệt pill "Chăm sóc KH" — xếp hạng khách hoàn/hủy nhiều) + Đơn hoàn
   // để nắm tình trạng đơn khi trả lời khách, nhưng KHÔNG được thao tác luồng
   // 3 chặng (không nằm trong CO_THAO_TAC_VAN_HANH bên dưới) — chỉ xem, việc
   // xử lý vẫn của Vận hành sàn/Kho/Kế toán đúng ranh giới bộ phận đã chốt.
-  cskh:            { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'kinhdoanh', 'donhoan', 'taisan'],                                          xem_luong: false, admin: false, them_nhan_su: false },
+  cskh:            { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'kinhdoanh', 'donhoan', 'taisan', 'xepca'],                                          xem_luong: false, admin: false, them_nhan_su: false },
   // Vai trò TEST (Sếp Ngọc chốt 19/08/2026): cho nhân viên vào bấm thử để
   // hiểu luồng 3 chặng Kho -> Vận hành sàn -> Kế toán, KHÔNG dính quyền admin
   // (không cấp/khoá tài khoản, không xem lương, không thêm nhân sự). Xem
   // được đủ các tab liên quan tới luồng đơn hoàn để test trọn vẹn từ đầu tới cuối.
-  nv_test:         { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'kinhdoanh', 'khovan', 'donhoan', 'ketoan', 'taisan'],                      xem_luong: false, admin: false, them_nhan_su: false }
+  nv_test:         { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'kinhdoanh', 'khovan', 'donhoan', 'ketoan', 'taisan', 'xepca'],                      xem_luong: false, admin: false, them_nhan_su: false }
 };
 
 /* ---- Quyền trong module Kho --------------------------------------------
@@ -120,6 +120,19 @@ export function duocKhoaSanPham(vaiTro) {
 const CO_QUAN_LY_TAI_SAN = new Set(['giam_doc', 'pho_giam_doc', 'hcns']);
 export function duocQuanLyTaiSan(vaiTro) {
   return CO_QUAN_LY_TAI_SAN.has(vaiTro);
+}
+
+/* ---- Quyền module Đăng ký ca / Xếp ca ------------------------------------
+   Data Owner CHÍNH SÁCH (mẫu ca, ca mở, hạn đăng ký) = HR/Admin — cùng bộ
+   vai trò với them_nhan_su (giam_doc, pho_giam_doc, hcns).
+   DUYỆT đăng ký thì KHÔNG theo vai trò — theo phong_ban.truong_phong_id có
+   khớp với người đang đăng nhập không (kiểm tra ở src/ca.js, cần đọc DB nên
+   không thể là 1 hàm tĩnh ở đây). Admin (laAdmin) luôn duyệt được mọi phòng.
+   XEM tab 'xepca' mở cho MỌI vai trò — nhân viên part-time/thời vụ tự đăng
+   ký; ai không phải trưởng phòng/admin thì chỉ thấy phần đăng ký của mình. */
+const CO_QUAN_LY_CHINH_SACH_CA = new Set(['giam_doc', 'pho_giam_doc', 'hcns']);
+export function duocQuanLyChinhSachCa(vaiTro) {
+  return CO_QUAN_LY_CHINH_SACH_CA.has(vaiTro);
 }
 
 /* ---- Quyền module Đơn hoàn (Shopee) ------------------------------------

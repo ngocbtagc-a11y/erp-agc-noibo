@@ -400,6 +400,14 @@
                 <option value="parttime">Bán thời gian</option>
               </select>
             </div>
+            <div class="field">
+              <label>Loại lao động <span class="hint">· để dùng được Đăng ký ca</span></label>
+              <select id="qtLoaiLaoDong">
+                <option value="toan_thoi_gian">Toàn thời gian</option>
+                <option value="ban_thoi_gian">Part-time</option>
+                <option value="thoi_vu">Thời vụ</option>
+              </select>
+            </div>
             <div class="field" id="qtFieldLuong">
               <label>Lương (đồng/tháng)</label>
               <input type="text" id="qtLuong" inputmode="numeric" placeholder="Để trống nếu chưa có">
@@ -1182,6 +1190,142 @@
       </div>
     </section>
 
+    <!-- ---------- Xếp ca (Đăng ký ca / Xếp ca tuần) — Part-time & Thời vụ ---------- -->
+    <section class="view" id="v-xepca" hidden>
+      <div class="view-head">
+        <h3>Xếp ca</h3>
+        <p>Đăng ký ca làm việc (Part-time/Thời vụ) và xếp ca cho phòng ban — thay thế đăng ký ca trên Google Sheet.</p>
+      </div>
+
+      <div class="seg" id="xcSeg">
+        <button class="seg-nut active" data-xc="dangky">Đăng ký ca</button>
+        <button class="seg-nut" data-xc="xep">Xếp ca tuần</button>
+        <button class="seg-nut" data-xc="cauhinh" id="xcSegCauHinh" hidden>Cấu hình ca</button>
+      </div>
+
+      <!-- ===== Nhân viên: Đăng ký ca ===== -->
+      <div class="kv-pane" id="xc-pane-dangky">
+        <div class="empty" id="xc-khongduockyy" hidden>Chức năng Đăng ký ca chỉ dành cho nhân sự Part-time/Thời vụ. Liên hệ HCNS nếu cần hỗ trợ.</div>
+
+        <div id="xc-dangky-body" hidden>
+          <div class="panel">
+            <div class="panel-head">
+              <h4>Ca đang mở đăng ký</h4>
+              <span class="hint" id="xcDangMoDem"></span>
+            </div>
+            <div class="panel-body">
+              <div id="xc-dangky-list"></div>
+              <div class="empty" id="xc-dangky-trong" hidden>Chưa có ca nào đang mở đăng ký.</div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-head"><h4>Lịch làm việc chính thức của tôi</h4></div>
+            <div class="panel-body">
+              <div id="xc-lichtoi-list"></div>
+              <div class="empty" id="xc-lichtoi-trong" hidden>Chưa có ca nào được duyệt.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== Trưởng phòng: Xếp ca tuần (ma trận) ===== -->
+      <div class="kv-pane" id="xc-pane-xep" hidden>
+        <div class="empty" id="xc-khongquanly" hidden>Bạn chưa được gán là trưởng phòng của phòng ban nào — liên hệ Quản trị để được gán.</div>
+
+        <div id="xc-xep-body" hidden>
+          <div class="panel">
+            <div class="panel-body" style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end">
+              <div class="field" style="margin:0; min-width:200px">
+                <label>Phòng ban</label>
+                <select id="xcPhongBan"></select>
+              </div>
+              <div class="field" style="margin:0; display:flex; gap:6px; align-items:center">
+                <button type="button" class="btn-phu" id="xcTuanTruoc">‹ Tuần trước</button>
+                <span class="nm" id="xcTuanLabel" style="white-space:nowrap"></span>
+                <button type="button" class="btn-phu" id="xcTuanSau">Tuần sau ›</button>
+              </div>
+              <div class="field" style="margin:0 0 0 auto">
+                <button type="button" class="btn-primary" id="xcChotLich" style="width:auto">Chốt lịch tuần</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-head">
+              <h4>Kế hoạch nhân lực tuần</h4>
+              <span class="hint">Nhập số người cần theo Ca × Ngày, rồi bấm "Mở đăng ký" — ô để trống/0 sẽ không mở</span>
+            </div>
+            <div class="panel-body">
+              <div class="table-wrap">
+                <table class="xc-matrix" id="xc-kehoach-table"><thead id="xc-kehoach-thead"></thead><tbody id="xc-kehoach-tbody"></tbody></table>
+              </div>
+              <div style="display:flex; gap:10px; align-items:center; margin-top:12px; flex-wrap:wrap">
+                <div class="field" style="margin:0">
+                  <label>Hạn đăng ký (không bắt buộc)</label>
+                  <input type="date" id="xcKeHoachHan">
+                </div>
+                <button type="button" class="btn-primary" id="xcMoDangKyTuan" style="width:auto; align-self:flex-end">Mở đăng ký cho tuần</button>
+              </div>
+              <div class="form-loi" id="xcKeHoachLoi"></div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-head">
+              <h4>Nhân lực theo ca</h4>
+              <span class="hint">Đã duyệt / Cần — bấm "Duyệt tất cả" ở đầu cột để duyệt nhanh cả ca</span>
+            </div>
+            <div class="panel-body">
+              <div id="xc-tongquan-ca"></div>
+            </div>
+          </div>
+
+          <div class="table-wrap" id="xc-matrix-wrap">
+            <table class="xc-matrix" id="xc-matrix-table">
+              <thead id="xc-matrix-thead"></thead>
+              <tbody id="xc-matrix-tbody"></tbody>
+            </table>
+          </div>
+          <div class="empty" id="xc-matrix-trong" hidden>Phòng ban này chưa có nhân sự Part-time/Thời vụ nào.</div>
+        </div>
+      </div>
+
+      <!-- ===== HR/Admin: Cấu hình Mẫu ca (chính sách chung, KHÔNG mở ca
+           thay phòng ban — mở ca là việc của Trưởng phòng, xem pane
+           "Xếp ca tuần" → Kế hoạch nhân lực tuần) ===== -->
+      <div class="kv-pane" id="xc-pane-cauhinh" hidden>
+        <div class="panel">
+          <div class="panel-head"><h4>Mẫu ca</h4><span class="hint" id="xcMauCaDem"></span></div>
+          <div class="panel-body">
+            <form id="xcMauCaForm" class="form-luoi" autocomplete="off">
+              <div class="field">
+                <label>Ký hiệu ngắn *</label>
+                <input type="text" id="xcMcMa" required placeholder="VD: S">
+              </div>
+              <div class="field">
+                <label>Tên ca *</label>
+                <input type="text" id="xcMcTen" required placeholder="VD: Ca sáng">
+              </div>
+              <div class="field">
+                <label>Giờ bắt đầu *</label>
+                <input type="time" id="xcMcBatDau" required>
+              </div>
+              <div class="field">
+                <label>Giờ kết thúc *</label>
+                <input type="time" id="xcMcKetThuc" required>
+              </div>
+              <div class="field field-nut">
+                <button type="submit" class="btn-primary" id="xcMcNutThem">+ Thêm mẫu ca</button>
+              </div>
+            </form>
+            <div class="form-loi" id="xcMcLoi"></div>
+            <div id="xcMcList" style="margin-top:10px"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- ---------- Kết nối sàn — Đơn hoàn (Shopee + TikTok) ---------- -->
     <section class="view" id="v-donhoan" hidden>
       <div class="view-head">
@@ -1451,6 +1595,14 @@
           <option value="cho_ky">Chờ ký</option>
           <option value="da_ky">Đã ký HĐ</option>
           <option value="parttime">Bán thời gian</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Loại lao động <span class="hint">· để dùng được Đăng ký ca</span></label>
+        <select id="nsSua-loailaodong">
+          <option value="toan_thoi_gian">Toàn thời gian</option>
+          <option value="ban_thoi_gian">Part-time</option>
+          <option value="thoi_vu">Thời vụ</option>
         </select>
       </div>
       <div class="field" id="nsSua-fieldluong">
@@ -1795,6 +1947,39 @@
     <div class="empty" id="tsLichSuTrong" hidden>Chưa có lịch sử.</div>
     <div class="modal-nut" style="margin-top:14px">
       <button class="btn-primary" id="tsLichSuDong">Đóng</button>
+    </div>
+  </div>
+</div>
+
+<!-- Hộp thao tác trên 1 ô của ma trận Xếp ca tuần -->
+<div class="modal-nen" id="xcOModalNen" hidden>
+  <div class="modal">
+    <h4 id="xcOTieuDe">Chi tiết ca</h4>
+    <div id="xcOChiTiet" class="sm" style="margin-bottom:12px"></div>
+
+    <!-- Gán ca (khi ô trống — chọn ca để xếp) -->
+    <div id="xcOGanCaBox" hidden>
+      <div class="field field-rong">
+        <label>Chọn ca</label>
+        <select id="xcOChonCa"></select>
+      </div>
+    </div>
+
+    <!-- Lý do từ chối -->
+    <div id="xcOTuChoiBox" hidden>
+      <div class="field field-rong">
+        <label>Lý do từ chối</label>
+        <input type="text" id="xcOLyDoTuChoi" placeholder="Không bắt buộc">
+      </div>
+    </div>
+
+    <div class="form-loi" id="xcOLoi"></div>
+    <div class="modal-nut" style="margin-top:14px; flex-wrap:wrap">
+      <button class="btn-primary" id="xcODuyet" hidden>Duyệt</button>
+      <button class="btn-phu" id="xcOTuChoiNut" hidden>Từ chối</button>
+      <button class="btn-phu" id="xcOTuChoiXacNhan" hidden>Xác nhận từ chối</button>
+      <button class="btn-primary" id="xcOGanCaNut" hidden>Gán ca</button>
+      <button class="btn-phu" id="xcODong">Đóng</button>
     </div>
   </div>
 </div>

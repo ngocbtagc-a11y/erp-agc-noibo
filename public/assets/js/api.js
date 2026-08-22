@@ -163,6 +163,7 @@ export const API = {
   dlnPhongBan: () => goi('/api/dulieunen/phong-ban'),
   dlnThemPhongBan: (ten, xacNhan) => goi('/api/dulieunen/phong-ban/them', { method: 'POST', body: JSON.stringify({ ten, xac_nhan: !!xacNhan }) }),
   dlnSuaPhongBan: (id, d) => goi('/api/dulieunen/phong-ban/sua', { method: 'POST', body: JSON.stringify({ id, ...d }) }),
+  dlnGanTruongPhong: (id, truongPhongId) => goi('/api/dulieunen/phong-ban/gan-truong-phong', { method: 'POST', body: JSON.stringify({ id, truong_phong_id: truongPhongId }) }),
   dlnKhoaPhongBan: (id, trangThai) => goi('/api/dulieunen/phong-ban/khoa', { method: 'POST', body: JSON.stringify({ id, trang_thai: trangThai }) }),
 
   dlnChucDanh: () => goi('/api/dulieunen/chuc-danh'),
@@ -185,6 +186,23 @@ export const API = {
   dlnKho: () => goi('/api/dulieunen/kho'),
   dlnThemKho: (d) => goi('/api/dulieunen/kho/them', { method: 'POST', body: JSON.stringify(d) }),
   dlnSuaKho: (id, d) => goi('/api/dulieunen/kho/sua', { method: 'POST', body: JSON.stringify({ id, ...d }) }),
+
+  /* ---- Đăng ký ca / Xếp ca ---- */
+  caMauCa: () => goi('/api/ca/mau-ca'),
+  caThemMauCa: (d) => goi('/api/ca/mau-ca/them', { method: 'POST', body: JSON.stringify(d) }),
+  caThemCaMo: (d) => goi('/api/ca/mo/them', { method: 'POST', body: JSON.stringify(d) }),
+  caMoDangKyTuan: (d) => goi('/api/ca/mo/mo-tuan', { method: 'POST', body: JSON.stringify(d) }),
+  caKhoaCaMo: (id) => goi('/api/ca/mo/khoa', { method: 'POST', body: JSON.stringify({ id }) }),
+  caDangMo: () => goi('/api/ca/dang-mo'),
+  caDangKy: (d) => goi('/api/ca/dang-ky', { method: 'POST', body: JSON.stringify(d) }),
+  caHuyDangKy: (id) => goi('/api/ca/dang-ky/huy', { method: 'POST', body: JSON.stringify({ id }) }),
+  caLichCuaToi: (tu, den) => goi(`/api/ca/lich-cua-toi?tu=${tu}&den=${den}`),
+  caMaTranTuan: (phongBanId, tu, den) => goi(`/api/ca/ma-tran-tuan?phong_ban_id=${phongBanId}&tu=${tu}&den=${den}`),
+  caDuyet: (id) => goi('/api/ca/duyet', { method: 'POST', body: JSON.stringify({ id }) }),
+  caDuyetHangLoat: (ids) => goi('/api/ca/duyet-hang-loat', { method: 'POST', body: JSON.stringify({ ids }) }),
+  caTuChoi: (id, lyDo) => goi('/api/ca/tu-choi', { method: 'POST', body: JSON.stringify({ id, ly_do_tu_choi: lyDo }) }),
+  caGanThuCong: (d) => goi('/api/ca/gan-thu-cong', { method: 'POST', body: JSON.stringify(d) }),
+  caChotLichTuan: (d) => goi('/api/ca/chot-lich-tuan', { method: 'POST', body: JSON.stringify(d) }),
 
   /* ---- Tài sản ---- */
   taiSanDanhSach: () => goi('/api/tai-san'),

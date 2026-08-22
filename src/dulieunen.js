@@ -153,13 +153,41 @@ function batBuocHangHoa(phien) {
 /* ==========================================================================
    PHÒNG BAN
    ========================================================================== */
-export const danhSachPhongBan = (env) => danhSachDanhMuc(env, 'phong_ban');
+export const danhSachPhongBan = async (env) => {
+  const { results } = await env.DB.prepare(`
+    SELECT pb.id, pb.ten, pb.hoat_dong, pb.trang_thai, pb.truong_phong_id, ns.ho_ten AS truong_phong_ten
+      FROM phong_ban pb LEFT JOIN nhan_su ns ON ns.id = pb.truong_phong_id
+     ORDER BY pb.hoat_dong DESC, pb.ten
+  `).all();
+  return json({ ds: results || [] });
+};
 export const themPhongBan = (env, phien, body) =>
   batBuocToChuc(phien) || themDanhMuc(env, 'phong_ban', body, 'tên phòng ban');
 export const suaPhongBan = (env, phien, body) =>
   batBuocToChuc(phien) || suaDanhMuc(env, phien, 'phong_ban', body, 'tên phòng ban');
 export const khoaPhongBan = (env, phien, body) =>
   batBuocToChuc(phien) || khoaDanhMuc(env, phien, 'phong_ban', body);
+
+/* Gán trưởng phòng — TÁCH riêng khỏi suaPhongBan (chỉ đổi tên) vì đây là
+   quyết định cấp Ban Giám đốc, không phải sửa danh mục thường; cho phép gán
+   ngay cả khi phòng ban đã khoá (khoá chỉ chặn đổi TÊN, không chặn gán
+   trưởng phòng — 2 việc khác nhau). */
+export async function ganTruongPhong(env, phien, body) {
+  const chan = batBuocToChuc(phien);
+  if (chan) return chan;
+  const id = parseInt(body?.id, 10) || 0;
+  if (!id) return loi('Thiếu id phòng ban');
+  const pb = await env.DB.prepare('SELECT id FROM phong_ban WHERE id = ?').bind(id).first();
+  if (!pb) return loi('Không tìm thấy phòng ban', 404);
+
+  const truongPhongId = body.truong_phong_id ? String(body.truong_phong_id).trim() : null;
+  if (truongPhongId) {
+    const ns = await env.DB.prepare('SELECT id FROM nhan_su WHERE id = ? AND dang_lam = 1').bind(truongPhongId).first();
+    if (!ns) return loi('Không tìm thấy nhân sự này hoặc đã nghỉ việc', 404);
+  }
+  await env.DB.prepare('UPDATE phong_ban SET truong_phong_id = ? WHERE id = ?').bind(truongPhongId, id).run();
+  return json({ ok: true });
+}
 
 /* ==========================================================================
    CHỨC DANH
