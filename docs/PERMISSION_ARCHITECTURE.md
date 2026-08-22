@@ -1,0 +1,72 @@
+# Permission Architecture — ERP Alpha Green Commerce
+
+Tài liệu tham chiếu nhẹ, KHÔNG phải bộ máy IAM đầy đủ. Ghi lại nguyên tắc
+đã áp dụng và LÝ DO không xây thêm — quy mô thật hiện tại (8 nhân sự, 4
+phòng ban, 1 kho) chưa cần Permission Resolver/scope engine/delegation có
+thời hạn/workflow phê duyệt quyền nhạy cảm. Cập nhật file này khi có quyết
+định mới về phân quyền — không cần bảng/service mới nếu chưa có nhu cầu
+thật (đúng nguyên tắc đã áp dụng xuyên suốt, xem [ENTITY_IDENTITY.md](./ENTITY_IDENTITY.md)).
+
+## Nguyên tắc đã áp dụng (23/08/2026)
+
+**System Permission ≠ Business Permission** — quản trị nền tảng (tài
+khoản, mật khẩu, mở khoá dữ liệu, xem lương) không tự động kéo theo quyền
+làm nghiệp vụ (chỉnh tồn kho, khoá sản phẩm, cấp phát tài sản, kết nối
+Shopee, xếp ca).
+
+Cụ thể trong `src/quyen.js`:
+- `laAdmin(vaiTro)` (System Permission) — chỉ quyết định: tạo/khoá/xoá tài
+  khoản, thêm nhân sự (kể cả lương), sửa dữ liệu nền đã khoá.
+- Quyền nghiệp vụ (Business Permission) nằm ở các bảng riêng —
+  `QUYEN_KHO`, `QUYEN_SAN_PHAM`, `QUYEN_SHOPEE`, `CO_QUAN_LY_TAI_SAN`,
+  `CO_QUAN_LY_CHINH_SACH_CA`, `CO_THAO_TAC_VAN_HANH` — mỗi vai trò phải
+  **có mặt tường minh** ở đúng bảng đó mới thao tác được, không suy ra từ
+  `laAdmin()`.
+
+**Vai trò `admin_he_thong`** (System Admin thuần — tách khỏi chức danh
+CEO) là ví dụ áp dụng nguyên tắc này: có `admin: true` (System) và xem
+được mọi tab (module access — đúng ý "System Access cấp quyền VÀO module,
+không cấp quyền THAO TÁC"), nhưng **cố ý KHÔNG có mặt** ở bất kỳ bảng
+Business Permission nào — muốn làm nghiệp vụ Kho/Sản phẩm/Tài sản... phải
+được gán thêm 1 vai trò nghiệp vụ thật.
+
+**`giam_doc`/`pho_giam_doc` KHÔNG áp dụng nguyên tắc tách này** — đây là
+ngoại lệ có chủ đích, không phải sai sót: ở quy mô 8 người, Giám đốc/Phó
+Giám đốc là người trực tiếp vận hành nhiều mảng hằng ngày (không có đủ
+nhân sự chuyên trách mọi vị trí), tước quyền nghiệp vụ mặc định của họ sẽ
+gây gián đoạn vận hành thật mà không có lợi ích tương xứng ở quy mô này.
+
+## Scope theo phòng ban — chỉ có ở nơi thật sự cần
+
+Duy nhất module **Đăng ký ca / Xếp ca** có scope theo phòng ban thật
+(`laTruongPhong()` trong `src/ca.js`, so `phong_ban.truong_phong_id` với
+người đăng nhập) — vì đây là nơi có nhu cầu thật (mỗi phòng tự quản lý
+nhân lực phòng mình).
+
+**Tài sản, Sản phẩm/SKU, Kho — CỐ Ý chưa có scope phòng ban.** Bất kỳ ai
+có tab tương ứng đều xem được toàn bộ — đây là quyết định minh bạch có
+chủ đích (Sếp Ngọc: "mọi người xem được ai đang giữ gì"), không phải lỗ
+hổng. Nếu sau này có nhu cầu giới hạn theo phòng ban thật, làm theo đúng
+khuôn `laTruongPhong()` đã có, không cần xây scope engine tổng quát trước.
+
+## Việc CỐ Ý chưa làm (và vì sao)
+
+Theo đúng tinh thần "không xây trước khi có nhu cầu thật":
+
+- **Permission Resolver / Effective Permission engine tổng quát** — 9 vai
+  trò, ~6 bảng quyền nghiệp vụ là đủ nhìn bao quát bằng mắt; 1 service
+  tổng hợp sẽ là tầng trừu tượng thừa ở quy mô này.
+- **Explicit Grant/Deny cá nhân, Delegation có thời hạn** — chưa ai từng
+  cần "1 người nghỉ phép, uỷ quyền tạm 1 tuần". Khi có nhu cầu thật, thêm
+  bảng `permission_overrides` (nhan_su_id, quyen, het_han) là đủ, không
+  cần trước.
+- **Permission Request Workflow (phê duyệt quyền nhạy cảm)** — công ty
+  8 người, Giám đốc/Phó Giám đốc đã trực tiếp cấp mọi quyền, thêm 1 lớp
+  phê duyệt là quan liêu hoá không cần thiết ở quy mô này.
+- **UI tách 2 khu vực (System Admin / Trưởng phòng)** — hiện chỉ có
+  `laTruongPhong()` (Xếp ca) là scope theo phòng ban thật; chưa đủ nhiều
+  màn hình phân quyền để cần tách UI riêng.
+
+Khi công ty lớn hơn (nhiều kho, nhiều người quản lý ngang cấp, cần uỷ
+quyền tạm thời thật) — quay lại bản thiết kế đầy đủ đã trao đổi ngày
+23/08/2026, áp dụng đúng phần đang thật sự cần thay vì làm lại từ đầu.
