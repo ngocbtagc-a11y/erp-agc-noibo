@@ -12,28 +12,31 @@
 
 import { API } from './api.js';
 
-/* ---- Danh mục tab ------------------------------------------------------- */
+/* ---- Danh mục tab -------------------------------------------------------
+   "nhom" = nhóm cha hiện trên sidebar, bám theo 4 phòng ban thật của công ty
+   (xem docs/ERP_V2_INFORMATION_ARCHITECTURE.md). null = không có nhóm cha,
+   hiện ngay đầu sidebar (dùng chung mọi vai trò). */
 const TAB = [
-  { id: 'tongquan',  ten: 'Trạm Mục Tiêu', icon: 'M3 12l9-9 9 9M5 10v10h14V10' },
-  { id: 'lichsuviec', ten: 'Lịch sử làm việc', icon: 'M12 8v4l3 3M21 12a9 9 0 11-9-9 9 9 0 019 9z' },
-  { id: 'danhba',    ten: 'Danh bạ',    icon: 'M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8' },
-  { id: 'nhansu',    ten: 'Nhân sự',    icon: 'M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75' },
-  { id: 'kinhdoanh', ten: 'Kinh doanh', icon: 'M23 6l-9.5 9.5-5-5L1 18M17 6h6v6' },
-  { id: 'khovan',    ten: 'Kho vận',    icon: 'M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16zM3.27 6.96L12 12.01l8.73-5.05M12 22.08V12' },
-  { id: 'ketoan',    ten: 'Kế toán',    icon: 'M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6' },
-  { id: 'donhoan',   ten: 'Kết nối sàn', icon: 'M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71' },
-  { id: 'dulieunen', ten: 'Dữ liệu nền', icon: 'M12 2C6.48 2 2 3.79 2 6s4.48 4 10 4 10-1.79 10-4-4.48-4-10-4zM2 6v6c0 2.21 4.48 4 10 4s10-1.79 10-4V6M2 12v6c0 2.21 4.48 4 10 4s10-1.79 10-4v-6' },
-  { id: 'quantri',   ten: 'Quản trị',   icon: 'M12 15a3 3 0 100-6 3 3 0 000 6zM19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-2.82 1.17V21a2 2 0 01-4 0v-.09A1.65 1.65 0 006 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.6 14a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 7.6a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z' }
+  { id: 'tongquan',  ten: 'Trạm Mục Tiêu', nhom: null, icon: 'M3 12l9-9 9 9M5 10v10h14V10' },
+  { id: 'lichsuviec', ten: 'Lịch sử làm việc', nhom: null, icon: 'M12 8v4l3 3M21 12a9 9 0 11-9-9 9 9 0 019 9z' },
+  { id: 'danhba',    ten: 'Danh bạ',    nhom: null, icon: 'M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8' },
+  { id: 'quantri',   ten: 'Quản trị',   nhom: 'Quản trị doanh nghiệp', icon: 'M12 15a3 3 0 100-6 3 3 0 000 6zM19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-2.82 1.17V21a2 2 0 01-4 0v-.09A1.65 1.65 0 006 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.6 14a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 7.6a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z' },
+  { id: 'kinhdoanh', ten: 'Kinh doanh', nhom: 'Kinh doanh & MKT', icon: 'M23 6l-9.5 9.5-5-5L1 18M17 6h6v6' },
+  { id: 'donhoan',   ten: 'Kết nối sàn', nhom: 'Kinh doanh & MKT', icon: 'M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71' },
+  { id: 'khovan',    ten: 'Kho vận',    nhom: 'Kho vận & Sản xuất', icon: 'M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16zM3.27 6.96L12 12.01l8.73-5.05M12 22.08V12' },
+  { id: 'nhansu',    ten: 'Nhân sự',    nhom: 'Support', icon: 'M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75' },
+  { id: 'ketoan',    ten: 'Kế toán',    nhom: 'Support', icon: 'M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6' },
+  { id: 'taisan',    ten: 'Tài sản',    nhom: 'Support', icon: 'M20 7h-3V6a3 3 0 00-3-3h-4a3 3 0 00-3 3v1H4a1 1 0 00-1 1v11a2 2 0 002 2h14a2 2 0 002-2V8a1 1 0 00-1-1zM9 6a1 1 0 011-1h4a1 1 0 011 1v1H9V6z' }
 ];
 
 /* ---- Danh mục nền dùng chung (Phòng ban/Chức danh/Đơn vị tính) ----------
-   Nạp 1 lần, dùng lại cho cả dropdown ở Nhân sự, Kho vận, VÀ màn Dữ liệu
-   nền tự quản lý — tránh mỗi màn tự gọi API riêng. window.LAM_MOI_DANHMUC_NEN
-   để nơi khác gọi lại sau khi Thêm/Sửa 1 danh mục. */
-// Giữ NGUYÊN cả hàng đã ẩn trong 3 mảng này (Dữ liệu nền cần thấy hàng ẩn
-// mới bấm "Hiện" lại được — lỗi thật đã gặp: ẩn xong hàng biến mất luôn,
-// không có đường quay lại). Chỗ nào đổ DROPDOWN để CHỌN (Thêm/Sửa Nhân sự,
-// Thêm/Sửa Sản phẩm...) thì tự lọc .hoat_dong ngay tại chỗ dùng.
+   Nạp 1 lần, dùng lại cho cả dropdown ở Nhân sự, Kho vận, VÀ 2 màn tự quản
+   lý danh mục này — Cơ cấu tổ chức (trong tab Quản trị) + Danh mục (trong
+   tab Kho vận) — tránh mỗi màn tự gọi API riêng. */
+// Giữ NGUYÊN cả hàng đã ẩn trong 3 mảng này (2 màn quản lý danh mục cần
+// thấy hàng ẩn mới bấm "Hiện" lại được — lỗi thật đã gặp: ẩn xong hàng
+// biến mất luôn, không có đường quay lại). Chỗ nào đổ DROPDOWN để CHỌN
+// (Thêm/Sửa Nhân sự, Thêm/Sửa Sản phẩm...) thì tự lọc .hoat_dong ngay tại chỗ dùng.
 let DS_PHONG_BAN = [], DS_CHUC_DANH = [], DS_DON_VI = [];
 // Dữ liệu nhân sự đầy đủ (chỉ nạp cho HCNS/Admin qua qtDanhSach) — dùng
 // chung cho cả bảng Nhân sự (hồ sơ) lẫn Quản trị (tài khoản), 1 API duy
@@ -66,7 +69,7 @@ async function taiLaiNhanSuQuanTri() {
       const tt = TRANG_THAI[r.trang_thai] || { chu: r.trang_thai, mau: 'mute' };
       return '' +
         `<td><div class="person">${avHtml(r.id, r.viet_tat, r.co_anh)}` +
-          `<div><div class="nm">${esc(r.ho_ten)}</div>` +
+          `<div><div class="nm">${esc(r.ho_ten)}${r.ma_nv ? ` <span class="sm" style="font-weight:400">· ${esc(r.ma_nv)}</span>` : ''}</div>` +
           `<div class="sm">${esc(r.chuc_vu)}</div></div></div></td>` +
         `<td>${esc(r.bo_phan)}</td>` +
         `<td><span class="tag ${tt.mau}">${esc(tt.chu)}</span></td>` +
@@ -91,7 +94,7 @@ async function taiLaiNhanSuQuanTri() {
         : `<button class="btn-nho" data-khoa-ns="${esc(n.id)}">Hoàn tất</button>`);
     return '' +
       `<td><div class="person">${avHtml(n.id, n.viet_tat, n.co_anh)}` +
-        `<div><div class="nm">${esc(n.ho_ten)}${daKhoaNs ? ' <span class="tag warn">🔒</span>' : ''}</div>` +
+        `<div><div class="nm">${esc(n.ho_ten)}${n.ma_nv ? ` <span class="sm" style="font-weight:400">· ${esc(n.ma_nv)}</span>` : ''}${daKhoaNs ? ' <span class="tag warn">🔒</span>' : ''}</div>` +
         `<div class="sm">${esc(n.chuc_vu || tt.chu || '')}</div></div></div></td>` +
       `<td>${esc(n.bo_phan || '—')}</td>` +
       `<td><span class="tag ${tt.mau}">${esc(tt.chu)}</span></td>` +
@@ -133,7 +136,7 @@ async function taiLaiNhanSuQuanTri() {
       }
       return '' +
         `<td><div class="person">${avHtml(n.id, n.viet_tat, n.co_anh)}` +
-          `<div><div class="nm">${esc(n.ho_ten)}</div>` +
+          `<div><div class="nm">${esc(n.ho_ten)}${n.ma_nv ? ` <span class="sm" style="font-weight:400">· ${esc(n.ma_nv)}</span>` : ''}</div>` +
           `<div class="sm">${esc(n.chuc_vu || tt.chu || '')}</div></div></div></td>` +
         `<td>${esc(n.bo_phan || '—')}</td>` +
         `<td>${cotTK}</td>` +
@@ -447,7 +450,13 @@ $('#ngayHomNay').textContent = 'Hôm nay, ' +
 /* ---- Thanh điều hướng --------------------------------------------------- */
 
 const nav = $('#dieuHuong');
+let nhomVuaVe = null;
 TAB.forEach(t => {
+  if (t.nhom && t.nhom !== nhomVuaVe) {
+    nav.appendChild(el('div', 'sb-nhom', esc(t.nhom)));
+  }
+  nhomVuaVe = t.nhom;
+
   const duocXem = TOI.quyen.includes(t.id);
   const b = el('button', 'sb-item' + (duocXem ? '' : ' locked'));
   b.innerHTML =
@@ -1701,6 +1710,7 @@ if (TOI.quyen.includes('nhansu')) {
           sdt: $('#qtSdt').value,
           email: $('#qtEmail').value,
           quan_ly_id: $('#qtQuanLy').value,
+          trang_thai: $('#qtTrangThai').value,
           luong: $('#qtLuong').value
         });
         $('#qtFormThem').reset();
@@ -2283,6 +2293,11 @@ if (TOI.quyen.includes('dulieunen')) {
   try { await khoiDongDuLieuNen(); } catch (e) { console.error('Dữ liệu nền:', e); }
 }
 
+/* -- Tài sản (Asset Management) -- */
+if (TOI.quyen.includes('taisan')) {
+  try { await khoiDongTaiSan(); } catch (e) { console.error('Tài sản:', e); }
+}
+
 /* -- Đơn hoàn Shopee/TikTok — danh sách nằm trong tab Kho vận (kho xử lý),
    khối kết nối nằm trong tab Kết nối sàn. Chạy cho MỌI vai trò xem được đơn
    hoàn (gồm cả kho), không chỉ vai trò có tab Kết nối sàn. -- */
@@ -2638,25 +2653,210 @@ async function khoiDongDuLieuNen() {
     }
   });
 
-  // Chuyển màn Tổ chức / Hàng hoá / Đối tác / Kho
-  $('#dlnSeg').addEventListener('click', e => {
+  // Chuyển màn Tài khoản / Cơ cấu tổ chức trong tab Quản trị (Phòng ban +
+  // Chức danh — cấp công ty, chuyển từ Dữ liệu nền hôm nay).
+  const qtSeg = $('#qtSeg');
+  if (qtSeg) qtSeg.addEventListener('click', e => {
     const nut = e.target.closest('.seg-nut');
     if (!nut) return;
-    document.querySelectorAll('#dlnSeg .seg-nut').forEach(b => b.classList.toggle('active', b === nut));
-    ['tochuc', 'hanghoa', 'doitac', 'kho'].forEach(k => {
+    document.querySelectorAll('#qtSeg .seg-nut').forEach(b => b.classList.toggle('active', b === nut));
+    const paneTk = $('#qt-pane-taikhoan'), paneCc = $('#dln-pane-tochuc');
+    if (paneTk) paneTk.hidden = nut.dataset.qt !== 'taikhoan';
+    if (paneCc) paneCc.hidden = nut.dataset.qt !== 'cocau';
+  });
+
+  // Chuyển màn Đơn vị tính / Nhà cung cấp / Kho trong tab Kho vận → Danh mục
+  // (cũng chuyển từ Dữ liệu nền hôm nay — cùng chủ sở hữu quan_ly_kho).
+  const kvdlnSeg = $('#kvdlnSeg');
+  if (kvdlnSeg) kvdlnSeg.addEventListener('click', e => {
+    const nut = e.target.closest('.seg-nut');
+    if (!nut) return;
+    document.querySelectorAll('#kvdlnSeg .seg-nut').forEach(b => b.classList.toggle('active', b === nut));
+    ['hanghoa', 'doitac', 'kho'].forEach(k => {
       const pane = document.getElementById('dln-pane-' + k);
       if (pane) pane.hidden = (k !== nut.dataset.dln);
     });
   });
 
-  // Liên kết "quản lý ở Dữ liệu nền" từ form Thêm nhân sự (Quản trị)
+  // Liên kết "quản lý ở Quản trị/Kho vận" từ các form khác — mở đúng tab
+  // rồi bấm luôn đúng tab con để khỏi phải tự tìm.
   document.querySelectorAll('a[data-mo-tab]').forEach(a => {
-    a.addEventListener('click', e => { e.preventDefault(); moTab(a.dataset.moTab); });
+    a.addEventListener('click', e => {
+      e.preventDefault();
+      const dich = a.dataset.moTab;
+      moTab(dich);
+      if (dich === 'quantri') {
+        const b = document.querySelector('#qtSeg .seg-nut[data-qt="cocau"]'); if (b) b.click();
+      } else if (dich === 'khovan') {
+        const b = document.querySelector('#kvSeg .seg-nut[data-kv="danhmuc"]'); if (b) b.click();
+      }
+    });
   });
 
   await lamMoiTatCa();
   await veNCC();
   await veKhoList();
+}
+
+/* ==========================================================================
+   TÀI SẢN — Asset Management (xem docs/ENTITY_IDENTITY.md)
+   ---------------------------------------------------------------------------
+   XEM (danh sách + lịch sử) cho mọi vai trò có tab 'taisan'. Chỉ Data Owner
+   (Hành chính/Admin — quyen.quan_ly từ máy chủ) mới tạo/cấp phát/thu hồi/
+   bảo trì/thanh lý. Báo hỏng thì Data Owner HOẶC người đang giữ tự báo.
+   ========================================================================== */
+async function khoiDongTaiSan() {
+  let DS_TS = [];
+  let quanLy = false;
+
+  const NHAN_TT_TS = {
+    san_sang:    { chu: 'Sẵn sàng',    mau: 'ok' },
+    da_cap_phat: { chu: 'Đang giao',   mau: 'sage' },
+    bao_hong:    { chu: 'Báo hỏng',    mau: 'danger' },
+    da_thanh_ly: { chu: 'Đã thanh lý', mau: 'mute' }
+  };
+  const NHAN_SU_KIEN_TS = {
+    tao_moi: 'Tạo mới', cap_phat: 'Cấp phát', thu_hoi: 'Thu hồi',
+    bao_hong: 'Báo hỏng', bao_tri: 'Bảo trì xong', thanh_ly: 'Thanh lý'
+  };
+
+  function ve() {
+    $('#tsDem').textContent = DS_TS.length ? `${DS_TS.length} tài sản` : '';
+    $('#ts-trong').hidden = DS_TS.length > 0;
+    veBang('#ts-bang', DS_TS, t => {
+      const tt = NHAN_TT_TS[t.trang_thai] || { chu: t.trang_thai, mau: 'mute' };
+      const laNguoiGiu = t.nguoi_giu_id && t.nguoi_giu_id === TOI.id;
+      let nut = '';
+      if (t.trang_thai === 'san_sang' && quanLy) {
+        nut += `<button class="btn-nho" data-ts-capphat="${esc(t.id)}">Cấp phát</button> ` +
+               `<button class="btn-nho" data-ts-baohong="${esc(t.id)}">Báo hỏng</button> ` +
+               `<button class="btn-nho" data-ts-thanhly="${esc(t.id)}">Thanh lý</button> `;
+      } else if (t.trang_thai === 'da_cap_phat') {
+        if (quanLy) {
+          nut += `<button class="btn-nho" data-ts-capphat="${esc(t.id)}">Điều chuyển</button> ` +
+                 `<button class="btn-nho" data-ts-thuhoi="${esc(t.id)}">Thu hồi</button> ` +
+                 `<button class="btn-nho" data-ts-thanhly="${esc(t.id)}">Thanh lý</button> `;
+        }
+        if (quanLy || laNguoiGiu) nut += `<button class="btn-nho" data-ts-baohong="${esc(t.id)}">Báo hỏng</button> `;
+      } else if (t.trang_thai === 'bao_hong' && quanLy) {
+        nut += `<button class="btn-nho" data-ts-baotrixong="${esc(t.id)}">Bảo trì xong</button> ` +
+               `<button class="btn-nho" data-ts-thanhly="${esc(t.id)}">Thanh lý</button> `;
+      }
+      nut += `<button class="btn-nho btn-phu" data-ts-lichsu="${esc(t.id)}">Lịch sử</button>`;
+      return `<td class="sm">${esc(t.ma_ts)}</td>` +
+        `<td><div class="nm">${esc(t.ten)}</div></td>` +
+        `<td class="sm">${esc(t.danh_muc || '—')}</td>` +
+        `<td><span class="tag ${tt.mau}">${esc(tt.chu)}</span></td>` +
+        `<td class="sm">${t.nguoi_giu_ten ? esc(t.nguoi_giu_ten) + (t.nguoi_giu_ma ? ' · ' + esc(t.nguoi_giu_ma) : '') : '—'}</td>` +
+        `<td class="sm">${esc(t.vi_tri || '—')}</td>` +
+        `<td>${nut}</td>`;
+    });
+  }
+
+  async function taiLai() {
+    const kq = await API.taiSanDanhSach();
+    DS_TS = kq.ds || [];
+    quanLy = !!(kq.quyen && kq.quyen.quan_ly);
+    $('#ts-panel-them').hidden = !quanLy;
+    ve();
+  }
+
+  $('#tsThemForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const oLoi = $('#tsThemLoi'); oLoi.textContent = '';
+    try {
+      await API.taiSanThem({
+        ten: $('#tsThemTen').value.trim(),
+        danh_muc: $('#tsThemDanhMuc').value.trim(),
+        vi_tri: $('#tsThemViTri').value.trim()
+      });
+      $('#tsThemForm').reset();
+      await taiLai();
+    } catch (err) { oLoi.textContent = err.message || 'Không lưu được, thử lại nhé.'; }
+  });
+
+  /* Cấp phát/Điều chuyển — mở modal chọn nhân sự (dùng chung danh bạ, đỡ
+     gọi thêm API riêng). */
+  let dsNhanSuChon = [];
+  async function moModalCapPhat(id) {
+    if (!dsNhanSuChon.length) {
+      try { const kq = await API.danhBa(); dsNhanSuChon = kq.danh_ba || []; } catch { dsNhanSuChon = []; }
+    }
+    const t = DS_TS.find(x => x.id === id);
+    $('#tsCapPhatId').value = id;
+    $('#tsCapPhatTieuDe').textContent = 'Cấp phát: ' + (t ? t.ten : '');
+    $('#tsCapPhatNguoi').innerHTML = '<option value="">— Chọn nhân sự —</option>' +
+      dsNhanSuChon.map(n => `<option value="${esc(n.id)}">${esc(n.ho_ten)} — ${esc(n.chuc_vu || '')}</option>`).join('');
+    $('#tsCapPhatViTri').value = t ? (t.vi_tri || '') : '';
+    $('#tsCapPhatGhiChu').value = '';
+    $('#tsCapPhatLoi').textContent = '';
+    $('#tsCapPhatModalNen').hidden = false;
+  }
+  $('#tsCapPhatHuy').addEventListener('click', () => { $('#tsCapPhatModalNen').hidden = true; });
+  $('#tsCapPhatForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const oLoi = $('#tsCapPhatLoi'); oLoi.textContent = '';
+    try {
+      await API.taiSanCapPhat({
+        id: $('#tsCapPhatId').value,
+        nguoi_giu_id: $('#tsCapPhatNguoi').value,
+        vi_tri: $('#tsCapPhatViTri').value.trim(),
+        ghi_chu: $('#tsCapPhatGhiChu').value.trim()
+      });
+      $('#tsCapPhatModalNen').hidden = true;
+      await taiLai();
+    } catch (err) { oLoi.textContent = err.message || 'Không cấp phát được, thử lại nhé.'; }
+  });
+
+  async function moModalLichSu(id) {
+    const t = DS_TS.find(x => x.id === id);
+    $('#tsLichSuTieuDe').textContent = 'Lịch sử: ' + (t ? t.ten : '');
+    const box = $('#tsLichSuDanhSach');
+    box.innerHTML = '<p class="hint">Đang tải…</p>';
+    $('#tsLichSuTrong').hidden = true;
+    $('#tsLichSuModalNen').hidden = false;
+    try {
+      const kq = await API.taiSanLichSu(id);
+      const ds = kq.ds || [];
+      $('#tsLichSuTrong').hidden = ds.length > 0;
+      box.innerHTML = ds.map(ls => `<div class="list-item">` +
+        `<div class="nm">${esc(NHAN_SU_KIEN_TS[ls.loai_su_kien] || ls.loai_su_kien)}</div>` +
+        `<div class="sm">${esc(ls.luc)} · ${esc(ls.nguoi_thuc_hien_ten || '')}` +
+        (ls.nguoi_giu_moi_ten ? ` · giao cho ${esc(ls.nguoi_giu_moi_ten)}` : '') +
+        (ls.ghi_chu ? ` · ${esc(ls.ghi_chu)}` : '') + `</div></div>`).join('');
+    } catch (err) { box.innerHTML = `<p class="hint">${esc(err.message || 'Không tải được lịch sử.')}</p>`; }
+  }
+  $('#tsLichSuDong').addEventListener('click', () => { $('#tsLichSuModalNen').hidden = true; });
+
+  $('#ts-bang').addEventListener('click', async e => {
+    const btnCapPhat = e.target.closest('[data-ts-capphat]');
+    const btnThuHoi = e.target.closest('[data-ts-thuhoi]');
+    const btnBaoHong = e.target.closest('[data-ts-baohong]');
+    const btnBaoTriXong = e.target.closest('[data-ts-baotrixong]');
+    const btnThanhLy = e.target.closest('[data-ts-thanhly]');
+    const btnLichSu = e.target.closest('[data-ts-lichsu]');
+    try {
+      if (btnCapPhat) {
+        await moModalCapPhat(btnCapPhat.dataset.tsCapphat);
+      } else if (btnThuHoi) {
+        if (!confirm('Thu hồi tài sản này về kho?')) return;
+        await API.taiSanThuHoi({ id: btnThuHoi.dataset.tsThuhoi }); await taiLai();
+      } else if (btnBaoHong) {
+        const ghiChu = prompt('Mô tả tình trạng hỏng (không bắt buộc):') || '';
+        await API.taiSanBaoHong({ id: btnBaoHong.dataset.tsBaohong, ghi_chu: ghiChu }); await taiLai();
+      } else if (btnBaoTriXong) {
+        if (!confirm('Xác nhận đã sửa xong — tài sản về trạng thái sẵn sàng?')) return;
+        await API.taiSanBaoTriXong({ id: btnBaoTriXong.dataset.tsBaotrixong }); await taiLai();
+      } else if (btnThanhLy) {
+        if (!confirm('Thanh lý tài sản này? Sau đó không cấp phát lại được nữa.')) return;
+        await API.taiSanThanhLy({ id: btnThanhLy.dataset.tsThanhly }); await taiLai();
+      } else if (btnLichSu) {
+        await moModalLichSu(btnLichSu.dataset.tsLichsu);
+      }
+    } catch (err) { alert(err.message || 'Không thực hiện được, thử lại nhé.'); }
+  });
+
+  await taiLai();
 }
 
 async function khoiDongKho() {
@@ -2696,11 +2896,14 @@ async function khoiDongKho() {
     document.querySelectorAll('#kvSeg .seg-nut[data-kv="nhap"], #kvSeg .seg-nut[data-kv="xuat"]')
             .forEach(b => b.remove());
   }
-  // Không được quản lý kho → giấu ô thêm mã hàng
+  // Không được quản lý kho → giấu ô thêm mã hàng + tab Danh mục (Đơn vị
+  // tính/NCC/Kho — chuyển từ Dữ liệu nền, cùng chủ sở hữu quan_ly_kho).
   if (qKho.quan_ly) {
     $('#kv-panel-them').hidden = false;
     $('#kvDonVi').innerHTML = '<option value="">— Chưa chọn —</option>' +
       DS_DON_VI.filter(x => x.hoat_dong).map(d => `<option value="${d.id}">${esc(d.ten)}</option>`).join('');
+  } else {
+    document.querySelectorAll('#kvSeg .seg-nut[data-kv="danhmuc"]').forEach(b => b.remove());
   }
   // Không xem được giá vốn → bỏ cột giá trị tồn và ô đơn giá
   if (!qKho.gia_von) {
@@ -2714,7 +2917,7 @@ async function khoiDongKho() {
     const nut = e.target.closest('.seg-nut');
     if (!nut) return;
     document.querySelectorAll('#kvSeg .seg-nut').forEach(b => b.classList.toggle('active', b === nut));
-    ['ton', 'nhap', 'xuat', 'baocao', 'donhoan', 'lichsu'].forEach(k => {
+    ['ton', 'nhap', 'xuat', 'baocao', 'donhoan', 'lichsu', 'danhmuc'].forEach(k => {
       const pane = document.getElementById('kv-pane-' + k);
       if (pane) pane.hidden = (k !== nut.dataset.kv);
     });

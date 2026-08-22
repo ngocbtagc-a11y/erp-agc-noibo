@@ -127,15 +127,20 @@ xảy ra ở đây.
 
 ---
 
-## Việc tiếp theo (chờ Sếp duyệt riêng — CHƯA code)
+## Việc tiếp theo — ĐÃ LÀM (22/08/2026, Sếp duyệt "còn lại thì duyệt, làm thử đi thì mới biết được")
 
-1. Đổi sidebar: nhóm 11 tab hiện tại thành 5 nhóm cha (Tổng quan / Quản
-   trị doanh nghiệp / Kinh doanh-MKT / Kho vận-Sản xuất / Support).
-2. MOVE Phòng ban+Chức danh từ Dữ liệu nền → Quản trị doanh nghiệp.
-3. MOVE Đơn vị tính+NCC+Kho từ Dữ liệu nền → Kho vận & Sản xuất.
-4. Sau khi 2+3 xong, tab "Dữ liệu nền" không còn gì — xoá hẳn, không để
-   tab rỗng.
+1. ✅ Đổi sidebar: nhóm 9 tab còn lại thành 5 nhóm (Trạm Mục Tiêu/Lịch sử/Danh
+   bạ không nhóm — dùng chung mọi vai trò / Quản trị doanh nghiệp /
+   Kinh doanh & MKT / Kho vận & Sản xuất / Support).
+2. ✅ MOVE Phòng ban+Chức danh từ Dữ liệu nền → tab Quản trị (sub-tab "Cơ cấu tổ chức").
+3. ✅ MOVE Đơn vị tính+NCC+Kho từ Dữ liệu nền → tab Kho vận (sub-tab "Danh mục").
+4. ✅ Xoá tab "Dữ liệu nền" — không còn tồn tại độc lập, không tab rỗng.
 
-Đây là thay đổi layout/navigation lớn (đổi sidebar) — nên làm thành 1 đợt
-riêng, test kỹ trên máy trước khi đẩy lên (đúng nguyên tắc "mỗi refactor
-nhỏ, không đổi nhiều domain cùng lúc" đã thống nhất từ đầu phiên).
+Quyền xem/sửa giữ nguyên 100% (không đổi `src/quyen.js`) — vì mọi role đang
+có quyền 'dulieunen' đều đã có sẵn 'quantri' và/hoặc 'khovan', nên nội dung
+tự động chỉ hiện đúng cho đúng người như trước, chỉ đổi VỊ TRÍ hiển thị.
+
+## Xem thêm
+
+Nguyên tắc định danh Entity (mã nhân sự, mã tài sản, khi nào cần Business
+Code) — xem [docs/ENTITY_IDENTITY.md](./ENTITY_IDENTITY.md).

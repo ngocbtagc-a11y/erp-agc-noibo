@@ -365,6 +365,16 @@ button { cursor: pointer; border: none; background: none; }
 
 .sb-nav { display: flex; flex-direction: column; gap: 2px; }
 
+.sb-nhom {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,.42);
+  padding: 16px 11px 4px;
+}
+.sb-nhom:first-child { padding-top: 4px; }
+
 .sb-item {
   display: flex;
   align-items: center;

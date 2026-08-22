@@ -30,7 +30,6 @@
            alt="Alpha Green Commerce" width="1109" height="376">
     </div>
 
-    <div class="sb-label">Quản trị</div>
     <nav class="sb-nav" id="dieuHuong"></nav>
 
     <div class="sb-foot">
@@ -373,11 +372,11 @@
               <input type="text" id="qtHoTen" required placeholder="Ví dụ: Trần Văn Nam">
             </div>
             <div class="field">
-              <label>Chức danh <span class="hint">· <a href="#" data-mo-tab="dulieunen">quản lý ở Dữ liệu nền</a></span></label>
+              <label>Chức danh <span class="hint">· <a href="#" data-mo-tab="quantri">quản lý ở Quản trị</a></span></label>
               <select id="qtChucDanh"><option value="">— Chưa chọn —</option></select>
             </div>
             <div class="field">
-              <label>Phòng ban <span class="hint">· <a href="#" data-mo-tab="dulieunen">quản lý ở Dữ liệu nền</a></span></label>
+              <label>Phòng ban <span class="hint">· <a href="#" data-mo-tab="quantri">quản lý ở Quản trị</a></span></label>
               <select id="qtPhongBan"><option value="">— Chưa chọn —</option></select>
             </div>
             <div class="field">
@@ -391,6 +390,15 @@
             <div class="field">
               <label>Quản lý trực tiếp</label>
               <select id="qtQuanLy"><option value="">— Không —</option></select>
+            </div>
+            <div class="field">
+              <label>Trạng thái</label>
+              <select id="qtTrangThai">
+                <option value="thu_viec">Thử việc</option>
+                <option value="cho_ky">Chờ ký</option>
+                <option value="da_ky">Đã ký HĐ</option>
+                <option value="parttime">Bán thời gian</option>
+              </select>
             </div>
             <div class="field" id="qtFieldLuong">
               <label>Lương (đồng/tháng)</label>
@@ -570,7 +578,7 @@
                 <input type="text" id="kdsp-danhmuc" placeholder="Hạt dinh dưỡng">
               </div>
               <div class="field">
-                <label>Đơn vị tính <span class="hint">· <a href="#" data-mo-tab="dulieunen">quản lý ở Dữ liệu nền</a></span></label>
+                <label>Đơn vị tính <span class="hint">· <a href="#" data-mo-tab="khovan">quản lý ở Kho vận</a></span></label>
                 <select id="kdsp-donvi"><option value="">— Chưa chọn —</option></select>
               </div>
               <div class="field">
@@ -661,6 +669,7 @@
         <button class="seg-nut" data-kv="baocao">Báo cáo</button>
         <button class="seg-nut" data-kv="donhoan">Đơn hoàn</button>
         <button class="seg-nut" data-kv="lichsu">Lịch sử đơn hoàn</button>
+        <button class="seg-nut" data-kv="danhmuc">Danh mục</button>
       </div>
 
       <!-- ===== Màn Tồn kho ===== -->
@@ -717,7 +726,7 @@
                 <input type="text" id="kvDanhMuc" placeholder="Hạt dinh dưỡng">
               </div>
               <div class="field">
-                <label>Đơn vị tính <span class="hint">· <a href="#" data-mo-tab="dulieunen">quản lý ở Dữ liệu nền</a></span></label>
+                <label>Đơn vị tính <span class="hint">· <a href="#" data-mo-tab="khovan">quản lý ở Kho vận</a></span></label>
                 <select id="kvDonVi"><option value="">— Chưa chọn —</option></select>
               </div>
               <div class="field">
@@ -946,6 +955,94 @@
         </div>
 
       </div>
+
+      <!-- ===== Màn Danh mục: Đơn vị tính / Nhà cung cấp / Kho (chuyển từ Dữ liệu nền) ===== -->
+      <div class="kv-pane" id="kv-pane-danhmuc" hidden>
+        <div class="seg" id="kvdlnSeg">
+          <button class="seg-nut active" data-dln="hanghoa">Đơn vị tính</button>
+          <button class="seg-nut" data-dln="doitac">Nhà cung cấp</button>
+          <button class="seg-nut" data-dln="kho">Kho</button>
+        </div>
+
+        <div class="kv-pane" id="dln-pane-hanghoa">
+          <div class="panel">
+            <div class="panel-head"><h4>Đơn vị tính</h4><span class="hint" id="dln-dv-dem"></span></div>
+            <div class="panel-body">
+              <form id="dln-dv-form" style="display:flex; gap:8px" autocomplete="off">
+                <input type="text" id="dln-dv-ten" placeholder="Tên đơn vị mới, VD: kg" required style="flex:1">
+                <button type="submit" class="btn-nho btn-primary" style="width:auto">+ Thêm</button>
+              </form>
+              <div class="form-loi" id="dln-dv-loi"></div>
+              <div id="dln-dv-list" style="margin-top:10px"></div>
+              <div class="empty" id="dln-dv-trong" hidden>Chưa có đơn vị tính nào — thêm ở trên.</div>
+            </div>
+            <div class="panel-body" style="padding-top:0">
+              <p class="hint">Quản lý Sản phẩm/SKU nằm ở tab <b>Kho vận → Tồn kho</b>.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="kv-pane" id="dln-pane-doitac" hidden>
+          <div class="panel">
+            <div class="panel-head"><h4>Nhà cung cấp</h4><span class="hint" id="dln-ncc-dem"></span></div>
+            <div class="panel-body">
+              <form id="dln-ncc-form" class="form-luoi" autocomplete="off">
+                <input type="hidden" id="dln-ncc-id">
+                <div class="field field-rong">
+                  <label>Tên nhà cung cấp *</label>
+                  <input type="text" id="dln-ncc-ten" required>
+                </div>
+                <div class="field">
+                  <label>Mã số thuế</label>
+                  <input type="text" id="dln-ncc-mst">
+                </div>
+                <div class="field">
+                  <label>Điện thoại</label>
+                  <input type="text" id="dln-ncc-dt">
+                </div>
+                <div class="field field-rong">
+                  <label>Địa chỉ</label>
+                  <input type="text" id="dln-ncc-diachi">
+                </div>
+                <div class="field field-nut" style="display:flex; gap:10px">
+                  <button type="submit" class="btn-primary" id="dln-ncc-nutluu" style="width:auto">+ Thêm</button>
+                  <button type="button" class="btn-phu" id="dln-ncc-nuthuy" style="width:auto" hidden>Hủy sửa</button>
+                </div>
+              </form>
+              <div class="form-loi" id="dln-ncc-loi"></div>
+              <div id="dln-ncc-list" style="margin-top:10px"></div>
+              <div class="empty" id="dln-ncc-trong" hidden>Chưa có nhà cung cấp nào — thêm ở trên.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="kv-pane" id="dln-pane-kho" hidden>
+          <div class="panel">
+            <div class="panel-head"><h4>Kho</h4><span class="hint" id="dln-kho-dem"></span></div>
+            <div class="panel-body">
+              <p class="hint" style="margin:0 0 14px">Hiện công ty vận hành 1 kho — chuẩn bị sẵn danh mục để mở kho mới không cần sửa code. Quản lý bởi Giám đốc/Phó Giám đốc.</p>
+              <form id="dln-kho-form" class="form-luoi" autocomplete="off">
+                <input type="hidden" id="dln-kho-id">
+                <div class="field field-rong">
+                  <label>Tên kho *</label>
+                  <input type="text" id="dln-kho-ten" required placeholder="VD: Kho chính Hoài Đức">
+                </div>
+                <div class="field field-rong">
+                  <label>Địa chỉ</label>
+                  <input type="text" id="dln-kho-diachi">
+                </div>
+                <div class="field field-nut" style="display:flex; gap:10px">
+                  <button type="submit" class="btn-primary" id="dln-kho-nutluu" style="width:auto">+ Thêm</button>
+                  <button type="button" class="btn-phu" id="dln-kho-nuthuy" style="width:auto" hidden>Hủy sửa</button>
+                </div>
+              </form>
+              <div class="form-loi" id="dln-kho-loi"></div>
+              <div id="dln-kho-list" style="margin-top:10px"></div>
+              <div class="empty" id="dln-kho-trong" hidden>Chưa có kho nào — thêm ở trên.</div>
+            </div>
+          </div>
+        </div>
+      </div>
     </section>
 
     <!-- ---------- Kế toán ---------- -->
@@ -1029,6 +1126,62 @@
 
     </section>
 
+    <!-- ---------- Tài sản (Asset Management) ---------- -->
+    <section class="view" id="v-taisan" hidden>
+      <div class="view-head">
+        <h3>Tài sản</h3>
+        <p>Máy tính, thiết bị văn phòng và tài sản công ty cấp cho nhân sự sử dụng. Mọi người xem được ai đang giữ gì; Hành chính/Admin cấp phát, thu hồi, thanh lý.</p>
+      </div>
+
+      <div class="panel" id="ts-panel-them" hidden>
+        <div class="panel-head"><h4>Thêm tài sản</h4></div>
+        <div class="panel-body">
+          <form id="tsThemForm" class="form-luoi" autocomplete="off">
+            <div class="field field-rong">
+              <label>Tên tài sản *</label>
+              <input type="text" id="tsThemTen" required placeholder="VD: Laptop Dell Latitude 5420">
+            </div>
+            <div class="field">
+              <label>Danh mục</label>
+              <input type="text" id="tsThemDanhMuc" placeholder="Laptop, Máy in, Xe nâng...">
+            </div>
+            <div class="field">
+              <label>Vị trí hiện tại</label>
+              <input type="text" id="tsThemViTri" placeholder="VD: Kho chính, Văn phòng...">
+            </div>
+            <div class="field field-nut">
+              <button type="submit" class="btn-primary" id="tsThemNut" style="width:auto">+ Thêm tài sản</button>
+            </div>
+          </form>
+          <div class="form-loi" id="tsThemLoi"></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h4>Danh sách tài sản</h4>
+          <span class="hint" id="tsDem"></span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Mã TS</th>
+                <th>Tên</th>
+                <th>Danh mục</th>
+                <th>Trạng thái</th>
+                <th>Đang giữ</th>
+                <th>Vị trí</th>
+                <th>Thao tác</th>
+              </tr>
+            </thead>
+            <tbody id="ts-bang"></tbody>
+          </table>
+        </div>
+        <div class="empty" id="ts-trong" hidden>Chưa có tài sản nào.</div>
+      </div>
+    </section>
+
     <!-- ---------- Kết nối sàn — Đơn hoàn (Shopee + TikTok) ---------- -->
     <section class="view" id="v-donhoan" hidden>
       <div class="view-head">
@@ -1077,11 +1230,11 @@
       </div>
     </section>
 
-    <!-- ---------- Dữ liệu nền: danh mục chuẩn dùng chung toàn hệ thống ---------- -->
-    <section class="view" id="v-dulieunen" hidden>
+    <!-- ---------- Quản trị (chỉ admin) ---------- -->
+    <section class="view" id="v-quantri" hidden>
       <div class="view-head">
-        <h3>Dữ liệu nền</h3>
-        <p>Danh mục chuẩn dùng chung — nhập một lần ở đây, dùng lại khắp ERP thay vì gõ tự do từng chỗ (tránh trùng lặp kiểu "kg"/"KG"/"Kg").</p>
+        <h3>Quản trị</h3>
+        <p id="qtMoTa">Tạo tài khoản đăng nhập, đặt lại mật khẩu, khoá/mở tài khoản và quản lý Cơ cấu tổ chức (Phòng ban/Chức danh) cấp công ty.</p>
       </div>
 
       <div class="panel">
@@ -1096,14 +1249,12 @@
         </div>
       </div>
 
-      <div class="seg" id="dlnSeg">
-        <button class="seg-nut active" data-dln="tochuc">Tổ chức</button>
-        <button class="seg-nut" data-dln="hanghoa">Hàng hoá</button>
-        <button class="seg-nut" data-dln="doitac">Đối tác</button>
-        <button class="seg-nut" data-dln="kho">Kho</button>
+      <div class="seg" id="qtSeg">
+        <button class="seg-nut active" data-qt="taikhoan">Tài khoản</button>
+        <button class="seg-nut" data-qt="cocau">Cơ cấu tổ chức</button>
       </div>
 
-      <div class="kv-pane" id="dln-pane-tochuc">
+      <div class="kv-pane" id="dln-pane-tochuc" hidden>
         <div class="grid-2">
           <div class="panel">
             <div class="panel-head"><h4>Phòng ban</h4><span class="hint" id="dln-pb-dem"></span></div>
@@ -1133,92 +1284,7 @@
         </div>
       </div>
 
-      <div class="kv-pane" id="dln-pane-hanghoa" hidden>
-        <div class="panel">
-          <div class="panel-head"><h4>Đơn vị tính</h4><span class="hint" id="dln-dv-dem"></span></div>
-          <div class="panel-body">
-            <form id="dln-dv-form" style="display:flex; gap:8px" autocomplete="off">
-              <input type="text" id="dln-dv-ten" placeholder="Tên đơn vị mới, VD: kg" required style="flex:1">
-              <button type="submit" class="btn-nho btn-primary" style="width:auto">+ Thêm</button>
-            </form>
-            <div class="form-loi" id="dln-dv-loi"></div>
-            <div id="dln-dv-list" style="margin-top:10px"></div>
-            <div class="empty" id="dln-dv-trong" hidden>Chưa có đơn vị tính nào — thêm ở trên.</div>
-          </div>
-          <div class="panel-body" style="padding-top:0">
-            <p class="hint">Quản lý Sản phẩm/SKU nằm ở tab <b>Kho vận → Tồn kho</b>.</p>
-          </div>
-        </div>
-      </div>
-
-      <div class="kv-pane" id="dln-pane-doitac" hidden>
-        <div class="panel">
-          <div class="panel-head"><h4>Nhà cung cấp</h4><span class="hint" id="dln-ncc-dem"></span></div>
-          <div class="panel-body">
-            <form id="dln-ncc-form" class="form-luoi" autocomplete="off">
-              <input type="hidden" id="dln-ncc-id">
-              <div class="field field-rong">
-                <label>Tên nhà cung cấp *</label>
-                <input type="text" id="dln-ncc-ten" required>
-              </div>
-              <div class="field">
-                <label>Mã số thuế</label>
-                <input type="text" id="dln-ncc-mst">
-              </div>
-              <div class="field">
-                <label>Điện thoại</label>
-                <input type="text" id="dln-ncc-dt">
-              </div>
-              <div class="field field-rong">
-                <label>Địa chỉ</label>
-                <input type="text" id="dln-ncc-diachi">
-              </div>
-              <div class="field field-nut" style="display:flex; gap:10px">
-                <button type="submit" class="btn-primary" id="dln-ncc-nutluu" style="width:auto">+ Thêm</button>
-                <button type="button" class="btn-phu" id="dln-ncc-nuthuy" style="width:auto" hidden>Hủy sửa</button>
-              </div>
-            </form>
-            <div class="form-loi" id="dln-ncc-loi"></div>
-            <div id="dln-ncc-list" style="margin-top:10px"></div>
-            <div class="empty" id="dln-ncc-trong" hidden>Chưa có nhà cung cấp nào — thêm ở trên.</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="kv-pane" id="dln-pane-kho" hidden>
-        <div class="panel">
-          <div class="panel-head"><h4>Kho</h4><span class="hint" id="dln-kho-dem"></span></div>
-          <div class="panel-body">
-            <p class="hint" style="margin:0 0 14px">Hiện công ty vận hành 1 kho — chuẩn bị sẵn danh mục để mở kho mới không cần sửa code. Quản lý bởi Giám đốc/Phó Giám đốc.</p>
-            <form id="dln-kho-form" class="form-luoi" autocomplete="off">
-              <input type="hidden" id="dln-kho-id">
-              <div class="field field-rong">
-                <label>Tên kho *</label>
-                <input type="text" id="dln-kho-ten" required placeholder="VD: Kho chính Hoài Đức">
-              </div>
-              <div class="field field-rong">
-                <label>Địa chỉ</label>
-                <input type="text" id="dln-kho-diachi">
-              </div>
-              <div class="field field-nut" style="display:flex; gap:10px">
-                <button type="submit" class="btn-primary" id="dln-kho-nutluu" style="width:auto">+ Thêm</button>
-                <button type="button" class="btn-phu" id="dln-kho-nuthuy" style="width:auto" hidden>Hủy sửa</button>
-              </div>
-            </form>
-            <div class="form-loi" id="dln-kho-loi"></div>
-            <div id="dln-kho-list" style="margin-top:10px"></div>
-            <div class="empty" id="dln-kho-trong" hidden>Chưa có kho nào — thêm ở trên.</div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ---------- Quản trị (chỉ admin) ---------- -->
-    <section class="view" id="v-quantri" hidden>
-      <div class="view-head">
-        <h3>Quản trị</h3>
-        <p id="qtMoTa">Tạo tài khoản đăng nhập, đặt lại mật khẩu và khoá/mở tài khoản. Thêm/sửa hồ sơ nhân sự đã chuyển sang tab Nhân sự.</p>
-      </div>
+      <div class="kv-pane" id="qt-pane-taikhoan">
 
       <!-- ===== Đón nhân sự mới từ ảnh CCCD (đang hoàn thiện — tạm ẩn) ===== -->
       <div class="panel" hidden>
@@ -1342,6 +1408,7 @@
           </table>
         </div>
       </div>
+      </div><!-- /qt-pane-taikhoan -->
     </section>
 
   </div>
@@ -1358,11 +1425,11 @@
         <input type="text" id="nsSua-hoten" required>
       </div>
       <div class="field">
-        <label>Chức danh <span class="hint">· <a href="#" data-mo-tab="dulieunen">quản lý ở Dữ liệu nền</a></span></label>
+        <label>Chức danh <span class="hint">· <a href="#" data-mo-tab="quantri">quản lý ở Quản trị</a></span></label>
         <select id="nsSua-chucdanh"><option value="">— Chưa chọn —</option></select>
       </div>
       <div class="field">
-        <label>Phòng ban <span class="hint">· <a href="#" data-mo-tab="dulieunen">quản lý ở Dữ liệu nền</a></span></label>
+        <label>Phòng ban <span class="hint">· <a href="#" data-mo-tab="quantri">quản lý ở Quản trị</a></span></label>
         <select id="nsSua-phongban"><option value="">— Chưa chọn —</option></select>
       </div>
       <div class="field">
@@ -1689,6 +1756,45 @@
     <div id="qrKhung" style="width:100%;border-radius:10px;overflow:hidden;background:#000"></div>
     <div class="modal-nut" style="margin-top:14px">
       <button class="btn-primary" id="qrDong">Đóng</button>
+    </div>
+  </div>
+</div>
+
+<!-- Hộp Cấp phát / Điều chuyển tài sản -->
+<div class="modal-nen" id="tsCapPhatModalNen" hidden>
+  <div class="modal">
+    <h4 id="tsCapPhatTieuDe">Cấp phát tài sản</h4>
+    <form id="tsCapPhatForm" class="form-luoi" autocomplete="off">
+      <input type="hidden" id="tsCapPhatId">
+      <div class="field field-rong">
+        <label>Giao cho *</label>
+        <select id="tsCapPhatNguoi" required><option value="">— Chọn nhân sự —</option></select>
+      </div>
+      <div class="field field-rong">
+        <label>Vị trí</label>
+        <input type="text" id="tsCapPhatViTri" placeholder="VD: Văn phòng, Kho chính...">
+      </div>
+      <div class="field field-rong">
+        <label>Ghi chú</label>
+        <input type="text" id="tsCapPhatGhiChu">
+      </div>
+      <div class="field field-nut" style="display:flex; gap:10px">
+        <button type="submit" class="btn-primary" id="tsCapPhatNut" style="width:auto">Cấp phát</button>
+        <button type="button" class="btn-phu" id="tsCapPhatHuy" style="width:auto">Hủy</button>
+      </div>
+    </form>
+    <div class="form-loi" id="tsCapPhatLoi"></div>
+  </div>
+</div>
+
+<!-- Hộp Lịch sử tài sản (chỉ xem) -->
+<div class="modal-nen" id="tsLichSuModalNen" hidden>
+  <div class="modal">
+    <h4 id="tsLichSuTieuDe">Lịch sử tài sản</h4>
+    <div class="list" id="tsLichSuDanhSach"></div>
+    <div class="empty" id="tsLichSuTrong" hidden>Chưa có lịch sử.</div>
+    <div class="modal-nut" style="margin-top:14px">
+      <button class="btn-primary" id="tsLichSuDong">Đóng</button>
     </div>
   </div>
 </div>

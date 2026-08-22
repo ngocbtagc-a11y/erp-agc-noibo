@@ -22,6 +22,8 @@ import * as shopee from './shopee.js';
 import * as tiktok from './tiktok.js';
 import * as nhansu from './nhansu.js';
 import * as dulieunen from './dulieunen.js';
+import * as taisan from './taisan.js';
+import { sinhMa } from './dinh-danh.js';
 
 /* ---- Trả lời dạng JSON -------------------------------------------------- */
 
@@ -171,7 +173,7 @@ async function layDanhBa(req, env) {
   // đây là tài khoản bấm thử, không phải nhân sự thật, không để lẫn vào
   // danh sách chọn người (Chat, Người nhận/Người phối hợp ở Trạm Việc...).
   const { results } = await env.DB.prepare(`
-    SELECT n.id, n.ho_ten, n.viet_tat, n.chuc_vu, n.bo_phan, n.sdt, n.email,
+    SELECT n.id, n.ma_nv, n.ho_ten, n.viet_tat, n.chuc_vu, n.bo_phan, n.sdt, n.email,
            (n.anh_chan_dung IS NOT NULL) AS co_anh,
            q.ho_ten AS quan_ly
       FROM nhan_su n
@@ -198,10 +200,10 @@ async function layNhanSu(req, env) {
   // hai câu lệnh khác nhau tuỳ vai trò. Người không có quyền thì cột lương
   // không được chọn ra khỏi database — không phải "lấy ra rồi ẩn đi".
   const cauLenh = xemLuong
-    ? `SELECT id, ho_ten, viet_tat, chuc_vu, bo_phan, trang_thai,
+    ? `SELECT id, ma_nv, ho_ten, viet_tat, chuc_vu, bo_phan, trang_thai,
               ngay_vao, luong, (anh_chan_dung IS NOT NULL) AS co_anh
          FROM nhan_su WHERE dang_lam = 1 ORDER BY bo_phan, ho_ten`
-    : `SELECT id, ho_ten, viet_tat, chuc_vu, bo_phan, trang_thai,
+    : `SELECT id, ma_nv, ho_ten, viet_tat, chuc_vu, bo_phan, trang_thai,
               ngay_vao, (anh_chan_dung IS NOT NULL) AS co_anh
          FROM nhan_su WHERE dang_lam = 1 ORDER BY bo_phan, ho_ten`;
 
@@ -407,7 +409,7 @@ async function qtDanhSach(req, env) {
   if (l) return l;
 
   const { results } = await env.DB.prepare(`
-    SELECT n.id, n.ho_ten, n.viet_tat, n.chuc_vu, n.bo_phan, n.phong_ban_id, n.chuc_danh_id,
+    SELECT n.id, n.ma_nv, n.ho_ten, n.viet_tat, n.chuc_vu, n.bo_phan, n.phong_ban_id, n.chuc_danh_id,
            n.sdt, n.email, n.quan_ly_id, n.trang_thai_dl,
            n.phap_nhan, n.trang_thai, n.dang_lam, (n.anh_chan_dung IS NOT NULL) AS co_anh,
            t.id AS tai_khoan_id, t.ten_dang_nhap, t.vai_tro, t.kich_hoat, t.phai_doi_mk
@@ -446,6 +448,9 @@ async function qtThemNhanSu(req, env) {
   if (hoTen.length < 2) return loi('Vui lòng nhập họ tên');
 
   const id = 'ns_' + crypto.randomUUID().slice(0, 12);
+  // Mã nhân sự (Business Code) — sinh 1 lần, không đổi, không tái sử dụng
+  // (xem docs/ENTITY_IDENTITY.md). Tên có thể trùng/đổi, mã thì không.
+  const maNv = await sinhMa(env, 'nhan_su');
 
   // RANH GIỚI LƯƠNG: chỉ admin mới được đặt lương. HCNS gửi lương lên cũng
   // bị bỏ qua ở đây — máy chủ ép NULL, không tin giao diện.
@@ -458,11 +463,11 @@ async function qtThemNhanSu(req, env) {
 
   // phap_nhan luôn là 'Công ty' — công ty đang đóng HKD, không còn phân biệt.
   await env.DB.prepare(`
-    INSERT INTO nhan_su (id, ho_ten, viet_tat, chuc_vu, bo_phan, phong_ban_id, chuc_danh_id,
+    INSERT INTO nhan_su (id, ma_nv, ho_ten, viet_tat, chuc_vu, bo_phan, phong_ban_id, chuc_danh_id,
                          sdt, email, quan_ly_id, phap_nhan, trang_thai, ngay_vao, luong)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Công ty', ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Công ty', ?, ?, ?)
   `).bind(
-    id, hoTen, vietTatTen(hoTen),
+    id, maNv, hoTen, vietTatTen(hoTen),
     cd ? cd.ten : String(b.chuc_vu || '').trim(),
     pb ? pb.ten : String(b.bo_phan || '').trim(),
     pb ? pb.id : null,
@@ -475,7 +480,7 @@ async function qtThemNhanSu(req, env) {
     luong
   ).run();
 
-  return json({ ok: true, id });
+  return json({ ok: true, id, ma_nv: maNv });
 }
 
 /* Sửa hồ sơ nhân sự đã có (Admin/HCNS) — trước đây CHƯA có, chỉ thêm mới
@@ -880,6 +885,69 @@ async function dlnSuaKho(req, env) {
   if (l) return l;
   let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
   return dulieunen.suaKho(env, phien, b);
+}
+
+/* ==========================================================================
+   TÀI SẢN — Asset Management (xem docs/ENTITY_IDENTITY.md)
+   ---------------------------------------------------------------------------
+   Nghiệp vụ nằm trong src/taisan.js. XEM (danh sách + lịch sử) cho mọi
+   người có tab 'taisan' (mọi vai trò); THÊM/CẤP PHÁT/THU HỒI/THANH LÝ thì
+   taisan.js tự kiểm duocQuanLyTaiSan — giống cách kho.js chặn kép.
+   ========================================================================== */
+
+async function batBuocXemTaiSan(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return { loi: l };
+  if (!duocXemTab(phien.vai_tro, 'taisan')) return { loi: loi('Bạn không có quyền xem Tài sản', 403) };
+  return { phien };
+}
+
+async function tsDanhSach(req, env) {
+  const { phien, loi: l } = await batBuocXemTaiSan(req, env);
+  if (l) return l;
+  return taisan.danhSachTaiSan(env, phien);
+}
+async function tsLichSu(req, env) {
+  const { loi: l } = await batBuocXemTaiSan(req, env);
+  if (l) return l;
+  const url = new URL(req.url);
+  return taisan.lichSuTaiSan(env, url.searchParams.get('id'));
+}
+async function tsThem(req, env) {
+  const { phien, loi: l } = await batBuocXemTaiSan(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return taisan.themTaiSan(env, phien, b);
+}
+async function tsCapPhat(req, env) {
+  const { phien, loi: l } = await batBuocXemTaiSan(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return taisan.capPhatTaiSan(env, phien, b);
+}
+async function tsThuHoi(req, env) {
+  const { phien, loi: l } = await batBuocXemTaiSan(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return taisan.thuHoiTaiSan(env, phien, b);
+}
+async function tsBaoHong(req, env) {
+  const { phien, loi: l } = await batBuocXemTaiSan(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return taisan.baoHongTaiSan(env, phien, b);
+}
+async function tsBaoTriXong(req, env) {
+  const { phien, loi: l } = await batBuocXemTaiSan(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return taisan.baoTriXongTaiSan(env, phien, b);
+}
+async function tsThanhLy(req, env) {
+  const { phien, loi: l } = await batBuocXemTaiSan(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return taisan.thanhLyTaiSan(env, phien, b);
 }
 
 /* ==========================================================================
@@ -2390,6 +2458,14 @@ const DUONG_DAN = {
   'GET  /api/dulieunen/kho':      dlnDanhSachKho,
   'POST /api/dulieunen/kho/them': dlnThemKho,
   'POST /api/dulieunen/kho/sua':  dlnSuaKho,
+  'GET  /api/tai-san':            tsDanhSach,
+  'GET  /api/tai-san/lich-su':    tsLichSu,
+  'POST /api/tai-san/them':       tsThem,
+  'POST /api/tai-san/cap-phat':   tsCapPhat,
+  'POST /api/tai-san/thu-hoi':    tsThuHoi,
+  'POST /api/tai-san/bao-hong':   tsBaoHong,
+  'POST /api/tai-san/bao-tri-xong': tsBaoTriXong,
+  'POST /api/tai-san/thanh-ly':   tsThanhLy,
   'GET  /api/dulieunen/tinh-trang':     dlnTinhTrang,
   'GET  /api/shopee/trang-thai': shopeeTrangThai,
   'GET  /api/shopee/connect':    shopeeConnect,

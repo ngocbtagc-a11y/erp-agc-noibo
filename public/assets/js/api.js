@@ -186,6 +186,16 @@ export const API = {
   dlnThemKho: (d) => goi('/api/dulieunen/kho/them', { method: 'POST', body: JSON.stringify(d) }),
   dlnSuaKho: (id, d) => goi('/api/dulieunen/kho/sua', { method: 'POST', body: JSON.stringify({ id, ...d }) }),
 
+  /* ---- Tài sản ---- */
+  taiSanDanhSach: () => goi('/api/tai-san'),
+  taiSanLichSu: (id) => goi('/api/tai-san/lich-su?id=' + encodeURIComponent(id)),
+  taiSanThem: (d) => goi('/api/tai-san/them', { method: 'POST', body: JSON.stringify(d) }),
+  taiSanCapPhat: (d) => goi('/api/tai-san/cap-phat', { method: 'POST', body: JSON.stringify(d) }),
+  taiSanThuHoi: (d) => goi('/api/tai-san/thu-hoi', { method: 'POST', body: JSON.stringify(d) }),
+  taiSanBaoHong: (d) => goi('/api/tai-san/bao-hong', { method: 'POST', body: JSON.stringify(d) }),
+  taiSanBaoTriXong: (d) => goi('/api/tai-san/bao-tri-xong', { method: 'POST', body: JSON.stringify(d) }),
+  taiSanThanhLy: (d) => goi('/api/tai-san/thanh-ly', { method: 'POST', body: JSON.stringify(d) }),
+
   /* ---- Đón nhân sự mới (ảnh CCCD) ---- */
   nsDocCCCD: (anhBase64) => goi('/api/nhan-su/doc-cccd', {
     method: 'POST', body: JSON.stringify({ anh: anhBase64 })
