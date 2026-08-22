@@ -466,8 +466,10 @@ async function qtThemNhanSu(req, env) {
 
   const id = 'ns_' + crypto.randomUUID().slice(0, 12);
   // Mã nhân sự (Business Code) — sinh 1 lần, không đổi, không tái sử dụng
-  // (xem docs/ENTITY_IDENTITY.md). Tên có thể trùng/đổi, mã thì không.
-  const maNv = await sinhMa(env, 'nhan_su');
+  // (xem docs/ENTITY_IDENTITY.md). Tên có thể trùng/đổi, mã thì không. Tiền
+  // tố theo Loại lao động LÚC TẠO (01=Toàn TG/02=Part-time/03=Thời vụ) —
+  // đổi Loại lao động sau đó KHÔNG đổi lại mã đã cấp.
+  const maNv = await sinhMa(env, 'nhan_su_' + loaiLaoDongTuBody(b));
 
   // RANH GIỚI LƯƠNG: chỉ admin mới được đặt lương. HCNS gửi lương lên cũng
   // bị bỏ qua ở đây — máy chủ ép NULL, không tin giao diện.

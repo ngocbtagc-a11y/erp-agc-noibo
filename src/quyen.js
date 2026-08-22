@@ -27,6 +27,10 @@ export const TAB = ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'nha
 const QUYEN_THEO_VAI_TRO = {
   giam_doc:        { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'nhansu', 'kinhdoanh', 'khovan', 'donhoan', 'ketoan', 'dulieunen', 'quantri', 'taisan', 'xepca'], xem_luong: true,  admin: true,  them_nhan_su: true  },
   pho_giam_doc:    { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'nhansu', 'kinhdoanh', 'khovan', 'donhoan', 'ketoan', 'dulieunen', 'quantri', 'taisan', 'xepca'], xem_luong: true,  admin: true,  them_nhan_su: true  },
+  // Vai trò kỹ thuật TÁCH RIÊNG khỏi chức danh CEO/Phó CEO (Sếp chốt
+  // 22/08/2026) — toàn quyền như giam_doc, dùng cho tài khoản cần full
+  // quyền hệ thống mà không mang chức danh Giám đốc/Phó Giám đốc.
+  admin_he_thong:  { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'nhansu', 'kinhdoanh', 'khovan', 'donhoan', 'ketoan', 'dulieunen', 'quantri', 'taisan', 'xepca'], xem_luong: true,  admin: true,  them_nhan_su: true  },
   ke_toan_truong:  { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'khovan', 'donhoan', 'ketoan', 'taisan', 'xepca'],                                   xem_luong: true,  admin: false, them_nhan_su: false },
   quan_ly_kho:     { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'khovan', 'nhansu', 'dulieunen', 'taisan', 'xepca'],                                 xem_luong: false, admin: false, them_nhan_su: false },
   nhan_vien_kho:   { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'khovan', 'taisan', 'xepca'],                                                        xem_luong: false, admin: false, them_nhan_su: false },
@@ -59,6 +63,7 @@ const QUYEN_THEO_VAI_TRO = {
 const QUYEN_KHO = {
   giam_doc:       { thao_tac: true,  quan_ly: true,  gia_von: true  },
   pho_giam_doc:   { thao_tac: true,  quan_ly: true,  gia_von: true  },
+  admin_he_thong: { thao_tac: true,  quan_ly: true,  gia_von: true  },
   quan_ly_kho:    { thao_tac: true,  quan_ly: true,  gia_von: true  },
   nhan_vien_kho:  { thao_tac: true,  quan_ly: false, gia_von: false },
   ke_toan_truong: { thao_tac: false, quan_ly: false, gia_von: true  },
@@ -93,6 +98,7 @@ export function duocXemGiaVon(vaiTro) {
 const QUYEN_SAN_PHAM = {
   giam_doc:      { sua: true, khoa: true },
   pho_giam_doc:  { sua: true, khoa: true },
+  admin_he_thong:{ sua: true, khoa: true },
   van_hanh_san:  { sua: true, khoa: true },
   quan_ly_kho:   { sua: true, khoa: false }
 };
@@ -117,7 +123,7 @@ export function duocKhoaSanPham(vaiTro) {
    được danh sách + lịch sử — chỉ nhóm này mới tạo/cấp phát/thu hồi/thanh lý.
    Riêng "Báo hỏng" cho phép TỰ báo với tài sản đang giữ (self-service, xem
    src/taisan.js), không cần nằm trong nhóm này. */
-const CO_QUAN_LY_TAI_SAN = new Set(['giam_doc', 'pho_giam_doc', 'hcns']);
+const CO_QUAN_LY_TAI_SAN = new Set(['giam_doc', 'pho_giam_doc', 'admin_he_thong', 'hcns']);
 export function duocQuanLyTaiSan(vaiTro) {
   return CO_QUAN_LY_TAI_SAN.has(vaiTro);
 }
@@ -130,7 +136,7 @@ export function duocQuanLyTaiSan(vaiTro) {
    không thể là 1 hàm tĩnh ở đây). Admin (laAdmin) luôn duyệt được mọi phòng.
    XEM tab 'xepca' mở cho MỌI vai trò — nhân viên part-time/thời vụ tự đăng
    ký; ai không phải trưởng phòng/admin thì chỉ thấy phần đăng ký của mình. */
-const CO_QUAN_LY_CHINH_SACH_CA = new Set(['giam_doc', 'pho_giam_doc', 'hcns']);
+const CO_QUAN_LY_CHINH_SACH_CA = new Set(['giam_doc', 'pho_giam_doc', 'admin_he_thong', 'hcns']);
 export function duocQuanLyChinhSachCa(vaiTro) {
   return CO_QUAN_LY_CHINH_SACH_CA.has(vaiTro);
 }
@@ -143,6 +149,7 @@ export function duocQuanLyChinhSachCa(vaiTro) {
 const QUYEN_SHOPEE = {
   giam_doc:       { xem: true, quan_ly: true  },
   pho_giam_doc:   { xem: true, quan_ly: true  },
+  admin_he_thong: { xem: true, quan_ly: true  },
   van_hanh_san:   { xem: true, quan_ly: false },
   ke_toan_truong: { xem: true, quan_ly: false },
   // Kho cần XEM đơn hoàn (để nhận hàng, bấm "Đã nhận", quẹt QR) — nhưng KHÔNG
@@ -176,7 +183,7 @@ export function duocQuanLyShopee(vaiTro) {
      (duocThaoTacVanHanh — MỚI, trước đây dùng chung duocXemDonHoan nên kế
      toán trưởng lỡ thao tác được cả bước của vận hành sàn).
    - Kế toán: chỉ "Đã tra soát tiền" (duocXemTab(vaiTro,'ketoan'), đã có sẵn). */
-const CO_THAO_TAC_VAN_HANH = new Set(['giam_doc', 'pho_giam_doc', 'van_hanh_san', 'nv_test']);
+const CO_THAO_TAC_VAN_HANH = new Set(['giam_doc', 'pho_giam_doc', 'admin_he_thong', 'van_hanh_san', 'nv_test']);
 export function duocThaoTacVanHanh(vaiTro) {
   return CO_THAO_TAC_VAN_HANH.has(vaiTro);
 }
@@ -216,6 +223,7 @@ export const VAI_TRO_HOP_LE = Object.keys(QUYEN_THEO_VAI_TRO);
 export const TEN_VAI_TRO = {
   giam_doc:       'Giám đốc',
   pho_giam_doc:   'Phó Giám đốc',
+  admin_he_thong: 'Admin hệ thống',
   ke_toan_truong: 'Kế toán trưởng',
   quan_ly_kho:    'Quản lý kho',
   nhan_vien_kho:  'Nhân viên kho',

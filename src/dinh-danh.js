@@ -11,7 +11,13 @@
    ========================================================================== */
 
 const CAU_HINH_MA = {
-  nhan_su: { prefix: 'NV', so_chu_so: 4 },   // NV0001
+  // Mã nhân sự — tiền tố theo Loại lao động (Sếp chốt 22/08/2026), đếm
+  // RIÊNG từng loại (01-0001, 02-0001... không dùng chung 1 dãy số).
+  // Tiền tố gán 1 LẦN lúc tạo — đổi Loại lao động sau đó KHÔNG đổi mã
+  // (xem docs/ENTITY_IDENTITY.md — mã bất biến, chỉ field mô tả mới đổi).
+  nhan_su_toan_thoi_gian: { prefix: '01-', so_chu_so: 4 },   // 01-0001
+  nhan_su_ban_thoi_gian:  { prefix: '02-', so_chu_so: 4 },   // 02-0001
+  nhan_su_thoi_vu:        { prefix: '03-', so_chu_so: 4 },   // 03-0001
   tai_san: { prefix: 'TS', so_chu_so: 4 }    // TS0001
 };
 
