@@ -83,6 +83,33 @@ export function duocXemGiaVon(vaiTro) {
   return quyenKho(vaiTro).gia_von === true;
 }
 
+/* ---- Quyền Sản phẩm/SKU — TÁCH RIÊNG khỏi "quan_ly" kho nói chung
+   (Sếp chốt 22/08/2026: Kinh doanh là chủ sở hữu Sản phẩm/SKU — họ quyết
+   định bán gì — nhưng Kho vận vẫn sửa được hằng ngày vì là người nhập/
+   xuất thực tế). Data Ownership: xem docs/DATA_OWNERSHIP_MATRIX.md.
+   - sua  : được Thêm/Sửa/Ẩn-hiện mã hàng.
+   - khoa : được "Hoàn tất" (khoá) — chỉ chủ sở hữu thật (Kinh doanh) +
+            Admin. Kho vận sửa ngày thường nhưng KHÔNG phải người khoá. */
+const QUYEN_SAN_PHAM = {
+  giam_doc:      { sua: true, khoa: true },
+  pho_giam_doc:  { sua: true, khoa: true },
+  van_hanh_san:  { sua: true, khoa: true },
+  quan_ly_kho:   { sua: true, khoa: false }
+};
+const KHONG_QUYEN_SAN_PHAM = { sua: false, khoa: false };
+
+export function quyenSanPham(vaiTro) {
+  return QUYEN_SAN_PHAM[vaiTro] || KHONG_QUYEN_SAN_PHAM;
+}
+
+export function duocSuaSanPham(vaiTro) {
+  return quyenSanPham(vaiTro).sua === true;
+}
+
+export function duocKhoaSanPham(vaiTro) {
+  return quyenSanPham(vaiTro).khoa === true;
+}
+
 /* ---- Quyền module Đơn hoàn (Shopee) ------------------------------------
    - xem     : xem danh sách đơn hoàn + bấm đồng bộ. Vận hành sàn, kế toán
                trưởng và ban giám đốc đều có.

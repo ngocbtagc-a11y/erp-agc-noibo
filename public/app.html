@@ -438,6 +438,7 @@
       <div class="seg" id="kdSeg">
         <button class="seg-nut" data-kd="rnd">R&amp;D</button>
         <button class="seg-nut active" data-kd="vanhanh">Vận hành sàn</button>
+        <button class="seg-nut" data-kd="sanpham">Sản phẩm</button>
         <button class="seg-nut" data-kd="cskh">Chăm sóc KH</button>
       </div>
 
@@ -534,6 +535,76 @@
       </div>
 
       <!-- ===== Màn R&D ===== -->
+      <!-- ===== Màn Sản phẩm/SKU — Kinh doanh là chủ sở hữu (quyết định bán
+           gì), Kho vận vẫn sửa được hằng ngày ở tab Kho vận > Tồn kho vì họ
+           là người nhập/xuất thực tế (cùng 1 dữ liệu san_pham, xem
+           docs/DATA_OWNERSHIP_MATRIX.md). Chỉ Kinh doanh/Admin "Hoàn tất"
+           (khoá) được — Kho vận sửa nhưng không phải người duyệt. ===== -->
+      <div class="kv-pane" id="kd-pane-sanpham" hidden>
+        <div class="panel">
+          <div class="panel-head">
+            <h4>Sản phẩm / SKU</h4>
+            <span class="hint" id="kdsp-dem"></span>
+          </div>
+          <div class="panel-body" style="padding-bottom:0">
+            <div class="search">
+              <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+              </svg>
+              <input type="search" id="kdsp-tim" placeholder="Tìm theo tên, mã hàng hoặc nhóm hàng">
+            </div>
+          </div>
+          <div class="panel-body" id="kdsp-panel-them" hidden>
+            <form id="kdspForm" class="form-luoi" autocomplete="off">
+              <input type="hidden" id="kdsp-id">
+              <div class="field">
+                <label>Mã hàng (SKU) *</label>
+                <input type="text" id="kdsp-sku" required placeholder="VD: HN-MY-1000">
+              </div>
+              <div class="field">
+                <label>Tên sản phẩm *</label>
+                <input type="text" id="kdsp-ten" required placeholder="VD: Hạnh nhân Mỹ tách vỏ 1kg">
+              </div>
+              <div class="field">
+                <label>Nhóm hàng</label>
+                <input type="text" id="kdsp-danhmuc" placeholder="Hạt dinh dưỡng">
+              </div>
+              <div class="field">
+                <label>Đơn vị tính <span class="hint">· <a href="#" data-mo-tab="dulieunen">quản lý ở Dữ liệu nền</a></span></label>
+                <select id="kdsp-donvi"><option value="">— Chưa chọn —</option></select>
+              </div>
+              <div class="field">
+                <label>Mức tồn tối thiểu</label>
+                <input type="text" id="kdsp-tonmin" inputmode="numeric" placeholder="Cảnh báo khi tồn xuống dưới mức này">
+              </div>
+              <div class="field">
+                <label class="ck"><input type="checkbox" id="kdsp-theodoihsd" checked> Theo dõi hạn sử dụng</label>
+              </div>
+              <div class="field field-nut" style="display:flex; gap:10px">
+                <button type="submit" class="btn-primary" id="kdsp-nutluu" style="width:auto">+ Thêm mã hàng</button>
+                <button type="button" class="btn-phu" id="kdsp-nuthuy" style="width:auto" hidden>Hủy sửa</button>
+              </div>
+            </form>
+            <div class="form-loi" id="kdsp-loi"></div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Sản phẩm</th>
+                  <th>Mã hàng</th>
+                  <th>Đơn vị</th>
+                  <th>Trạng thái</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="kdsp-bang"></tbody>
+            </table>
+          </div>
+          <div class="empty" id="kdsp-trong" hidden>Chưa có mã hàng nào khớp — bấm "+ Thêm mã hàng" ở trên để bắt đầu.</div>
+        </div>
+      </div>
+
       <div class="kv-pane" id="kd-pane-rnd" hidden>
         <div class="panel">
           <div class="panel-head"><h4>R&amp;D — Nghiên cứu &amp; phát triển sản phẩm</h4></div>

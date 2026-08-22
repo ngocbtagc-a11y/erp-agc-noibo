@@ -663,14 +663,29 @@ async function batBuocXemKho(req, env) {
   return { phien };
 }
 
+/* Sản phẩm/SKU giờ có 2 chủ: Kho vận (sửa ngày thường) VÀ Kinh doanh (chủ
+   sở hữu, khoá/duyệt) — nên danh sách + thêm/sửa/ẩn-hiện/khoá phải mở cho
+   CẢ 2 tab, khác với batBuocXemKho (chỉ Kho vận) vốn còn dùng cho Nhập/
+   Xuất/Báo cáo/Lịch sử — những việc CHỈ Kho vận mới cần. Quyền chi tiết
+   (ai thực sự sửa/khoá được) vẫn kiểm ở kho.js qua duocSuaSanPham/
+   duocKhoaSanPham — đây chỉ là cửa vào theo TAB. */
+async function batBuocXemSanPham(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return { loi: l };
+  if (!duocXemTab(phien.vai_tro, 'khovan') && !duocXemTab(phien.vai_tro, 'kinhdoanh')) {
+    return { loi: loi('Bạn không có quyền xem Sản phẩm/SKU', 403) };
+  }
+  return { phien };
+}
+
 async function khoDanhSachSP(req, env) {
-  const { phien, loi: l } = await batBuocXemKho(req, env);
+  const { phien, loi: l } = await batBuocXemSanPham(req, env);
   if (l) return l;
   return kho.danhSachSanPham(env, phien);
 }
 
 async function khoThemSP(req, env) {
-  const { phien, loi: l } = await batBuocXemKho(req, env);
+  const { phien, loi: l } = await batBuocXemSanPham(req, env);
   if (l) return l;
   let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
   return kho.themSanPham(env, phien, b);
@@ -712,21 +727,21 @@ async function khoLichSu(req, env) {
 }
 
 async function khoSuaSP(req, env) {
-  const { phien, loi: l } = await batBuocXemKho(req, env);
+  const { phien, loi: l } = await batBuocXemSanPham(req, env);
   if (l) return l;
   let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
   return kho.suaSanPham(env, phien, b);
 }
 
 async function khoAnHienSP(req, env) {
-  const { phien, loi: l } = await batBuocXemKho(req, env);
+  const { phien, loi: l } = await batBuocXemSanPham(req, env);
   if (l) return l;
   let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
   return kho.anHienSanPham(env, phien, b);
 }
 
 async function khoKhoaSP(req, env) {
-  const { phien, loi: l } = await batBuocXemKho(req, env);
+  const { phien, loi: l } = await batBuocXemSanPham(req, env);
   if (l) return l;
   let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
   return kho.khoaSanPham(env, phien, b);

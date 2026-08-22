@@ -1805,11 +1805,119 @@ if (TOI.quyen.includes('kinhdoanh')) {
     const nut = e.target.closest('.seg-nut');
     if (!nut) return;
     document.querySelectorAll('#kdSeg .seg-nut').forEach(b => b.classList.toggle('active', b === nut));
-    ['vanhanh', 'rnd', 'cskh'].forEach(k => {
+    ['vanhanh', 'sanpham', 'rnd', 'cskh'].forEach(k => {
       const pane = document.getElementById('kd-pane-' + k);
       if (pane) pane.hidden = (k !== nut.dataset.kd);
     });
   });
+
+  /* ---- Sản phẩm/SKU — Kinh doanh là chủ sở hữu (Data Ownership, xem
+     docs/DATA_OWNERSHIP_MATRIX.md). Dùng LẠI đúng API Kho vận đang dùng
+     (khoSanPham/khoThemSanPham/khoSuaSanPham/khoKhoaSanPham) — 1 dữ liệu
+     duy nhất, không tạo bảng riêng. Ai xem tab Kinh doanh cũng xem được
+     danh sách; chỉ ai có quyen.sua_san_pham mới Thêm/Sửa được, chỉ
+     quyen.khoa_san_pham mới "Hoàn tất"/"Mở lại" được (Kho vận sửa ngày
+     thường nhưng không phải người khoá). */
+  (async function khoiDongSanPhamKinhDoanh() {
+    let DS_SP_KD = [], quyenSp = {};
+
+    function veBangSp(tuKhoa) {
+      const k = boDau((tuKhoa || '').trim());
+      const ds = DS_SP_KD.filter(s => !k || boDau(`${s.ten} ${s.ma_sku} ${s.danh_muc || ''}`).includes(k));
+      veBang('#kdsp-bang', ds, s => {
+        const daKhoa = s.trang_thai === 'da_khoa';
+        const nutSua = quyenSp.sua_san_pham ? `<button type="button" class="btn-nho" data-kdsp-sua="${esc(s.id)}">Sửa</button> ` : '';
+        const nutKhoa = quyenSp.khoa_san_pham
+          ? (daKhoa
+              ? `<button type="button" class="btn-nho" data-kdsp-mokhoa="${esc(s.id)}">Mở lại</button>`
+              : `<button type="button" class="btn-nho" data-kdsp-khoa="${esc(s.id)}">Hoàn tất</button>`)
+          : '';
+        return `<td><div class="nm">${esc(s.ten)}</div>${s.danh_muc ? `<div class="sm">${esc(s.danh_muc)}</div>` : ''}</td>` +
+          `<td class="sm">${esc(s.ma_sku)}</td>` +
+          `<td class="sm">${esc(s.don_vi)}</td>` +
+          `<td>${daKhoa ? '<span class="tag warn">🔒 Đã khoá</span>' : '<span class="tag mute">Nháp</span>'}</td>` +
+          `<td style="white-space:nowrap">${nutSua}${nutKhoa}</td>`;
+      });
+      $('#kdsp-dem').textContent = `${ds.length}/${DS_SP_KD.length} mã hàng`;
+      $('#kdsp-trong').hidden = ds.length > 0;
+    }
+
+    async function taiLaiSp() {
+      const kq = await API.khoSanPham().catch(() => null);
+      if (!kq) return;
+      DS_SP_KD = kq.san_pham || [];
+      quyenSp = kq.quyen || {};
+      if (quyenSp.sua_san_pham) {
+        $('#kdsp-panel-them').hidden = false;
+        $('#kdsp-donvi').innerHTML = '<option value="">— Chưa chọn —</option>' +
+          DS_DON_VI.filter(x => x.hoat_dong).map(d => `<option value="${d.id}">${esc(d.ten)}</option>`).join('');
+      }
+      veBangSp($('#kdsp-tim').value);
+    }
+
+    $('#kdsp-tim')?.addEventListener('input', e => veBangSp(e.target.value));
+
+    function dienFormSp(s) {
+      $('#kdsp-id').value = s ? s.id : '';
+      $('#kdsp-sku').value = s ? s.ma_sku : '';
+      $('#kdsp-sku').disabled = !!s;   // SKU là khoá tự nhiên, không đổi khi sửa
+      $('#kdsp-ten').value = s ? s.ten : '';
+      $('#kdsp-danhmuc').value = s ? (s.danh_muc || '') : '';
+      $('#kdsp-donvi').value = s ? (s.don_vi_id || '') : '';
+      $('#kdsp-tonmin').value = s ? (s.ton_toi_thieu ?? '') : '';
+      $('#kdsp-theodoihsd').checked = s ? !!s.theo_doi_hsd : true;
+      $('#kdsp-nutluu').textContent = s ? 'Lưu' : '+ Thêm mã hàng';
+      $('#kdsp-nuthuy').hidden = !s;
+      $('#kdsp-loi').textContent = '';
+    }
+
+    $('#kdsp-nuthuy')?.addEventListener('click', () => { $('#kdspForm').reset(); dienFormSp(null); });
+
+    $('#kdspForm')?.addEventListener('submit', async e => {
+      e.preventDefault();
+      const oLoi = $('#kdsp-loi'); oLoi.textContent = '';
+      const id = $('#kdsp-id').value;
+      const du = {
+        ma_sku: $('#kdsp-sku').value,
+        ten: $('#kdsp-ten').value,
+        danh_muc: $('#kdsp-danhmuc').value,
+        don_vi_id: $('#kdsp-donvi').value,
+        ton_toi_thieu: $('#kdsp-tonmin').value,
+        theo_doi_hsd: $('#kdsp-theodoihsd').checked
+      };
+      try {
+        if (id) { du.id = id; await API.khoSuaSanPham(du); }
+        else await API.khoThemSanPham(du);
+        $('#kdspForm').reset(); dienFormSp(null);
+        await taiLaiSp();
+      } catch (err) { oLoi.textContent = err.message || 'Không lưu được, thử lại nhé.'; }
+    });
+
+    $('#kdsp-bang')?.addEventListener('click', async e => {
+      const btnSua = e.target.closest('[data-kdsp-sua]');
+      const btnKhoa = e.target.closest('[data-kdsp-khoa]');
+      const btnMoKhoa = e.target.closest('[data-kdsp-mokhoa]');
+      if (btnSua) {
+        const s = DS_SP_KD.find(x => String(x.id) === btnSua.dataset.kdspSua);
+        if (s.trang_thai === 'da_khoa' && !TOI.la_admin) {
+          alert('Mã hàng này đã khoá — cần Kinh doanh (Vận hành sàn) hoặc Admin mở lại trước.');
+          return;
+        }
+        dienFormSp(s);
+        $('#kdsp-ten').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } else if (btnKhoa) {
+        const s = DS_SP_KD.find(x => String(x.id) === btnKhoa.dataset.kdspKhoa);
+        if (!confirm(`Hoàn tất "${s.ten}"? Sau đó Kho vận vẫn sửa được, nhưng chỉ Kinh doanh/Admin mới mở lại được.`)) return;
+        try { await API.khoKhoaSanPham(s.id, 'da_khoa'); await taiLaiSp(); }
+        catch (err) { alert(err.message || 'Không thực hiện được, thử lại nhé.'); }
+      } else if (btnMoKhoa) {
+        try { await API.khoKhoaSanPham(btnMoKhoa.dataset.kdspMokhoa, 'nhap'); await taiLaiSp(); }
+        catch (err) { alert(err.message || 'Không thực hiện được, thử lại nhé.'); }
+      }
+    });
+
+    await taiLaiSp();
+  })();
 
   // Vận hành sàn — đơn hoàn cần đối soát (đã GỘP đơn huỷ vào chung) — chỉ ai có
   // quyền Đơn hoàn mới thấy. Bọc try/catch để 1 lỗi không kéo sập phần sau.
@@ -2555,6 +2663,11 @@ async function khoiDongKho() {
   const qKho = TOI.kho || { thao_tac: false, quan_ly: false, gia_von: false };
   let DS_SP = [];          // danh sách sản phẩm + tồn, lấy từ máy chủ
   let xemGiaVon = false;
+  // Khoá/mở khoá Sản phẩm/SKU giờ CHỈ dành cho Kinh doanh/Admin (chủ sở
+  // hữu định nghĩa sản phẩm) — Quản lý kho vẫn Sửa được (qKho.quan_ly) như
+  // trước nhưng KHÔNG còn thấy nút Khoá nữa. Cờ riêng lấy từ API.khoSanPham(),
+  // không dùng qKho.quan_ly cho việc này.
+  let khoaSanPhamOk = false;
 
   /* Ngày dạng YYYY-MM-DD theo giờ máy người dùng (Hà Nội = giờ VN) */
   const p2 = n => String(n).padStart(2, '0');
@@ -2688,6 +2801,7 @@ async function khoiDongKho() {
     const kq = await API.khoSanPham();
     DS_SP = kq.san_pham;
     xemGiaVon = kq.xem_gia_von;
+    khoaSanPhamOk = !!(kq.quyen && kq.quyen.khoa_san_pham);
     veThe_Kho();
     veTonKho($('#kv-tim').value);
     doDropdown();
@@ -2741,7 +2855,9 @@ async function khoiDongKho() {
         btnKhoa.hidden = !TOI.la_admin;
         btnKhoa.textContent = 'Mở lại';
       } else {
-        btnKhoa.hidden = false;
+        // Khoá ("Hoàn tất") giờ chỉ Kinh doanh/Admin — Quản lý kho sửa
+        // được nhưng không phải người khoá (xem docs/DATA_OWNERSHIP_MATRIX.md).
+        btnKhoa.hidden = !khoaSanPhamOk;
         btnKhoa.textContent = 'Hoàn tất';
       }
     }
