@@ -103,7 +103,17 @@
           <form id="vd-form" class="form-luoi" autocomplete="off">
             <div class="field field-rong">
               <label>Khen ai *</label>
-              <select id="vd-nguoi" required><option value="">— Chọn người —</option></select>
+              <div class="combo1" id="vd-nguoicombo">
+                <button type="button" class="combo1-hienthi rong" id="vd-nguoihienthi">
+                  <span>Chọn người...</span>
+                  <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+                </button>
+                <div class="combo1-panel" id="vd-nguoipanel" hidden>
+                  <input type="search" id="vd-nguoitim" placeholder="Tìm theo mã hoặc tên...">
+                  <div class="ql-goiy" id="vd-nguoigoiy"></div>
+                </div>
+              </div>
+              <input type="hidden" id="vd-nguoi">
             </div>
             <div class="field field-rong">
               <label>Lời khen *</label>
@@ -820,7 +830,17 @@
             <form id="kvFormNhap" class="form-luoi" autocomplete="off">
               <div class="field field-rong">
                 <label>Sản phẩm *</label>
-                <select id="kvNhapSP" required></select>
+                <div class="combo1" id="kvNhapSPCombo">
+                  <button type="button" class="combo1-hienthi rong" id="kvNhapSPHienThi">
+                    <span>Chọn sản phẩm...</span>
+                    <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+                  </button>
+                  <div class="combo1-panel" id="kvNhapSPPanel" hidden>
+                    <input type="search" id="kvNhapSPTim" placeholder="Tìm theo tên hoặc mã SKU...">
+                    <div class="ql-goiy" id="kvNhapSPGoiY"></div>
+                  </div>
+                </div>
+                <input type="hidden" id="kvNhapSP">
               </div>
               <div class="field">
                 <label>Số lượng nhập *</label>
@@ -864,7 +884,17 @@
             <form id="kvFormXuat" class="form-luoi" autocomplete="off">
               <div class="field field-rong">
                 <label>Sản phẩm *</label>
-                <select id="kvXuatSP" required></select>
+                <div class="combo1" id="kvXuatSPCombo">
+                  <button type="button" class="combo1-hienthi rong" id="kvXuatSPHienThi">
+                    <span>Chọn sản phẩm...</span>
+                    <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+                  </button>
+                  <div class="combo1-panel" id="kvXuatSPPanel" hidden>
+                    <input type="search" id="kvXuatSPTim" placeholder="Tìm theo tên hoặc mã SKU...">
+                    <div class="ql-goiy" id="kvXuatSPGoiY"></div>
+                  </div>
+                </div>
+                <input type="hidden" id="kvXuatSP">
               </div>
               <div class="field field-rong" id="kvXuatTonBox" hidden>
                 <div class="kv-ton-nhac" id="kvXuatTonNhac"></div>
@@ -1864,7 +1894,17 @@
     <form id="cv-form" class="form-luoi" autocomplete="off">
       <div class="field field-rong">
         <label>Giao cho ai * <span class="hint">(người chịu trách nhiệm chính)</span></label>
-        <select id="cv-nguoi-nhan" required><option value="">— Chọn người nhận việc —</option></select>
+        <div class="combo1" id="cv-nguoi-nhancombo">
+          <button type="button" class="combo1-hienthi rong" id="cv-nguoi-nhanhienthi">
+            <span>Chọn người nhận việc...</span>
+            <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+          <div class="combo1-panel" id="cv-nguoi-nhanpanel" hidden>
+            <input type="search" id="cv-nguoi-nhantim" placeholder="Tìm theo mã hoặc tên...">
+            <div class="ql-goiy" id="cv-nguoi-nhangoiy"></div>
+          </div>
+        </div>
+        <input type="hidden" id="cv-nguoi-nhan">
       </div>
       <div class="field field-rong">
         <label>Tên việc *</label>
@@ -2187,7 +2227,17 @@
       </div>
       <div class="field field-rong">
         <label>Vai trò *</label>
-        <select id="taoTkVaiTro" required></select>
+        <div class="combo1" id="taoTkVaiTroCombo">
+          <button type="button" class="combo1-hienthi rong" id="taoTkVaiTroHienThi">
+            <span>Chọn vai trò...</span>
+            <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+          <div class="combo1-panel" id="taoTkVaiTroPanel" hidden>
+            <input type="search" id="taoTkVaiTroTim" placeholder="Tìm vai trò...">
+            <div class="ql-goiy" id="taoTkVaiTroGoiY"></div>
+          </div>
+        </div>
+        <input type="hidden" id="taoTkVaiTro">
       </div>
       <div class="field field-nut" style="display:flex; gap:10px">
         <button type="submit" class="btn-primary" id="taoTkNutLuu" style="width:auto">Tạo tài khoản</button>
@@ -2206,7 +2256,17 @@
     <form id="doiVaiTroForm" class="form-luoi" autocomplete="off">
       <div class="field field-rong">
         <label>Vai trò mới *</label>
-        <select id="doiVaiTroMoi" required></select>
+        <div class="combo1" id="doiVaiTroMoiCombo">
+          <button type="button" class="combo1-hienthi rong" id="doiVaiTroMoiHienThi">
+            <span>Chọn vai trò...</span>
+            <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+          <div class="combo1-panel" id="doiVaiTroMoiPanel" hidden>
+            <input type="search" id="doiVaiTroMoiTim" placeholder="Tìm vai trò...">
+            <div class="ql-goiy" id="doiVaiTroMoiGoiY"></div>
+          </div>
+        </div>
+        <input type="hidden" id="doiVaiTroMoi">
       </div>
       <div class="field field-nut" style="display:flex; gap:10px">
         <button type="submit" class="btn-primary" id="doiVaiTroNutLuu" style="width:auto">Lưu</button>

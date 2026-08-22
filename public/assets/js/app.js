@@ -354,9 +354,16 @@ function ganCombo({ hienThi, panel, tim, goiY, giaTri }, layTuyChon, coRong, ron
     const loc = k ? dsGoc.filter(t => boDau(t.nhan).includes(k)) : dsGoc;
     const rongHtml = coRong
       ? `<div class="ql-goiy-item${giaTri.value ? '' : ' active'}" data-gt="">${esc(coRong)}</div>` : '';
-    goiY.innerHTML = rongHtml + (loc.length
-      ? loc.map(t => `<div class="ql-goiy-item${String(t.gia_tri) === giaTri.value ? ' active' : ''}" data-gt="${esc(t.gia_tri)}">${esc(t.nhan)}</div>`).join('')
-      : (rongHtml ? '' : '<div class="ql-goiy-trong">Không tìm thấy</div>'));
+    // Hỗ trợ nhóm (VD "Vai trò hệ thống" / "Vị trí công việc") — chỉ hiện
+    // tiêu đề nhóm khi có ≥1 item thuộc nhóm đó CÒN LẠI sau khi lọc.
+    let nhomVuaVe = null;
+    const dsHtml = loc.map(t => {
+      const dau = (t.nhom !== undefined && t.nhom !== nhomVuaVe)
+        ? `<div class="ql-goiy-nhom">${esc(t.nhom)}</div>` : '';
+      nhomVuaVe = t.nhom;
+      return dau + `<div class="ql-goiy-item${String(t.gia_tri) === giaTri.value ? ' active' : ''}" data-gt="${esc(t.gia_tri)}">${esc(t.nhan)}</div>`;
+    }).join('');
+    goiY.innerHTML = rongHtml + (loc.length ? dsHtml : (rongHtml ? '' : '<div class="ql-goiy-trong">Không tìm thấy</div>'));
   }
   function mo() {
     combo.classList.add('mo');
@@ -371,6 +378,10 @@ function ganCombo({ hienThi, panel, tim, goiY, giaTri }, layTuyChon, coRong, ron
   }
   function chon(gt) {
     giaTri.value = gt;
+    // Bắn 'change' như <select> thật — chỗ nào đã có addEventListener('change',
+    // ...) trên giaTri (VD kvXuatSP hiện tồn kho khi chọn SP) vẫn chạy đúng,
+    // không phải sửa lại logic cũ.
+    giaTri.dispatchEvent(new Event('change', { bubbles: true }));
     capNhatHienThi();
     dong();
     hienThi.focus();
@@ -981,11 +992,10 @@ function thoiGianTruoc(chuoi) {
 async function khoiDongVinhDanh() {
   const { danh_ba } = await API.danhBa();
   const chonNguoi = $('#vd-nguoi');
-  danh_ba.forEach(n => {
-    const o = document.createElement('option');
-    o.value = n.id; o.textContent = n.ho_ten;
-    chonNguoi.appendChild(o);
-  });
+  const { capNhatHienThi: veNguoiVd } = ganCombo({
+    hienThi: $('#vd-nguoihienthi'), panel: $('#vd-nguoipanel'),
+    tim: $('#vd-nguoitim'), goiY: $('#vd-nguoigoiy'), giaTri: chonNguoi
+  }, () => danh_ba.map(n => ({ gia_tri: n.id, nhan: nhanNhanSu(n) })), null, 'Chọn người...');
 
   // Nút mở/đóng đổi chữ theo trạng thái — trước đây chữ đứng yên "+ Khen ai
   // đó" dù form đang mở, không ai biết bấm lại là đóng được (Sếp Ngọc bắt lỗi
@@ -999,6 +1009,7 @@ async function khoiDongVinhDanh() {
   nutMoVd.addEventListener('click', () => dongMoFormVd($('#vd-form-body').hidden));
   $('#vd-nut-huy').addEventListener('click', () => {
     $('#vd-form').reset();
+    veNguoiVd();
     dongMoFormVd(false);
   });
 
@@ -1047,6 +1058,7 @@ async function khoiDongVinhDanh() {
     try {
       await API.vdGui(chonNguoi.value, $('#vd-noidung').value.trim(), parseInt($('#vd-so-sao').value, 10));
       $('#vd-form').reset();
+      veNguoiVd();
       dongMoFormVd(false);
       await taiLai();
     } catch (err) {
@@ -1366,20 +1378,20 @@ async function khoiDongMucTieu() {
 
 async function khoiDongCongViec() {
   const { danh_ba } = await API.danhBa();
-  const chonNguoiNhan = $('#cv-nguoi-nhan');
   const oPhoiHop = $('#cv-phoi-hop');
+  const chonNguoiNhan = $('#cv-nguoi-nhan');
 
   // Cho tự giao cho MÌNH = todo cá nhân (việc cần làm của bản thân). Ghim lên
   // đầu danh sách cho dễ thấy.
-  const oToi = document.createElement('option');
-  oToi.value = TOI.id;
-  oToi.textContent = '🙋 Tôi — việc cần làm của tôi (todo cá nhân)';
-  chonNguoiNhan.appendChild(oToi);
+  const { capNhatHienThi: veNguoiNhanCv } = ganCombo({
+    hienThi: $('#cv-nguoi-nhanhienthi'), panel: $('#cv-nguoi-nhanpanel'),
+    tim: $('#cv-nguoi-nhantim'), goiY: $('#cv-nguoi-nhangoiy'), giaTri: chonNguoiNhan
+  }, () => [
+    { gia_tri: TOI.id, nhan: '🙋 Tôi — việc cần làm của tôi (todo cá nhân)' },
+    ...danh_ba.filter(n => n.id !== TOI.id).map(n => ({ gia_tri: n.id, nhan: nhanNhanSu(n) }))
+  ], null, 'Chọn người nhận việc...');
 
   danh_ba.filter(n => n.id !== TOI.id).forEach(n => {
-    const o = document.createElement('option');
-    o.value = n.id; o.textContent = `${n.ho_ten} — ${n.chuc_vu || ''}`;
-    chonNguoiNhan.appendChild(o);
     if (oPhoiHop) {
       const lbl = document.createElement('label');
       lbl.className = 'cv-ph-item';
@@ -1422,6 +1434,7 @@ async function khoiDongCongViec() {
   cvFormModal.addEventListener('click', e => { if (e.target === cvFormModal) dongMoFormCv(false); });
   $('#cv-nut-huy').addEventListener('click', () => {
     $('#cv-form').reset();
+    veNguoiNhanCv();
     dongMoFormCv(false);
     moTuyChon(false);
     capNhatMtmKhoi();
@@ -1496,7 +1509,7 @@ async function khoiDongCongViec() {
   // để thấy rõ mục tiêu đã được chọn — không thì ẩn đi, tưởng chưa gắn.
   window.MO_FORM_GIAO_VIEC = (mucTieuId, nguoiNhanId) => {
     dongMoFormCv(true);
-    if (nguoiNhanId) chonNguoiNhan.value = nguoiNhanId;
+    if (nguoiNhanId) { chonNguoiNhan.value = nguoiNhanId; veNguoiNhanCv(); }
     if (mucTieuId) { oCvMucTieu.value = mucTieuId; capNhatMtmKhoi(); moTuyChon(true); }
     apDungCheDoTodo();
   };
@@ -1615,6 +1628,7 @@ async function khoiDongCongViec() {
       // Gắn việc vào mục tiêu xong -> tiến độ mục tiêu đổi, tải lại luôn cho khớp
       if (window.LAM_MOI_MUCTIEU) window.LAM_MOI_MUCTIEU();
       $('#cv-form').reset();
+      veNguoiNhanCv();
       apDungCheDoTodo();
       capNhatMtmKhoi();
       dongMoFormCv(false);
@@ -3897,13 +3911,17 @@ async function khoiDongKho() {
     veThe('#kv-the', the);
   }
 
+  const veNhapSP = $('#kvNhapSP') ? ganCombo({
+    hienThi: $('#kvNhapSPHienThi'), panel: $('#kvNhapSPPanel'),
+    tim: $('#kvNhapSPTim'), goiY: $('#kvNhapSPGoiY'), giaTri: $('#kvNhapSP')
+  }, () => DS_SP.map(s => ({ gia_tri: s.id, nhan: `${s.ten} — ${s.ma_sku}` })), null, 'Chọn sản phẩm...').capNhatHienThi : null;
+  const veXuatSP = $('#kvXuatSP') ? ganCombo({
+    hienThi: $('#kvXuatSPHienThi'), panel: $('#kvXuatSPPanel'),
+    tim: $('#kvXuatSPTim'), goiY: $('#kvXuatSPGoiY'), giaTri: $('#kvXuatSP')
+  }, () => DS_SP.map(s => ({ gia_tri: s.id, nhan: `${s.ten} — tồn ${s.ton} ${s.don_vi}` })), null, 'Chọn sản phẩm...').capNhatHienThi : null;
   function doDropdown() {
-    const optNhap = DS_SP.map(s =>
-      `<option value="${esc(s.id)}">${esc(s.ten)} — ${esc(s.ma_sku)}</option>`).join('');
-    const nSel = $('#kvNhapSP'), xSel = $('#kvXuatSP');
-    if (nSel) nSel.innerHTML = '<option value="">— Chọn sản phẩm —</option>' + optNhap;
-    if (xSel) xSel.innerHTML = '<option value="">— Chọn sản phẩm —</option>' +
-      DS_SP.map(s => `<option value="${esc(s.id)}">${esc(s.ten)} — tồn ${s.ton} ${esc(s.don_vi)}</option>`).join('');
+    veNhapSP?.();
+    veXuatSP?.();
   }
 
   /* ---- Nạp lại toàn bộ dữ liệu kho từ máy chủ ---- */
@@ -4880,25 +4898,28 @@ if (TOI.quyen.includes('quantri')) {
     }
   });
 
-  /* Đổ <select> vai trò thành 2 nhóm — "Vai trò hệ thống" tách khỏi "Vị trí
-     công việc" (Sếp chốt 23/08/2026: 2 thứ khác nhau, không gộp 1 danh
-     sách phẳng). nhom đến từ src/quyen.js nhomVaiTro(), không suy đoán ở
-     frontend. */
-  function veTuyChonVaiTro(select, hienTai) {
-    const heThong = DS_VAI_TRO_QT.filter(v => v.nhom === 'he_thong');
-    const viTri = DS_VAI_TRO_QT.filter(v => v.nhom !== 'he_thong');
-    const oNhom = (nhan, ds) => ds.length
-      ? `<optgroup label="${esc(nhan)}">${ds.map(v => `<option value="${esc(v.ma)}">${esc(v.ten)}</option>`).join('')}</optgroup>`
-      : '';
-    select.innerHTML = oNhom('Vai trò hệ thống', heThong) + oNhom('Vị trí công việc', viTri);
-    if (hienTai) select.value = hienTai;
+  /* Combobox vai trò, giữ 2 nhóm "Vai trò hệ thống" tách khỏi "Vị trí công
+     việc" (Sếp chốt 23/08/2026: 2 thứ khác nhau, không gộp 1 danh sách
+     phẳng) — nhom đến từ src/quyen.js nhomVaiTro(), không suy đoán ở
+     frontend. tienTo = "taoTkVaiTro" | "doiVaiTroMoi", khớp id các phần tử
+     combo (${tienTo}HienThi/Panel/Tim/GoiY) + input hidden ${tienTo}. */
+  function veTuyChonVaiTro(tienTo, hienTai) {
+    const oGiaTri = $('#' + tienTo);
+    if (hienTai) oGiaTri.value = hienTai;
+    return ganCombo({
+      hienThi: $('#' + tienTo + 'HienThi'), panel: $('#' + tienTo + 'Panel'),
+      tim: $('#' + tienTo + 'Tim'), goiY: $('#' + tienTo + 'GoiY'), giaTri: oGiaTri
+    }, () => DS_VAI_TRO_QT.map(v => ({
+      gia_tri: v.ma, nhan: v.ten, nhom: v.nhom === 'he_thong' ? 'Vai trò hệ thống' : 'Vị trí công việc'
+    })), null, 'Chọn vai trò...');
   }
 
   // Hộp tạo tài khoản
   function moHopTaoTaiKhoan(nhanSuId, tenGoiY, hoTen) {
     $('#taoTkHoTen').textContent = hoTen || '';
     $('#taoTkTen').value = tenGoiY || '';
-    veTuyChonVaiTro($('#taoTkVaiTro'));
+    $('#taoTkVaiTro').value = '';
+    veTuyChonVaiTro('taoTkVaiTro');
     $('#taoTkLoi').textContent = '';
     $('#taoTkForm').dataset.nhanSuId = nhanSuId;
     $('#taoTkModalNen').hidden = false;
@@ -4920,7 +4941,7 @@ if (TOI.quyen.includes('quantri')) {
   function moHopDoiVaiTro(taiKhoanId, hoTen, vaiTroHienTai) {
     $('#doiVaiTroHoTen').textContent = hoTen || '';
     $('#doiVaiTroHienTai').textContent = (DS_VAI_TRO_QT.find(v => v.ma === vaiTroHienTai) || {}).ten || vaiTroHienTai || '—';
-    veTuyChonVaiTro($('#doiVaiTroMoi'), vaiTroHienTai);
+    veTuyChonVaiTro('doiVaiTroMoi', vaiTroHienTai);
     $('#doiVaiTroLoi').textContent = '';
     $('#doiVaiTroForm').dataset.taiKhoanId = taiKhoanId;
     $('#doiVaiTroModalNen').hidden = false;
