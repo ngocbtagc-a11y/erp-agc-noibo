@@ -1276,8 +1276,26 @@
 
           <div class="panel">
             <div class="panel-head">
+              <h4>Xếp lịch tự động</h4>
+              <span class="hint">ERP tự chọn người phù hợp nhất theo nhu cầu + ai đang ít giờ hơn — chưa chốt, vẫn xem/chỉnh được</span>
+            </div>
+            <div class="panel-body">
+              <button type="button" class="btn-primary" id="xcXepTuDong" style="width:auto">Xếp lịch tự động cho tuần này</button>
+              <div class="form-loi" id="xcXepTuDongLoi"></div>
+            </div>
+          </div>
+
+          <div class="panel" id="xc-canxuly-panel" hidden>
+            <div class="panel-head"><h4>Cần xử lý</h4></div>
+            <div class="panel-body">
+              <div id="xc-canxuly-list"></div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-head">
               <h4>Nhân lực theo ca</h4>
-              <span class="hint">Đã duyệt / Cần — bấm "Duyệt tất cả" ở đầu cột để duyệt nhanh cả ca</span>
+              <span class="hint">Đã xếp / Cần — bấm "Duyệt tất cả" ở đầu cột để tự xếp nhanh riêng ca đó</span>
             </div>
             <div class="panel-body">
               <div id="xc-tongquan-ca"></div>
@@ -1984,9 +2002,9 @@
 
     <div class="form-loi" id="xcOLoi"></div>
     <div class="modal-nut" style="margin-top:14px; flex-wrap:wrap">
-      <button class="btn-primary" id="xcODuyet" hidden>Duyệt</button>
-      <button class="btn-phu" id="xcOTuChoiNut" hidden>Từ chối</button>
-      <button class="btn-phu" id="xcOTuChoiXacNhan" hidden>Xác nhận từ chối</button>
+      <button class="btn-primary" id="xcODuyet" hidden>Xếp người này</button>
+      <button class="btn-phu" id="xcOTuChoiNut" hidden>Loại khỏi đề xuất</button>
+      <button class="btn-phu" id="xcOTuChoiXacNhan" hidden>Xác nhận loại</button>
       <button class="btn-primary" id="xcOGanCaNut" hidden>Gán ca</button>
       <button class="btn-phu" id="xcODong">Đóng</button>
     </div>

@@ -717,6 +717,36 @@ async function qtKhoaTaiKhoan(req, env) {
   return json({ ok: true });
 }
 
+/* Đổi vai trò (phân quyền lại) một tài khoản đã có — trước đây chỉ chọn
+   được LÚC tạo tài khoản, không sửa lại được sau. Chặn hạ vai trò Admin
+   cuối cùng còn hoạt động xuống vai trò thường (giữ nguyên logic chặn ở
+   qtXoaTaiKhoan — tránh hệ thống mất hết người quản trị). */
+async function qtSuaVaiTro(req, env) {
+  const { phien, loi: l } = await batBuocAdmin(req, env);
+  if (l) return l;
+
+  let b;
+  try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+
+  const tkId = parseInt(b.tai_khoan_id, 10);
+  const vaiTroMoi = String(b.vai_tro || '').trim();
+  if (!tkId) return loi('Thiếu tài khoản');
+  if (!VAI_TRO_HOP_LE.includes(vaiTroMoi)) return loi('Vai trò không hợp lệ');
+
+  const tk = await env.DB.prepare('SELECT id, vai_tro FROM tai_khoan WHERE id = ?').bind(tkId).first();
+  if (!tk) return loi('Không tìm thấy tài khoản', 404);
+
+  if (laAdmin(tk.vai_tro) && !laAdmin(vaiTroMoi)) {
+    const { results } = await env.DB.prepare('SELECT vai_tro FROM tai_khoan WHERE kich_hoat = 1 AND id != ?').bind(tkId).all();
+    if (!results.some(x => laAdmin(x.vai_tro))) {
+      return loi('Không thể đổi — đây là tài khoản Admin cuối cùng còn hoạt động', 409);
+    }
+  }
+
+  await env.DB.prepare('UPDATE tai_khoan SET vai_tro = ? WHERE id = ?').bind(vaiTroMoi, tkId).run();
+  return json({ ok: true });
+}
+
 /* Xoá HẲN tài khoản đăng nhập (khác "Khoá" — Khoá chỉ chặn đăng nhập, giữ
    nguyên lịch sử; Xoá dùng khi tạo nhầm và cần cấp lại tài khoản đúng cho
    đúng nhân sự đó — "Nhân sự này đã có tài khoản rồi" sẽ chặn tạo lại nếu
@@ -2662,6 +2692,7 @@ const DUONG_DAN = {
   'POST /api/quan-tri/tao-tai-khoan':  qtTaoTaiKhoan,
   'POST /api/quan-tri/dat-lai-mat-khau': qtDatLaiMatKhau,
   'POST /api/quan-tri/khoa-tai-khoan': qtKhoaTaiKhoan,
+  'POST /api/quan-tri/sua-vai-tro':    qtSuaVaiTro,
   'POST /api/quan-tri/xoa-tai-khoan': qtXoaTaiKhoan,
   'GET  /api/kho/san-pham':      khoDanhSachSP,
   'POST /api/kho/them-san-pham': khoThemSP,

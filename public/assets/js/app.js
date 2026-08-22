@@ -130,7 +130,8 @@ async function taiLaiNhanSuQuanTri() {
           const goiY = String(n.sdt || '').replace(/\D/g, '');
           thaoTac = `<button class="btn-nho btn-primary" data-tao="${esc(n.id)}" data-ten-goi-y="${esc(goiY)}">Tạo tài khoản</button>`;
         } else {
-          thaoTac = `<button class="btn-nho btn-phu" data-datlai="${n.tai_khoan_id}">Đặt lại MK</button> ` +
+          thaoTac = `<button class="btn-nho btn-phu" data-doivaitro="${n.tai_khoan_id}" data-doivaitro-ten="${esc(n.ho_ten)}">Đổi vai trò</button> ` +
+            `<button class="btn-nho btn-phu" data-datlai="${n.tai_khoan_id}">Đặt lại MK</button> ` +
             (n.kich_hoat
               ? `<button class="btn-nho btn-phu" data-khoa="${n.tai_khoan_id}" data-kh="0">Khoá</button>`
               : `<button class="btn-nho btn-phu" data-khoa="${n.tai_khoan_id}" data-kh="1">Mở lại</button>`) +
@@ -2907,11 +2908,15 @@ async function khoiDongTaiSan() {
    ========================================================================== */
 async function khoiDongXepCa() {
   const THU_NGAN = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+  // KHÔNG dùng "Đã duyệt/Chờ duyệt" — hệ thống không còn duyệt từng đăng ký
+  // (xem docs). "cho_duyet" = đã khai báo có thể làm, chưa được xếp; "da_duyet"
+  // = ERP (hoặc trưởng phòng) đã xếp vào lịch; "cho_xep" = còn trong danh sách
+  // chờ (available nhưng chưa được chọn); "tu_choi" = trưởng phòng loại hẳn.
   const NHAN_TT_DK = {
-    cho_duyet: { chu: 'Chờ duyệt', mau: 'warn' },
-    cho_xep:   { chu: 'Chờ duyệt', mau: 'warn' },
-    da_duyet:  { chu: 'Đã duyệt', mau: 'ok' },
-    tu_choi:   { chu: 'Từ chối', mau: 'danger' }
+    cho_duyet: { chu: 'Đã đăng ký', mau: 'warn' },
+    cho_xep:   { chu: 'Danh sách chờ', mau: 'warn' },
+    da_duyet:  { chu: 'Đã xếp', mau: 'ok' },
+    tu_choi:   { chu: 'Không được chọn', mau: 'danger' }
   };
 
   function ngayISO(d) {
@@ -3168,27 +3173,40 @@ async function khoiDongXepCa() {
       // ---- Tổng quan nhân lực theo ca (mỗi ca_mo 1 dòng) ----
       const boxTQ = $('#xc-tongquan-ca');
       boxTQ.innerHTML = '';
+      let soCaThieu = 0;
       ca_mo.forEach(cm => {
-        const daDuyet = dang_ky.filter(d => d.ca_mo_id === cm.id && d.trang_thai === 'da_duyet').length;
-        const choDuyet = dang_ky.filter(d => d.ca_mo_id === cm.id && ['cho_duyet', 'cho_xep'].includes(d.trang_thai)).length;
+        const daXep = dang_ky.filter(d => d.ca_mo_id === cm.id && d.trang_thai === 'da_duyet').length;
+        const dangCho = dang_ky.filter(d => d.ca_mo_id === cm.id && ['cho_duyet', 'cho_xep'].includes(d.trang_thai)).length;
         const can = cm.can_bao_nhieu_nguoi || 0;
         let ttChu = 'Đủ', ttCls = 'du';
-        if (daDuyet < can) { ttChu = `Thiếu ${can - daDuyet}`; ttCls = 'thieu'; }
-        else if (daDuyet > can) { ttChu = `Dư ${daDuyet - can}`; ttCls = 'du_thua'; }
+        if (daXep < can) { ttChu = `Thiếu ${can - daXep}`; ttCls = 'thieu'; soCaThieu++; }
+        else if (daXep > can) { ttChu = `Dư ${daXep - can}`; ttCls = 'du_thua'; }
         const r = el('div', 'list-item',
           `<div class="body"><b>${nhanNgayNgan(cm.ngay)} · ${esc(cm.ten_ca)} (${esc(cm.gio_bat_dau)}–${esc(cm.gio_ket_thuc)})</b>` +
-            `<span>Đã duyệt ${daDuyet}/${can}${choDuyet ? ` · ${choDuyet} chờ duyệt` : ''}</span></div>` +
+            `<span>Đã xếp ${daXep}/${can}${dangCho ? ` · ${dangCho} đang chờ` : ''}</span></div>` +
           `<div class="meta"><span class="xc-ngay-tt ${ttCls}">${ttChu}</span> ` +
-          (choDuyet ? `<button type="button" class="btn-nho" data-xc-duyetca="${cm.id}">Duyệt tất cả</button>` : '') + `</div>`
+          (dangCho ? `<button type="button" class="btn-nho" data-xc-duyetca="${cm.id}">Tự xếp ca này</button>` : '') + `</div>`
         );
         boxTQ.appendChild(r);
       });
       const tongCho = dang_ky.filter(d => ['cho_duyet', 'cho_xep'].includes(d.trang_thai)).length;
       if (tongCho) {
         boxTQ.appendChild(el('div', 'list-item',
-          `<div class="body"><b>Toàn bộ tuần</b><span>${tongCho} đăng ký đang chờ duyệt</span></div>` +
-          `<div class="meta"><button type="button" class="btn-nho btn-primary" data-xc-duyettuan="1">Duyệt tất cả đang chờ</button></div>`
+          `<div class="body"><b>Toàn bộ tuần</b><span>${tongCho} người đang chờ xếp</span></div>` +
+          `<div class="meta"><button type="button" class="btn-nho btn-primary" data-xc-duyettuan="1">Xếp tất cả còn chờ</button></div>`
         ));
+      }
+
+      // ---- Cần xử lý (exception) — trưởng phòng chỉ cần nhìn đây thay vì
+      // lướt qua từng người đã hợp lệ ----
+      const soChuaXep = dang_ky.filter(d => d.trang_thai === 'cho_xep').length;
+      const boxCX = $('#xc-canxuly-list');
+      const canXuLy = [];
+      if (soCaThieu) canXuLy.push(`${soCaThieu} ca còn thiếu người`);
+      if (soChuaXep) canXuLy.push(`${soChuaXep} người đã đăng ký nhưng chưa được xếp (danh sách chờ)`);
+      $('#xc-canxuly-panel').hidden = canXuLy.length === 0;
+      if (canXuLy.length) {
+        boxCX.innerHTML = canXuLy.map(t => `<div class="list-item"><div class="body"><span>⚠️ ${esc(t)}</span></div></div>`).join('');
       }
 
       // ---- Ma trận: header ----
@@ -3247,8 +3265,9 @@ async function khoiDongXepCa() {
         `<div>Ca: <b>${esc(d.ten_ca)}</b> (${esc(d.gio_bat_dau)}–${esc(d.gio_ket_thuc)})</div>` +
         `<div>Đăng ký lúc: ${esc(d.tao_luc || '—')}</div>` +
         (d.ghi_chu_ns ? `<div>Ghi chú nhân viên: ${esc(d.ghi_chu_ns)}</div>` : '') +
-        (d.nguoi_duyet_ten ? `<div>Người duyệt: ${esc(d.nguoi_duyet_ten)} · ${esc(d.duyet_luc || '')}</div>` : '') +
-        (d.ly_do_tu_choi ? `<div>Lý do từ chối: ${esc(d.ly_do_tu_choi)}</div>` : '') +
+        (d.ly_do_de_xuat ? `<div class="hint">Được đề xuất vì: ${esc(d.ly_do_de_xuat)}</div>` : '') +
+        (d.nguoi_duyet_ten ? `<div>Người xếp: ${esc(d.nguoi_duyet_ten)} · ${esc(d.duyet_luc || '')}</div>` : '') +
+        (d.ly_do_tu_choi ? `<div>Lý do không chọn: ${esc(d.ly_do_tu_choi)}</div>` : '') +
         (khoa ? `<div><span class="tag ok">Đã chốt lịch</span></div>` : '');
 
       const choDuyet = ['cho_duyet', 'cho_xep'].includes(d.trang_thai) && !khoa;
@@ -3327,12 +3346,28 @@ async function khoiDongXepCa() {
         ? duLieuTuan.dang_ky.filter(d => d.ca_mo_id === btnCa.dataset.xcDuyetca && ['cho_duyet', 'cho_xep'].includes(d.trang_thai)).map(d => d.id)
         : duLieuTuan.dang_ky.filter(d => ['cho_duyet', 'cho_xep'].includes(d.trang_thai)).map(d => d.id);
       if (!ids.length) return;
-      if (!confirm(`Duyệt ${ids.length} đăng ký?`)) return;
+      if (!confirm(`Tự xếp ${ids.length} người đang chờ vào ca?`)) return;
       try {
         const kq = await API.caDuyetHangLoat(ids);
-        if (kq.loi && kq.loi.length) alert(`Duyệt thành công ${kq.thanh_cong.length}, lỗi ${kq.loi.length}:\n` + kq.loi.map(x => x.loi).join('\n'));
+        if (kq.loi && kq.loi.length) alert(`Đã xếp ${kq.thanh_cong.length}, lỗi ${kq.loi.length}:\n` + kq.loi.map(x => x.loi).join('\n'));
         await taiMaTran();
-      } catch (err) { alert(err.message || 'Không duyệt được.'); }
+      } catch (err) { alert(err.message || 'Không xếp được.'); }
+    });
+
+    /* ---- Xếp lịch tự động (Auto Allocation) — luồng chính, thay cho duyệt
+       từng đăng ký. Chạy lại an toàn: không đụng vào ai đã được xếp/loại
+       thủ công từ trước, chỉ xử lý người đang ở trạng thái chờ. ---- */
+    $('#xcXepTuDong').addEventListener('click', async () => {
+      const oLoi = $('#xcXepTuDongLoi'); oLoi.textContent = '';
+      const phongBanId = $('#xcPhongBan').value;
+      const tu = ngayISO(tuanHienTai);
+      const cuoiTuan = new Date(tuanHienTai); cuoiTuan.setDate(cuoiTuan.getDate() + 6);
+      const den = ngayISO(cuoiTuan);
+      try {
+        const kq = await API.caXepTuDong({ phong_ban_id: phongBanId, tu_ngay: tu, den_ngay: den });
+        alert(`Đã xếp ${kq.so_da_xep} người vào lịch. Còn ${kq.so_cho_xep} người trong danh sách chờ (không đủ chỗ hoặc trùng giờ).`);
+        await taiMaTran();
+      } catch (err) { oLoi.textContent = err.message || 'Không xếp được, thử lại nhé.'; }
     });
 
     /* ---- Điều hướng tuần ---- */
@@ -4467,6 +4502,17 @@ if (TOI.quyen.includes('quantri')) {
       btn.disabled = true;
       try {
         await API.qtXoaTaiKhoan(parseInt(btn.dataset.xoatk, 10));
+        await taiLaiNhanSuQuanTri();
+      } catch (err) { alert(err.message); btn.disabled = false; }
+    } else if (btn.dataset.doivaitro) {
+      const dsMa = DS_VAI_TRO_QT.map((v, i) => `${i + 1}. ${v.ten}`).join('\n');
+      const chon = prompt(`Vai trò mới cho "${btn.dataset.doivaitroTen}" — gõ số:\n` + dsMa, '');
+      if (chon === null) return;
+      const idx = parseInt(chon, 10) - 1;
+      if (!(idx >= 0 && idx < DS_VAI_TRO_QT.length)) { alert('Số vai trò không hợp lệ'); return; }
+      btn.disabled = true;
+      try {
+        await API.qtSuaVaiTro(parseInt(btn.dataset.doivaitro, 10), DS_VAI_TRO_QT[idx].ma);
         await taiLaiNhanSuQuanTri();
       } catch (err) { alert(err.message); btn.disabled = false; }
     }

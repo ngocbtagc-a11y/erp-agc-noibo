@@ -123,6 +123,10 @@ export const API = {
     method: 'POST', body: JSON.stringify({ tai_khoan_id: taiKhoanId })
   }),
 
+  qtSuaVaiTro: (taiKhoanId, vaiTro) => goi('/api/quan-tri/sua-vai-tro', {
+    method: 'POST', body: JSON.stringify({ tai_khoan_id: taiKhoanId, vai_tro: vaiTro })
+  }),
+
   qtSuaNhanSu: (ns) => goi('/api/quan-tri/sua-nhan-su', {
     method: 'POST', body: JSON.stringify(ns)
   }),
@@ -208,6 +212,7 @@ export const API = {
   caHuyDangKy: (id) => goi('/api/ca/dang-ky/huy', { method: 'POST', body: JSON.stringify({ id }) }),
   caLichCuaToi: (tu, den) => goi(`/api/ca/lich-cua-toi?tu=${tu}&den=${den}`),
   caMaTranTuan: (phongBanId, tu, den) => goi(`/api/ca/ma-tran-tuan?phong_ban_id=${phongBanId}&tu=${tu}&den=${den}`),
+  caXepTuDong: (d) => goi('/api/ca/xep-tu-dong', { method: 'POST', body: JSON.stringify(d) }),
   caDuyet: (id) => goi('/api/ca/duyet', { method: 'POST', body: JSON.stringify({ id }) }),
   caDuyetHangLoat: (ids) => goi('/api/ca/duyet-hang-loat', { method: 'POST', body: JSON.stringify({ ids }) }),
   caTuChoi: (id, lyDo) => goi('/api/ca/tu-choi', { method: 'POST', body: JSON.stringify({ id, ly_do_tu_choi: lyDo }) }),
