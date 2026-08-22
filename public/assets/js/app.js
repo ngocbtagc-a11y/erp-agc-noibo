@@ -89,9 +89,14 @@ async function taiLaiNhanSuQuanTri() {
   if (oQtBang) {
     const oQuanLy = $('#qtQuanLy'), oQuanLyTim = $('#qtQuanLyTim');
     if (oQuanLy && oQuanLyTim) {
-      ganTimChoSelect(oQuanLyTim, oQuanLy,
-        () => nhan_su.filter(n => n.dang_lam).map(n => ({ gia_tri: n.id, nhan: nhanNhanSu(n) })),
-        '— Không —')();
+      const veQuanLy = ganTimChoSelect(oQuanLyTim, oQuanLy,
+        () => uuTienCungPhongBan(nhan_su.filter(n => n.dang_lam), $('#qtPhongBan')?.value).map(n => ({ gia_tri: n.id, nhan: nhanNhanSu(n) })),
+        '— Không —');
+      veQuanLy();
+      // Đổi Phòng ban thì sắp lại ưu tiên (không tự xoá lựa chọn đang có).
+      // Gán qua .onchange (không addEventListener) — an toàn khi gọi lại nhiều lần.
+      const oPbTaoNs = $('#qtPhongBan');
+      if (oPbTaoNs) oPbTaoNs.onchange = veQuanLy;
     }
     napBoLocVaiTroQT(vai_tro);
     veBangQtTaiKhoan();
@@ -309,6 +314,20 @@ function nhanNhanSu(n) {
   const ma = n.ma_nv ? `${n.ma_nv} · ` : '';
   const cv = (n.chuc_vu || '').trim();
   return ma + n.ho_ten + (cv ? ` — ${cv}` : '');
+}
+
+/* Sắp người cùng phòng ban (đặc biệt Trưởng phòng) lên đầu candidate list
+   thay vì thứ tự ngẫu nhiên/ABC — không cần organizational_level hay
+   is_managerial, chỉ dùng đúng 1 quan hệ thật đang có: phong_ban.truong_phong_id.
+   Nhẹ, không migration, không chặn chọn người ngoài phòng (Sếp vẫn có thể
+   cần gán quản lý khác phòng thật). */
+function uuTienCungPhongBan(ds, phongBanId) {
+  if (!phongBanId) return ds;
+  const truongPhongId = DS_PHONG_BAN.find(p => String(p.id) === String(phongBanId))?.truong_phong_id;
+  return [...ds].sort((a, b) => {
+    const diem = x => x.id === truongPhongId ? 0 : (String(x.phong_ban_id) === String(phongBanId) ? 1 : 2);
+    return diem(a) - diem(b);
+  });
 }
 
 /* Gắn ô tìm kiếm phía trên 1 <select> nhiều lựa chọn (chọn nhân sự...) —
@@ -1991,7 +2010,8 @@ if (TOI.quyen.includes('nhansu')) {
 
       const oQl = $('#nsSua-quanly'), oQlTim = $('#nsSua-quanlytim');
       ganTimChoSelect(oQlTim, oQl,
-        () => DS_NHAN_SU_QT.filter(x => x.dang_lam && x.id !== n.id).map(x => ({ gia_tri: x.id, nhan: nhanNhanSu(x) })),
+        () => uuTienCungPhongBan(DS_NHAN_SU_QT.filter(x => x.dang_lam && x.id !== n.id), n.phong_ban_id)
+          .map(x => ({ gia_tri: x.id, nhan: nhanNhanSu(x) })),
         '— Không —')();
       oQlTim.value = '';
       oQl.value = n.quan_ly_id || '';
