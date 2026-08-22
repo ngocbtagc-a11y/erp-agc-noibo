@@ -49,7 +49,7 @@ const TRANG_THAI = {
   thu_viec:     { chu: 'Thử việc',     mau: 'warn' },
   cho_ky:       { chu: 'Chờ ký',       mau: 'warn' },
   can_trao_doi: { chu: 'Cần trao đổi', mau: 'danger' },
-  parttime:     { chu: 'Parttime',     mau: 'mute' }
+  parttime:     { chu: 'Bán thời gian', mau: 'mute' }
 };
 
 /* ---- Tiện ích ----------------------------------------------------------- */
@@ -3334,10 +3334,6 @@ async function khoiDongKeToanHangHong() {
 
 /* -- Quản trị (chỉ admin) -- */
 if (TOI.quyen.includes('quantri')) {
-  const TT_QT = {
-    da_ky: 'Đã ký HĐ', thu_viec: 'Thử việc', cho_ky: 'Chờ ký',
-    can_trao_doi: 'Cần trao đổi', parttime: 'Parttime'
-  };
   let DS_VAI_TRO = [];
   let DS_NHAN_SU_QT = [];
 
@@ -3418,7 +3414,7 @@ if (TOI.quyen.includes('quantri')) {
       return '' +
         `<td><div class="person">${avHtml(n.id, n.viet_tat, n.co_anh)}` +
           `<div><div class="nm">${esc(n.ho_ten)}${daKhoaNs ? ' <span class="tag warn">🔒</span>' : ''}</div>` +
-          `<div class="sm">${esc(n.chuc_vu || TT_QT[n.trang_thai] || '')}</div></div></div></td>` +
+          `<div class="sm">${esc(n.chuc_vu || TRANG_THAI[n.trang_thai]?.chu || '')}</div></div></div></td>` +
         `<td>${esc(n.bo_phan || '—')}</td>` +
         `<td>${cotTK}</td>` +
         `<td class="sm">${esc(tenVaiTro || '—')}</td>` +
