@@ -206,10 +206,23 @@ export function duocXemLuong(vaiTro) {
   return quyenCua(vaiTro).xem_luong === true;
 }
 
-/* Admin = người được cấp/khoá/đặt lại tài khoản, thêm nhân sự có cả lương.
-   Chỉ Giám đốc và Phó Giám đốc. */
+/* Admin = người được cấp/khoá/đặt lại/xoá tài khoản, đổi vai trò, thêm
+   nhân sự có cả lương. Chỉ Giám đốc, Phó Giám đốc, Admin hệ thống. */
 export function laAdmin(vaiTro) {
   return quyenCua(vaiTro).admin === true;
+}
+
+/* Được TẠO tài khoản (không phải toàn bộ quyền Admin) — Admin luôn được,
+   cộng thêm HCNS làm người "backup" cho Giám đốc khi cần tạo gấp (Sếp yêu
+   cầu 23/08/2026: "muốn có người backup việc tạo tài khoản, HR hoặc
+   trưởng bộ phận"). Chỉ áp dụng HR trước — "trưởng bộ phận" gắn theo dữ
+   liệu phong_ban.truong_phong_id từng phòng, chưa có khái niệm tài khoản
+   scope theo phòng ban để mở rộng an toàn, để dành khi có nhu cầu thật.
+   Người KHÔNG phải Admin dùng quyền này CHỈ được tạo tài khoản vai trò
+   thường — không được tự tạo tài khoản Admin (chặn ở qtTaoTaiKhoan). */
+const CO_TAO_TAI_KHOAN_BACKUP = new Set(['hcns']);
+export function duocTaoTaiKhoan(vaiTro) {
+  return laAdmin(vaiTro) || CO_TAO_TAI_KHOAN_BACKUP.has(vaiTro);
 }
 
 /* Được thêm nhân sự vào hồ sơ (admin + HCNS). KHÔNG kéo theo quyền xem lương
@@ -220,6 +233,16 @@ export function duocThemNhanSu(vaiTro) {
 
 /* Các vai trò hợp lệ để admin chọn khi tạo tài khoản mới */
 export const VAI_TRO_HOP_LE = Object.keys(QUYEN_THEO_VAI_TRO);
+
+/* Nhóm vai trò CHỈ để hiển thị đúng chỗ trên UI (Vai trò hệ thống tách
+   khỏi Vị trí công việc, không gộp 1 danh sách phẳng) — KHÔNG phải quyền
+   thật, quyền thật vẫn nằm ở QUYEN_THEO_VAI_TRO/QUYEN_KHO/... phía trên.
+   Sếp chốt 23/08/2026: "các vai trò kia cũng là vị trí nhân viên chứ
+   không phải vai trò hệ thống nữa". */
+const NHOM_VAI_TRO_HE_THONG = new Set(['giam_doc', 'pho_giam_doc', 'admin_he_thong']);
+export function nhomVaiTro(vaiTro) {
+  return NHOM_VAI_TRO_HE_THONG.has(vaiTro) ? 'he_thong' : 'vi_tri';
+}
 
 /* Tên hiển thị của vai trò */
 export const TEN_VAI_TRO = {

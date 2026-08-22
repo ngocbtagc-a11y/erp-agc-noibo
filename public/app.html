@@ -2011,6 +2011,48 @@
   </div>
 </div>
 
+<!-- Hộp Tạo tài khoản -->
+<div class="modal-nen" id="taoTkModalNen" hidden>
+  <div class="modal">
+    <h4>Tạo tài khoản</h4>
+    <p class="modal-nhac">Cho <b id="taoTkHoTen">—</b></p>
+    <form id="taoTkForm" class="form-luoi" autocomplete="off">
+      <div class="field field-rong">
+        <label>Tên đăng nhập (số điện thoại) *</label>
+        <input type="text" id="taoTkTen" required placeholder="09xx xxx xxx">
+      </div>
+      <div class="field field-rong">
+        <label>Vai trò *</label>
+        <select id="taoTkVaiTro" required></select>
+      </div>
+      <div class="field field-nut" style="display:flex; gap:10px">
+        <button type="submit" class="btn-primary" id="taoTkNutLuu" style="width:auto">Tạo tài khoản</button>
+        <button type="button" class="btn-phu" id="taoTkHuy" style="width:auto">Hủy</button>
+      </div>
+    </form>
+    <div class="form-loi" id="taoTkLoi"></div>
+  </div>
+</div>
+
+<!-- Hộp Đổi vai trò -->
+<div class="modal-nen" id="doiVaiTroModalNen" hidden>
+  <div class="modal">
+    <h4>Đổi vai trò</h4>
+    <p class="modal-nhac">Cho <b id="doiVaiTroHoTen">—</b> — đang là <b id="doiVaiTroHienTai">—</b></p>
+    <form id="doiVaiTroForm" class="form-luoi" autocomplete="off">
+      <div class="field field-rong">
+        <label>Vai trò mới *</label>
+        <select id="doiVaiTroMoi" required></select>
+      </div>
+      <div class="field field-nut" style="display:flex; gap:10px">
+        <button type="submit" class="btn-primary" id="doiVaiTroNutLuu" style="width:auto">Lưu</button>
+        <button type="button" class="btn-phu" id="doiVaiTroHuy" style="width:auto">Hủy</button>
+      </div>
+    </form>
+    <div class="form-loi" id="doiVaiTroLoi"></div>
+  </div>
+</div>
+
 <script type="module" src="assets/js/app.js"></script>
 <script>
   // Đăng ký service worker để ERP cài được vào màn hình chính và mở nhanh

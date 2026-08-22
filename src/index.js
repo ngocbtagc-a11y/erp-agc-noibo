@@ -13,7 +13,7 @@ import {
 } from './auth.js';
 
 import {
-  quyenCua, duocXemTab, duocXemLuong, laAdmin, duocThemNhanSu, duocQuanLyChinhSachCa,
+  quyenCua, duocXemTab, duocXemLuong, laAdmin, duocThemNhanSu, duocQuanLyChinhSachCa, duocTaoTaiKhoan, nhomVaiTro,
   quyenKho, quyenShopee, duocThaoTacKho, duocQuanLyKho, duocXemDonHoan, duocThaoTacVanHanh, TEN_VAI_TRO, VAI_TRO_HOP_LE
 } from './quyen.js';
 import { kiemTraMatKhauDat, DAI_TOI_THIEU } from './mat-khau.js';
@@ -128,6 +128,7 @@ async function toiLaAi(req, env) {
     la_admin: laAdmin(phien.vai_tro),
     them_nhan_su: duocThemNhanSu(phien.vai_tro),
     quan_ly_chinh_sach_ca: duocQuanLyChinhSachCa(phien.vai_tro),
+    duoc_tao_tai_khoan: duocTaoTaiKhoan(phien.vai_tro),
     kho: quyenKho(phien.vai_tro),           // { thao_tac, quan_ly, gia_von } cho tab Kho
     shopee: quyenShopee(phien.vai_tro),     // { xem, quan_ly } cho tab Đơn hoàn
     thao_tac_van_hanh: duocThaoTacVanHanh(phien.vai_tro),   // được bấm nút ở bước Vận hành sàn (Cần đối soát) hay chỉ xem
@@ -398,6 +399,16 @@ async function batBuocAdmin(req, env) {
   return { phien };
 }
 
+/* Được TẠO tài khoản — Admin hoặc người "backup" (hiện là HCNS). Rộng hơn
+   batBuocAdmin ở trên nhưng CHỈ dùng cho việc tạo mới; các việc admin khác
+   (đặt lại MK/khoá/xoá/đổi vai trò) vẫn phải batBuocAdmin như cũ. */
+async function batBuocTaoTaiKhoan(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return { loi: l };
+  if (!duocTaoTaiKhoan(phien.vai_tro)) return { loi: loi('Bạn không có quyền tạo tài khoản', 403) };
+  return { phien };
+}
+
 /* Cho phép admin HOẶC HCNS (thêm nhân sự) */
 async function batBuocThemNhanSu(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
@@ -432,7 +443,7 @@ async function qtDanhSach(req, env) {
 
   return json({
     nhan_su: results,
-    vai_tro: VAI_TRO_HOP_LE.map(v => ({ ma: v, ten: TEN_VAI_TRO[v] }))
+    vai_tro: VAI_TRO_HOP_LE.map(v => ({ ma: v, ten: TEN_VAI_TRO[v], nhom: nhomVaiTro(v) }))
   });
 }
 
@@ -630,9 +641,11 @@ async function qtKhoaNhanSu(req, env) {
   return json({ ok: true });
 }
 
-/* Tạo tài khoản đăng nhập cho một nhân sự → trả mật khẩu tạm MỘT LẦN */
+/* Tạo tài khoản đăng nhập cho một nhân sự → trả mật khẩu tạm MỘT LẦN.
+   Admin hoặc người "backup" (HCNS) — nhưng backup KHÔNG được tự tạo tài
+   khoản Admin (chặn tự nâng quyền), chỉ tạo được vai trò nghiệp vụ thường. */
 async function qtTaoTaiKhoan(req, env) {
-  const { loi: l } = await batBuocAdmin(req, env);
+  const { phien, loi: l } = await batBuocTaoTaiKhoan(req, env);
   if (l) return l;
 
   let b;
@@ -648,6 +661,9 @@ async function qtTaoTaiKhoan(req, env) {
     return loi('Tên đăng nhập (số điện thoại) 3–20 ký tự, chỉ gồm số, chữ thường không dấu, dấu . _ -');
   }
   if (!VAI_TRO_HOP_LE.includes(vaiTro)) return loi('Vai trò không hợp lệ');
+  if (!laAdmin(phien.vai_tro) && laAdmin(vaiTro)) {
+    return loi('Bạn không có quyền tạo tài khoản Admin — cần Giám đốc/Phó Giám đốc', 403);
+  }
 
   const ns = await env.DB.prepare('SELECT id FROM nhan_su WHERE id = ?').bind(nhanSuId).first();
   if (!ns) return loi('Không tìm thấy nhân sự này', 404);
