@@ -92,7 +92,8 @@ async function taiLaiNhanSuQuanTri() {
     const thaoTac = `<button class="btn-nho" data-sua-ns="${esc(n.id)}">Sửa</button> ` +
       (daKhoaNs
         ? (TOI.la_admin ? `<button class="btn-nho" data-mokhoa-ns="${esc(n.id)}">Mở lại</button>` : '')
-        : `<button class="btn-nho" data-khoa-ns="${esc(n.id)}">Hoàn tất</button>`);
+        : `<button class="btn-nho" data-khoa-ns="${esc(n.id)}">Hoàn tất</button>`) +
+      (TOI.la_admin ? ` <button class="btn-nho btn-phu" data-xoa-ns="${esc(n.id)}" data-xoa-ns-ten="${esc(n.ho_ten)}">Xoá</button>` : '');
     return '' +
       `<td><div class="person">${avHtml(n.id, n.viet_tat, n.co_anh)}` +
         `<div><div class="nm">${esc(n.ho_ten)}${n.ma_nv ? ` <span class="sm" style="font-weight:400">· ${esc(n.ma_nv)}</span>` : ''}${daKhoaNs ? ' <span class="tag warn">🔒</span>' : ''}</div>` +
@@ -1800,6 +1801,7 @@ if (TOI.quyen.includes('nhansu')) {
       const btnSua = e.target.closest('[data-sua-ns]');
       const btnKhoa = e.target.closest('[data-khoa-ns]');
       const btnMoKhoa = e.target.closest('[data-mokhoa-ns]');
+      const btnXoa = e.target.closest('[data-xoa-ns]');
       if (btnSua) {
         moHopSuaNhanSu(btnSua.dataset.suaNs);
       } else if (btnKhoa) {
@@ -1809,6 +1811,10 @@ if (TOI.quyen.includes('nhansu')) {
       } else if (btnMoKhoa) {
         try { await API.qtKhoaNhanSu(btnMoKhoa.dataset.mokhoaNs, 'nhap'); await taiLaiNhanSuQuanTri(); }
         catch (err) { alert(err.message || 'Không thực hiện được, thử lại nhé.'); }
+      } else if (btnXoa) {
+        if (!confirm(`Xoá HẲN hồ sơ "${btnXoa.dataset.xoaNsTen}"? Không thể hoàn tác — chỉ dùng khi tạo nhầm/test. Nếu nhân sự đã nghỉ việc thật, dùng "Hoàn tất" để giữ lịch sử thay vì xoá.`)) return;
+        try { await API.qtXoaNhanSu(btnXoa.dataset.xoaNs); await taiLaiNhanSuQuanTri(); }
+        catch (err) { alert(err.message || 'Không xoá được, thử lại nhé.'); }
       }
     });
   }

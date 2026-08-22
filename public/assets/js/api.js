@@ -131,6 +131,10 @@ export const API = {
     method: 'POST', body: JSON.stringify({ id, trang_thai_dl: trangThaiDl })
   }),
 
+  qtXoaNhanSu: (id) => goi('/api/quan-tri/xoa-nhan-su', {
+    method: 'POST', body: JSON.stringify({ id })
+  }),
+
   /* ---- Kho: Xuất / Nhập / Tồn ---- */
   khoSanPham: () => goi('/api/kho/san-pham'),
 

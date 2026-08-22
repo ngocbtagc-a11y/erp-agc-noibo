@@ -585,6 +585,34 @@ async function qtSuaNhanSu(req, env) {
   return json({ ok: true });
 }
 
+/* Xoá HẲN hồ sơ nhân sự — chỉ Admin, chỉ khi chưa có dữ liệu nghiệp vụ nào
+   gắn vào (đơn hàng, tài sản, chấm công, MBO...). Dùng để dọn hồ sơ tạo
+   nhầm/test, KHÔNG dùng để xử lý nhân sự nghỉ việc thật (dùng "Hoàn tất"
+   để khoá + giữ lịch sử — đúng nguyên tắc không xoá Entity đã có dữ liệu). */
+async function qtXoaNhanSu(req, env) {
+  const { phien, loi: l } = await batBuocAdmin(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+
+  const id = String(b.id || '').trim();
+  if (!id) return loi('Thiếu id nhân sự');
+  if (id === phien.nhan_su_id) return loi('Không thể tự xoá hồ sơ của chính mình');
+
+  const ns = await env.DB.prepare('SELECT id FROM nhan_su WHERE id = ?').bind(id).first();
+  if (!ns) return loi('Không tìm thấy nhân sự', 404);
+
+  try {
+    await env.DB.prepare('DELETE FROM tai_khoan WHERE nhan_su_id = ?').bind(id).run();
+    await env.DB.prepare('DELETE FROM nhan_su WHERE id = ?').bind(id).run();
+  } catch (e) {
+    if (String(e.message || '').includes('FOREIGN KEY')) {
+      return loi('Không xoá được — nhân sự này đã có dữ liệu gắn vào (đơn hàng, tài sản, chấm công, mục tiêu...). Dùng nút "Hoàn tất" để khoá thay vì xoá.', 409);
+    }
+    throw e;
+  }
+  return json({ ok: true });
+}
+
 /* Khoá (HCNS/Admin bấm "Xác nhận & khoá") / Mở khoá (chỉ Admin). */
 async function qtKhoaNhanSu(req, env) {
   const { phien, loi: l } = await batBuocThemNhanSu(req, env);
@@ -2624,6 +2652,7 @@ const DUONG_DAN = {
   'POST /api/quan-tri/them-nhan-su':   qtThemNhanSu,
   'POST /api/quan-tri/sua-nhan-su':    qtSuaNhanSu,
   'POST /api/quan-tri/khoa-nhan-su':   qtKhoaNhanSu,
+  'POST /api/quan-tri/xoa-nhan-su':    qtXoaNhanSu,
   'POST /api/quan-tri/tao-tai-khoan':  qtTaoTaiKhoan,
   'POST /api/quan-tri/dat-lai-mat-khau': qtDatLaiMatKhau,
   'POST /api/quan-tri/khoa-tai-khoan': qtKhoaTaiKhoan,
