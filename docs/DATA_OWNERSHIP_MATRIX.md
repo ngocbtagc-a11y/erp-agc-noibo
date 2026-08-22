@@ -12,23 +12,28 @@ nhưng hồ sơ nhân sự luôn tồn tại độc lập. **Người hiểu d�
 người nhập** — không để 1 phòng ban nhập thay phòng ban khác nếu tránh
 được.
 
-| Dữ liệu | Bảng | Owner tạo/sửa | Chỉ xem (không sửa) | Ghi chú |
-|---|---|---|---|---|
-| Hồ sơ nhân sự (tên, SĐT, email, phòng ban, chức danh, quản lý trực tiếp, trạng thái HĐ) | `nhan_su` | HCNS, Admin | Mọi vai trò (qua Nhân sự/Danh bạ, không thấy lương nếu không có quyền) | Nhập ở tab **Nhân sự** (không phải Quản trị) |
-| Lương | `nhan_su.luong` | Admin | HCNS không xem/sửa được | Ranh giới cứng, máy chủ tự chặn |
-| Tài khoản đăng nhập (username/mật khẩu/vai trò) | `tai_khoan` | Admin | HCNS xem trạng thái (có/chưa có tài khoản) | Tab **Quản trị** — tách hẳn khỏi hồ sơ nhân sự |
-| Phòng ban / Chức danh (danh mục) | `phong_ban`, `chuc_danh` | HCNS, Admin | Ai cũng chọn được khi thêm nhân sự | Tab **Dữ liệu nền → Tổ chức** |
-| Đơn vị tính | `don_vi_tinh` | Quản lý kho, Admin | Ai cũng chọn được khi thêm sản phẩm | Tab **Dữ liệu nền → Hàng hoá** |
-| Sản phẩm/SKU (tên, danh mục, đơn vị, mức tồn tối thiểu) | `san_pham` | *(đang chuyển)* Kinh doanh khoá/duyệt; Kho vận vẫn sửa ngày thường; Admin luôn sửa được | Ai có quyền xem tab liên quan | Trước đây Kho vận sở hữu hoàn toàn — đổi vì Kinh doanh là người quyết định bán gì |
-| Nhà cung cấp | `nha_cung_cap` | Quản lý kho, Admin | — | Tạm thời — công ty chưa có phòng Mua hàng riêng, sẽ đổi owner nếu lập phòng này |
-| Kho (danh sách kho vật lý) | `kho` | Admin | — | Cấu hình cấp công ty, hiếm đổi |
-| Tồn kho (nhập/xuất/điều chỉnh) | `giao_dich_kho`, `lo_hang` | Kho vận (Quản lý kho + Nhân viên kho) | Kế toán trưởng xem giá vốn | Sổ cái bất biến, không sửa trực tiếp |
-| Đơn hàng | `don_hang` | **AUTO** — đồng bộ tự động từ Shopee/TikTok (sàn là nguồn thật) | Vận hành sàn, Kế toán, Admin | Không ai nhập tay |
-| Đơn hoàn | `don_hoan` | **AUTO** tạo từ sàn; Kho xác nhận nhận hàng; Vận hành sàn xử lý; Kế toán tra soát tiền | — | Luồng 3 chặng, mỗi bên chỉ sửa đúng chặng của mình |
-| Đối soát / tra soát tiền | (field trong `don_hoan`) | Kế toán | Vận hành sàn, Admin | Kế toán ĐỌC dữ liệu đơn hoàn có sẵn, không nhập lại đơn |
-| Mục tiêu (MBO) | `muc_tieu` | Người tạo mục tiêu (cấp cá nhân: chính người/quản lý; cấp phòng ban: HCNS; cấp công ty: Admin) | Toàn công ty (minh bạch) | Tiến độ % **AUTO tính** từ việc đã hoàn thành, không nhập tay |
-| Công việc (Trạm Mục Tiêu) | `cong_viec` | Người giao việc (bất kỳ ai có quyền) | Người liên quan + toàn công ty (Lịch sử làm việc) | — |
-| Dữ liệu đã khoá (Data Lock) | `trang_thai`/`trang_thai_dl` trên 5 bảng nền | Chỉ Admin sửa được khi đã khoá | Owner gốc chỉ xem, không sửa | Xem thêm lịch sử tại `lich_su_thay_doi_nen` |
+Cột **Phòng ban thật** đối chiếu theo đúng 4 phòng ban Sếp đã tự nhập
+trong Dữ liệu nền (Ban Giám đốc / P. Kho Vận-Sản Xuất / P. Kinh Doanh-MKT
+/ P. Support [Kế toán-Nhân sự-Admin]) — xem
+[docs/ERP_V2_INFORMATION_ARCHITECTURE.md](./ERP_V2_INFORMATION_ARCHITECTURE.md).
+
+| Dữ liệu | Bảng | Owner tạo/sửa (vai trò) | Phòng ban thật | Chỉ xem (không sửa) | Ghi chú |
+|---|---|---|---|---|---|
+| Hồ sơ nhân sự (tên, SĐT, email, phòng ban, chức danh, quản lý trực tiếp, trạng thái HĐ) | `nhan_su` | HCNS, Admin | P. Support | Mọi vai trò (qua Nhân sự/Danh bạ, không thấy lương nếu không có quyền) | Nhập ở tab **Nhân sự** (không phải Quản trị) |
+| Lương | `nhan_su.luong` | Admin | Ban Giám đốc | HCNS không xem/sửa được | Ranh giới cứng, máy chủ tự chặn |
+| Tài khoản đăng nhập (username/mật khẩu/vai trò) | `tai_khoan` | Admin | P. Support | HCNS xem trạng thái (có/chưa có tài khoản) | Tab **Quản trị** — tách hẳn khỏi hồ sơ nhân sự |
+| Phòng ban / Chức danh (danh mục) | `phong_ban`, `chuc_danh` | HCNS, Admin | **Ban Giám đốc** | Ai cũng chọn được khi thêm nhân sự | Cấp công ty — đề xuất MOVE khỏi Dữ liệu nền → Quản trị doanh nghiệp |
+| Đơn vị tính | `don_vi_tinh` | Quản lý kho, Admin | **P. Kho Vận-Sản Xuất** | Ai cũng chọn được khi thêm sản phẩm | Đề xuất MOVE khỏi Dữ liệu nền → Kho vận & Sản xuất |
+| Sản phẩm/SKU (tên, danh mục, đơn vị, mức tồn tối thiểu) | `san_pham` | Kinh doanh (van_hanh_san) khoá/duyệt; Kho vận sửa ngày thường; Admin luôn sửa được | **P. Kinh Doanh-MKT** (khoá) / P. Kho Vận-Sản Xuất (sửa) | Ai có quyền xem tab liên quan | Đã chuyển xong 22/08/2026 — Kinh doanh quyết định bán gì, Kho vận là người nhập/xuất thực tế |
+| Nhà cung cấp | `nha_cung_cap` | Quản lý kho, Admin | **P. Kho Vận-Sản Xuất** | — | Công ty chưa có phòng Mua hàng riêng — đề xuất MOVE khỏi Dữ liệu nền → Kho vận & Sản xuất |
+| Kho (danh sách kho vật lý) | `kho` | Admin | P. Kho Vận-Sản Xuất | — | Cấu hình vận hành kho — đề xuất MOVE khỏi Dữ liệu nền → Kho vận & Sản xuất |
+| Tồn kho (nhập/xuất/điều chỉnh) | `giao_dich_kho`, `lo_hang` | Kho vận (Quản lý kho + Nhân viên kho) | P. Kho Vận-Sản Xuất | Kế toán trưởng xem giá vốn | Sổ cái bất biến, không sửa trực tiếp |
+| Đơn hàng | `don_hang` | **AUTO** — đồng bộ tự động từ Shopee/TikTok (sàn là nguồn thật) | P. Kinh Doanh-MKT | Vận hành sàn, Kế toán, Admin | Không ai nhập tay |
+| Đơn hoàn | `don_hoan` | **AUTO** tạo từ sàn; Kho xác nhận nhận hàng; Vận hành sàn xử lý; Kế toán tra soát tiền | P. Kinh Doanh-MKT + P. Kho Vận-Sản Xuất + P. Support | — | Luồng 3 chặng, mỗi bên chỉ sửa đúng chặng của mình |
+| Đối soát / tra soát tiền | (field trong `don_hoan`) | Kế toán | P. Support | Vận hành sàn, Admin | Kế toán ĐỌC dữ liệu đơn hoàn có sẵn, không nhập lại đơn |
+| Mục tiêu (MBO) | `muc_tieu` | Người tạo mục tiêu (cấp cá nhân: chính người/quản lý; cấp phòng ban: HCNS; cấp công ty: Admin) | Tất cả phòng (phân theo cấp) | Toàn công ty (minh bạch) | Tiến độ % **AUTO tính** từ việc đã hoàn thành, không nhập tay |
+| Công việc (Trạm Mục Tiêu) | `cong_viec` | Người giao việc (bất kỳ ai có quyền) | Tất cả phòng | Người liên quan + toàn công ty (Lịch sử làm việc) | — |
+| Dữ liệu đã khoá (Data Lock) | `trang_thai`/`trang_thai_dl` trên 7 bảng nền | Chỉ Admin sửa được khi đã khoá | Ban Giám đốc (mở khoá) | Owner gốc chỉ xem, không sửa | Xem thêm lịch sử tại `lich_su_thay_doi_nen` |
 
 ## Nguyên tắc áp dụng khi thêm dữ liệu mới
 
