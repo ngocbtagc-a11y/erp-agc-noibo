@@ -1,7 +1,7 @@
 /* ==========================================================================
    TÀI SẢN — Asset Management (module mới, xem docs/ENTITY_IDENTITY.md)
    ---------------------------------------------------------------------------
-   Data Owner: P. Support/Hành chính (duocQuanLyTaiSan — giam_doc, pho_giam_doc,
+   Data Owner: P. Support/Hành chính (duocQuanLyTaiSan — admin, admin_backup,
    hcns). Mọi nhân viên XEM được danh sách + lịch sử (minh bạch, giống Trạm
    Mục Tiêu/Lịch sử làm việc) nhưng chỉ Data Owner mới tạo/cấp phát/thu hồi/
    thanh lý. Riêng "Báo hỏng" cho phép người ĐANG GIỮ tài sản tự báo.

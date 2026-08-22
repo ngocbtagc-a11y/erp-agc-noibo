@@ -204,7 +204,7 @@ export async function suaSanPham(env, phien, body) {
 
   // Đã khoá thì chỉ Admin sửa được (Data Lock — xem migration them-khoa-danhmuc-nen.sql)
   if (hienCo.trang_thai === 'da_khoa' && !laAdmin(phien.vai_tro)) {
-    return loi('Mã hàng này đã khoá — cần Giám đốc/Phó Giám đốc sửa hoặc mở khoá lại', 403);
+    return loi('Mã hàng này đã khoá — cần Admin sửa hoặc mở khoá lại', 403);
   }
 
   const ten = String(body.ten || '').trim();
@@ -259,7 +259,7 @@ export async function khoaSanPham(env, phien, body) {
   if (!id) return loi('Thiếu id sản phẩm');
   const muon = body.trang_thai === 'da_khoa' ? 'da_khoa' : 'nhap';
   if (muon === 'nhap' && !laAdmin(phien.vai_tro)) {
-    return loi('Chỉ Giám đốc/Phó Giám đốc mới mở khoá lại được', 403);
+    return loi('Chỉ Admin mới mở khoá lại được', 403);
   }
 
   await env.DB.prepare('UPDATE san_pham SET trang_thai = ? WHERE id = ?').bind(muon, id).run();

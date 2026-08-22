@@ -7,34 +7,50 @@ thời hạn/workflow phê duyệt quyền nhạy cảm. Cập nhật file này 
 định mới về phân quyền — không cần bảng/service mới nếu chưa có nhu cầu
 thật (đúng nguyên tắc đã áp dụng xuyên suốt, xem [ENTITY_IDENTITY.md](./ENTITY_IDENTITY.md)).
 
-## Nguyên tắc đã áp dụng (23/08/2026)
+## Nguyên tắc đã áp dụng (23/08/2026, cập nhật vai trò 22/08/2026)
 
 **System Permission ≠ Business Permission** — quản trị nền tảng (tài
 khoản, mật khẩu, mở khoá dữ liệu, xem lương) không tự động kéo theo quyền
 làm nghiệp vụ (chỉnh tồn kho, khoá sản phẩm, cấp phát tài sản, kết nối
 Shopee, xếp ca).
 
+**Vai trò hệ thống (`nhomVaiTro='he_thong'`) — 3 cấp, thay cho
+`giam_doc`/`pho_giam_doc`/`admin_he_thong` cũ:**
+- **`admin`** — Toàn quyền mọi quyền (System + Business). Gộp cả 2 tài
+  khoản lãnh đạo thật (Giám đốc Nguyễn Duy Phong, Phó Giám đốc Bùi Thị
+  Ngọc) vào đúng 1 vai trò này.
+- **`admin_backup`** — chỉ System Permission hẹp: tạo tài khoản, phân vai
+  trò (`duocTaoTaiKhoan`), thêm nhân sự, xem tab quản trị/tài sản/xếp ca —
+  **không** xem lương, **không** phải `laAdmin()`, **không** có mặt ở bất
+  kỳ bảng Business Permission nào (Kho/Sản phẩm/Shopee). Sinh ra để HR
+  hoặc trưởng bộ phận backup việc tạo tài khoản giúp Admin, không phải
+  admin thứ 2.
+- **`nguoi_dung`** — tài khoản thường, chỉ các tab phổ quát (tổng quan,
+  danh bạ, chat, công việc, lịch sử việc, tài sản, xếp ca), không quyền
+  đặc biệt nào.
+
 Cụ thể trong `src/quyen.js`:
-- `laAdmin(vaiTro)` (System Permission) — chỉ quyết định: tạo/khoá/xoá tài
-  khoản, thêm nhân sự (kể cả lương), sửa dữ liệu nền đã khoá.
+- `laAdmin(vaiTro)` (System Permission cao nhất) — chỉ đúng vai trò
+  `admin` mới trả `true`.
+- `duocTaoTaiKhoan(vaiTro)` — `admin` hoặc `admin_backup`. Có **chặn leo
+  thang quyền**: tài khoản `admin_backup` không tự gán vai trò
+  `admin`/`admin_backup` cho ai (kể cả chính mình) — chỉ `admin` thật mới
+  làm được, enforce ở cả `qtTaoTaiKhoan` và `qtSuaVaiTro`
+  (`src/index.js`).
 - Quyền nghiệp vụ (Business Permission) nằm ở các bảng riêng —
   `QUYEN_KHO`, `QUYEN_SAN_PHAM`, `QUYEN_SHOPEE`, `CO_QUAN_LY_TAI_SAN`,
   `CO_QUAN_LY_CHINH_SACH_CA`, `CO_THAO_TAC_VAN_HANH` — mỗi vai trò phải
   **có mặt tường minh** ở đúng bảng đó mới thao tác được, không suy ra từ
   `laAdmin()`.
 
-**Vai trò `admin_he_thong`** (System Admin thuần — tách khỏi chức danh
-CEO) là ví dụ áp dụng nguyên tắc này: có `admin: true` (System) và xem
-được mọi tab (module access — đúng ý "System Access cấp quyền VÀO module,
-không cấp quyền THAO TÁC"), nhưng **cố ý KHÔNG có mặt** ở bất kỳ bảng
-Business Permission nào — muốn làm nghiệp vụ Kho/Sản phẩm/Tài sản... phải
-được gán thêm 1 vai trò nghiệp vụ thật.
-
-**`giam_doc`/`pho_giam_doc` KHÔNG áp dụng nguyên tắc tách này** — đây là
-ngoại lệ có chủ đích, không phải sai sót: ở quy mô 8 người, Giám đốc/Phó
-Giám đốc là người trực tiếp vận hành nhiều mảng hằng ngày (không có đủ
-nhân sự chuyên trách mọi vị trí), tước quyền nghiệp vụ mặc định của họ sẽ
-gây gián đoạn vận hành thật mà không có lợi ích tương xứng ở quy mô này.
+**`admin` KHÔNG áp dụng nguyên tắc tách System/Business** — đây là ngoại
+lệ có chủ đích, không phải sai sót: ở quy mô 8 người, người giữ vai trò
+`admin` (Giám đốc/Phó Giám đốc) là người trực tiếp vận hành nhiều mảng
+hằng ngày (không có đủ nhân sự chuyên trách mọi vị trí), tước quyền
+nghiệp vụ mặc định của họ sẽ gây gián đoạn vận hành thật mà không có lợi
+ích tương xứng ở quy mô này. `admin_backup` thì NGƯỢC LẠI — tuân thủ đúng
+nguyên tắc tách (chỉ System, không Business) vì đây đúng là vai trò hẹp,
+không phải lãnh đạo vận hành.
 
 ## Scope theo phòng ban — chỉ có ở nơi thật sự cần
 

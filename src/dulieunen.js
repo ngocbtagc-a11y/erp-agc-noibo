@@ -47,7 +47,7 @@ export async function ghiLichSuThayDoi(env, phien, bang, banGhiId, thayDoi) {
 function batBuocDuocSuaKhoa(phien, hienCo) {
   if (hienCo.trang_thai !== 'da_khoa') return null;   // còn nháp, ai có quyền sửa danh mục đều sửa được
   if (laAdmin(phien.vai_tro)) return null;             // Admin luôn sửa được kể cả đã khoá
-  return loi('Dữ liệu này đã khoá — cần Giám đốc/Phó Giám đốc sửa hoặc mở khoá lại', 403);
+  return loi('Dữ liệu này đã khoá — cần Admin sửa hoặc mở khoá lại', 403);
 }
 
 /* Chuẩn hoá tên để so "gần giống" — bỏ dấu, thường hoá, gộp khoảng trắng.
@@ -132,7 +132,7 @@ async function khoaDanhMuc(env, phien, bang, body) {
   if (!id) return loi('Thiếu id');
   const muon = body.trang_thai === 'da_khoa' ? 'da_khoa' : 'nhap';
   if (muon === 'nhap' && !laAdmin(phien.vai_tro)) {
-    return loi('Chỉ Giám đốc/Phó Giám đốc mới mở khoá lại được', 403);
+    return loi('Chỉ Admin mới mở khoá lại được', 403);
   }
   await env.DB.prepare(`UPDATE ${bang} SET trang_thai = ? WHERE id = ?`).bind(muon, id).run();
   return json({ ok: true });
@@ -285,7 +285,7 @@ export const khoaNhaCungCap = (env, phien, body) => {
    sẵn để mở kho 2 không cần sửa code).
    ========================================================================== */
 function batBuocKho(phien) {
-  return laAdmin(phien.vai_tro) ? null : loi('Chỉ Giám đốc/Phó Giám đốc mới quản lý được danh sách Kho', 403);
+  return laAdmin(phien.vai_tro) ? null : loi('Chỉ Admin mới quản lý được danh sách Kho', 403);
 }
 export async function danhSachKho(env) {
   return danhSachDanhMuc(env, 'kho', ', dia_chi');

@@ -386,7 +386,7 @@ async function chatTepDinhKem(req, env) {
 }
 
 /* ==========================================================================
-   QUẢN TRỊ — chỉ admin (Giám đốc, Phó Giám đốc)
+   QUẢN TRỊ — chỉ admin (Admin)
    ---------------------------------------------------------------------------
    Mọi đầu việc dưới đây đều kiểm tra laAdmin() ở máy chủ. Người không phải
    admin gọi thẳng vào cũng nhận 403 — không phải chỉ ẩn nút trên giao diện.
@@ -395,7 +395,7 @@ async function chatTepDinhKem(req, env) {
 async function batBuocAdmin(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return { loi: l };
-  if (!laAdmin(phien.vai_tro)) return { loi: loi('Chỉ Giám đốc và Phó Giám đốc mới được cấp/khoá tài khoản', 403) };
+  if (!laAdmin(phien.vai_tro)) return { loi: loi('Chỉ Admin mới được cấp/khoá tài khoản', 403) };
   return { phien };
 }
 
@@ -531,7 +531,7 @@ async function qtSuaNhanSu(req, env) {
 
   // Đã khoá thì chỉ Admin sửa được (Data Lock — xem migration them-khoa-danhmuc-nen.sql)
   if (hienCo.trang_thai_dl === 'da_khoa' && !laAdmin(phien.vai_tro)) {
-    return loi('Hồ sơ này đã khoá — cần Giám đốc/Phó Giám đốc sửa hoặc mở khoá lại', 403);
+    return loi('Hồ sơ này đã khoá — cần Admin sửa hoặc mở khoá lại', 403);
   }
 
   const hoTen = String(b.ho_ten || '').trim();
@@ -634,7 +634,7 @@ async function qtKhoaNhanSu(req, env) {
   if (!id) return loi('Thiếu id nhân sự');
   const muon = b.trang_thai_dl === 'da_khoa' ? 'da_khoa' : 'nhap';
   if (muon === 'nhap' && !laAdmin(phien.vai_tro)) {
-    return loi('Chỉ Giám đốc/Phó Giám đốc mới mở khoá lại được', 403);
+    return loi('Chỉ Admin mới mở khoá lại được', 403);
   }
 
   await env.DB.prepare('UPDATE nhan_su SET trang_thai_dl = ? WHERE id = ?').bind(muon, id).run();
@@ -661,8 +661,8 @@ async function qtTaoTaiKhoan(req, env) {
     return loi('Tên đăng nhập (số điện thoại) 3–20 ký tự, chỉ gồm số, chữ thường không dấu, dấu . _ -');
   }
   if (!VAI_TRO_HOP_LE.includes(vaiTro)) return loi('Vai trò không hợp lệ');
-  if (!laAdmin(phien.vai_tro) && laAdmin(vaiTro)) {
-    return loi('Bạn không có quyền tạo tài khoản Admin — cần Giám đốc/Phó Giám đốc', 403);
+  if (!laAdmin(phien.vai_tro) && (vaiTro === 'admin' || vaiTro === 'admin_backup')) {
+    return loi('Bạn không có quyền tạo tài khoản Admin/Admin backup — cần Admin thật', 403);
   }
 
   const ns = await env.DB.prepare('SELECT id FROM nhan_su WHERE id = ?').bind(nhanSuId).first();
@@ -738,7 +738,7 @@ async function qtKhoaTaiKhoan(req, env) {
    cuối cùng còn hoạt động xuống vai trò thường (giữ nguyên logic chặn ở
    qtXoaTaiKhoan — tránh hệ thống mất hết người quản trị). */
 async function qtSuaVaiTro(req, env) {
-  const { phien, loi: l } = await batBuocAdmin(req, env);
+  const { phien, loi: l } = await batBuocTaoTaiKhoan(req, env);
   if (l) return l;
 
   let b;
@@ -748,6 +748,13 @@ async function qtSuaVaiTro(req, env) {
   const vaiTroMoi = String(b.vai_tro || '').trim();
   if (!tkId) return loi('Thiếu tài khoản');
   if (!VAI_TRO_HOP_LE.includes(vaiTroMoi)) return loi('Vai trò không hợp lệ');
+
+  // Admin backup KHÔNG được tự gán vai trò Admin/Admin backup cho ai (kể cả
+  // chính mình) — tránh tự nâng quyền. Chỉ Admin thật mới gán được vai trò
+  // hệ thống cấp cao.
+  if (!laAdmin(phien.vai_tro) && (vaiTroMoi === 'admin' || vaiTroMoi === 'admin_backup')) {
+    return loi('Bạn không có quyền gán vai trò Admin/Admin backup — cần Admin thật', 403);
+  }
 
   const tk = await env.DB.prepare('SELECT id, vai_tro FROM tai_khoan WHERE id = ?').bind(tkId).first();
   if (!tk) return loi('Không tìm thấy tài khoản', 404);
@@ -1382,7 +1389,7 @@ function nhomCua(vaiTro) {
   if (vaiTro === 'nhan_vien_kho' || vaiTro === 'quan_ly_kho') return ['kho'];
   if (vaiTro === 'van_hanh_san') return ['van_hanh'];
   if (vaiTro === 'ke_toan_truong') return ['ke_toan'];
-  if (vaiTro === 'giam_doc' || vaiTro === 'pho_giam_doc') return ['kho', 'van_hanh', 'ke_toan'];
+  if (laAdmin(vaiTro)) return ['kho', 'van_hanh', 'ke_toan'];
   return [];
 }
 
@@ -1842,7 +1849,7 @@ async function cvLichSu(req, env) {
    20/08/2026, Sếp Ngọc bổ sung tầng cá nhân + gộp chung 1 khối "Trạm Mục
    Tiêu (MBOs)" với bảng giao việc 21/08/2026 — 2 khối vốn cùng bản chất:
    mục tiêu ở đây, việc cụ thể để đạt mục tiêu ở Trạm Mục Tiêu bên dưới).
-   Mục tiêu CÔNG TY: chỉ Giám đốc/Phó Giám đốc tạo VÀ chốt (Sếp Phong: "Tôi là
+   Mục tiêu CÔNG TY: chỉ Admin tạo VÀ chốt (Sếp Phong: "Tôi là
    người chốt mục tiêu công ty"). Mục tiêu PHÒNG BAN + CÁ NHÂN: mở cho ai cũng
    tạo được (giống triết lý MVP của Trạm Mục Tiêu — tin tưởng tự đặt mục tiêu
    cho phòng/cho bản thân). Phòng ban gắn với 1 bộ phận (bo_phan, chữ tự do
@@ -1894,7 +1901,7 @@ async function mtTao(req, env) {
   const cap = String(b.cap || '').trim();
   if (!['cong_ty', 'phong_ban', 'ca_nhan'].includes(cap)) return loi('Cấp mục tiêu không hợp lệ');
   if (cap === 'cong_ty' && !laAdmin(phien.vai_tro)) {
-    return loi('Chỉ Giám đốc/Phó Giám đốc mới được đặt mục tiêu cấp công ty', 403);
+    return loi('Chỉ Admin mới được đặt mục tiêu cấp công ty', 403);
   }
 
   const boPhan = cap === 'phong_ban' ? String(b.bo_phan || '').trim() : null;
@@ -1918,11 +1925,11 @@ async function mtTao(req, env) {
   return json({ ok: true, id: r.meta.last_row_id });
 }
 
-/* Giám đốc/Phó Giám đốc CHỐT mục tiêu công ty — khoá lại, không sửa được nữa */
+/* Admin CHỐT mục tiêu công ty — khoá lại, không sửa được nữa */
 async function mtChot(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
-  if (!laAdmin(phien.vai_tro)) return loi('Chỉ Giám đốc/Phó Giám đốc mới được chốt mục tiêu công ty', 403);
+  if (!laAdmin(phien.vai_tro)) return loi('Chỉ Admin mới được chốt mục tiêu công ty', 403);
 
   let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
   const id = parseInt(b.id, 10);
@@ -1951,7 +1958,7 @@ async function mtCapNhat(req, env) {
   if (mt.da_chot) return loi('Mục tiêu công ty đã chốt, không sửa được nữa', 409);
 
   const laChu = mt.nguoi_tao_id === phien.nhan_su_id || laAdmin(phien.vai_tro);
-  if (!laChu) return loi('Chỉ người tạo (hoặc Giám đốc/Phó Giám đốc) mới sửa được mục tiêu này', 403);
+  if (!laChu) return loi('Chỉ người tạo (hoặc Admin) mới sửa được mục tiêu này', 403);
 
   const truong = {};
   if (b.trang_thai != null) {
@@ -2175,7 +2182,7 @@ async function kiemTraLyDoNghiemTrong(env) {
    theo dõi và đối soát/khiếu nại với sàn — cùng bộ lọc với cron cảnh báo
    Telegram ở kiemTraCanhBaoHoan(), chỉ khác là không giới hạn "chưa báo lần
    nào" (da_canh_bao) vì đây là màn xem liên tục, không phải cảnh báo 1 lần.
-   Quyền dùng chung với Đơn hoàn (duocXemDonHoan): Giám đốc, Phó Giám đốc,
+   Quyền dùng chung với Đơn hoàn (duocXemDonHoan): Admin,
    Vận hành sàn, Kế toán trưởng. ========================================== */
 
 async function kdCanDoiSoat(req, env) {

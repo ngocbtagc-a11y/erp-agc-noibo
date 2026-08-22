@@ -18,13 +18,13 @@ import { writeFileSync } from 'node:fs';
 
 /* ====================== SẾP SỬA Ở ĐÂY ======================================
    Mỗi dòng là một admin. Đổi số điện thoại thành SỐ THẬT (đây là tên đăng nhập).
-   vai_tro: 'giam_doc' hoặc 'pho_giam_doc' — cả hai đều có quyền quản trị. */
+   vai_tro: 'admin' — toàn quyền. */
 const ADMINS = [
   {
     ho_ten:        'Bùi Thị Ngọc',
     chuc_vu:       'Phó Giám đốc',
     bo_phan:       'Ban giám đốc',
-    vai_tro:       'pho_giam_doc',
+    vai_tro:       'admin',
     so_dien_thoai: '0911994696',
     email:         ''
   },
@@ -32,7 +32,7 @@ const ADMINS = [
     ho_ten:        'Nguyễn Duy Phong',
     chuc_vu:       'Giám đốc',
     bo_phan:       'Ban giám đốc',
-    vai_tro:       'giam_doc',
+    vai_tro:       'admin',
     so_dien_thoai: '0945923368',
     email:         ''
   }
@@ -101,8 +101,8 @@ for (let i = 0; i < ADMINS.length; i++) {
     process.exit(1);
   }
   tenDaDung.add(ten);
-  if (a.vai_tro !== 'giam_doc' && a.vai_tro !== 'pho_giam_doc') {
-    console.error(`\n  ✖ Admin #${i + 1}: vai_tro phải là giam_doc hoặc pho_giam_doc.\n`);
+  if (a.vai_tro !== 'admin') {
+    console.error(`\n  ✖ Admin #${i + 1}: vai_tro phải là admin.\n`);
     process.exit(1);
   }
 
