@@ -1145,6 +1145,12 @@ async function caMaTranTuan(req, env) {
   if (!phongBanId || !tu || !den) return loi('Thiếu phong_ban_id/tu/den');
   return ca.maTranTuan(env, phien, phongBanId, tu, den);
 }
+async function caXepTuDong(req, env) {
+  const { phien, loi: l } = await batBuocXemXepCa(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return ca.chayPhanBo(env, phien, b);
+}
 async function caDuyet(req, env) {
   const { phien, loi: l } = await batBuocXemXepCa(req, env);
   if (l) return l;
@@ -2707,6 +2713,7 @@ const DUONG_DAN = {
   'POST /api/ca/dang-ky/huy':     caHuyDangKy,
   'GET  /api/ca/lich-cua-toi':    caLichCuaToi,
   'GET  /api/ca/ma-tran-tuan':    caMaTranTuan,
+  'POST /api/ca/xep-tu-dong':     caXepTuDong,
   'POST /api/ca/duyet':           caDuyet,
   'POST /api/ca/duyet-hang-loat': caDuyetHangLoat,
   'POST /api/ca/tu-choi':         caTuChoi,

@@ -316,7 +316,8 @@ export async function maTranTuan(env, phien, phongBanId, tuNgay, denNgay) {
     SELECT dk.id, dk.nhan_su_id, dk.trang_thai, dk.ghi_chu_ns, dk.tao_luc, dk.duyet_luc, dk.ly_do_tu_choi,
            dk.nguoi_duyet_id, ndg.ho_ten AS nguoi_duyet_ten,
            cm.id AS ca_mo_id, cm.ngay, cm.can_bao_nhieu_nguoi,
-           mc.id AS mau_ca_id, mc.ma_ca, mc.ten_ca, mc.gio_bat_dau, mc.gio_ket_thuc
+           mc.id AS mau_ca_id, mc.ma_ca, mc.ten_ca, mc.gio_bat_dau, mc.gio_ket_thuc,
+           (SELECT ap.ly_do FROM allocation_proposals ap WHERE ap.dang_ky_ca_id = dk.id ORDER BY ap.tao_luc DESC, ap.id DESC LIMIT 1) AS ly_do_de_xuat
       FROM dang_ky_ca dk
       JOIN ca_mo cm ON cm.id = dk.ca_mo_id
       JOIN mau_ca mc ON mc.id = cm.mau_ca_id
@@ -371,6 +372,157 @@ async function duyetMotDangKy(env, phien, dk) {
   await ghiLichSuCa(env, phien, 'dang_ky_ca', dk.id, 'duyet', dk.trang_thai, 'da_duyet', null);
   await ghiLichSuCa(env, phien, 'lich_lam_viec', llvId, 'tao', null, 'da_xep', 'Từ đăng ký ' + dk.id);
   return { ok: true, lich_lam_viec_id: llvId };
+}
+
+/* ==========================================================================
+   XẾP LỊCH TỰ ĐỘNG (Auto Allocation) — thay luồng "duyệt từng đăng ký".
+   ---------------------------------------------------------------------------
+   Input : Staffing Demand (ca_mo.can_bao_nhieu_nguoi) + Employee Availability
+           (dang_ky_ca đang cho_duyet/cho_xep).
+   Rule engine v1 (deterministic, theo thứ tự ưu tiên — xem docs):
+     1. Eligibility  — đã chặn từ lúc đăng ký (active/đúng phòng/đúng loại LĐ).
+     2. No conflict  — không xếp 2 ca trùng giờ trong CÙNG lần chạy này.
+     3. Max hours    — chưa có policy giờ tối đa, bỏ qua ở v1 (chừa chỗ sau).
+     4. Fair distribution — ưu tiên người đang có ÍT GIỜ HƠN trong tuần đang
+        xếp (tính trong phạm vi lần chạy, không cộng dồn tuần khác).
+     5. Skill        — chưa có dữ liệu kỹ năng, bỏ qua ở v1 (chừa chỗ sau).
+     6. Tie-break    — giờ đăng ký (ai đăng ký trước, ưu tiên khi mọi thứ
+        khác bằng nhau — KHÔNG phải rule chính, chỉ phá thế hoà).
+   Output: KHÔNG tự chốt lịch — chỉ tạo Allocation Proposal (lich_lam_viec
+   chưa khoá, đúng như trước đây "duyệt" tạo ra) để trưởng phòng review.
+   Idempotent theo hướng an toàn: CHỈ xử lý đăng ký đang cho_duyet/cho_xep —
+   không đụng vào cái trưởng phòng đã tự tay quyết định (da_duyet/tu_choi
+   do gán thủ công hoặc duyệt tay trước đó), nên chạy lại không phá can
+   thiệp thủ công đã có. */
+export async function chayPhanBo(env, phien, body) {
+  const phongBanId = parseInt(body.phong_ban_id, 10);
+  const tuNgay = chuoi(body.tu_ngay), denNgay = chuoi(body.den_ngay);
+  if (!phongBanId || !tuNgay || !denNgay) return loi('Thiếu phòng ban hoặc khoảng ngày');
+  if (!(await laTruongPhong(env, phien, phongBanId))) {
+    return loi('Bạn không có quyền xếp lịch cho phòng ban này', 403);
+  }
+
+  const { results: caMoList } = await env.DB.prepare(`
+    SELECT cm.id, cm.ngay, cm.can_bao_nhieu_nguoi, mc.gio_bat_dau, mc.gio_ket_thuc
+      FROM ca_mo cm JOIN mau_ca mc ON mc.id = cm.mau_ca_id
+     WHERE cm.phong_ban_id = ? AND cm.ngay BETWEEN ? AND ? AND cm.trang_thai IN ('mo', 'dong')
+     ORDER BY cm.ngay, mc.gio_bat_dau
+  `).bind(phongBanId, tuNgay, denNgay).all();
+  if (!caMoList.length) return loi('Chưa có ca nào mở trong khoảng thời gian này');
+
+  const idsCaMo = caMoList.map(c => c.id);
+  const cho = idsCaMo.map(() => '?').join(',');
+  const { results: dangKyList } = await env.DB.prepare(`
+    SELECT id, nhan_su_id, ca_mo_id, trang_thai, tao_luc FROM dang_ky_ca
+     WHERE ca_mo_id IN (${cho}) AND trang_thai IN ('cho_duyet', 'cho_xep')
+     ORDER BY tao_luc
+  `).bind(...idsCaMo).all();
+
+  // Người ĐÃ được xếp từ trước (duyệt tay/gán thủ công trước lần chạy này)
+  // vẫn phải tính vào "đã có giờ" + "đã chiếm chỗ trong ca" để không xếp
+  // chồng/xếp dư — đọc thêm để rule No-conflict + headcount đúng thực tế.
+  const { results: daXepTruoc } = await env.DB.prepare(`
+    SELECT dk.nhan_su_id, dk.ca_mo_id FROM dang_ky_ca dk
+     WHERE dk.ca_mo_id IN (${cho}) AND dk.trang_thai = 'da_duyet'
+  `).bind(...idsCaMo).all();
+
+  const caMoTheoId = {};
+  caMoList.forEach(c => { caMoTheoId[c.id] = c; });
+
+  function phutCa(cm) {
+    const [h1, m1] = cm.gio_bat_dau.split(':').map(Number);
+    const [h2, m2] = cm.gio_ket_thuc.split(':').map(Number);
+    return (h2 * 60 + m2) - (h1 * 60 + m1);
+  }
+  function trungGio(a, b) {
+    if (a.ngay !== b.ngay) return false;
+    return a.gio_bat_dau < b.gio_ket_thuc && b.gio_bat_dau < a.gio_ket_thuc;
+  }
+
+  const gioTheoNhanSu = {};       // nhan_su_id -> tổng phút đã xếp (kể cả trước run)
+  const caDaXepTheoNhanSu = {};   // nhan_su_id -> [ca_mo] đã xếp, để check trùng giờ
+  const soDaXepTheoCa = {};       // ca_mo_id -> số người đã có (kể cả trước run)
+
+  daXepTruoc.forEach(d => {
+    const cm = caMoTheoId[d.ca_mo_id];
+    if (!cm) return;
+    gioTheoNhanSu[d.nhan_su_id] = (gioTheoNhanSu[d.nhan_su_id] || 0) + phutCa(cm);
+    (caDaXepTheoNhanSu[d.nhan_su_id] ||= []).push(cm);
+    soDaXepTheoCa[d.ca_mo_id] = (soDaXepTheoCa[d.ca_mo_id] || 0) + 1;
+  });
+
+  const dangKyTheoCa = {};
+  dangKyList.forEach(d => { (dangKyTheoCa[d.ca_mo_id] ||= []).push(d); });
+
+  const dexuat = [];   // { id, nhan_su_id, ca_mo_id, ket_qua, ly_do }
+
+  for (const cm of caMoList) {
+    const ungVien = dangKyTheoCa[cm.id] || [];
+    const con = Math.max(0, (cm.can_bao_nhieu_nguoi || 0) - (soDaXepTheoCa[cm.id] || 0));
+
+    // Rule 2 — No conflict: loại người đã có ca trùng giờ (kể cả từ trước run)
+    const hopLe = ungVien.filter(d => {
+      const daXep = caDaXepTheoNhanSu[d.nhan_su_id];
+      if (!daXep) return true;
+      return !daXep.some(cmKhac => trungGio(cm, cmKhac));
+    });
+    const bTrung = ungVien.filter(d => !hopLe.includes(d));
+
+    // Rule 4 — Fair distribution (ít giờ hơn ưu tiên trước), Rule 7 — tie-break giờ đăng ký
+    hopLe.sort((a, b) => {
+      const gA = gioTheoNhanSu[a.nhan_su_id] || 0, gB = gioTheoNhanSu[b.nhan_su_id] || 0;
+      if (gA !== gB) return gA - gB;
+      return new Date(a.tao_luc) - new Date(b.tao_luc);
+    });
+
+    const chon = hopLe.slice(0, con);
+    const khongChon = hopLe.slice(con);
+
+    chon.forEach(d => {
+      const gioTruoc = gioTheoNhanSu[d.nhan_su_id] || 0;
+      gioTheoNhanSu[d.nhan_su_id] = gioTruoc + phutCa(cm);
+      (caDaXepTheoNhanSu[d.nhan_su_id] ||= []).push(cm);
+      soDaXepTheoCa[cm.id] = (soDaXepTheoCa[cm.id] || 0) + 1;
+      dexuat.push({
+        dk: d, ket_qua: 'chon',
+        ly_do: `Có thể làm ca này, không trùng giờ, đang có ${Math.round(gioTruoc / 60 * 10) / 10}h tuần này (đăng ký lúc ${d.tao_luc})`
+      });
+    });
+    khongChon.forEach(d => dexuat.push({
+      dk: d, ket_qua: 'khong_chon',
+      ly_do: `Ca đã đủ ${cm.can_bao_nhieu_nguoi} người — ưu tiên người đang ít giờ hơn`
+    }));
+    bTrung.forEach(d => dexuat.push({
+      dk: d, ket_qua: 'khong_chon',
+      ly_do: 'Trùng giờ với ca khác đã được xếp trong tuần này'
+    }));
+  }
+
+  const runId = 'ar_' + crypto.randomUUID().slice(0, 12);
+  await env.DB.prepare(`
+    INSERT INTO allocation_runs (id, phong_ban_id, tu_ngay, den_ngay, phien_ban_rule, nguoi_chay_id)
+    VALUES (?, ?, ?, ?, 'v1', ?)
+  `).bind(runId, phongBanId, tuNgay, denNgay, phien.nhan_su_id).run();
+
+  let soChon = 0, soKhongChon = 0;
+  for (const dx of dexuat) {
+    await env.DB.prepare(`
+      INSERT INTO allocation_proposals (allocation_run_id, dang_ky_ca_id, nhan_su_id, ca_mo_id, ket_qua, ly_do)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).bind(runId, dx.dk.id, dx.dk.nhan_su_id, dx.dk.ca_mo_id, dx.ket_qua, dx.ly_do).run();
+
+    if (dx.ket_qua === 'chon') {
+      const kq = await duyetMotDangKy(env, phien, dx.dk);
+      if (kq.ok) soChon++;
+    } else {
+      await env.DB.prepare(
+        "UPDATE dang_ky_ca SET trang_thai = 'cho_xep', cap_nhat_luc = datetime('now','+7 hours') WHERE id = ? AND trang_thai != 'cho_xep'"
+      ).bind(dx.dk.id).run();
+      soKhongChon++;
+    }
+  }
+
+  return json({ ok: true, run_id: runId, so_da_xep: soChon, so_cho_xep: soKhongChon });
 }
 
 export async function duyetDangKy(env, phien, body) {
