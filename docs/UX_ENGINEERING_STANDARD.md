@@ -1,0 +1,81 @@
+# UX Engineering Standard — ERP Alpha Green Commerce
+
+Sếp chốt 22/08/2026: đây là chuẩn UX mặc định cho **mọi module mới hoặc
+module được refactor** từ nay về sau — không chờ Sếp chỉ ra từng chi tiết
+nhỏ (dropdown quá dài, thiếu search, dấu `—` rỗng, action dư...). Khi làm
+1 chức năng, tự kiểm tra và sửa luôn UX smell liên quan **trong phạm vi
+module đang đụng tới** — không tự ý mở rộng audit toàn ERP nếu Sếp không
+yêu cầu (xem thêm nguyên tắc "làm nhẹ đúng quy mô" đã áp dụng xuyên suốt,
+[LIST_UX_AUDIT.md](./LIST_UX_AUDIT.md)).
+
+## Tư duy cốt lõi
+
+Trước khi chọn component, luôn hỏi theo thứ tự:
+**Context → Business Rule → Candidate → UX Component.**
+
+- Người dùng đang muốn hoàn thành việc gì (không phải "chọn 1 ID")?
+- Hệ thống đã biết gì rồi (department, position, dữ liệu đã nhập) để giảm
+  bớt lựa chọn phải đưa ra?
+- Nếu suy ra được duy nhất 1 giá trị → auto-fill, có nút "Thay đổi" nếu
+  cần override, không bắt chọn lại.
+- Một nhiệm vụ chỉ nên có **một** control (không tách ô tìm + ô chọn
+  riêng nếu gộp được).
+
+## Ngưỡng chọn component cho field lựa chọn
+
+| Số lựa chọn hợp lệ | Component |
+|---|---|
+| 1 | Auto-fill (có thể cho "Thay đổi") |
+| 2–7 | Simple `<select>` |
+| ≥8 hoặc có khả năng tăng | Searchable Combobox (xem `ganComboNhanSu()` trong `app.js`) |
+| Hàng trăm/nghìn dòng | Search server-side, không load hết ra frontend |
+
+Enum cố định nhỏ (Trạng thái, Loại lao động...) luôn dùng Simple Select,
+**không** biến thành combobox tìm kiếm dù nguyên tắc trên có vẻ áp dụng
+được — over-engineer cho enum là smell (xem danh sách dưới).
+
+## Parent lọc Child
+
+Field phụ thuộc field khác thì phải lọc theo, và khi Parent đổi mà Child
+hiện tại không còn hợp lệ thì **clear Child**, không để lại dữ liệu mâu
+thuẫn âm thầm (VD Phòng ban đổi mà Quản lý trực tiếp cũ không còn hợp
+lý — hiện tại hệ thống mới chỉ *ưu tiên sắp xếp lại*, chưa ép buộc clear,
+vì chưa có business rule đủ chắc để coi 1 lựa chọn là "không hợp lệ" —
+xem `uuTienCungPhongBan()`).
+
+## Danh sách UX smell — tự sửa khi thấy, không chờ nhắc
+
+- Dropdown >10–20 lựa chọn mà không có search.
+- Cùng một việc có 2 control (ô tìm tách rời dropdown).
+- Option hiển thị dấu nối (`—`, `·`) dù phần sau rỗng.
+- List có khả năng tăng dữ liệu mà không có Search/Filter.
+- Placeholder quá dài.
+- Button dùng thuật ngữ backend (`LOCK_RECORD`, `WAITLISTED`...) thay vì
+  ngôn ngữ nghiệp vụ (`Hoàn tất`, `Chờ chỗ`...).
+- >2 action ngang hàng trong 1 dòng bảng — nên gộp bớt vào `⋯`.
+- Entity có lịch sử/giao dịch mà action mặc định là Xoá cứng thay vì
+  Ngừng hoạt động/Lưu trữ.
+- Empty state không phân biệt "chưa có dữ liệu" vs "lọc không ra kết quả".
+- Form dài hiển thị hết field cùng lúc thay vì "Thông tin thêm" gấp lại.
+
+## Tự review trước khi báo hoàn thành 1 task frontend
+
+Context (đã tận dụng dữ liệu biết trước chưa?) · Selection (dropdown có
+cần search/auto-fill không?) · Action (có dư thao tác lặp không?) ·
+Naming (có lẫn thuật ngữ kỹ thuật không?) · State (Loading/Empty/Error đủ
+chưa?) · Permission (có hiện action ngoài quyền không?) · Performance (có
+load dư dữ liệu không?) · Consistency (có component dùng chung sẵn có mà
+chưa tái dùng không?).
+
+## Giới hạn — tránh làm quá tay
+
+- Không tự ý mở rộng sang module/entity chưa tồn tại trong ERP này chỉ vì
+  nguyên tắc "có thể áp dụng được" — xem [LIST_UX_AUDIT.md](./LIST_UX_AUDIT.md)
+  và [PERMISSION_ARCHITECTURE.md](./PERMISSION_ARCHITECTURE.md) về cách đã
+  từ chối over-engineer tương tự trước đây.
+- Sửa UX smell trong phạm vi đang làm thì tự sửa luôn; nếu phát hiện smell
+  ở module KHÁC không liên quan việc đang làm, hoặc thay đổi có thể ảnh
+  hưởng business logic/workflow, thì báo trước cho Sếp thay vì tự sửa.
+- Component dùng chung (`ganComboNhanSu`, `boDau`, `veBang`, `moHopNhap`)
+  được thêm khi pattern lặp lại lần 2 trở lên — không dựng framework
+  trước khi có nhu cầu thật thứ 2.

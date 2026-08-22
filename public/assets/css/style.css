@@ -965,6 +965,34 @@ tr.canh-bao:hover > td { background: #fbdbd6; }
 .cv-ph-item.an { display: none; }
 .cv-ph-trong { width: 100%; text-align: center; color: var(--text-mute); font-size: 13px; padding: 6px; }
 
+/* Combobox tìm-kiếm-được cho chọn 1 nhân sự (Quản lý trực tiếp, Trưởng
+   phòng, Cấp phát tài sản...) — MỘT control duy nhất: hiển thị giá trị đã
+   chọn, bấm vào mới mở khung tìm+chọn (không tách ô tìm với dropdown thành
+   2 control riêng). */
+.combo1 { position: relative; }
+.combo1-hienthi {
+  width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 9px 12px; border: 1px solid var(--line); border-radius: var(--r-sm);
+  background: var(--white); font-family: inherit; font-size: 14px; color: var(--text);
+  cursor: pointer; text-align: left;
+}
+.combo1-hienthi:focus { outline: none; border-color: var(--sage); box-shadow: 0 0 0 3px rgba(154,171,134,.22); }
+.combo1-hienthi.rong { color: var(--text-mute); }
+.combo1-hienthi .ico { flex: none; opacity: .55; transition: transform .12s; }
+.combo1.mo .combo1-hienthi .ico { transform: rotate(180deg); }
+.combo1-panel {
+  position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 120;
+  background: var(--white); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: 0 12px 34px rgba(0,0,0,.16); padding: 8px;
+}
+.combo1-panel[hidden] { display: none; }
+.combo1-panel input[type="search"] { margin-bottom: 6px; }
+.combo1-panel .ql-goiy { max-height: 220px; overflow-y: auto; border: none; margin: 0; }
+.ql-goiy-item { padding: 8px 10px; font-size: 13.5px; cursor: pointer; border-radius: 8px; }
+.ql-goiy-item:hover { background: var(--surface); }
+.ql-goiy-item.active { background: var(--sage-wash); font-weight: 600; }
+.ql-goiy-trong { padding: 8px 10px; font-size: 13px; color: var(--text-mute); }
+
 /* Chuông thông báo trên topbar */
 .tb-chuong { position: relative; margin-left: auto; }
 .tb-nut { position: relative; background: none; border: none; cursor: pointer; color: var(--text); padding: 8px; border-radius: 10px; display: flex; }

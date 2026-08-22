@@ -87,12 +87,13 @@ async function taiLaiNhanSuQuanTri() {
   // Quản trị (tài khoản) — chỉ hiện nếu tab đó tồn tại trong DOM cho vai trò này.
   const oQtBang = $('#qtBang');
   if (oQtBang) {
-    const oQuanLy = $('#qtQuanLy'), oQuanLyTim = $('#qtQuanLyTim');
-    if (oQuanLy && oQuanLyTim) {
-      const veQuanLy = ganTimChoSelect(oQuanLyTim, oQuanLy,
-        () => uuTienCungPhongBan(nhan_su.filter(n => n.dang_lam), $('#qtPhongBan')?.value).map(n => ({ gia_tri: n.id, nhan: nhanNhanSu(n) })),
-        '— Không —');
-      veQuanLy();
+    const oQuanLy = $('#qtQuanLy');
+    if (oQuanLy) {
+      const { capNhatHienThi: veQuanLy } = ganComboNhanSu({
+        hienThi: $('#qtQuanLyHienThi'), panel: $('#qtQuanLyPanel'),
+        tim: $('#qtQuanLyTim'), goiY: $('#qtQuanLyGoiY'), giaTri: oQuanLy
+      }, () => uuTienCungPhongBan(nhan_su.filter(n => n.dang_lam), $('#qtPhongBan')?.value).map(n => ({ gia_tri: n.id, nhan: nhanNhanSu(n) })),
+        '— Không —', 'Chọn quản lý...');
       // Đổi Phòng ban thì sắp lại ưu tiên (không tự xoá lựa chọn đang có).
       // Gán qua .onchange (không addEventListener) — an toàn khi gọi lại nhiều lần.
       const oPbTaoNs = $('#qtPhongBan');
@@ -330,25 +331,77 @@ function uuTienCungPhongBan(ds, phongBanId) {
   });
 }
 
-/* Gắn ô tìm kiếm phía trên 1 <select> nhiều lựa chọn (chọn nhân sự...) —
-   gõ chữ gì lọc option còn lại theo boDau() (không dấu, không phân biệt
-   hoa-thường), giữ lại lựa chọn đang chọn nếu vẫn còn hợp lệ sau khi lọc.
-   Trả về hàm ve() để gọi lại mỗi khi nạp danh sách gốc mới. */
-function ganTimChoSelect(oTim, oSelect, layTuyChon, coRong) {
-  function ve() {
-    const k = boDau((oTim.value || '').trim());
-    const dsGoc = layTuyChon();
-    const hienTai = oSelect.value;
-    const loc = k ? dsGoc.filter(t => boDau(t.nhan).includes(k)) : dsGoc;
-    oSelect.innerHTML = (coRong ? `<option value="">${esc(coRong)}</option>` : '') +
-      loc.map(t => `<option value="${esc(t.gia_tri)}">${esc(t.nhan)}</option>`).join('');
-    if (loc.some(t => String(t.gia_tri) === hienTai)) oSelect.value = hienTai;
+/* Ô tìm + gợi ý hiện NGAY dưới ô (không phải <select> phải bấm mở mới thấy)
+   — dùng cho mọi chỗ chọn 1 nhân sự (Quản lý trực tiếp, Trưởng phòng, Cấp
+   phát tài sản...). MỘT control duy nhất: nút hiển thị giá trị đã chọn,
+   bấm vào mới mở khung tìm+chọn (không phải 2 control tách rời). oGiaTri
+   là <input type="hidden"> giữ id đã chọn (giữ nguyên .value để chỗ đọc/
+   ghi cũ không phải đổi). Gõ lọc theo boDau() (không dấu, không phân biệt
+   hoa-thường). Enter chọn dòng đầu, Escape đóng. Trả về { capNhatHienThi }
+   để gọi lại khi nạp danh sách/giá trị mới. */
+function ganComboNhanSu({ hienThi, panel, tim, goiY, giaTri }, layTuyChon, coRong, rongChu) {
+  const combo = hienThi.closest('.combo1');
+  function capNhatHienThi() {
+    const hienTai = layTuyChon().find(t => String(t.gia_tri) === giaTri.value);
+    hienThi.querySelector('span').textContent = hienTai ? hienTai.nhan : (rongChu || 'Chọn...');
+    hienThi.classList.toggle('rong', !hienTai);
   }
-  // Gán qua .oninput (không addEventListener) — gọi hàm này nhiều lần (mỗi lần
-  // mở modal/nạp lại data) vẫn an toàn, không bị chồng nhiều listener.
-  oTim.oninput = ve;
-  return ve;
+  function ve() {
+    const k = boDau((tim.value || '').trim());
+    const dsGoc = layTuyChon();
+    const loc = k ? dsGoc.filter(t => boDau(t.nhan).includes(k)) : dsGoc;
+    const rongHtml = coRong
+      ? `<div class="ql-goiy-item${giaTri.value ? '' : ' active'}" data-gt="">${esc(coRong)}</div>` : '';
+    goiY.innerHTML = rongHtml + (loc.length
+      ? loc.map(t => `<div class="ql-goiy-item${String(t.gia_tri) === giaTri.value ? ' active' : ''}" data-gt="${esc(t.gia_tri)}">${esc(t.nhan)}</div>`).join('')
+      : (rongHtml ? '' : '<div class="ql-goiy-trong">Không tìm thấy</div>'));
+  }
+  function mo() {
+    combo.classList.add('mo');
+    panel.hidden = false;
+    tim.value = '';
+    ve();
+    tim.focus();
+  }
+  function dong() {
+    combo.classList.remove('mo');
+    panel.hidden = true;
+  }
+  function chon(gt) {
+    giaTri.value = gt;
+    capNhatHienThi();
+    dong();
+    hienThi.focus();
+  }
+  // Gán qua .onclick/.oninput/.onkeydown (không addEventListener) — gọi
+  // hàm này nhiều lần (mỗi lần mở modal/nạp lại data) vẫn an toàn, không
+  // chồng nhiều listener chạy trùng. Đóng khi click ra ngoài xử lý chung ở
+  // 1 listener document duy nhất (xem cuối file), không gắn lại mỗi lần.
+  hienThi.onclick = () => (panel.hidden ? mo() : dong());
+  tim.oninput = ve;
+  goiY.onclick = e => { const it = e.target.closest('[data-gt]'); if (it) chon(it.dataset.gt); };
+  tim.onkeydown = e => {
+    if (e.key === 'Escape') { dong(); hienThi.focus(); }
+    else if (e.key === 'Enter') {
+      e.preventDefault();
+      const dau = goiY.querySelector('.ql-goiy-item');
+      if (dau) chon(dau.dataset.gt);
+    }
+  };
+  capNhatHienThi();
+  return { capNhatHienThi };
 }
+
+/* Đóng mọi combobox (.combo1) đang mở khi click ra ngoài — 1 listener
+   dùng chung cho toàn trang, không gắn lại theo từng combo. */
+document.addEventListener('click', e => {
+  document.querySelectorAll('.combo1.mo').forEach(c => {
+    if (c.contains(e.target)) return;
+    c.classList.remove('mo');
+    const p = c.querySelector('.combo1-panel');
+    if (p) p.hidden = true;
+  });
+});
 
 /* Hộp nhập nhanh dùng chung — thay prompt()/confirm() tự do của trình
    duyệt bằng modal cùng khuôn với Sửa hồ sơ nhân sự. loai: 'text' | 'select'
@@ -360,28 +413,17 @@ function moHopNhap({ tieuDe, loai = 'text', nhan = '', giaTri = '', placeholder 
   oNhan.textContent = nhan; oNhan.hidden = !nhan;
 
   const oInput = $('#hopNhap-input'), oSelect = $('#hopNhap-select'), oTextarea = $('#hopNhap-textarea');
-  const oSelectTim = $('#hopNhap-selecttim');
-  oInput.hidden = true; oSelect.hidden = true; oTextarea.hidden = true; oSelectTim.hidden = true;
+  const oSelectCombo = $('#hopNhap-selectcombo');
+  oInput.hidden = true; oSelectCombo.hidden = true; oTextarea.hidden = true;
   let o;
-  oSelectTim.oninput = null;
   if (loai === 'select') {
-    const veChon = () => {
-      const k = boDau((oSelectTim.value || '').trim());
-      const hienTai = oSelect.value;
-      const loc = k ? tuyChon.filter(t => boDau(t.nhan).includes(k)) : tuyChon;
-      oSelect.innerHTML = loc.length
-        ? loc.map(t => `<option value="${esc(t.gia_tri)}">${esc(t.nhan)}</option>`).join('')
-        : '<option value="" disabled>Không tìm thấy</option>';
-      if (loc.some(t => String(t.gia_tri) === hienTai)) oSelect.value = hienTai;
-    };
-    // Chỉ hiện ô tìm khi danh sách đủ dài — danh sách ngắn gõ tìm không cần thiết.
-    oSelectTim.hidden = tuyChon.length <= 8;
-    oSelectTim.value = '';
-    veChon();
     oSelect.value = giaTri || '';
-    oSelect.hidden = false;
-    if (!oSelectTim.hidden) oSelectTim.oninput = veChon;
-    o = oSelectTim.hidden ? oSelect : oSelectTim;
+    ganComboNhanSu({
+      hienThi: $('#hopNhap-selecthienthi'), panel: $('#hopNhap-selectpanel'),
+      tim: $('#hopNhap-selecttim'), goiY: $('#hopNhap-selectgoiy'), giaTri: oSelect
+    }, () => tuyChon, null, 'Chọn...');
+    oSelectCombo.hidden = false;
+    o = $('#hopNhap-selecthienthi');
   } else if (loai === 'textarea') {
     o = oTextarea; oTextarea.value = giaTri || ''; oTextarea.placeholder = placeholder;
     o.hidden = false;
@@ -2008,13 +2050,14 @@ if (TOI.quyen.includes('nhansu')) {
       oCd.value = n.chuc_danh_id || '';
       oPb.value = n.phong_ban_id || '';
 
-      const oQl = $('#nsSua-quanly'), oQlTim = $('#nsSua-quanlytim');
-      ganTimChoSelect(oQlTim, oQl,
-        () => uuTienCungPhongBan(DS_NHAN_SU_QT.filter(x => x.dang_lam && x.id !== n.id), n.phong_ban_id)
-          .map(x => ({ gia_tri: x.id, nhan: nhanNhanSu(x) })),
-        '— Không —')();
-      oQlTim.value = '';
+      const oQl = $('#nsSua-quanly');
       oQl.value = n.quan_ly_id || '';
+      ganComboNhanSu({
+        hienThi: $('#nsSua-quanlyhienthi'), panel: $('#nsSua-quanlypanel'),
+        tim: $('#nsSua-quanlytim'), goiY: $('#nsSua-quanlygoiy'), giaTri: oQl
+      }, () => uuTienCungPhongBan(DS_NHAN_SU_QT.filter(x => x.dang_lam && x.id !== n.id), n.phong_ban_id)
+          .map(x => ({ gia_tri: x.id, nhan: nhanNhanSu(x) })),
+        '— Không —', 'Chọn quản lý...');
 
       const oFieldLuong = $('#nsSua-fieldluong');
       if (oFieldLuong) oFieldLuong.hidden = !TOI.la_admin;
@@ -3116,11 +3159,12 @@ async function khoiDongTaiSan() {
     const t = DS_TS.find(x => x.id === id);
     $('#tsCapPhatId').value = id;
     $('#tsCapPhatTieuDe').textContent = 'Cấp phát: ' + (t ? t.ten : '');
-    const oTsNguoiTim = $('#tsCapPhatNguoiTim');
-    oTsNguoiTim.value = '';
-    ganTimChoSelect(oTsNguoiTim, $('#tsCapPhatNguoi'),
-      () => dsNhanSuChon.map(n => ({ gia_tri: n.id, nhan: nhanNhanSu(n) })),
-      '— Chọn nhân sự —')();
+    $('#tsCapPhatNguoi').value = '';
+    ganComboNhanSu({
+      hienThi: $('#tsCapPhatNguoiHienThi'), panel: $('#tsCapPhatNguoiPanel'),
+      tim: $('#tsCapPhatNguoiTim'), goiY: $('#tsCapPhatNguoiGoiY'), giaTri: $('#tsCapPhatNguoi')
+    }, () => dsNhanSuChon.map(n => ({ gia_tri: n.id, nhan: nhanNhanSu(n) })),
+      null, 'Chọn nhân sự...');
     $('#tsCapPhatViTri').value = t ? (t.vi_tri || '') : '';
     $('#tsCapPhatGhiChu').value = '';
     $('#tsCapPhatLoi').textContent = '';
