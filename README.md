@@ -1,13 +1,21 @@
 # ERP nội bộ — Công ty TNHH Alpha Green Commerce
 
-Hệ thống quản trị nội bộ: **Tổng quan · Danh bạ · Nhân sự · Kinh doanh · Kho vận · Kế toán**.
+Hệ thống quản trị nội bộ: **Tổng quan · Danh bạ · Nhân sự · Kinh doanh · Kho vận · Kế toán · Xếp ca · Tài sản · Quản trị**.
 Dùng được trên cả máy tính và điện thoại.
 
 Chạy trên Cloudflare Workers + D1 (gói miễn phí).
 
+**Người mới vào dự án đọc [docs/START-HERE.md](docs/START-HERE.md) trước** (10 phút, không cần biết kỹ thuật). Claude Code đọc [CLAUDE.md](CLAUDE.md).
+
 ---
 
 ## Trạng thái từng phần
+
+⚠️ Bảng dưới đây đã lỗi thời tính đến 22/08/2026 — Đơn hàng/Đơn hoàn đã
+chạy dữ liệu thật (Shopee/TikTok đồng bộ sống), Sản phẩm/Kho vận vẫn chưa
+có dữ liệu thật. Trạng thái đúng và chi tiết từng bảng xem
+[docs/MODULE-MAP.md](docs/MODULE-MAP.md) và
+[docs/audit/AUDIT-GOLIVE-MASTERDATA.md](docs/audit/AUDIT-GOLIVE-MASTERDATA.md).
 
 | Phần | Trạng thái | Được dùng dữ liệu thật? |
 |---|---|---|
@@ -15,7 +23,7 @@ Chạy trên Cloudflare Workers + D1 (gói miễn phí).
 | **Danh bạ** | ✅ Máy chủ thật (D1) | Có |
 | **Nhân sự** (gồm lương) | ✅ Máy chủ thật (D1) | Có |
 | Tổng quan | ⚠️ Dữ liệu mẫu | **Chưa** |
-| Kinh doanh | ⚠️ Dữ liệu mẫu — chờ nối Shopee API | **Chưa** |
+| Kinh doanh | ⚠️ Dữ liệu mẫu | **Chưa** |
 | Kho vận | ⚠️ Dữ liệu mẫu | **Chưa** |
 | Kế toán | ⚠️ Dữ liệu mẫu | **Chưa** |
 
