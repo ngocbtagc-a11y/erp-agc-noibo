@@ -1921,7 +1921,7 @@
 <div class="modal-nen" id="cvFormModalNen" hidden>
   <div class="modal">
     <h4>+ Giao Mục Tiêu</h4>
-    <p class="hint" style="margin:0 0 16px">Tự thêm việc cần làm cho bản thân (chọn "Tôi"), hoặc giao cho người khác rõ đầu ra. Mời thêm người phối hợp để làm cùng. Cần mục tiêu mới thì tạo ngay trong mục "Thuộc mục tiêu" bên dưới.</p>
+    <p class="hint" style="margin:0 0 16px">Tự thêm việc cần làm cho bản thân (chọn "Tôi"), hoặc giao cho người khác rõ đầu ra. Nếu việc này thuộc 1 mục tiêu lớn hơn (để tự tính tiến độ), chọn hoặc tạo mới ở mục "Thuộc mục tiêu" — để trống thì chỉ là 1 việc thường, không hiện ở Trạm Mục Tiêu.</p>
     <form id="cv-form" class="form-luoi" autocomplete="off">
       <div class="field field-rong">
         <label>Giao cho ai * <span class="hint">(người chịu trách nhiệm chính)</span></label>
@@ -1950,35 +1950,36 @@
         <input type="date" id="cv-han-chot">
       </div>
 
-      <div class="field field-rong" style="margin-bottom:0">
-        <button type="button" class="btn-nho" id="cv-nut-tuychon">+ Thêm tuỳ chọn (mục tiêu, người phối hợp, ghi chú)</button>
+      <div class="field field-rong" id="cv-muc-tieu-khoi">
+        <label>Thuộc mục tiêu <span class="hint">(để trống nếu chỉ là việc thường ngày, không cần tính vào mục tiêu)</span></label>
+        <select id="cv-muc-tieu">
+          <option value="">— Không gắn mục tiêu, chỉ là việc thường —</option>
+          <option value="_moi_">+ Tạo mục tiêu mới…</option>
+        </select>
       </div>
-      <div class="field-rong" id="cv-tuychon-them" hidden>
-        <div class="field field-rong">
-          <label>Thuộc mục tiêu <span class="hint">(tuỳ chọn — để tự tính tiến độ mục tiêu)</span></label>
-          <select id="cv-muc-tieu">
-            <option value="">— Không gắn mục tiêu —</option>
-            <option value="_moi_">+ Tạo mục tiêu mới…</option>
+      <div class="field-rong" id="cv-mtm-khoi" hidden>
+        <div class="field">
+          <label>Cấp mục tiêu mới *</label>
+          <select id="cv-mtm-cap">
+            <option value="ca_nhan">Cá nhân (tôi)</option>
+            <option value="phong_ban">Phòng ban</option>
+            <option value="cong_ty" id="cv-mtm-opt-congty" hidden>Công ty</option>
           </select>
         </div>
-        <div class="field-rong" id="cv-mtm-khoi" hidden>
-          <div class="field">
-            <label>Cấp mục tiêu mới *</label>
-            <select id="cv-mtm-cap">
-              <option value="ca_nhan">Cá nhân (tôi)</option>
-              <option value="phong_ban">Phòng ban</option>
-              <option value="cong_ty" id="cv-mtm-opt-congty" hidden>Công ty</option>
-            </select>
-          </div>
-          <div class="field" id="cv-mtm-field-bophan">
-            <label>Phòng ban / bộ phận *</label>
-            <input type="text" id="cv-mtm-bophan" placeholder="VD: Kho vận, Kế toán, Vận hành sàn...">
-          </div>
-          <div class="field field-rong">
-            <label>Tên mục tiêu mới *</label>
-            <input type="text" id="cv-mtm-tieude" placeholder="VD: Doanh thu Shopee đạt 30 tỷ trong quý">
-          </div>
+        <div class="field" id="cv-mtm-field-bophan">
+          <label>Phòng ban / bộ phận *</label>
+          <input type="text" id="cv-mtm-bophan" placeholder="VD: Kho vận, Kế toán, Vận hành sàn...">
         </div>
+        <div class="field field-rong">
+          <label>Tên mục tiêu mới *</label>
+          <input type="text" id="cv-mtm-tieude" placeholder="VD: Doanh thu Shopee đạt 30 tỷ trong quý">
+        </div>
+      </div>
+
+      <div class="field field-rong" style="margin-bottom:0">
+        <button type="button" class="btn-nho" id="cv-nut-tuychon">+ Thêm tuỳ chọn (người phối hợp, ghi chú)</button>
+      </div>
+      <div class="field-rong" id="cv-tuychon-them" hidden>
         <div class="field field-rong">
           <label>Người phối hợp <span class="hint">(tuỳ chọn — chọn nhiều người hỗ trợ)</span></label>
           <div class="search cv-ph-search">

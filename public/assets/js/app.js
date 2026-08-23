@@ -1482,15 +1482,19 @@ async function khoiDongCongViec() {
   chonNguoiNhan.addEventListener('change', apDungCheDoTodo);
   apDungCheDoTodo();
 
-  // Form gọn: mục tiêu/phối hợp/ghi chú thêm gộp sau 1 nút "+ Thêm tuỳ chọn",
-  // ẩn mặc định — 4 ô chính (Giao cho ai/Tên việc/Đầu ra/Hạn chót) là đủ cho
-  // phần lớn việc, đỡ rối mắt (Sếp Ngọc chốt 21/08/2026: "thiết kế gọn, dễ
-  // làm, dễ hiểu thôi nhé").
+  // Form gọn: người phối hợp/ghi chú thêm gộp sau 1 nút "+ Thêm tuỳ chọn",
+  // ẩn mặc định — 5 ô chính (Giao cho ai/Tên việc/Đầu ra/Hạn chót/Thuộc mục
+  // tiêu) là đủ cho phần lớn việc, đỡ rối mắt (Sếp Ngọc chốt 21/08/2026:
+  // "thiết kế gọn, dễ làm, dễ hiểu thôi nhé"). "Thuộc mục tiêu" LUÔN hiện
+  // sẵn (không giấu trong tuỳ chọn) — trước đây bị ẩn khiến người dùng bấm
+  // "+ Giao Mục Tiêu", điền xong, chỉ ra 1 Việc thường chứ không tạo Mục
+  // tiêu, gây hiểu lầm "sao mục tiêu tôi tự giao không thấy ở Trạm Mục
+  // Tiêu" (Sếp Ngọc phản ánh 23/08/2026).
   const oTuyChon = $('#cv-tuychon-them');
   const nutTuyChon = $('#cv-nut-tuychon');
   function moTuyChon(hien) {
     oTuyChon.hidden = !hien;
-    nutTuyChon.textContent = hien ? '− Ẩn tuỳ chọn thêm' : '+ Thêm tuỳ chọn (mục tiêu, người phối hợp, ghi chú)';
+    nutTuyChon.textContent = hien ? '− Ẩn tuỳ chọn thêm' : '+ Thêm tuỳ chọn (người phối hợp, ghi chú)';
   }
   nutTuyChon.addEventListener('click', () => moTuyChon(oTuyChon.hidden));
 
@@ -1535,7 +1539,7 @@ async function khoiDongCongViec() {
   window.MO_FORM_GIAO_VIEC = (mucTieuId, nguoiNhanId) => {
     dongMoFormCv(true);
     if (nguoiNhanId) { chonNguoiNhan.value = nguoiNhanId; veNguoiNhanCv(); }
-    if (mucTieuId) { oCvMucTieu.value = mucTieuId; capNhatMtmKhoi(); moTuyChon(true); }
+    if (mucTieuId) { oCvMucTieu.value = mucTieuId; capNhatMtmKhoi(); }
     apDungCheDoTodo();
   };
 
