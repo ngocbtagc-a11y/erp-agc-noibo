@@ -180,6 +180,22 @@
         </div>
       </div>
 
+      <!-- Tổng quan việc TOÀN CÔNG TY — chỉ Admin thấy (Sếp Ngọc/Sếp Phong xem
+           full công ty, khác bảng "Việc cần làm/tôi giao" bên dưới vốn chỉ
+           lọc theo đúng người đang xem). -->
+      <div class="panel" id="cv-tqct-panel" hidden>
+        <div class="panel-head">
+          <h4>📊 Tổng quan công việc toàn công ty</h4>
+          <span class="hint">Chỉ Admin thấy khối này</span>
+        </div>
+        <div class="panel-body">
+          <div class="stats" id="cv-tqct-the"></div>
+          <div id="cv-tqct-phongban" style="margin-top:16px"></div>
+          <p class="hint" id="cv-tqct-quahan-nhan" style="margin:16px 0 8px" hidden>Việc quá hạn cần chú ý</p>
+          <div id="cv-tqct-quahan"></div>
+        </div>
+      </div>
+
       <div class="seg" id="cvSeg">
         <button class="seg-nut active" data-cv="nhan">Việc cần làm</button>
         <button class="seg-nut" data-cv="phoihop">Việc phối hợp</button>

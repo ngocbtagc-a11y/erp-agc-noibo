@@ -1844,6 +1844,53 @@ async function cvLichSu(req, env) {
   return json({ viec: results || [] });
 }
 
+/* Tổng quan việc TOÀN CÔNG TY — chỉ Admin (Sếp Ngọc/Sếp Phong xem "full
+   toàn bộ công ty" thay vì chỉ việc của riêng mình, đúng như "Việc cần
+   làm/Việc tôi giao" đang lọc theo người xem). Dùng lại đúng bảng cong_viec
+   đã có, không tạo bảng/API riêng cho từng chỉ số — chỉ 1 query tổng hợp +
+   1 query top việc quá hạn (Sếp Ngọc chốt 23/08/2026: làm nhẹ, không xây
+   dashboard nhiều khối biểu đồ). */
+async function cvTongQuanCongTy(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  if (!laAdmin(phien.vai_tro)) return loi('Bạn không có quyền', 403);
+
+  const homNay = new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
+
+  const [tongTheoPhong, quaHan] = await Promise.all([
+    env.DB.prepare(`
+      SELECT COALESCE(NULLIF(n.bo_phan, ''), '— Chưa gán phòng ban') AS bo_phan,
+             COUNT(*) AS dang_mo,
+             SUM(CASE WHEN c.han_chot IS NOT NULL AND c.han_chot < ? THEN 1 ELSE 0 END) AS qua_han,
+             SUM(CASE WHEN c.trang_thai = 'cho_duyet' THEN 1 ELSE 0 END) AS cho_duyet
+        FROM cong_viec c
+        LEFT JOIN nhan_su n ON n.id = c.nguoi_nhan_id
+       WHERE c.trang_thai IN ('moi', 'dang_lam', 'cho_duyet')
+       GROUP BY bo_phan
+       ORDER BY dang_mo DESC
+    `).bind(homNay).all(),
+    env.DB.prepare(`
+      SELECT c.id, c.tieu_de, c.han_chot, c.nguoi_nhan_ten, c.nguoi_giao_ten,
+             COALESCE(NULLIF(n.bo_phan, ''), '—') AS bo_phan
+        FROM cong_viec c
+        LEFT JOIN nhan_su n ON n.id = c.nguoi_nhan_id
+       WHERE c.trang_thai IN ('moi', 'dang_lam', 'cho_duyet')
+         AND c.han_chot IS NOT NULL AND c.han_chot < ?
+       ORDER BY c.han_chot ASC
+       LIMIT 15
+    `).bind(homNay).all()
+  ]);
+
+  const phong = tongTheoPhong.results || [];
+  return json({
+    dang_mo: phong.reduce((s, p) => s + p.dang_mo, 0),
+    qua_han: phong.reduce((s, p) => s + p.qua_han, 0),
+    cho_duyet: phong.reduce((s, p) => s + p.cho_duyet, 0),
+    theo_phong_ban: phong,
+    viec_qua_han: quaHan.results || []
+  });
+}
+
 /* ==========================================================================
    MỤC TIÊU — MBOs 3 tầng: Công ty -> Phòng ban -> Cá nhân (Sếp Phong chốt
    20/08/2026, Sếp Ngọc bổ sung tầng cá nhân + gộp chung 1 khối "Trạm Mục
@@ -2807,6 +2854,7 @@ const DUONG_DAN = {
   'POST /api/cong-viec/tao':       cvTao,
   'POST /api/cong-viec/cap-nhat':  cvCapNhat,
   'GET  /api/cong-viec/lich-su':   cvLichSu,
+  'GET  /api/cong-viec/tong-quan-congty': cvTongQuanCongTy,
   'GET  /api/muc-tieu/danh-sach': mtDanhSach,
   'POST /api/muc-tieu/tao':       mtTao,
   'POST /api/muc-tieu/chot':      mtChot,

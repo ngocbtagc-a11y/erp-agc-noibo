@@ -69,6 +69,7 @@ export const API = {
     method: 'POST', body: JSON.stringify({ id, trang_thai: trangThai, ket_qua: ketQua })
   }),
   cvLichSu: () => goi('/api/cong-viec/lich-su'),
+  cvTongQuanCongTy: () => goi('/api/cong-viec/tong-quan-congty'),
 
   /* ---- Mục tiêu (MBOs: công ty / phòng ban) ---- */
   mtDanhSach: (nam, quy) => goi('/api/muc-tieu/danh-sach' +

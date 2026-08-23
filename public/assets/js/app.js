@@ -1718,8 +1718,46 @@ async function khoiDongCongViec() {
   $('#cv-bang-nhan').addEventListener('click', xuLyNut);
   $('#cv-bang-giao').addEventListener('click', xuLyNut);
 
-  window.LAM_MOI_CONGVIEC = taiLai;   // để chuông thông báo gọi làm mới được
+  // Tổng quan việc TOÀN CÔNG TY — chỉ Admin (Sếp Ngọc/Sếp Phong yêu cầu
+  // 23/08/2026: "xem full toàn bộ công ty" ngay ở khu vực Việc, không chỉ
+  // việc của riêng mình). Dùng lại .stats/list-item đã có, không tạo
+  // component mới (Rule 5, docs/ERP-CONSTITUTION.md).
+  async function taiLaiTongQuanCongTy() {
+    if (!TOI.la_admin) return;
+    $('#cv-tqct-panel').hidden = false;
+    try {
+      const kq = await API.cvTongQuanCongTy();
+      veThe('#cv-tqct-the', [
+        { k: 'Việc đang mở', v: String(kq.dang_mo), d: 'Toàn công ty' },
+        { k: 'Việc quá hạn', v: String(kq.qua_han), d: kq.qua_han ? 'Cần xử lý' : 'Không có', dir: kq.qua_han ? 'down' : '' },
+        { k: 'Chờ duyệt', v: String(kq.cho_duyet), d: 'Toàn công ty' }
+      ]);
+
+      const oPhong = $('#cv-tqct-phongban');
+      oPhong.innerHTML = (kq.theo_phong_ban || []).length
+        ? '<div class="table-wrap"><table><thead><tr>' +
+          '<th>Phòng ban</th><th class="num">Đang mở</th><th class="num">Quá hạn</th><th class="num">Chờ duyệt</th>' +
+          '</tr></thead><tbody>' +
+          kq.theo_phong_ban.map(p => `<tr>` +
+            `<td>${esc(p.bo_phan)}</td>` +
+            `<td class="num">${p.dang_mo}</td>` +
+            `<td class="num">${p.qua_han > 0 ? `<span class="canh-bao-chu">${p.qua_han}</span>` : '0'}</td>` +
+            `<td class="num">${p.cho_duyet}</td>` +
+          `</tr>`).join('') +
+          '</tbody></table></div>'
+        : '';
+
+      $('#cv-tqct-quahan-nhan').hidden = !(kq.viec_qua_han || []).length;
+      veDanhSach('#cv-tqct-quahan', (kq.viec_qua_han || []).map(v => {
+        const [nam, thang, ngay] = (v.han_chot || '').split('-');
+        return { m: 'danger', b: v.tieu_de, s: `${v.nguoi_nhan_ten} · ${v.bo_phan}`, t: `Hạn ${ngay}/${thang}/${nam}` };
+      }));
+    } catch { /* im lặng — không chặn phần còn lại của trang */ }
+  }
+
+  window.LAM_MOI_CONGVIEC = async () => { await taiLai(); await taiLaiTongQuanCongTy(); };
   await taiLai();
+  await taiLaiTongQuanCongTy();
 }
 
 /* ==========================================================================
