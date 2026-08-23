@@ -1870,3 +1870,37 @@ tr.kd-chiadoi td {
 }
 .pw-eye:hover { color: var(--ink-soft); background: var(--sage-wash); }
 .pw-eye svg { width: 20px; height: 20px; }
+
+/* ==========================================================================
+   TÀI SẢN — Chi tiết (QR + info) + Tem in (@media print)
+   ========================================================================== */
+.ts-ct-dau { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+.ts-ct-dau h4 { margin: 0 0 4px; }
+.ts-ct-qr { flex: none; width: 96px; }
+.ts-ct-qr svg { width: 100%; height: auto; display: block; }
+.ts-ct-info { display: flex; flex-direction: column; gap: 2px; }
+.ts-ct-dong { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 13.5px; }
+.ts-ct-dong span { color: var(--text-mute); }
+.ts-ct-dong:last-child { border-bottom: none; }
+
+/* Tem in — ẩn hoàn toàn khi xem thường, chỉ hiện lúc in (window.print()).
+   Khổ ~50x30mm, đủ cho máy in tem lẫn máy in giấy A4 thường. */
+.ts-in-tem-vung { display: none; }
+.ts-tem {
+  width: 50mm; padding: 3mm; box-sizing: border-box;
+  font-family: var(--sans); text-align: center; color: #000;
+}
+.ts-tem-cty { font-size: 7px; font-weight: 700; letter-spacing: .04em; }
+.ts-tem-ten { font-size: 9px; font-weight: 600; margin-top: 1.5mm; line-height: 1.2; }
+.ts-tem-ma { font-size: 13px; font-weight: 800; letter-spacing: .06em; margin-top: 1mm; }
+.ts-tem-qr { margin: 1.5mm auto 0; width: 26mm; }
+.ts-tem-qr svg { width: 100%; height: auto; display: block; }
+.ts-tem-phu { font-size: 6px; color: #333; margin-top: 1mm; letter-spacing: .03em; }
+
+@media print {
+  body * { visibility: hidden; }
+  .ts-in-tem-vung, .ts-in-tem-vung * { visibility: visible; }
+  .ts-in-tem-vung {
+    display: block; position: fixed; top: 0; left: 0; margin: 0;
+  }
+}

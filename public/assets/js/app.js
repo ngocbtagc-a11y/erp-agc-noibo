@@ -887,6 +887,86 @@ function veDanhSach(dich, ds) {
   });
 }
 
+// Render 1 danh mục dạng Data Lock (Phòng ban/Chức danh/Đơn vị tính/Danh
+// mục tài sản/Vị trí tài sản...) — cùng khuôn cho mọi bảng {id,ten,
+// hoat_dong,trang_thai}. Rút thành hàm dùng chung khi pattern lặp lại lần
+// 2 (Tài sản), đúng UX_ENGINEERING_STANDARD.md — không viết lại logic
+// khoá/sửa/ẩn riêng từng module (Rule 5).
+function veDanhMuc(dsId, demId, trongId, ds, xuLySua, xuLyAn, xuLyKhoa, dongPhu, xuLyLamMoi) {
+  const box = $(dsId);
+  box.innerHTML = '';
+  ds.forEach(m => {
+    const daKhoa = m.trang_thai === 'da_khoa';
+    const r = el('div', '', '');
+    r.style.cssText = 'display:flex;flex-direction:column;gap:4px;padding:8px 0;border-bottom:1px solid var(--line)';
+    const nutSua = `<button type="button" class="btn-nho" data-sua="${m.id}">Sửa</button> `;
+    const nutKhoa = daKhoa
+      ? (TOI.la_admin ? `<button type="button" class="btn-nho" data-mokhoa="${m.id}">Mở lại</button> ` : '')
+      : `<button type="button" class="btn-nho" data-khoa="${m.id}">Hoàn tất</button> `;
+    r.innerHTML =
+      `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px">` +
+      `<span>${esc(m.ten)}${m.hoat_dong ? '' : ' <span class="tag mute">Đã ẩn</span>'}` +
+        `${daKhoa ? ' <span class="tag warn">🔒 Đã khoá</span>' : ''}</span>` +
+      `<span>${nutSua}${nutKhoa}` +
+      `<button type="button" class="btn-nho" data-an="${m.id}" data-hd="${m.hoat_dong ? 0 : 1}">${m.hoat_dong ? 'Ẩn' : 'Hiện'}</button></span>` +
+      `</div>` + (dongPhu ? dongPhu(m) : '');
+    box.appendChild(r);
+  });
+  if (demId) $(demId).textContent = ds.length ? `${ds.length} mục` : '';
+  if (trongId) $(trongId).hidden = ds.length > 0;
+
+  box.onclick = async (e) => {
+    const btnSua = e.target.closest('[data-sua]');
+    const btnAn = e.target.closest('[data-an]');
+    const btnKhoa = e.target.closest('[data-khoa]');
+    const btnMoKhoa = e.target.closest('[data-mokhoa]');
+    const btnGanTruong = e.target.closest('[data-gan-truong]');
+    if (btnGanTruong) {
+      const m = ds.find(x => String(x.id) === btnGanTruong.dataset.ganTruong);
+      const dsChon = DS_NHAN_SU_QT.length ? DS_NHAN_SU_QT : (await API.danhBa().catch(() => ({ danh_ba: [] }))).danh_ba || [];
+      moHopNhap({
+        tieuDe: `Trưởng phòng — ${m.ten}`,
+        loai: 'select',
+        nhan: 'Người làm trưởng phòng',
+        giaTri: m.truong_phong_id || '',
+        tuyChon: [
+          { gia_tri: '', nhan: '— Không gán —' },
+          ...dsChon.map(n => ({ gia_tri: n.id, nhan: nhanNhanSu(n) }))
+        ],
+        xuLyLuu: async val => { await API.dlnGanTruongPhong(m.id, val || null); await xuLyLamMoi?.(); }
+      });
+      return;
+    }
+    if (btnSua) {
+      const m = ds.find(x => String(x.id) === btnSua.dataset.sua);
+      if (m.trang_thai === 'da_khoa' && !TOI.la_admin) {
+        alert('Mục này đã khoá — cần Admin sửa hoặc mở khoá lại.');
+        return;
+      }
+      moHopNhap({
+        tieuDe: `Sửa tên — ${m.ten}`,
+        nhan: 'Tên mới *',
+        giaTri: m.ten,
+        xuLyLuu: async val => {
+          if (!val) throw new Error('Vui lòng nhập tên.');
+          await xuLySua(m.id, val);
+          await xuLyLamMoi?.();
+        }
+      });
+    } else if (btnAn) {
+      try { await xuLyAn(btnAn.dataset.an, btnAn.dataset.hd === '1'); await xuLyLamMoi?.(); }
+      catch (err) { alert(err.message || 'Không lưu được, thử lại nhé.'); }
+    } else if (btnKhoa) {
+      if (!confirm('Hoàn tất mục này? Sau đó người thường sẽ không sửa tên được nữa — chỉ Admin mới sửa hoặc mở lại.')) return;
+      try { await xuLyKhoa(btnKhoa.dataset.khoa, 'da_khoa'); await xuLyLamMoi?.(); }
+      catch (err) { alert(err.message || 'Không thực hiện được, thử lại nhé.'); }
+    } else if (btnMoKhoa) {
+      try { await xuLyKhoa(btnMoKhoa.dataset.mokhoa, 'nhap'); await xuLyLamMoi?.(); }
+      catch (err) { alert(err.message || 'Không thực hiện được, thử lại nhé.'); }
+    }
+  };
+}
+
 function veBang(dich, ds, hang) {
   const box = $(dich);
   if (!box) return;
@@ -2917,95 +2997,20 @@ async function khoiDongDuLieuNen() {
       : [{ m: 'sage', b: 'Dữ liệu nền đã đủ cho các mục đang theo dõi.', s: '', t: '' }]);
   }
 
-  // Render 1 danh mục (Phòng ban/Chức danh/Đơn vị tính) — cùng khuôn cho cả 3.
-  function veDanhMuc(dsId, demId, trongId, ds, xuLySua, xuLyAn, xuLyKhoa, dongPhu) {
-    const box = $(dsId);
-    box.innerHTML = '';
-    ds.forEach(m => {
-      const daKhoa = m.trang_thai === 'da_khoa';
-      const r = el('div', '', '');
-      r.style.cssText = 'display:flex;flex-direction:column;gap:4px;padding:8px 0;border-bottom:1px solid var(--line)';
-      const nutSua = `<button type="button" class="btn-nho" data-sua="${m.id}">Sửa</button> `;
-      const nutKhoa = daKhoa
-        ? (TOI.la_admin ? `<button type="button" class="btn-nho" data-mokhoa="${m.id}">Mở lại</button> ` : '')
-        : `<button type="button" class="btn-nho" data-khoa="${m.id}">Hoàn tất</button> `;
-      r.innerHTML =
-        `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px">` +
-        `<span>${esc(m.ten)}${m.hoat_dong ? '' : ' <span class="tag mute">Đã ẩn</span>'}` +
-          `${daKhoa ? ' <span class="tag warn">🔒 Đã khoá</span>' : ''}</span>` +
-        `<span>${nutSua}${nutKhoa}` +
-        `<button type="button" class="btn-nho" data-an="${m.id}" data-hd="${m.hoat_dong ? 0 : 1}">${m.hoat_dong ? 'Ẩn' : 'Hiện'}</button></span>` +
-        `</div>` + (dongPhu ? dongPhu(m) : '');
-      box.appendChild(r);
-    });
-    $(demId).textContent = ds.length ? `${ds.length} mục` : '';
-    $(trongId).hidden = ds.length > 0;
-
-    box.onclick = async (e) => {
-      const btnSua = e.target.closest('[data-sua]');
-      const btnAn = e.target.closest('[data-an]');
-      const btnKhoa = e.target.closest('[data-khoa]');
-      const btnMoKhoa = e.target.closest('[data-mokhoa]');
-      const btnGanTruong = e.target.closest('[data-gan-truong]');
-      if (btnGanTruong) {
-        const m = ds.find(x => String(x.id) === btnGanTruong.dataset.ganTruong);
-        const dsChon = DS_NHAN_SU_QT.length ? DS_NHAN_SU_QT : (await API.danhBa().catch(() => ({ danh_ba: [] }))).danh_ba || [];
-        moHopNhap({
-          tieuDe: `Trưởng phòng — ${m.ten}`,
-          loai: 'select',
-          nhan: 'Người làm trưởng phòng',
-          giaTri: m.truong_phong_id || '',
-          tuyChon: [
-            { gia_tri: '', nhan: '— Không gán —' },
-            ...dsChon.map(n => ({ gia_tri: n.id, nhan: nhanNhanSu(n) }))
-          ],
-          xuLyLuu: async val => { await API.dlnGanTruongPhong(m.id, val || null); await lamMoiTatCa(); }
-        });
-        return;
-      }
-      if (btnSua) {
-        const m = ds.find(x => String(x.id) === btnSua.dataset.sua);
-        if (m.trang_thai === 'da_khoa' && !TOI.la_admin) {
-          alert('Mục này đã khoá — cần Admin sửa hoặc mở khoá lại.');
-          return;
-        }
-        moHopNhap({
-          tieuDe: `Sửa tên — ${m.ten}`,
-          nhan: 'Tên mới *',
-          giaTri: m.ten,
-          xuLyLuu: async val => {
-            if (!val) throw new Error('Vui lòng nhập tên.');
-            await xuLySua(m.id, val);
-            await lamMoiTatCa();
-          }
-        });
-      } else if (btnAn) {
-        try { await xuLyAn(btnAn.dataset.an, btnAn.dataset.hd === '1'); await lamMoiTatCa(); }
-        catch (err) { alert(err.message || 'Không lưu được, thử lại nhé.'); }
-      } else if (btnKhoa) {
-        if (!confirm('Hoàn tất mục này? Sau đó người thường sẽ không sửa tên được nữa — chỉ Admin mới sửa hoặc mở lại.')) return;
-        try { await xuLyKhoa(btnKhoa.dataset.khoa, 'da_khoa'); await lamMoiTatCa(); }
-        catch (err) { alert(err.message || 'Không thực hiện được, thử lại nhé.'); }
-      } else if (btnMoKhoa) {
-        try { await xuLyKhoa(btnMoKhoa.dataset.mokhoa, 'nhap'); await lamMoiTatCa(); }
-        catch (err) { alert(err.message || 'Không thực hiện được, thử lại nhé.'); }
-      }
-    };
-  }
-
   async function lamMoiTatCa() {
     await taiDanhMucNen();   // làm mới cache dùng chung (Nhân sự/Kho vận cũng đọc từ đây)
     veDanhMuc('#dln-pb-list', '#dln-pb-dem', '#dln-pb-trong', DS_PHONG_BAN,
       (id, ten) => API.dlnSuaPhongBan(id, { ten }), (id, hd) => API.dlnSuaPhongBan(id, { hoat_dong: hd }),
       (id, tt) => API.dlnKhoaPhongBan(id, tt),
       m => `<div class="sm">Trưởng phòng: ${m.truong_phong_ten ? esc(m.truong_phong_ten) : '— Chưa gán —'} ` +
-           `<button type="button" class="btn-nho" data-gan-truong="${m.id}" style="margin-left:6px">Đổi</button></div>`);
+           `<button type="button" class="btn-nho" data-gan-truong="${m.id}" style="margin-left:6px">Đổi</button></div>`,
+      lamMoiTatCa);
     veDanhMuc('#dln-cd-list', '#dln-cd-dem', '#dln-cd-trong', DS_CHUC_DANH,
       (id, ten) => API.dlnSuaChucDanh(id, { ten }), (id, hd) => API.dlnSuaChucDanh(id, { hoat_dong: hd }),
-      (id, tt) => API.dlnKhoaChucDanh(id, tt));
+      (id, tt) => API.dlnKhoaChucDanh(id, tt), null, lamMoiTatCa);
     veDanhMuc('#dln-dv-list', '#dln-dv-dem', '#dln-dv-trong', DS_DON_VI,
       (id, ten) => API.dlnSuaDonVi(id, { ten }), (id, hd) => API.dlnSuaDonVi(id, { hoat_dong: hd }),
-      (id, tt) => API.dlnKhoaDonVi(id, tt));
+      (id, tt) => API.dlnKhoaDonVi(id, tt), null, lamMoiTatCa);
     await veTinhTrang();
   }
 
@@ -3257,16 +3262,22 @@ async function khoiDongDuLieuNen() {
 async function khoiDongTaiSan() {
   let DS_TS = [];
   let quanLy = false;
+  let DS_TS_DANHMUC = [], DS_TS_VITRI = [];
 
   const NHAN_TT_TS = {
     san_sang:    { chu: 'Sẵn sàng',    mau: 'ok' },
     da_cap_phat: { chu: 'Đang giao',   mau: 'sage' },
     bao_hong:    { chu: 'Báo hỏng',    mau: 'danger' },
+    mat:         { chu: 'Mất',         mau: 'danger' },
     da_thanh_ly: { chu: 'Đã thanh lý', mau: 'mute' }
+  };
+  const NHAN_TINH_TRANG_TS = {
+    tot: { chu: 'Tốt', mau: 'ok' }, binh_thuong: { chu: 'Bình thường', mau: 'sage' },
+    can_sua: { chu: 'Cần sửa', mau: 'warn' }, hong: { chu: 'Hỏng', mau: 'danger' }
   };
   const NHAN_SU_KIEN_TS = {
     tao_moi: 'Tạo mới', cap_phat: 'Cấp phát', thu_hoi: 'Thu hồi',
-    bao_hong: 'Báo hỏng', bao_tri: 'Bảo trì xong', thanh_ly: 'Thanh lý'
+    bao_hong: 'Báo hỏng', mat: 'Báo mất', bao_tri: 'Bảo trì xong', thanh_ly: 'Thanh lý'
   };
 
   function locTS() {
@@ -3274,7 +3285,7 @@ async function khoiDongTaiSan() {
     const trangThai = $('#ts-loctrangthai')?.value || '';
     return DS_TS.filter(t => {
       if (trangThai && t.trang_thai !== trangThai) return false;
-      if (k && !boDau(`${t.ma_ts} ${t.ten} ${t.danh_muc || ''}`).includes(k)) return false;
+      if (k && !boDau(`${t.ma_ts} ${t.ten} ${t.danh_muc_ten || t.danh_muc || ''} ${t.serial || ''}`).includes(k)) return false;
       return true;
     });
   }
@@ -3296,28 +3307,21 @@ async function khoiDongTaiSan() {
       const laNguoiGiu = t.nguoi_giu_id && t.nguoi_giu_id === TOI.id;
       let nut = '';
       if (t.trang_thai === 'san_sang' && quanLy) {
-        nut += `<button class="btn-nho" data-ts-capphat="${esc(t.id)}">Cấp phát</button> ` +
-               `<button class="btn-nho" data-ts-baohong="${esc(t.id)}">Báo hỏng</button> ` +
-               `<button class="btn-nho" data-ts-thanhly="${esc(t.id)}">Thanh lý</button> `;
-      } else if (t.trang_thai === 'da_cap_phat') {
-        if (quanLy) {
-          nut += `<button class="btn-nho" data-ts-capphat="${esc(t.id)}">Điều chuyển</button> ` +
-                 `<button class="btn-nho" data-ts-thuhoi="${esc(t.id)}">Thu hồi</button> ` +
-                 `<button class="btn-nho" data-ts-thanhly="${esc(t.id)}">Thanh lý</button> `;
-        }
-        if (quanLy || laNguoiGiu) nut += `<button class="btn-nho" data-ts-baohong="${esc(t.id)}">Báo hỏng</button> `;
-      } else if (t.trang_thai === 'bao_hong' && quanLy) {
-        nut += `<button class="btn-nho" data-ts-baotrixong="${esc(t.id)}">Bảo trì xong</button> ` +
-               `<button class="btn-nho" data-ts-thanhly="${esc(t.id)}">Thanh lý</button> `;
+        nut += `<button class="btn-nho" data-ts-capphat="${esc(t.id)}">Cấp phát</button> `;
+      } else if (t.trang_thai === 'da_cap_phat' && quanLy) {
+        nut += `<button class="btn-nho" data-ts-capphat="${esc(t.id)}">Điều chuyển</button> ` +
+               `<button class="btn-nho" data-ts-thuhoi="${esc(t.id)}">Thu hồi</button> `;
+      } else if (['bao_hong', 'mat'].includes(t.trang_thai) && quanLy) {
+        nut += `<button class="btn-nho" data-ts-baotrixong="${esc(t.id)}">Bảo trì xong</button> `;
       }
-      nut += `<button class="btn-nho btn-phu" data-ts-lichsu="${esc(t.id)}">Lịch sử</button>`;
-      return `<td class="sm">${esc(t.ma_ts)}</td>` +
+      nut += `<button class="btn-nho btn-phu" data-ts-mo="${esc(t.id)}">Chi tiết</button>`;
+      return `<td class="sm"><button type="button" class="btn-nho btn-phu" data-ts-mo="${esc(t.id)}" style="font-weight:600">${esc(t.ma_ts)}</button></td>` +
         `<td><div class="nm">${esc(t.ten)}</div></td>` +
-        `<td class="sm">${esc(t.danh_muc || '—')}</td>` +
+        `<td class="sm">${esc(t.danh_muc_ten || t.danh_muc || '—')}</td>` +
         `<td><span class="tag ${tt.mau}">${esc(tt.chu)}</span></td>` +
         `<td class="sm">${t.nguoi_giu_ten ? esc(t.nguoi_giu_ten) + (t.nguoi_giu_ma ? ' · ' + esc(t.nguoi_giu_ma) : '') : '—'}</td>` +
-        `<td class="sm">${esc(t.vi_tri || '—')}</td>` +
-        `<td>${nut}</td>`;
+        `<td class="sm">${esc(t.vi_tri_ten || t.vi_tri || '—')}</td>` +
+        `<td style="white-space:nowrap">${nut}</td>`;
     });
   }
 
@@ -3326,8 +3330,10 @@ async function khoiDongTaiSan() {
     DS_TS = kq.ds || [];
     quanLy = !!(kq.quyen && kq.quyen.quan_ly);
     $('#ts-panel-them').hidden = !quanLy;
+    $('#ts-panel-danhmuc').hidden = !quanLy;
     ve();
   }
+  window.LAM_MOI_TAISAN = taiLai;
 
   function xoaLocTS() {
     if ($('#ts-tim')) $('#ts-tim').value = '';
@@ -3338,16 +3344,116 @@ async function khoiDongTaiSan() {
   $('#ts-loctrangthai').addEventListener('change', ve);
   $('#ts-xoaloc').addEventListener('click', xoaLocTS);
 
+  /* ---- Danh mục & Vị trí — combobox dùng chung cho Thêm/Sửa + panel quản lý ---- */
+  const { capNhatHienThi: veThemDanhMuc } = ganCombo({
+    hienThi: $('#tsThemDanhMucHienThi'), panel: $('#tsThemDanhMucPanel'),
+    tim: $('#tsThemDanhMucTim'), goiY: $('#tsThemDanhMucGoiY'), giaTri: $('#tsThemDanhMucId')
+  }, () => DS_TS_DANHMUC.filter(d => d.hoat_dong).map(d => ({ gia_tri: d.id, nhan: d.ten })), null, 'Chọn danh mục...');
+  const { capNhatHienThi: veThemViTri } = ganCombo({
+    hienThi: $('#tsThemViTriHienThi'), panel: $('#tsThemViTriPanel'),
+    tim: $('#tsThemViTriTim'), goiY: $('#tsThemViTriGoiY'), giaTri: $('#tsThemViTriId')
+  }, () => DS_TS_VITRI.filter(d => d.hoat_dong).map(d => ({ gia_tri: d.id, nhan: d.ten })), null, 'Chọn vị trí...');
+  const { capNhatHienThi: veSuaDanhMuc } = ganCombo({
+    hienThi: $('#tsSuaDanhMucHienThi'), panel: $('#tsSuaDanhMucPanel'),
+    tim: $('#tsSuaDanhMucTim'), goiY: $('#tsSuaDanhMucGoiY'), giaTri: $('#tsSuaDanhMucId')
+  }, () => DS_TS_DANHMUC.filter(d => d.hoat_dong).map(d => ({ gia_tri: d.id, nhan: d.ten })), null, 'Chọn danh mục...');
+  const { capNhatHienThi: veSuaViTri } = ganCombo({
+    hienThi: $('#tsSuaViTriHienThi'), panel: $('#tsSuaViTriPanel'),
+    tim: $('#tsSuaViTriTim'), goiY: $('#tsSuaViTriGoiY'), giaTri: $('#tsSuaViTriId')
+  }, () => DS_TS_VITRI.filter(d => d.hoat_dong).map(d => ({ gia_tri: d.id, nhan: d.ten })), null, 'Chọn vị trí...');
+
+  function veChonPhongBan(sel, hienTaiId) {
+    if (!sel) return;
+    sel.innerHTML = '<option value="">— Chưa gán —</option>' +
+      DS_PHONG_BAN.filter(p => p.hoat_dong).map(p => `<option value="${p.id}">${esc(p.ten)}</option>`).join('');
+    sel.value = hienTaiId != null ? String(hienTaiId) : '';
+  }
+
+  async function taiDanhMucViTri() {
+    try {
+      const [dm, vt] = await Promise.all([API.dlnDanhMucTaiSan(), API.dlnViTriTaiSan()]);
+      DS_TS_DANHMUC = dm.ds || []; DS_TS_VITRI = vt.ds || [];
+    } catch { DS_TS_DANHMUC = []; DS_TS_VITRI = []; }
+    veThemDanhMuc(); veThemViTri(); veSuaDanhMuc(); veSuaViTri();
+    veChonPhongBan($('#tsThemPhongBan'));
+    if (quanLy) veQuanLyDanhMuc();
+  }
+
+  function veQuanLyDanhMuc() {
+    veDanhMuc('#ts-dm-list', null, null, DS_TS_DANHMUC,
+      (id, ten) => API.dlnSuaDanhMucTaiSan(id, { ten }), (id, hd) => API.dlnSuaDanhMucTaiSan(id, { hoat_dong: hd }),
+      (id, tt) => API.dlnKhoaDanhMucTaiSan(id, tt), null, taiDanhMucViTri);
+    veDanhMuc('#ts-vt-list', null, null, DS_TS_VITRI,
+      (id, ten) => API.dlnSuaViTriTaiSan(id, { ten }), (id, hd) => API.dlnSuaViTriTaiSan(id, { hoat_dong: hd }),
+      (id, tt) => API.dlnKhoaViTriTaiSan(id, tt), null, taiDanhMucViTri);
+  }
+
+  $('#ts-nut-danhmuctoggle').addEventListener('click', () => {
+    $('#ts-danhmuc-body').hidden = !$('#ts-danhmuc-body').hidden;
+  });
+  $('#ts-dm-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    const oLoi = $('#ts-dm-loi'); oLoi.textContent = '';
+    try {
+      await API.dlnThemDanhMucTaiSan($('#ts-dm-ten').value.trim());
+      $('#ts-dm-form').reset(); await taiDanhMucViTri();
+    } catch (err) { oLoi.textContent = err.message || 'Không thêm được, thử lại nhé.'; }
+  });
+  $('#ts-vt-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    const oLoi = $('#ts-vt-loi'); oLoi.textContent = '';
+    try {
+      await API.dlnThemViTriTaiSan($('#ts-vt-ten').value.trim());
+      $('#ts-vt-form').reset(); await taiDanhMucViTri();
+    } catch (err) { oLoi.textContent = err.message || 'Không thêm được, thử lại nhé.'; }
+  });
+
+  /* ---- Ảnh: đọc thành base64 để gửi thẳng, cùng giới hạn 4MB như ảnh nhân sự ---- */
+  function docAnh(input, xemTruocId) {
+    return new Promise((resolve, reject) => {
+      const f = input.files && input.files[0];
+      if (!f) { resolve(undefined); return; }
+      if (f.size > 4 * 1024 * 1024) { reject(new Error('Ảnh vượt quá 4MB, chọn ảnh nhỏ hơn nhé.')); return; }
+      const r = new FileReader();
+      r.onload = () => {
+        $(xemTruocId).innerHTML = `<img src="${r.result}" style="max-width:160px; border-radius:8px">`;
+        resolve(String(r.result).split(',')[1] || null);
+      };
+      r.onerror = () => reject(new Error('Không đọc được ảnh.'));
+      r.readAsDataURL(f);
+    });
+  }
+
+  $('#tsThemNutChiTiet').addEventListener('click', () => { $('#tsThemChiTiet').hidden = !$('#tsThemChiTiet').hidden; });
+
   $('#tsThemForm').addEventListener('submit', async e => {
     e.preventDefault();
     const oLoi = $('#tsThemLoi'); oLoi.textContent = '';
     try {
+      const anh = await docAnh($('#tsThemAnh'), '#tsThemAnhXemTruoc');
       await API.taiSanThem({
         ten: $('#tsThemTen').value.trim(),
-        danh_muc: $('#tsThemDanhMuc').value.trim(),
-        vi_tri: $('#tsThemViTri').value.trim()
+        danh_muc_id: $('#tsThemDanhMucId').value || null,
+        vi_tri_id: $('#tsThemViTriId').value || null,
+        hang_sx: $('#tsThemHangSx').value.trim(),
+        model: $('#tsThemModel').value.trim(),
+        serial: $('#tsThemSerial').value.trim(),
+        ngay_mua: $('#tsThemNgayMua').value,
+        nha_cung_cap: $('#tsThemNCC').value.trim(),
+        gia_mua: $('#tsThemGiaMua').value || null,
+        het_bao_hanh: $('#tsThemHetBaoHanh').value,
+        phong_ban_id: $('#tsThemPhongBan').value || null,
+        anh, ghi_chu: $('#tsThemGhiChu').value.trim()
       });
       $('#tsThemForm').reset();
+      // form.reset() KHÔNG xoá được input hidden của combobox — set .value
+      // qua JS làm defaultValue của input hidden đổi theo (quirk trình
+      // duyệt cho type=hidden), nên reset() coi giá trị vừa chọn là "mặc
+      // định" luôn. Phải tự xoá tay trước khi vẽ lại nhãn hiển thị.
+      $('#tsThemDanhMucId').value = ''; $('#tsThemViTriId').value = '';
+      veThemDanhMuc(); veThemViTri();
+      $('#tsThemAnhXemTruoc').innerHTML = '';
+      $('#tsThemChiTiet').hidden = true;
       await taiLai();
     } catch (err) { oLoi.textContent = err.message || 'Không lưu được, thử lại nhé.'; }
   });
@@ -3368,7 +3474,7 @@ async function khoiDongTaiSan() {
       tim: $('#tsCapPhatNguoiTim'), goiY: $('#tsCapPhatNguoiGoiY'), giaTri: $('#tsCapPhatNguoi')
     }, () => dsNhanSuChon.map(n => ({ gia_tri: n.id, nhan: nhanNhanSu(n) })),
       null, 'Chọn nhân sự...');
-    $('#tsCapPhatViTri').value = t ? (t.vi_tri || '') : '';
+    $('#tsCapPhatViTri').value = t ? (t.vi_tri_ten || t.vi_tri || '') : '';
     $('#tsCapPhatGhiChu').value = '';
     $('#tsCapPhatLoi').textContent = '';
     $('#tsCapPhatModalNen').hidden = false;
@@ -3385,64 +3491,249 @@ async function khoiDongTaiSan() {
         ghi_chu: $('#tsCapPhatGhiChu').value.trim()
       });
       $('#tsCapPhatModalNen').hidden = true;
+      $('#tsChiTietModalNen').hidden = true;
       await taiLai();
     } catch (err) { oLoi.textContent = err.message || 'Không cấp phát được, thử lại nhé.'; }
   });
 
-  async function moModalLichSu(id) {
-    const t = DS_TS.find(x => x.id === id);
-    $('#tsLichSuTieuDe').textContent = 'Lịch sử: ' + (t ? t.ten : '');
-    const box = $('#tsLichSuDanhSach');
-    box.innerHTML = '<p class="hint">Đang tải…</p>';
-    $('#tsLichSuTrong').hidden = true;
-    $('#tsLichSuModalNen').hidden = false;
-    try {
-      const kq = await API.taiSanLichSu(id);
-      const ds = kq.ds || [];
-      $('#tsLichSuTrong').hidden = ds.length > 0;
-      box.innerHTML = ds.map(ls => `<div class="list-item">` +
-        `<div class="nm">${esc(NHAN_SU_KIEN_TS[ls.loai_su_kien] || ls.loai_su_kien)}</div>` +
-        `<div class="sm">${esc(ls.luc)} · ${esc(ls.nguoi_thuc_hien_ten || '')}` +
-        (ls.nguoi_giu_moi_ten ? ` · giao cho ${esc(ls.nguoi_giu_moi_ten)}` : '') +
-        (ls.ghi_chu ? ` · ${esc(ls.ghi_chu)}` : '') + `</div></div>`).join('');
-    } catch (err) { box.innerHTML = `<p class="hint">${esc(err.message || 'Không tải được lịch sử.')}</p>`; }
+  function veLichSuHtml(ds) {
+    if (!ds.length) return '<p class="hint">Chưa có lịch sử.</p>';
+    return ds.map(ls => `<div class="list-item">` +
+      `<div class="nm">${esc(NHAN_SU_KIEN_TS[ls.loai_su_kien] || ls.loai_su_kien)}</div>` +
+      `<div class="sm">${esc(ls.luc)} · ${esc(ls.nguoi_thuc_hien_ten || '')}` +
+      (ls.nguoi_giu_moi_ten ? ` · giao cho ${esc(ls.nguoi_giu_moi_ten)}` : '') +
+      (ls.ghi_chu ? ` · ${esc(ls.ghi_chu)}` : '') + `</div></div>`).join('');
   }
-  $('#tsLichSuDong').addEventListener('click', () => { $('#tsLichSuModalNen').hidden = true; });
+
+
+  /* ---- Chi tiết tài sản: header + QR + hiện tại + lịch sử + quick actions ---- */
+  function svgQR(noiDung) {
+    try {
+      const qr = window.qrcode(0, 'M');
+      qr.addData(noiDung);
+      qr.make();
+      return qr.createSvgTag(4, 8);
+    } catch { return '<p class="hint">Không tạo được mã QR.</p>'; }
+  }
+
+  let tsDangXem = null;
+  function moChiTietData(t) {
+    tsDangXem = t;
+    const tt = NHAN_TT_TS[t.trang_thai] || { chu: t.trang_thai, mau: 'mute' };
+    const dk = NHAN_TINH_TRANG_TS[t.tinh_trang] || { chu: t.tinh_trang, mau: 'mute' };
+    $('#tsCtTen').textContent = t.ten;
+    $('#tsCtMa').textContent = t.ma_ts;
+    $('#tsCtQR').innerHTML = svgQR(t.ma_ts);
+    $('#tsCtTag').innerHTML = `<span class="tag ${tt.mau}">${esc(tt.chu)}</span> <span class="tag ${dk.mau}">${esc(dk.chu)}</span>`;
+
+    const laNguoiGiu = t.nguoi_giu_id && t.nguoi_giu_id === TOI.id;
+    $('#tsCtNutCapPhat').hidden = !(quanLy && ['san_sang', 'da_cap_phat'].includes(t.trang_thai));
+    $('#tsCtNutCapPhat').textContent = t.trang_thai === 'da_cap_phat' ? 'Điều chuyển' : 'Bàn giao';
+    $('#tsCtNutThuHoi').hidden = !(quanLy && t.trang_thai === 'da_cap_phat');
+    $('#tsCtNutBaoHong').hidden = !((quanLy || laNguoiGiu) && ['san_sang', 'da_cap_phat'].includes(t.trang_thai));
+    $('#tsCtNutBaoMat').hidden = !((quanLy || laNguoiGiu) && ['san_sang', 'da_cap_phat'].includes(t.trang_thai));
+    $('#tsCtNutBaoTriXong').hidden = !(quanLy && ['bao_hong', 'mat'].includes(t.trang_thai));
+    $('#tsCtNutSua').hidden = !quanLy;
+    $('#tsCtNutThanhLy').hidden = !(quanLy && t.trang_thai !== 'da_thanh_ly');
+
+    const dong = (nhan, gia) => gia ? `<div class="ts-ct-dong"><span>${esc(nhan)}</span><b>${gia}</b></div>` : '';
+    $('#tsCtThongTin').innerHTML =
+      dong('Người giữ', t.nguoi_giu_ten ? esc(t.nguoi_giu_ten) + (t.nguoi_giu_ma ? ' · ' + esc(t.nguoi_giu_ma) : '') : '') +
+      dong('Phòng ban', t.phong_ban_ten ? esc(t.phong_ban_ten) : '') +
+      dong('Vị trí', t.vi_tri_ten || t.vi_tri ? esc(t.vi_tri_ten || t.vi_tri) : '') +
+      dong('Danh mục', t.danh_muc_ten || t.danh_muc ? esc(t.danh_muc_ten || t.danh_muc) : '') +
+      dong('Hãng SX / Model', [t.hang_sx, t.model].filter(Boolean).map(esc).join(' / ')) +
+      dong('Số serial', t.serial ? esc(t.serial) : '') +
+      dong('Ngày mua', t.ngay_mua ? esc(t.ngay_mua) : '') +
+      dong('Nhà cung cấp', t.nha_cung_cap ? esc(t.nha_cung_cap) : '') +
+      dong('Giá mua (tham chiếu)', t.gia_mua ? tienVN(t.gia_mua) + ' đ' : '') +
+      dong('Hết bảo hành', t.het_bao_hanh ? esc(t.het_bao_hanh) : '') +
+      dong('Ghi chú', t.ghi_chu ? esc(t.ghi_chu) : '') +
+      (t.anh ? `<div style="margin-top:10px"><img src="data:image/*;base64,${t.anh}" style="max-width:220px; border-radius:10px"></div>` : '');
+
+    $('#tsCtLichSu').innerHTML = '<p class="hint">Đang tải…</p>';
+    API.taiSanLichSu(t.id).then(kq => { $('#tsCtLichSu').innerHTML = veLichSuHtml(kq.ds || []); })
+      .catch(() => { $('#tsCtLichSu').innerHTML = '<p class="hint">Không tải được lịch sử.</p>'; });
+
+    $('#tsChiTietModalNen').hidden = false;
+  }
+  function moChiTiet(id) {
+    const t = DS_TS.find(x => x.id === id);
+    if (t) moChiTietData(t);
+  }
+  $('#tsCtDong').addEventListener('click', () => { $('#tsChiTietModalNen').hidden = true; });
+  $('#tsCtNutCapPhat').addEventListener('click', () => { $('#tsChiTietModalNen').hidden = true; moModalCapPhat(tsDangXem.id); });
+  $('#tsCtNutThuHoi').addEventListener('click', async () => {
+    if (!confirm('Thu hồi tài sản này về kho?')) return;
+    try { await API.taiSanThuHoi({ id: tsDangXem.id }); $('#tsChiTietModalNen').hidden = true; await taiLai(); }
+    catch (err) { alert(err.message || 'Không thực hiện được, thử lại nhé.'); }
+  });
+  $('#tsCtNutBaoHong').addEventListener('click', () => {
+    moHopNhap({
+      tieuDe: 'Báo hỏng tài sản', loai: 'textarea', nhan: 'Mô tả tình trạng hỏng', placeholder: 'Không bắt buộc',
+      xuLyLuu: async val => { await API.taiSanBaoHong({ id: tsDangXem.id, loai: 'hong', ghi_chu: val }); $('#tsChiTietModalNen').hidden = true; await taiLai(); }
+    });
+  });
+  $('#tsCtNutBaoMat').addEventListener('click', () => {
+    moHopNhap({
+      tieuDe: 'Báo mất tài sản', loai: 'textarea', nhan: 'Mô tả (mất khi nào, ở đâu...)', placeholder: 'Không bắt buộc',
+      xuLyLuu: async val => { await API.taiSanBaoHong({ id: tsDangXem.id, loai: 'mat', ghi_chu: val }); $('#tsChiTietModalNen').hidden = true; await taiLai(); }
+    });
+  });
+  $('#tsCtNutBaoTriXong').addEventListener('click', async () => {
+    const nhan = tsDangXem.trang_thai === 'mat' ? 'Xác nhận đã tìm lại được — tài sản về trạng thái sẵn sàng?' : 'Xác nhận đã sửa xong — tài sản về trạng thái sẵn sàng?';
+    if (!confirm(nhan)) return;
+    try { await API.taiSanBaoTriXong({ id: tsDangXem.id }); $('#tsChiTietModalNen').hidden = true; await taiLai(); }
+    catch (err) { alert(err.message || 'Không thực hiện được, thử lại nhé.'); }
+  });
+  $('#tsCtNutThanhLy').addEventListener('click', async () => {
+    if (!confirm('Thanh lý tài sản này? Sau đó không cấp phát lại được nữa.')) return;
+    try { await API.taiSanThanhLy({ id: tsDangXem.id }); $('#tsChiTietModalNen').hidden = true; await taiLai(); }
+    catch (err) { alert(err.message || 'Không thực hiện được, thử lại nhé.'); }
+  });
+  $('#tsCtNutInTem').addEventListener('click', () => inTem(tsDangXem));
+
+  /* ---- Sửa ---- */
+  $('#tsCtNutSua').addEventListener('click', () => moSua(tsDangXem));
+  function moSua(t) {
+    $('#tsChiTietModalNen').hidden = true;
+    $('#tsSuaId').value = t.id;
+    $('#tsSuaTen').value = t.ten || '';
+    $('#tsSuaDanhMucId').value = t.danh_muc_id || '';
+    veSuaDanhMuc();
+    $('#tsSuaViTriId').value = t.vi_tri_id || '';
+    veSuaViTri();
+    $('#tsSuaTinhTrang').value = t.tinh_trang || 'tot';
+    $('#tsSuaHangSx').value = t.hang_sx || '';
+    $('#tsSuaModel').value = t.model || '';
+    $('#tsSuaSerial').value = t.serial || '';
+    $('#tsSuaNgayMua').value = t.ngay_mua || '';
+    $('#tsSuaNCC').value = t.nha_cung_cap || '';
+    $('#tsSuaGiaMua').value = t.gia_mua || '';
+    $('#tsSuaHetBaoHanh').value = t.het_bao_hanh || '';
+    veChonPhongBan($('#tsSuaPhongBan'), t.phong_ban_id);
+    $('#tsSuaGhiChu').value = t.ghi_chu || '';
+    $('#tsSuaAnhXemTruoc').innerHTML = t.anh ? `<img src="data:image/*;base64,${t.anh}" style="max-width:160px; border-radius:8px">` : '';
+    $('#tsSuaLoi').textContent = '';
+    $('#tsSuaModalNen').hidden = false;
+  }
+  $('#tsSuaHuy').addEventListener('click', () => { $('#tsSuaModalNen').hidden = true; });
+  $('#tsSuaForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const oLoi = $('#tsSuaLoi'); oLoi.textContent = '';
+    try {
+      const anh = await docAnh($('#tsSuaAnh'), '#tsSuaAnhXemTruoc');
+      await API.taiSanSua({
+        id: $('#tsSuaId').value,
+        ten: $('#tsSuaTen').value.trim(),
+        danh_muc_id: $('#tsSuaDanhMucId').value || null,
+        vi_tri_id: $('#tsSuaViTriId').value || null,
+        tinh_trang: $('#tsSuaTinhTrang').value,
+        hang_sx: $('#tsSuaHangSx').value.trim(),
+        model: $('#tsSuaModel').value.trim(),
+        serial: $('#tsSuaSerial').value.trim(),
+        ngay_mua: $('#tsSuaNgayMua').value,
+        nha_cung_cap: $('#tsSuaNCC').value.trim(),
+        gia_mua: $('#tsSuaGiaMua').value || null,
+        het_bao_hanh: $('#tsSuaHetBaoHanh').value,
+        phong_ban_id: $('#tsSuaPhongBan').value || null,
+        anh, ghi_chu: $('#tsSuaGhiChu').value.trim()
+      });
+      $('#tsSuaModalNen').hidden = true;
+      await taiLai();
+    } catch (err) { oLoi.textContent = err.message || 'Không lưu được, thử lại nhé.'; }
+  });
+
+  /* ---- In tem: HTML/CSS print, khổ nhỏ, xem @media print trong style.css ---- */
+  function inTem(t) {
+    $('#tsTemMauDon').innerHTML =
+      `<div class="ts-tem-cty">ALPHA GREEN COMMERCE</div>` +
+      `<div class="ts-tem-ten">${esc(t.ten)}</div>` +
+      `<div class="ts-tem-ma">${esc(t.ma_ts)}</div>` +
+      `<div class="ts-tem-qr">${svgQR(t.ma_ts)}</div>` +
+      `<div class="ts-tem-phu">TÀI SẢN NỘI BỘ</div>`;
+    window.print();
+  }
+
+  /* ---- Quét mã: BarcodeDetector (native, không cần thư viện ngoài) — nơi
+     trình duyệt chưa hỗ trợ thì nhập tay Mã tài sản (xem docs/audit/AUDIT-TAISAN-MODULE.md
+     mục G — không tự viết decoder để tránh rủi ro quét sai). ---- */
+  let quetStream = null, quetDangChay = false;
+  function dongQuet() {
+    quetDangChay = false;
+    if (quetStream) { quetStream.getTracks().forEach(tr => tr.stop()); quetStream = null; }
+    $('#tsQuetVideo').hidden = true;
+  }
+  async function xuLyMaQuet(ma) {
+    dongQuet();
+    $('#tsQuetModalNen').hidden = true;
+    try {
+      const kq = await API.taiSanTraCuu(ma);
+      moChiTietData(kq.ts);
+    } catch (err) { alert(err.message || `Không tìm thấy tài sản với mã "${ma}".`); }
+  }
+  async function quetVongLap(detector, video) {
+    if (!quetDangChay) return;
+    try {
+      const ds = await detector.detect(video);
+      if (ds.length) { await xuLyMaQuet(ds[0].rawValue); return; }
+    } catch { /* frame lỗi thoáng qua — thử lại frame sau, không báo lỗi dồn dập */ }
+    requestAnimationFrame(() => quetVongLap(detector, video));
+  }
+  async function moQuet() {
+    $('#tsQuetLoi').textContent = '';
+    $('#tsQuetNhapTay').value = '';
+    $('#tsQuetGhiChu').textContent = 'Đưa camera vào mã QR dán trên tài sản.';
+    $('#tsQuetModalNen').hidden = false;
+    if ('BarcodeDetector' in window) {
+      try {
+        const formats = await window.BarcodeDetector.getSupportedFormats();
+        if (formats.includes('qr_code')) {
+          const detector = new window.BarcodeDetector({ formats: ['qr_code'] });
+          quetStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+          const video = $('#tsQuetVideo');
+          video.srcObject = quetStream;
+          video.hidden = false;
+          await video.play();
+          quetDangChay = true;
+          quetVongLap(detector, video);
+          return;
+        }
+      } catch { /* không có camera/không cấp quyền — rơi xuống nhập tay */ }
+    }
+    $('#tsQuetGhiChu').textContent = 'Máy này chưa quét camera trực tiếp được — nhập mã tài sản bên dưới rồi bấm "Mở tài sản".';
+  }
+  $('#ts-nut-quet').addEventListener('click', moQuet);
+  $('#tsQuetDong').addEventListener('click', () => { dongQuet(); $('#tsQuetModalNen').hidden = true; });
+  $('#tsQuetTraCuu').addEventListener('click', () => {
+    const ma = $('#tsQuetNhapTay').value.trim();
+    if (!ma) { $('#tsQuetLoi').textContent = 'Nhập mã tài sản trước đã.'; return; }
+    xuLyMaQuet(ma);
+  });
+  $('#tsQuetNhapTay').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('#tsQuetTraCuu').click(); } });
 
   $('#ts-bang').addEventListener('click', async e => {
     const btnCapPhat = e.target.closest('[data-ts-capphat]');
     const btnThuHoi = e.target.closest('[data-ts-thuhoi]');
-    const btnBaoHong = e.target.closest('[data-ts-baohong]');
     const btnBaoTriXong = e.target.closest('[data-ts-baotrixong]');
-    const btnThanhLy = e.target.closest('[data-ts-thanhly]');
-    const btnLichSu = e.target.closest('[data-ts-lichsu]');
+    const btnMo = e.target.closest('[data-ts-mo]');
     try {
       if (btnCapPhat) {
         await moModalCapPhat(btnCapPhat.dataset.tsCapphat);
       } else if (btnThuHoi) {
         if (!confirm('Thu hồi tài sản này về kho?')) return;
         await API.taiSanThuHoi({ id: btnThuHoi.dataset.tsThuhoi }); await taiLai();
-      } else if (btnBaoHong) {
-        moHopNhap({
-          tieuDe: 'Báo hỏng tài sản',
-          loai: 'textarea',
-          nhan: 'Mô tả tình trạng hỏng',
-          placeholder: 'Không bắt buộc',
-          xuLyLuu: async val => { await API.taiSanBaoHong({ id: btnBaoHong.dataset.tsBaohong, ghi_chu: val }); await taiLai(); }
-        });
       } else if (btnBaoTriXong) {
-        if (!confirm('Xác nhận đã sửa xong — tài sản về trạng thái sẵn sàng?')) return;
+        if (!confirm('Xác nhận đã xử lý xong — tài sản về trạng thái sẵn sàng?')) return;
         await API.taiSanBaoTriXong({ id: btnBaoTriXong.dataset.tsBaotrixong }); await taiLai();
-      } else if (btnThanhLy) {
-        if (!confirm('Thanh lý tài sản này? Sau đó không cấp phát lại được nữa.')) return;
-        await API.taiSanThanhLy({ id: btnThanhLy.dataset.tsThanhly }); await taiLai();
-      } else if (btnLichSu) {
-        await moModalLichSu(btnLichSu.dataset.tsLichsu);
+      } else if (btnMo) {
+        moChiTiet(btnMo.dataset.tsMo);
       }
     } catch (err) { alert(err.message || 'Không thực hiện được, thử lại nhé.'); }
   });
 
   await taiLai();
+  await taiDanhMucViTri();
 }
 
 /* ==========================================================================

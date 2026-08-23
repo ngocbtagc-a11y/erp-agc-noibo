@@ -7,7 +7,7 @@
    tránh vỡ tham chiếu ở nhân sự/sản phẩm đã gắn vào).
    ========================================================================== */
 
-import { duocThemNhanSu, duocQuanLyKho, laAdmin } from './quyen.js';
+import { duocThemNhanSu, duocQuanLyKho, laAdmin, duocQuanLyTaiSan } from './quyen.js';
 
 function json(duLieu, status = 200) {
   return new Response(JSON.stringify(duLieu), {
@@ -199,6 +199,33 @@ export const suaChucDanh = (env, phien, body) =>
   batBuocToChuc(phien) || suaDanhMuc(env, phien, 'chuc_danh', body, 'tên chức danh');
 export const khoaChucDanh = (env, phien, body) =>
   batBuocToChuc(phien) || khoaDanhMuc(env, phien, 'chuc_danh', body);
+
+/* ==========================================================================
+   DANH MỤC TÀI SẢN / VỊ TRÍ TÀI SẢN — Master Data cho module Tài sản (xem
+   docs/audit/AUDIT-TAISAN-MODULE.md). Chủ sở hữu = Data Owner Tài sản
+   (duocQuanLyTaiSan: admin/admin_backup/hcns) — cùng nhóm đang tạo/cấp
+   phát/thu hồi tài sản, không cần vai trò riêng. Reuse thẳng
+   danhSachDanhMuc/themDanhMuc/suaDanhMuc/khoaDanhMuc chung phía trên —
+   không viết lại logic khoá/Search Before Create riêng cho 2 bảng này.
+   ========================================================================== */
+function batBuocTaiSan(phien) {
+  return duocQuanLyTaiSan(phien.vai_tro) ? null : loi('Bạn không có quyền sửa Danh mục/Vị trí tài sản', 403);
+}
+export const danhSachDanhMucTaiSan = (env) => danhSachDanhMuc(env, 'tai_san_danh_muc');
+export const themDanhMucTaiSan = (env, phien, body) =>
+  batBuocTaiSan(phien) || themDanhMuc(env, 'tai_san_danh_muc', body, 'tên danh mục tài sản');
+export const suaDanhMucTaiSan = (env, phien, body) =>
+  batBuocTaiSan(phien) || suaDanhMuc(env, phien, 'tai_san_danh_muc', body, 'tên danh mục tài sản');
+export const khoaDanhMucTaiSan = (env, phien, body) =>
+  batBuocTaiSan(phien) || khoaDanhMuc(env, phien, 'tai_san_danh_muc', body);
+
+export const danhSachViTriTaiSan = (env) => danhSachDanhMuc(env, 'tai_san_vi_tri');
+export const themViTriTaiSan = (env, phien, body) =>
+  batBuocTaiSan(phien) || themDanhMuc(env, 'tai_san_vi_tri', body, 'tên vị trí');
+export const suaViTriTaiSan = (env, phien, body) =>
+  batBuocTaiSan(phien) || suaDanhMuc(env, phien, 'tai_san_vi_tri', body, 'tên vị trí');
+export const khoaViTriTaiSan = (env, phien, body) =>
+  batBuocTaiSan(phien) || khoaDanhMuc(env, phien, 'tai_san_vi_tri', body);
 
 /* ==========================================================================
    ĐƠN VỊ TÍNH

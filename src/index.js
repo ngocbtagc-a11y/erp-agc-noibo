@@ -973,6 +973,54 @@ async function dlnKhoaChucDanh(req, env) {
   return dulieunen.khoaChucDanh(env, phien, b);
 }
 
+async function dlnDanhSachDanhMucTaiSan(req, env) {
+  const { loi: l } = await batBuocXemDuLieuNen(req, env);
+  if (l) return l;
+  return dulieunen.danhSachDanhMucTaiSan(env);
+}
+async function dlnThemDanhMucTaiSan(req, env) {
+  const { phien, loi: l } = await batBuocXemDuLieuNen(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return dulieunen.themDanhMucTaiSan(env, phien, b);
+}
+async function dlnSuaDanhMucTaiSan(req, env) {
+  const { phien, loi: l } = await batBuocXemDuLieuNen(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return dulieunen.suaDanhMucTaiSan(env, phien, b);
+}
+async function dlnKhoaDanhMucTaiSan(req, env) {
+  const { phien, loi: l } = await batBuocXemDuLieuNen(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return dulieunen.khoaDanhMucTaiSan(env, phien, b);
+}
+
+async function dlnDanhSachViTriTaiSan(req, env) {
+  const { loi: l } = await batBuocXemDuLieuNen(req, env);
+  if (l) return l;
+  return dulieunen.danhSachViTriTaiSan(env);
+}
+async function dlnThemViTriTaiSan(req, env) {
+  const { phien, loi: l } = await batBuocXemDuLieuNen(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return dulieunen.themViTriTaiSan(env, phien, b);
+}
+async function dlnSuaViTriTaiSan(req, env) {
+  const { phien, loi: l } = await batBuocXemDuLieuNen(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return dulieunen.suaViTriTaiSan(env, phien, b);
+}
+async function dlnKhoaViTriTaiSan(req, env) {
+  const { phien, loi: l } = await batBuocXemDuLieuNen(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return dulieunen.khoaViTriTaiSan(env, phien, b);
+}
+
 async function dlnDanhSachDonVi(req, env) {
   const { loi: l } = await batBuocXemDuLieuNen(req, env);
   if (l) return l;
@@ -1071,11 +1119,29 @@ async function tsLichSu(req, env) {
   const url = new URL(req.url);
   return taisan.lichSuTaiSan(env, url.searchParams.get('id'));
 }
+async function tsChiTiet(req, env) {
+  const { loi: l } = await batBuocXemTaiSan(req, env);
+  if (l) return l;
+  const url = new URL(req.url);
+  return taisan.chiTietTaiSan(env, url.searchParams.get('id'));
+}
+async function tsTraCuu(req, env) {
+  const { loi: l } = await batBuocXemTaiSan(req, env);
+  if (l) return l;
+  const url = new URL(req.url);
+  return taisan.traCuuTheoMa(env, url.searchParams.get('ma'));
+}
 async function tsThem(req, env) {
   const { phien, loi: l } = await batBuocXemTaiSan(req, env);
   if (l) return l;
   let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
   return taisan.themTaiSan(env, phien, b);
+}
+async function tsSua(req, env) {
+  const { phien, loi: l } = await batBuocXemTaiSan(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return taisan.suaTaiSan(env, phien, b);
 }
 async function tsCapPhat(req, env) {
   const { phien, loi: l } = await batBuocXemTaiSan(req, env);
@@ -2850,6 +2916,14 @@ const DUONG_DAN = {
   'POST /api/dulieunen/don-vi/them':    dlnThemDonVi,
   'POST /api/dulieunen/don-vi/sua':     dlnSuaDonVi,
   'POST /api/dulieunen/don-vi/khoa':    dlnKhoaDonVi,
+  'GET  /api/dulieunen/tai-san-danh-muc':      dlnDanhSachDanhMucTaiSan,
+  'POST /api/dulieunen/tai-san-danh-muc/them': dlnThemDanhMucTaiSan,
+  'POST /api/dulieunen/tai-san-danh-muc/sua':  dlnSuaDanhMucTaiSan,
+  'POST /api/dulieunen/tai-san-danh-muc/khoa': dlnKhoaDanhMucTaiSan,
+  'GET  /api/dulieunen/tai-san-vi-tri':      dlnDanhSachViTriTaiSan,
+  'POST /api/dulieunen/tai-san-vi-tri/them': dlnThemViTriTaiSan,
+  'POST /api/dulieunen/tai-san-vi-tri/sua':  dlnSuaViTriTaiSan,
+  'POST /api/dulieunen/tai-san-vi-tri/khoa': dlnKhoaViTriTaiSan,
   'GET  /api/dulieunen/ncc':      dlnDanhSachNCC,
   'POST /api/dulieunen/ncc/them': dlnThemNCC,
   'POST /api/dulieunen/ncc/sua':  dlnSuaNCC,
@@ -2859,7 +2933,10 @@ const DUONG_DAN = {
   'POST /api/dulieunen/kho/sua':  dlnSuaKho,
   'GET  /api/tai-san':            tsDanhSach,
   'GET  /api/tai-san/lich-su':    tsLichSu,
+  'GET  /api/tai-san/chi-tiet':   tsChiTiet,
+  'GET  /api/tai-san/tra-cuu':    tsTraCuu,
   'POST /api/tai-san/them':       tsThem,
+  'POST /api/tai-san/sua':        tsSua,
   'POST /api/tai-san/cap-phat':   tsCapPhat,
   'POST /api/tai-san/thu-hoi':    tsThuHoi,
   'POST /api/tai-san/bao-hong':   tsBaoHong,

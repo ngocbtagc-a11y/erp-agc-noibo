@@ -118,6 +118,9 @@ Kiến trúc/dữ liệu: [MODULE-MAP.md](docs/MODULE-MAP.md) ·
 UX: [UX_ENGINEERING_STANDARD.md](docs/UX_ENGINEERING_STANDARD.md) ·
 [LIST_UX_AUDIT.md](docs/LIST_UX_AUDIT.md)
 
+[THIRD-PARTY-LIBRARIES.md](docs/THIRD-PARTY-LIBRARIES.md) — thư viện
+ngoài đã vendor (hiếm khi cần, xem lý do trước khi thêm cái mới).
+
 Templates: [BUSINESS-REQUEST.md](docs/templates/BUSINESS-REQUEST.md) ·
 [FEATURE-SPEC.md](docs/templates/FEATURE-SPEC.md) ·
 [CHANGE-REQUEST.md](docs/templates/CHANGE-REQUEST.md) ·
