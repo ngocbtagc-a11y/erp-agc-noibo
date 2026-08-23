@@ -8,6 +8,14 @@ Format: `Date | Feature | Domain | Decision | Migration | Breaking impact | Stat
 
 ---
 
+## 2026-08-23 (tiếp)
+
+| Feature | Domain | Decision | Migration | Breaking impact | Status |
+|---|---|---|---|---|---|
+| ERP-wide Quick Create Policy — audit toàn bộ dropdown Master Data + triển khai cho 3 entity rủi ro thấp | Core UI (`ganCombo`) + Governance | Audit trước khi code (`docs/audit/AUDIT-QUICK-CREATE-POLICY.md`): liệt kê toàn bộ ~18 dropdown/searchable-select thật đang có, phân loại ALLOWED/CONTROLLED/FORBIDDEN theo rủi ro (tiền/tồn/quyền, Source of Truth ngoài, cần business owner xác nhận, duplicate nguy hiểm, tần suất). Phát hiện quan trọng: Nhân sự/Vai trò/Sản phẩm-SKU đã ĐÚNG là không có Quick Create ở bất kỳ đâu (FORBIDDEN, đã tự nhiên an toàn); nhưng phát hiện `kvNhapNCC` và `tsThemNCC`/`tsSuaNCC` (Nhà cung cấp) đang là Ô NHẬP TỰ DO chứ không phải reference — vi phạm "No Free Text Fallback", để dành sửa riêng (CONTROLLED, không phải rủi ro thấp). Mở rộng `ganCombo()` (dùng ở toàn bộ ~20 chỗ trong ERP) thêm tham số `taoMoi` tuỳ chọn — không tìm thấy + đang gõ có chữ → hiện "+ Tạo '...'", bấm vào gọi thẳng API `themXyz` đã có sẵn (dùng lại Search Before Create/`canh_bao` gần giống đã có ở `dulieunen.js`, không viết logic duplicate mới), tạo xong tự chọn record mới, không đóng modal cha, không reload, không mất field khác đang nhập. Bật cho 3 entity ALLOWED có sẵn hạ tầng: **Danh mục tài sản, Vị trí tài sản, Chức danh** — cùng người bấm vào các form này (Data Owner tương ứng) vốn đã đúng quyền tạo Master Data đó, field bắt buộc duy nhất là tên đang gõ nên không cần mini-form riêng. Test trực tiếp: tạo mới tự chọn đúng, gõ gần giống ("Máy   tính" vs "Máy tính") → backend bắt đúng → confirm() → từ chối → không tạo trùng, xoá dữ liệu test sau khi verify | Không | Không (chỉ thêm tham số tuỳ chọn cho hàm dùng chung, các lời gọi cũ không truyền `taoMoi` không đổi hành vi) | OFFICIAL |
+
+---
+
 ## 2026-08-23
 
 | Feature | Domain | Decision | Migration | Breaking impact | Status |

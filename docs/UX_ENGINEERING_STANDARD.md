@@ -82,6 +82,7 @@ kiểm tra trước khi tự viết cái mới:
 | Việc | Dùng | Không tự viết lại |
 |---|---|---|
 | Chọn 1 entity từ danh sách dài/có thể tăng | `ganCombo()` | select riêng, ô tìm tách rời |
+| Tạo nhanh Master Data ngay trong dropdown (chỉ entity ALLOWED — xem [Quick Create Policy](../ERP-CONSTITUTION.md#quick-create-policy)) | `ganCombo(..., taoMoi: {xuLyTao, capNhatDs})` | modal/form riêng, hoặc tự chế "+ Thêm" khác kiểu mỗi màn |
 | Search không dấu/không phân biệt hoa-thường | `boDau()` | logic so khớp tự viết |
 | Render bảng từ mảng dữ liệu | `veBang()` | vòng lặp `innerHTML +=` thủ công |
 | Modal nhập nhanh (text/select/textarea) | `moHopNhap()` | `prompt()`/`confirm()` trình duyệt |

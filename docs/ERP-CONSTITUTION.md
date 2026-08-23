@@ -145,6 +145,40 @@ hơn, không nhiều biểu đồ hơn.
   cũng cần Dashboard — domain ít giao dịch/backlog/SLA thì Work
   Queue/List là đủ (xem MODULE-MAP.md).
 
+## Quick Create Policy
+
+Chốt 23/08/2026 (audit đầy đủ + phân loại từng entity:
+[docs/audit/AUDIT-QUICK-CREATE-POLICY.md](./audit/AUDIT-QUICK-CREATE-POLICY.md)).
+**Make common things fast, but make dangerous things deliberate** — không
+phải dropdown nào cũng nên cho "+ Tạo mới" ngay tại chỗ.
+
+Mỗi entity tham chiếu qua dropdown phải xếp vào đúng 1 trong 3 nhóm,
+đánh giá theo: ảnh hưởng nhiều module? đụng tiền/tồn/quyền? có Source of
+Truth ngoài? cần business owner xác nhận? duplicate có nguy hiểm? tần
+suất phát sinh trong context? tạo được bằng mini-form ≤3-5 field?
+
+- **QUICK_CREATE_ALLOWED** — rủi ro thấp, tần suất cao, người bấm vào
+  dropdown vốn đã đúng là Data Owner của entity đó. VD: Danh mục/Vị trí
+  tài sản, Chức danh.
+- **QUICK_CREATE_CONTROLLED** — cần thêm permission/duplicate
+  validation/có thể ở trạng thái nháp trước khi Active. VD: Phòng ban,
+  Đơn vị tính, Nhà cung cấp.
+- **QUICK_CREATE_FORBIDDEN** — entity nhạy cảm (lương/tài khoản/quyền/
+  giá vốn/kế toán) — không bao giờ tạo trực tiếp từ dropdown. VD: Nhân
+  sự, Vai trò, Sản phẩm/SKU chính thức. Không tìm thấy thì hiện hướng
+  dẫn tới đúng màn Master Data, không tự ý tạo tắt.
+
+**Không free-text fallback**: field tham chiếu Master Data mà user không
+tìm thấy thì phải tạo đúng Master record (nếu ALLOWED/CONTROLLED) hoặc từ
+chối lưu text tự do — không lưu chuỗi tự do vào field đáng lẽ là
+reference (đã phát hiện 2 vi phạm thật: `kvNhapNCC`, `tsThemNCC`/
+`tsSuaNCC` — Nhà cung cấp đang là ô nhập tay, chưa sửa, xem audit mục I).
+
+**Component dùng chung**: `ganCombo()` hỗ trợ tham số `taoMoi` tuỳ chọn
+(`{xuLyTao, capNhatDs}`) — không tạo component Quick Create riêng từng
+màn. Chỉ bật khi entity đã phân loại ALLOWED (hoặc CONTROLLED có thêm
+bước xác nhận) — mặc định KHÔNG có quick create, phải tự quyết định bật.
+
 ## UX Performance Budget (Frequent Action Budget)
 
 | Tần suất | Mục tiêu số thao tác chính |

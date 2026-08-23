@@ -341,7 +341,13 @@ function uuTienCungPhongBan(ds, phongBanId) {
    biệt hoa-thường) trên CẢ label hiển thị (đã gồm mã nếu có, VD "01-0003 ·
    Tên" — gõ mã hay tên đều tìm được). Enter chọn dòng đầu, Escape đóng.
    Trả về { capNhatHienThi } để gọi lại khi nạp danh sách/giá trị mới. */
-function ganCombo({ hienThi, panel, tim, goiY, giaTri }, layTuyChon, coRong, rongChu) {
+// taoMoi (tuỳ chọn) — ERP-WIDE QUICK CREATE POLICY (docs/audit/AUDIT-QUICK-CREATE-POLICY.md):
+// CHỈ bật cho entity đã đánh giá QUICK_CREATE_ALLOWED (rủi ro thấp, field
+// bắt buộc duy nhất = tên đang gõ để tìm — không mở form riêng). Không tự
+// ý bật cho combo khác khi chưa phân loại — mặc định KHÔNG có quick create.
+// { xuLyTao: async (ten) => ({id}), capNhatDs: async () => void — nạp lại
+//   ĐÚNG mảng mà layTuyChon() đọc, chạy XONG trước khi tự chọn record mới }
+function ganCombo({ hienThi, panel, tim, goiY, giaTri }, layTuyChon, coRong, rongChu, taoMoi) {
   const combo = hienThi.closest('.combo1');
   function capNhatHienThi() {
     const hienTai = layTuyChon().find(t => String(t.gia_tri) === giaTri.value);
@@ -349,7 +355,8 @@ function ganCombo({ hienThi, panel, tim, goiY, giaTri }, layTuyChon, coRong, ron
     hienThi.classList.toggle('rong', !hienTai);
   }
   function ve() {
-    const k = boDau((tim.value || '').trim());
+    const timTho = (tim.value || '').trim();
+    const k = boDau(timTho);
     const dsGoc = layTuyChon();
     const loc = k ? dsGoc.filter(t => boDau(t.nhan).includes(k)) : dsGoc;
     const rongHtml = coRong
@@ -363,7 +370,13 @@ function ganCombo({ hienThi, panel, tim, goiY, giaTri }, layTuyChon, coRong, ron
       nhomVuaVe = t.nhom;
       return dau + `<div class="ql-goiy-item${String(t.gia_tri) === giaTri.value ? ' active' : ''}" data-gt="${esc(t.gia_tri)}">${esc(t.nhan)}</div>`;
     }).join('');
-    goiY.innerHTML = rongHtml + (loc.length ? dsHtml : (rongHtml ? '' : '<div class="ql-goiy-trong">Không tìm thấy</div>'));
+    // "+ Tạo ..." chỉ hiện khi: có bật taoMoi, đang gõ có chữ, và KHÔNG
+    // trùng khít 1 lựa chọn đã có (Duplicate Protection — tránh tạo trùng
+    // khi user chỉ gõ chưa đúng dấu/hoa-thường của cái đã tồn tại).
+    const daTrungKhit = loc.some(t => boDau(t.nhan) === k);
+    const taoMoiHtml = (taoMoi && timTho && !daTrungKhit)
+      ? `<div class="ql-goiy-item ql-goiy-taomoi" data-tao-moi="1">+ Tạo "${esc(timTho)}"</div>` : '';
+    goiY.innerHTML = rongHtml + (loc.length ? dsHtml : (rongHtml || taoMoiHtml ? '' : '<div class="ql-goiy-trong">Không tìm thấy</div>')) + taoMoiHtml;
   }
   function mo() {
     combo.classList.add('mo');
@@ -386,19 +399,55 @@ function ganCombo({ hienThi, panel, tim, goiY, giaTri }, layTuyChon, coRong, ron
     dong();
     hienThi.focus();
   }
+  // Search → Not Found → + Create → Validate (Search Before Create ở
+  // backend themDanhMuc/... đã có sẵn, cùng logic confirm() đã dùng ở
+  // Dữ liệu nền — themCoCanhBaoTrung) → Create → Auto-select → Continue.
+  // Không đóng modal cha, không reload, không mất field khác trong form.
+  async function taoMoiVaChon(dong2) {
+    if (!taoMoi) return;
+    const ten = (tim.value || '').trim();
+    if (!ten) return;
+    dong2.classList.add('ql-goiy-dangtao');
+    dong2.textContent = 'Đang tạo…';
+    try {
+      let kq = await taoMoi.xuLyTao(ten, false);
+      if (kq && kq.canh_bao) {
+        const dongY = confirm(`Đã có mục gần giống: "${kq.giong.join('", "')}".\nVẫn tạo "${ten}" là mục MỚI riêng?`);
+        if (!dongY) {
+          dong2.classList.remove('ql-goiy-dangtao');
+          dong2.textContent = `+ Tạo "${ten}"`;
+          tim.focus();
+          return;
+        }
+        kq = await taoMoi.xuLyTao(ten, true);
+      }
+      await taoMoi.capNhatDs();
+      chon(String(kq.id));
+    } catch (err) {
+      alert(err.message || 'Không tạo được, thử lại nhé.');
+      dong2.classList.remove('ql-goiy-dangtao');
+      dong2.textContent = `+ Tạo "${ten}"`;
+    }
+  }
   // Gán qua .onclick/.oninput/.onkeydown (không addEventListener) — gọi
   // hàm này nhiều lần (mỗi lần mở modal/nạp lại data) vẫn an toàn, không
   // chồng nhiều listener chạy trùng. Đóng khi click ra ngoài xử lý chung ở
   // 1 listener document duy nhất (xem cuối file), không gắn lại mỗi lần.
   hienThi.onclick = () => (panel.hidden ? mo() : dong());
   tim.oninput = ve;
-  goiY.onclick = e => { const it = e.target.closest('[data-gt]'); if (it) chon(it.dataset.gt); };
+  goiY.onclick = e => {
+    const nutTao = e.target.closest('[data-tao-moi]');
+    if (nutTao) { taoMoiVaChon(nutTao); return; }
+    const it = e.target.closest('[data-gt]');
+    if (it) chon(it.dataset.gt);
+  };
   tim.onkeydown = e => {
     if (e.key === 'Escape') { dong(); hienThi.focus(); }
     else if (e.key === 'Enter') {
       e.preventDefault();
-      const dau = goiY.querySelector('.ql-goiy-item');
-      if (dau) chon(dau.dataset.gt);
+      const dau = goiY.querySelector('.ql-goiy-item:not(.ql-goiy-taomoi)') || goiY.querySelector('.ql-goiy-item');
+      if (dau && dau.dataset.taoMoi) taoMoiVaChon(dau);
+      else if (dau) chon(dau.dataset.gt);
     }
   };
   capNhatHienThi();
@@ -2263,10 +2312,14 @@ if (TOI.quyen.includes('nhansu')) {
       $('#nsMoTa').textContent = 'Thêm/sửa hồ sơ nhân sự. Cấp tài khoản đăng nhập và lương do Admin phụ trách (tab Quản trị).';
     }
 
+    // QUICK_CREATE_ALLOWED (docs/audit/AUDIT-QUICK-CREATE-POLICY.md) — người
+    // đang thêm nhân sự ở đây ĐÃ đúng là Data Owner của Chức danh
+    // (duocThemNhanSu), field bắt buộc duy nhất là tên.
+    const taoMoiChucDanh = { xuLyTao: API.dlnThemChucDanh, capNhatDs: window.LAM_MOI_DANHMUC_NEN };
     const { capNhatHienThi: veQtChucDanh } = ganCombo({
       hienThi: $('#qtChucDanhHienThi'), panel: $('#qtChucDanhPanel'),
       tim: $('#qtChucDanhTim'), goiY: $('#qtChucDanhGoiY'), giaTri: $('#qtChucDanh')
-    }, () => dsCandidateDanhMuc(DS_CHUC_DANH, $('#qtChucDanh').value), null, 'Chọn chức danh...');
+    }, () => dsCandidateDanhMuc(DS_CHUC_DANH, $('#qtChucDanh').value), null, 'Chọn chức danh...', taoMoiChucDanh);
     const { capNhatHienThi: veQtPhongBan } = ganCombo({
       hienThi: $('#qtPhongBanHienThi'), panel: $('#qtPhongBanPanel'),
       tim: $('#qtPhongBanTim'), goiY: $('#qtPhongBanGoiY'), giaTri: $('#qtPhongBan')
@@ -2327,7 +2380,8 @@ if (TOI.quyen.includes('nhansu')) {
       ganCombo({
         hienThi: $('#nsSua-chucdanhhienthi'), panel: $('#nsSua-chucdanhpanel'),
         tim: $('#nsSua-chucdanhtim'), goiY: $('#nsSua-chucdanhgoiy'), giaTri: oCd
-      }, () => dsCandidateDanhMuc(DS_CHUC_DANH, n.chuc_danh_id), null, 'Chọn chức danh...');
+      }, () => dsCandidateDanhMuc(DS_CHUC_DANH, n.chuc_danh_id), null, 'Chọn chức danh...',
+        { xuLyTao: API.dlnThemChucDanh, capNhatDs: window.LAM_MOI_DANHMUC_NEN });
       ganCombo({
         hienThi: $('#nsSua-phongbanhienthi'), panel: $('#nsSua-phongbanpanel'),
         tim: $('#nsSua-phongbantim'), goiY: $('#nsSua-phongbangoiy'), giaTri: oPb
@@ -3377,23 +3431,28 @@ async function khoiDongTaiSan() {
   $('#ts-loctrangthai').addEventListener('change', ve);
   $('#ts-xoaloc').addEventListener('click', xoaLocTS);
 
-  /* ---- Danh mục & Vị trí — combobox dùng chung cho Thêm/Sửa + panel quản lý ---- */
+  /* ---- Danh mục & Vị trí — combobox dùng chung cho Thêm/Sửa + panel quản lý.
+     QUICK_CREATE_ALLOWED (docs/audit/AUDIT-QUICK-CREATE-POLICY.md mục E) —
+     rủi ro thấp, chỉ tên, người bấm "Tài sản" đã đúng luôn là Data Owner
+     (duocQuanLyTaiSan) nên không cần thêm bước xác nhận/quyền riêng. ---- */
+  const taoMoiDanhMuc = { xuLyTao: API.dlnThemDanhMucTaiSan, capNhatDs: taiDanhMucViTri };
+  const taoMoiViTri = { xuLyTao: API.dlnThemViTriTaiSan, capNhatDs: taiDanhMucViTri };
   const { capNhatHienThi: veThemDanhMuc } = ganCombo({
     hienThi: $('#tsThemDanhMucHienThi'), panel: $('#tsThemDanhMucPanel'),
     tim: $('#tsThemDanhMucTim'), goiY: $('#tsThemDanhMucGoiY'), giaTri: $('#tsThemDanhMucId')
-  }, () => DS_TS_DANHMUC.filter(d => d.hoat_dong).map(d => ({ gia_tri: d.id, nhan: d.ten })), null, 'Chọn danh mục...');
+  }, () => DS_TS_DANHMUC.filter(d => d.hoat_dong).map(d => ({ gia_tri: d.id, nhan: d.ten })), null, 'Chọn danh mục...', taoMoiDanhMuc);
   const { capNhatHienThi: veThemViTri } = ganCombo({
     hienThi: $('#tsThemViTriHienThi'), panel: $('#tsThemViTriPanel'),
     tim: $('#tsThemViTriTim'), goiY: $('#tsThemViTriGoiY'), giaTri: $('#tsThemViTriId')
-  }, () => DS_TS_VITRI.filter(d => d.hoat_dong).map(d => ({ gia_tri: d.id, nhan: d.ten })), null, 'Chọn vị trí...');
+  }, () => DS_TS_VITRI.filter(d => d.hoat_dong).map(d => ({ gia_tri: d.id, nhan: d.ten })), null, 'Chọn vị trí...', taoMoiViTri);
   const { capNhatHienThi: veSuaDanhMuc } = ganCombo({
     hienThi: $('#tsSuaDanhMucHienThi'), panel: $('#tsSuaDanhMucPanel'),
     tim: $('#tsSuaDanhMucTim'), goiY: $('#tsSuaDanhMucGoiY'), giaTri: $('#tsSuaDanhMucId')
-  }, () => DS_TS_DANHMUC.filter(d => d.hoat_dong).map(d => ({ gia_tri: d.id, nhan: d.ten })), null, 'Chọn danh mục...');
+  }, () => DS_TS_DANHMUC.filter(d => d.hoat_dong).map(d => ({ gia_tri: d.id, nhan: d.ten })), null, 'Chọn danh mục...', taoMoiDanhMuc);
   const { capNhatHienThi: veSuaViTri } = ganCombo({
     hienThi: $('#tsSuaViTriHienThi'), panel: $('#tsSuaViTriPanel'),
     tim: $('#tsSuaViTriTim'), goiY: $('#tsSuaViTriGoiY'), giaTri: $('#tsSuaViTriId')
-  }, () => DS_TS_VITRI.filter(d => d.hoat_dong).map(d => ({ gia_tri: d.id, nhan: d.ten })), null, 'Chọn vị trí...');
+  }, () => DS_TS_VITRI.filter(d => d.hoat_dong).map(d => ({ gia_tri: d.id, nhan: d.ten })), null, 'Chọn vị trí...', taoMoiViTri);
 
   function veChonPhongBan(sel, hienTaiId) {
     if (!sel) return;
