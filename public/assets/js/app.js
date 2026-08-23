@@ -3302,6 +3302,10 @@ async function khoiDongTaiSan() {
     }
     const nutLoc = $('#ts-xoaloc');
     if (nutLoc) nutLoc.hidden = !($('#ts-tim')?.value || $('#ts-loctrangthai')?.value);
+    // Bấm chọn nhiều dòng để In tem hàng loạt — bỏ id không còn trong danh
+    // sách đang lọc/hiển thị (đổi bộ lọc thì lựa chọn cũ không còn ý nghĩa).
+    const idConLai = new Set(ds.map(t => t.id));
+    for (const id of [...tsChon]) if (!idConLai.has(id)) tsChon.delete(id);
     veBang('#ts-bang', ds, t => {
       const tt = NHAN_TT_TS[t.trang_thai] || { chu: t.trang_thai, mau: 'mute' };
       const laNguoiGiu = t.nguoi_giu_id && t.nguoi_giu_id === TOI.id;
@@ -3315,7 +3319,8 @@ async function khoiDongTaiSan() {
         nut += `<button class="btn-nho" data-ts-baotrixong="${esc(t.id)}">Bảo trì xong</button> `;
       }
       nut += `<button class="btn-nho btn-phu" data-ts-mo="${esc(t.id)}">Chi tiết</button>`;
-      return `<td class="sm"><button type="button" class="btn-nho btn-phu" data-ts-mo="${esc(t.id)}" style="font-weight:600">${esc(t.ma_ts)}</button></td>` +
+      return `<td><input type="checkbox" data-ts-chon="${esc(t.id)}" ${tsChon.has(t.id) ? 'checked' : ''}></td>` +
+        `<td class="sm"><button type="button" class="btn-nho btn-phu" data-ts-mo="${esc(t.id)}" style="font-weight:600">${esc(t.ma_ts)}</button></td>` +
         `<td><div class="nm">${esc(t.ten)}</div></td>` +
         `<td class="sm">${esc(t.danh_muc_ten || t.danh_muc || '—')}</td>` +
         `<td><span class="tag ${tt.mau}">${esc(tt.chu)}</span></td>` +
@@ -3323,7 +3328,35 @@ async function khoiDongTaiSan() {
         `<td class="sm">${esc(t.vi_tri_ten || t.vi_tri || '—')}</td>` +
         `<td style="white-space:nowrap">${nut}</td>`;
     });
+    veThanhChonTS();
   }
+
+  /* ---- Chọn nhiều dòng → In tem hàng loạt (mỗi tài sản 1 trang, xem CSS
+     .ts-tem page-break-after) ---- */
+  const tsChon = new Set();
+  function veThanhChonTS() {
+    $('#ts-thanhchon').hidden = tsChon.size === 0;
+    $('#ts-sldachon').textContent = `Đã chọn ${tsChon.size} tài sản`;
+    const tatCa = $('#ts-chontatca');
+    const dsHienThi = locTS();
+    tatCa.checked = dsHienThi.length > 0 && dsHienThi.every(t => tsChon.has(t.id));
+    tatCa.indeterminate = !tatCa.checked && dsHienThi.some(t => tsChon.has(t.id));
+  }
+  $('#ts-chontatca').addEventListener('change', e => {
+    locTS().forEach(t => { if (e.target.checked) tsChon.add(t.id); else tsChon.delete(t.id); });
+    ve();
+  });
+  $('#ts-nut-huychon').addEventListener('click', () => { tsChon.clear(); ve(); });
+  $('#ts-bang').addEventListener('change', e => {
+    const cb = e.target.closest('[data-ts-chon]');
+    if (!cb) return;
+    if (cb.checked) tsChon.add(cb.dataset.tsChon); else tsChon.delete(cb.dataset.tsChon);
+    veThanhChonTS();
+  });
+  $('#ts-nut-intemchon').addEventListener('click', () => {
+    const ds = DS_TS.filter(t => tsChon.has(t.id));
+    if (ds.length) inTemNhieu(ds);
+  });
 
   async function taiLai() {
     const kq = await API.taiSanDanhSach();
@@ -3426,13 +3459,18 @@ async function khoiDongTaiSan() {
 
   $('#tsThemNutChiTiet').addEventListener('click', () => { $('#tsThemChiTiet').hidden = !$('#tsThemChiTiet').hidden; });
 
+  // "Lưu & In tem" — 2 nút submit trong cùng 1 form (Sếp Ngọc: "không bắt
+  // lưu → quay danh sách → tìm lại → in"), phân biệt bằng nút nào bấm qua
+  // submitter của SubmitEvent (chuẩn, không cần theo dõi biến cờ riêng).
   $('#tsThemForm').addEventListener('submit', async e => {
     e.preventDefault();
+    const inTemSauKhiLuu = e.submitter && e.submitter.id === 'tsThemNutInTem';
     const oLoi = $('#tsThemLoi'); oLoi.textContent = '';
+    const ten = $('#tsThemTen').value.trim();
     try {
       const anh = await docAnh($('#tsThemAnh'), '#tsThemAnhXemTruoc');
-      await API.taiSanThem({
-        ten: $('#tsThemTen').value.trim(),
+      const kq = await API.taiSanThem({
+        ten,
         danh_muc_id: $('#tsThemDanhMucId').value || null,
         vi_tri_id: $('#tsThemViTriId').value || null,
         hang_sx: $('#tsThemHangSx').value.trim(),
@@ -3455,6 +3493,7 @@ async function khoiDongTaiSan() {
       $('#tsThemAnhXemTruoc').innerHTML = '';
       $('#tsThemChiTiet').hidden = true;
       await taiLai();
+      if (inTemSauKhiLuu) inTemNhieu([{ ma_ts: kq.ma_ts, ten }]);
     } catch (err) { oLoi.textContent = err.message || 'Không lưu được, thử lại nhé.'; }
   });
 
@@ -3591,7 +3630,7 @@ async function khoiDongTaiSan() {
     try { await API.taiSanThanhLy({ id: tsDangXem.id }); $('#tsChiTietModalNen').hidden = true; await taiLai(); }
     catch (err) { alert(err.message || 'Không thực hiện được, thử lại nhé.'); }
   });
-  $('#tsCtNutInTem').addEventListener('click', () => inTem(tsDangXem));
+  $('#tsCtNutInTem').addEventListener('click', () => inTemNhieu([tsDangXem]));
 
   /* ---- Sửa ---- */
   $('#tsCtNutSua').addEventListener('click', () => moSua(tsDangXem));
@@ -3644,14 +3683,22 @@ async function khoiDongTaiSan() {
     } catch (err) { oLoi.textContent = err.message || 'Không lưu được, thử lại nhé.'; }
   });
 
-  /* ---- In tem: HTML/CSS print, khổ nhỏ, xem @media print trong style.css ---- */
-  function inTem(t) {
-    $('#tsTemMauDon').innerHTML =
-      `<div class="ts-tem-cty">ALPHA GREEN COMMERCE</div>` +
-      `<div class="ts-tem-ten">${esc(t.ten)}</div>` +
-      `<div class="ts-tem-ma">${esc(t.ma_ts)}</div>` +
-      `<div class="ts-tem-qr">${svgQR(t.ma_ts)}</div>` +
-      `<div class="ts-tem-phu">TÀI SẢN NỘI BỘ</div>`;
+  /* ---- In tem 60×40mm ngang (ASSET_LABEL_60X40, xem @page trong style.css)
+     — hỗ trợ in 1 tem hoặc hàng loạt (mỗi tài sản 1 trang). Reprint dùng lại
+     đúng ma_ts/ten hiện có, KHÔNG sinh mã mới — chỉ đọc, không ghi gì thêm
+     (Sếp Ngọc: "không cần spam Audit nếu việc này không có giá trị"). ---- */
+  function inTemNhieu(dsTaiSan) {
+    $('#tsTemMauDon').innerHTML = dsTaiSan.map(t =>
+      `<div class="ts-tem">` +
+        `<div class="ts-tem-trai">` +
+          `<div class="ts-tem-cty">ALPHA GREEN COMMERCE</div>` +
+          `<div class="ts-tem-ten">${esc(t.ten)}</div>` +
+          `<div class="ts-tem-ma">${esc(t.ma_ts)}</div>` +
+          `<div class="ts-tem-phu">TÀI SẢN NỘI BỘ</div>` +
+        `</div>` +
+        `<div class="ts-tem-qr">${svgQR(t.ma_ts)}</div>` +
+      `</div>`
+    ).join('');
     window.print();
   }
 

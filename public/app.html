@@ -1328,8 +1328,9 @@
               </div>
             </div>
 
-            <div class="field field-nut">
+            <div class="field field-nut" style="display:flex; gap:10px">
               <button type="submit" class="btn-primary" id="tsThemNut" style="width:auto">+ Thêm tài sản</button>
+              <button type="submit" class="btn-phu" id="tsThemNutInTem" style="width:auto">Lưu &amp; In tem</button>
             </div>
           </form>
           <div class="form-loi" id="tsThemLoi"></div>
@@ -1388,11 +1389,17 @@
             </select>
             <button type="button" class="btn-nho btn-phu" id="ts-xoaloc" hidden>Xoá bộ lọc</button>
           </div>
+          <div class="kd-thanh-chon" id="ts-thanhchon" hidden style="margin-top:10px">
+            <span id="ts-sldachon"></span>
+            <button type="button" class="btn-primary" id="ts-nut-intemchon" style="width:auto">In tem đã chọn</button>
+            <button type="button" class="btn-phu" id="ts-nut-huychon">Bỏ chọn</button>
+          </div>
         </div>
         <div class="table-wrap">
           <table>
             <thead>
               <tr>
+                <th style="width:28px"><input type="checkbox" id="ts-chontatca"></th>
                 <th>Mã TS</th>
                 <th>Tên</th>
                 <th>Danh mục</th>
@@ -1530,7 +1537,7 @@
 
     <!-- ---------- Tài sản: Tem in (chỉ hiện khi in — xem @media print trong style.css) ---------- -->
     <div id="tsInTemVung" class="ts-in-tem-vung" hidden>
-      <div class="ts-tem" id="tsTemMauDon"></div>
+      <div id="tsTemMauDon"></div>
     </div>
 
     <!-- ---------- Xếp ca (Đăng ký ca / Xếp ca tuần) — Part-time & Thời vụ ---------- -->

@@ -1884,19 +1884,31 @@ tr.kd-chiadoi td {
 .ts-ct-dong:last-child { border-bottom: none; }
 
 /* Tem in — ẩn hoàn toàn khi xem thường, chỉ hiện lúc in (window.print()).
-   Khổ ~50x30mm, đủ cho máy in tem lẫn máy in giấy A4 thường. */
+   Khổ VẬT LÝ CHÍNH XÁC 60×40mm ngang (Sếp chốt 23/08/2026) — @page dùng mm
+   thật, không phải px quy đổi, để máy in tem cắt đúng khổ không lệch.
+   Template đặt tên ASSET_LABEL_60X40 — sau này thêm khổ khác (30x50,
+   50x80...) thì thêm class ts-tem--{ma} riêng, không sửa Asset Core.
+   Mỗi tem = 1 trang in riêng (page-break) để in hàng loạt không dính nhau. */
 .ts-in-tem-vung { display: none; }
 .ts-tem {
-  width: 50mm; padding: 3mm; box-sizing: border-box;
-  font-family: var(--sans); text-align: center; color: #000;
+  width: 60mm; height: 40mm; box-sizing: border-box;
+  padding: 2.5mm; display: flex; align-items: center; gap: 2.5mm;
+  font-family: var(--sans); color: #000; overflow: hidden;
+  page-break-after: always; break-after: page;
 }
-.ts-tem-cty { font-size: 7px; font-weight: 700; letter-spacing: .04em; }
-.ts-tem-ten { font-size: 9px; font-weight: 600; margin-top: 1.5mm; line-height: 1.2; }
-.ts-tem-ma { font-size: 13px; font-weight: 800; letter-spacing: .06em; margin-top: 1mm; }
-.ts-tem-qr { margin: 1.5mm auto 0; width: 26mm; }
-.ts-tem-qr svg { width: 100%; height: auto; display: block; }
-.ts-tem-phu { font-size: 6px; color: #333; margin-top: 1mm; letter-spacing: .03em; }
+.ts-tem:last-child { page-break-after: auto; break-after: auto; }
+.ts-tem-trai { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 1mm; }
+.ts-tem-cty { font-size: 6.5px; font-weight: 700; letter-spacing: .04em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ts-tem-ten {
+  font-size: 8px; font-weight: 600; line-height: 1.25; color: #000;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.ts-tem-ma { font-size: 12.5px; font-weight: 800; letter-spacing: .03em; }
+.ts-tem-phu { font-size: 5.5px; color: #333; letter-spacing: .03em; margin-top: auto; }
+.ts-tem-qr { flex: none; width: 32mm; height: 32mm; }
+.ts-tem-qr svg { width: 100%; height: 100%; display: block; }
 
+@page { size: 60mm 40mm; margin: 0; }
 @media print {
   body * { visibility: hidden; }
   .ts-in-tem-vung, .ts-in-tem-vung * { visibility: visible; }
