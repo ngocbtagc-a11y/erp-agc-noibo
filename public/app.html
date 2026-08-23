@@ -152,16 +152,31 @@
           <p class="hint" style="margin:0 0 14px">Mục tiêu 3 cấp: Công ty → Phòng ban → Cá nhân. Bấm vào 1 thẻ mục tiêu để xem chi tiết việc gắn vào. Tiến độ tự tính từ việc đã Hoàn thành, không nhập tay.</p>
 
           <div class="mt-nhom-nhan">Cấp công ty</div>
-          <div id="mt-congty-list"></div>
+          <div id="mt-congty-list" class="mt-the-grid"></div>
           <div class="empty" id="mt-congty-trong" hidden>Chưa có mục tiêu công ty nào cho quý này.</div>
+          <button type="button" class="mt-daxong-toggle" id="mt-congty-daxong-toggle" hidden>
+            <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+            <span id="mt-congty-daxong-dem"></span>
+          </button>
+          <div id="mt-congty-daxong-list" class="mt-the-grid mt-daxong-list" hidden></div>
 
           <div class="mt-nhom-nhan" style="margin-top:18px">Cấp phòng ban</div>
-          <div id="mt-phongban-list"></div>
+          <div id="mt-phongban-list" class="mt-the-grid"></div>
           <div class="empty" id="mt-phongban-trong" hidden>Chưa có mục tiêu phòng ban nào cho quý này.</div>
+          <button type="button" class="mt-daxong-toggle" id="mt-phongban-daxong-toggle" hidden>
+            <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+            <span id="mt-phongban-daxong-dem"></span>
+          </button>
+          <div id="mt-phongban-daxong-list" class="mt-the-grid mt-daxong-list" hidden></div>
 
           <div class="mt-nhom-nhan" style="margin-top:18px">Cấp cá nhân</div>
-          <div id="mt-canhan-list"></div>
+          <div id="mt-canhan-list" class="mt-the-grid"></div>
           <div class="empty" id="mt-canhan-trong" hidden>Chưa có mục tiêu cá nhân nào cho quý này.</div>
+          <button type="button" class="mt-daxong-toggle" id="mt-canhan-daxong-toggle" hidden>
+            <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+            <span id="mt-canhan-daxong-dem"></span>
+          </button>
+          <div id="mt-canhan-daxong-list" class="mt-the-grid mt-daxong-list" hidden></div>
         </div>
       </div>
 

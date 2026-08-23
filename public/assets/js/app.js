@@ -1206,6 +1206,7 @@ async function khoiDongMucTieu() {
       `</div>` +
       `<div class="bar mt-the-bar"><i class="${mauBar}" style="width:0"></i></div>` +
       (m.mo_ta ? `<div class="mt-the-mo" title="${esc(m.mo_ta)}">${esc(m.mo_ta)}</div>` : '') +
+      (!daXong && !daHuy && m.han_gan_nhat ? `<div class="mt-the-han">⏰ Hạn gần nhất: ${dongHanMt(m.han_gan_nhat)}</div>` : '') +
       `<div class="mt-the-meta">${badge}` +
         `<span class="mt-the-viec">${m.so_viec_xong}/${m.so_viec} việc · ${esc(m.nguoi_tao_ten)}</span>` +
         nutSua +
@@ -1217,22 +1218,46 @@ async function khoiDongMucTieu() {
 
   let DS_MT = [];   // cả 3 cấp, dùng chung để đổ dropdown "Thuộc mục tiêu" ở Trạm Mục Tiêu
 
+  // Mục tiêu đã Hoàn thành/Đã huỷ gấp lại thành khối riêng, không nằm lẫn
+  // với mục đang làm — càng làm xong nhiều mục tiêu, màn hình càng đầy nếu
+  // không gấp lại (Sếp Ngọc yêu cầu 23/08/2026: "để không bị đầy màn hình
+  // và dễ kiểm soát"). Vẫn xem lại được ngay, chỉ cần bấm mở — không mất,
+  // không phải sang tab khác. Backend đã sắp mục đang làm lên trước + theo
+  // hạn gần nhất (xem mtDanhSach trong index.js), nên chỉ cần tách 2 nhóm
+  // theo đúng thứ tự mảng trả về, không cần sort lại ở đây.
+  function veNhomMucTieu(prefix, list) {
+    const dangLam = list.filter(m => m.trang_thai === 'dang_thuc_hien');
+    const daXong = list.filter(m => m.trang_thai !== 'dang_thuc_hien');
+
+    const oList = $(`#mt-${prefix}-list`);
+    oList.innerHTML = '';
+    dangLam.forEach(m => oList.appendChild(veThe1MucTieu(m)));
+    $(`#mt-${prefix}-trong`).hidden = list.length > 0;
+
+    const oToggle = $(`#mt-${prefix}-daxong-toggle`);
+    const oDaXongList = $(`#mt-${prefix}-daxong-list`);
+    oToggle.hidden = daXong.length === 0;
+    $(`#mt-${prefix}-daxong-dem`).textContent = `Đã xong (${daXong.length})`;
+    oDaXongList.innerHTML = '';
+    daXong.forEach(m => oDaXongList.appendChild(veThe1MucTieu(m)));
+    // Gán qua .onclick (không addEventListener) — hàm này gọi lại mỗi lần
+    // nạp dữ liệu, tránh chồng nhiều listener chạy trùng khi bấm 1 lần mở
+    // ra nhiều khối.
+    oToggle.onclick = () => {
+      const dangMo = !oDaXongList.hidden;
+      oDaXongList.hidden = dangMo;
+      oToggle.classList.toggle('mo', !dangMo);
+    };
+  }
+
   async function taiLaiMucTieu() {
     const kq = await API.mtDanhSach();
     $('#mt-ky-hint').textContent = `Quý ${kq.quy}/${kq.nam}`;
     DS_MT = [...(kq.cong_ty || []), ...(kq.phong_ban || []), ...(kq.ca_nhan || [])];
 
-    const oCT = $('#mt-congty-list'); oCT.innerHTML = '';
-    (kq.cong_ty || []).forEach(m => oCT.appendChild(veThe1MucTieu(m)));
-    $('#mt-congty-trong').hidden = (kq.cong_ty || []).length > 0;
-
-    const oPB = $('#mt-phongban-list'); oPB.innerHTML = '';
-    (kq.phong_ban || []).forEach(m => oPB.appendChild(veThe1MucTieu(m)));
-    $('#mt-phongban-trong').hidden = (kq.phong_ban || []).length > 0;
-
-    const oCN = $('#mt-canhan-list'); oCN.innerHTML = '';
-    (kq.ca_nhan || []).forEach(m => oCN.appendChild(veThe1MucTieu(m)));
-    $('#mt-canhan-trong').hidden = (kq.ca_nhan || []).length > 0;
+    veNhomMucTieu('congty', kq.cong_ty || []);
+    veNhomMucTieu('phongban', kq.phong_ban || []);
+    veNhomMucTieu('canhan', kq.ca_nhan || []);
 
     // Đổ dropdown "Thuộc mục tiêu" trong form Giao Mục Tiêu — giữ nguyên tuỳ
     // chọn "+ Tạo mục tiêu mới…" (hardcode sẵn trong app.html) ở đầu danh
@@ -1552,7 +1577,7 @@ async function khoiDongCongViec() {
         nut = `<button type="button" class="btn-nho btn-primary" data-cv-nop="${r.id}">Nộp kết quả</button>`;
       }
       const nhanTodo = laTodo ? ` <span class="tag sage">🙋 Việc của tôi</span>` : '';
-      return `<td><div class="nm">${esc(r.tieu_de)}${nhanTodo}</div>${r.mo_ta ? `<div class="sm">${esc(r.mo_ta)}</div>` : ''}${r.phoi_hop_ten ? `<div class="sm">🤝 Phối hợp: ${esc(r.phoi_hop_ten)}</div>` : ''}${r.ket_qua ? `<div class="sm"><b>Kết quả:</b> ${esc(r.ket_qua)}</div>` : ''}</td>` +
+      return `<td><div class="nm">${esc(r.tieu_de)}${nhanTodo}</div>${r.muc_tieu_ten ? `<div class="sm">🎯 Thuộc mục tiêu: ${esc(r.muc_tieu_ten)}</div>` : ''}${r.mo_ta ? `<div class="sm">${esc(r.mo_ta)}</div>` : ''}${r.phoi_hop_ten ? `<div class="sm">🤝 Phối hợp: ${esc(r.phoi_hop_ten)}</div>` : ''}${r.ket_qua ? `<div class="sm"><b>Kết quả:</b> ${esc(r.ket_qua)}</div>` : ''}</td>` +
         `<td class="sm">${esc(r.dau_ra) || '—'}</td>` +
         `<td class="sm">${laTodo ? '— (của tôi)' : esc(r.nguoi_giao_ten)}</td>` +
         `<td class="sm">${dongHan(r.han_chot)}</td>` +
@@ -1571,7 +1596,7 @@ async function khoiDongCongViec() {
       if (r.trang_thai === 'moi' || r.trang_thai === 'dang_lam' || r.trang_thai === 'cho_duyet') {
         nut += ` <button type="button" class="btn-nho" data-cv-huy="${r.id}">Huỷ</button>`;
       }
-      return `<td><div class="nm">${esc(r.tieu_de)}</div>${r.mo_ta ? `<div class="sm">${esc(r.mo_ta)}</div>` : ''}${r.phoi_hop_ten ? `<div class="sm">🤝 Phối hợp: ${esc(r.phoi_hop_ten)}</div>` : ''}${r.ket_qua ? `<div class="sm"><b>Kết quả:</b> ${esc(r.ket_qua)}</div>` : ''}</td>` +
+      return `<td><div class="nm">${esc(r.tieu_de)}</div>${r.muc_tieu_ten ? `<div class="sm">🎯 Thuộc mục tiêu: ${esc(r.muc_tieu_ten)}</div>` : ''}${r.mo_ta ? `<div class="sm">${esc(r.mo_ta)}</div>` : ''}${r.phoi_hop_ten ? `<div class="sm">🤝 Phối hợp: ${esc(r.phoi_hop_ten)}</div>` : ''}${r.ket_qua ? `<div class="sm"><b>Kết quả:</b> ${esc(r.ket_qua)}</div>` : ''}</td>` +
         `<td class="sm">${esc(r.dau_ra)}</td>` +
         `<td class="sm">${esc(r.nguoi_nhan_ten)}</td>` +
         `<td class="sm">${dongHan(r.han_chot)}</td>` +
@@ -1585,7 +1610,7 @@ async function khoiDongCongViec() {
     // chịu trách nhiệm báo cáo cho mỗi việc, phối hợp chỉ để biết & hỗ trợ).
     veBang('#cv-bang-phoihop', kq.phoi_hop || [], r => {
       const tt = CV_TRANG_THAI[r.trang_thai] || CV_TRANG_THAI.moi;
-      return `<td><div class="nm">${esc(r.tieu_de)}</div>${r.mo_ta ? `<div class="sm">${esc(r.mo_ta)}</div>` : ''}</td>` +
+      return `<td><div class="nm">${esc(r.tieu_de)}</div>${r.muc_tieu_ten ? `<div class="sm">🎯 Thuộc mục tiêu: ${esc(r.muc_tieu_ten)}</div>` : ''}${r.mo_ta ? `<div class="sm">${esc(r.mo_ta)}</div>` : ''}</td>` +
         `<td class="sm">${esc(r.dau_ra)}</td>` +
         `<td class="sm">${esc(r.nguoi_nhan_ten)}</td>` +
         `<td class="sm">${esc(r.nguoi_giao_ten)}</td>` +

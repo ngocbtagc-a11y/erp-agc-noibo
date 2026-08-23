@@ -1869,7 +1869,10 @@ function kyHienTai() {
 const MT_COT = `id, cap, bo_phan, tieu_de, mo_ta, nam, quy, nguoi_tao_id, nguoi_tao_ten,
                 trang_thai, da_chot, chot_boi, chot_luc, tao_luc, cap_nhat_luc,
                 (SELECT COUNT(*) FROM cong_viec WHERE muc_tieu_id = m.id) AS so_viec,
-                (SELECT COUNT(*) FROM cong_viec WHERE muc_tieu_id = m.id AND trang_thai = 'hoan_thanh') AS so_viec_xong`;
+                (SELECT COUNT(*) FROM cong_viec WHERE muc_tieu_id = m.id AND trang_thai = 'hoan_thanh') AS so_viec_xong,
+                (SELECT MIN(han_chot) FROM cong_viec
+                  WHERE muc_tieu_id = m.id AND han_chot IS NOT NULL
+                    AND trang_thai NOT IN ('hoan_thanh', 'huy')) AS han_gan_nhat`;
 
 async function mtDanhSach(req, env) {
   const { loi: l } = await batBuocDangNhap(req, env);
@@ -1881,8 +1884,17 @@ async function mtDanhSach(req, env) {
 
   // LIMIT 300 — đã lọc theo đúng 1 quý nên vốn nhỏ, thêm trần cho chắc
   // (audit hiệu năng 21/08/2026, mục P0).
+  // Sắp theo: đang thực hiện lên trước (đã xong/huỷ xuống cuối, frontend tự
+  // gấp lại thành khối riêng) → trong nhóm đang thực hiện, hạn gần nhất lên
+  // trước (không có hạn thì xuống cuối) → mới tạo trước (giữ thói quen cũ).
   const { results } = await env.DB.prepare(
-    `SELECT ${MT_COT} FROM muc_tieu m WHERE nam = ? AND quy = ? ORDER BY cap ASC, tao_luc DESC LIMIT 300`
+    `SELECT ${MT_COT} FROM muc_tieu m WHERE nam = ? AND quy = ?
+     ORDER BY cap ASC,
+              (trang_thai = 'dang_thuc_hien') DESC,
+              (han_gan_nhat IS NULL) ASC,
+              han_gan_nhat ASC,
+              tao_luc DESC
+     LIMIT 300`
   ).bind(nam, quy).all();
 
   return json({

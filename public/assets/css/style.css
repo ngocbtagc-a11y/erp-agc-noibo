@@ -629,11 +629,29 @@ img.av { object-fit: cover; display: block; cursor: default; }
    theo tiến độ (xanh >=70% · vàng 40-69% · đỏ <40%). Tên dài cắt 1 dòng, rê
    chuột hiện đủ (không dùng chữ chạy vì khó đọc). --- */
 /* Xếp 2 cột trên màn rộng cho đỡ phí chiều ngang, tự về 1 cột khi hẹp/điện thoại */
-#mt-congty-list, #mt-phongban-list, #mt-canhan-list {
+.mt-the-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
   gap: 8px;
 }
+
+/* Nút gấp/mở khối "Đã xong" mỗi cấp — gọn, không phải nút hành động chính,
+   để mục tiêu đã hoàn thành/đã huỷ không chiếm chỗ mục đang làm nhưng vẫn
+   tra lại được ngay khi cần (không mất, không phải sang màn khác). */
+.mt-daxong-toggle {
+  display: flex; align-items: center; gap: 6px;
+  margin: 10px 0 8px; padding: 0; border: none; background: none;
+  font-size: 12.5px; font-weight: 600; color: var(--text-mute); cursor: pointer;
+}
+.mt-daxong-toggle:hover { color: var(--text); }
+.mt-daxong-toggle .ico { width: 12px; height: 12px; transition: transform .15s; }
+.mt-daxong-toggle.mo .ico { transform: rotate(180deg); }
+.mt-daxong-list[hidden] { display: none; }
+
+/* Hạn gần nhất trên thẻ mục tiêu — trễ hạn thì tô đỏ, giống cách dùng ở
+   bảng việc chi tiết (canh-bao-chu) để nhất quán 1 kiểu cảnh báo hạn. */
+.mt-the-han { font-size: 11px; margin-top: 2px; }
+.mt-the-han .canh-bao-chu { font-weight: 700; }
 
 /* Trạm Mục Tiêu (MBOs) — gộp khối mục tiêu + giao việc (Sếp Ngọc chốt
    21/08/2026: "bản chất 2 cái này nó như nhau"), tô CAM để phân biệt với
