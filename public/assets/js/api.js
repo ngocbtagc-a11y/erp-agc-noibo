@@ -70,6 +70,7 @@ export const API = {
   }),
   cvLichSu: () => goi('/api/cong-viec/lich-su'),
   cvTongQuanCongTy: () => goi('/api/cong-viec/tong-quan-congty'),
+  cvTongQuanPhongBan: () => goi('/api/cong-viec/tong-quan-phongban'),
 
   /* ---- Mục tiêu (MBOs: công ty / phòng ban) ---- */
   mtDanhSach: (nam, quy) => goi('/api/muc-tieu/danh-sach' +

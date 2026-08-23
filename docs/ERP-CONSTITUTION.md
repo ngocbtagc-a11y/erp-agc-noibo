@@ -113,6 +113,38 @@ REDESIGN**. Xem ngân sách cụ thể ngay dưới đây.
 
 ---
 
+## Dashboard Rules
+
+Chốt 23/08/2026 (audit [docs/audit/AUDIT-HOME-DASHBOARD.md](./audit/AUDIT-HOME-DASHBOARD.md)):
+Home không phải nơi trưng bày dữ liệu — Home là nơi bắt đầu công việc,
+Dashboard là nơi hỗ trợ quyết định. Metric không dẫn tới quyết định hoặc
+hành động thì không nên xuất hiện. ERP càng dùng lâu càng phải ít nhiễu
+hơn, không nhiều biểu đồ hơn.
+
+- **D1 — Actionable over informative.** Mỗi card/metric phải trả lời:
+  có vấn đề gì, mức độ, ai chịu trách nhiệm, có cần hành động, click vào
+  đâu để xử lý. Không đưa số lên chỉ vì có dữ liệu.
+- **D2 — Role-based, not one-size-fits-all.** Employee = Action First
+  (việc cần làm của mình). Manager = Exception First (ngoại lệ/backlog/
+  SLA của phòng mình quản lý — xác định qua `phong_ban.truong_phong_id`,
+  KHÔNG qua vai_tro hệ thống, vì trưởng phòng thật có thể không giữ vai
+  trò hệ thống cao). CEO/Admin = Decision First (vấn đề cần quyết định
+  trước, không phải chart đẹp trước).
+- **D3 — Exception first.** Bình thường phải "yên" — ưu tiên hiển thị
+  quá hạn/blocked/thiếu dữ liệu/chênh lệch/lỗi/chờ duyệt, không biến mọi
+  card thành đỏ/vàng.
+- **D4 — One metric, one definition.** Một metric chỉ một định nghĩa —
+  khác định nghĩa thì khác tên. Xem [METRIC-DEFINITIONS.md](./METRIC-DEFINITIONS.md).
+  Không copy logic tính toán ở nhiều nơi — dùng lại đúng 1 nguồn/hàm.
+- **D5 — Drill down to action.** Counter/cảnh báo quan trọng phải bấm
+  được: Metric → Filtered List/Lịch sử → Record → Action, giữ context
+  khi quay lại. Không để dashboard là ngõ cụt.
+- **D6 — No dashboard without a decision.** Trước khi đưa 1 KPI lên
+  dashboard: Ai xem? Xem bao lâu 1 lần? Số xấu thì làm gì? Số tốt thì làm
+  gì? Không trả lời được thì không đưa lên. Không phải phòng ban nào
+  cũng cần Dashboard — domain ít giao dịch/backlog/SLA thì Work
+  Queue/List là đủ (xem MODULE-MAP.md).
+
 ## UX Performance Budget (Frequent Action Budget)
 
 | Tần suất | Mục tiêu số thao tác chính |

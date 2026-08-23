@@ -816,15 +816,22 @@ $('#nutThoat').addEventListener('click', async () => {
    CÁC KHỐI DỰNG SẴN
    ========================================================================== */
 
+// s.onClick (tuỳ chọn) — Drill Down to Action (UX_ENGINEERING_STANDARD.md):
+// counter/card quan trọng phải bấm được tới đúng dữ liệu gốc, không phải
+// ngõ cụt (audit Home/Dashboard 23/08/2026, docs/audit/AUDIT-HOME-DASHBOARD.md).
 function veThe(dich, ds) {
   const box = $(dich);
   if (!box) return;
   box.innerHTML = '';
-  ds.forEach(s => box.appendChild(el('div', 'stat',
-    `<div class="k">${esc(s.k)}</div>` +
-    `<div class="v">${esc(s.v)}</div>` +
-    `<div class="d ${s.dir || ''}">${esc(s.d)}</div>`
-  )));
+  ds.forEach(s => {
+    const o = el('div', 'stat' + (s.onClick ? ' clickable' : ''),
+      `<div class="k">${esc(s.k)}</div>` +
+      `<div class="v">${esc(s.v)}</div>` +
+      `<div class="d ${s.dir || ''}">${esc(s.d)}</div>`
+    );
+    if (s.onClick) { o.tabIndex = 0; o.setAttribute('role', 'button'); o.addEventListener('click', s.onClick); }
+    box.appendChild(o);
+  });
 }
 
 function veChart(dich, ds) {
@@ -864,15 +871,20 @@ function veTienDo(dich, ds) {
   });
 }
 
+// i.onClick (tuỳ chọn) — xem ghi chú Drill Down ở veThe() phía trên.
 function veDanhSach(dich, ds) {
   const box = $(dich);
   if (!box) return;
   box.innerHTML = '';
-  ds.forEach(i => box.appendChild(el('div', 'list-item',
-    `<div class="bullet ${i.m || ''}"></div>` +
-    `<div class="body"><b>${esc(i.b)}</b><span>${esc(i.s)}</span></div>` +
-    `<div class="meta">${esc(i.t)}</div>`
-  )));
+  ds.forEach(i => {
+    const o = el('div', 'list-item' + (i.onClick ? ' clickable' : ''),
+      `<div class="bullet ${i.m || ''}"></div>` +
+      `<div class="body"><b>${esc(i.b)}</b><span>${esc(i.s)}</span></div>` +
+      `<div class="meta">${esc(i.t)}</div>`
+    );
+    if (i.onClick) { o.tabIndex = 0; o.setAttribute('role', 'button'); o.addEventListener('click', i.onClick); }
+    box.appendChild(o);
+  });
 }
 
 function veBang(dich, ds, hang) {
@@ -881,6 +893,7 @@ function veBang(dich, ds, hang) {
   box.innerHTML = '';
   ds.forEach(r => {
     const tr = document.createElement('tr');
+    if (r && r.id != null) tr.dataset.id = r.id;   // để drill-down scroll đúng dòng (xem MO_DEN_VIEC_CUA_TOI)
     const out = hang(r);
     if (out && typeof out === 'object') {       // { html, cls } — cho phép tô màu hàng
       tr.innerHTML = out.html;
@@ -1078,6 +1091,12 @@ async function khoiDongVinhDanh() {
    CHỈ dùng dữ liệu thật đã có sẵn (cvDanhSach/mtDanhSach/doanh thu) —
    không tự bịa số liệu; rỗng thì ẩn hẳn khối, không hiện khối trống.
    ========================================================================== */
+// Home 3 tầng theo vai trò thật (audit 23/08/2026, docs/audit/AUDIT-HOME-DASHBOARD.md):
+// Employee = Action First (việc CỦA TÔI) · Manager = Exception First (ngoại
+// lệ của PHÒNG tôi quản lý) · CEO/Admin = Decision First (vấn đề cần quyết
+// định). Manager KHÔNG xác định qua vai_tro hệ thống (nhiều trưởng phòng
+// thật chỉ có vai_tro="nguoi_dung") mà qua TOI.phong_ban_quan_ly — đúng
+// cơ chế phong_ban.truong_phong_id đã dùng cho Xếp ca/Duyệt (ERP-CONSTITUTION.md).
 async function veTongQuanTheoVaiTro() {
   if (!TOI.quyen.includes('congviec')) return;
 
@@ -1089,18 +1108,21 @@ async function veTongQuanTheoVaiTro() {
   const chuaXong = c => !['hoan_thanh', 'huy'].includes(c.trang_thai);
   const nhan = (cv.nhan || []).filter(chuaXong);
   const giao = (cv.giao || []).filter(chuaXong);
-  const quaHanNhan = nhan.filter(c => c.han_chot && c.han_chot < homNay).length;
+  const quaHanNhan = nhan.filter(c => c.han_chot && c.han_chot < homNay);
   const quaHanGiao = giao.filter(c => c.han_chot && c.han_chot < homNay).length;
   const choDuyetGiao = giao.filter(c => c.trang_thai === 'cho_duyet').length;
 
   const the = [];
   const canhBao = [];
+  const laManager = !TOI.la_admin && (TOI.phong_ban_quan_ly || []).length > 0;
 
   if (TOI.la_admin) {
     ((mt.cong_ty || [])).filter(m => m.trang_thai === 'dang_thuc_hien' && !m.da_chot)
       .forEach(m => canhBao.push({ m: 'warn', b: `Mục tiêu công ty "${m.tieu_de}" chưa chốt`, s: 'Vào khối Trạm Mục Tiêu bên dưới để chốt', t: 'Mục tiêu' }));
-    if (quaHanGiao > 0) canhBao.push({ m: 'danger', b: `${quaHanGiao} việc đã giao đang quá hạn`, s: '', t: 'Công việc' });
-    if (choDuyetGiao > 0) canhBao.push({ m: 'warn', b: `${choDuyetGiao} việc đang chờ Sếp duyệt`, s: '', t: 'Công việc' });
+    if (quaHanGiao > 0) canhBao.push({ m: 'danger', b: `${quaHanGiao} việc đã giao đang quá hạn`, s: 'Bấm để xem trong Lịch sử làm việc', t: 'Công việc',
+      onClick: () => window.MO_DEN_LICHSU_TIM && window.MO_DEN_LICHSU_TIM('') });
+    if (choDuyetGiao > 0) canhBao.push({ m: 'warn', b: `${choDuyetGiao} việc đang chờ Sếp duyệt`, s: 'Bấm để xem trong Việc tôi giao', t: 'Công việc',
+      onClick: () => window.MO_DEN_VIEC_CUA_TOI && window.MO_DEN_VIEC_CUA_TOI('giao') });
 
     try {
       const dt = await API.kdTongQuanDoanhThu();
@@ -1108,10 +1130,28 @@ async function veTongQuanTheoVaiTro() {
         the.push({ k: 'Doanh thu hôm nay', v: tienVN(dt.hom_nay.tong_tien) + ' đ', d: `${dt.hom_nay.so_don} đơn` });
       }
     } catch { /* chưa nạp migration đơn hàng ở môi trường này — im lặng bỏ qua */ }
+  } else if (laManager) {
+    // Exception First cho trưởng phòng — TEAM của họ, không phải việc cá
+    // nhân (cá nhân vẫn thấy tiếp ở khối Việc cần làm bên dưới như Employee).
+    try {
+      const tq = await API.cvTongQuanPhongBan();
+      const tenPhong = (tq.phong_ban || []).map(p => p.ten).join(', ') || 'phòng bạn quản lý';
+      the.push({ k: 'Việc đang mở', v: String(tq.dang_mo || 0), d: tenPhong });
+      the.push({ k: 'Việc quá hạn', v: String(tq.qua_han || 0), d: tq.qua_han ? 'Cần xử lý' : 'Không có', dir: tq.qua_han ? 'down' : '' });
+      the.push({ k: 'Chờ duyệt', v: String(tq.cho_duyet || 0), d: tenPhong });
+      (tq.viec_qua_han || []).forEach(v => {
+        const [nam, thang, ngay] = (v.han_chot || '').split('-');
+        canhBao.push({ m: 'danger', b: v.tieu_de, s: `${v.nguoi_nhan_ten} — quá hạn ${ngay}/${thang}/${nam}`, t: 'Quá hạn',
+          onClick: () => window.MO_DEN_LICHSU_TIM && window.MO_DEN_LICHSU_TIM(v.tieu_de) });
+      });
+    } catch { /* chưa có phòng ban quản lý hợp lệ hoặc lỗi mạng — im lặng, Home vẫn dùng được */ }
   } else {
-    the.push({ k: 'Việc đang mở', v: String(nhan.length), d: 'Việc cần làm của tôi' });
-    the.push({ k: 'Việc quá hạn', v: String(quaHanNhan), d: quaHanNhan ? 'Cần xử lý ngay' : 'Không có', dir: quaHanNhan ? 'down' : '' });
-    if (giao.length > 0) the.push({ k: 'Việc tôi giao — chờ duyệt', v: String(choDuyetGiao), d: `${giao.length} việc đang giao` });
+    the.push({ k: 'Việc đang mở', v: String(nhan.length), d: 'Việc cần làm của tôi',
+      onClick: () => window.MO_DEN_VIEC_CUA_TOI && window.MO_DEN_VIEC_CUA_TOI('nhan') });
+    the.push({ k: 'Việc quá hạn', v: String(quaHanNhan.length), d: quaHanNhan.length ? 'Cần xử lý ngay' : 'Không có', dir: quaHanNhan.length ? 'down' : '',
+      onClick: quaHanNhan.length ? () => window.MO_DEN_VIEC_CUA_TOI && window.MO_DEN_VIEC_CUA_TOI('nhan', quaHanNhan[0].id) : null });
+    if (giao.length > 0) the.push({ k: 'Việc tôi giao — chờ duyệt', v: String(choDuyetGiao), d: `${giao.length} việc đang giao`,
+      onClick: () => window.MO_DEN_VIEC_CUA_TOI && window.MO_DEN_VIEC_CUA_TOI('giao') });
   }
 
   if (the.length) { veThe('#tq-tomtat', the); $('#tq-tomtat').hidden = false; }
@@ -1544,15 +1584,38 @@ async function khoiDongCongViec() {
   };
 
   // Chuyển màn Việc tôi nhận / Việc tôi giao
-  $('#cvSeg').addEventListener('click', (e) => {
-    const nut = e.target.closest('.seg-nut');
+  function chuyenSegCv(seg) {
+    const nut = document.querySelector(`#cvSeg .seg-nut[data-cv="${seg}"]`);
     if (!nut) return;
     document.querySelectorAll('#cvSeg .seg-nut').forEach(b => b.classList.toggle('active', b === nut));
     ['nhan', 'phoihop', 'giao'].forEach(k => {
       const pane = document.getElementById('cv-pane-' + k);
-      if (pane) pane.hidden = (k !== nut.dataset.cv);
+      if (pane) pane.hidden = (k !== seg);
     });
+  }
+  $('#cvSeg').addEventListener('click', (e) => {
+    const nut = e.target.closest('.seg-nut');
+    if (nut) chuyenSegCv(nut.dataset.cv);
   });
+
+  // Drill Down to Action (audit Home/Dashboard 23/08/2026): counter "Việc
+  // đang mở/quá hạn/chờ duyệt" ở khối tóm tắt (veTongQuanTheoVaiTro) bấm
+  // vào phải nhảy thẳng tới đúng bảng Việc của MÌNH, không phải ngõ cụt —
+  // chỉ dùng cho Việc CỦA NGƯỜI ĐANG XEM (cv-bang-nhan/giao vốn đã lọc
+  // theo đúng người). Việc của NGƯỜI KHÁC (Admin/Manager xem team) dùng
+  // window.MO_DEN_LICHSU_TIM ở khoiDongLichSuViec thay vì hàm này.
+  window.MO_DEN_VIEC_CUA_TOI = (seg, rowId) => {
+    moTab('tongquan');
+    chuyenSegCv(seg);
+    requestAnimationFrame(() => {
+      const box = $('#cvSeg');
+      if (box) box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      if (rowId != null) {
+        const tr = document.querySelector(`#cv-bang-${seg} tr[data-id="${rowId}"]`);
+        if (tr) { tr.scrollIntoView({ behavior: 'smooth', block: 'center' }); tr.classList.add('canh-bao'); setTimeout(() => tr.classList.remove('canh-bao'), 2500); }
+      }
+    });
+  };
 
   function dongHan(hanChot) {
     if (!hanChot) return '—';
@@ -1834,6 +1897,20 @@ async function khoiDongLichSuViec() {
   // (bug thật 23/08/2026: hoàn thành/tạo việc xong, tab này vẫn hiện dữ liệu
   // cũ vì chỉ tải 1 lần lúc vào trang).
   window.LAM_MOI_LICHSU_VIEC = taiLaiLichSuCv;
+
+  // Drill Down to Action: Admin/Manager bấm 1 dòng "quá hạn/chờ duyệt"
+  // của NGƯỜI KHÁC ở khối tóm tắt (veTongQuanTheoVaiTro) — bảng Việc
+  // cần làm/tôi giao của họ chỉ có việc CỦA CHÍNH họ nên không scroll-tới
+  // được; Lịch sử làm việc là nơi DUY NHẤT xem được việc của mọi người,
+  // tái dùng luôn ô tìm/lọc trạng thái đã có thay vì xây thêm view mới
+  // (audit Home/Dashboard 23/08/2026, Rule 5 reuse).
+  window.MO_DEN_LICHSU_TIM = (tuKhoa) => {
+    moTab('lichsuviec');
+    const oTim = $('#ls-cv-tim'), oLoc = $('#ls-cv-loctt');
+    if (oLoc) oLoc.value = '';
+    if (oTim) { oTim.value = tuKhoa || ''; oTim.dispatchEvent(new Event('input', { bubbles: true })); oTim.focus(); }
+    requestAnimationFrame(() => { const b = $('#ls-cv-bang'); if (b) b.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+  };
 
   $('#ls-cv-tim').addEventListener('input', veBangLsCv);
   $('#ls-cv-loctt').addEventListener('change', veBangLsCv);

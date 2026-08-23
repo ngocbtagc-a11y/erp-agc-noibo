@@ -791,6 +791,15 @@ img.av { object-fit: cover; display: block; cursor: default; }
 .stat .d.up { color: var(--ok); font-weight: 500; }
 .stat .d.down { color: var(--danger); font-weight: 500; }
 
+/* Drill Down to Action (docs/UX_ENGINEERING_STANDARD.md) — card/dòng bấm
+   được thì phải RÕ là bấm được, không chỉ đổi hành vi âm thầm. */
+.stat.clickable, .list-item.clickable {
+  cursor: pointer;
+  transition: box-shadow .15s, border-color .15s;
+}
+.stat.clickable:hover, .stat.clickable:focus-visible { box-shadow: var(--shadow-md); border-color: var(--sage-dark); }
+.list-item.clickable:hover, .list-item.clickable:focus-visible { background: var(--sage-wash); }
+
 /* ==========================================================================
    KHỐI NỘI DUNG
    ========================================================================== */
