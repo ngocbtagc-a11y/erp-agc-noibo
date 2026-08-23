@@ -71,6 +71,15 @@ UI tổ chức theo công việc người dùng cần làm, không bắt hiểu 
 entity/module/technical workflow. Xem
 [UX_ENGINEERING_STANDARD.md](./UX_ENGINEERING_STANDARD.md).
 
+**UI State Consistency** (bổ sung 23/08/2026): mọi mutation thành công
+(Create/Update/Complete/Approve/Reject/Assign/Archive/Cancel/Delete) phải
+làm mới ngay mọi vùng UI đang hiển thị dữ liệu bị ảnh hưởng — không bắt
+user F5 để thấy đúng trạng thái, không dùng `window.location.reload()` làm
+mặc định. Feature chưa tính DONE nếu còn chỗ nào chỉ đúng sau khi F5. Cách
+làm cụ thể (naming convention `window.LAM_MOI_*`, Mutation Impact Map, khi
+nào cần double-submit guard): xem
+[UX_ENGINEERING_STANDARD.md § UI State Consistency](./UX_ENGINEERING_STANDARD.md#ui-state-consistency--sau-mutation-không-được-bắt-f5).
+
 ### Rule 8 — Traceable & Recoverable
 Mọi thay đổi production quan trọng phải traceable, auditable, recoverable.
 Hiện tại: git log (message chi tiết, có ngày/người chốt), `lich_su_thay_doi_nen`

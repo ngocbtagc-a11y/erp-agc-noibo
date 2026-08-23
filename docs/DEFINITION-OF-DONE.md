@@ -18,6 +18,9 @@ lặng bỏ qua).
       dữ liệu rác.
 - [ ] **Empty / Loading / Error states** — đủ cả 3, không riêng happy path
       (xem `UX_ENGINEERING_STANDARD.md`).
+- [ ] **UI State Consistency** — sau mutation thành công, mọi vùng UI liên
+      quan tự cập nhật, không cần F5 (xem `UX_ENGINEERING_STANDARD.md` §
+      UI State Consistency, `ERP-CONSTITUTION.md` Rule 7).
 - [ ] **Mobile** nếu user thực tế dùng mobile cho màn hình này (ERP là
       PWA, phần lớn thao tác vận hành dùng điện thoại).
 - [ ] **Audit** nếu nghiệp vụ cần biết "ai/khi nào" — dùng pattern

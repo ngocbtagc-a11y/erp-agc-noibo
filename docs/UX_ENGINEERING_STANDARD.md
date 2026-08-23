@@ -92,11 +92,61 @@ kiểm tra trước khi tự viết cái mới:
 | Thông báo lỗi form | `.form-loi` | `alert()` cho lỗi validate thường xuyên |
 | Ô tìm kiếm danh sách | class `.dh-timkiem` + `.search` (icon kính lúp) | ô input tìm kiếm tự style riêng |
 | Empty state | class `.empty`, phân biệt "chưa có dữ liệu" vs "không tìm thấy" (xem UX smell) | text tự do không nhất quán |
+| Làm mới UI sau mutation (Create/Update/Complete/...) | `window.LAM_MOI_<TÊN>` export từ `khoiDong*` của module sở hữu dữ liệu, gọi có kiểm tra tồn tại — xem [UI State Consistency](#ui-state-consistency--sau-mutation-không-được-bắt-f5) | `window.location.reload()`, bắt user F5 |
 
 Table/Card, Quick Action, Bulk Action: chưa có pattern dùng chung chính
 thức (mỗi domain đang tự làm phù hợp dữ liệu của mình) — nếu thấy pattern
 lặp lại lần 2 trở lên ở domain khác, cân nhắc rút thành hàm dùng chung như
 các dòng trên, không bắt buộc trước khi có nhu cầu thật thứ 2.
+
+## UI State Consistency — sau mutation KHÔNG được bắt F5
+
+Sếp Ngọc phản ánh 23/08/2026: Hoàn thành 1 mục tiêu, backend đã lưu đúng
+nhưng có màn vẫn hiện dữ liệu cũ, phải F5 mới đúng. Audit tìm ra: SPA này
+mỗi `khoiDong*()` (1 module/tab) chỉ fetch dữ liệu **một lần lúc tải
+trang** — chuyển tab không tự fetch lại (xem `moTab()` trong `app.js`, chỉ
+ẩn/hiện DOM, không gọi lại API nào). Nên module A đổi dữ liệu, mà module B
+đang hiển thị cùng loại dữ liệu đó (đã tải từ trước) sẽ đứng yên tới khi
+F5.
+
+**Rule: mọi mutation thành công (Create/Update/Complete/Approve/Reject/
+Assign/Archive/Cancel/Delete) phải làm mới ngay mọi vùng UI đang hiển thị
+dữ liệu bị ảnh hưởng — không bắt user F5, không dùng
+`window.location.reload()`.**
+
+Cách áp dụng — dùng đúng pattern `window.LAM_MOI_*` đã có sẵn (không tạo
+framework/state-management mới, Rule 5):
+
+1. Module tự sở hữu 1 loại dữ liệu (`khoiDongX`) thì có hàm `taiLai()` nội
+   bộ, và **export ra `window.LAM_MOI_X = taiLai`** ngay cả khi hiện tại
+   chưa ai gọi tới từ module khác — chi phí gần như 0, tránh phải quay lại
+   sửa lần 2 khi có module khác cần đọc chéo dữ liệu này.
+2. Trước khi viết mutation handler mới, tự hỏi **Mutation Impact Map**:
+   Entity nào đổi? Còn màn/tab/badge/counter/detail-view nào khác đang
+   hiển thị đúng entity đó không (kể cả khi KHÔNG active/hidden)? Nếu có,
+   gọi đúng `window.LAM_MOI_*` tương ứng ngay sau khi API mutation thành
+   công — gộp các lệnh gọi lại của module mình vào 1 hàm dùng chung (VD
+   `lamMoiCacManLienQuanCv()` trong `khoiDongCongViec`) thay vì rải
+   `await taiLai()` lặp lại ở từng nút bấm, để khi thêm 1 view phụ thuộc
+   mới chỉ sửa 1 chỗ.
+3. Luôn `if (window.LAM_MOI_X) window.LAM_MOI_X()` — không gọi thẳng, vì
+   module đích có thể chưa `khoiDong` (role không có quyền xem tab đó).
+4. **Không** dùng `window.location.reload()` làm giải pháp mặc định cho
+   state cũ — chỉ refetch/update đúng vùng bị ảnh hưởng.
+5. Trong lúc mutation đang gửi: disable đúng nút bấm (đã là thói quen sẵn
+   có — `nut.disabled = true` trước `await API...`, `= false` lại trong
+   `catch`) để tránh double-submit; nút chỉ đổi trạng thái/text sau khi
+   biết chắc thành công hay thất bại, không lạc quan giả (không optimistic
+   update chưa có rollback).
+6. Lỗi API thì giữ nguyên state cũ trên UI + hiện lỗi qua `.form-loi`/
+   `alert()` đang dùng — không âm thầm coi như đã thành công.
+
+Ví dụ đã áp dụng (23/08/2026): `khoiDongCongViec` gộp
+`lamMoiCacManLienQuanCv()` (tải lại Việc cần làm/giao/phối hợp + Tổng quan
+công ty Admin + gọi `window.LAM_MOI_LICHSU_VIEC` nếu có) — dùng ở cả 3 nơi
+tạo/nộp/đổi trạng thái Việc, thay vì gọi `taiLai()` rời rạc từng chỗ.
+`khoiDongLichSuViec` export `window.LAM_MOI_LICHSU_VIEC` dù trước đó không
+ai gọi tới, để sẵn sàng cho module khác.
 
 ## Giới hạn — tránh làm quá tay
 

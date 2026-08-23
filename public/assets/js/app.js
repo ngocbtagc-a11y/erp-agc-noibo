@@ -1624,6 +1624,20 @@ async function khoiDongCongViec() {
     $('#cv-trong-phoihop').hidden = (kq.phoi_hop || []).length > 0;
   }
 
+  // UI STATE CONSISTENCY (docs/ERP-CONSTITUTION.md): sau mọi mutation đổi
+  // cong_viec (tạo/nộp/bắt đầu/xong/duyệt/trả lại/huỷ), các màn ĐỌC lại
+  // cùng dữ liệu này (Việc cần làm/giao/phối hợp, Tổng quan công ty Admin,
+  // Lịch sử làm việc) phải làm mới ngay — không bắt F5. Gom 1 chỗ để mọi
+  // nút hành động gọi giống nhau, không tự viết refresh riêng từng nút
+  // (audit 23/08/2026: phát hiện "Lịch sử làm việc" và "Tổng quan công ty"
+  // từng chỉ tải 1 lần lúc vào trang, không cập nhật khi có việc mới/đổi
+  // trạng thái trong lúc đang dùng).
+  async function lamMoiCacManLienQuanCv() {
+    await taiLai();
+    await taiLaiTongQuanCongTy();
+    if (window.LAM_MOI_LICHSU_VIEC) window.LAM_MOI_LICHSU_VIEC();
+  }
+
   $('#cv-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     $('#cv-loi').textContent = '';
@@ -1662,7 +1676,7 @@ async function khoiDongCongViec() {
       capNhatMtmKhoi();
       dongMoFormCv(false);
       moTuyChon(false);
-      await taiLai();
+      await lamMoiCacManLienQuanCv();
     } catch (err) {
       $('#cv-loi').textContent = err.message || 'Không giao được việc, thử lại nhé.';
     } finally {
@@ -1689,7 +1703,7 @@ async function khoiDongCongViec() {
         xuLyLuu: async val => {
           if (!val) throw new Error('Cần điền kết quả trước khi nộp.');
           await API.cvCapNhat(idNop, 'cho_duyet', val);
-          await taiLai();
+          await lamMoiCacManLienQuanCv();
         }
       });
       return;
@@ -1711,7 +1725,7 @@ async function khoiDongCongViec() {
     btn.disabled = true;
     try {
       await API.cvCapNhat(id, trangThai, ketQua);
-      await taiLai();
+      await lamMoiCacManLienQuanCv();
       // Việc chuyển Hoàn thành/Huỷ có thể đổi tiến độ mục tiêu đang gắn — tải lại
       if ((trangThai === 'hoan_thanh' || trangThai === 'huy') && window.LAM_MOI_MUCTIEU) window.LAM_MOI_MUCTIEU();
     } catch (err) {
@@ -1759,7 +1773,7 @@ async function khoiDongCongViec() {
     } catch { /* im lặng — không chặn phần còn lại của trang */ }
   }
 
-  window.LAM_MOI_CONGVIEC = async () => { await taiLai(); await taiLaiTongQuanCongTy(); };
+  window.LAM_MOI_CONGVIEC = lamMoiCacManLienQuanCv;
   await taiLai();
   await taiLaiTongQuanCongTy();
 }
@@ -1806,11 +1820,20 @@ async function khoiDongLichSuViec() {
     $('#ls-cv-trong').hidden = ds.length > 0;
   }
 
-  try {
-    const { viec } = await API.cvLichSu();
-    DS_LSCV = viec || [];
-  } catch { /* trống — hiện bảng rỗng, không chặn cả trang */ }
-  veBangLsCv();
+  async function taiLaiLichSuCv() {
+    try {
+      const { viec } = await API.cvLichSu();
+      DS_LSCV = viec || [];
+    } catch { /* trống — hiện bảng rỗng, không chặn cả trang */ }
+    veBangLsCv();
+  }
+
+  await taiLaiLichSuCv();
+  // UI STATE CONSISTENCY: mọi màn khác đổi cong_viec (khoiDongCongViec) gọi
+  // hàm này để tab Lịch sử làm việc luôn khớp dữ liệu mới nhất, không cần F5
+  // (bug thật 23/08/2026: hoàn thành/tạo việc xong, tab này vẫn hiện dữ liệu
+  // cũ vì chỉ tải 1 lần lúc vào trang).
+  window.LAM_MOI_LICHSU_VIEC = taiLaiLichSuCv;
 
   $('#ls-cv-tim').addEventListener('input', veBangLsCv);
   $('#ls-cv-loctt').addEventListener('change', veBangLsCv);
