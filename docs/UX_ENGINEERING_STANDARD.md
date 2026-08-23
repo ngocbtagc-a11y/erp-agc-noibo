@@ -73,6 +73,31 @@ chưa?) · Permission (có hiện action ngoài quyền không?) · Performance 
 load dư dữ liệu không?) · Consistency (có component dùng chung sẵn có mà
 chưa tái dùng không?).
 
+## Shared UI Pattern — Domain không tự sáng tạo cái khác nếu Core đã có
+
+Cùng 1 việc phải cùng tên/component/interaction/status/layout ở mọi màn.
+Danh sách pattern dùng chung hiện có trong `public/assets/js/app.js` —
+kiểm tra trước khi tự viết cái mới:
+
+| Việc | Dùng | Không tự viết lại |
+|---|---|---|
+| Chọn 1 entity từ danh sách dài/có thể tăng | `ganCombo()` | select riêng, ô tìm tách rời |
+| Search không dấu/không phân biệt hoa-thường | `boDau()` | logic so khớp tự viết |
+| Render bảng từ mảng dữ liệu | `veBang()` | vòng lặp `innerHTML +=` thủ công |
+| Modal nhập nhanh (text/select/textarea) | `moHopNhap()` | `prompt()`/`confirm()` trình duyệt |
+| Nhãn trạng thái (chữ + màu) | `TRANG_THAI`/`CV_TRANG_THAI` (map `{chu, mau}`) + class `.tag` | tự đặt màu/chữ riêng từng nơi |
+| Thẻ thống kê tổng quan | `veThe()` (class `.stats`/`.stat`) | tự dựng khối số liệu riêng |
+| Danh sách cảnh báo/tin cần chú ý | `veDanhSach()` (class `.list-item`) | tự dựng list riêng |
+| Nút hành động | `.btn-primary` (chính) / `.btn-phu` (phụ) / `.btn-nho` (nhỏ trong bảng) | tự đặt style nút mới |
+| Thông báo lỗi form | `.form-loi` | `alert()` cho lỗi validate thường xuyên |
+| Ô tìm kiếm danh sách | class `.dh-timkiem` + `.search` (icon kính lúp) | ô input tìm kiếm tự style riêng |
+| Empty state | class `.empty`, phân biệt "chưa có dữ liệu" vs "không tìm thấy" (xem UX smell) | text tự do không nhất quán |
+
+Table/Card, Quick Action, Bulk Action: chưa có pattern dùng chung chính
+thức (mỗi domain đang tự làm phù hợp dữ liệu của mình) — nếu thấy pattern
+lặp lại lần 2 trở lên ở domain khác, cân nhắc rút thành hàm dùng chung như
+các dòng trên, không bắt buộc trước khi có nhu cầu thật thứ 2.
+
 ## Giới hạn — tránh làm quá tay
 
 - Không tự ý mở rộng sang module/entity chưa tồn tại trong ERP này chỉ vì
@@ -82,6 +107,6 @@ chưa tái dùng không?).
 - Sửa UX smell trong phạm vi đang làm thì tự sửa luôn; nếu phát hiện smell
   ở module KHÁC không liên quan việc đang làm, hoặc thay đổi có thể ảnh
   hưởng business logic/workflow, thì báo trước cho Sếp thay vì tự sửa.
-- Component dùng chung (`ganComboNhanSu`, `boDau`, `veBang`, `moHopNhap`)
+- Component dùng chung (`ganCombo()`, `boDau()`, `veBang()`, `moHopNhap()`)
   được thêm khi pattern lặp lại lần 2 trở lên — không dựng framework
   trước khi có nhu cầu thật thứ 2.

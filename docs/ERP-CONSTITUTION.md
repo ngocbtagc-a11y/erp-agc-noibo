@@ -120,6 +120,22 @@ danh sách UX smell) — 2 tài liệu bổ sung nhau, không mâu thuẫn.
 
 ---
 
+## Data Input Rule
+
+Người nhập liệu phải biết mình đang nhập loại gì — form không được để họ
+tự đoán:
+
+| Loại | Ví dụ trong ERP này | Yêu cầu tối thiểu |
+|---|---|---|
+| **Master** | Nhân sự, Sản phẩm, Phòng ban, Chức danh, Tài sản | Validation + search khi danh sách dài (`ganCombo()`) + controlled dropdown khi đã có Master khác liên quan + smart default + không nhập lại dữ liệu đã có (Rule 2) |
+| **Transaction** | Nhập/xuất kho, Đơn hàng (auto), Việc/Task | Không sửa lịch sử cũ tự do — dùng ledger/lịch sử (Rule 10) |
+| **Configuration** | Đơn vị tính, vai trò/quyền | Chỉ Admin/Owner đúng vai trò sửa — xem DATA-DICTIONARY.md cột Controlled |
+| **Document** | Chưa có Document Core (xem MODULE-MAP.md) | Chưa áp dụng — không tạo trước khi có nhu cầu thật |
+| **Test Data** | Xem Test Data Policy ngay dưới đây | Prefix/dải số riêng, xoá sau khi dùng |
+
+Trước khi thêm 1 màn nhập liệu mới, xác nhận đúng loại ở trên rồi mới
+thiết kế form — không đưa hết field database lên 1 form phẳng (Rule 7).
+
 ## Test Data Policy
 
 Chưa cần hạ tầng tách môi trường phức tạp (Cloudflare/D1 ở quy mô này chưa

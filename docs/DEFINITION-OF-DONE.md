@@ -49,3 +49,19 @@ kế toán chính thức cho tới khi ERP Owner quyết định khác (xem
 [SOURCE-OF-TRUTH.md](./SOURCE-OF-TRUTH.md)).
 
 Status hiện tại từng module xem [MODULE-MAP.md](./MODULE-MAP.md).
+
+## Module Retirement
+
+ERP không phình mãi — mỗi module/feature có thể chuyển sang:
+
+```
+PRODUCTION → INACTIVE (tạm ẩn, còn dữ liệu) → ARCHIVED (không dùng, giữ để tra cứu) → RETIRED (gỡ khỏi code)
+```
+
+Retire khi: không còn ai dùng, bị duplicate bởi module mới thay thế, hoặc
+quy trình nghiệp vụ đã đổi khiến module cũ vô nghĩa. **Không giữ feature
+chỉ vì đã từng code.** Trước khi RETIRED (gỡ code thật), cập nhật Status
+trong [MODULE-MAP.md](./MODULE-MAP.md) và ghi 1 dòng
+[CHANGELOG.md](./CHANGELOG.md) — dữ liệu liên quan xử lý theo Rule 10
+(History Must Survive Change), không xoá thẳng nếu còn giá trị tra cứu
+lịch sử.

@@ -10,11 +10,12 @@ Mỗi phiên mới, đọc tối thiểu theo thứ tự:
 
 1. File này (`/CLAUDE.md`)
 2. [docs/ERP-CONSTITUTION.md](docs/ERP-CONSTITUTION.md) — 12 nguyên tắc, mô hình vai trò, Architecture Gates
-3. [docs/DATA-DICTIONARY.md](docs/DATA-DICTIONARY.md) — entity nào đã có, ai sở hữu
-4. [docs/SOURCE-OF-TRUTH.md](docs/SOURCE-OF-TRUTH.md) — dữ liệu nào nguồn thật ở đâu
-5. [docs/MODULE-MAP.md](docs/MODULE-MAP.md) — Core/Domain/Integration, file nào thuộc đâu
-6. [docs/ACTIVE-WORK.md](docs/ACTIVE-WORK.md) — ai đang đụng vùng nào (tránh conflict)
-7. [docs/CHANGELOG.md](docs/CHANGELOG.md) — quyết định gần đây
+3. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — sơ đồ hệ thống, trỏ tới audit kiến trúc đầy đủ
+4. [docs/DATA-DICTIONARY.md](docs/DATA-DICTIONARY.md) — entity nào đã có, ai sở hữu
+5. [docs/SOURCE-OF-TRUTH.md](docs/SOURCE-OF-TRUTH.md) — dữ liệu nào nguồn thật ở đâu
+6. [docs/MODULE-MAP.md](docs/MODULE-MAP.md) — Core/Domain/Integration, file nào thuộc đâu
+7. [docs/ACTIVE-WORK.md](docs/ACTIVE-WORK.md) — ai đang đụng vùng nào (tránh conflict)
+8. [docs/CHANGELOG.md](docs/CHANGELOG.md) — quyết định gần đây
 
 Sau đó trả lời ngắn gọn trước khi code: **Current task · Classification
 (LOCAL_DOMAIN/CROSS_DOMAIN/CORE_CHANGE/INTEGRATION_CHANGE) · Affected
@@ -42,6 +43,30 @@ thay vì đọc lại toàn bộ lịch sử chat cũ.
   change dùng khung `CORE_CHANGE_PROPOSAL` trong
   [docs/CORE-CHANGE-POLICY.md](docs/CORE-CHANGE-POLICY.md), chờ ERP Owner
   (Sếp) duyệt trước khi code.
+
+### Pre-Code Checklist (bản đầy đủ — 6 Gate ở trên là bản rút gọn)
+
+```
+[ ] Business Owner? (ai yêu cầu — Sếp/trưởng phòng/tự phát hiện)
+[ ] Problem rõ chưa? (không code khi còn mơ hồ "chắc sẽ tiện hơn")
+[ ] Data Owner? (tra DATA-DICTIONARY.md)
+[ ] Source of Truth? (tra SOURCE-OF-TRUTH.md, UNDECIDED thì hỏi trước)
+[ ] Đã kiểm tra Core/component dùng lại được chưa? (Rule 5)
+[ ] Có nguy cơ tạo duplicate data không? (Rule 1)
+[ ] Boundary Classification? (LOCAL_DOMAIN/CROSS_DOMAIN/CORE_CHANGE/INTEGRATION_CHANGE)
+[ ] Có phải Cross-domain không? (ảnh hưởng domain khác ngoài domain đang sửa)
+[ ] Permission đúng vai trò chưa? (src/quyen.js)
+[ ] Có cần Audit/lịch sử không?
+[ ] Human Cost đạt ngân sách chưa? (UX Performance Budget)
+[ ] Có dùng trên mobile không? (ERP là PWA, nhiều thao tác dùng điện thoại)
+[ ] Migration cần không, đã viết file chưa?
+[ ] Rollback nếu sai — biết cách lùi lại chưa?
+[ ] Test plan — test tay flow nào?
+[ ] Go-Live Level bắt đầu ở đâu? (DEVELOPMENT/INTERNAL_TEST/PILOT/OFFICIAL)
+```
+
+Nếu Boundary là `CORE_CHANGE`/`CROSS_DOMAIN`/`INTEGRATION_CHANGE` →
+**STOP FOR ERP OWNER**, không tự code tiếp.
 
 ## AI Rules — dữ liệu
 
