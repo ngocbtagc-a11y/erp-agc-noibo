@@ -1016,6 +1016,24 @@ function veDanhMuc(dsId, demId, trongId, ds, xuLySua, xuLyAn, xuLyKhoa, dongPhu,
   };
 }
 
+// Thêm mới có kiểm tra "gần giống" (Search Before Create) — API dùng
+// chung themDanhMuc() ở dulieunen.js trả về {canh_bao, giong:[...]} thay
+// vì lỗi khi nghi trùng; hỏi xác nhận rồi gọi lại với xacNhan=true để
+// thực sự tạo. goiApi(ten, xacNhan) là 1 trong các hàm API.dlnThem* —
+// rút thành hàm dùng chung khi cần lần 2 (Rule 5, tài sản Danh mục/Vị
+// trí — trước đây chỉ dùng ở Dữ liệu nền, sót không gọi ở Tài sản, làm
+// form "im lặng không tạo gì" khi trùng tên mà không báo — audit
+// 23/08/2026 khi rà lại tab Tài sản).
+async function themCoCanhBaoTrung(goiApi, ten, oLoi) {
+  let kq = await goiApi(ten, false);
+  if (kq && kq.canh_bao) {
+    const ok = confirm(`Đã có mục gần giống: "${kq.giong.join('", "')}".\nVẫn tạo "${ten}" là mục MỚI riêng?`);
+    if (!ok) return false;
+    kq = await goiApi(ten, true);
+  }
+  return true;
+}
+
 function veBang(dich, ds, hang) {
   const box = $(dich);
   if (!box) return;
@@ -3068,20 +3086,6 @@ async function khoiDongDuLieuNen() {
     await veTinhTrang();
   }
 
-  // Thêm mới có kiểm tra "gần giống" (Search Before Create) — API trả về
-  // {canh_bao, giong:[...]} thay vì lỗi khi nghi trùng; hỏi xác nhận rồi gọi
-  // lại với xac_nhan=true để thực sự tạo. goiApi(ten, xacNhan) là 1 trong
-  // các hàm API.dlnThem* — dùng chung logic này cho cả 3 danh mục dưới.
-  async function themCoCanhBaoTrung(goiApi, ten, oLoi) {
-    let kq = await goiApi(ten, false);
-    if (kq && kq.canh_bao) {
-      const ok = confirm(`Đã có mục gần giống: "${kq.giong.join('", "')}".\nVẫn tạo "${ten}" là mục MỚI riêng?`);
-      if (!ok) return false;
-      kq = await goiApi(ten, true);
-    }
-    return true;
-  }
-
   $('#dln-pb-form').addEventListener('submit', async e => {
     e.preventDefault();
     const oLoi = $('#dln-pb-loi'); oLoi.textContent = '';
@@ -3362,7 +3366,6 @@ async function khoiDongTaiSan() {
     for (const id of [...tsChon]) if (!idConLai.has(id)) tsChon.delete(id);
     veBang('#ts-bang', ds, t => {
       const tt = NHAN_TT_TS[t.trang_thai] || { chu: t.trang_thai, mau: 'mute' };
-      const laNguoiGiu = t.nguoi_giu_id && t.nguoi_giu_id === TOI.id;
       let nut = '';
       if (t.trang_thai === 'san_sang' && quanLy) {
         nut += `<button class="btn-nho" data-ts-capphat="${esc(t.id)}">Cấp phát</button> `;
@@ -3487,16 +3490,16 @@ async function khoiDongTaiSan() {
     e.preventDefault();
     const oLoi = $('#ts-dm-loi'); oLoi.textContent = '';
     try {
-      await API.dlnThemDanhMucTaiSan($('#ts-dm-ten').value.trim());
-      $('#ts-dm-form').reset(); await taiDanhMucViTri();
+      const ten = $('#ts-dm-ten').value.trim();
+      if (await themCoCanhBaoTrung(API.dlnThemDanhMucTaiSan, ten, oLoi)) { $('#ts-dm-form').reset(); await taiDanhMucViTri(); }
     } catch (err) { oLoi.textContent = err.message || 'Không thêm được, thử lại nhé.'; }
   });
   $('#ts-vt-form').addEventListener('submit', async e => {
     e.preventDefault();
     const oLoi = $('#ts-vt-loi'); oLoi.textContent = '';
     try {
-      await API.dlnThemViTriTaiSan($('#ts-vt-ten').value.trim());
-      $('#ts-vt-form').reset(); await taiDanhMucViTri();
+      const ten = $('#ts-vt-ten').value.trim();
+      if (await themCoCanhBaoTrung(API.dlnThemViTriTaiSan, ten, oLoi)) { $('#ts-vt-form').reset(); await taiDanhMucViTri(); }
     } catch (err) { oLoi.textContent = err.message || 'Không thêm được, thử lại nhé.'; }
   });
 
