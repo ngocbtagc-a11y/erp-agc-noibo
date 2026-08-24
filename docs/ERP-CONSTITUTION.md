@@ -145,39 +145,58 @@ hơn, không nhiều biểu đồ hơn.
   cũng cần Dashboard — domain ít giao dịch/backlog/SLA thì Work
   Queue/List là đủ (xem MODULE-MAP.md).
 
-## Quick Create Policy
+## Contextual Creation Rule (Quick Create Policy)
 
-Chốt 23/08/2026 (audit đầy đủ + phân loại từng entity:
-[docs/audit/AUDIT-QUICK-CREATE-POLICY.md](./audit/AUDIT-QUICK-CREATE-POLICY.md)).
-**Make common things fast, but make dangerous things deliberate** — không
-phải dropdown nào cũng nên cho "+ Tạo mới" ngay tại chỗ.
+Chốt 23/08/2026, chuẩn hoá lại 23/08/2026 (audit đầy đủ + phân loại từng
+entity theo template mới: [docs/audit/AUDIT-QUICK-CREATE-POLICY.md](./audit/AUDIT-QUICK-CREATE-POLICY.md)).
 
-Mỗi entity tham chiếu qua dropdown phải xếp vào đúng 1 trong 3 nhóm,
-đánh giá theo: ảnh hưởng nhiều module? đụng tiền/tồn/quyền? có Source of
-Truth ngoài? cần business owner xác nhận? duplicate có nguy hiểm? tần
-suất phát sinh trong context? tạo được bằng mini-form ≤3-5 field?
+> Every reference dropdown must help the user resolve a missing value
+> without leaving the current workflow. Low-risk Master Data may be
+> created inline. Controlled Master Data may be created inline subject
+> to permission, validation and verification. High-risk Master Data
+> must use Request Create. Fixed enums and system states are never
+> user-extensible through Quick Create.
 
-- **QUICK_CREATE_ALLOWED** — rủi ro thấp, tần suất cao, người bấm vào
-  dropdown vốn đã đúng là Data Owner của entity đó. VD: Danh mục/Vị trí
-  tài sản, Chức danh.
-- **QUICK_CREATE_CONTROLLED** — cần thêm permission/duplicate
-  validation/có thể ở trạng thái nháp trước khi Active. VD: Phòng ban,
-  Đơn vị tính, Nhà cung cấp.
-- **QUICK_CREATE_FORBIDDEN** — entity nhạy cảm (lương/tài khoản/quyền/
-  giá vốn/kế toán) — không bao giờ tạo trực tiếp từ dropdown. VD: Nhân
-  sự, Vai trò, Sản phẩm/SKU chính thức. Không tìm thấy thì hiện hướng
-  dẫn tới đúng màn Master Data, không tự ý tạo tắt.
+**Make common things fast, but make dangerous things deliberate** —
+không phải dropdown nào cũng nên cho "+ Tạo mới" ngay tại chỗ, và "mọi
+dropdown có action" KHÔNG có nghĩa "mọi user được tạo mọi loại dữ liệu".
+
+Mỗi entity tham chiếu qua dropdown phải xếp vào đúng 1 trong 4 mode,
+đánh giá theo: đây là enum hay Master Data? ai là Data Owner? tạo sai có
+ảnh hưởng tiền/tồn/quyền không? có Source of Truth ngoài không? duplicate
+nguy hiểm mức nào? user có thường phát hiện thiếu record ngay trong flow
+này không? mini-form có thể ≤5 field không?
+
+- **CREATE_DIRECT** (= "ALLOWED" ở audit gốc) — rủi ro thấp, tần suất
+  cao, người bấm vào dropdown vốn đã đúng là Data Owner của entity đó.
+  VD: Danh mục/Vị trí tài sản, Chức danh — **đã triển khai**.
+- **CREATE_CONTROLLED** (= "CONTROLLED") — cho tạo ngay trong dropdown
+  nhưng cần thêm permission/duplicate validation, có thể ở trạng thái
+  nháp/chờ xác nhận thay vì Active ngay. VD: Phòng ban, Đơn vị tính, Nhà
+  cung cấp — **chưa triển khai, Phase 2**.
+- **REQUEST_ONLY** (= "FORBIDDEN" nhưng có action, không phải ngõ cụt) —
+  entity nhạy cảm (lương/tài khoản/quyền/giá vốn/kế toán) — không tạo
+  trực tiếp từ dropdown; ưu tiên route user tới đúng màn tạo đầy đủ (đã
+  có sẵn cho Nhân sự/SKU) thay vì thêm nút "+ Đề xuất" chưa có nhu cầu
+  thật. VD: Nhân sự, Vai trò, Sản phẩm/SKU chính thức — **chưa cần xây
+  hạ tầng request/approve, thiết kế đã ghi lại trong audit khi cần**.
+- **NO_CREATE_NEEDED** — enum cố định/system state (Trạng thái, Tình
+  trạng, Loại lao động, Giới tính, Ưu tiên...) — KHÔNG phải Master Data,
+  không bao giờ Quick Create dù dropdown đó searchable. Nhầm enum thành
+  Master Data là lỗi thiết kế, không phải thiếu tính năng.
 
 **Không free-text fallback**: field tham chiếu Master Data mà user không
-tìm thấy thì phải tạo đúng Master record (nếu ALLOWED/CONTROLLED) hoặc từ
-chối lưu text tự do — không lưu chuỗi tự do vào field đáng lẽ là
-reference (đã phát hiện 2 vi phạm thật: `kvNhapNCC`, `tsThemNCC`/
+tìm thấy thì phải tạo đúng Master record (CREATE_DIRECT/CONTROLLED) hoặc
+route tới đúng nơi (REQUEST_ONLY) — không lưu chuỗi tự do vào field đáng
+lẽ là reference (đã phát hiện vi phạm thật: `kvNhapNCC`, `tsThemNCC`/
 `tsSuaNCC` — Nhà cung cấp đang là ô nhập tay, chưa sửa, xem audit mục I).
 
 **Component dùng chung**: `ganCombo()` hỗ trợ tham số `taoMoi` tuỳ chọn
 (`{xuLyTao, capNhatDs}`) — không tạo component Quick Create riêng từng
-màn. Chỉ bật khi entity đã phân loại ALLOWED (hoặc CONTROLLED có thêm
-bước xác nhận) — mặc định KHÔNG có quick create, phải tự quyết định bật.
+màn, không xây bảng config tập trung khi lời gọi tại chỗ đã đủ rẻ (xem
+audit mục H). Chỉ bật cho entity đã phân loại CREATE_DIRECT/CONTROLLED —
+mặc định KHÔNG có quick create, phải tự quyết định bật, và KHÔNG BAO GIỜ
+bật cho dropdown enum/system state (mục NO_CREATE_NEEDED ở trên).
 
 ## UX Performance Budget (Frequent Action Budget)
 
