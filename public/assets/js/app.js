@@ -378,17 +378,43 @@ function ganCombo({ hienThi, panel, tim, goiY, giaTri }, layTuyChon, coRong, ron
       ? `<div class="ql-goiy-item ql-goiy-taomoi" data-tao-moi="1">+ Tạo "${esc(timTho)}"</div>` : '';
     goiY.innerHTML = rongHtml + (loc.length ? dsHtml : (rongHtml || taoMoiHtml ? '' : '<div class="ql-goiy-trong">Không tìm thấy</div>')) + taoMoiHtml;
   }
+  // Panel định vị theo TOẠ ĐỘ MÀN HÌNH (position:fixed, tính lại mỗi lần mở)
+  // thay vì position:absolute theo .combo1 — bug thật 23/08/2026 (Sếp Ngọc
+  // báo dropdown "cụt" khi combobox nằm trong .modal): .modal có
+  // overflow-y:auto để tự cuộn, absolute bên trong nó bị khung modal CẮT
+  // thay vì nổi lên trên, dù z-index đã cao. Đây là bug Core ở component
+  // dùng chung — sửa 1 chỗ cho mọi combobox trong ERP, không vá riêng từng
+  // modal. Đóng khi cuộn trang (dropdown menu chuẩn vẫn làm vậy) để khỏi
+  // lệch khỏi ô khi vị trí trigger đổi.
+  function dongKhiCuon() { dong(); }
   function mo() {
     combo.classList.add('mo');
     panel.hidden = false;
+    const r = hienThi.getBoundingClientRect();
+    panel.style.position = 'fixed';
+    panel.style.top = (r.bottom + 4) + 'px';
+    panel.style.left = r.left + 'px';
+    panel.style.width = r.width + 'px';
     tim.value = '';
     ve();
     tim.focus();
+    window.addEventListener('scroll', dongKhiCuon, true);
+    window.addEventListener('resize', dongKhiCuon);
   }
   function dong() {
     combo.classList.remove('mo');
     panel.hidden = true;
+    panel.style.position = ''; panel.style.top = ''; panel.style.left = ''; panel.style.width = '';
+    window.removeEventListener('scroll', dongKhiCuon, true);
+    window.removeEventListener('resize', dongKhiCuon);
   }
+  // Listener click-ra-ngoài dùng CHUNG (cuối file) cần gọi ĐÚNG dong() này
+  // để gỡ listener scroll/resize vừa gắn ở trên — không thì mỗi lần mở rồi
+  // bấm ra ngoài (không chọn gì) lại để sót 1 listener scroll trên window,
+  // dồn mãi không gỡ. Gắn qua property trên chính node .combo1 vì dong() là
+  // closure riêng của lần ganCombo() này, generic listener không gọi trực
+  // tiếp được.
+  combo._ganComboDong = dong;
   function chon(gt) {
     giaTri.value = gt;
     // Bắn 'change' như <select> thật — chỗ nào đã có addEventListener('change',
@@ -459,9 +485,11 @@ function ganCombo({ hienThi, panel, tim, goiY, giaTri }, layTuyChon, coRong, ron
 document.addEventListener('click', e => {
   document.querySelectorAll('.combo1.mo').forEach(c => {
     if (c.contains(e.target)) return;
-    c.classList.remove('mo');
-    const p = c.querySelector('.combo1-panel');
-    if (p) p.hidden = true;
+    // Gọi đúng dong() riêng của combo này (nếu có — luôn có, gán trong
+    // ganCombo()) để gỡ đúng listener scroll/resize đã gắn lúc mở, không
+    // chỉ tắt hiển thị suông.
+    if (c._ganComboDong) c._ganComboDong();
+    else { c.classList.remove('mo'); const p = c.querySelector('.combo1-panel'); if (p) p.hidden = true; }
   });
 });
 

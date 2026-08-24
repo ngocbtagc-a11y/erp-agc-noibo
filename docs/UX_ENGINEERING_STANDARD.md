@@ -149,6 +149,22 @@ tạo/nộp/đổi trạng thái Việc, thay vì gọi `taiLai()` rời rạc t
 `khoiDongLichSuViec` export `window.LAM_MOI_LICHSU_VIEC` dù trước đó không
 ai gọi tới, để sẵn sàng cho module khác.
 
+## Combobox trong modal — luôn định vị theo toạ độ màn hình
+
+Bug thật 23/08/2026 (Sếp Ngọc báo dropdown "cụt" ở Sửa tài sản): `.modal`
+tự cuộn (`overflow-y: auto`), nên `.combo1-panel` định vị
+`position: absolute` theo `.combo1` bên trong nó bị modal CẮT thay vì nổi
+lên trên, dù `z-index` đã cao — `overflow` trên tổ tiên luôn cắt hậu duệ
+`position: absolute`, kể cả khi hậu duệ đó "thoát" khỏi box của cha trực
+tiếp. Đã sửa tận gốc trong `ganCombo()`: khi mở, tính `getBoundingClientRect()`
+của nút hiển thị rồi gán `position: fixed` + toạ độ tuyệt đối cho panel —
+`position: fixed` không bị `overflow` của tổ tiên cắt (trừ khi tổ tiên có
+`transform`/`filter`/`will-change`, `.modal` hiện không có). Đóng khi
+cuộn trang (dropdown chuẩn vẫn làm vậy, tránh lệch khỏi ô). **Đã sửa 1
+lần trong component dùng chung — mọi combobox trong ERP tự động đúng,
+không cần sửa lại từng modal.** Khi thêm combobox mới trong modal, không
+cần làm gì thêm — `ganCombo()` đã tự lo.
+
 ## Giới hạn — tránh làm quá tay
 
 - Không tự ý mở rộng sang module/entity chưa tồn tại trong ERP này chỉ vì
