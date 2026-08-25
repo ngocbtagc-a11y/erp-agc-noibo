@@ -368,6 +368,27 @@ $('#nutThoat').addEventListener('click', async () => {
   window.location.replace('index.html');
 });
 
+/* ---- Cài đặt ERP thành app riêng (PWA) — thay vì bắt nhân viên tự tìm
+   trong menu ⋮ của trình duyệt, hiện thẳng nút bấm ngay trong ERP khi
+   trình duyệt báo cài được (Sếp Ngọc yêu cầu 25/08/2026: phiên bản desktop,
+   Phase 1 — không cần app .exe riêng, PWA đã đủ). Nút tự ẩn nếu trình
+   duyệt không hỗ trợ cài (Safari cũ, hoặc đã cài rồi) hoặc sau khi cài xong. */
+let _suKienCaiDat = null;
+const nutCaiDat = $('#nutCaiDat');
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  _suKienCaiDat = e;
+  nutCaiDat.hidden = false;
+});
+nutCaiDat?.addEventListener('click', async () => {
+  if (!_suKienCaiDat) return;
+  nutCaiDat.hidden = true;
+  _suKienCaiDat.prompt();
+  await _suKienCaiDat.userChoice;
+  _suKienCaiDat = null;
+});
+window.addEventListener('appinstalled', () => { nutCaiDat.hidden = true; });
+
 /* ==========================================================================
    CÁC KHỐI DỰNG SẴN
    ========================================================================== */
