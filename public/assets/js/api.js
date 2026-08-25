@@ -52,6 +52,7 @@ export const API = {
   danhBa: () => goi('/api/danh-ba'),
 
   nhanSu: () => goi('/api/nhan-su'),
+  nsLichSu: (id) => goi('/api/nhan-su/lich-su?id=' + encodeURIComponent(id)),
   nsAnhDaiDien: (anhBase64) => goi('/api/nhan-su/anh-dai-dien', {
     method: 'POST', body: JSON.stringify({ anh: anhBase64 })
   }),

@@ -93,10 +93,15 @@ export async function taoPhien(db, taiKhoanId) {
 export async function docPhien(db, token) {
   if (!token) return null;
 
+  // phong_ban_id thêm vào phiên (Employee Profile Phase 1, CORE_CHANGE đã
+  // duyệt 25/08/2026) — mọi màn hình dùng Position/Capability sau này đọc
+  // thẳng phien.phong_ban_id, khỏi phải gọi thêm API riêng chỉ để biết
+  // phòng ban của người đang đăng nhập. Chỉ THÊM cột đọc ra, không đổi hành
+  // vi/độ dài phiên/bảo mật — tương thích ngược hoàn toàn.
   const d = await db.prepare(`
     SELECT p.tai_khoan_id, p.het_han,
            t.ten_dang_nhap, t.vai_tro, t.kich_hoat, t.phai_doi_mk,
-           n.id AS nhan_su_id, n.ho_ten, n.viet_tat, n.chuc_vu
+           n.id AS nhan_su_id, n.ho_ten, n.viet_tat, n.chuc_vu, n.phong_ban_id
       FROM phien p
       JOIN tai_khoan t ON t.id = p.tai_khoan_id
       JOIN nhan_su  n ON n.id = t.nhan_su_id

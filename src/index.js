@@ -225,6 +225,35 @@ async function layNhanSu(req, env) {
   return json({ nhan_su: results, xem_luong: xemLuong });
 }
 
+/* Lịch sử thay đổi vị trí/phòng ban/quản lý/trạng thái của 1 nhân sự — dùng
+   cho tab "Hồ sơ & Công việc" trong Employee Profile (CORE_CHANGE Phase 1,
+   25/08/2026). Cùng quyền xem với danh sách Nhân sự — không mở thêm bề mặt
+   quyền mới. Tự thêm tên người thực hiện qua JOIN, khỏi phải tra riêng. */
+async function nsLichSu(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  if (!duocXemTab(phien.vai_tro, 'nhansu')) return loi('Không có quyền', 403);
+
+  const u = new URL(req.url);
+  const nhanSuId = String(u.searchParams.get('id') || '').trim();
+  if (!nhanSuId) return loi('Thiếu id nhân sự');
+
+  try {
+    const { results } = await env.DB.prepare(`
+      SELECT h.id, h.loai_su_kien, h.gia_tri_cu, h.gia_tri_moi, h.ghi_chu, h.luc,
+             n.ho_ten AS nguoi_thuc_hien_ten
+        FROM nhan_su_lich_su h
+        LEFT JOIN nhan_su n ON n.id = h.nguoi_thuc_hien_id
+       WHERE h.nhan_su_id = ?
+       ORDER BY h.luc DESC, h.id DESC
+       LIMIT 200
+    `).bind(nhanSuId).all();
+    return json({ lich_su: results || [] });
+  } catch {
+    return json({ lich_su: [] });   // chưa nạp migration them-nhansu-lichsu.sql
+  }
+}
+
 /* ==========================================================================
    CHAT NỘI BỘ — kênh chung TOÀN công ty + chat riêng (DM) từng người
    (Sếp Ngọc chốt 19-20/08/2026)
@@ -511,6 +540,13 @@ async function qtThemNhanSu(req, env) {
     loaiLaoDongTuBody(b)
   ).run();
 
+  try {
+    await env.DB.prepare(`
+      INSERT INTO nhan_su_lich_su (nhan_su_id, loai_su_kien, gia_tri_moi, nguoi_thuc_hien_id, luc)
+      VALUES (?, 'vao_lam', ?, ?, datetime('now','+7 hours'))
+    `).bind(id, cd ? cd.ten : String(b.chuc_vu || '').trim(), phien.nhan_su_id).run();
+  } catch { /* chưa nạp migration them-nhansu-lichsu.sql — bỏ qua êm */ }
+
   return json({ ok: true, id, ma_nv: maNv });
 }
 
@@ -526,7 +562,7 @@ async function qtSuaNhanSu(req, env) {
   const id = String(b.id || '').trim();
   if (!id) return loi('Thiếu id nhân sự');
 
-  const hienCo = await env.DB.prepare('SELECT id, ho_ten, chuc_vu, bo_phan, trang_thai_dl, ma_nv FROM nhan_su WHERE id = ?').bind(id).first();
+  const hienCo = await env.DB.prepare('SELECT id, ho_ten, chuc_vu, bo_phan, phong_ban_id, chuc_danh_id, quan_ly_id, trang_thai, trang_thai_dl, ma_nv FROM nhan_su WHERE id = ?').bind(id).first();
   if (!hienCo) return loi('Không tìm thấy nhân sự', 404);
 
   // Đã khoá thì chỉ Admin sửa được (Data Lock — xem migration them-khoa-danhmuc-nen.sql)
@@ -591,6 +627,33 @@ async function qtSuaNhanSu(req, env) {
   }
   if (coCapNhatMaNv) {
     await dulieunen.ghiLichSuThayDoi(env, phien, 'nhan_su', id, { ma_nv: [hienCo.ma_nv, maNvMoi] });
+  }
+
+  // Lịch sử thay đổi nhân sự (Employee Profile Phase 1) — ghi vào bảng sự
+  // kiện RIÊNG (nhan_su_lich_su), LUÔN LUÔN chứ không chỉ khi hồ sơ đã khoá
+  // (khác cơ chế Data Lock ở trên vốn chỉ log sau khi khoá) — đóng đúng
+  // khoảng trống "chưa có audit trail vị trí/phòng ban/quản lý" đã ghi trong
+  // báo cáo CORE_CHANGE 25/08/2026. Chỉ ghi khi THẬT SỰ đổi, không ghi khống.
+  const suKien = [];
+  const quanLyMoi = String(b.quan_ly_id || '').trim() || null;
+  const trangThaiMoi = String(b.trang_thai || 'da_ky').trim();
+  const phongBanIdMoi = pb ? pb.id : null;
+  const chucDanhIdMoi = cd ? cd.id : null;
+  if (phongBanIdMoi !== hienCo.phong_ban_id) suKien.push(['doi_phong_ban', hienCo.bo_phan, boPhanMoi]);
+  if (chucDanhIdMoi !== hienCo.chuc_danh_id) suKien.push(['doi_chuc_danh', hienCo.chuc_vu, chucVuMoi]);
+  if (quanLyMoi !== hienCo.quan_ly_id) suKien.push(['doi_quan_ly', hienCo.quan_ly_id, quanLyMoi]);
+  if (trangThaiMoi !== hienCo.trang_thai) suKien.push(['doi_trang_thai', hienCo.trang_thai, trangThaiMoi]);
+  if (suKien.length) {
+    const nguoiThucHien = phien.nhan_su_id;
+    // Bọc try/catch — nếu máy chủ CHƯA nạp migration them-nhansu-lichsu.sql
+    // thì bỏ qua êm, không chặn việc SỬA hồ sơ (việc chính, quan trọng hơn
+    // ghi log), cùng nếp schema-detection graceful degrade đã dùng khắp nơi.
+    try {
+      await env.DB.batch(suKien.map(([loai, cu, moi]) => env.DB.prepare(`
+        INSERT INTO nhan_su_lich_su (nhan_su_id, loai_su_kien, gia_tri_cu, gia_tri_moi, nguoi_thuc_hien_id, luc)
+        VALUES (?, ?, ?, ?, ?, datetime('now','+7 hours'))
+      `).bind(id, loai, cu, moi, nguoiThucHien)));
+    } catch { /* chưa nạp migration — bỏ qua, không chặn sửa hồ sơ */ }
   }
 
   return json({ ok: true });
@@ -2881,6 +2944,7 @@ const DUONG_DAN = {
   'POST /api/doi-mat-khau':  doiMatKhau,
   'GET  /api/danh-ba':       layDanhBa,
   'GET  /api/nhan-su':       layNhanSu,
+  'GET  /api/nhan-su/lich-su': nsLichSu,
   'POST /api/nhan-su/anh-dai-dien': nsAnhDaiDien,
   'GET  /api/nhan-su/anh':          nsAnhXem,
   'GET  /api/chat/tin-nhan': chatDanhSach,
