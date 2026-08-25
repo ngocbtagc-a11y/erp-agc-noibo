@@ -528,6 +528,48 @@ img.av { object-fit: cover; display: block; cursor: default; }
 }
 .sb-user .meta span { font-size: 11px; color: rgba(255,255,255,.5); }
 
+/* Trạng thái hiện diện (Presence) tự đặt — pill nhỏ dưới tên, bấm mở
+   popover nhỏ để đổi trạng thái/ghi chú/thời hạn NGAY TẠI ĐÓ, không modal
+   to (Sếp Ngọc yêu cầu 25/08/2026, xem TRANG_THAI_HD trong app.js). */
+.thd-wrap { position: relative; margin-top: 5px; }
+.thd-nut {
+  display: flex; align-items: center; gap: 5px;
+  background: rgba(255,255,255,.08);
+  border: none; border-radius: var(--r-pill);
+  padding: 3px 9px 3px 7px;
+  font-size: 11px; color: rgba(255,255,255,.75);
+  cursor: pointer; transition: background .14s;
+}
+.thd-nut:hover { background: rgba(255,255,255,.15); }
+.thd-cham { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; background: currentColor; }
+.thd-ok     { color: #8fc47a; }
+.thd-sage   { color: #a9c98f; }
+.thd-warn   { color: #e0b15e; }
+.thd-danger { color: #d98a72; }
+.thd-mute   { color: rgba(255,255,255,.55); }
+
+.thd-panel {
+  position: absolute; left: 0; bottom: calc(100% + 6px); z-index: 40;
+  background: var(--card); border-radius: var(--r-md);
+  box-shadow: var(--shadow-md); padding: 12px; width: 220px;
+  display: flex; flex-direction: column; gap: 3px;
+}
+.thd-panel-tieu {
+  font-size: 12.5px; font-weight: 700; color: var(--ink);
+  margin-bottom: 6px;
+}
+.thd-panel-nhan {
+  font-size: 10.5px; font-weight: 600; letter-spacing: .02em;
+  color: var(--text-mute); text-transform: uppercase;
+  margin-top: 6px;
+}
+.thd-panel select, .thd-panel input[type="text"] {
+  width: 100%; padding: 7px 9px;
+  border: 1px solid var(--line); border-radius: var(--r-sm);
+  font-size: 12.5px; color: var(--ink); background: var(--surface);
+}
+.thd-panel-luu { width: 100%; margin-top: 10px; }
+
 .sb-logout {
   width: 100%;
   margin-top: 6px;

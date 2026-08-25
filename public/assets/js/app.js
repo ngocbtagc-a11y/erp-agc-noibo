@@ -297,6 +297,26 @@ const TRANG_THAI = {
   parttime:     { chu: 'Bán thời gian', mau: 'mute' }
 };
 
+/* Trạng thái HIỆN DIỆN (Presence) tự đặt — khác TRANG_THAI ở trên (trạng
+   thái HỢP ĐỒNG). Đây là GIAO TIẾP nội bộ, không phải chấm công/lịch nghỉ:
+   AVAILABLE không có nghĩa "đã check-in", không dùng để tính lương/KPI.
+   Mỗi người tự đổi ở Sidebar (popover), hiện cho người khác thấy ở Danh bạ
+   (Sếp Ngọc yêu cầu 25/08/2026). off_today/on_leave để dành cho SYSTEM
+   status khi có Lịch làm/Nghỉ phép chính thức sau này — Phase 1 chưa có
+   nguồn dữ liệu đó nên chỉ 6 trạng thái MANUAL này. */
+const TRANG_THAI_HD = {
+  available: { chu: 'Đang làm việc',  mau: 'ok' },
+  busy:      { chu: 'Đang bận',       mau: 'warn' },
+  meeting:   { chu: 'Đang họp',       mau: 'warn' },
+  away:      { chu: 'Tạm vắng',       mau: 'mute' },
+  dnd:       { chu: 'Không làm phiền', mau: 'danger' },
+  remote:    { chu: 'Làm việc từ xa', mau: 'sage' }
+};
+/* Smart default (spec §13) — mở dropdown Thời hạn sẵn giá trị hợp lý theo
+   trạng thái vừa chọn, người dùng vẫn đổi được. Trạng thái không liệt kê
+   ở đây mặc định "Cuối ngày" (an toàn, không lo quên đổi qua hôm sau). */
+const THOI_HAN_MAC_DINH_HD = { meeting: '1h', away: '30p', dnd: '1h' };
+
 /* ---- Tiện ích ----------------------------------------------------------- */
 
 const $ = s => document.querySelector(s);
@@ -857,6 +877,59 @@ $('#uAvFile').addEventListener('change', async () => {
 $('#uTen').textContent = TOI.ten;
 $('#uChucVu').textContent = TOI.chuc_vu;
 
+/* Trạng thái hiện diện — pill (chấm + nhãn ngắn) dưới tên mình ở Sidebar.
+   Bấm mở popover nhỏ NGAY TẠI ĐÓ (không modal to) để đổi trạng thái + ghi
+   chú + thời hạn. Sidebar CHỈ hiện nhãn ngắn — ghi chú dài chỉ hiện qua
+   tooltip title (spec §11 "không hiện tại sidebar"). Lưu xong cập nhật
+   ngay pill + đồng bộ dòng của mình trong Danh bạ nếu đang mở, không F5
+   (Rule 7 UI State Consistency). */
+$('#thdMa').innerHTML = Object.entries(TRANG_THAI_HD)
+  .map(([ma, tt]) => `<option value="${ma}">${esc(tt.chu)}</option>`).join('');
+
+function veThdPill() {
+  const tt = TRANG_THAI_HD[TOI.trang_thai_hd] || TRANG_THAI_HD.available;
+  $('#thdNhan').textContent = tt.chu;
+  $('#thdNut').className = 'thd-nut thd-' + tt.mau;
+  $('#thdNut').title = TOI.trang_thai_ghi_chu
+    ? `${tt.chu} · ${TOI.trang_thai_ghi_chu}` : tt.chu;
+}
+veThdPill();
+
+$('#thdNut').addEventListener('click', (e) => {
+  e.stopPropagation();
+  const panel = $('#thdPanel');
+  if (!panel.hidden) { panel.hidden = true; return; }
+  $('#thdMa').value = TOI.trang_thai_hd || 'available';
+  $('#thdGhiChu').value = TOI.trang_thai_ghi_chu || '';
+  $('#thdThoiHan').value = THOI_HAN_MAC_DINH_HD[TOI.trang_thai_hd] || 'cuoi_ngay';
+  panel.hidden = false;
+  $('#thdGhiChu').focus();
+});
+$('#thdPanel').addEventListener('click', (e) => e.stopPropagation());
+$('#thdMa').addEventListener('change', () => {
+  $('#thdThoiHan').value = THOI_HAN_MAC_DINH_HD[$('#thdMa').value] || 'cuoi_ngay';
+});
+$('#thdLuu').addEventListener('click', async () => {
+  const ma = $('#thdMa').value;
+  const ghiChu = $('#thdGhiChu').value.trim().slice(0, 120);
+  const thoiHan = $('#thdThoiHan').value;
+  const nutLuu = $('#thdLuu');
+  nutLuu.disabled = true;
+  try {
+    await API.nsTrangThaiHD(ma, ghiChu, thoiHan);
+    TOI.trang_thai_hd = ma;
+    TOI.trang_thai_ghi_chu = ghiChu || null;
+    veThdPill();
+    $('#thdPanel').hidden = true;
+    window.LAM_MOI_TRANGTHAI_DANHBA?.(TOI.id, ma, ghiChu || null);
+  } catch (err) {
+    alert(err.message || 'Không đổi được trạng thái, thử lại nhé.');
+  } finally {
+    nutLuu.disabled = false;
+  }
+});
+document.addEventListener('click', () => { $('#thdPanel').hidden = true; });
+
 const d = new Date();
 $('#ngayHomNay').textContent = 'Hôm nay, ' +
   ['Chủ nhật','Thứ hai','Thứ ba','Thứ tư','Thứ năm','Thứ sáu','Thứ bảy'][d.getDay()] +
@@ -1165,17 +1238,25 @@ if (TOI.quyen.includes('danhba')) {
     // không phải chính mình (tự chat với mình thì vô nghĩa).
     const coChat = TOI.quyen.includes('chat');
 
-    veBang('#db-bang', ds, n =>
-      `<td><div class="person">${avHtml(n.id, n.viet_tat, n.co_anh)}` +
+    veBang('#db-bang', ds, n => {
+      const tt = TRANG_THAI_HD[n.trang_thai_hd] || TRANG_THAI_HD.available;
+      // Ví dụ: "🟢 Đang làm việc" hoặc "🟡 Đang họp · đến 15:00" — dot MÀU
+      // + CHỮ luôn đi cùng (spec §10 "Status luôn có text, không chỉ dot
+      // màu"), ghi chú chỉ nối thêm khi có, không render null/undefined.
+      const thd = `<span class="tag ${tt.mau}">${esc(tt.chu)}</span>` +
+        (n.trang_thai_ghi_chu ? `<div class="sm">${esc(n.trang_thai_ghi_chu)}</div>` : '');
+      return `<td><div class="person">${avHtml(n.id, n.viet_tat, n.co_anh)}` +
         `<div><div class="nm">${esc(n.ho_ten)}</div>` +
         `<div class="sm">${esc(n.chuc_vu)}</div></div></div></td>` +
+      `<td>${thd}</td>` +
       `<td>${esc(n.bo_phan)}</td>` +
       `<td><a class="lnk" href="tel:${esc(String(n.sdt || '').replace(/\s/g, ''))}">${esc(n.sdt || '—')}</a></td>` +
       `<td><a class="lnk" href="mailto:${esc(n.email)}">${esc(n.email || '—')}</a></td>` +
       `<td class="sm">${esc(n.quan_ly || '—')}</td>` +
       `<td>${(coChat && n.id !== TOI.id)
         ? `<button type="button" class="btn-nho" data-chatngay="${esc(n.id)}" data-ten="${esc(n.ho_ten)}" data-vt="${esc(n.viet_tat)}">Chat ngay</button>`
-        : ''}</td>`);
+        : ''}</td>`;
+    });
 
     $('#db-trong').hidden = ds.length > 0;
     $('#db-dem').textContent = `${ds.length}/${danh_ba.length} người`;
@@ -1189,6 +1270,17 @@ if (TOI.quyen.includes('danhba')) {
     if (!btn) return;
     window.moChatVoi?.(btn.getAttribute('data-chatngay'), btn.getAttribute('data-ten'), btn.getAttribute('data-vt'));
   });
+
+  // Sidebar gọi lại đây sau khi Lưu trạng thái — sửa thẳng dòng của mình
+  // trong mảng đã tải (khỏi gọi lại API), re-render đúng ô tìm kiếm hiện
+  // tại. Không F5 (Rule 7 UI State Consistency).
+  window.LAM_MOI_TRANGTHAI_DANHBA = (id, ma, ghiChu) => {
+    const n = danh_ba.find(x => x.id === id);
+    if (!n) return;
+    n.trang_thai_hd = ma;
+    n.trang_thai_ghi_chu = ghiChu;
+    veDanhBa($('#db-tim').value);
+  };
 }
 
 /* -- Trạm Mục Tiêu: giao việc cho nhân viên (máy chủ thật) -- */

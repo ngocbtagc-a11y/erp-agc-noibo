@@ -56,6 +56,9 @@ export const API = {
   nsAnhDaiDien: (anhBase64) => goi('/api/nhan-su/anh-dai-dien', {
     method: 'POST', body: JSON.stringify({ anh: anhBase64 })
   }),
+  nsTrangThaiHD: (maTrangThai, ghiChu, thoiHan) => goi('/api/nhan-su/trang-thai-hd', {
+    method: 'POST', body: JSON.stringify({ ma_trang_thai: maTrangThai, ghi_chu: ghiChu, thoi_han: thoiHan })
+  }),
 
   /* ---- Vinh danh (Tổng quan) ---- */
   vdDanhSach: () => goi('/api/vinh-danh'),

@@ -105,6 +105,7 @@ async function toiLaAi(req, env) {
   const q = quyenCua(phien.vai_tro);
   const ns = await env.DB.prepare('SELECT (anh_chan_dung IS NOT NULL) AS co_anh, phong_ban_id, loai_lao_dong FROM nhan_su WHERE id = ?')
                          .bind(phien.nhan_su_id).first();
+  const trangThai = await docTrangThaiHienDien(env, phien.nhan_su_id);
   // Phòng ban mà mình là trưởng phòng (Xếp ca tuần + các quyền theo phòng
   // ban khác dùng chung field này) — KHÔNG suy từ vai trò, đọc thẳng DB vì
   // đây là quan hệ theo TỪNG phòng ban cụ thể (xem src/ca.js laTruongPhong).
@@ -122,6 +123,8 @@ async function toiLaAi(req, env) {
     co_anh: !!ns?.co_anh,
     phong_ban_id: ns ? ns.phong_ban_id : null,
     loai_lao_dong: ns ? ns.loai_lao_dong : null,
+    trang_thai_hd: trangThai.ma,
+    trang_thai_ghi_chu: trangThai.ghi_chu,
     phong_ban_quan_ly: phongBanQuanLy,
     quyen: q.tab,
     xem_luong: q.xem_luong,
@@ -188,13 +191,27 @@ async function layDanhBa(req, env) {
   const { results } = await env.DB.prepare(`
     SELECT n.id, n.ma_nv, n.ho_ten, n.viet_tat, n.chuc_vu, n.bo_phan, n.sdt, n.email,
            (n.anh_chan_dung IS NOT NULL) AS co_anh,
-           q.ho_ten AS quan_ly
+           q.ho_ten AS quan_ly,
+           tt.ma_trang_thai, tt.ghi_chu AS trang_thai_ghi_chu, tt.het_han_luc
       FROM nhan_su n
       LEFT JOIN nhan_su q ON q.id = n.quan_ly_id
       LEFT JOIN tai_khoan t ON t.nhan_su_id = n.id
+      LEFT JOIN nhan_su_trang_thai tt ON tt.nhan_su_id = n.id
      WHERE n.dang_lam = 1 AND (t.vai_tro IS NULL OR t.vai_tro != 'nv_test')
      ORDER BY n.bo_phan, n.ho_ten
   `).all();
+
+  // Hết hạn thì coi như 'available', không lộ ghi chú cũ (Rule 22 — không
+  // render dữ liệu đã hết hiệu lực). Tính khi đọc, không cần cron dọn nền.
+  // het_han_luc lưu giờ UTC thật (giống phien.het_han), KHÔNG dùng hack
+  // +7 giờ (hack đó chỉ dành cho log hiển thị "x phút trước", không phải
+  // mốc so sánh nội bộ).
+  for (const r of results) {
+    const hetHan = r.het_han_luc && new Date(r.het_han_luc) < new Date();
+    r.trang_thai_hd = (!r.ma_trang_thai || hetHan) ? 'available' : r.ma_trang_thai;
+    r.trang_thai_ghi_chu = hetHan ? null : r.trang_thai_ghi_chu;
+    delete r.ma_trang_thai; delete r.het_han_luc;
+  }
 
   return json({ danh_ba: results });
 }
@@ -2931,6 +2948,67 @@ async function nsAnhDaiDien(req, env) {
   return json({ ok: true });
 }
 
+/* ---- Trạng thái hiện diện (Presence) ------------------------------------
+   GIAO TIẾP nội bộ ("đang ở đâu, tiện liên hệ không") — KHÔNG PHẢI chấm
+   công/lịch nghỉ (Rule 19 trong spec gốc). Chỉ 1 nguồn sự thật
+   (nhan_su_trang_thai), Sidebar/Danh bạ/Hồ sơ đều đọc từ đây, không copy
+   sang bảng khác. Mỗi người CHỈ tự đổi trạng thái của MÌNH.
+
+   MANUAL (người dùng tự chọn) vs SYSTEM (ERP tự suy ra từ Lịch làm/Nghỉ
+   phép chính thức — CHƯA có module đó nên Phase 1 chỉ có manual; cột
+   `nguon` để sẵn chỗ cho 'system' sau này, không tự chế dữ liệu system
+   khi chưa có nguồn thật). */
+const TRANG_THAI_HD_HOP_LE = ['available', 'busy', 'meeting', 'away', 'dnd', 'remote'];
+const GHI_CHU_HD_TOI_DA = 120;
+// Thời hạn nhanh — tính het_han_luc = giờ UTC thật ngay tại máy chủ, KHÔNG
+// nhận timestamp thô từ client (tránh lệch giờ máy khách/giả mạo).
+const THOI_HAN_HD = {
+  '30p':        "datetime('now', '+30 minutes')",
+  '1h':         "datetime('now', '+1 hours')",
+  '2h':         "datetime('now', '+2 hours')",
+  cuoi_ngay:    "datetime('now', '+7 hours', 'start of day', '+1 day', '-7 hours', '-1 seconds')",
+  khong_han:    null
+};
+
+/* Đọc trạng thái hiện diện của 1 người, tự trả 'available' nếu hết hạn/chưa
+   từng đặt — dùng chung cho toiLaAi() (chính mình) và Hồ sơ nhân sự sau
+   này, khỏi lặp logic hết-hạn ở nhiều nơi. */
+async function docTrangThaiHienDien(env, nhanSuId) {
+  const tt = await env.DB.prepare(
+    'SELECT ma_trang_thai, ghi_chu, het_han_luc FROM nhan_su_trang_thai WHERE nhan_su_id = ?'
+  ).bind(nhanSuId).first();
+  if (!tt) return { ma: 'available', ghi_chu: null, het_han_luc: null };
+  const hetHan = tt.het_han_luc && new Date(tt.het_han_luc) < new Date();
+  return hetHan
+    ? { ma: 'available', ghi_chu: null, het_han_luc: null }
+    : { ma: tt.ma_trang_thai, ghi_chu: tt.ghi_chu, het_han_luc: tt.het_han_luc };
+}
+
+async function nsTrangThaiHD(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  const ma = String(b.ma_trang_thai || '');
+  if (!TRANG_THAI_HD_HOP_LE.includes(ma)) return loi('Trạng thái không hợp lệ');
+  const ghiChu = String(b.ghi_chu || '').trim().slice(0, GHI_CHU_HD_TOI_DA) || null;
+  const thoiHan = String(b.thoi_han || 'khong_han');
+  if (!(thoiHan in THOI_HAN_HD)) return loi('Thời hạn không hợp lệ');
+  const bieuThucHetHan = THOI_HAN_HD[thoiHan];
+
+  await env.DB.prepare(`
+    INSERT INTO nhan_su_trang_thai (nhan_su_id, ma_trang_thai, ghi_chu, het_han_luc, nguon, cap_nhat_luc)
+    VALUES (?, ?, ?, ${bieuThucHetHan || 'NULL'}, 'manual', datetime('now'))
+    ON CONFLICT(nhan_su_id) DO UPDATE SET
+      ma_trang_thai = excluded.ma_trang_thai,
+      ghi_chu       = excluded.ghi_chu,
+      het_han_luc   = excluded.het_han_luc,
+      nguon         = 'manual',
+      cap_nhat_luc  = excluded.cap_nhat_luc
+  `).bind(phien.nhan_su_id, ma, ghiChu).run();
+
+  return json({ ok: true });
+}
+
 /* Xem ảnh đại diện của 1 người — GET /api/nhan-su/anh?id=X (ai đăng nhập rồi
    cũng xem được ảnh của bất kỳ ai, giống tinh thần Danh bạ mở cho tất cả). */
 async function nsAnhXem(req, env) {
@@ -2955,6 +3033,7 @@ const DUONG_DAN = {
   'GET  /api/nhan-su':       layNhanSu,
   'GET  /api/nhan-su/lich-su': nsLichSu,
   'POST /api/nhan-su/anh-dai-dien': nsAnhDaiDien,
+  'POST /api/nhan-su/trang-thai-hd': nsTrangThaiHD,
   'GET  /api/nhan-su/anh':          nsAnhXem,
   'GET  /api/chat/tin-nhan': chatDanhSach,
   'GET  /api/chat/chua-doc': chatChuaDoc,

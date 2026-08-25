@@ -41,6 +41,27 @@
         <div class="meta">
           <b id="uTen">—</b>
           <span id="uChucVu">—</span>
+          <div class="thd-wrap" id="thdWrap">
+            <button type="button" class="thd-nut" id="thdNut" title="Đổi trạng thái">
+              <i class="thd-cham"></i><span id="thdNhan">—</span>
+            </button>
+            <div class="thd-panel" id="thdPanel" hidden>
+              <div class="thd-panel-tieu">Trạng thái của tôi</div>
+              <label class="thd-panel-nhan">Trạng thái</label>
+              <select id="thdMa"></select>
+              <label class="thd-panel-nhan">Ghi chú</label>
+              <input type="text" id="thdGhiChu" maxlength="120" placeholder="VD: Đang xử lý đối soát...">
+              <label class="thd-panel-nhan">Thời hạn</label>
+              <select id="thdThoiHan">
+                <option value="30p">30 phút</option>
+                <option value="1h">1 giờ</option>
+                <option value="2h">2 giờ</option>
+                <option value="cuoi_ngay">Cuối ngày</option>
+                <option value="khong_han">Không tự xoá</option>
+              </select>
+              <button type="button" class="btn-nho btn-primary thd-panel-luu" id="thdLuu">Lưu</button>
+            </div>
+          </div>
         </div>
       </div>
       <button class="sb-logout" id="nutThoat">Đăng xuất</button>
@@ -341,6 +362,7 @@
             <thead>
               <tr>
                 <th>Nhân sự</th>
+                <th>Trạng thái</th>
                 <th>Bộ phận</th>
                 <th>Điện thoại</th>
                 <th>Email</th>
