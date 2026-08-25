@@ -2039,7 +2039,7 @@ const MT_COT = `id, cap, bo_phan, tieu_de, mo_ta, nam, quy, nguoi_tao_id, nguoi_
                     AND trang_thai NOT IN ('hoan_thanh', 'huy')) AS han_gan_nhat`;
 
 async function mtDanhSach(req, env) {
-  const { loi: l } = await batBuocDangNhap(req, env);
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
   const u = new URL(req.url);
   const ky = kyHienTai();
@@ -2061,11 +2061,17 @@ async function mtDanhSach(req, env) {
      LIMIT 300`
   ).bind(nam, quy).all();
 
+  // Cấp cá nhân CHỈ hiện mục tiêu của CHÍNH người xem — không công khai toàn
+  // công ty như công ty/phòng ban (Sếp Ngọc chốt 25/08/2026, sau khi thấy
+  // thật: "cá nhân xem của nhau thì xem trong lịch sử công việc thôi chứ cả
+  // công ty nhập liệu trên đó thì nhiều lắm" — card cấp cá nhân sẽ vỡ trận
+  // với ~20 người, và Lịch sử làm việc (cvLichSu) đã đủ minh bạch xem việc
+  // của nhau qua bảng lọc được, không cần lặp lại ở dạng thẻ tại đây).
   return json({
     nam, quy,
     cong_ty: results.filter(r => r.cap === 'cong_ty'),
     phong_ban: results.filter(r => r.cap === 'phong_ban'),
-    ca_nhan: results.filter(r => r.cap === 'ca_nhan')
+    ca_nhan: results.filter(r => r.cap === 'ca_nhan' && r.nguoi_tao_id === phien.nhan_su_id)
   });
 }
 
