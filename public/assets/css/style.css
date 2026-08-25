@@ -892,6 +892,15 @@ th.num { text-align: right; }
 td .nm { font-weight: 600; color: var(--ink); white-space: nowrap; }
 td .sm { font-size: 12px; color: var(--text-mute); white-space: nowrap; }
 
+/* Lịch sử làm việc — NGOẠI LỆ khỏi luật "1 dòng, cuộn ngang" ở trên. Cột
+   "Việc" ở đây chứa Đầu ra/Kết quả — đoạn văn dài tự do do nhân viên gõ,
+   khác hẳn tên người/mã hàng ngắn gọn — ép 1 dòng khiến cột này bị kéo dài
+   ra hết cỡ, đẩy mọi cột khác ra ngoài màn hình phải kéo ngang mới thấy
+   (Sếp Ngọc bắt lỗi 25/08/2026: "kéo sang trái như này có mà mỏi tay").
+   Cho xuống dòng + giới hạn bề rộng cột thay vì tràn vô hạn. */
+#ls-cv-tbl .nm, #ls-cv-tbl .sm { white-space: normal; }
+#ls-cv-tbl th:first-child, #ls-cv-tbl td:first-child { max-width: 320px; }
+
 .person { display: flex; align-items: center; gap: 10px; }
 
 .person .av {
