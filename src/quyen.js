@@ -9,11 +9,11 @@
 
 /* Các mảng dữ liệu trong hệ thống.
    "quantri" = tab quản trị: thêm nhân sự, tạo tài khoản, đặt lại mật khẩu.
-   Chỉ admin (Giám đốc, Phó Giám đốc) thấy.
+   Chỉ vai trò hệ thống Admin/Admin backup thấy.
    "lichsuviec" = Lịch sử làm việc (Sếp Ngọc yêu cầu 21/08/2026: lưu trữ quá
    trình làm việc của nhân sự, ai làm gì, xong task nào ra sao) — mở cho MỌI
    vai trò, đúng tinh thần minh bạch đã áp dụng cho Trạm Mục Tiêu (MBOs). */
-export const TAB = ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'nhansu', 'kinhdoanh', 'khovan', 'donhoan', 'ketoan', 'quantri'];
+export const TAB = ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'nhansu', 'kinhdoanh', 'khovan', 'donhoan', 'ketoan', 'dulieunen', 'quantri', 'taisan', 'xepca'];
 
 /* Vai trò → được xem mảng nào và làm được gì.
    Danh bạ VÀ Chat nội bộ mở cho tất cả (Sếp Ngọc yêu cầu: ai cũng tra được
@@ -25,24 +25,36 @@ export const TAB = ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'nha
                     được tài khoản). HCNS có mức này.
    - xem_luong    : xem cột lương. HCNS KHÔNG có — đây là ranh giới cứng. */
 const QUYEN_THEO_VAI_TRO = {
-  giam_doc:        { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'nhansu', 'kinhdoanh', 'khovan', 'donhoan', 'ketoan', 'quantri'], xem_luong: true,  admin: true,  them_nhan_su: true  },
-  pho_giam_doc:    { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'nhansu', 'kinhdoanh', 'khovan', 'donhoan', 'ketoan', 'quantri'], xem_luong: true,  admin: true,  them_nhan_su: true  },
-  ke_toan_truong:  { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'khovan', 'donhoan', 'ketoan'],                                   xem_luong: true,  admin: false, them_nhan_su: false },
-  quan_ly_kho:     { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'khovan', 'nhansu'],                                              xem_luong: false, admin: false, them_nhan_su: false },
-  nhan_vien_kho:   { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'khovan'],                                                        xem_luong: false, admin: false, them_nhan_su: false },
-  hcns:            { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'nhansu', 'quantri'],                                             xem_luong: false, admin: false, them_nhan_su: true  },
-  van_hanh_san:    { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'kinhdoanh', 'donhoan'],                                          xem_luong: false, admin: false, them_nhan_su: false },
+  // ---- Vai trò HỆ THỐNG (nhomVaiTro='he_thong') — Sếp chốt 23/08/2026 ----
+  // Admin = toàn quyền (gộp Giám đốc + Phó Giám đốc + Admin hệ thống cũ
+  // thành 1 vai trò hệ thống duy nhất — chức danh thật của người đó vẫn ở
+  // hồ sơ nhân sự (chuc_vu), KHÔNG còn gắn cứng vào vai trò đăng nhập).
+  admin:           { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'nhansu', 'kinhdoanh', 'khovan', 'donhoan', 'ketoan', 'dulieunen', 'quantri', 'taisan', 'xepca'], xem_luong: true,  admin: true,  them_nhan_su: true  },
+  // Admin backup = "quyền tạo tài khoản, phân quyền" — KHÔNG phải toàn
+  // quyền Admin (không unlock dữ liệu khoá, không khoá/xoá tài khoản người
+  // khác, không xem lương). Dùng khi Admin vắng mặt cần người tạo gấp tài
+  // khoản cho nhân viên mới — xem duocTaoTaiKhoan()/qtSuaVaiTro bên dưới.
+  admin_backup:    { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'nhansu', 'dulieunen', 'quantri', 'taisan', 'xepca'],                                 xem_luong: false, admin: false, them_nhan_su: true  },
+  // Người dùng = tài khoản thường, không quyền hệ thống gì thêm — mặc định
+  // hợp lý cho ai chưa gán đúng vị trí công việc cụ thể.
+  nguoi_dung:      { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'taisan', 'xepca'],                                                                  xem_luong: false, admin: false, them_nhan_su: false },
+  // ---- Vị trí công việc (nhomVaiTro='vi_tri') ----
+  ke_toan_truong:  { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'khovan', 'donhoan', 'ketoan', 'taisan', 'xepca'],                                   xem_luong: true,  admin: false, them_nhan_su: false },
+  quan_ly_kho:     { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'khovan', 'nhansu', 'dulieunen', 'taisan', 'xepca'],                                 xem_luong: false, admin: false, them_nhan_su: false },
+  nhan_vien_kho:   { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'khovan', 'taisan', 'xepca'],                                                        xem_luong: false, admin: false, them_nhan_su: false },
+  hcns:            { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'nhansu', 'dulieunen', 'quantri', 'taisan', 'xepca'],                                xem_luong: false, admin: false, them_nhan_su: true  },
+  van_hanh_san:    { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'kinhdoanh', 'donhoan', 'taisan', 'xepca'],                                          xem_luong: false, admin: false, them_nhan_su: false },
   // NV Chăm sóc khách hàng (Sếp Ngọc yêu cầu 20/08/2026): xem tab Kinh doanh
   // (đặc biệt pill "Chăm sóc KH" — xếp hạng khách hoàn/hủy nhiều) + Đơn hoàn
   // để nắm tình trạng đơn khi trả lời khách, nhưng KHÔNG được thao tác luồng
   // 3 chặng (không nằm trong CO_THAO_TAC_VAN_HANH bên dưới) — chỉ xem, việc
   // xử lý vẫn của Vận hành sàn/Kho/Kế toán đúng ranh giới bộ phận đã chốt.
-  cskh:            { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'kinhdoanh', 'donhoan'],                                          xem_luong: false, admin: false, them_nhan_su: false },
+  cskh:            { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'kinhdoanh', 'donhoan', 'taisan', 'xepca'],                                          xem_luong: false, admin: false, them_nhan_su: false },
   // Vai trò TEST (Sếp Ngọc chốt 19/08/2026): cho nhân viên vào bấm thử để
   // hiểu luồng 3 chặng Kho -> Vận hành sàn -> Kế toán, KHÔNG dính quyền admin
   // (không cấp/khoá tài khoản, không xem lương, không thêm nhân sự). Xem
   // được đủ các tab liên quan tới luồng đơn hoàn để test trọn vẹn từ đầu tới cuối.
-  nv_test:         { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'kinhdoanh', 'khovan', 'donhoan', 'ketoan'],                      xem_luong: false, admin: false, them_nhan_su: false }
+  nv_test:         { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'kinhdoanh', 'khovan', 'donhoan', 'ketoan', 'taisan', 'xepca'],                      xem_luong: false, admin: false, them_nhan_su: false }
 };
 
 /* ---- Quyền trong module Kho --------------------------------------------
@@ -57,8 +69,7 @@ const QUYEN_THEO_VAI_TRO = {
    Kế toán trưởng xem được tồn + báo cáo + giá vốn nhưng KHÔNG thao tác
    (không nhập/xuất thay kho). */
 const QUYEN_KHO = {
-  giam_doc:       { thao_tac: true,  quan_ly: true,  gia_von: true  },
-  pho_giam_doc:   { thao_tac: true,  quan_ly: true,  gia_von: true  },
+  admin:          { thao_tac: true,  quan_ly: true,  gia_von: true  },
   quan_ly_kho:    { thao_tac: true,  quan_ly: true,  gia_von: true  },
   nhan_vien_kho:  { thao_tac: true,  quan_ly: false, gia_von: false },
   ke_toan_truong: { thao_tac: false, quan_ly: false, gia_von: true  },
@@ -83,14 +94,64 @@ export function duocXemGiaVon(vaiTro) {
   return quyenKho(vaiTro).gia_von === true;
 }
 
+/* ---- Quyền Sản phẩm/SKU — TÁCH RIÊNG khỏi "quan_ly" kho nói chung
+   (Sếp chốt 22/08/2026: Kinh doanh là chủ sở hữu Sản phẩm/SKU — họ quyết
+   định bán gì — nhưng Kho vận vẫn sửa được hằng ngày vì là người nhập/
+   xuất thực tế). Data Ownership: xem docs/DATA_OWNERSHIP_MATRIX.md.
+   - sua  : được Thêm/Sửa/Ẩn-hiện mã hàng.
+   - khoa : được "Hoàn tất" (khoá) — chỉ chủ sở hữu thật (Kinh doanh) +
+            Admin. Kho vận sửa ngày thường nhưng KHÔNG phải người khoá. */
+const QUYEN_SAN_PHAM = {
+  admin:         { sua: true, khoa: true },
+  van_hanh_san:  { sua: true, khoa: true },
+  quan_ly_kho:   { sua: true, khoa: false }
+};
+const KHONG_QUYEN_SAN_PHAM = { sua: false, khoa: false };
+
+export function quyenSanPham(vaiTro) {
+  return QUYEN_SAN_PHAM[vaiTro] || KHONG_QUYEN_SAN_PHAM;
+}
+
+export function duocSuaSanPham(vaiTro) {
+  return quyenSanPham(vaiTro).sua === true;
+}
+
+export function duocKhoaSanPham(vaiTro) {
+  return quyenSanPham(vaiTro).khoa === true;
+}
+
+/* ---- Quyền module Tài sản -----------------------------------------------
+   Data Owner = P. Support/Hành chính (admin, admin_backup, hcns — đúng bộ
+   vai trò đang gộp Kế toán-Nhân sự-Admin thành 1 phòng thật, xem
+   docs/ENTITY_IDENTITY.md). Toàn bộ nhân viên (đã có tab 'taisan') XEM
+   được danh sách + lịch sử — chỉ nhóm này mới tạo/cấp phát/thu hồi/thanh lý.
+   Riêng "Báo hỏng" cho phép TỰ báo với tài sản đang giữ (self-service, xem
+   src/taisan.js), không cần nằm trong nhóm này. */
+const CO_QUAN_LY_TAI_SAN = new Set(['admin', 'admin_backup', 'hcns']);
+export function duocQuanLyTaiSan(vaiTro) {
+  return CO_QUAN_LY_TAI_SAN.has(vaiTro);
+}
+
+/* ---- Quyền module Đăng ký ca / Xếp ca ------------------------------------
+   Data Owner CHÍNH SÁCH (mẫu ca, ca mở, hạn đăng ký) = HR/Admin — cùng bộ
+   vai trò với them_nhan_su (admin, admin_backup, hcns).
+   DUYỆT đăng ký thì KHÔNG theo vai trò — theo phong_ban.truong_phong_id có
+   khớp với người đang đăng nhập không (kiểm tra ở src/ca.js, cần đọc DB nên
+   không thể là 1 hàm tĩnh ở đây). Admin (laAdmin) luôn duyệt được mọi phòng.
+   XEM tab 'xepca' mở cho MỌI vai trò — nhân viên part-time/thời vụ tự đăng
+   ký; ai không phải trưởng phòng/admin thì chỉ thấy phần đăng ký của mình. */
+const CO_QUAN_LY_CHINH_SACH_CA = new Set(['admin', 'admin_backup', 'hcns']);
+export function duocQuanLyChinhSachCa(vaiTro) {
+  return CO_QUAN_LY_CHINH_SACH_CA.has(vaiTro);
+}
+
 /* ---- Quyền module Đơn hoàn (Shopee) ------------------------------------
    - xem     : xem danh sách đơn hoàn + bấm đồng bộ. Vận hành sàn, kế toán
                trưởng và ban giám đốc đều có.
    - quan_ly : được KẾT NỐI Shopee (ủy quyền shop) — chỉ ban giám đốc, vì
                đây là hành động cấp công ty đụng tới tài khoản shop. */
 const QUYEN_SHOPEE = {
-  giam_doc:       { xem: true, quan_ly: true  },
-  pho_giam_doc:   { xem: true, quan_ly: true  },
+  admin:          { xem: true, quan_ly: true  },
   van_hanh_san:   { xem: true, quan_ly: false },
   ke_toan_truong: { xem: true, quan_ly: false },
   // Kho cần XEM đơn hoàn (để nhận hàng, bấm "Đã nhận", quẹt QR) — nhưng KHÔNG
@@ -124,7 +185,7 @@ export function duocQuanLyShopee(vaiTro) {
      (duocThaoTacVanHanh — MỚI, trước đây dùng chung duocXemDonHoan nên kế
      toán trưởng lỡ thao tác được cả bước của vận hành sàn).
    - Kế toán: chỉ "Đã tra soát tiền" (duocXemTab(vaiTro,'ketoan'), đã có sẵn). */
-const CO_THAO_TAC_VAN_HANH = new Set(['giam_doc', 'pho_giam_doc', 'van_hanh_san', 'nv_test']);
+const CO_THAO_TAC_VAN_HANH = new Set(['admin', 'van_hanh_san', 'nv_test']);
 export function duocThaoTacVanHanh(vaiTro) {
   return CO_THAO_TAC_VAN_HANH.has(vaiTro);
 }
@@ -145,10 +206,20 @@ export function duocXemLuong(vaiTro) {
   return quyenCua(vaiTro).xem_luong === true;
 }
 
-/* Admin = người được cấp/khoá/đặt lại tài khoản, thêm nhân sự có cả lương.
-   Chỉ Giám đốc và Phó Giám đốc. */
+/* Admin = người được cấp/khoá/đặt lại/xoá tài khoản, đổi vai trò, thêm
+   nhân sự có cả lương. Chỉ vai trò hệ thống "Admin". */
 export function laAdmin(vaiTro) {
   return quyenCua(vaiTro).admin === true;
+}
+
+/* Được TẠO/SỬA vai trò tài khoản (không phải toàn bộ quyền Admin) — Admin
+   luôn được, cộng thêm vai trò hệ thống "Admin backup" (Sếp chốt
+   23/08/2026: "Admin backup — quyền tạo tài khoản, phân quyền"). Người
+   dùng quyền này mà KHÔNG phải Admin thật thì CHỈ được tạo/gán vai trò
+   thường — không được tự tạo/tự gán tài khoản Admin hay Admin backup khác
+   (chặn ở qtTaoTaiKhoan/qtSuaVaiTro — tránh tự nâng quyền). */
+export function duocTaoTaiKhoan(vaiTro) {
+  return laAdmin(vaiTro) || vaiTro === 'admin_backup';
 }
 
 /* Được thêm nhân sự vào hồ sơ (admin + HCNS). KHÔNG kéo theo quyền xem lương
@@ -160,10 +231,21 @@ export function duocThemNhanSu(vaiTro) {
 /* Các vai trò hợp lệ để admin chọn khi tạo tài khoản mới */
 export const VAI_TRO_HOP_LE = Object.keys(QUYEN_THEO_VAI_TRO);
 
+/* Nhóm vai trò CHỈ để hiển thị đúng chỗ trên UI (Vai trò hệ thống tách
+   khỏi Vị trí công việc, không gộp 1 danh sách phẳng) — KHÔNG phải quyền
+   thật, quyền thật vẫn nằm ở QUYEN_THEO_VAI_TRO/QUYEN_KHO/... phía trên.
+   Sếp chốt 23/08/2026: "các vai trò kia cũng là vị trí nhân viên chứ
+   không phải vai trò hệ thống nữa". */
+const NHOM_VAI_TRO_HE_THONG = new Set(['admin', 'admin_backup', 'nguoi_dung']);
+export function nhomVaiTro(vaiTro) {
+  return NHOM_VAI_TRO_HE_THONG.has(vaiTro) ? 'he_thong' : 'vi_tri';
+}
+
 /* Tên hiển thị của vai trò */
 export const TEN_VAI_TRO = {
-  giam_doc:       'Giám đốc',
-  pho_giam_doc:   'Phó Giám đốc',
+  admin:          'Admin',
+  admin_backup:   'Admin backup',
+  nguoi_dung:     'Người dùng',
   ke_toan_truong: 'Kế toán trưởng',
   quan_ly_kho:    'Quản lý kho',
   nhan_vien_kho:  'Nhân viên kho',

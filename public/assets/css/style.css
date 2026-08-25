@@ -365,6 +365,53 @@ button { cursor: pointer; border: none; background: none; }
 
 .sb-nav { display: flex; flex-direction: column; gap: 2px; }
 
+/* ---- Xếp ca tuần (ma trận) ----------------------------------------------
+   Cột đầu (Mã NV/Họ tên) và header ngày phải sticky khi cuộn ngang/dọc —
+   trưởng phòng kéo bảng rộng vẫn biết đang xem nhân viên/ngày nào. */
+.xc-matrix { border-collapse: collapse; width: 100%; }
+.xc-matrix th, .xc-matrix td {
+  border: 1px solid var(--line);
+  padding: 6px 8px;
+  text-align: center;
+  white-space: nowrap;
+  font-size: 12.5px;
+}
+.xc-matrix thead th {
+  position: sticky; top: 0; z-index: 2;
+  background: var(--bg2, #f3f4f0);
+}
+.xc-matrix .xc-col-fixed {
+  position: sticky; left: 0; z-index: 1;
+  background: var(--white); text-align: left;
+}
+.xc-matrix thead .xc-col-fixed { z-index: 3; }
+.xc-matrix .xc-ten { font-weight: 600; }
+.xc-o {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 26px; height: 22px; padding: 0 6px; border-radius: 6px;
+  font-weight: 700; font-size: 11.5px; cursor: pointer; border: 1px solid transparent;
+}
+.xc-o.trong    { background: #f1f1ee; color: var(--text-mute); border-style: dashed; border-color: var(--line); }
+.xc-o.cho_duyet, .xc-o.cho_xep { background: #fff6d9; color: #8a6d00; }
+.xc-o.da_duyet { background: #e3f3e1; color: #256a25; }
+.xc-o.tu_choi  { background: #fbe3e1; color: #a1291f; }
+.xc-o.khoa     { background: #e7e7e7; color: var(--text-mute); cursor: default; }
+.xc-o + .xc-o  { margin-left: 3px; }
+.xc-ngay-tt { font-size: 11px; font-weight: 600; margin-top: 2px; }
+.xc-ngay-tt.du     { color: #256a25; }
+.xc-ngay-tt.thieu  { color: #a1291f; }
+.xc-ngay-tt.du_thua{ color: #8a6d00; }
+
+.sb-nhom {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,.42);
+  padding: 16px 11px 4px;
+}
+.sb-nhom:first-child { padding-top: 4px; }
+
 .sb-item {
   display: flex;
   align-items: center;
@@ -582,11 +629,29 @@ img.av { object-fit: cover; display: block; cursor: default; }
    theo tiến độ (xanh >=70% · vàng 40-69% · đỏ <40%). Tên dài cắt 1 dòng, rê
    chuột hiện đủ (không dùng chữ chạy vì khó đọc). --- */
 /* Xếp 2 cột trên màn rộng cho đỡ phí chiều ngang, tự về 1 cột khi hẹp/điện thoại */
-#mt-congty-list, #mt-phongban-list, #mt-canhan-list {
+.mt-the-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
   gap: 8px;
 }
+
+/* Nút gấp/mở khối "Đã xong" mỗi cấp — gọn, không phải nút hành động chính,
+   để mục tiêu đã hoàn thành/đã huỷ không chiếm chỗ mục đang làm nhưng vẫn
+   tra lại được ngay khi cần (không mất, không phải sang màn khác). */
+.mt-daxong-toggle {
+  display: flex; align-items: center; gap: 6px;
+  margin: 10px 0 8px; padding: 0; border: none; background: none;
+  font-size: 12.5px; font-weight: 600; color: var(--text-mute); cursor: pointer;
+}
+.mt-daxong-toggle:hover { color: var(--text); }
+.mt-daxong-toggle .ico { width: 12px; height: 12px; transition: transform .15s; }
+.mt-daxong-toggle.mo .ico { transform: rotate(180deg); }
+.mt-daxong-list[hidden] { display: none; }
+
+/* Hạn gần nhất trên thẻ mục tiêu — trễ hạn thì tô đỏ, giống cách dùng ở
+   bảng việc chi tiết (canh-bao-chu) để nhất quán 1 kiểu cảnh báo hạn. */
+.mt-the-han { font-size: 11px; margin-top: 2px; }
+.mt-the-han .canh-bao-chu { font-weight: 700; }
 
 /* Trạm Mục Tiêu (MBOs) — gộp khối mục tiêu + giao việc (Sếp Ngọc chốt
    21/08/2026: "bản chất 2 cái này nó như nhau"), tô CAM để phân biệt với
@@ -725,6 +790,15 @@ img.av { object-fit: cover; display: block; cursor: default; }
 .stat .d { font-size: 12px; margin-top: 5px; color: var(--text-mute); }
 .stat .d.up { color: var(--ok); font-weight: 500; }
 .stat .d.down { color: var(--danger); font-weight: 500; }
+
+/* Drill Down to Action (docs/UX_ENGINEERING_STANDARD.md) — card/dòng bấm
+   được thì phải RÕ là bấm được, không chỉ đổi hành vi âm thầm. */
+.stat.clickable, .list-item.clickable {
+  cursor: pointer;
+  transition: box-shadow .15s, border-color .15s;
+}
+.stat.clickable:hover, .stat.clickable:focus-visible { box-shadow: var(--shadow-md); border-color: var(--sage-dark); }
+.list-item.clickable:hover, .list-item.clickable:focus-visible { background: var(--sage-wash); }
 
 /* ==========================================================================
    KHỐI NỘI DUNG
@@ -917,6 +991,39 @@ tr.canh-bao:hover > td { background: #fbdbd6; }
 .cv-ph-item:has(input:checked) { border-color: var(--sage); background: var(--sage-wash); font-weight: 600; }
 .cv-ph-item.an { display: none; }
 .cv-ph-trong { width: 100%; text-align: center; color: var(--text-mute); font-size: 13px; padding: 6px; }
+
+/* Combobox tìm-kiếm-được cho chọn 1 nhân sự (Quản lý trực tiếp, Trưởng
+   phòng, Cấp phát tài sản...) — MỘT control duy nhất: hiển thị giá trị đã
+   chọn, bấm vào mới mở khung tìm+chọn (không tách ô tìm với dropdown thành
+   2 control riêng). */
+.combo1 { position: relative; }
+.combo1-hienthi {
+  width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 9px 12px; border: 1px solid var(--line); border-radius: var(--r-sm);
+  background: var(--white); font-family: inherit; font-size: 14px; color: var(--text);
+  cursor: pointer; text-align: left;
+}
+.combo1-hienthi:focus { outline: none; border-color: var(--sage); box-shadow: 0 0 0 3px rgba(154,171,134,.22); }
+.combo1-hienthi.rong { color: var(--text-mute); }
+.combo1-hienthi .ico { flex: none; opacity: .55; transition: transform .12s; }
+.combo1.mo .combo1-hienthi .ico { transform: rotate(180deg); }
+.combo1-panel {
+  position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 120;
+  background: var(--white); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: 0 12px 34px rgba(0,0,0,.16); padding: 8px;
+}
+.combo1-panel[hidden] { display: none; }
+.combo1-panel input[type="search"] { margin-bottom: 6px; }
+.combo1-panel .ql-goiy { max-height: 220px; overflow-y: auto; border: none; margin: 0; }
+.ql-goiy-item { padding: 8px 10px; font-size: 13.5px; cursor: pointer; border-radius: 8px; }
+.ql-goiy-item:hover { background: var(--surface); }
+.ql-goiy-item.active { background: var(--sage-wash); font-weight: 600; }
+.ql-goiy-nhom { padding: 8px 10px 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .3px; color: var(--text-mute); }
+.ql-goiy-trong { padding: 8px 10px; font-size: 13px; color: var(--text-mute); }
+/* Quick Create (docs/audit/AUDIT-QUICK-CREATE-POLICY.md) — tách màu khỏi
+   lựa chọn thường để rõ đây là HÀNH ĐỘNG tạo mới, không phải 1 record có sẵn. */
+.ql-goiy-taomoi { color: var(--sage-dark); font-weight: 600; border-top: 1px solid var(--line); margin-top: 2px; }
+.ql-goiy-taomoi.ql-goiy-dangtao { opacity: .6; pointer-events: none; }
 
 /* Chuông thông báo trên topbar */
 .tb-chuong { position: relative; margin-left: auto; }
@@ -1362,6 +1469,44 @@ tr.kd-chiadoi td {
 .list-item .meta { font-size: 11.5px; color: var(--text-mute); white-space: nowrap; }
 
 /* ==========================================================================
+   CARD MOBILE — thay bảng cuộn ngang trên màn hẹp (pilot: Tồn kho, 21/08/2026)
+   ---------------------------------------------------------------------------
+   Cùng 1 dữ liệu, render ra CẢ HAI (bảng + card) — CSS quyết định cái nào
+   hiện theo bề rộng màn hình, giống mốc 780px đã dùng ở nơi khác trong file
+   này. Không cần JS theo dõi resize: xoay ngang/dọc điện thoại tự chuyển.
+   ========================================================================== */
+.kv-card-list { display: none; }
+
+.kv-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 14px 16px;
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+}
+.kv-card:active { background: var(--surface); }
+
+.kv-card-dau { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.kv-card-ten { font-size: 14.5px; font-weight: 600; color: var(--ink); line-height: 1.35; }
+.kv-card-sku { font-size: 12px; color: var(--text-mute); margin-top: 1px; }
+
+.kv-card-hang { display: flex; align-items: baseline; gap: 6px; margin-top: 2px; }
+.kv-card-ton    { font-size: 19px; font-weight: 700; color: var(--ink); }
+.kv-card-donvi  { font-size: 12.5px; color: var(--text-mute); }
+
+.kv-card-phu { font-size: 12px; color: var(--text-mute); }
+.kv-card-phu + .kv-card-phu { margin-top: -2px; }
+
+@media (max-width: 780px) {
+  .kv-ton-table { display: none; }
+  .kv-card-list { display: flex; flex-direction: column; gap: 10px; }
+}
+
+/* ==========================================================================
    THÔNG BÁO DỮ LIỆU MẪU
    ========================================================================== */
 
@@ -1729,3 +1874,49 @@ tr.kd-chiadoi td {
 }
 .pw-eye:hover { color: var(--ink-soft); background: var(--sage-wash); }
 .pw-eye svg { width: 20px; height: 20px; }
+
+/* ==========================================================================
+   TÀI SẢN — Chi tiết (QR + info) + Tem in (@media print)
+   ========================================================================== */
+.ts-ct-dau { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+.ts-ct-dau h4 { margin: 0 0 4px; }
+.ts-ct-qr { flex: none; width: 96px; }
+.ts-ct-qr svg { width: 100%; height: auto; display: block; }
+.ts-ct-info { display: flex; flex-direction: column; gap: 2px; }
+.ts-ct-dong { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 13.5px; }
+.ts-ct-dong span { color: var(--text-mute); }
+.ts-ct-dong:last-child { border-bottom: none; }
+
+/* Tem in — ẩn hoàn toàn khi xem thường, chỉ hiện lúc in (window.print()).
+   Khổ VẬT LÝ CHÍNH XÁC 60×40mm ngang (Sếp chốt 23/08/2026) — @page dùng mm
+   thật, không phải px quy đổi, để máy in tem cắt đúng khổ không lệch.
+   Template đặt tên ASSET_LABEL_60X40 — sau này thêm khổ khác (30x50,
+   50x80...) thì thêm class ts-tem--{ma} riêng, không sửa Asset Core.
+   Mỗi tem = 1 trang in riêng (page-break) để in hàng loạt không dính nhau. */
+.ts-in-tem-vung { display: none; }
+.ts-tem {
+  width: 60mm; height: 40mm; box-sizing: border-box;
+  padding: 2.5mm; display: flex; align-items: center; gap: 2.5mm;
+  font-family: var(--sans); color: #000; overflow: hidden;
+  page-break-after: always; break-after: page;
+}
+.ts-tem:last-child { page-break-after: auto; break-after: auto; }
+.ts-tem-trai { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 1mm; }
+.ts-tem-cty { font-size: 6.5px; font-weight: 700; letter-spacing: .04em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ts-tem-ten {
+  font-size: 8px; font-weight: 600; line-height: 1.25; color: #000;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.ts-tem-ma { font-size: 12.5px; font-weight: 800; letter-spacing: .03em; }
+.ts-tem-phu { font-size: 5.5px; color: #333; letter-spacing: .03em; margin-top: auto; }
+.ts-tem-qr { flex: none; width: 32mm; height: 32mm; }
+.ts-tem-qr svg { width: 100%; height: 100%; display: block; }
+
+@page { size: 60mm 40mm; margin: 0; }
+@media print {
+  body * { visibility: hidden; }
+  .ts-in-tem-vung, .ts-in-tem-vung * { visibility: visible; }
+  .ts-in-tem-vung {
+    display: block; position: fixed; top: 0; left: 0; margin: 0;
+  }
+}

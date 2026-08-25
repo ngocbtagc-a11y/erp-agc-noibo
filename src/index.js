@@ -13,7 +13,7 @@ import {
 } from './auth.js';
 
 import {
-  quyenCua, duocXemTab, duocXemLuong, laAdmin, duocThemNhanSu,
+  quyenCua, duocXemTab, duocXemLuong, laAdmin, duocThemNhanSu, duocQuanLyChinhSachCa, duocTaoTaiKhoan, nhomVaiTro,
   quyenKho, quyenShopee, duocThaoTacKho, duocQuanLyKho, duocXemDonHoan, duocThaoTacVanHanh, TEN_VAI_TRO, VAI_TRO_HOP_LE
 } from './quyen.js';
 import { kiemTraMatKhauDat, DAI_TOI_THIEU } from './mat-khau.js';
@@ -21,6 +21,10 @@ import * as kho from './kho.js';
 import * as shopee from './shopee.js';
 import * as tiktok from './tiktok.js';
 import * as nhansu from './nhansu.js';
+import * as dulieunen from './dulieunen.js';
+import * as taisan from './taisan.js';
+import * as ca from './ca.js';
+import { sinhMa } from './dinh-danh.js';
 
 /* ---- Trả lời dạng JSON -------------------------------------------------- */
 
@@ -99,8 +103,15 @@ async function toiLaAi(req, env) {
   if (l) return l;
 
   const q = quyenCua(phien.vai_tro);
-  const ns = await env.DB.prepare('SELECT (anh_chan_dung IS NOT NULL) AS co_anh FROM nhan_su WHERE id = ?')
+  const ns = await env.DB.prepare('SELECT (anh_chan_dung IS NOT NULL) AS co_anh, phong_ban_id, loai_lao_dong FROM nhan_su WHERE id = ?')
                          .bind(phien.nhan_su_id).first();
+  // Phòng ban mà mình là trưởng phòng (Xếp ca tuần + các quyền theo phòng
+  // ban khác dùng chung field này) — KHÔNG suy từ vai trò, đọc thẳng DB vì
+  // đây là quan hệ theo TỪNG phòng ban cụ thể (xem src/ca.js laTruongPhong).
+  const { results: phongBanQuanLy } = await env.DB.prepare(
+    'SELECT id, ten FROM phong_ban WHERE truong_phong_id = ? AND hoat_dong = 1'
+  ).bind(phien.nhan_su_id).all();
+
   return json({
     id: phien.nhan_su_id,
     ten: phien.ho_ten,
@@ -109,10 +120,15 @@ async function toiLaAi(req, env) {
     vai_tro: phien.vai_tro,
     phai_doi_mk: !!phien.phai_doi_mk,
     co_anh: !!ns?.co_anh,
+    phong_ban_id: ns ? ns.phong_ban_id : null,
+    loai_lao_dong: ns ? ns.loai_lao_dong : null,
+    phong_ban_quan_ly: phongBanQuanLy,
     quyen: q.tab,
     xem_luong: q.xem_luong,
     la_admin: laAdmin(phien.vai_tro),
     them_nhan_su: duocThemNhanSu(phien.vai_tro),
+    quan_ly_chinh_sach_ca: duocQuanLyChinhSachCa(phien.vai_tro),
+    duoc_tao_tai_khoan: duocTaoTaiKhoan(phien.vai_tro),
     kho: quyenKho(phien.vai_tro),           // { thao_tac, quan_ly, gia_von } cho tab Kho
     shopee: quyenShopee(phien.vai_tro),     // { xem, quan_ly } cho tab Đơn hoàn
     thao_tac_van_hanh: duocThaoTacVanHanh(phien.vai_tro),   // được bấm nút ở bước Vận hành sàn (Cần đối soát) hay chỉ xem
@@ -170,7 +186,7 @@ async function layDanhBa(req, env) {
   // đây là tài khoản bấm thử, không phải nhân sự thật, không để lẫn vào
   // danh sách chọn người (Chat, Người nhận/Người phối hợp ở Trạm Việc...).
   const { results } = await env.DB.prepare(`
-    SELECT n.id, n.ho_ten, n.viet_tat, n.chuc_vu, n.bo_phan, n.sdt, n.email,
+    SELECT n.id, n.ma_nv, n.ho_ten, n.viet_tat, n.chuc_vu, n.bo_phan, n.sdt, n.email,
            (n.anh_chan_dung IS NOT NULL) AS co_anh,
            q.ho_ten AS quan_ly
       FROM nhan_su n
@@ -197,10 +213,10 @@ async function layNhanSu(req, env) {
   // hai câu lệnh khác nhau tuỳ vai trò. Người không có quyền thì cột lương
   // không được chọn ra khỏi database — không phải "lấy ra rồi ẩn đi".
   const cauLenh = xemLuong
-    ? `SELECT id, ho_ten, viet_tat, chuc_vu, bo_phan, trang_thai,
+    ? `SELECT id, ma_nv, ho_ten, viet_tat, chuc_vu, bo_phan, trang_thai,
               ngay_vao, luong, (anh_chan_dung IS NOT NULL) AS co_anh
          FROM nhan_su WHERE dang_lam = 1 ORDER BY bo_phan, ho_ten`
-    : `SELECT id, ho_ten, viet_tat, chuc_vu, bo_phan, trang_thai,
+    : `SELECT id, ma_nv, ho_ten, viet_tat, chuc_vu, bo_phan, trang_thai,
               ngay_vao, (anh_chan_dung IS NOT NULL) AS co_anh
          FROM nhan_su WHERE dang_lam = 1 ORDER BY bo_phan, ho_ten`;
 
@@ -370,7 +386,7 @@ async function chatTepDinhKem(req, env) {
 }
 
 /* ==========================================================================
-   QUẢN TRỊ — chỉ admin (Giám đốc, Phó Giám đốc)
+   QUẢN TRỊ — chỉ admin (Admin)
    ---------------------------------------------------------------------------
    Mọi đầu việc dưới đây đều kiểm tra laAdmin() ở máy chủ. Người không phải
    admin gọi thẳng vào cũng nhận 403 — không phải chỉ ẩn nút trên giao diện.
@@ -379,7 +395,17 @@ async function chatTepDinhKem(req, env) {
 async function batBuocAdmin(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return { loi: l };
-  if (!laAdmin(phien.vai_tro)) return { loi: loi('Chỉ Giám đốc và Phó Giám đốc mới được cấp/khoá tài khoản', 403) };
+  if (!laAdmin(phien.vai_tro)) return { loi: loi('Chỉ Admin mới được cấp/khoá tài khoản', 403) };
+  return { phien };
+}
+
+/* Được TẠO tài khoản — Admin hoặc người "backup" (hiện là HCNS). Rộng hơn
+   batBuocAdmin ở trên nhưng CHỈ dùng cho việc tạo mới; các việc admin khác
+   (đặt lại MK/khoá/xoá/đổi vai trò) vẫn phải batBuocAdmin như cũ. */
+async function batBuocTaoTaiKhoan(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return { loi: l };
+  if (!duocTaoTaiKhoan(phien.vai_tro)) return { loi: loi('Bạn không có quyền tạo tài khoản', 403) };
   return { phien };
 }
 
@@ -406,7 +432,8 @@ async function qtDanhSach(req, env) {
   if (l) return l;
 
   const { results } = await env.DB.prepare(`
-    SELECT n.id, n.ho_ten, n.viet_tat, n.chuc_vu, n.bo_phan, n.sdt, n.email,
+    SELECT n.id, n.ma_nv, n.ho_ten, n.viet_tat, n.chuc_vu, n.bo_phan, n.phong_ban_id, n.chuc_danh_id,
+           n.sdt, n.email, n.quan_ly_id, n.trang_thai_dl, n.loai_lao_dong,
            n.phap_nhan, n.trang_thai, n.dang_lam, (n.anh_chan_dung IS NOT NULL) AS co_anh,
            t.id AS tai_khoan_id, t.ten_dang_nhap, t.vai_tro, t.kich_hoat, t.phai_doi_mk
       FROM nhan_su n
@@ -416,8 +443,25 @@ async function qtDanhSach(req, env) {
 
   return json({
     nhan_su: results,
-    vai_tro: VAI_TRO_HOP_LE.map(v => ({ ma: v, ten: TEN_VAI_TRO[v] }))
+    vai_tro: VAI_TRO_HOP_LE.map(v => ({ ma: v, ten: TEN_VAI_TRO[v], nhom: nhomVaiTro(v) }))
   });
+}
+
+/* Phòng ban/Chức danh: nếu body gửi *_id (chọn từ danh mục chuẩn Dữ liệu
+   nền) thì lấy TÊN thật ghi vào cột chữ cũ (bo_phan/chuc_vu) để màn hình cũ
+   đọc cột chữ vẫn hiển thị đúng. Id không hợp lệ/đã ẩn thì âm thầm bỏ qua. */
+async function phongBanTuId(env, id) {
+  if (!id) return null;
+  return env.DB.prepare('SELECT id, ten FROM phong_ban WHERE id = ? AND hoat_dong = 1').bind(id).first();
+}
+async function chucDanhTuId(env, id) {
+  if (!id) return null;
+  return env.DB.prepare('SELECT id, ten FROM chuc_danh WHERE id = ? AND hoat_dong = 1').bind(id).first();
+}
+
+const LOAI_LAO_DONG_HOP_LE = ['toan_thoi_gian', 'ban_thoi_gian', 'thoi_vu'];
+function loaiLaoDongTuBody(b) {
+  return LOAI_LAO_DONG_HOP_LE.includes(b.loai_lao_dong) ? b.loai_lao_dong : 'toan_thoi_gian';
 }
 
 /* Thêm một nhân sự mới (chưa có tài khoản). Admin và HCNS đều thêm được. */
@@ -432,6 +476,11 @@ async function qtThemNhanSu(req, env) {
   if (hoTen.length < 2) return loi('Vui lòng nhập họ tên');
 
   const id = 'ns_' + crypto.randomUUID().slice(0, 12);
+  // Mã nhân sự (Business Code) — sinh 1 lần, không đổi, không tái sử dụng
+  // (xem docs/ENTITY_IDENTITY.md). Tên có thể trùng/đổi, mã thì không. Tiền
+  // tố theo Loại lao động LÚC TẠO (01=Toàn TG/02=Part-time/03=Thời vụ) —
+  // đổi Loại lao động sau đó KHÔNG đổi lại mã đã cấp.
+  const maNv = await sinhMa(env, 'nhan_su_' + loaiLaoDongTuBody(b));
 
   // RANH GIỚI LƯƠNG: chỉ admin mới được đặt lương. HCNS gửi lương lên cũng
   // bị bỏ qua ở đây — máy chủ ép NULL, không tin giao diện.
@@ -439,29 +488,164 @@ async function qtThemNhanSu(req, env) {
     ? ((b.luong === '' || b.luong == null) ? null : parseInt(String(b.luong).replace(/\D/g, ''), 10) || null)
     : null;
 
+  const pb = await phongBanTuId(env, b.phong_ban_id ? parseInt(b.phong_ban_id, 10) : null);
+  const cd = await chucDanhTuId(env, b.chuc_danh_id ? parseInt(b.chuc_danh_id, 10) : null);
+
   // phap_nhan luôn là 'Công ty' — công ty đang đóng HKD, không còn phân biệt.
   await env.DB.prepare(`
-    INSERT INTO nhan_su (id, ho_ten, viet_tat, chuc_vu, bo_phan, sdt, email,
-                         quan_ly_id, phap_nhan, trang_thai, ngay_vao, luong)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Công ty', ?, ?, ?)
+    INSERT INTO nhan_su (id, ma_nv, ho_ten, viet_tat, chuc_vu, bo_phan, phong_ban_id, chuc_danh_id,
+                         sdt, email, quan_ly_id, phap_nhan, trang_thai, ngay_vao, luong, loai_lao_dong)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Công ty', ?, ?, ?, ?)
   `).bind(
-    id, hoTen, vietTatTen(hoTen),
-    String(b.chuc_vu || '').trim(),
-    String(b.bo_phan || '').trim(),
+    id, maNv, hoTen, vietTatTen(hoTen),
+    cd ? cd.ten : String(b.chuc_vu || '').trim(),
+    pb ? pb.ten : String(b.bo_phan || '').trim(),
+    pb ? pb.id : null,
+    cd ? cd.id : null,
     String(b.sdt || '').trim() || null,
     String(b.email || '').trim() || null,
     String(b.quan_ly_id || '').trim() || null,
     String(b.trang_thai || 'da_ky').trim(),
     String(b.ngay_vao || '').trim() || null,
-    luong
+    luong,
+    loaiLaoDongTuBody(b)
   ).run();
 
-  return json({ ok: true, id });
+  return json({ ok: true, id, ma_nv: maNv });
 }
 
-/* Tạo tài khoản đăng nhập cho một nhân sự → trả mật khẩu tạm MỘT LẦN */
+/* Sửa hồ sơ nhân sự đã có (Admin/HCNS) — trước đây CHƯA có, chỉ thêm mới
+   được. Cùng ranh giới lương như Thêm: HCNS gửi lương lên cũng bị bỏ qua. */
+async function qtSuaNhanSu(req, env) {
+  const { phien, loi: l } = await batBuocThemNhanSu(req, env);
+  if (l) return l;
+
+  let b;
+  try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+
+  const id = String(b.id || '').trim();
+  if (!id) return loi('Thiếu id nhân sự');
+
+  const hienCo = await env.DB.prepare('SELECT id, ho_ten, chuc_vu, bo_phan, trang_thai_dl, ma_nv FROM nhan_su WHERE id = ?').bind(id).first();
+  if (!hienCo) return loi('Không tìm thấy nhân sự', 404);
+
+  // Đã khoá thì chỉ Admin sửa được (Data Lock — xem migration them-khoa-danhmuc-nen.sql)
+  if (hienCo.trang_thai_dl === 'da_khoa' && !laAdmin(phien.vai_tro)) {
+    return loi('Hồ sơ này đã khoá — cần Admin sửa hoặc mở khoá lại', 403);
+  }
+
+  const hoTen = String(b.ho_ten || '').trim();
+  if (hoTen.length < 2) return loi('Vui lòng nhập họ tên');
+
+  const pb = await phongBanTuId(env, b.phong_ban_id ? parseInt(b.phong_ban_id, 10) : null);
+  const cd = await chucDanhTuId(env, b.chuc_danh_id ? parseInt(b.chuc_danh_id, 10) : null);
+  const chucVuMoi = cd ? cd.ten : String(b.chuc_vu || '').trim();
+  const boPhanMoi = pb ? pb.ten : String(b.bo_phan || '').trim();
+
+  const coCapNhatLuong = laAdmin(phien.vai_tro) && b.luong !== undefined;
+  const luong = coCapNhatLuong
+    ? ((b.luong === '' || b.luong == null) ? null : parseInt(String(b.luong).replace(/\D/g, ''), 10) || null)
+    : null;
+
+  // Mã nhân sự BÌNH THƯỜNG là bất biến (xem docs/ENTITY_IDENTITY.md) — chỉ
+  // Admin mới sửa lại được, dùng cho trường hợp cấp nhầm (VD chọn nhầm Loại
+  // lao động lúc tạo nên sai tiền tố). Luôn ghi lịch sử vì đây là hành động
+  // hiếm, nhạy cảm — không chờ hồ sơ đã khoá mới ghi như các trường khác.
+  const coCapNhatMaNv = laAdmin(phien.vai_tro) && b.ma_nv !== undefined && String(b.ma_nv).trim() && String(b.ma_nv).trim() !== hienCo.ma_nv;
+  const maNvMoi = coCapNhatMaNv ? String(b.ma_nv).trim() : null;
+
+  try {
+    await env.DB.prepare(`
+      UPDATE nhan_su SET ho_ten = ?, viet_tat = ?, chuc_vu = ?, bo_phan = ?,
+             phong_ban_id = ?, chuc_danh_id = ?, sdt = ?, email = ?, quan_ly_id = ?,
+             trang_thai = ?, ngay_vao = ?, loai_lao_dong = ?${coCapNhatLuong ? ', luong = ?' : ''}${coCapNhatMaNv ? ', ma_nv = ?' : ''}
+       WHERE id = ?
+    `).bind(
+      ...[
+        hoTen, vietTatTen(hoTen),
+        chucVuMoi, boPhanMoi,
+        pb ? pb.id : null,
+        cd ? cd.id : null,
+        String(b.sdt || '').trim() || null,
+        String(b.email || '').trim() || null,
+        String(b.quan_ly_id || '').trim() || null,
+        String(b.trang_thai || 'da_ky').trim(),
+        String(b.ngay_vao || '').trim() || null,
+        loaiLaoDongTuBody(b),
+        ...(coCapNhatLuong ? [luong] : []),
+        ...(coCapNhatMaNv ? [maNvMoi] : []),
+        id
+      ]
+    ).run();
+  } catch (e) {
+    if (String(e.message || '').includes('UNIQUE')) return loi(`Mã nhân sự "${maNvMoi}" đã có người dùng`, 409);
+    throw e;
+  }
+
+  if (hienCo.trang_thai_dl === 'da_khoa') {
+    await dulieunen.ghiLichSuThayDoi(env, phien, 'nhan_su', id, {
+      ho_ten: [hienCo.ho_ten, hoTen],
+      chuc_vu: [hienCo.chuc_vu, chucVuMoi],
+      bo_phan: [hienCo.bo_phan, boPhanMoi]
+    });
+  }
+  if (coCapNhatMaNv) {
+    await dulieunen.ghiLichSuThayDoi(env, phien, 'nhan_su', id, { ma_nv: [hienCo.ma_nv, maNvMoi] });
+  }
+
+  return json({ ok: true });
+}
+
+/* Xoá HẲN hồ sơ nhân sự — chỉ Admin, chỉ khi chưa có dữ liệu nghiệp vụ nào
+   gắn vào (đơn hàng, tài sản, chấm công, MBO...). Dùng để dọn hồ sơ tạo
+   nhầm/test, KHÔNG dùng để xử lý nhân sự nghỉ việc thật (dùng "Hoàn tất"
+   để khoá + giữ lịch sử — đúng nguyên tắc không xoá Entity đã có dữ liệu). */
+async function qtXoaNhanSu(req, env) {
+  const { phien, loi: l } = await batBuocAdmin(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+
+  const id = String(b.id || '').trim();
+  if (!id) return loi('Thiếu id nhân sự');
+  if (id === phien.nhan_su_id) return loi('Không thể tự xoá hồ sơ của chính mình');
+
+  const ns = await env.DB.prepare('SELECT id FROM nhan_su WHERE id = ?').bind(id).first();
+  if (!ns) return loi('Không tìm thấy nhân sự', 404);
+
+  try {
+    await env.DB.prepare('DELETE FROM tai_khoan WHERE nhan_su_id = ?').bind(id).run();
+    await env.DB.prepare('DELETE FROM nhan_su WHERE id = ?').bind(id).run();
+  } catch (e) {
+    if (String(e.message || '').includes('FOREIGN KEY')) {
+      return loi('Không xoá được — nhân sự này đã có dữ liệu gắn vào (đơn hàng, tài sản, chấm công, mục tiêu...). Dùng nút "Hoàn tất" để khoá thay vì xoá.', 409);
+    }
+    throw e;
+  }
+  return json({ ok: true });
+}
+
+/* Khoá (HCNS/Admin bấm "Xác nhận & khoá") / Mở khoá (chỉ Admin). */
+async function qtKhoaNhanSu(req, env) {
+  const { phien, loi: l } = await batBuocThemNhanSu(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+
+  const id = String(b.id || '').trim();
+  if (!id) return loi('Thiếu id nhân sự');
+  const muon = b.trang_thai_dl === 'da_khoa' ? 'da_khoa' : 'nhap';
+  if (muon === 'nhap' && !laAdmin(phien.vai_tro)) {
+    return loi('Chỉ Admin mới mở khoá lại được', 403);
+  }
+
+  await env.DB.prepare('UPDATE nhan_su SET trang_thai_dl = ? WHERE id = ?').bind(muon, id).run();
+  return json({ ok: true });
+}
+
+/* Tạo tài khoản đăng nhập cho một nhân sự → trả mật khẩu tạm MỘT LẦN.
+   Admin hoặc người "backup" (HCNS) — nhưng backup KHÔNG được tự tạo tài
+   khoản Admin (chặn tự nâng quyền), chỉ tạo được vai trò nghiệp vụ thường. */
 async function qtTaoTaiKhoan(req, env) {
-  const { loi: l } = await batBuocAdmin(req, env);
+  const { phien, loi: l } = await batBuocTaoTaiKhoan(req, env);
   if (l) return l;
 
   let b;
@@ -477,6 +661,9 @@ async function qtTaoTaiKhoan(req, env) {
     return loi('Tên đăng nhập (số điện thoại) 3–20 ký tự, chỉ gồm số, chữ thường không dấu, dấu . _ -');
   }
   if (!VAI_TRO_HOP_LE.includes(vaiTro)) return loi('Vai trò không hợp lệ');
+  if (!laAdmin(phien.vai_tro) && (vaiTro === 'admin' || vaiTro === 'admin_backup')) {
+    return loi('Bạn không có quyền tạo tài khoản Admin/Admin backup — cần Admin thật', 403);
+  }
 
   const ns = await env.DB.prepare('SELECT id FROM nhan_su WHERE id = ?').bind(nhanSuId).first();
   if (!ns) return loi('Không tìm thấy nhân sự này', 404);
@@ -546,6 +733,77 @@ async function qtKhoaTaiKhoan(req, env) {
   return json({ ok: true });
 }
 
+/* Đổi vai trò (phân quyền lại) một tài khoản đã có — trước đây chỉ chọn
+   được LÚC tạo tài khoản, không sửa lại được sau. Chặn hạ vai trò Admin
+   cuối cùng còn hoạt động xuống vai trò thường (giữ nguyên logic chặn ở
+   qtXoaTaiKhoan — tránh hệ thống mất hết người quản trị). */
+async function qtSuaVaiTro(req, env) {
+  const { phien, loi: l } = await batBuocTaoTaiKhoan(req, env);
+  if (l) return l;
+
+  let b;
+  try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+
+  const tkId = parseInt(b.tai_khoan_id, 10);
+  const vaiTroMoi = String(b.vai_tro || '').trim();
+  if (!tkId) return loi('Thiếu tài khoản');
+  if (!VAI_TRO_HOP_LE.includes(vaiTroMoi)) return loi('Vai trò không hợp lệ');
+
+  // Admin backup KHÔNG được tự gán vai trò Admin/Admin backup cho ai (kể cả
+  // chính mình) — tránh tự nâng quyền. Chỉ Admin thật mới gán được vai trò
+  // hệ thống cấp cao.
+  if (!laAdmin(phien.vai_tro) && (vaiTroMoi === 'admin' || vaiTroMoi === 'admin_backup')) {
+    return loi('Bạn không có quyền gán vai trò Admin/Admin backup — cần Admin thật', 403);
+  }
+
+  const tk = await env.DB.prepare('SELECT id, vai_tro FROM tai_khoan WHERE id = ?').bind(tkId).first();
+  if (!tk) return loi('Không tìm thấy tài khoản', 404);
+
+  if (laAdmin(tk.vai_tro) && !laAdmin(vaiTroMoi)) {
+    const { results } = await env.DB.prepare('SELECT vai_tro FROM tai_khoan WHERE kich_hoat = 1 AND id != ?').bind(tkId).all();
+    if (!results.some(x => laAdmin(x.vai_tro))) {
+      return loi('Không thể đổi — đây là tài khoản Admin cuối cùng còn hoạt động', 409);
+    }
+  }
+
+  await env.DB.prepare('UPDATE tai_khoan SET vai_tro = ? WHERE id = ?').bind(vaiTroMoi, tkId).run();
+  return json({ ok: true });
+}
+
+/* Xoá HẲN tài khoản đăng nhập (khác "Khoá" — Khoá chỉ chặn đăng nhập, giữ
+   nguyên lịch sử; Xoá dùng khi tạo nhầm và cần cấp lại tài khoản đúng cho
+   đúng nhân sự đó — "Nhân sự này đã có tài khoản rồi" sẽ chặn tạo lại nếu
+   không xoá cái cũ trước). KHÔNG đụng tới hồ sơ nhân_su — chỉ xoá phần
+   đăng nhập. Chặn tự xoá chính mình và chặn xoá Admin cuối cùng còn hoạt
+   động, tránh hệ thống mất hết người quản trị được. */
+async function qtXoaTaiKhoan(req, env) {
+  const { phien, loi: l } = await batBuocAdmin(req, env);
+  if (l) return l;
+
+  let b;
+  try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+
+  const tkId = parseInt(b.tai_khoan_id, 10);
+  if (!tkId) return loi('Thiếu tài khoản');
+
+  if (tkId === phien.tai_khoan_id) {
+    return loi('Không thể tự xoá tài khoản đang đăng nhập');
+  }
+
+  const tk = await env.DB.prepare('SELECT id, vai_tro FROM tai_khoan WHERE id = ?').bind(tkId).first();
+  if (!tk) return loi('Không tìm thấy tài khoản', 404);
+
+  if (laAdmin(tk.vai_tro)) {
+    const { results } = await env.DB.prepare('SELECT vai_tro FROM tai_khoan WHERE kich_hoat = 1 AND id != ?').bind(tkId).all();
+    if (!results.some(x => laAdmin(x.vai_tro))) {
+      return loi('Không thể xoá — đây là tài khoản Admin cuối cùng còn hoạt động', 409);
+    }
+  }
+
+  await env.DB.prepare('DELETE FROM tai_khoan WHERE id = ?').bind(tkId).run();
+  return json({ ok: true });
+}
+
 /* ==========================================================================
    KHO — Xuất / Nhập / Tồn
    ---------------------------------------------------------------------------
@@ -562,14 +820,29 @@ async function batBuocXemKho(req, env) {
   return { phien };
 }
 
+/* Sản phẩm/SKU giờ có 2 chủ: Kho vận (sửa ngày thường) VÀ Kinh doanh (chủ
+   sở hữu, khoá/duyệt) — nên danh sách + thêm/sửa/ẩn-hiện/khoá phải mở cho
+   CẢ 2 tab, khác với batBuocXemKho (chỉ Kho vận) vốn còn dùng cho Nhập/
+   Xuất/Báo cáo/Lịch sử — những việc CHỈ Kho vận mới cần. Quyền chi tiết
+   (ai thực sự sửa/khoá được) vẫn kiểm ở kho.js qua duocSuaSanPham/
+   duocKhoaSanPham — đây chỉ là cửa vào theo TAB. */
+async function batBuocXemSanPham(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return { loi: l };
+  if (!duocXemTab(phien.vai_tro, 'khovan') && !duocXemTab(phien.vai_tro, 'kinhdoanh')) {
+    return { loi: loi('Bạn không có quyền xem Sản phẩm/SKU', 403) };
+  }
+  return { phien };
+}
+
 async function khoDanhSachSP(req, env) {
-  const { phien, loi: l } = await batBuocXemKho(req, env);
+  const { phien, loi: l } = await batBuocXemSanPham(req, env);
   if (l) return l;
   return kho.danhSachSanPham(env, phien);
 }
 
 async function khoThemSP(req, env) {
-  const { phien, loi: l } = await batBuocXemKho(req, env);
+  const { phien, loi: l } = await batBuocXemSanPham(req, env);
   if (l) return l;
   let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
   return kho.themSanPham(env, phien, b);
@@ -608,6 +881,424 @@ async function khoLichSu(req, env) {
   if (l) return l;
   const u = new URL(req.url);
   return kho.lichSu(env, phien, u.searchParams.get('san_pham_id'), u.searchParams.get('gioi_han'));
+}
+
+async function khoSuaSP(req, env) {
+  const { phien, loi: l } = await batBuocXemSanPham(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return kho.suaSanPham(env, phien, b);
+}
+
+async function khoAnHienSP(req, env) {
+  const { phien, loi: l } = await batBuocXemSanPham(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return kho.anHienSanPham(env, phien, b);
+}
+
+async function khoKhoaSP(req, env) {
+  const { phien, loi: l } = await batBuocXemSanPham(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return kho.khoaSanPham(env, phien, b);
+}
+
+/* ==========================================================================
+   DỮ LIỆU NỀN — Phòng ban / Chức danh / Đơn vị tính + tình trạng sẵn sàng.
+   Nghiệp vụ nằm trong src/dulieunen.js. Ai có tab 'dulieunen' đều XEM được
+   (danh sách + tình trạng); THÊM/SỬA thì dulieunen.js tự kiểm quyền chi
+   tiết theo đúng chủ sở hữu từng nhóm (HCNS cho Tổ chức, Quản lý kho cho
+   Đơn vị tính) — giống cách kho.js chặn kép.
+   ========================================================================== */
+
+async function batBuocXemDuLieuNen(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return { loi: l };
+  if (!duocXemTab(phien.vai_tro, 'dulieunen')) return { loi: loi('Bạn không có quyền xem Dữ liệu nền', 403) };
+  return { phien };
+}
+
+async function dlnDanhSachPhongBan(req, env) {
+  const { loi: l } = await batBuocXemDuLieuNen(req, env);
+  if (l) return l;
+  return dulieunen.danhSachPhongBan(env);
+}
+async function dlnThemPhongBan(req, env) {
+  const { phien, loi: l } = await batBuocXemDuLieuNen(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return dulieunen.themPhongBan(env, phien, b);
+}
+async function dlnSuaPhongBan(req, env) {
+  const { phien, loi: l } = await batBuocXemDuLieuNen(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return dulieunen.suaPhongBan(env, phien, b);
+}
+async function dlnKhoaPhongBan(req, env) {
+  const { phien, loi: l } = await batBuocXemDuLieuNen(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return dulieunen.khoaPhongBan(env, phien, b);
+}
+async function dlnGanTruongPhong(req, env) {
+  const { phien, loi: l } = await batBuocXemDuLieuNen(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return dulieunen.ganTruongPhong(env, phien, b);
+}
+
+async function dlnDanhSachChucDanh(req, env) {
+  const { loi: l } = await batBuocXemDuLieuNen(req, env);
+  if (l) return l;
+  return dulieunen.danhSachChucDanh(env);
+}
+async function dlnThemChucDanh(req, env) {
+  const { phien, loi: l } = await batBuocXemDuLieuNen(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return dulieunen.themChucDanh(env, phien, b);
+}
+async function dlnSuaChucDanh(req, env) {
+  const { phien, loi: l } = await batBuocXemDuLieuNen(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return dulieunen.suaChucDanh(env, phien, b);
+}
+async function dlnKhoaChucDanh(req, env) {
+  const { phien, loi: l } = await batBuocXemDuLieuNen(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return dulieunen.khoaChucDanh(env, phien, b);
+}
+
+async function dlnDanhSachDanhMucTaiSan(req, env) {
+  const { loi: l } = await batBuocXemDuLieuNen(req, env);
+  if (l) return l;
+  return dulieunen.danhSachDanhMucTaiSan(env);
+}
+async function dlnThemDanhMucTaiSan(req, env) {
+  const { phien, loi: l } = await batBuocXemDuLieuNen(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return dulieunen.themDanhMucTaiSan(env, phien, b);
+}
+async function dlnSuaDanhMucTaiSan(req, env) {
+  const { phien, loi: l } = await batBuocXemDuLieuNen(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return dulieunen.suaDanhMucTaiSan(env, phien, b);
+}
+async function dlnKhoaDanhMucTaiSan(req, env) {
+  const { phien, loi: l } = await batBuocXemDuLieuNen(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return dulieunen.khoaDanhMucTaiSan(env, phien, b);
+}
+
+async function dlnDanhSachViTriTaiSan(req, env) {
+  const { loi: l } = await batBuocXemDuLieuNen(req, env);
+  if (l) return l;
+  return dulieunen.danhSachViTriTaiSan(env);
+}
+async function dlnThemViTriTaiSan(req, env) {
+  const { phien, loi: l } = await batBuocXemDuLieuNen(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return dulieunen.themViTriTaiSan(env, phien, b);
+}
+async function dlnSuaViTriTaiSan(req, env) {
+  const { phien, loi: l } = await batBuocXemDuLieuNen(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return dulieunen.suaViTriTaiSan(env, phien, b);
+}
+async function dlnKhoaViTriTaiSan(req, env) {
+  const { phien, loi: l } = await batBuocXemDuLieuNen(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return dulieunen.khoaViTriTaiSan(env, phien, b);
+}
+
+async function dlnDanhSachDonVi(req, env) {
+  const { loi: l } = await batBuocXemDuLieuNen(req, env);
+  if (l) return l;
+  return dulieunen.danhSachDonVi(env);
+}
+async function dlnThemDonVi(req, env) {
+  const { phien, loi: l } = await batBuocXemDuLieuNen(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return dulieunen.themDonVi(env, phien, b);
+}
+async function dlnSuaDonVi(req, env) {
+  const { phien, loi: l } = await batBuocXemDuLieuNen(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return dulieunen.suaDonVi(env, phien, b);
+}
+async function dlnKhoaDonVi(req, env) {
+  const { phien, loi: l } = await batBuocXemDuLieuNen(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return dulieunen.khoaDonVi(env, phien, b);
+}
+
+async function dlnTinhTrang(req, env) {
+  const { loi: l } = await batBuocXemDuLieuNen(req, env);
+  if (l) return l;
+  return dulieunen.tinhTrangSanSang(env);
+}
+
+async function dlnDanhSachNCC(req, env) {
+  const { loi: l } = await batBuocXemDuLieuNen(req, env);
+  if (l) return l;
+  return dulieunen.danhSachNhaCungCap(env);
+}
+async function dlnThemNCC(req, env) {
+  const { phien, loi: l } = await batBuocXemDuLieuNen(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return dulieunen.themNhaCungCap(env, phien, b);
+}
+async function dlnSuaNCC(req, env) {
+  const { phien, loi: l } = await batBuocXemDuLieuNen(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return dulieunen.suaNhaCungCap(env, phien, b);
+}
+async function dlnKhoaNCC(req, env) {
+  const { phien, loi: l } = await batBuocXemDuLieuNen(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return dulieunen.khoaNhaCungCap(env, phien, b);
+}
+
+async function dlnDanhSachKho(req, env) {
+  const { loi: l } = await batBuocXemDuLieuNen(req, env);
+  if (l) return l;
+  return dulieunen.danhSachKho(env);
+}
+async function dlnThemKho(req, env) {
+  const { phien, loi: l } = await batBuocXemDuLieuNen(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return dulieunen.themKho(env, phien, b);
+}
+async function dlnSuaKho(req, env) {
+  const { phien, loi: l } = await batBuocXemDuLieuNen(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return dulieunen.suaKho(env, phien, b);
+}
+
+/* ==========================================================================
+   TÀI SẢN — Asset Management (xem docs/ENTITY_IDENTITY.md)
+   ---------------------------------------------------------------------------
+   Nghiệp vụ nằm trong src/taisan.js. XEM (danh sách + lịch sử) cho mọi
+   người có tab 'taisan' (mọi vai trò); THÊM/CẤP PHÁT/THU HỒI/THANH LÝ thì
+   taisan.js tự kiểm duocQuanLyTaiSan — giống cách kho.js chặn kép.
+   ========================================================================== */
+
+async function batBuocXemTaiSan(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return { loi: l };
+  if (!duocXemTab(phien.vai_tro, 'taisan')) return { loi: loi('Bạn không có quyền xem Tài sản', 403) };
+  return { phien };
+}
+
+async function tsDanhSach(req, env) {
+  const { phien, loi: l } = await batBuocXemTaiSan(req, env);
+  if (l) return l;
+  return taisan.danhSachTaiSan(env, phien);
+}
+async function tsLichSu(req, env) {
+  const { loi: l } = await batBuocXemTaiSan(req, env);
+  if (l) return l;
+  const url = new URL(req.url);
+  return taisan.lichSuTaiSan(env, url.searchParams.get('id'));
+}
+async function tsChiTiet(req, env) {
+  const { loi: l } = await batBuocXemTaiSan(req, env);
+  if (l) return l;
+  const url = new URL(req.url);
+  return taisan.chiTietTaiSan(env, url.searchParams.get('id'));
+}
+async function tsTraCuu(req, env) {
+  const { loi: l } = await batBuocXemTaiSan(req, env);
+  if (l) return l;
+  const url = new URL(req.url);
+  return taisan.traCuuTheoMa(env, url.searchParams.get('ma'));
+}
+async function tsThem(req, env) {
+  const { phien, loi: l } = await batBuocXemTaiSan(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return taisan.themTaiSan(env, phien, b);
+}
+async function tsSua(req, env) {
+  const { phien, loi: l } = await batBuocXemTaiSan(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return taisan.suaTaiSan(env, phien, b);
+}
+async function tsCapPhat(req, env) {
+  const { phien, loi: l } = await batBuocXemTaiSan(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return taisan.capPhatTaiSan(env, phien, b);
+}
+async function tsThuHoi(req, env) {
+  const { phien, loi: l } = await batBuocXemTaiSan(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return taisan.thuHoiTaiSan(env, phien, b);
+}
+async function tsBaoHong(req, env) {
+  const { phien, loi: l } = await batBuocXemTaiSan(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return taisan.baoHongTaiSan(env, phien, b);
+}
+async function tsBaoTriXong(req, env) {
+  const { phien, loi: l } = await batBuocXemTaiSan(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return taisan.baoTriXongTaiSan(env, phien, b);
+}
+async function tsThanhLy(req, env) {
+  const { phien, loi: l } = await batBuocXemTaiSan(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return taisan.thanhLyTaiSan(env, phien, b);
+}
+
+/* ==========================================================================
+   ĐĂNG KÝ CA / XẾP CA — Part-time & Thời vụ (xem docs/ENTITY_IDENTITY.md)
+   ---------------------------------------------------------------------------
+   Nghiệp vụ nằm trong src/ca.js. XEM tab 'xepca' mở cho MỌI vai trò —
+   ca.js tự kiểm chi tiết theo loai_lao_dong (nhân viên) hoặc
+   phong_ban.truong_phong_id (trưởng phòng), không dựa vào vai trò chung.
+   ========================================================================== */
+
+async function batBuocXemXepCa(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return { loi: l };
+  if (!duocXemTab(phien.vai_tro, 'xepca')) return { loi: loi('Bạn không có quyền xem Xếp ca', 403) };
+  return { phien };
+}
+
+async function caDanhSachMauCa(req, env) {
+  const { loi: l } = await batBuocXemXepCa(req, env);
+  if (l) return l;
+  return ca.danhSachMauCa(env);
+}
+async function caThemMauCa(req, env) {
+  const { phien, loi: l } = await batBuocXemXepCa(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return ca.themMauCa(env, phien, b);
+}
+async function caSuaMauCa(req, env) {
+  const { phien, loi: l } = await batBuocXemXepCa(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return ca.suaMauCa(env, phien, b);
+}
+async function caXoaMauCa(req, env) {
+  const { phien, loi: l } = await batBuocXemXepCa(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return ca.xoaMauCa(env, phien, b);
+}
+async function caThemCaMo(req, env) {
+  const { phien, loi: l } = await batBuocXemXepCa(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return ca.themCaMo(env, phien, b);
+}
+async function caMoDangKyTuan(req, env) {
+  const { phien, loi: l } = await batBuocXemXepCa(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return ca.moDangKyTuan(env, phien, b);
+}
+async function caKhoaCaMo(req, env) {
+  const { phien, loi: l } = await batBuocXemXepCa(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return ca.khoaCaMo(env, phien, b);
+}
+async function caDangMoXem(req, env) {
+  const { phien, loi: l } = await batBuocXemXepCa(req, env);
+  if (l) return l;
+  return ca.caDangMo(env, phien);
+}
+async function caDangKy(req, env) {
+  const { phien, loi: l } = await batBuocXemXepCa(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return ca.dangKyCa(env, phien, b);
+}
+async function caHuyDangKy(req, env) {
+  const { phien, loi: l } = await batBuocXemXepCa(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return ca.huyDangKyCa(env, phien, b);
+}
+async function caLichCuaToi(req, env) {
+  const { phien, loi: l } = await batBuocXemXepCa(req, env);
+  if (l) return l;
+  const url = new URL(req.url);
+  const tu = url.searchParams.get('tu') || '0000-01-01';
+  const den = url.searchParams.get('den') || '9999-12-31';
+  return ca.lichCuaToi(env, phien, tu, den);
+}
+async function caMaTranTuan(req, env) {
+  const { phien, loi: l } = await batBuocXemXepCa(req, env);
+  if (l) return l;
+  const url = new URL(req.url);
+  const phongBanId = parseInt(url.searchParams.get('phong_ban_id'), 10);
+  const tu = url.searchParams.get('tu'), den = url.searchParams.get('den');
+  if (!phongBanId || !tu || !den) return loi('Thiếu phong_ban_id/tu/den');
+  return ca.maTranTuan(env, phien, phongBanId, tu, den);
+}
+async function caXepTuDong(req, env) {
+  const { phien, loi: l } = await batBuocXemXepCa(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return ca.chayPhanBo(env, phien, b);
+}
+async function caDuyet(req, env) {
+  const { phien, loi: l } = await batBuocXemXepCa(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return ca.duyetDangKy(env, phien, b);
+}
+async function caDuyetHangLoat(req, env) {
+  const { phien, loi: l } = await batBuocXemXepCa(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return ca.duyetHangLoat(env, phien, b);
+}
+async function caTuChoi(req, env) {
+  const { phien, loi: l } = await batBuocXemXepCa(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return ca.tuChoiDangKy(env, phien, b);
+}
+async function caGanThuCong(req, env) {
+  const { phien, loi: l } = await batBuocXemXepCa(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return ca.ganCaThuCong(env, phien, b);
+}
+async function caChotLichTuan(req, env) {
+  const { phien, loi: l } = await batBuocXemXepCa(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return ca.chotLichTuan(env, phien, b);
 }
 
 /* ==========================================================================
@@ -764,7 +1455,7 @@ function nhomCua(vaiTro) {
   if (vaiTro === 'nhan_vien_kho' || vaiTro === 'quan_ly_kho') return ['kho'];
   if (vaiTro === 'van_hanh_san') return ['van_hanh'];
   if (vaiTro === 'ke_toan_truong') return ['ke_toan'];
-  if (vaiTro === 'giam_doc' || vaiTro === 'pho_giam_doc') return ['kho', 'van_hanh', 'ke_toan'];
+  if (laAdmin(vaiTro)) return ['kho', 'van_hanh', 'ke_toan'];
   return [];
 }
 
@@ -818,6 +1509,22 @@ async function donDepDuLieuNgoaiThang(env) {
     `DELETE FROM don_hoan WHERE tao_luc_shopee IS NULL OR CAST(tao_luc_shopee AS INTEGER) < ?`
   ).bind(dauThang).run();
   if (r.meta.changes) console.log(`Dọn ${r.meta.changes} đơn hoàn ngoài tháng làm việc`);
+}
+
+/* Đơn hàng (doanh thu) — KHÔNG xoá dòng như đơn hoàn (đây là dữ liệu kinh
+   doanh cần giữ lâu dài để tra cứu doanh thu quá khứ, khác đơn hoàn chỉ có
+   giá trị vận hành trong tháng). Chỉ dọn cột du_lieu_json (payload thô từ
+   sàn, nặng nhất) sau 90 ngày — giữ nguyên tong_tien/so_sp/trang_thai/ngày
+   tháng vĩnh viễn (audit hiệu năng 21/08/2026, mục P0). */
+async function donDepJsonDonHangCu(env) {
+  const gioNay = Math.floor(Date.now() / 1000);
+  const nguong90Ngay = gioNay - 90 * 86400;
+  const r = await env.DB.prepare(
+    `UPDATE don_hang SET du_lieu_json = NULL
+      WHERE du_lieu_json IS NOT NULL
+        AND tao_luc_san IS NOT NULL AND CAST(tao_luc_san AS INTEGER) < ?`
+  ).bind(nguong90Ngay).run();
+  if (r.meta.changes) console.log(`Dọn payload thô của ${r.meta.changes} đơn hàng cũ hơn 90 ngày`);
 }
 
 /* Đẩy 1 đơn hoàn ngược về Vận hành sàn + báo vận hành (dùng chung cho cả
@@ -1034,21 +1741,28 @@ const CV_TU = `cong_viec c LEFT JOIN muc_tieu m ON m.id = c.muc_tieu_id`;
 async function cvDanhSach(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
+  // LIMIT 300 mỗi danh sách — phòng khi công ty đông lên, tránh trả về vô hạn
+  // dòng (audit hiệu năng 21/08/2026, mục P0). Việc cũ/hoàn thành đã bị xếp
+  // xuống cuối bởi ORDER BY nên bị cắt bớt trước, không mất việc đang mở —
+  // và giờ đã có tab "Lịch sử làm việc" riêng để tra việc cũ đầy đủ.
   const [nhan, giao, phoiHop] = await Promise.all([
     env.DB.prepare(
       `SELECT ${CV_COT} FROM ${CV_TU} WHERE c.nguoi_nhan_id = ?
-        ORDER BY (c.trang_thai IN ('hoan_thanh','huy')), (c.han_chot IS NULL), c.han_chot ASC, c.id DESC`
+        ORDER BY (c.trang_thai IN ('hoan_thanh','huy')), (c.han_chot IS NULL), c.han_chot ASC, c.id DESC
+        LIMIT 300`
     ).bind(phien.nhan_su_id).all(),
     env.DB.prepare(
       // Việc GIAO cho người khác. Todo cá nhân (tự giao cho mình) không tính
       // vào đây — nó nằm ở "Việc cần làm" — nên loại nguoi_nhan = nguoi_giao.
       `SELECT ${CV_COT} FROM ${CV_TU}
          WHERE c.nguoi_giao_id = ? AND c.nguoi_nhan_id <> c.nguoi_giao_id
-        ORDER BY (c.trang_thai IN ('hoan_thanh','huy')), c.id DESC`
+        ORDER BY (c.trang_thai IN ('hoan_thanh','huy')), c.id DESC
+        LIMIT 300`
     ).bind(phien.nhan_su_id).all(),
     env.DB.prepare(
       `SELECT ${CV_COT} FROM ${CV_TU} WHERE c.phoi_hop_ids LIKE '%,' || ? || ',%'
-        ORDER BY (c.trang_thai IN ('hoan_thanh','huy')), (c.han_chot IS NULL), c.han_chot ASC, c.id DESC`
+        ORDER BY (c.trang_thai IN ('hoan_thanh','huy')), (c.han_chot IS NULL), c.han_chot ASC, c.id DESC
+        LIMIT 300`
     ).bind(phien.nhan_su_id).all()
   ]);
   return json({ nhan: nhan.results || [], giao: giao.results || [], phoi_hop: phoiHop.results || [] });
@@ -1196,12 +1910,110 @@ async function cvLichSu(req, env) {
   return json({ viec: results || [] });
 }
 
+/* Tổng quan việc TOÀN CÔNG TY — chỉ Admin (Sếp Ngọc/Sếp Phong xem "full
+   toàn bộ công ty" thay vì chỉ việc của riêng mình, đúng như "Việc cần
+   làm/Việc tôi giao" đang lọc theo người xem). Dùng lại đúng bảng cong_viec
+   đã có, không tạo bảng/API riêng cho từng chỉ số — chỉ 1 query tổng hợp +
+   1 query top việc quá hạn (Sếp Ngọc chốt 23/08/2026: làm nhẹ, không xây
+   dashboard nhiều khối biểu đồ). */
+async function cvTongQuanCongTy(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  if (!laAdmin(phien.vai_tro)) return loi('Bạn không có quyền', 403);
+
+  const homNay = new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
+
+  const [tongTheoPhong, quaHan] = await Promise.all([
+    env.DB.prepare(`
+      SELECT COALESCE(NULLIF(n.bo_phan, ''), '— Chưa gán phòng ban') AS bo_phan,
+             COUNT(*) AS dang_mo,
+             SUM(CASE WHEN c.han_chot IS NOT NULL AND c.han_chot < ? THEN 1 ELSE 0 END) AS qua_han,
+             SUM(CASE WHEN c.trang_thai = 'cho_duyet' THEN 1 ELSE 0 END) AS cho_duyet
+        FROM cong_viec c
+        LEFT JOIN nhan_su n ON n.id = c.nguoi_nhan_id
+       WHERE c.trang_thai IN ('moi', 'dang_lam', 'cho_duyet')
+       GROUP BY bo_phan
+       ORDER BY dang_mo DESC
+    `).bind(homNay).all(),
+    env.DB.prepare(`
+      SELECT c.id, c.tieu_de, c.han_chot, c.nguoi_nhan_ten, c.nguoi_giao_ten,
+             COALESCE(NULLIF(n.bo_phan, ''), '—') AS bo_phan
+        FROM cong_viec c
+        LEFT JOIN nhan_su n ON n.id = c.nguoi_nhan_id
+       WHERE c.trang_thai IN ('moi', 'dang_lam', 'cho_duyet')
+         AND c.han_chot IS NOT NULL AND c.han_chot < ?
+       ORDER BY c.han_chot ASC
+       LIMIT 15
+    `).bind(homNay).all()
+  ]);
+
+  const phong = tongTheoPhong.results || [];
+  return json({
+    dang_mo: phong.reduce((s, p) => s + p.dang_mo, 0),
+    qua_han: phong.reduce((s, p) => s + p.qua_han, 0),
+    cho_duyet: phong.reduce((s, p) => s + p.cho_duyet, 0),
+    theo_phong_ban: phong,
+    viec_qua_han: quaHan.results || []
+  });
+}
+
+/* Tổng quan việc THEO PHÒNG BAN — cho Manager (trưởng phòng, KHÔNG phải
+   Admin). Audit Home/Dashboard 23/08/2026: Home trước đây chỉ có 2 mức
+   Admin/không-Admin, trong khi trưởng phòng thật (VD anh Duy — Kho Vận)
+   nhiều khi vai_tro hệ thống chỉ là "nguoi_dung" — phải theo đúng
+   phong_ban.truong_phong_id (đã có ở TOI.phong_ban_quan_ly), không theo
+   vai_tro (xem docs/audit/AUDIT-HOME-DASHBOARD.md mục A). Mirror đúng
+   logic cvTongQuanCongTy phía trên, chỉ khác WHERE lọc theo phòng ban
+   người gọi quản lý — đọc từ SESSION, không nhận phong_ban_id từ client
+   (Rule K trong audit: tránh 1 nhân viên tự dò xem team người khác). */
+async function cvTongQuanPhongBan(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+
+  const { results: phongBanQuanLy } = await env.DB.prepare(
+    'SELECT id, ten FROM phong_ban WHERE truong_phong_id = ? AND hoat_dong = 1'
+  ).bind(phien.nhan_su_id).all();
+  if (!phongBanQuanLy.length) return loi('Bạn không quản lý phòng ban nào', 403);
+
+  const ids = phongBanQuanLy.map(p => p.id);
+  const cho = ids.map(() => '?').join(',');
+  const homNay = new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
+
+  const [tong, quaHan] = await Promise.all([
+    env.DB.prepare(`
+      SELECT COUNT(*) AS dang_mo,
+             SUM(CASE WHEN c.han_chot IS NOT NULL AND c.han_chot < ? THEN 1 ELSE 0 END) AS qua_han,
+             SUM(CASE WHEN c.trang_thai = 'cho_duyet' THEN 1 ELSE 0 END) AS cho_duyet
+        FROM cong_viec c
+        JOIN nhan_su n ON n.id = c.nguoi_nhan_id
+       WHERE c.trang_thai IN ('moi', 'dang_lam', 'cho_duyet') AND n.phong_ban_id IN (${cho})
+    `).bind(homNay, ...ids).first(),
+    env.DB.prepare(`
+      SELECT c.id, c.tieu_de, c.han_chot, c.nguoi_nhan_ten, c.nguoi_giao_ten
+        FROM cong_viec c
+        JOIN nhan_su n ON n.id = c.nguoi_nhan_id
+       WHERE c.trang_thai IN ('moi', 'dang_lam', 'cho_duyet') AND n.phong_ban_id IN (${cho})
+         AND c.han_chot IS NOT NULL AND c.han_chot < ?
+       ORDER BY c.han_chot ASC
+       LIMIT 15
+    `).bind(...ids, homNay).all()
+  ]);
+
+  return json({
+    phong_ban: phongBanQuanLy,
+    dang_mo: tong.dang_mo || 0,
+    qua_han: tong.qua_han || 0,
+    cho_duyet: tong.cho_duyet || 0,
+    viec_qua_han: quaHan.results || []
+  });
+}
+
 /* ==========================================================================
    MỤC TIÊU — MBOs 3 tầng: Công ty -> Phòng ban -> Cá nhân (Sếp Phong chốt
    20/08/2026, Sếp Ngọc bổ sung tầng cá nhân + gộp chung 1 khối "Trạm Mục
    Tiêu (MBOs)" với bảng giao việc 21/08/2026 — 2 khối vốn cùng bản chất:
    mục tiêu ở đây, việc cụ thể để đạt mục tiêu ở Trạm Mục Tiêu bên dưới).
-   Mục tiêu CÔNG TY: chỉ Giám đốc/Phó Giám đốc tạo VÀ chốt (Sếp Phong: "Tôi là
+   Mục tiêu CÔNG TY: chỉ Admin tạo VÀ chốt (Sếp Phong: "Tôi là
    người chốt mục tiêu công ty"). Mục tiêu PHÒNG BAN + CÁ NHÂN: mở cho ai cũng
    tạo được (giống triết lý MVP của Trạm Mục Tiêu — tin tưởng tự đặt mục tiêu
    cho phòng/cho bản thân). Phòng ban gắn với 1 bộ phận (bo_phan, chữ tự do
@@ -1221,7 +2033,10 @@ function kyHienTai() {
 const MT_COT = `id, cap, bo_phan, tieu_de, mo_ta, nam, quy, nguoi_tao_id, nguoi_tao_ten,
                 trang_thai, da_chot, chot_boi, chot_luc, tao_luc, cap_nhat_luc,
                 (SELECT COUNT(*) FROM cong_viec WHERE muc_tieu_id = m.id) AS so_viec,
-                (SELECT COUNT(*) FROM cong_viec WHERE muc_tieu_id = m.id AND trang_thai = 'hoan_thanh') AS so_viec_xong`;
+                (SELECT COUNT(*) FROM cong_viec WHERE muc_tieu_id = m.id AND trang_thai = 'hoan_thanh') AS so_viec_xong,
+                (SELECT MIN(han_chot) FROM cong_viec
+                  WHERE muc_tieu_id = m.id AND han_chot IS NOT NULL
+                    AND trang_thai NOT IN ('hoan_thanh', 'huy')) AS han_gan_nhat`;
 
 async function mtDanhSach(req, env) {
   const { loi: l } = await batBuocDangNhap(req, env);
@@ -1231,8 +2046,19 @@ async function mtDanhSach(req, env) {
   const nam = parseInt(u.searchParams.get('nam'), 10) || ky.nam;
   const quy = parseInt(u.searchParams.get('quy'), 10) || ky.quy;
 
+  // LIMIT 300 — đã lọc theo đúng 1 quý nên vốn nhỏ, thêm trần cho chắc
+  // (audit hiệu năng 21/08/2026, mục P0).
+  // Sắp theo: đang thực hiện lên trước (đã xong/huỷ xuống cuối, frontend tự
+  // gấp lại thành khối riêng) → trong nhóm đang thực hiện, hạn gần nhất lên
+  // trước (không có hạn thì xuống cuối) → mới tạo trước (giữ thói quen cũ).
   const { results } = await env.DB.prepare(
-    `SELECT ${MT_COT} FROM muc_tieu m WHERE nam = ? AND quy = ? ORDER BY cap ASC, tao_luc DESC`
+    `SELECT ${MT_COT} FROM muc_tieu m WHERE nam = ? AND quy = ?
+     ORDER BY cap ASC,
+              (trang_thai = 'dang_thuc_hien') DESC,
+              (han_gan_nhat IS NULL) ASC,
+              han_gan_nhat ASC,
+              tao_luc DESC
+     LIMIT 300`
   ).bind(nam, quy).all();
 
   return json({
@@ -1251,7 +2077,7 @@ async function mtTao(req, env) {
   const cap = String(b.cap || '').trim();
   if (!['cong_ty', 'phong_ban', 'ca_nhan'].includes(cap)) return loi('Cấp mục tiêu không hợp lệ');
   if (cap === 'cong_ty' && !laAdmin(phien.vai_tro)) {
-    return loi('Chỉ Giám đốc/Phó Giám đốc mới được đặt mục tiêu cấp công ty', 403);
+    return loi('Chỉ Admin mới được đặt mục tiêu cấp công ty', 403);
   }
 
   const boPhan = cap === 'phong_ban' ? String(b.bo_phan || '').trim() : null;
@@ -1275,11 +2101,11 @@ async function mtTao(req, env) {
   return json({ ok: true, id: r.meta.last_row_id });
 }
 
-/* Giám đốc/Phó Giám đốc CHỐT mục tiêu công ty — khoá lại, không sửa được nữa */
+/* Admin CHỐT mục tiêu công ty — khoá lại, không sửa được nữa */
 async function mtChot(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
-  if (!laAdmin(phien.vai_tro)) return loi('Chỉ Giám đốc/Phó Giám đốc mới được chốt mục tiêu công ty', 403);
+  if (!laAdmin(phien.vai_tro)) return loi('Chỉ Admin mới được chốt mục tiêu công ty', 403);
 
   let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
   const id = parseInt(b.id, 10);
@@ -1308,7 +2134,7 @@ async function mtCapNhat(req, env) {
   if (mt.da_chot) return loi('Mục tiêu công ty đã chốt, không sửa được nữa', 409);
 
   const laChu = mt.nguoi_tao_id === phien.nhan_su_id || laAdmin(phien.vai_tro);
-  if (!laChu) return loi('Chỉ người tạo (hoặc Giám đốc/Phó Giám đốc) mới sửa được mục tiêu này', 403);
+  if (!laChu) return loi('Chỉ người tạo (hoặc Admin) mới sửa được mục tiêu này', 403);
 
   const truong = {};
   if (b.trang_thai != null) {
@@ -1532,7 +2358,7 @@ async function kiemTraLyDoNghiemTrong(env) {
    theo dõi và đối soát/khiếu nại với sàn — cùng bộ lọc với cron cảnh báo
    Telegram ở kiemTraCanhBaoHoan(), chỉ khác là không giới hạn "chưa báo lần
    nào" (da_canh_bao) vì đây là màn xem liên tục, không phải cảnh báo 1 lần.
-   Quyền dùng chung với Đơn hoàn (duocXemDonHoan): Giám đốc, Phó Giám đốc,
+   Quyền dùng chung với Đơn hoàn (duocXemDonHoan): Admin,
    Vận hành sàn, Kế toán trưởng. ========================================== */
 
 async function kdCanDoiSoat(req, env) {
@@ -2059,16 +2885,82 @@ const DUONG_DAN = {
   'GET  /api/chat/tep':      chatTepDinhKem,
   'GET  /api/quan-tri/danh-sach':      qtDanhSach,
   'POST /api/quan-tri/them-nhan-su':   qtThemNhanSu,
+  'POST /api/quan-tri/sua-nhan-su':    qtSuaNhanSu,
+  'POST /api/quan-tri/khoa-nhan-su':   qtKhoaNhanSu,
+  'POST /api/quan-tri/xoa-nhan-su':    qtXoaNhanSu,
   'POST /api/quan-tri/tao-tai-khoan':  qtTaoTaiKhoan,
   'POST /api/quan-tri/dat-lai-mat-khau': qtDatLaiMatKhau,
   'POST /api/quan-tri/khoa-tai-khoan': qtKhoaTaiKhoan,
+  'POST /api/quan-tri/sua-vai-tro':    qtSuaVaiTro,
+  'POST /api/quan-tri/xoa-tai-khoan': qtXoaTaiKhoan,
   'GET  /api/kho/san-pham':      khoDanhSachSP,
   'POST /api/kho/them-san-pham': khoThemSP,
+  'POST /api/kho/sua-san-pham':  khoSuaSP,
+  'POST /api/kho/an-hien-san-pham': khoAnHienSP,
+  'POST /api/kho/khoa-san-pham':    khoKhoaSP,
   'POST /api/kho/nhap':          khoNhap,
   'POST /api/kho/xuat':          khoXuat,
   'GET  /api/kho/lo':            khoLo,
   'GET  /api/kho/bao-cao':       khoBaoCao,
   'GET  /api/kho/lich-su':       khoLichSu,
+  'GET  /api/dulieunen/phong-ban':      dlnDanhSachPhongBan,
+  'POST /api/dulieunen/phong-ban/them': dlnThemPhongBan,
+  'POST /api/dulieunen/phong-ban/sua':  dlnSuaPhongBan,
+  'POST /api/dulieunen/phong-ban/khoa': dlnKhoaPhongBan,
+  'POST /api/dulieunen/phong-ban/gan-truong-phong': dlnGanTruongPhong,
+  'GET  /api/dulieunen/chuc-danh':      dlnDanhSachChucDanh,
+  'POST /api/dulieunen/chuc-danh/them': dlnThemChucDanh,
+  'POST /api/dulieunen/chuc-danh/sua':  dlnSuaChucDanh,
+  'POST /api/dulieunen/chuc-danh/khoa': dlnKhoaChucDanh,
+  'GET  /api/dulieunen/don-vi':         dlnDanhSachDonVi,
+  'POST /api/dulieunen/don-vi/them':    dlnThemDonVi,
+  'POST /api/dulieunen/don-vi/sua':     dlnSuaDonVi,
+  'POST /api/dulieunen/don-vi/khoa':    dlnKhoaDonVi,
+  'GET  /api/dulieunen/tai-san-danh-muc':      dlnDanhSachDanhMucTaiSan,
+  'POST /api/dulieunen/tai-san-danh-muc/them': dlnThemDanhMucTaiSan,
+  'POST /api/dulieunen/tai-san-danh-muc/sua':  dlnSuaDanhMucTaiSan,
+  'POST /api/dulieunen/tai-san-danh-muc/khoa': dlnKhoaDanhMucTaiSan,
+  'GET  /api/dulieunen/tai-san-vi-tri':      dlnDanhSachViTriTaiSan,
+  'POST /api/dulieunen/tai-san-vi-tri/them': dlnThemViTriTaiSan,
+  'POST /api/dulieunen/tai-san-vi-tri/sua':  dlnSuaViTriTaiSan,
+  'POST /api/dulieunen/tai-san-vi-tri/khoa': dlnKhoaViTriTaiSan,
+  'GET  /api/dulieunen/ncc':      dlnDanhSachNCC,
+  'POST /api/dulieunen/ncc/them': dlnThemNCC,
+  'POST /api/dulieunen/ncc/sua':  dlnSuaNCC,
+  'POST /api/dulieunen/ncc/khoa': dlnKhoaNCC,
+  'GET  /api/dulieunen/kho':      dlnDanhSachKho,
+  'POST /api/dulieunen/kho/them': dlnThemKho,
+  'POST /api/dulieunen/kho/sua':  dlnSuaKho,
+  'GET  /api/tai-san':            tsDanhSach,
+  'GET  /api/tai-san/lich-su':    tsLichSu,
+  'GET  /api/tai-san/chi-tiet':   tsChiTiet,
+  'GET  /api/tai-san/tra-cuu':    tsTraCuu,
+  'POST /api/tai-san/them':       tsThem,
+  'POST /api/tai-san/sua':        tsSua,
+  'POST /api/tai-san/cap-phat':   tsCapPhat,
+  'POST /api/tai-san/thu-hoi':    tsThuHoi,
+  'POST /api/tai-san/bao-hong':   tsBaoHong,
+  'POST /api/tai-san/bao-tri-xong': tsBaoTriXong,
+  'POST /api/tai-san/thanh-ly':   tsThanhLy,
+  'GET  /api/ca/mau-ca':          caDanhSachMauCa,
+  'POST /api/ca/mau-ca/them':     caThemMauCa,
+  'POST /api/ca/mau-ca/sua':      caSuaMauCa,
+  'POST /api/ca/mau-ca/xoa':      caXoaMauCa,
+  'POST /api/ca/mo/them':         caThemCaMo,
+  'POST /api/ca/mo/mo-tuan':      caMoDangKyTuan,
+  'POST /api/ca/mo/khoa':         caKhoaCaMo,
+  'GET  /api/ca/dang-mo':         caDangMoXem,
+  'POST /api/ca/dang-ky':         caDangKy,
+  'POST /api/ca/dang-ky/huy':     caHuyDangKy,
+  'GET  /api/ca/lich-cua-toi':    caLichCuaToi,
+  'GET  /api/ca/ma-tran-tuan':    caMaTranTuan,
+  'POST /api/ca/xep-tu-dong':     caXepTuDong,
+  'POST /api/ca/duyet':           caDuyet,
+  'POST /api/ca/duyet-hang-loat': caDuyetHangLoat,
+  'POST /api/ca/tu-choi':         caTuChoi,
+  'POST /api/ca/gan-thu-cong':    caGanThuCong,
+  'POST /api/ca/chot-lich-tuan':  caChotLichTuan,
+  'GET  /api/dulieunen/tinh-trang':     dlnTinhTrang,
   'GET  /api/shopee/trang-thai': shopeeTrangThai,
   'GET  /api/shopee/connect':    shopeeConnect,
   'GET  /api/shopee/callback':   shopeeCallback,
@@ -2090,6 +2982,8 @@ const DUONG_DAN = {
   'POST /api/cong-viec/tao':       cvTao,
   'POST /api/cong-viec/cap-nhat':  cvCapNhat,
   'GET  /api/cong-viec/lich-su':   cvLichSu,
+  'GET  /api/cong-viec/tong-quan-congty': cvTongQuanCongTy,
+  'GET  /api/cong-viec/tong-quan-phongban': cvTongQuanPhongBan,
   'GET  /api/muc-tieu/danh-sach': mtDanhSach,
   'POST /api/muc-tieu/tao':       mtTao,
   'POST /api/muc-tieu/chot':      mtChot,
@@ -2139,6 +3033,7 @@ export default {
         try { await shopee.dongBoDonHangNen(env); } catch (e) { console.error('Cron Shopee đơn hàng:', e.message); }
         try { await tiktok.dongBoDonHangNen(env); } catch (e) { console.error('Cron TikTok đơn hàng:', e.message); }
         try { await donDepDuLieuNgoaiThang(env); } catch (e) { console.error('Cron dọn dữ liệu ngoài tháng:', e.message); }
+      try { await donDepJsonDonHangCu(env); } catch (e) { console.error('Cron dọn payload đơn hàng cũ:', e.message); }
       }
     })());
   },

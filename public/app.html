@@ -30,7 +30,6 @@
            alt="Alpha Green Commerce" width="1109" height="376">
     </div>
 
-    <div class="sb-label">Quản trị</div>
     <nav class="sb-nav" id="dieuHuong"></nav>
 
     <div class="sb-foot">
@@ -83,6 +82,15 @@
         <p>Mục tiêu MBOs (công ty → phòng ban → cá nhân), giao việc theo dõi tới khi xong, và bức tranh chung của Alpha Green Commerce.</p>
       </div>
 
+      <!-- ---------- Tóm tắt theo vai trò (dữ liệu thật, không mock) — Employee
+           thấy "Việc của tôi"; Manager/CEO thấy "Cần chú ý". Rỗng thì ẩn hẳn,
+           không hiện khối trống. ---------- -->
+      <div class="stats" id="tq-tomtat" hidden></div>
+      <div class="panel" id="tq-canhbao-panel" hidden>
+        <div class="panel-head"><h4>Cần chú ý</h4></div>
+        <div class="panel-body"><div class="list" id="tq-canhbao-that"></div></div>
+      </div>
+
       <!-- ---------- Vinh danh — khu khen ngợi nhỏ, lên đầu trang để ai mở ERP cũng thấy ngay ---------- -->
       <div class="panel vd-panel">
         <div class="panel-head">
@@ -96,7 +104,17 @@
           <form id="vd-form" class="form-luoi" autocomplete="off">
             <div class="field field-rong">
               <label>Khen ai *</label>
-              <select id="vd-nguoi" required><option value="">— Chọn người —</option></select>
+              <div class="combo1" id="vd-nguoicombo">
+                <button type="button" class="combo1-hienthi rong" id="vd-nguoihienthi">
+                  <span>Chọn người...</span>
+                  <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+                </button>
+                <div class="combo1-panel" id="vd-nguoipanel" hidden>
+                  <input type="search" id="vd-nguoitim" placeholder="Tìm theo mã hoặc tên...">
+                  <div class="ql-goiy" id="vd-nguoigoiy"></div>
+                </div>
+              </div>
+              <input type="hidden" id="vd-nguoi">
             </div>
             <div class="field field-rong">
               <label>Lời khen *</label>
@@ -135,16 +153,47 @@
           <p class="hint" style="margin:0 0 14px">Mục tiêu 3 cấp: Công ty → Phòng ban → Cá nhân. Bấm vào 1 thẻ mục tiêu để xem chi tiết việc gắn vào. Tiến độ tự tính từ việc đã Hoàn thành, không nhập tay.</p>
 
           <div class="mt-nhom-nhan">Cấp công ty</div>
-          <div id="mt-congty-list"></div>
+          <div id="mt-congty-list" class="mt-the-grid"></div>
           <div class="empty" id="mt-congty-trong" hidden>Chưa có mục tiêu công ty nào cho quý này.</div>
+          <button type="button" class="mt-daxong-toggle" id="mt-congty-daxong-toggle" hidden>
+            <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+            <span id="mt-congty-daxong-dem"></span>
+          </button>
+          <div id="mt-congty-daxong-list" class="mt-the-grid mt-daxong-list" hidden></div>
 
           <div class="mt-nhom-nhan" style="margin-top:18px">Cấp phòng ban</div>
-          <div id="mt-phongban-list"></div>
+          <div id="mt-phongban-list" class="mt-the-grid"></div>
           <div class="empty" id="mt-phongban-trong" hidden>Chưa có mục tiêu phòng ban nào cho quý này.</div>
+          <button type="button" class="mt-daxong-toggle" id="mt-phongban-daxong-toggle" hidden>
+            <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+            <span id="mt-phongban-daxong-dem"></span>
+          </button>
+          <div id="mt-phongban-daxong-list" class="mt-the-grid mt-daxong-list" hidden></div>
 
           <div class="mt-nhom-nhan" style="margin-top:18px">Cấp cá nhân</div>
-          <div id="mt-canhan-list"></div>
+          <div id="mt-canhan-list" class="mt-the-grid"></div>
           <div class="empty" id="mt-canhan-trong" hidden>Chưa có mục tiêu cá nhân nào cho quý này.</div>
+          <button type="button" class="mt-daxong-toggle" id="mt-canhan-daxong-toggle" hidden>
+            <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+            <span id="mt-canhan-daxong-dem"></span>
+          </button>
+          <div id="mt-canhan-daxong-list" class="mt-the-grid mt-daxong-list" hidden></div>
+        </div>
+      </div>
+
+      <!-- Tổng quan việc TOÀN CÔNG TY — chỉ Admin thấy (Sếp Ngọc/Sếp Phong xem
+           full công ty, khác bảng "Việc cần làm/tôi giao" bên dưới vốn chỉ
+           lọc theo đúng người đang xem). -->
+      <div class="panel" id="cv-tqct-panel" hidden>
+        <div class="panel-head">
+          <h4>📊 Tổng quan công việc toàn công ty</h4>
+          <span class="hint">Chỉ Admin thấy khối này</span>
+        </div>
+        <div class="panel-body">
+          <div class="stats" id="cv-tqct-the"></div>
+          <div id="cv-tqct-phongban" style="margin-top:16px"></div>
+          <p class="hint" id="cv-tqct-quahan-nhan" style="margin:16px 0 8px" hidden>Việc quá hạn cần chú ý</p>
+          <div id="cv-tqct-quahan"></div>
         </div>
       </div>
 
@@ -217,23 +266,6 @@
         </div>
       </div>
 
-      <div class="stats" id="tq-the"></div>
-
-      <div class="panel">
-        <div class="panel-head">
-          <h4>Doanh thu 6 tháng gần nhất</h4>
-          <span class="hint">Đơn vị: tỷ đồng</span>
-        </div>
-        <div class="panel-body"><div class="chart" id="tq-chart"></div></div>
-      </div>
-
-      <div class="panel">
-        <div class="panel-head">
-          <h4>Việc cần chú ý</h4>
-          <span class="hint">Tổng hợp từ 4 mảng</span>
-        </div>
-        <div class="panel-body"><div class="list" id="tq-canhbao"></div></div>
-      </div>
     </section>
 
     <!-- ---------- Lịch sử làm việc — kho lưu trữ TOÀN CỤC mọi việc trong Trạm
@@ -367,25 +399,96 @@
     <section class="view" id="v-nhansu" hidden>
       <div class="view-head">
         <h3>Nhân sự</h3>
-        <p>Danh sách nhân sự, tiến độ chuyển đổi từ HKD Onfod lên Công ty TNHH và lịch làm việc 1:1.</p>
+        <p id="nsMoTa">Danh sách nhân sự, tiến độ chuyển đổi từ HKD Onfod lên Công ty TNHH và lịch làm việc 1:1.</p>
       </div>
 
-      <div class="stats" id="ns-the"></div>
-
-      <div class="grid-2">
-        <div class="panel">
-          <div class="panel-head">
-            <h4>Tiến độ chuyển đổi pháp nhân</h4>
-            <span class="hint">Mục tiêu Q3/2026</span>
-          </div>
-          <div class="panel-body"><div id="ns-chuyendoi"></div></div>
-        </div>
-
-        <div class="panel">
-          <div class="panel-head">
-            <h4>Lịch & mốc quan trọng</h4>
-          </div>
-          <div class="panel-body"><div class="list" id="ns-lich"></div></div>
+      <!-- Thêm nhân sự — chỉ hiện với HCNS/Admin (đã chuyển từ tab Quản trị
+           về đây, vì đây mới đúng chỗ người phụ trách nhân sự tìm tới đầu
+           tiên; Quản trị giờ chỉ còn quản lý TÀI KHOẢN đăng nhập). -->
+      <div class="panel" id="ns-panel-them" hidden>
+        <div class="panel-head"><h4>Thêm nhân sự nhanh</h4></div>
+        <div class="panel-body">
+          <form id="qtFormThem" class="form-luoi" autocomplete="off">
+            <div class="field">
+              <label>Họ tên *</label>
+              <input type="text" id="qtHoTen" required placeholder="Ví dụ: Trần Văn Nam">
+            </div>
+            <div class="field">
+              <label>Chức danh <span class="hint">· <a href="#" data-mo-tab="quantri">quản lý ở Quản trị</a></span></label>
+              <div class="combo1" id="qtChucDanhCombo">
+                <button type="button" class="combo1-hienthi rong" id="qtChucDanhHienThi">
+                  <span>Chọn chức danh...</span>
+                  <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+                </button>
+                <div class="combo1-panel" id="qtChucDanhPanel" hidden>
+                  <input type="search" id="qtChucDanhTim" placeholder="Tìm chức danh...">
+                  <div class="ql-goiy" id="qtChucDanhGoiY"></div>
+                </div>
+              </div>
+              <input type="hidden" id="qtChucDanh">
+            </div>
+            <div class="field">
+              <label>Phòng ban <span class="hint">· <a href="#" data-mo-tab="quantri">quản lý ở Quản trị</a></span></label>
+              <div class="combo1" id="qtPhongBanCombo">
+                <button type="button" class="combo1-hienthi rong" id="qtPhongBanHienThi">
+                  <span>Chọn phòng ban...</span>
+                  <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+                </button>
+                <div class="combo1-panel" id="qtPhongBanPanel" hidden>
+                  <input type="search" id="qtPhongBanTim" placeholder="Tìm phòng ban...">
+                  <div class="ql-goiy" id="qtPhongBanGoiY"></div>
+                </div>
+              </div>
+              <input type="hidden" id="qtPhongBan">
+            </div>
+            <div class="field">
+              <label>Số điện thoại</label>
+              <input type="text" id="qtSdt" placeholder="09xx xxx xxx">
+            </div>
+            <div class="field">
+              <label>Email</label>
+              <input type="text" id="qtEmail" placeholder="ten@alphagreen.vn">
+            </div>
+            <div class="field">
+              <label>Quản lý trực tiếp</label>
+              <div class="combo1" id="qtQuanLyCombo">
+                <button type="button" class="combo1-hienthi rong" id="qtQuanLyHienThi">
+                  <span>Chọn quản lý...</span>
+                  <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+                </button>
+                <div class="combo1-panel" id="qtQuanLyPanel" hidden>
+                  <input type="search" id="qtQuanLyTim" placeholder="Tìm theo mã hoặc tên...">
+                  <div class="ql-goiy" id="qtQuanLyGoiY"></div>
+                </div>
+              </div>
+              <input type="hidden" id="qtQuanLy">
+            </div>
+            <div class="field">
+              <label>Trạng thái</label>
+              <select id="qtTrangThai">
+                <option value="thu_viec">Thử việc</option>
+                <option value="cho_ky">Chờ ký</option>
+                <option value="da_ky">Đã ký HĐ</option>
+                <option value="parttime">Bán thời gian</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Loại lao động <span class="hint">· để dùng được Đăng ký ca</span></label>
+              <select id="qtLoaiLaoDong">
+                <option value="toan_thoi_gian">Toàn thời gian</option>
+                <option value="ban_thoi_gian">Part-time</option>
+                <option value="thoi_vu">Thời vụ</option>
+              </select>
+            </div>
+            <div class="field" id="qtFieldLuong">
+              <label>Lương (đồng/tháng)</label>
+              <input type="text" id="qtLuong" inputmode="numeric" placeholder="Để trống nếu chưa có">
+            </div>
+            <div class="field field-nut">
+              <button type="submit" class="btn-primary" id="qtNutThem">Thêm nhân sự</button>
+            </div>
+          </form>
+          <div class="form-loi" id="qtLoiThem"></div>
         </div>
       </div>
 
@@ -393,6 +496,34 @@
         <div class="panel-head">
           <h4>Danh sách nhân sự</h4>
           <span class="hint" id="ns-hint"></span>
+        </div>
+        <div class="panel-body" style="padding-bottom:0">
+          <div class="dh-timkiem">
+            <div class="search">
+              <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+              </svg>
+              <input type="search" id="ns-tim" placeholder="Tìm theo mã, họ tên, SĐT hoặc email...">
+            </div>
+            <select id="ns-locbophan" class="chon-nho" title="Lọc theo bộ phận">
+              <option value="">Tất cả bộ phận</option>
+            </select>
+            <select id="ns-loctrangthai" class="chon-nho" title="Lọc theo trạng thái">
+              <option value="">Tất cả trạng thái</option>
+              <option value="da_ky">Đã ký HĐ</option>
+              <option value="thu_viec">Thử việc</option>
+              <option value="cho_ky">Chờ ký</option>
+              <option value="can_trao_doi">Cần trao đổi</option>
+              <option value="parttime">Bán thời gian</option>
+            </select>
+            <select id="ns-locloaild" class="chon-nho" title="Lọc theo loại lao động">
+              <option value="">Tất cả loại LĐ</option>
+              <option value="toan_thoi_gian">Toàn thời gian</option>
+              <option value="ban_thoi_gian">Part-time</option>
+              <option value="thoi_vu">Thời vụ</option>
+            </select>
+            <button type="button" class="btn-nho btn-phu" id="ns-xoaloc" hidden>Xoá bộ lọc</button>
+          </div>
         </div>
         <div class="table-wrap">
           <table>
@@ -403,11 +534,13 @@
                 <th>Trạng thái</th>
                 <th>Vào làm</th>
                 <th class="num" id="ns-thLuong">Lương</th>
+                <th id="ns-thThaoTac" hidden></th>
               </tr>
             </thead>
             <tbody id="ns-bang"></tbody>
           </table>
         </div>
+        <div class="empty" id="ns-trong" hidden></div>
       </div>
     </section>
 
@@ -422,6 +555,7 @@
       <div class="seg" id="kdSeg">
         <button class="seg-nut" data-kd="rnd">R&amp;D</button>
         <button class="seg-nut active" data-kd="vanhanh">Vận hành sàn</button>
+        <button class="seg-nut" data-kd="sanpham">Sản phẩm</button>
         <button class="seg-nut" data-kd="cskh">Chăm sóc KH</button>
       </div>
 
@@ -515,49 +649,79 @@
         <div class="empty" id="kd-dhh-trong" hidden>Không có đơn hàng nào bị hủy trong tháng này.</div>
       </div>
 
-      <div class="stats" id="kd-the"></div>
-
-      <div class="grid-2">
-        <div class="panel">
-          <div class="panel-head">
-            <h4>Doanh thu theo kênh</h4>
-            <span class="hint">Tháng 7 · tỷ đồng</span>
-          </div>
-          <div class="panel-body"><div class="chart" id="kd-chart"></div></div>
-        </div>
-
-        <div class="panel">
-          <div class="panel-head">
-            <h4>Động thái đối thủ</h4>
-            <span class="hint">Cập nhật thủ công</span>
-          </div>
-          <div class="panel-body"><div class="list" id="kd-doithu"></div></div>
-        </div>
-      </div>
-
-      <div class="panel">
-        <div class="panel-head">
-          <h4>Sản phẩm bán chạy — tháng 7</h4>
-          <span class="hint">So với kế hoạch tháng</span>
-        </div>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Sản phẩm</th>
-                <th>Danh mục</th>
-                <th class="num">Đơn hàng</th>
-                <th class="num">Doanh thu (đ)</th>
-                <th>So kế hoạch</th>
-              </tr>
-            </thead>
-            <tbody id="kd-bang"></tbody>
-          </table>
-        </div>
-      </div>
       </div>
 
       <!-- ===== Màn R&D ===== -->
+      <!-- ===== Màn Sản phẩm/SKU — Kinh doanh là chủ sở hữu (quyết định bán
+           gì), Kho vận vẫn sửa được hằng ngày ở tab Kho vận > Tồn kho vì họ
+           là người nhập/xuất thực tế (cùng 1 dữ liệu san_pham, xem
+           docs/DATA_OWNERSHIP_MATRIX.md). Chỉ Kinh doanh/Admin "Hoàn tất"
+           (khoá) được — Kho vận sửa nhưng không phải người duyệt. ===== -->
+      <div class="kv-pane" id="kd-pane-sanpham" hidden>
+        <div class="panel">
+          <div class="panel-head">
+            <h4>Sản phẩm / SKU</h4>
+            <span class="hint" id="kdsp-dem"></span>
+          </div>
+          <div class="panel-body" style="padding-bottom:0">
+            <div class="search">
+              <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+              </svg>
+              <input type="search" id="kdsp-tim" placeholder="Tìm theo tên, mã hàng hoặc nhóm hàng">
+            </div>
+          </div>
+          <div class="panel-body" id="kdsp-panel-them" hidden>
+            <form id="kdspForm" class="form-luoi" autocomplete="off">
+              <input type="hidden" id="kdsp-id">
+              <div class="field">
+                <label>Mã hàng (SKU) *</label>
+                <input type="text" id="kdsp-sku" required placeholder="VD: HN-MY-1000">
+              </div>
+              <div class="field">
+                <label>Tên sản phẩm *</label>
+                <input type="text" id="kdsp-ten" required placeholder="VD: Hạnh nhân Mỹ tách vỏ 1kg">
+              </div>
+              <div class="field">
+                <label>Nhóm hàng</label>
+                <input type="text" id="kdsp-danhmuc" placeholder="Hạt dinh dưỡng">
+              </div>
+              <div class="field">
+                <label>Đơn vị tính <span class="hint">· <a href="#" data-mo-tab="khovan">quản lý ở Kho vận</a></span></label>
+                <select id="kdsp-donvi"><option value="">— Chưa chọn —</option></select>
+              </div>
+              <div class="field">
+                <label>Mức tồn tối thiểu</label>
+                <input type="text" id="kdsp-tonmin" inputmode="numeric" placeholder="Cảnh báo khi tồn xuống dưới mức này">
+              </div>
+              <div class="field">
+                <label class="ck"><input type="checkbox" id="kdsp-theodoihsd" checked> Theo dõi hạn sử dụng</label>
+              </div>
+              <div class="field field-nut" style="display:flex; gap:10px">
+                <button type="submit" class="btn-primary" id="kdsp-nutluu" style="width:auto">+ Thêm mã hàng</button>
+                <button type="button" class="btn-phu" id="kdsp-nuthuy" style="width:auto" hidden>Hủy sửa</button>
+              </div>
+            </form>
+            <div class="form-loi" id="kdsp-loi"></div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Sản phẩm</th>
+                  <th>Mã hàng</th>
+                  <th>Đơn vị</th>
+                  <th>Trạng thái</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="kdsp-bang"></tbody>
+            </table>
+          </div>
+          <div class="empty" id="kdsp-trong" hidden>Chưa có mã hàng nào khớp — bấm "+ Thêm mã hàng" ở trên để bắt đầu.</div>
+        </div>
+      </div>
+
       <div class="kv-pane" id="kd-pane-rnd" hidden>
         <div class="panel">
           <div class="panel-head"><h4>R&amp;D — Nghiên cứu &amp; phát triển sản phẩm</h4></div>
@@ -600,7 +764,7 @@
     <!-- ---------- Kho — Xuất / Nhập / Tồn ---------- -->
     <section class="view" id="v-khovan" hidden>
       <div class="view-head">
-        <h3>Kho — Xuất / Nhập / Tồn</h3>
+        <h3>Kho vận</h3>
         <p>Ghi mọi lần nhập và xuất vào một sổ cái. Tồn kho luôn tính lại từ sổ, không bao giờ lệch. Xuất ưu tiên lô cận hạn nhất (FEFO).</p>
       </div>
 
@@ -614,6 +778,7 @@
         <button class="seg-nut" data-kv="baocao">Báo cáo</button>
         <button class="seg-nut" data-kv="donhoan">Đơn hoàn</button>
         <button class="seg-nut" data-kv="lichsu">Lịch sử đơn hoàn</button>
+        <button class="seg-nut" data-kv="danhmuc">Danh mục</button>
       </div>
 
       <!-- ===== Màn Tồn kho ===== -->
@@ -631,7 +796,7 @@
               <input type="search" id="kv-tim" placeholder="Tìm theo tên, mã hàng hoặc nhóm hàng">
             </div>
           </div>
-          <div class="table-wrap">
+          <div class="table-wrap kv-ton-table">
             <table>
               <thead>
                 <tr>
@@ -646,6 +811,9 @@
               <tbody id="kv-ton-bang"></tbody>
             </table>
           </div>
+          <!-- Mobile (≤780px): cùng dữ liệu, hiện dạng Card thay vì bảng cuộn
+               ngang — CSS tự chuyển theo bề rộng màn hình, xem style.css. -->
+          <div class="kv-card-list" id="kv-ton-card"></div>
           <div class="empty" id="kv-ton-trong" hidden>Chưa có mã hàng nào khớp — hoặc kho còn trống, hãy nhập hàng ở tab “Nhập kho”.</div>
         </div>
 
@@ -667,8 +835,8 @@
                 <input type="text" id="kvDanhMuc" placeholder="Hạt dinh dưỡng">
               </div>
               <div class="field">
-                <label>Đơn vị tính</label>
-                <input type="text" id="kvDonVi" placeholder="túi / hộp / kg">
+                <label>Đơn vị tính <span class="hint">· <a href="#" data-mo-tab="khovan">quản lý ở Kho vận</a></span></label>
+                <select id="kvDonVi"><option value="">— Chưa chọn —</option></select>
               </div>
               <div class="field">
                 <label>Mức tồn tối thiểu</label>
@@ -694,7 +862,17 @@
             <form id="kvFormNhap" class="form-luoi" autocomplete="off">
               <div class="field field-rong">
                 <label>Sản phẩm *</label>
-                <select id="kvNhapSP" required></select>
+                <div class="combo1" id="kvNhapSPCombo">
+                  <button type="button" class="combo1-hienthi rong" id="kvNhapSPHienThi">
+                    <span>Chọn sản phẩm...</span>
+                    <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+                  </button>
+                  <div class="combo1-panel" id="kvNhapSPPanel" hidden>
+                    <input type="search" id="kvNhapSPTim" placeholder="Tìm theo tên hoặc mã SKU...">
+                    <div class="ql-goiy" id="kvNhapSPGoiY"></div>
+                  </div>
+                </div>
+                <input type="hidden" id="kvNhapSP">
               </div>
               <div class="field">
                 <label>Số lượng nhập *</label>
@@ -738,7 +916,17 @@
             <form id="kvFormXuat" class="form-luoi" autocomplete="off">
               <div class="field field-rong">
                 <label>Sản phẩm *</label>
-                <select id="kvXuatSP" required></select>
+                <div class="combo1" id="kvXuatSPCombo">
+                  <button type="button" class="combo1-hienthi rong" id="kvXuatSPHienThi">
+                    <span>Chọn sản phẩm...</span>
+                    <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+                  </button>
+                  <div class="combo1-panel" id="kvXuatSPPanel" hidden>
+                    <input type="search" id="kvXuatSPTim" placeholder="Tìm theo tên hoặc mã SKU...">
+                    <div class="ql-goiy" id="kvXuatSPGoiY"></div>
+                  </div>
+                </div>
+                <input type="hidden" id="kvXuatSP">
               </div>
               <div class="field field-rong" id="kvXuatTonBox" hidden>
                 <div class="kv-ton-nhac" id="kvXuatTonNhac"></div>
@@ -896,6 +1084,94 @@
         </div>
 
       </div>
+
+      <!-- ===== Màn Danh mục: Đơn vị tính / Nhà cung cấp / Kho (chuyển từ Dữ liệu nền) ===== -->
+      <div class="kv-pane" id="kv-pane-danhmuc" hidden>
+        <div class="seg" id="kvdlnSeg">
+          <button class="seg-nut active" data-dln="hanghoa">Đơn vị tính</button>
+          <button class="seg-nut" data-dln="doitac">Nhà cung cấp</button>
+          <button class="seg-nut" data-dln="kho">Kho</button>
+        </div>
+
+        <div class="kv-pane" id="dln-pane-hanghoa">
+          <div class="panel">
+            <div class="panel-head"><h4>Đơn vị tính</h4><span class="hint" id="dln-dv-dem"></span></div>
+            <div class="panel-body">
+              <form id="dln-dv-form" style="display:flex; gap:8px" autocomplete="off">
+                <input type="text" id="dln-dv-ten" placeholder="Tên đơn vị mới, VD: kg" required style="flex:1">
+                <button type="submit" class="btn-nho btn-primary" style="width:auto">+ Thêm</button>
+              </form>
+              <div class="form-loi" id="dln-dv-loi"></div>
+              <div id="dln-dv-list" style="margin-top:10px"></div>
+              <div class="empty" id="dln-dv-trong" hidden>Chưa có đơn vị tính nào — thêm ở trên.</div>
+            </div>
+            <div class="panel-body" style="padding-top:0">
+              <p class="hint">Quản lý Sản phẩm/SKU nằm ở tab <b>Kho vận → Tồn kho</b>.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="kv-pane" id="dln-pane-doitac" hidden>
+          <div class="panel">
+            <div class="panel-head"><h4>Nhà cung cấp</h4><span class="hint" id="dln-ncc-dem"></span></div>
+            <div class="panel-body">
+              <form id="dln-ncc-form" class="form-luoi" autocomplete="off">
+                <input type="hidden" id="dln-ncc-id">
+                <div class="field field-rong">
+                  <label>Tên nhà cung cấp *</label>
+                  <input type="text" id="dln-ncc-ten" required>
+                </div>
+                <div class="field">
+                  <label>Mã số thuế</label>
+                  <input type="text" id="dln-ncc-mst">
+                </div>
+                <div class="field">
+                  <label>Điện thoại</label>
+                  <input type="text" id="dln-ncc-dt">
+                </div>
+                <div class="field field-rong">
+                  <label>Địa chỉ</label>
+                  <input type="text" id="dln-ncc-diachi">
+                </div>
+                <div class="field field-nut" style="display:flex; gap:10px">
+                  <button type="submit" class="btn-primary" id="dln-ncc-nutluu" style="width:auto">+ Thêm</button>
+                  <button type="button" class="btn-phu" id="dln-ncc-nuthuy" style="width:auto" hidden>Hủy sửa</button>
+                </div>
+              </form>
+              <div class="form-loi" id="dln-ncc-loi"></div>
+              <div id="dln-ncc-list" style="margin-top:10px"></div>
+              <div class="empty" id="dln-ncc-trong" hidden>Chưa có nhà cung cấp nào — thêm ở trên.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="kv-pane" id="dln-pane-kho" hidden>
+          <div class="panel">
+            <div class="panel-head"><h4>Kho</h4><span class="hint" id="dln-kho-dem"></span></div>
+            <div class="panel-body">
+              <p class="hint" style="margin:0 0 14px">Hiện công ty vận hành 1 kho — chuẩn bị sẵn danh mục để mở kho mới không cần sửa code. Quản lý bởi Admin.</p>
+              <form id="dln-kho-form" class="form-luoi" autocomplete="off">
+                <input type="hidden" id="dln-kho-id">
+                <div class="field field-rong">
+                  <label>Tên kho *</label>
+                  <input type="text" id="dln-kho-ten" required placeholder="VD: Kho chính Hoài Đức">
+                </div>
+                <div class="field field-rong">
+                  <label>Địa chỉ</label>
+                  <input type="text" id="dln-kho-diachi">
+                </div>
+                <div class="field field-nut" style="display:flex; gap:10px">
+                  <button type="submit" class="btn-primary" id="dln-kho-nutluu" style="width:auto">+ Thêm</button>
+                  <button type="button" class="btn-phu" id="dln-kho-nuthuy" style="width:auto" hidden>Hủy sửa</button>
+                </div>
+              </form>
+              <div class="form-loi" id="dln-kho-loi"></div>
+              <div id="dln-kho-list" style="margin-top:10px"></div>
+              <div class="empty" id="dln-kho-trong" hidden>Chưa có kho nào — thêm ở trên.</div>
+            </div>
+          </div>
+        </div>
+      </div>
     </section>
 
     <!-- ---------- Kế toán ---------- -->
@@ -977,43 +1253,449 @@
         <div class="empty" id="kt-hh-trong" hidden>Chưa có hàng hỏng nào chờ lập biên bản.</div>
       </div>
 
-      <div class="stats" id="kt-the"></div>
+    </section>
 
-      <div class="grid-2">
-        <div class="panel">
-          <div class="panel-head">
-            <h4>Cơ cấu chi phí tháng 7</h4>
-            <span class="hint">Đơn vị: tỷ đồng</span>
-          </div>
-          <div class="panel-body"><div class="chart" id="kt-chart"></div></div>
+    <!-- ---------- Tài sản (Asset Management) ---------- -->
+    <section class="view" id="v-taisan" hidden>
+      <div class="view-head">
+        <h3>Tài sản</h3>
+        <p>Máy tính, thiết bị văn phòng và tài sản công ty — mỗi tài sản 1 mã QR dán trực tiếp lên thiết bị. Mọi người xem được ai đang giữ gì, quét mã mở đúng tài sản; Hành chính/Admin cấp phát, thu hồi, thanh lý.</p>
+      </div>
+
+      <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:16px">
+        <button type="button" class="btn-primary" id="ts-nut-quet" style="width:auto">📷 Quét mã tài sản</button>
+      </div>
+
+      <div class="panel" id="ts-panel-them" hidden>
+        <div class="panel-head"><h4>Thêm tài sản</h4></div>
+        <div class="panel-body">
+          <form id="tsThemForm" class="form-luoi" autocomplete="off">
+            <div class="field field-rong">
+              <label>Tên tài sản *</label>
+              <input type="text" id="tsThemTen" required placeholder="VD: Laptop Dell Latitude 5420">
+            </div>
+            <div class="field">
+              <label>Danh mục *</label>
+              <div class="combo1" id="tsThemDanhMucCombo">
+                <button type="button" class="combo1-hienthi rong" id="tsThemDanhMucHienThi">
+                  <span>Chọn danh mục...</span>
+                  <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+                </button>
+                <div class="combo1-panel" id="tsThemDanhMucPanel" hidden>
+                  <input type="search" id="tsThemDanhMucTim" placeholder="Tìm danh mục...">
+                  <div class="ql-goiy" id="tsThemDanhMucGoiY"></div>
+                </div>
+              </div>
+              <input type="hidden" id="tsThemDanhMucId">
+            </div>
+            <div class="field">
+              <label>Vị trí hiện tại</label>
+              <div class="combo1" id="tsThemViTriCombo">
+                <button type="button" class="combo1-hienthi rong" id="tsThemViTriHienThi">
+                  <span>Chọn vị trí...</span>
+                  <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+                </button>
+                <div class="combo1-panel" id="tsThemViTriPanel" hidden>
+                  <input type="search" id="tsThemViTriTim" placeholder="Tìm vị trí...">
+                  <div class="ql-goiy" id="tsThemViTriGoiY"></div>
+                </div>
+              </div>
+              <input type="hidden" id="tsThemViTriId">
+            </div>
+
+            <div class="field field-rong" style="margin-bottom:0">
+              <button type="button" class="btn-nho" id="tsThemNutChiTiet">+ Thêm chi tiết (hãng SX, serial, giá mua, ảnh...)</button>
+            </div>
+            <div class="field-rong" id="tsThemChiTiet" hidden>
+              <div class="field"><label>Hãng sản xuất</label><input type="text" id="tsThemHangSx" placeholder="Dell, HP, Canon..."></div>
+              <div class="field"><label>Model</label><input type="text" id="tsThemModel"></div>
+              <div class="field"><label>Số serial</label><input type="text" id="tsThemSerial" placeholder="Mã serial của nhà sản xuất"></div>
+              <div class="field"><label>Ngày mua</label><input type="date" id="tsThemNgayMua"></div>
+              <div class="field"><label>Nhà cung cấp</label><input type="text" id="tsThemNCC"></div>
+              <div class="field"><label>Giá mua (đ) <span class="hint">— chỉ để tham chiếu, không phải sổ kế toán</span></label><input type="number" id="tsThemGiaMua" min="0" step="1000"></div>
+              <div class="field"><label>Hết bảo hành</label><input type="date" id="tsThemHetBaoHanh"></div>
+              <div class="field">
+                <label>Phòng ban sở hữu</label>
+                <select id="tsThemPhongBan"><option value="">— Chưa gán —</option></select>
+              </div>
+              <div class="field field-rong">
+                <label>Ảnh tài sản <span class="hint">(tối đa 4MB)</span></label>
+                <input type="file" id="tsThemAnh" accept="image/*">
+                <div id="tsThemAnhXemTruoc" style="margin-top:8px"></div>
+              </div>
+              <div class="field field-rong">
+                <label>Ghi chú</label>
+                <textarea id="tsThemGhiChu" rows="2"></textarea>
+              </div>
+            </div>
+
+            <div class="field field-nut" style="display:flex; gap:10px">
+              <button type="submit" class="btn-primary" id="tsThemNut" style="width:auto">+ Thêm tài sản</button>
+              <button type="submit" class="btn-phu" id="tsThemNutInTem" style="width:auto">Lưu &amp; In tem</button>
+            </div>
+          </form>
+          <div class="form-loi" id="tsThemLoi"></div>
         </div>
+      </div>
 
-        <div class="panel">
-          <div class="panel-head">
-            <h4>Nghĩa vụ thuế</h4>
+      <div class="panel" id="ts-panel-danhmuc" hidden>
+        <div class="panel-head">
+          <h4>Danh mục &amp; Vị trí tài sản</h4>
+          <button type="button" class="btn-nho" id="ts-nut-danhmuctoggle">Quản lý</button>
+        </div>
+        <div class="panel-body" id="ts-danhmuc-body" hidden style="padding-top:0">
+          <div class="grid-2">
+            <div>
+              <p class="hint" style="margin:0 0 8px">Danh mục</p>
+              <form id="ts-dm-form" style="display:flex; gap:8px" autocomplete="off">
+                <input type="text" id="ts-dm-ten" placeholder="Danh mục mới, VD: Máy chấm công" required style="flex:1">
+                <button type="submit" class="btn-nho btn-primary" style="width:auto">+ Thêm</button>
+              </form>
+              <div class="form-loi" id="ts-dm-loi"></div>
+              <div id="ts-dm-list" style="margin-top:10px"></div>
+            </div>
+            <div>
+              <p class="hint" style="margin:0 0 8px">Vị trí</p>
+              <form id="ts-vt-form" style="display:flex; gap:8px" autocomplete="off">
+                <input type="text" id="ts-vt-ten" placeholder="Vị trí mới, VD: Kho tầng 3" required style="flex:1">
+                <button type="submit" class="btn-nho btn-primary" style="width:auto">+ Thêm</button>
+              </form>
+              <div class="form-loi" id="ts-vt-loi"></div>
+              <div id="ts-vt-list" style="margin-top:10px"></div>
+            </div>
           </div>
-          <div class="panel-body"><div class="list" id="kt-thue"></div></div>
         </div>
       </div>
 
       <div class="panel">
         <div class="panel-head">
-          <h4>Công nợ</h4>
-          <span class="hint">Phải thu và phải trả</span>
+          <h4>Danh sách tài sản</h4>
+          <span class="hint" id="tsDem"></span>
+        </div>
+        <div class="panel-body" style="padding-bottom:0">
+          <div class="dh-timkiem">
+            <div class="search">
+              <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+              </svg>
+              <input type="search" id="ts-tim" placeholder="Tìm theo mã, tên, danh mục hoặc serial...">
+            </div>
+            <select id="ts-loctrangthai" class="chon-nho" title="Lọc theo trạng thái">
+              <option value="">Tất cả trạng thái</option>
+              <option value="san_sang">Sẵn sàng</option>
+              <option value="da_cap_phat">Đã cấp phát</option>
+              <option value="bao_hong">Báo hỏng</option>
+              <option value="mat">Mất</option>
+              <option value="da_thanh_ly">Đã thanh lý</option>
+            </select>
+            <button type="button" class="btn-nho btn-phu" id="ts-xoaloc" hidden>Xoá bộ lọc</button>
+          </div>
+          <div class="kd-thanh-chon" id="ts-thanhchon" hidden style="margin-top:10px">
+            <span id="ts-sldachon"></span>
+            <button type="button" class="btn-primary" id="ts-nut-intemchon" style="width:auto">In tem đã chọn</button>
+            <button type="button" class="btn-phu" id="ts-nut-huychon">Bỏ chọn</button>
+          </div>
         </div>
         <div class="table-wrap">
           <table>
             <thead>
               <tr>
-                <th>Đối tác</th>
-                <th>Loại</th>
-                <th class="num">Số tiền (đ)</th>
-                <th>Hạn</th>
+                <th style="width:28px"><input type="checkbox" id="ts-chontatca"></th>
+                <th>Mã TS</th>
+                <th>Tên</th>
+                <th>Danh mục</th>
                 <th>Trạng thái</th>
+                <th>Đang giữ</th>
+                <th>Vị trí</th>
+                <th>Thao tác</th>
               </tr>
             </thead>
-            <tbody id="kt-bang"></tbody>
+            <tbody id="ts-bang"></tbody>
           </table>
+        </div>
+        <div class="empty" id="ts-trong" hidden>Chưa có tài sản nào.</div>
+      </div>
+    </section>
+
+    <!-- ---------- Tài sản: Chi tiết (header + hiện tại + lịch sử + quick actions + QR) ---------- -->
+    <div class="modal-nen" id="tsChiTietModalNen" hidden>
+      <div class="modal">
+        <div class="ts-ct-dau">
+          <div>
+            <h4 id="tsCtTen"></h4>
+            <div class="sm" id="tsCtMa"></div>
+          </div>
+          <div id="tsCtQR" class="ts-ct-qr"></div>
+        </div>
+        <div id="tsCtTag" style="margin:10px 0"></div>
+
+        <div class="ts-ct-nhom" style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px">
+          <button type="button" class="btn-nho btn-primary" id="tsCtNutCapPhat">Bàn giao</button>
+          <button type="button" class="btn-nho" id="tsCtNutThuHoi">Thu hồi</button>
+          <button type="button" class="btn-nho" id="tsCtNutBaoHong">Báo hỏng</button>
+          <button type="button" class="btn-nho" id="tsCtNutBaoMat">Báo mất</button>
+          <button type="button" class="btn-nho" id="tsCtNutBaoTriXong">Bảo trì xong</button>
+          <button type="button" class="btn-nho" id="tsCtNutSua">Sửa</button>
+          <button type="button" class="btn-nho" id="tsCtNutThanhLy">Thanh lý</button>
+          <button type="button" class="btn-nho btn-phu" id="tsCtNutInTem">In tem</button>
+        </div>
+
+        <div class="ts-ct-info" id="tsCtThongTin"></div>
+
+        <div class="mt-nhom-nhan" style="margin-top:18px">Lịch sử</div>
+        <div id="tsCtLichSu"></div>
+
+        <div class="field field-nut" style="margin-top:14px">
+          <button type="button" class="btn-phu" id="tsCtDong" style="width:auto">Đóng</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ---------- Tài sản: Sửa ---------- -->
+    <div class="modal-nen" id="tsSuaModalNen" hidden>
+      <div class="modal">
+        <h4>Sửa tài sản</h4>
+        <form id="tsSuaForm" class="form-luoi" autocomplete="off">
+          <input type="hidden" id="tsSuaId">
+          <div class="field field-rong"><label>Tên tài sản *</label><input type="text" id="tsSuaTen" required></div>
+          <div class="field">
+            <label>Danh mục</label>
+            <div class="combo1" id="tsSuaDanhMucCombo">
+              <button type="button" class="combo1-hienthi rong" id="tsSuaDanhMucHienThi">
+                <span>Chọn danh mục...</span>
+                <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+              </button>
+              <div class="combo1-panel" id="tsSuaDanhMucPanel" hidden>
+                <input type="search" id="tsSuaDanhMucTim" placeholder="Tìm danh mục...">
+                <div class="ql-goiy" id="tsSuaDanhMucGoiY"></div>
+              </div>
+            </div>
+            <input type="hidden" id="tsSuaDanhMucId">
+          </div>
+          <div class="field">
+            <label>Vị trí</label>
+            <div class="combo1" id="tsSuaViTriCombo">
+              <button type="button" class="combo1-hienthi rong" id="tsSuaViTriHienThi">
+                <span>Chọn vị trí...</span>
+                <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+              </button>
+              <div class="combo1-panel" id="tsSuaViTriPanel" hidden>
+                <input type="search" id="tsSuaViTriTim" placeholder="Tìm vị trí...">
+                <div class="ql-goiy" id="tsSuaViTriGoiY"></div>
+              </div>
+            </div>
+            <input type="hidden" id="tsSuaViTriId">
+          </div>
+          <div class="field">
+            <label>Tình trạng</label>
+            <select id="tsSuaTinhTrang">
+              <option value="tot">Tốt</option>
+              <option value="binh_thuong">Bình thường</option>
+              <option value="can_sua">Cần sửa</option>
+              <option value="hong">Hỏng</option>
+            </select>
+          </div>
+          <div class="field"><label>Hãng sản xuất</label><input type="text" id="tsSuaHangSx"></div>
+          <div class="field"><label>Model</label><input type="text" id="tsSuaModel"></div>
+          <div class="field"><label>Số serial</label><input type="text" id="tsSuaSerial"></div>
+          <div class="field"><label>Ngày mua</label><input type="date" id="tsSuaNgayMua"></div>
+          <div class="field"><label>Nhà cung cấp</label><input type="text" id="tsSuaNCC"></div>
+          <div class="field"><label>Giá mua (đ)</label><input type="number" id="tsSuaGiaMua" min="0" step="1000"></div>
+          <div class="field"><label>Hết bảo hành</label><input type="date" id="tsSuaHetBaoHanh"></div>
+          <div class="field"><label>Phòng ban sở hữu</label><select id="tsSuaPhongBan"><option value="">— Chưa gán —</option></select></div>
+          <div class="field field-rong">
+            <label>Ảnh tài sản <span class="hint">(để trống = giữ ảnh cũ, tối đa 4MB)</span></label>
+            <input type="file" id="tsSuaAnh" accept="image/*">
+            <div id="tsSuaAnhXemTruoc" style="margin-top:8px"></div>
+          </div>
+          <div class="field field-rong"><label>Ghi chú</label><textarea id="tsSuaGhiChu" rows="2"></textarea></div>
+          <div class="field field-nut" style="display:flex; gap:10px">
+            <button type="submit" class="btn-primary" id="tsSuaNut" style="width:auto">Lưu</button>
+            <button type="button" class="btn-phu" id="tsSuaHuy" style="width:auto">Hủy</button>
+          </div>
+        </form>
+        <div class="form-loi" id="tsSuaLoi"></div>
+      </div>
+    </div>
+
+    <!-- ---------- Tài sản: Quét mã (camera BarcodeDetector, có nhập tay dự phòng) ---------- -->
+    <div class="modal-nen" id="tsQuetModalNen" hidden>
+      <div class="modal">
+        <h4>📷 Quét mã tài sản</h4>
+        <p class="hint" id="tsQuetGhiChu" style="margin:0 0 12px">Đưa camera vào mã QR dán trên tài sản.</p>
+        <video id="tsQuetVideo" playsinline muted style="width:100%; border-radius:12px; background:#000" hidden></video>
+        <div class="form-loi" id="tsQuetLoi"></div>
+        <div class="field field-rong" style="margin-top:14px">
+          <label>Hoặc nhập mã tài sản trực tiếp</label>
+          <input type="text" id="tsQuetNhapTay" placeholder="VD: TS0001" autocapitalize="characters">
+        </div>
+        <div class="field field-nut" style="display:flex; gap:10px">
+          <button type="button" class="btn-primary" id="tsQuetTraCuu" style="width:auto">Mở tài sản</button>
+          <button type="button" class="btn-phu" id="tsQuetDong" style="width:auto">Đóng</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ---------- Tài sản: Tem in (chỉ hiện khi in — xem @media print trong style.css) ---------- -->
+    <div id="tsInTemVung" class="ts-in-tem-vung" hidden>
+      <div id="tsTemMauDon"></div>
+    </div>
+
+    <!-- ---------- Xếp ca (Đăng ký ca / Xếp ca tuần) — Part-time & Thời vụ ---------- -->
+    <section class="view" id="v-xepca" hidden>
+      <div class="view-head">
+        <h3>Xếp ca</h3>
+        <p>Đăng ký ca làm việc (Part-time/Thời vụ) và xếp ca cho phòng ban — thay thế đăng ký ca trên Google Sheet.</p>
+      </div>
+
+      <div class="seg" id="xcSeg">
+        <button class="seg-nut active" data-xc="dangky">Đăng ký ca</button>
+        <button class="seg-nut" data-xc="xep">Xếp ca tuần</button>
+        <button class="seg-nut" data-xc="cauhinh" id="xcSegCauHinh" hidden>Cấu hình ca</button>
+      </div>
+
+      <!-- ===== Nhân viên: Đăng ký ca ===== -->
+      <div class="kv-pane" id="xc-pane-dangky">
+        <div class="empty" id="xc-khongduockyy" hidden>Chức năng Đăng ký ca chỉ dành cho nhân sự Part-time/Thời vụ. Liên hệ HCNS nếu cần hỗ trợ.</div>
+
+        <div id="xc-dangky-body" hidden>
+          <div class="panel">
+            <div class="panel-head">
+              <h4>Ca đang mở đăng ký</h4>
+              <span class="hint" id="xcDangMoDem"></span>
+            </div>
+            <div class="panel-body">
+              <div id="xc-dangky-list"></div>
+              <div class="empty" id="xc-dangky-trong" hidden>Chưa có ca nào đang mở đăng ký.</div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-head"><h4>Lịch làm việc chính thức của tôi</h4></div>
+            <div class="panel-body">
+              <div id="xc-lichtoi-list"></div>
+              <div class="empty" id="xc-lichtoi-trong" hidden>Chưa có ca nào được duyệt.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== Trưởng phòng: Xếp ca tuần (ma trận) ===== -->
+      <div class="kv-pane" id="xc-pane-xep" hidden>
+        <div class="empty" id="xc-khongquanly" hidden>Bạn chưa được gán là trưởng phòng của phòng ban nào — liên hệ Quản trị để được gán.</div>
+
+        <div id="xc-xep-body" hidden>
+          <div class="panel">
+            <div class="panel-body" style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end">
+              <div class="field" style="margin:0; min-width:200px">
+                <label>Phòng ban</label>
+                <select id="xcPhongBan"></select>
+              </div>
+              <div class="field" style="margin:0; display:flex; gap:6px; align-items:center">
+                <button type="button" class="btn-phu" id="xcTuanTruoc">‹ Tuần trước</button>
+                <span class="nm" id="xcTuanLabel" style="white-space:nowrap"></span>
+                <button type="button" class="btn-phu" id="xcTuanSau">Tuần sau ›</button>
+              </div>
+              <div class="field" style="margin:0 0 0 auto">
+                <button type="button" class="btn-primary" id="xcChotLich" style="width:auto">Chốt lịch tuần</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-head">
+              <h4>Kế hoạch nhân lực tuần</h4>
+              <span class="hint">Nhập số người cần theo Ca × Ngày, rồi bấm "Mở đăng ký" — ô để trống/0 sẽ không mở</span>
+            </div>
+            <div class="panel-body">
+              <div class="empty" id="xc-kehoach-chuacomauca" hidden>Chưa có Mẫu ca nào — vào tab "Cấu hình ca" để thêm trước (VD: Ca sáng, Ca chiều...), rồi quay lại đây nhập số người cần.</div>
+              <div id="xc-kehoach-noidung">
+                <div class="table-wrap">
+                  <table class="xc-matrix" id="xc-kehoach-table"><thead id="xc-kehoach-thead"></thead><tbody id="xc-kehoach-tbody"></tbody></table>
+                </div>
+                <div style="display:flex; gap:10px; align-items:center; margin-top:12px; flex-wrap:wrap">
+                  <div class="field" style="margin:0">
+                    <label>Hạn đăng ký (không bắt buộc)</label>
+                    <input type="date" id="xcKeHoachHan">
+                  </div>
+                  <button type="button" class="btn-primary" id="xcMoDangKyTuan" style="width:auto; align-self:flex-end">Mở đăng ký cho tuần</button>
+                </div>
+                <div class="form-loi" id="xcKeHoachLoi"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-head">
+              <h4>Xếp lịch tự động</h4>
+              <span class="hint">ERP tự chọn người phù hợp nhất theo nhu cầu + ai đang ít giờ hơn — chưa chốt, vẫn xem/chỉnh được</span>
+            </div>
+            <div class="panel-body">
+              <button type="button" class="btn-primary" id="xcXepTuDong" style="width:auto">Xếp lịch tự động cho tuần này</button>
+              <div class="form-loi" id="xcXepTuDongLoi"></div>
+            </div>
+          </div>
+
+          <div class="panel" id="xc-canxuly-panel" hidden>
+            <div class="panel-head"><h4>Cần xử lý</h4></div>
+            <div class="panel-body">
+              <div id="xc-canxuly-list"></div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-head">
+              <h4>Nhân lực theo ca</h4>
+              <span class="hint">Đã xếp / Cần — bấm "Duyệt tất cả" ở đầu cột để tự xếp nhanh riêng ca đó</span>
+            </div>
+            <div class="panel-body">
+              <div id="xc-tongquan-ca"></div>
+            </div>
+          </div>
+
+          <div class="table-wrap" id="xc-matrix-wrap">
+            <table class="xc-matrix" id="xc-matrix-table">
+              <thead id="xc-matrix-thead"></thead>
+              <tbody id="xc-matrix-tbody"></tbody>
+            </table>
+          </div>
+          <div class="empty" id="xc-matrix-trong" hidden>Phòng ban này chưa có nhân sự Part-time/Thời vụ nào.</div>
+        </div>
+      </div>
+
+      <!-- ===== HR/Admin: Cấu hình Mẫu ca (chính sách chung, KHÔNG mở ca
+           thay phòng ban — mở ca là việc của Trưởng phòng, xem pane
+           "Xếp ca tuần" → Kế hoạch nhân lực tuần) ===== -->
+      <div class="kv-pane" id="xc-pane-cauhinh" hidden>
+        <div class="panel">
+          <div class="panel-head"><h4>Mẫu ca</h4><span class="hint" id="xcMauCaDem"></span></div>
+          <div class="panel-body">
+            <form id="xcMauCaForm" class="form-luoi" autocomplete="off">
+              <input type="hidden" id="xcMcId">
+              <div class="field">
+                <label>Ký hiệu ngắn *</label>
+                <input type="text" id="xcMcMa" required placeholder="VD: S">
+              </div>
+              <div class="field">
+                <label>Tên ca *</label>
+                <input type="text" id="xcMcTen" required placeholder="VD: Ca sáng">
+              </div>
+              <div class="field">
+                <label>Giờ bắt đầu *</label>
+                <input type="time" id="xcMcBatDau" required>
+              </div>
+              <div class="field">
+                <label>Giờ kết thúc *</label>
+                <input type="time" id="xcMcKetThuc" required>
+              </div>
+              <div class="field field-nut" style="display:flex; gap:10px">
+                <button type="submit" class="btn-primary" id="xcMcNutThem">+ Thêm mẫu ca</button>
+                <button type="button" class="btn-phu" id="xcMcNutHuy" style="width:auto" hidden>Hủy sửa</button>
+              </div>
+            </form>
+            <div class="form-loi" id="xcMcLoi"></div>
+            <div id="xcMcList" style="margin-top:10px"></div>
+          </div>
         </div>
       </div>
     </section>
@@ -1070,8 +1752,57 @@
     <section class="view" id="v-quantri" hidden>
       <div class="view-head">
         <h3>Quản trị</h3>
-        <p id="qtMoTa">Thêm nhân sự, tạo tài khoản đăng nhập và đặt lại mật khẩu.</p>
+        <p id="qtMoTa">Tạo tài khoản đăng nhập, đặt lại mật khẩu, khoá/mở tài khoản và quản lý Cơ cấu tổ chức (Phòng ban/Chức danh) cấp công ty.</p>
       </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h4>Tình trạng dữ liệu nền</h4>
+          <span class="hint">Còn thiếu gì để ERP bắt đầu chạy thật</span>
+        </div>
+        <div class="panel-body">
+          <div class="stats" id="dln-tinhtrang"></div>
+          <p class="hint" style="margin:16px 0 8px">Việc tiếp theo</p>
+          <div class="list" id="dln-viectieptheo"></div>
+        </div>
+      </div>
+
+      <div class="seg" id="qtSeg">
+        <button class="seg-nut active" data-qt="taikhoan">Tài khoản</button>
+        <button class="seg-nut" data-qt="cocau">Cơ cấu tổ chức</button>
+      </div>
+
+      <div class="kv-pane" id="dln-pane-tochuc" hidden>
+        <div class="grid-2">
+          <div class="panel">
+            <div class="panel-head"><h4>Phòng ban</h4><span class="hint" id="dln-pb-dem"></span></div>
+            <div class="panel-body">
+              <form id="dln-pb-form" style="display:flex; gap:8px" autocomplete="off">
+                <input type="text" id="dln-pb-ten" placeholder="Tên phòng ban mới, VD: Kho vận" required style="flex:1">
+                <button type="submit" class="btn-nho btn-primary" style="width:auto">+ Thêm</button>
+              </form>
+              <div class="form-loi" id="dln-pb-loi"></div>
+              <div id="dln-pb-list" style="margin-top:10px"></div>
+              <div class="empty" id="dln-pb-trong" hidden>Chưa có phòng ban nào — thêm ở trên.</div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-head"><h4>Chức danh</h4><span class="hint" id="dln-cd-dem"></span></div>
+            <div class="panel-body">
+              <form id="dln-cd-form" style="display:flex; gap:8px" autocomplete="off">
+                <input type="text" id="dln-cd-ten" placeholder="Tên chức danh mới, VD: Nhân viên kho" required style="flex:1">
+                <button type="submit" class="btn-nho btn-primary" style="width:auto">+ Thêm</button>
+              </form>
+              <div class="form-loi" id="dln-cd-loi"></div>
+              <div id="dln-cd-list" style="margin-top:10px"></div>
+              <div class="empty" id="dln-cd-trong" hidden>Chưa có chức danh nào — thêm ở trên.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="kv-pane" id="qt-pane-taikhoan">
 
       <!-- ===== Đón nhân sự mới từ ảnh CCCD (đang hoàn thiện — tạm ẩn) ===== -->
       <div class="panel" hidden>
@@ -1157,7 +1888,7 @@
                 <option value="thu_viec">Thử việc</option>
                 <option value="cho_ky">Chờ ký</option>
                 <option value="da_ky">Đã ký HĐ</option>
-                <option value="parttime">Parttime</option>
+                <option value="parttime">Bán thời gian</option>
               </select>
             </div>
             <div class="field" id="dmFieldLuong">
@@ -1174,52 +1905,25 @@
         </div>
       </div>
 
-      <!-- Thêm nhân sự -->
-      <div class="panel">
-        <div class="panel-head"><h4>Thêm nhân sự nhanh (không ảnh)</h4></div>
-        <div class="panel-body">
-          <form id="qtFormThem" class="form-luoi" autocomplete="off">
-            <div class="field">
-              <label>Họ tên *</label>
-              <input type="text" id="qtHoTen" required placeholder="Ví dụ: Trần Văn Nam">
-            </div>
-            <div class="field">
-              <label>Chức vụ</label>
-              <input type="text" id="qtChucVu" placeholder="Nhân viên kho">
-            </div>
-            <div class="field">
-              <label>Bộ phận</label>
-              <input type="text" id="qtBoPhan" placeholder="Kho vận">
-            </div>
-            <div class="field">
-              <label>Số điện thoại</label>
-              <input type="text" id="qtSdt" placeholder="09xx xxx xxx">
-            </div>
-            <div class="field">
-              <label>Email</label>
-              <input type="text" id="qtEmail" placeholder="ten@alphagreen.vn">
-            </div>
-            <div class="field">
-              <label>Quản lý trực tiếp</label>
-              <select id="qtQuanLy"><option value="">— Không —</option></select>
-            </div>
-            <div class="field" id="qtFieldLuong">
-              <label>Lương (đồng/tháng)</label>
-              <input type="text" id="qtLuong" inputmode="numeric" placeholder="Để trống nếu chưa có">
-            </div>
-            <div class="field field-nut">
-              <button type="submit" class="btn-primary" id="qtNutThem">Thêm nhân sự</button>
-            </div>
-          </form>
-          <div class="form-loi" id="qtLoiThem"></div>
-        </div>
-      </div>
-
       <!-- Danh sách nhân sự + tài khoản -->
       <div class="panel">
         <div class="panel-head">
           <h4>Nhân sự &amp; tài khoản</h4>
           <span class="hint" id="qtDem"></span>
+        </div>
+        <div class="panel-body" style="padding-bottom:0">
+          <div class="dh-timkiem">
+            <div class="search">
+              <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+              </svg>
+              <input type="search" id="qt-tim" placeholder="Tìm theo mã, họ tên hoặc tên đăng nhập...">
+            </div>
+            <select id="qt-locvaitro" class="chon-nho" title="Lọc theo vai trò">
+              <option value="">Tất cả vai trò</option>
+            </select>
+            <button type="button" class="btn-nho btn-phu" id="qt-xoaloc" hidden>Xoá bộ lọc</button>
+          </div>
         </div>
         <div class="table-wrap">
           <table>
@@ -1235,9 +1939,137 @@
             <tbody id="qtBang"></tbody>
           </table>
         </div>
+        <div class="empty" id="qt-trong" hidden></div>
       </div>
+      </div><!-- /qt-pane-taikhoan -->
     </section>
 
+  </div>
+</div>
+
+<!-- Hộp nhập nhanh dùng chung — thay cho prompt() của trình duyệt (Gán
+     trưởng phòng, Sửa tên danh mục nền, Ghi chú báo hỏng, Kết quả công
+     việc...). Cùng khuôn mẫu với Sửa hồ sơ nhân sự. -->
+<div class="modal-nen" id="hopNhapModalNen" hidden>
+  <div class="modal">
+    <h4 id="hopNhap-tieude">Nhập</h4>
+    <form id="hopNhapForm" class="form-luoi" autocomplete="off">
+      <div class="field field-rong">
+        <label id="hopNhap-nhan"></label>
+        <input type="text" id="hopNhap-input" hidden>
+        <div class="combo1" id="hopNhap-selectcombo" hidden>
+          <button type="button" class="combo1-hienthi rong" id="hopNhap-selecthienthi">
+            <span>Chọn...</span>
+            <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+          <div class="combo1-panel" id="hopNhap-selectpanel" hidden>
+            <input type="search" id="hopNhap-selecttim" placeholder="Tìm theo mã hoặc tên...">
+            <div class="ql-goiy" id="hopNhap-selectgoiy"></div>
+          </div>
+        </div>
+        <input type="hidden" id="hopNhap-select">
+        <textarea id="hopNhap-textarea" hidden rows="3"></textarea>
+      </div>
+      <div class="form-loi" id="hopNhap-loi"></div>
+      <div class="field field-nut" style="display:flex; gap:10px; justify-content:flex-end">
+        <button type="button" class="btn-phu" id="hopNhap-huy" style="width:auto">Huỷ</button>
+        <button type="submit" class="btn-primary" id="hopNhap-luu" style="width:auto">Lưu</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Hộp Sửa hồ sơ nhân sự -->
+<div class="modal-nen" id="nsSuaModalNen" hidden>
+  <div class="modal">
+    <h4>Sửa hồ sơ nhân sự</h4>
+    <form id="nsSuaForm" class="form-luoi" autocomplete="off">
+      <input type="hidden" id="nsSua-id">
+      <div class="field field-rong">
+        <label>Họ tên *</label>
+        <input type="text" id="nsSua-hoten" required>
+      </div>
+      <div class="field" id="nsSua-fieldmanv" hidden>
+        <label>Mã nhân sự <span class="goi-y">· chỉ Admin sửa được, hiếm khi cần đổi</span></label>
+        <input type="text" id="nsSua-manv" placeholder="VD: 01-0001">
+      </div>
+      <div class="field">
+        <label>Chức danh <span class="hint">· <a href="#" data-mo-tab="quantri">quản lý ở Quản trị</a></span></label>
+        <div class="combo1" id="nsSua-chucdanhcombo">
+          <button type="button" class="combo1-hienthi rong" id="nsSua-chucdanhhienthi">
+            <span>Chọn chức danh...</span>
+            <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+          <div class="combo1-panel" id="nsSua-chucdanhpanel" hidden>
+            <input type="search" id="nsSua-chucdanhtim" placeholder="Tìm chức danh...">
+            <div class="ql-goiy" id="nsSua-chucdanhgoiy"></div>
+          </div>
+        </div>
+        <input type="hidden" id="nsSua-chucdanh">
+      </div>
+      <div class="field">
+        <label>Phòng ban <span class="hint">· <a href="#" data-mo-tab="quantri">quản lý ở Quản trị</a></span></label>
+        <div class="combo1" id="nsSua-phongbancombo">
+          <button type="button" class="combo1-hienthi rong" id="nsSua-phongbanhienthi">
+            <span>Chọn phòng ban...</span>
+            <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+          <div class="combo1-panel" id="nsSua-phongbanpanel" hidden>
+            <input type="search" id="nsSua-phongbantim" placeholder="Tìm phòng ban...">
+            <div class="ql-goiy" id="nsSua-phongbangoiy"></div>
+          </div>
+        </div>
+        <input type="hidden" id="nsSua-phongban">
+      </div>
+      <div class="field">
+        <label>Số điện thoại</label>
+        <input type="text" id="nsSua-sdt">
+      </div>
+      <div class="field">
+        <label>Email</label>
+        <input type="text" id="nsSua-email">
+      </div>
+      <div class="field">
+        <label>Quản lý trực tiếp</label>
+        <div class="combo1" id="nsSua-quanlycombo">
+          <button type="button" class="combo1-hienthi rong" id="nsSua-quanlyhienthi">
+            <span>Chọn quản lý...</span>
+            <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+          <div class="combo1-panel" id="nsSua-quanlypanel" hidden>
+            <input type="search" id="nsSua-quanlytim" placeholder="Tìm theo mã hoặc tên...">
+            <div class="ql-goiy" id="nsSua-quanlygoiy"></div>
+          </div>
+        </div>
+        <input type="hidden" id="nsSua-quanly">
+      </div>
+      <div class="field">
+        <label>Trạng thái</label>
+        <select id="nsSua-trangthai">
+          <option value="thu_viec">Thử việc</option>
+          <option value="cho_ky">Chờ ký</option>
+          <option value="da_ky">Đã ký HĐ</option>
+          <option value="parttime">Bán thời gian</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Loại lao động <span class="hint">· để dùng được Đăng ký ca</span></label>
+        <select id="nsSua-loailaodong">
+          <option value="toan_thoi_gian">Toàn thời gian</option>
+          <option value="ban_thoi_gian">Part-time</option>
+          <option value="thoi_vu">Thời vụ</option>
+        </select>
+      </div>
+      <div class="field" id="nsSua-fieldluong">
+        <label>Đổi lương (đồng/tháng) <span class="goi-y">· để trống = giữ nguyên</span></label>
+        <input type="text" id="nsSua-luong" inputmode="numeric" placeholder="Chỉ gõ nếu muốn đổi">
+      </div>
+      <div class="field field-nut" style="display:flex; gap:10px">
+        <button type="submit" class="btn-primary" id="nsSua-nutluu" style="width:auto">Lưu thay đổi</button>
+        <button type="button" class="btn-phu" id="nsSua-nuthuy" style="width:auto">Hủy</button>
+      </div>
+    </form>
+    <div class="form-loi" id="nsSua-loi"></div>
   </div>
 </div>
 
@@ -1302,11 +2134,21 @@
 <div class="modal-nen" id="cvFormModalNen" hidden>
   <div class="modal">
     <h4>+ Giao Mục Tiêu</h4>
-    <p class="hint" style="margin:0 0 16px">Tự thêm việc cần làm cho bản thân (chọn "Tôi"), hoặc giao cho người khác rõ đầu ra. Mời thêm người phối hợp để làm cùng. Cần mục tiêu mới thì tạo ngay trong mục "Thuộc mục tiêu" bên dưới.</p>
+    <p class="hint" style="margin:0 0 16px">Tự thêm việc cần làm cho bản thân (chọn "Tôi"), hoặc giao cho người khác rõ đầu ra. Nếu việc này thuộc 1 mục tiêu lớn hơn (để tự tính tiến độ), chọn hoặc tạo mới ở mục "Thuộc mục tiêu" — để trống thì chỉ là 1 việc thường, không hiện ở Trạm Mục Tiêu.</p>
     <form id="cv-form" class="form-luoi" autocomplete="off">
       <div class="field field-rong">
         <label>Giao cho ai * <span class="hint">(người chịu trách nhiệm chính)</span></label>
-        <select id="cv-nguoi-nhan" required><option value="">— Chọn người nhận việc —</option></select>
+        <div class="combo1" id="cv-nguoi-nhancombo">
+          <button type="button" class="combo1-hienthi rong" id="cv-nguoi-nhanhienthi">
+            <span>Chọn người nhận việc...</span>
+            <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+          <div class="combo1-panel" id="cv-nguoi-nhanpanel" hidden>
+            <input type="search" id="cv-nguoi-nhantim" placeholder="Tìm theo mã hoặc tên...">
+            <div class="ql-goiy" id="cv-nguoi-nhangoiy"></div>
+          </div>
+        </div>
+        <input type="hidden" id="cv-nguoi-nhan">
       </div>
       <div class="field field-rong">
         <label>Tên việc *</label>
@@ -1321,35 +2163,36 @@
         <input type="date" id="cv-han-chot">
       </div>
 
-      <div class="field field-rong" style="margin-bottom:0">
-        <button type="button" class="btn-nho" id="cv-nut-tuychon">+ Thêm tuỳ chọn (mục tiêu, người phối hợp, ghi chú)</button>
+      <div class="field field-rong" id="cv-muc-tieu-khoi">
+        <label>Thuộc mục tiêu <span class="hint">(để trống nếu chỉ là việc thường ngày, không cần tính vào mục tiêu)</span></label>
+        <select id="cv-muc-tieu">
+          <option value="">— Không gắn mục tiêu, chỉ là việc thường —</option>
+          <option value="_moi_">+ Tạo mục tiêu mới…</option>
+        </select>
       </div>
-      <div class="field-rong" id="cv-tuychon-them" hidden>
-        <div class="field field-rong">
-          <label>Thuộc mục tiêu <span class="hint">(tuỳ chọn — để tự tính tiến độ mục tiêu)</span></label>
-          <select id="cv-muc-tieu">
-            <option value="">— Không gắn mục tiêu —</option>
-            <option value="_moi_">+ Tạo mục tiêu mới…</option>
+      <div class="field-rong" id="cv-mtm-khoi" hidden>
+        <div class="field">
+          <label>Cấp mục tiêu mới *</label>
+          <select id="cv-mtm-cap">
+            <option value="ca_nhan">Cá nhân (tôi)</option>
+            <option value="phong_ban">Phòng ban</option>
+            <option value="cong_ty" id="cv-mtm-opt-congty" hidden>Công ty</option>
           </select>
         </div>
-        <div class="field-rong" id="cv-mtm-khoi" hidden>
-          <div class="field">
-            <label>Cấp mục tiêu mới *</label>
-            <select id="cv-mtm-cap">
-              <option value="ca_nhan">Cá nhân (tôi)</option>
-              <option value="phong_ban">Phòng ban</option>
-              <option value="cong_ty" id="cv-mtm-opt-congty" hidden>Công ty</option>
-            </select>
-          </div>
-          <div class="field" id="cv-mtm-field-bophan">
-            <label>Phòng ban / bộ phận *</label>
-            <input type="text" id="cv-mtm-bophan" placeholder="VD: Kho vận, Kế toán, Vận hành sàn...">
-          </div>
-          <div class="field field-rong">
-            <label>Tên mục tiêu mới *</label>
-            <input type="text" id="cv-mtm-tieude" placeholder="VD: Doanh thu Shopee đạt 30 tỷ trong quý">
-          </div>
+        <div class="field" id="cv-mtm-field-bophan">
+          <label>Phòng ban / bộ phận *</label>
+          <input type="text" id="cv-mtm-bophan" placeholder="VD: Kho vận, Kế toán, Vận hành sàn...">
         </div>
+        <div class="field field-rong">
+          <label>Tên mục tiêu mới *</label>
+          <input type="text" id="cv-mtm-tieude" placeholder="VD: Doanh thu Shopee đạt 30 tỷ trong quý">
+        </div>
+      </div>
+
+      <div class="field field-rong" style="margin-bottom:0">
+        <button type="button" class="btn-nho" id="cv-nut-tuychon">+ Thêm tuỳ chọn (người phối hợp, ghi chú)</button>
+      </div>
+      <div class="field-rong" id="cv-tuychon-them" hidden>
         <div class="field field-rong">
           <label>Người phối hợp <span class="hint">(tuỳ chọn — chọn nhiều người hỗ trợ)</span></label>
           <div class="search cv-ph-search">
@@ -1435,7 +2278,39 @@
       </table>
     </div>
 
+    <!-- Sửa mã hàng (chỉ Quản lý kho/Admin — ẩn ở app.js nếu không có quyền) -->
+    <form id="kvSuaForm" class="form-luoi" autocomplete="off" hidden style="margin-top:16px">
+      <input type="hidden" id="kvSua-id">
+      <div class="field field-rong">
+        <label>Tên sản phẩm *</label>
+        <input type="text" id="kvSua-ten" required>
+      </div>
+      <div class="field">
+        <label>Nhóm hàng</label>
+        <input type="text" id="kvSua-danhmuc">
+      </div>
+      <div class="field">
+        <label>Đơn vị tính</label>
+        <select id="kvSua-donvi"><option value="">— Chưa chọn —</option></select>
+      </div>
+      <div class="field">
+        <label>Mức tồn tối thiểu</label>
+        <input type="text" id="kvSua-tonmin" inputmode="numeric">
+      </div>
+      <div class="field">
+        <label class="ck"><input type="checkbox" id="kvSua-theodoihsd"> Theo dõi hạn sử dụng</label>
+      </div>
+      <div class="field field-nut" style="display:flex; gap:10px">
+        <button type="submit" class="btn-primary" id="kvSua-nutluu" style="width:auto">Lưu thay đổi</button>
+        <button type="button" class="btn-phu" id="kvSua-nuthuy" style="width:auto">Hủy</button>
+      </div>
+    </form>
+    <div class="form-loi" id="kvSua-loi"></div>
+
     <div class="modal-nut">
+      <button class="btn-phu" id="kvModalSua" hidden style="width:auto">Sửa mã hàng</button>
+      <button class="btn-phu" id="kvModalKhoa" hidden style="width:auto">Hoàn tất</button>
+      <button class="btn-phu" id="kvModalAnHien" hidden style="width:auto">Ẩn mã hàng</button>
       <button class="btn-primary" id="kvModalDong">Đóng</button>
     </div>
   </div>
@@ -1503,7 +2378,141 @@
   </div>
 </div>
 
-<script src="assets/js/data.js"></script>
+<!-- Hộp Cấp phát / Điều chuyển tài sản -->
+<div class="modal-nen" id="tsCapPhatModalNen" hidden>
+  <div class="modal">
+    <h4 id="tsCapPhatTieuDe">Cấp phát tài sản</h4>
+    <form id="tsCapPhatForm" class="form-luoi" autocomplete="off">
+      <input type="hidden" id="tsCapPhatId">
+      <div class="field field-rong">
+        <label>Giao cho *</label>
+        <div class="combo1" id="tsCapPhatNguoiCombo">
+          <button type="button" class="combo1-hienthi rong" id="tsCapPhatNguoiHienThi">
+            <span>Chọn nhân sự...</span>
+            <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+          <div class="combo1-panel" id="tsCapPhatNguoiPanel" hidden>
+            <input type="search" id="tsCapPhatNguoiTim" placeholder="Tìm theo mã hoặc tên...">
+            <div class="ql-goiy" id="tsCapPhatNguoiGoiY"></div>
+          </div>
+        </div>
+        <input type="hidden" id="tsCapPhatNguoi">
+      </div>
+      <div class="field field-rong">
+        <label>Vị trí</label>
+        <input type="text" id="tsCapPhatViTri" placeholder="VD: Văn phòng, Kho chính...">
+      </div>
+      <div class="field field-rong">
+        <label>Ghi chú</label>
+        <input type="text" id="tsCapPhatGhiChu">
+      </div>
+      <div class="field field-nut" style="display:flex; gap:10px">
+        <button type="submit" class="btn-primary" id="tsCapPhatNut" style="width:auto">Cấp phát</button>
+        <button type="button" class="btn-phu" id="tsCapPhatHuy" style="width:auto">Hủy</button>
+      </div>
+    </form>
+    <div class="form-loi" id="tsCapPhatLoi"></div>
+  </div>
+</div>
+
+
+<!-- Hộp thao tác trên 1 ô của ma trận Xếp ca tuần -->
+<div class="modal-nen" id="xcOModalNen" hidden>
+  <div class="modal">
+    <h4 id="xcOTieuDe">Chi tiết ca</h4>
+    <div id="xcOChiTiet" class="sm" style="margin-bottom:12px"></div>
+
+    <!-- Gán ca (khi ô trống — chọn ca để xếp) -->
+    <div id="xcOGanCaBox" hidden>
+      <div class="field field-rong">
+        <label>Chọn ca</label>
+        <select id="xcOChonCa"></select>
+      </div>
+    </div>
+
+    <!-- Lý do từ chối -->
+    <div id="xcOTuChoiBox" hidden>
+      <div class="field field-rong">
+        <label>Lý do từ chối</label>
+        <input type="text" id="xcOLyDoTuChoi" placeholder="Không bắt buộc">
+      </div>
+    </div>
+
+    <div class="form-loi" id="xcOLoi"></div>
+    <div class="modal-nut" style="margin-top:14px; flex-wrap:wrap">
+      <button class="btn-primary" id="xcODuyet" hidden>Xếp người này</button>
+      <button class="btn-phu" id="xcOTuChoiNut" hidden>Loại khỏi đề xuất</button>
+      <button class="btn-phu" id="xcOTuChoiXacNhan" hidden>Xác nhận loại</button>
+      <button class="btn-primary" id="xcOGanCaNut" hidden>Gán ca</button>
+      <button class="btn-phu" id="xcODong">Đóng</button>
+    </div>
+  </div>
+</div>
+
+<!-- Hộp Tạo tài khoản -->
+<div class="modal-nen" id="taoTkModalNen" hidden>
+  <div class="modal">
+    <h4>Tạo tài khoản</h4>
+    <p class="modal-nhac">Cho <b id="taoTkHoTen">—</b></p>
+    <form id="taoTkForm" class="form-luoi" autocomplete="off">
+      <div class="field field-rong">
+        <label>Tên đăng nhập (số điện thoại) *</label>
+        <input type="text" id="taoTkTen" required placeholder="09xx xxx xxx">
+      </div>
+      <div class="field field-rong">
+        <label>Vai trò *</label>
+        <div class="combo1" id="taoTkVaiTroCombo">
+          <button type="button" class="combo1-hienthi rong" id="taoTkVaiTroHienThi">
+            <span>Chọn vai trò...</span>
+            <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+          <div class="combo1-panel" id="taoTkVaiTroPanel" hidden>
+            <input type="search" id="taoTkVaiTroTim" placeholder="Tìm vai trò...">
+            <div class="ql-goiy" id="taoTkVaiTroGoiY"></div>
+          </div>
+        </div>
+        <input type="hidden" id="taoTkVaiTro">
+      </div>
+      <div class="field field-nut" style="display:flex; gap:10px">
+        <button type="submit" class="btn-primary" id="taoTkNutLuu" style="width:auto">Tạo tài khoản</button>
+        <button type="button" class="btn-phu" id="taoTkHuy" style="width:auto">Hủy</button>
+      </div>
+    </form>
+    <div class="form-loi" id="taoTkLoi"></div>
+  </div>
+</div>
+
+<!-- Hộp Đổi vai trò -->
+<div class="modal-nen" id="doiVaiTroModalNen" hidden>
+  <div class="modal">
+    <h4>Đổi vai trò</h4>
+    <p class="modal-nhac">Cho <b id="doiVaiTroHoTen">—</b> — đang là <b id="doiVaiTroHienTai">—</b></p>
+    <form id="doiVaiTroForm" class="form-luoi" autocomplete="off">
+      <div class="field field-rong">
+        <label>Vai trò mới *</label>
+        <div class="combo1" id="doiVaiTroMoiCombo">
+          <button type="button" class="combo1-hienthi rong" id="doiVaiTroMoiHienThi">
+            <span>Chọn vai trò...</span>
+            <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+          <div class="combo1-panel" id="doiVaiTroMoiPanel" hidden>
+            <input type="search" id="doiVaiTroMoiTim" placeholder="Tìm vai trò...">
+            <div class="ql-goiy" id="doiVaiTroMoiGoiY"></div>
+          </div>
+        </div>
+        <input type="hidden" id="doiVaiTroMoi">
+      </div>
+      <div class="field field-nut" style="display:flex; gap:10px">
+        <button type="submit" class="btn-primary" id="doiVaiTroNutLuu" style="width:auto">Lưu</button>
+        <button type="button" class="btn-phu" id="doiVaiTroHuy" style="width:auto">Hủy</button>
+      </div>
+    </form>
+    <div class="form-loi" id="doiVaiTroLoi"></div>
+  </div>
+</div>
+
+<!-- QR Code Generator for JavaScript (Kazuhiko Arase, MIT) — xem docs/THIRD-PARTY-LIBRARIES.md -->
+<script src="assets/js/qrcode-lib.js"></script>
 <script type="module" src="assets/js/app.js"></script>
 <script>
   // Đăng ký service worker để ERP cài được vào màn hình chính và mở nhanh

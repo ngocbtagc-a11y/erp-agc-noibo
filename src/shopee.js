@@ -220,7 +220,7 @@ export async function apiTrangThai(env, phien) {
 
 /* Bắt đầu kết nối: chuyển hướng sang trang ủy quyền của Shopee (admin) */
 export async function apiConnect(env, phien) {
-  if (!duocQuanLyShopee(phien.vai_tro)) return loi('Chỉ Giám đốc / Phó Giám đốc mới được kết nối Shopee', 403);
+  if (!duocQuanLyShopee(phien.vai_tro)) return loi('Chỉ Admin mới được kết nối Shopee', 403);
   if (!daCauHinh(env)) return loi('Chưa nạp khóa Shopee (partner_id/partner_key) trên máy chủ', 409);
   const url = await linkUyQuyen(env);
   return new Response(null, { status: 302, headers: { Location: url } });

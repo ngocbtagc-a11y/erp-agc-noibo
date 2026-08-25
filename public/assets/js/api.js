@@ -69,6 +69,8 @@ export const API = {
     method: 'POST', body: JSON.stringify({ id, trang_thai: trangThai, ket_qua: ketQua })
   }),
   cvLichSu: () => goi('/api/cong-viec/lich-su'),
+  cvTongQuanCongTy: () => goi('/api/cong-viec/tong-quan-congty'),
+  cvTongQuanPhongBan: () => goi('/api/cong-viec/tong-quan-phongban'),
 
   /* ---- Mục tiêu (MBOs: công ty / phòng ban) ---- */
   mtDanhSach: (nam, quy) => goi('/api/muc-tieu/danh-sach' +
@@ -119,11 +121,43 @@ export const API = {
     method: 'POST', body: JSON.stringify({ tai_khoan_id: taiKhoanId, kich_hoat: kichHoat })
   }),
 
+  qtXoaTaiKhoan: (taiKhoanId) => goi('/api/quan-tri/xoa-tai-khoan', {
+    method: 'POST', body: JSON.stringify({ tai_khoan_id: taiKhoanId })
+  }),
+
+  qtSuaVaiTro: (taiKhoanId, vaiTro) => goi('/api/quan-tri/sua-vai-tro', {
+    method: 'POST', body: JSON.stringify({ tai_khoan_id: taiKhoanId, vai_tro: vaiTro })
+  }),
+
+  qtSuaNhanSu: (ns) => goi('/api/quan-tri/sua-nhan-su', {
+    method: 'POST', body: JSON.stringify(ns)
+  }),
+
+  qtKhoaNhanSu: (id, trangThaiDl) => goi('/api/quan-tri/khoa-nhan-su', {
+    method: 'POST', body: JSON.stringify({ id, trang_thai_dl: trangThaiDl })
+  }),
+
+  qtXoaNhanSu: (id) => goi('/api/quan-tri/xoa-nhan-su', {
+    method: 'POST', body: JSON.stringify({ id })
+  }),
+
   /* ---- Kho: Xuất / Nhập / Tồn ---- */
   khoSanPham: () => goi('/api/kho/san-pham'),
 
   khoThemSanPham: (sp) => goi('/api/kho/them-san-pham', {
     method: 'POST', body: JSON.stringify(sp)
+  }),
+
+  khoSuaSanPham: (sp) => goi('/api/kho/sua-san-pham', {
+    method: 'POST', body: JSON.stringify(sp)
+  }),
+
+  khoAnHienSanPham: (id, dangBan) => goi('/api/kho/an-hien-san-pham', {
+    method: 'POST', body: JSON.stringify({ id, dang_ban: dangBan })
+  }),
+
+  khoKhoaSanPham: (id, trangThai) => goi('/api/kho/khoa-san-pham', {
+    method: 'POST', body: JSON.stringify({ id, trang_thai: trangThai })
   }),
 
   khoNhap: (d) => goi('/api/kho/nhap', { method: 'POST', body: JSON.stringify(d) }),
@@ -138,6 +172,75 @@ export const API = {
 
   khoLichSu: (sanPhamId, gioiHan = 30) =>
     goi('/api/kho/lich-su?san_pham_id=' + encodeURIComponent(sanPhamId) + '&gioi_han=' + gioiHan),
+
+  /* ---- Dữ liệu nền: Phòng ban / Chức danh / Đơn vị tính ---- */
+  dlnPhongBan: () => goi('/api/dulieunen/phong-ban'),
+  dlnThemPhongBan: (ten, xacNhan) => goi('/api/dulieunen/phong-ban/them', { method: 'POST', body: JSON.stringify({ ten, xac_nhan: !!xacNhan }) }),
+  dlnSuaPhongBan: (id, d) => goi('/api/dulieunen/phong-ban/sua', { method: 'POST', body: JSON.stringify({ id, ...d }) }),
+  dlnGanTruongPhong: (id, truongPhongId) => goi('/api/dulieunen/phong-ban/gan-truong-phong', { method: 'POST', body: JSON.stringify({ id, truong_phong_id: truongPhongId }) }),
+  dlnKhoaPhongBan: (id, trangThai) => goi('/api/dulieunen/phong-ban/khoa', { method: 'POST', body: JSON.stringify({ id, trang_thai: trangThai }) }),
+
+  dlnChucDanh: () => goi('/api/dulieunen/chuc-danh'),
+  dlnThemChucDanh: (ten, xacNhan) => goi('/api/dulieunen/chuc-danh/them', { method: 'POST', body: JSON.stringify({ ten, xac_nhan: !!xacNhan }) }),
+  dlnSuaChucDanh: (id, d) => goi('/api/dulieunen/chuc-danh/sua', { method: 'POST', body: JSON.stringify({ id, ...d }) }),
+  dlnKhoaChucDanh: (id, trangThai) => goi('/api/dulieunen/chuc-danh/khoa', { method: 'POST', body: JSON.stringify({ id, trang_thai: trangThai }) }),
+  dlnDanhMucTaiSan: () => goi('/api/dulieunen/tai-san-danh-muc'),
+  dlnThemDanhMucTaiSan: (ten, xacNhan) => goi('/api/dulieunen/tai-san-danh-muc/them', { method: 'POST', body: JSON.stringify({ ten, xac_nhan: !!xacNhan }) }),
+  dlnSuaDanhMucTaiSan: (id, d) => goi('/api/dulieunen/tai-san-danh-muc/sua', { method: 'POST', body: JSON.stringify({ id, ...d }) }),
+  dlnKhoaDanhMucTaiSan: (id, trangThai) => goi('/api/dulieunen/tai-san-danh-muc/khoa', { method: 'POST', body: JSON.stringify({ id, trang_thai: trangThai }) }),
+  dlnViTriTaiSan: () => goi('/api/dulieunen/tai-san-vi-tri'),
+  dlnThemViTriTaiSan: (ten, xacNhan) => goi('/api/dulieunen/tai-san-vi-tri/them', { method: 'POST', body: JSON.stringify({ ten, xac_nhan: !!xacNhan }) }),
+  dlnSuaViTriTaiSan: (id, d) => goi('/api/dulieunen/tai-san-vi-tri/sua', { method: 'POST', body: JSON.stringify({ id, ...d }) }),
+  dlnKhoaViTriTaiSan: (id, trangThai) => goi('/api/dulieunen/tai-san-vi-tri/khoa', { method: 'POST', body: JSON.stringify({ id, trang_thai: trangThai }) }),
+
+  dlnDonVi: () => goi('/api/dulieunen/don-vi'),
+  dlnThemDonVi: (ten, xacNhan) => goi('/api/dulieunen/don-vi/them', { method: 'POST', body: JSON.stringify({ ten, xac_nhan: !!xacNhan }) }),
+  dlnSuaDonVi: (id, d) => goi('/api/dulieunen/don-vi/sua', { method: 'POST', body: JSON.stringify({ id, ...d }) }),
+  dlnKhoaDonVi: (id, trangThai) => goi('/api/dulieunen/don-vi/khoa', { method: 'POST', body: JSON.stringify({ id, trang_thai: trangThai }) }),
+
+  dlnTinhTrang: () => goi('/api/dulieunen/tinh-trang'),
+
+  dlnNCC: () => goi('/api/dulieunen/ncc'),
+  dlnThemNCC: (d) => goi('/api/dulieunen/ncc/them', { method: 'POST', body: JSON.stringify(d) }),
+  dlnSuaNCC: (id, d) => goi('/api/dulieunen/ncc/sua', { method: 'POST', body: JSON.stringify({ id, ...d }) }),
+  dlnKhoaNCC: (id, trangThai) => goi('/api/dulieunen/ncc/khoa', { method: 'POST', body: JSON.stringify({ id, trang_thai: trangThai }) }),
+
+  dlnKho: () => goi('/api/dulieunen/kho'),
+  dlnThemKho: (d) => goi('/api/dulieunen/kho/them', { method: 'POST', body: JSON.stringify(d) }),
+  dlnSuaKho: (id, d) => goi('/api/dulieunen/kho/sua', { method: 'POST', body: JSON.stringify({ id, ...d }) }),
+
+  /* ---- Đăng ký ca / Xếp ca ---- */
+  caMauCa: () => goi('/api/ca/mau-ca'),
+  caThemMauCa: (d) => goi('/api/ca/mau-ca/them', { method: 'POST', body: JSON.stringify(d) }),
+  caSuaMauCa: (d) => goi('/api/ca/mau-ca/sua', { method: 'POST', body: JSON.stringify(d) }),
+  caXoaMauCa: (id) => goi('/api/ca/mau-ca/xoa', { method: 'POST', body: JSON.stringify({ id }) }),
+  caThemCaMo: (d) => goi('/api/ca/mo/them', { method: 'POST', body: JSON.stringify(d) }),
+  caMoDangKyTuan: (d) => goi('/api/ca/mo/mo-tuan', { method: 'POST', body: JSON.stringify(d) }),
+  caKhoaCaMo: (id) => goi('/api/ca/mo/khoa', { method: 'POST', body: JSON.stringify({ id }) }),
+  caDangMo: () => goi('/api/ca/dang-mo'),
+  caDangKy: (d) => goi('/api/ca/dang-ky', { method: 'POST', body: JSON.stringify(d) }),
+  caHuyDangKy: (id) => goi('/api/ca/dang-ky/huy', { method: 'POST', body: JSON.stringify({ id }) }),
+  caLichCuaToi: (tu, den) => goi(`/api/ca/lich-cua-toi?tu=${tu}&den=${den}`),
+  caMaTranTuan: (phongBanId, tu, den) => goi(`/api/ca/ma-tran-tuan?phong_ban_id=${phongBanId}&tu=${tu}&den=${den}`),
+  caXepTuDong: (d) => goi('/api/ca/xep-tu-dong', { method: 'POST', body: JSON.stringify(d) }),
+  caDuyet: (id) => goi('/api/ca/duyet', { method: 'POST', body: JSON.stringify({ id }) }),
+  caDuyetHangLoat: (ids) => goi('/api/ca/duyet-hang-loat', { method: 'POST', body: JSON.stringify({ ids }) }),
+  caTuChoi: (id, lyDo) => goi('/api/ca/tu-choi', { method: 'POST', body: JSON.stringify({ id, ly_do_tu_choi: lyDo }) }),
+  caGanThuCong: (d) => goi('/api/ca/gan-thu-cong', { method: 'POST', body: JSON.stringify(d) }),
+  caChotLichTuan: (d) => goi('/api/ca/chot-lich-tuan', { method: 'POST', body: JSON.stringify(d) }),
+
+  /* ---- Tài sản ---- */
+  taiSanDanhSach: () => goi('/api/tai-san'),
+  taiSanLichSu: (id) => goi('/api/tai-san/lich-su?id=' + encodeURIComponent(id)),
+  taiSanChiTiet: (id) => goi('/api/tai-san/chi-tiet?id=' + encodeURIComponent(id)),
+  taiSanTraCuu: (ma) => goi('/api/tai-san/tra-cuu?ma=' + encodeURIComponent(ma)),
+  taiSanThem: (d) => goi('/api/tai-san/them', { method: 'POST', body: JSON.stringify(d) }),
+  taiSanSua: (d) => goi('/api/tai-san/sua', { method: 'POST', body: JSON.stringify(d) }),
+  taiSanCapPhat: (d) => goi('/api/tai-san/cap-phat', { method: 'POST', body: JSON.stringify(d) }),
+  taiSanThuHoi: (d) => goi('/api/tai-san/thu-hoi', { method: 'POST', body: JSON.stringify(d) }),
+  taiSanBaoHong: (d) => goi('/api/tai-san/bao-hong', { method: 'POST', body: JSON.stringify(d) }),
+  taiSanBaoTriXong: (d) => goi('/api/tai-san/bao-tri-xong', { method: 'POST', body: JSON.stringify(d) }),
+  taiSanThanhLy: (d) => goi('/api/tai-san/thanh-ly', { method: 'POST', body: JSON.stringify(d) }),
 
   /* ---- Đón nhân sự mới (ảnh CCCD) ---- */
   nsDocCCCD: (anhBase64) => goi('/api/nhan-su/doc-cccd', {

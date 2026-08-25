@@ -165,7 +165,7 @@ export async function apiTrangThai(env, phien) {
 }
 
 export async function apiConnect(env, phien) {
-  if (!duocQuanLyShopee(phien.vai_tro)) return loi('Chỉ Giám đốc / Phó Giám đốc mới được kết nối TikTok', 403);
+  if (!duocQuanLyShopee(phien.vai_tro)) return loi('Chỉ Admin mới được kết nối TikTok', 403);
   if (!daCauHinh(env)) return loi('Chưa nạp khóa TikTok (app_key/app_secret) trên máy chủ', 409);
   return new Response(null, { status: 302, headers: { Location: linkUyQuyen(env) } });
 }
