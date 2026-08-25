@@ -314,6 +314,24 @@ function esc(s) {
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
+/* Hiển thị text dài (mô tả/đầu ra/ghi chú...) — xuống dòng đúng, không ép
+   1 dòng. Text ngắn: bọc .dai (wrap, không giới hạn dòng). Text dài (theo
+   độ dài ký tự hoặc số dòng): kẹp 2 dòng .dai-gon + nút "Xem thêm/Thu gọn"
+   để bung/thu — không đo DOM, chỉ dựa heuristic độ dài (Rule 28). */
+function dg(text) {
+  if (!text) return '';
+  const s = String(text);
+  const daiQua = s.length > 120 || (s.match(/\n/g) || []).length >= 2;
+  if (!daiQua) return `<div class="dai">${esc(s)}</div>`;
+  return `<div class="dai-gon">${esc(s)}</div><button type="button" class="dai-gon-btn" onclick="window.toggleDaiGon(this)">Xem thêm</button>`;
+}
+window.toggleDaiGon = function (btn) {
+  const wrap = btn.previousElementSibling;
+  if (!wrap) return;
+  const moRa = wrap.classList.toggle('dai-gon-mo');
+  btn.textContent = moRa ? 'Thu gọn' : 'Xem thêm';
+};
+
 /* Khung tròn avatar — ảnh đại diện (co_anh=true) hoặc chữ viết tắt (mặc
    định). Dùng chung mọi nơi có khung .av (sidebar, Danh bạ, Nhân sự, Vinh
    danh…) — CSS .av lo kích thước/bo tròn, hàm này chỉ quyết định nội dung. */
@@ -1455,7 +1473,7 @@ async function khoiDongMucTieu() {
         `<div class="mt-the-pct ${mucMau}">${pct}<span>%</span></div>` +
       `</div>` +
       `<div class="bar mt-the-bar"><i class="${mauBar}" style="width:0"></i></div>` +
-      (m.mo_ta ? `<div class="mt-the-mo" title="${esc(m.mo_ta)}">${esc(m.mo_ta)}</div>` : '') +
+      (m.mo_ta ? `<div class="mt-the-mo">${dg(m.mo_ta)}</div>` : '') +
       (!daXong && !daHuy && m.han_gan_nhat ? `<div class="mt-the-han">⏰ Hạn gần nhất: ${dongHanMt(m.han_gan_nhat)}</div>` : '') +
       `<div class="mt-the-meta">${badge}` +
         `<span class="mt-the-viec">${m.so_viec_xong}/${m.so_viec} việc · ${esc(m.nguoi_tao_ten)}</span>` +
@@ -1593,7 +1611,7 @@ async function khoiDongMucTieu() {
     try { ({ viec } = await API.mtViec(m.id)); } catch { /* im lặng — modal vẫn hiện phần đầu */ }
     veBang('#mtModalViec', viec, v => {
       const tt = CV_TRANG_THAI[v.trang_thai] || CV_TRANG_THAI.moi;
-      return `<td><div class="nm">${esc(v.tieu_de)}</div>${v.dau_ra ? `<div class="sm">${esc(v.dau_ra)}</div>` : ''}${v.phoi_hop_ten ? `<div class="sm">🤝 Phối hợp: ${esc(v.phoi_hop_ten)}</div>` : ''}</td>` +
+      return `<td><div class="nm">${esc(v.tieu_de)}</div>${v.dau_ra ? `<div class="sm">${dg(v.dau_ra)}</div>` : ''}${v.phoi_hop_ten ? `<div class="sm">🤝 Phối hợp: ${esc(v.phoi_hop_ten)}</div>` : ''}</td>` +
         `<td class="sm">${esc(v.nguoi_nhan_ten)}</td>` +
         `<td class="sm">${esc(v.nguoi_giao_ten)}</td>` +
         `<td class="sm">${dongHanMt(v.han_chot)}</td>` +
@@ -1854,8 +1872,8 @@ async function khoiDongCongViec() {
         nut = `<button type="button" class="btn-nho btn-primary" data-cv-nop="${r.id}">Nộp kết quả</button>`;
       }
       const nhanTodo = laTodo ? ` <span class="tag sage">🙋 Việc của tôi</span>` : '';
-      return `<td><div class="nm">${esc(r.tieu_de)}${nhanTodo}</div>${r.muc_tieu_ten ? `<div class="sm">🎯 Thuộc mục tiêu: ${esc(r.muc_tieu_ten)}</div>` : ''}${r.mo_ta ? `<div class="sm">${esc(r.mo_ta)}</div>` : ''}${r.phoi_hop_ten ? `<div class="sm">🤝 Phối hợp: ${esc(r.phoi_hop_ten)}</div>` : ''}${r.ket_qua ? `<div class="sm"><b>Kết quả:</b> ${esc(r.ket_qua)}</div>` : ''}</td>` +
-        `<td class="sm">${esc(r.dau_ra) || '—'}</td>` +
+      return `<td><div class="nm">${esc(r.tieu_de)}${nhanTodo}</div>${r.muc_tieu_ten ? `<div class="sm">🎯 Thuộc mục tiêu: ${esc(r.muc_tieu_ten)}</div>` : ''}${r.mo_ta ? `<div class="sm">${dg(r.mo_ta)}</div>` : ''}${r.phoi_hop_ten ? `<div class="sm">🤝 Phối hợp: ${esc(r.phoi_hop_ten)}</div>` : ''}${r.ket_qua ? `<div class="sm"><b>Kết quả:</b> ${dg(r.ket_qua)}</div>` : ''}</td>` +
+        `<td class="sm">${r.dau_ra ? dg(r.dau_ra) : '—'}</td>` +
         `<td class="sm">${laTodo ? '— (của tôi)' : esc(r.nguoi_giao_ten)}</td>` +
         `<td class="sm">${dongHan(r.han_chot)}</td>` +
         `<td><span class="tag ${tt.mau}">${tt.chu}</span></td>` +
@@ -1873,8 +1891,8 @@ async function khoiDongCongViec() {
       if (r.trang_thai === 'moi' || r.trang_thai === 'dang_lam' || r.trang_thai === 'cho_duyet') {
         nut += ` <button type="button" class="btn-nho" data-cv-huy="${r.id}">Huỷ</button>`;
       }
-      return `<td><div class="nm">${esc(r.tieu_de)}</div>${r.muc_tieu_ten ? `<div class="sm">🎯 Thuộc mục tiêu: ${esc(r.muc_tieu_ten)}</div>` : ''}${r.mo_ta ? `<div class="sm">${esc(r.mo_ta)}</div>` : ''}${r.phoi_hop_ten ? `<div class="sm">🤝 Phối hợp: ${esc(r.phoi_hop_ten)}</div>` : ''}${r.ket_qua ? `<div class="sm"><b>Kết quả:</b> ${esc(r.ket_qua)}</div>` : ''}</td>` +
-        `<td class="sm">${esc(r.dau_ra)}</td>` +
+      return `<td><div class="nm">${esc(r.tieu_de)}</div>${r.muc_tieu_ten ? `<div class="sm">🎯 Thuộc mục tiêu: ${esc(r.muc_tieu_ten)}</div>` : ''}${r.mo_ta ? `<div class="sm">${dg(r.mo_ta)}</div>` : ''}${r.phoi_hop_ten ? `<div class="sm">🤝 Phối hợp: ${esc(r.phoi_hop_ten)}</div>` : ''}${r.ket_qua ? `<div class="sm"><b>Kết quả:</b> ${dg(r.ket_qua)}</div>` : ''}</td>` +
+        `<td class="sm">${dg(r.dau_ra)}</td>` +
         `<td class="sm">${esc(r.nguoi_nhan_ten)}</td>` +
         `<td class="sm">${dongHan(r.han_chot)}</td>` +
         `<td><span class="tag ${tt.mau}">${tt.chu}</span></td>` +
@@ -1887,8 +1905,8 @@ async function khoiDongCongViec() {
     // chịu trách nhiệm báo cáo cho mỗi việc, phối hợp chỉ để biết & hỗ trợ).
     veBang('#cv-bang-phoihop', kq.phoi_hop || [], r => {
       const tt = CV_TRANG_THAI[r.trang_thai] || CV_TRANG_THAI.moi;
-      return `<td><div class="nm">${esc(r.tieu_de)}</div>${r.muc_tieu_ten ? `<div class="sm">🎯 Thuộc mục tiêu: ${esc(r.muc_tieu_ten)}</div>` : ''}${r.mo_ta ? `<div class="sm">${esc(r.mo_ta)}</div>` : ''}</td>` +
-        `<td class="sm">${esc(r.dau_ra)}</td>` +
+      return `<td><div class="nm">${esc(r.tieu_de)}</div>${r.muc_tieu_ten ? `<div class="sm">🎯 Thuộc mục tiêu: ${esc(r.muc_tieu_ten)}</div>` : ''}${r.mo_ta ? `<div class="sm">${dg(r.mo_ta)}</div>` : ''}</td>` +
+        `<td class="sm">${dg(r.dau_ra)}</td>` +
         `<td class="sm">${esc(r.nguoi_nhan_ten)}</td>` +
         `<td class="sm">${esc(r.nguoi_giao_ten)}</td>` +
         `<td class="sm">${dongHan(r.han_chot)}</td>` +
@@ -2082,7 +2100,7 @@ async function khoiDongLichSuViec() {
       (!k || boDau(`${r.tieu_de} ${r.nguoi_nhan_ten || ''} ${r.nguoi_giao_ten || ''} ${r.muc_tieu_ten || ''}`).includes(k)));
     veBang('#ls-cv-bang', ds, r => {
       const tt = CV_TRANG_THAI[r.trang_thai] || CV_TRANG_THAI.moi;
-      return `<td><div class="nm">${esc(r.tieu_de)}</div>${r.dau_ra ? `<div class="sm">${esc(r.dau_ra)}</div>` : ''}${r.ket_qua ? `<div class="sm"><b>Kết quả:</b> ${esc(r.ket_qua)}</div>` : ''}</td>` +
+      return `<td><div class="nm">${esc(r.tieu_de)}</div>${r.dau_ra ? `<div class="sm">${dg(r.dau_ra)}</div>` : ''}${r.ket_qua ? `<div class="sm"><b>Kết quả:</b> ${dg(r.ket_qua)}</div>` : ''}</td>` +
         `<td class="sm">${esc(r.nguoi_nhan_ten)}</td>` +
         `<td class="sm">${esc(r.nguoi_giao_ten)}</td>` +
         `<td class="sm">${esc(r.muc_tieu_ten || '—')}</td>` +

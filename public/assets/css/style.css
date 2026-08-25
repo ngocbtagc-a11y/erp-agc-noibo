@@ -730,8 +730,7 @@ img.av { object-fit: cover; display: block; cursor: default; }
 .mt-the-bar { margin-top: 7px; height: 6px; }
 
 .mt-the-mo {
-  margin-top: 6px; font-size: 12px; color: var(--text-mute); line-height: 1.4;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  margin-top: 6px; font-size: 12px; color: var(--text-mute);
 }
 
 .mt-the-meta {
@@ -888,18 +887,69 @@ tbody tr:hover { background: var(--sage-wash); }
 td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 th.num { text-align: right; }
 /* Tên và chức vụ giữ trên một dòng — thà để bảng cuộn ngang còn hơn
-   bóp chữ xuống nhiều dòng, trên điện thoại sẽ rất khó đọc */
+   bóp chữ xuống nhiều dòng, trên điện thoại sẽ rất khó đọc. CHỈ dùng cho
+   field NGẮN (tên người, mã hàng, chức vụ) — field dài tự do (mô tả/đầu ra/
+   ghi chú/lý do) phải cộng thêm class .dai/.dai-gon bên dưới, không dùng
+   trần .nm/.sm 1 mình (Sếp Ngọc yêu cầu 25/08/2026: audit toàn ERP cách
+   hiển thị văn bản dài — LONG CONTENT RULE: giữ cấu trúc user gõ, nén cách
+   trình bày, không bao giờ nén dữ liệu). */
 td .nm { font-weight: 600; color: var(--ink); white-space: nowrap; }
 td .sm { font-size: 12px; color: var(--text-mute); white-space: nowrap; }
 
-/* Lịch sử làm việc — NGOẠI LỆ khỏi luật "1 dòng, cuộn ngang" ở trên. Cột
-   "Việc" ở đây chứa Đầu ra/Kết quả — đoạn văn dài tự do do nhân viên gõ,
-   khác hẳn tên người/mã hàng ngắn gọn — ép 1 dòng khiến cột này bị kéo dài
-   ra hết cỡ, đẩy mọi cột khác ra ngoài màn hình phải kéo ngang mới thấy
-   (Sếp Ngọc bắt lỗi 25/08/2026: "kéo sang trái như này có mà mỏi tay").
-   Cho xuống dòng + giới hạn bề rộng cột thay vì tràn vô hạn. */
-#ls-cv-tbl .nm, #ls-cv-tbl .sm { white-space: normal; }
-#ls-cv-tbl th:first-child, #ls-cv-tbl td:first-child { max-width: 320px; }
+/* ==========================================================================
+   VĂN BẢN DÀI DÙNG CHUNG (.dai / .dai-gon) — thay thế mọi chỗ đang tự chế
+   white-space/ellipsis riêng cho mô tả/đầu ra/kết quả/ghi chú/lý do/vướng
+   mắc... 1 nền tảng dùng lại khắp ERP, không viết CSS lặp ở từng module.
+   Mẫu gốc: .chat-bong đã dùng đúng pre-wrap từ trước — kế thừa y hệt.
+
+   .dai      — DETAIL: đọc đầy đủ, giữ nguyên xuống dòng/gạch đầu dòng
+               người dùng gõ, tự xuống dòng theo bề rộng khung chứa, không
+               tràn ngang, không cắt bớt.
+   .dai-gon  — LIST/CARD/TABLE: gọn 2 dòng mặc định (vẫn giữ xuống dòng
+               thật trong 2 dòng đó, không dồn hết thành 1 dòng dài) —
+               thêm .dong-3 nếu cần 3 dòng (card).
+   Cả 2 đều overflow-wrap:anywhere để URL/mã đơn/email dài không phá layout,
+   nhưng KHÔNG tự chèn ký tự vào dữ liệu gốc — chỉ là hiển thị. */
+.dai {
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+}
+.dai-gon {
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.dai-gon.dong-3 { -webkit-line-clamp: 3; }
+
+/* Trạng thái bung — .dai-gon-mo do JS gắn (window.toggleDaiGon trong
+   app.js, hàm dg()) khi bấm nút "Xem thêm". Bỏ giới hạn dòng, hiện đủ. */
+.dai-gon.dai-gon-mo {
+  -webkit-line-clamp: unset;
+  overflow: visible;
+}
+/* Nút "Xem thêm/Thu gọn" — chỉ render khi dg() xác định text đủ dài
+   (heuristic độ dài/số dòng, không đo DOM). Rõ ràng là nút, không bắt
+   click mơ hồ vào text. */
+.dai-gon-btn {
+  display: inline-block;
+  margin-top: 2px;
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--sage-dark);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.dai-gon-btn:hover { opacity: .75; }
 
 .person { display: flex; align-items: center; gap: 10px; }
 
