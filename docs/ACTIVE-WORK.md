@@ -10,7 +10,7 @@ hoặc ERP Owner trước khi cùng sửa.
 
 | Area | Owner/Agent | Branch | Task | Started | Status | Affected files/modules |
 |---|---|---|---|---|---|---|
-| HR | Claude (Sếp Ngọc) | main | Employee Profile Phase 1 — theo báo cáo CORE_CHANGE đã duyệt | 2026-08-25 | in_progress | src/nhansu.js, src/auth.js, src/quyen.js, public/app.html (Nhân sự + Quản trị), public/assets/js/app.js, migrations/them-nhansu-lichsu.sql |
+| _(chưa có việc đang chạy — xoá dòng ví dụ này khi ghi dòng thật đầu tiên)_ | — | — | — | — | — | — |
 
 **Status hợp lệ**: `in_progress` · `blocked` · `waiting_review` · `done`
 (xoá dòng khi `done` và đã merge).

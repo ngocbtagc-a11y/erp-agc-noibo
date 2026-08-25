@@ -8,6 +8,12 @@ Format: `Date | Feature | Domain | Decision | Migration | Breaking impact | Stat
 
 ---
 
+## 2026-08-25
+
+| Feature | Domain | Decision | Migration | Breaking impact | Status |
+|---|---|---|---|---|---|
+| Employee Profile Phase 1 — gộp Hồ sơ/Tài khoản/Lịch sử vào 1 hộp | Core (Employee Core, Permission) + Domain (HCNS) | CORE_CHANGE đã audit + duyệt trước khi code (báo cáo "Nền tảng Hồ sơ Nhân sự thống nhất", theo khung `docs/CORE-CHANGE-POLICY.md`). Bảng sự kiện mới `nhan_su_lich_su` (append-only, đóng gap "Audit Log dùng chung — chưa có" mà `MODULE-MAP.md` tự ghi) — tự ghi khi đổi phòng ban/chức danh/quản lý/trạng thái, bọc try/catch không chặn việc sửa hồ sơ nếu thiếu migration. Mở rộng modal "Sửa hồ sơ nhân sự" thành "Hồ sơ nhân sự" (khổ `modal-rong`): thêm header tổng quan + khối "Tài khoản ERP" (tái dùng `veCotTaiKhoan()`/`veThaoTacTaiKhoan()`/`xuLyThaoTacTaiKhoan()` dùng chung với bảng Quản trị, Rule 5) + khối Lịch sử — không còn phải nhảy giữa tab Nhân sự và Quản trị→Tài khoản để quản lý 1 người. `donNhanSuMoi()` (luồng CCCD, hiện chưa có UI gọi tới) sửa để ghi FK `phong_ban_id`/`chuc_danh_id` nhất quán với `qtThemNhanSu()`. `phien` (session) mang thêm `phong_ban_id` — Core, chỉ thêm cột đọc, không đổi hành vi/bảo mật | Có — `migrations/them-nhansu-lichsu.sql` (đã chạy remote) | Không (thêm bảng/cột mới, không đổi API/schema cũ) | PILOT — chờ dùng thật vài ngày trước khi coi OFFICIAL |
+
 ## 2026-08-23 (tiếp)
 
 | Feature | Domain | Decision | Migration | Breaking impact | Status |
