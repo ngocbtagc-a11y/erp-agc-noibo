@@ -641,7 +641,16 @@ async function qtSuaNhanSu(req, env) {
   const chucDanhIdMoi = cd ? cd.id : null;
   if (phongBanIdMoi !== hienCo.phong_ban_id) suKien.push(['doi_phong_ban', hienCo.bo_phan, boPhanMoi]);
   if (chucDanhIdMoi !== hienCo.chuc_danh_id) suKien.push(['doi_chuc_danh', hienCo.chuc_vu, chucVuMoi]);
-  if (quanLyMoi !== hienCo.quan_ly_id) suKien.push(['doi_quan_ly', hienCo.quan_ly_id, quanLyMoi]);
+  if (quanLyMoi !== hienCo.quan_ly_id) {
+    // Ghi TÊN quản lý, không ghi thẳng id — id không đọc được trên màn hình
+    // lịch sử (khác các sự kiện khác vốn đã có tên qua chuc_vu/bo_phan/
+    // trang_thai sẵn có).
+    const [qlCu, qlMoi] = await Promise.all([
+      hienCo.quan_ly_id ? env.DB.prepare('SELECT ho_ten FROM nhan_su WHERE id = ?').bind(hienCo.quan_ly_id).first() : null,
+      quanLyMoi ? env.DB.prepare('SELECT ho_ten FROM nhan_su WHERE id = ?').bind(quanLyMoi).first() : null
+    ]);
+    suKien.push(['doi_quan_ly', qlCu ? qlCu.ho_ten : null, qlMoi ? qlMoi.ho_ten : null]);
+  }
   if (trangThaiMoi !== hienCo.trang_thai) suKien.push(['doi_trang_thai', hienCo.trang_thai, trangThaiMoi]);
   if (suKien.length) {
     const nguoiThucHien = phien.nhan_su_id;

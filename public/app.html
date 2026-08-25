@@ -1981,8 +1981,17 @@
 
 <!-- Hộp Sửa hồ sơ nhân sự -->
 <div class="modal-nen" id="nsSuaModalNen" hidden>
-  <div class="modal">
-    <h4>Sửa hồ sơ nhân sự</h4>
+  <div class="modal modal-rong">
+    <h4>Hồ sơ nhân sự</h4>
+
+    <!-- Employee Profile Phase 1 (CORE_CHANGE 25/08/2026) — header tổng quan
+         + Tài khoản ERP đọc thẳng từ DS_NHAN_SU_QT (đã có sẵn qua qtDanhSach,
+         không gọi thêm API), thay vì bắt nhảy sang tab Quản trị riêng. -->
+    <div class="person" id="nsSua-dauho" style="margin-bottom:16px"></div>
+
+    <div class="kv-md-muc">Tài khoản ERP</div>
+    <div id="nsSua-taikhoan" style="margin-bottom:18px"></div>
+
     <form id="nsSuaForm" class="form-luoi" autocomplete="off">
       <input type="hidden" id="nsSua-id">
       <div class="field field-rong">
@@ -2070,6 +2079,15 @@
       </div>
     </form>
     <div class="form-loi" id="nsSua-loi"></div>
+
+    <div class="kv-md-muc">Lịch sử thay đổi</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Thời gian</th><th>Thay đổi</th><th>Người thực hiện</th></tr></thead>
+        <tbody id="nsSua-lichsu"></tbody>
+      </table>
+    </div>
+    <div class="empty" id="nsSua-lichsu-trong" hidden>Chưa có lịch sử thay đổi nào.</div>
   </div>
 </div>
 

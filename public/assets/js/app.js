@@ -102,6 +102,12 @@ async function taiLaiNhanSuQuanTri() {
     napBoLocVaiTroQT(vai_tro);
     veBangQtTaiKhoan();
   }
+
+  // Hộp Hồ sơ nhân sự (nếu đang mở) đọc riêng DS_NHAN_SU_QT/DS_VAI_TRO_QT ở
+  // trên — vừa nạp lại xong thì vẽ lại luôn khối Tài khoản, khỏi phải đóng
+  // mở lại hộp mới thấy đúng (Employee Profile Phase 1, UI State Consistency
+  // — Rule 7 trong ERP-CONSTITUTION.md).
+  window.LAM_MOI_HOSO_NHANSU?.();
 }
 
 /* ---- Search + Filter: Nhân sự / Tài khoản --------------------------------
@@ -222,6 +228,31 @@ function xoaLocQT() {
   veBangQtTaiKhoan();
 }
 
+/* Badge trạng thái Tài khoản + nút thao tác — DÙNG CHUNG giữa bảng "Quản
+   trị → Tài khoản" và khối "Tài khoản ERP" trong Hồ sơ nhân sự (Employee
+   Profile Phase 1, 25/08/2026) — Rule 5, không viết lại 2 lần. `n` là 1
+   dòng trong DS_NHAN_SU_QT (đã có sẵn tai_khoan_id/ten_dang_nhap/vai_tro/
+   kich_hoat/phai_doi_mk qua qtDanhSach, không cần gọi thêm API). */
+function veCotTaiKhoan(n) {
+  if (!n.tai_khoan_id) return '<span class="tag mute">Chưa có</span>';
+  if (!n.kich_hoat) return `<span class="tag danger">Đã khoá</span> <span class="sm">${esc(n.ten_dang_nhap)}</span>`;
+  return `<span class="nm">${esc(n.ten_dang_nhap)}</span>` + (n.phai_doi_mk ? ' <span class="tag warn">chờ đổi MK</span>' : '');
+}
+function veThaoTacTaiKhoan(n) {
+  if (!n.tai_khoan_id) {
+    return TOI.duoc_tao_tai_khoan
+      ? `<button class="btn-nho btn-primary" data-tao="${esc(n.id)}" data-ten-goi-y="${esc(String(n.sdt || '').replace(/\D/g, ''))}" data-ten="${esc(n.ho_ten)}">Tạo tài khoản</button>`
+      : '<span class="sm">—</span>';
+  }
+  if (!TOI.la_admin) return '<span class="sm">—</span>';
+  return `<button class="btn-nho btn-phu" data-doivaitro="${n.tai_khoan_id}" data-doivaitro-ten="${esc(n.ho_ten)}" data-doivaitro-hientai="${esc(n.vai_tro || '')}">Đổi vai trò</button> ` +
+    `<button class="btn-nho btn-phu" data-datlai="${n.tai_khoan_id}">Đặt lại MK</button> ` +
+    (n.kich_hoat
+      ? `<button class="btn-nho btn-phu" data-khoa="${n.tai_khoan_id}" data-kh="0">Khoá</button>`
+      : `<button class="btn-nho btn-phu" data-khoa="${n.tai_khoan_id}" data-kh="1">Mở lại</button>`) +
+    ` <button class="btn-nho btn-phu" data-xoatk="${n.tai_khoan_id}" data-xoatk-ten="${esc(n.ho_ten)}">Xoá</button>`;
+}
+
 function veBangQtTaiKhoan() {
   const nhan_su = DS_NHAN_SU_QT, vai_tro = DS_VAI_TRO_QT;
   const ds = locTaiKhoanQT(nhan_su);
@@ -231,25 +262,8 @@ function veBangQtTaiKhoan() {
     const coTK = !!n.tai_khoan_id;
     const tt = TRANG_THAI[n.trang_thai] || { chu: n.trang_thai, mau: 'mute' };
     const tenVaiTro = coTK ? (vai_tro.find(v => v.ma === n.vai_tro)?.ten || n.vai_tro) : '';
-    let cotTK;
-    if (!coTK) cotTK = '<span class="tag mute">Chưa có</span>';
-    else if (!n.kich_hoat) cotTK = `<span class="tag danger">Đã khoá</span> <span class="sm">${esc(n.ten_dang_nhap)}</span>`;
-    else cotTK = `<span class="nm">${esc(n.ten_dang_nhap)}</span>` + (n.phai_doi_mk ? ' <span class="tag warn">chờ đổi MK</span>' : '');
-
-    let thaoTac = '<span class="sm">—</span>';
-    if (!coTK) {
-      if (TOI.duoc_tao_tai_khoan) {
-        const goiY = String(n.sdt || '').replace(/\D/g, '');
-        thaoTac = `<button class="btn-nho btn-primary" data-tao="${esc(n.id)}" data-ten-goi-y="${esc(goiY)}" data-ten="${esc(n.ho_ten)}">Tạo tài khoản</button>`;
-      }
-    } else if (TOI.la_admin) {
-      thaoTac = `<button class="btn-nho btn-phu" data-doivaitro="${n.tai_khoan_id}" data-doivaitro-ten="${esc(n.ho_ten)}" data-doivaitro-hientai="${esc(n.vai_tro || '')}">Đổi vai trò</button> ` +
-        `<button class="btn-nho btn-phu" data-datlai="${n.tai_khoan_id}">Đặt lại MK</button> ` +
-        (n.kich_hoat
-          ? `<button class="btn-nho btn-phu" data-khoa="${n.tai_khoan_id}" data-kh="0">Khoá</button>`
-          : `<button class="btn-nho btn-phu" data-khoa="${n.tai_khoan_id}" data-kh="1">Mở lại</button>`) +
-        ` <button class="btn-nho btn-phu" data-xoatk="${n.tai_khoan_id}" data-xoatk-ten="${esc(n.ho_ten)}">Xoá</button>`;
-    }
+    const cotTK = veCotTaiKhoan(n);
+    const thaoTac = veThaoTacTaiKhoan(n);
     return '' +
       `<td><div class="person">${avHtml(n.id, n.viet_tat, n.co_anh)}` +
         `<div><div class="nm">${esc(n.ho_ten)}${n.ma_nv ? ` <span class="sm" style="font-weight:400">· ${esc(n.ma_nv)}</span>` : ''}</div>` +
@@ -2425,6 +2439,52 @@ if (TOI.quyen.includes('nhansu')) {
     $('#nsSua-nuthuy').addEventListener('click', dongHopSuaNhanSu);
     nsSuaModal.addEventListener('click', e => { if (e.target === nsSuaModal) dongHopSuaNhanSu(); });
 
+    const LOAI_LD_CHU = { toan_thoi_gian: 'Toàn thời gian', ban_thoi_gian: 'Part-time', thoi_vu: 'Thời vụ' };
+    const NHAN_SU_KIEN = {
+      vao_lam: '🙋 Vào làm', doi_phong_ban: 'Đổi phòng ban', doi_chuc_danh: 'Đổi chức danh',
+      doi_quan_ly: 'Đổi quản lý trực tiếp', doi_trang_thai: 'Đổi trạng thái hợp đồng', nghi_viec: 'Nghỉ việc'
+    };
+
+    // Header tổng quan + khối Tài khoản ERP (Employee Profile Phase 1) —
+    // đọc thẳng từ `n` (đã có sẵn trong DS_NHAN_SU_QT qua qtDanhSach), không
+    // gọi thêm API nào cho phần này.
+    function veDauHoSo(n) {
+      const tt = TRANG_THAI[n.trang_thai] || { chu: n.trang_thai, mau: 'mute' };
+      const quanLy = n.quan_ly_id ? DS_NHAN_SU_QT.find(x => x.id === n.quan_ly_id) : null;
+      const chiTiet = [
+        n.chuc_vu ? esc(n.chuc_vu) : null,
+        n.bo_phan ? esc(n.bo_phan) : null,
+        quanLy ? `Quản lý: ${esc(nhanNhanSu(quanLy))}` : null,
+        LOAI_LD_CHU[n.loai_lao_dong] || null,
+        n.ngay_vao ? `Vào làm ${esc(n.ngay_vao)}` : null
+      ].filter(Boolean).join(' · ');
+      $('#nsSua-dauho').innerHTML =
+        `${avHtml(n.id, n.viet_tat, n.co_anh)}` +
+        `<div><div class="nm">${esc(n.ho_ten)}${n.ma_nv ? ` <span class="sm" style="font-weight:400">· ${esc(n.ma_nv)}</span>` : ''} <span class="tag ${tt.mau}">${esc(tt.chu)}</span></div>` +
+        `<div class="sm">${chiTiet || '—'}</div></div>`;
+    }
+    function veKhoiTaiKhoan(n) {
+      $('#nsSua-taikhoan').innerHTML =
+        `<div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap">${veCotTaiKhoan(n)}<span class="sm">${n.tai_khoan_id ? esc((DS_VAI_TRO_QT.find(v => v.ma === n.vai_tro) || {}).ten || n.vai_tro || '') : ''}</span></div>` +
+        `<div style="margin-top:8px">${veThaoTacTaiKhoan(n)}</div>`;
+    }
+    async function veLichSuHoSo(id) {
+      const oBang = $('#nsSua-lichsu'), oTrong = $('#nsSua-lichsu-trong');
+      let lich_su = [];
+      try { ({ lich_su } = await API.nsLichSu(id)); } catch { /* im lặng — hộp vẫn dùng được không có lịch sử */ }
+      veBang('#nsSua-lichsu', lich_su, h => {
+        const luc = (h.luc || '').slice(0, 16).replace('T', ' ');
+        // doi_trang_thai lưu MÃ trạng thái thô (da_ky/thu_viec...) ở backend
+        // — các loại sự kiện khác đã lưu sẵn TÊN (bo_phan/chuc_vu/họ tên
+        // quản lý), dịch riêng chỉ mã này qua từ điển TRANG_THAI đã có.
+        const dichGiaTri = v => h.loai_su_kien === 'doi_trang_thai' ? (TRANG_THAI[v]?.chu || v) : v;
+        return `<td class="sm">${esc(luc)}</td>` +
+          `<td class="sm">${esc(NHAN_SU_KIEN[h.loai_su_kien] || h.loai_su_kien)}${h.gia_tri_cu || h.gia_tri_moi ? `<div class="phu">${esc(dichGiaTri(h.gia_tri_cu) || '—')} → ${esc(dichGiaTri(h.gia_tri_moi) || '—')}</div>` : ''}</td>` +
+          `<td class="sm">${esc(h.nguoi_thuc_hien_ten || '—')}</td>`;
+      });
+      oTrong.hidden = lich_su.length > 0;
+    }
+
     function moHopSuaNhanSu(id) {
       const n = DS_NHAN_SU_QT.find(x => x.id === id);
       if (!n) return;
@@ -2432,6 +2492,9 @@ if (TOI.quyen.includes('nhansu')) {
         alert('Hồ sơ này đã khoá — cần Admin sửa hoặc mở khoá lại.');
         return;
       }
+      veDauHoSo(n);
+      veKhoiTaiKhoan(n);
+      veLichSuHoSo(id);
       $('#nsSua-id').value = n.id;
       $('#nsSua-hoten').value = n.ho_ten;
       $('#nsSua-sdt').value = n.sdt || '';
@@ -2470,6 +2533,19 @@ if (TOI.quyen.includes('nhansu')) {
       $('#nsSua-loi').textContent = '';
       nsSuaModal.hidden = false;
     }
+
+    // Vẽ lại phần CHỈ ĐỌC (đầu hồ sơ + Tài khoản ERP) khi hộp đang mở đúng
+    // người vừa có thay đổi tài khoản — KHÔNG đụng vào các ô đang sửa dở
+    // trong form, tránh mất dữ liệu người dùng đang gõ (UI State Consistency,
+    // ERP-CONSTITUTION.md Rule 7).
+    window.LAM_MOI_HOSO_NHANSU = () => {
+      if (nsSuaModal.hidden) return;
+      const id = $('#nsSua-id').value;
+      const n = DS_NHAN_SU_QT.find(x => x.id === id);
+      if (!n) return;
+      veDauHoSo(n);
+      veKhoiTaiKhoan(n);
+    };
 
     $('#nsSuaForm').addEventListener('submit', async e => {
       e.preventDefault();
@@ -5481,7 +5557,12 @@ if (TOI.quyen.includes('quantri')) {
   $('#qt-locvaitro')?.addEventListener('change', veBangQtTaiKhoan);
   $('#qt-xoaloc')?.addEventListener('click', xoaLocQT);
 
-  $('#qtBang').addEventListener('click', async e => {
+  // DÙNG CHUNG giữa bảng "Quản trị → Tài khoản" và khối "Tài khoản ERP"
+  // trong Hồ sơ nhân sự (Employee Profile Phase 1, 25/08/2026) — cùng 1 hàm,
+  // gắn ở cả 2 nơi, khỏi viết lại luồng Tạo/Đổi vai trò/Đặt lại MK/Khoá/Xoá
+  // 2 lần. Sau khi xong, nếu hộp Hồ sơ đang mở đúng người vừa đổi thì tự vẽ
+  // lại luôn (window.LAM_MOI_HOSO_NHANSU, gắn ở khối Nhân sự phía trên).
+  async function xuLyThaoTacTaiKhoan(e) {
     const btn = e.target.closest('button');
     if (!btn) return;
 
@@ -5512,7 +5593,9 @@ if (TOI.quyen.includes('quantri')) {
     } else if (btn.dataset.doivaitro) {
       moHopDoiVaiTro(btn.dataset.doivaitro, btn.dataset.doivaitroTen, btn.dataset.doivaitroHientai);
     }
-  });
+  }
+  $('#qtBang').addEventListener('click', xuLyThaoTacTaiKhoan);
+  $('#nsSua-taikhoan').addEventListener('click', xuLyThaoTacTaiKhoan);
 
   /* Combobox vai trò, giữ 2 nhóm "Vai trò hệ thống" tách khỏi "Vị trí công
      việc" (Sếp chốt 23/08/2026: 2 thứ khác nhau, không gộp 1 danh sách
