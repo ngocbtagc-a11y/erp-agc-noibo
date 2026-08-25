@@ -2132,11 +2132,11 @@
      nhiệm chính; mục tiêu (nếu cần) tạo NGAY tại đây thay vì phải làm 2
      bước ở 2 chỗ khác nhau. -->
 <div class="modal-nen" id="cvFormModalNen" hidden>
-  <div class="modal">
+  <div class="modal modal-rong">
     <h4>+ Giao Mục Tiêu</h4>
     <p class="hint" style="margin:0 0 16px">Tự thêm việc cần làm cho bản thân (chọn "Tôi"), hoặc giao cho người khác rõ đầu ra. Nếu việc này thuộc 1 mục tiêu lớn hơn (để tự tính tiến độ), chọn hoặc tạo mới ở mục "Thuộc mục tiêu" — để trống thì chỉ là 1 việc thường, không hiện ở Trạm Mục Tiêu.</p>
     <form id="cv-form" class="form-luoi" autocomplete="off">
-      <div class="field field-rong">
+      <div class="field">
         <label>Giao cho ai * <span class="hint">(người chịu trách nhiệm chính)</span></label>
         <div class="combo1" id="cv-nguoi-nhancombo">
           <button type="button" class="combo1-hienthi rong" id="cv-nguoi-nhanhienthi">
@@ -2150,17 +2150,17 @@
         </div>
         <input type="hidden" id="cv-nguoi-nhan">
       </div>
+      <div class="field">
+        <label>Hạn chót (tuỳ chọn)</label>
+        <input type="date" id="cv-han-chot">
+      </div>
       <div class="field field-rong">
         <label>Tên việc *</label>
         <input type="text" id="cv-tieu-de" required placeholder="Ví dụ: Rà soát tồn kho lô hàng chè chưng yến">
       </div>
       <div class="field field-rong">
         <label>Đầu ra cụ thể cần đạt *</label>
-        <textarea id="cv-dau-ra" required rows="2" placeholder="Không ghi 'làm gì' — ghi rõ XONG thì kết quả trông như thế nào. Ví dụ: File Excel đối chiếu tồn thực tế vs sổ sách, khớp 100%, gửi trước 17h."></textarea>
-      </div>
-      <div class="field">
-        <label>Hạn chót (tuỳ chọn)</label>
-        <input type="date" id="cv-han-chot">
+        <textarea id="cv-dau-ra" required rows="3" placeholder="Không ghi 'làm gì' — ghi rõ XONG thì kết quả trông như thế nào. Ví dụ: File Excel đối chiếu tồn thực tế vs sổ sách, khớp 100%, gửi trước 17h."></textarea>
       </div>
 
       <div class="field field-rong" id="cv-muc-tieu-khoi">
