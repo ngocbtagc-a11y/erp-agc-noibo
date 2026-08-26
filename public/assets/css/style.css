@@ -496,6 +496,15 @@ img.av { object-fit: cover; display: block; cursor: default; }
   padding: 12px 15px; font-size: 13.5px; color: #6d5325; font-weight: 500;
 }
 
+/* Hộp đề xuất Hồ Ly (AI) trong Chi tiết góp ý — chế độ nháp, Admin bấm
+   "Áp dụng" chỉ điền sẵn form, không tự đổi trạng thái thật (Sếp Ngọc chốt
+   26/08/2026). Tông sage nhạt, khác màu vàng cảnh báo của .vd-goiy để phân
+   biệt "gợi ý AI" với "cảnh báo cần chú ý". */
+.gy-ai-box {
+  background: var(--sage-wash); border: 1px solid var(--sage-pale);
+  border-radius: var(--r-md); padding: 13px 15px;
+}
+
 /* Danh sách vinh danh: xếp 2 cột trên màn rộng, tự về 1 cột khi hẹp/điện thoại */
 #vd-list {
   display: grid;

@@ -2922,7 +2922,9 @@ async function khoiDongGopY() {
     return `<tr data-id="${g.id}">` +
       `<td><div class="nm">${esc(g.tieu_de)}</div>${g.khu_vuc ? `<div class="sm">${esc((TAB.find(t => t.id === g.khu_vuc) || {}).ten || g.khu_vuc)}</div>` : ''}</td>` +
       (laAd ? `<td class="sm">${esc(g.nguoi_gui_ten)}</td>` : '') +
-      `<td><span class="tag ${tt.mau}">${esc(tt.chu)}</span></td>` +
+      `<td><span class="tag ${tt.mau}">${esc(tt.chu)}</span>` +
+        (laAd && g.trang_thai === 'moi' && g.de_xuat_trang_thai ? ' <span title="Hồ Ly đã có đề xuất">🦊</span>' : '') +
+      `</td>` +
       `<td class="sm">${thoiGianTruoc(g.cap_nhat_luc || g.tao_luc)}</td>` +
       `<td><button type="button" class="btn-nho" data-gyxem="${g.id}">Xem</button></td></tr>`;
   }
@@ -3002,6 +3004,24 @@ async function khoiDongGopY() {
       $('#gyCtTriageLoi').textContent = '';
     }
 
+    // Đề xuất Hồ Ly (AI, chế độ nháp) — chỉ Admin thấy, chỉ có ý nghĩa khi
+    // góp ý còn "Mới gửi" (đã triage tay/tự động rồi thì đề xuất cũ hết giá trị).
+    const deXuatBox = $('#gyCtDeXuatKhoi'), choXuLy = $('#gyCtDeXuatChoXuLy');
+    if (laAd && g.trang_thai === 'moi' && g.de_xuat_trang_thai) {
+      deXuatBox.hidden = false; choXuLy.hidden = true;
+      const RISK_MAU = { LOW: 'ok', MEDIUM: 'warn', HIGH: 'danger' };
+      const RISK_NHAN = { LOW: 'Risk: Thấp', MEDIUM: 'Risk: Trung bình', HIGH: 'Risk: Cao' };
+      $('#gyCtDeXuatRisk').className = 'tag ' + (RISK_MAU[g.de_xuat_risk] || 'mute');
+      $('#gyCtDeXuatRisk').textContent = RISK_NHAN[g.de_xuat_risk] || g.de_xuat_risk || '—';
+      $('#gyCtDeXuatLoai').textContent = GOPY_LOAI[g.de_xuat_loai] || 'Chưa rõ phân loại';
+      $('#gyCtDeXuatLyDo').textContent = g.de_xuat_ly_do || '';
+      $('#gyCtDeXuatSpec').textContent = g.de_xuat_spec || '';
+    } else if (laAd && g.trang_thai === 'moi') {
+      deXuatBox.hidden = true; choXuLy.hidden = false;
+    } else {
+      deXuatBox.hidden = true; choXuLy.hidden = true;
+    }
+
     $('#gyCtLichSu').innerHTML = '<div class="sm">Đang tải…</div>';
     modal.hidden = false;
 
@@ -3026,6 +3046,19 @@ async function khoiDongGopY() {
     if (btn) moChiTiet(parseInt(btn.getAttribute('data-gyxem'), 10));
   });
   $('#gyCtDong').addEventListener('click', () => { modal.hidden = true; });
+
+  // "Áp dụng đề xuất" CHỈ điền sẵn form triage — không tự gọi API, không tự
+  // đổi trạng thái thật. Admin vẫn phải tự bấm "Lưu" bên dưới mới thật sự
+  // áp dụng (đúng API gopYDoiTrangThai() có backend enforce quyền sẵn có).
+  $('#gyCtApDung').addEventListener('click', () => {
+    const id = parseInt(modal.dataset.id, 10);
+    const g = dsGopY.find(x => x.id === id);
+    if (!g) return;
+    $('#gyCtTrangThai').value = g.de_xuat_trang_thai;
+    $('#gyCtLoai').value = g.de_xuat_loai || '';
+    $('#gyCtGhiChu').value = '🦊 Hồ Ly (AI) đề xuất: ' + (g.de_xuat_ly_do || '');
+    $('#gyCtGhiChu').focus();
+  });
 
   $('#gyCtTriageForm').addEventListener('submit', async (e) => {
     e.preventDefault();

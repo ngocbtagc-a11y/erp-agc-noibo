@@ -3030,6 +3030,119 @@ const GOPY_LOAI_HOP_LE = ['loi', 'cai_tien_trai_nghiem', 'cai_tien_quy_trinh', '
 const GOPY_TAN_SUAT_HOP_LE = ['lan_dau', 'thinh_thoang', 'thuong_xuyen', 'lien_tuc'];
 const GOPY_DINH_KEM_TOI_DA = 800 * 1024;   // giống ẢNH_DAI_DIEN_TOI_DA — 1 ảnh, không video Phase 1 (D1 không hợp cho file lớn)
 
+/* ---- Hồ Ly tự động TRIAGE (CHẾ ĐỘ NHÁP — shadow mode) --------------------
+   Sếp Ngọc chốt 26/08/2026: tự động hoá Tier 1 bằng Workers AI (đã bind sẵn
+   [ai] trong wrangler.toml, 0 credential mới, dùng thay Claude API thật vì
+   lý do chi phí). Chạy trong cron mỗi 5 phút đã có (default.scheduled()).
+
+   AN TOÀN: hàm này CHỈ ghi vào các cột de_xuat_* — KHÔNG bao giờ tự đổi
+   gop_y.trang_thai thật. Admin phải tự bấm "Áp dụng đề xuất" (điền sẵn
+   form) rồi bấm "Lưu" thật (gopYDoiTrangThai(), có backend enforce quyền)
+   mới thật sự đổi trạng thái — đúng tinh thần Owner Gate đã thống nhất,
+   không cho AI đường tắt tự quyết định thay Sếp. */
+const HOLY_MODEL_AI = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
+const HOLY_RISK_TIEU_CHI = `HIGH nếu liên quan: kiến trúc Core, Source of Truth, đăng nhập/phân quyền, tài chính/kế toán, điều chỉnh tồn kho, hợp đồng tích hợp bên ngoài (Shopee/TikTok...), migration phá dữ liệu, nhân sự nhạy cảm, lương/kỷ luật/nghỉ việc, quy định pháp lý.
+MEDIUM nếu: ảnh hưởng nhiều phòng ban, đổi luồng nghiệp vụ đang dùng thật, cần trưởng phòng xác nhận trước khi làm.
+LOW nếu: chỉ 1 màn hình/1 phòng ban, sửa hiển thị/UX, không đụng dữ liệu chung, dễ revert.`;
+
+/* Rút JSON ĐẦU TIÊN trong đoạn text — model Workers AI (Llama, không phải
+   Claude) hay không tuân thủ đúng "chỉ trả JSON" như đã dặn trong prompt:
+   viết thêm lời chào/giải thích trước sau, thậm chí lặp lại 1 khối JSON
+   khác (echo dữ liệu đầu vào) phía sau. Regex tham lam `/\{[\s\S]*\}\/`
+   kiểu rutJSON() trong nhansu.js sẽ nuốt luôn từ dấu { ĐẦU đến dấu }
+   CUỐI — dính cả 2 khối làm 1 chuỗi không phải JSON hợp lệ (bug thật gặp
+   khi test 26/08/2026). Dò đúng cặp ngoặc CÂN BẰNG đầu tiên, có theo dõi
+   chuỗi "..." để không đếm nhầm { } nằm trong text bên trong. */
+function rutJsonGopY(text) {
+  if (!text) return null;
+  const s = String(text);
+  const batDau = s.indexOf('{');
+  if (batDau === -1) return null;
+  let doSau = 0, trongChuoi = false, thoat = false;
+  for (let i = batDau; i < s.length; i++) {
+    const c = s[i];
+    if (trongChuoi) {
+      if (thoat) thoat = false;
+      else if (c === '\\') thoat = true;
+      else if (c === '"') trongChuoi = false;
+      continue;
+    }
+    if (c === '"') trongChuoi = true;
+    else if (c === '{') doSau++;
+    else if (c === '}') {
+      doSau--;
+      if (doSau === 0) {
+        try { return JSON.parse(s.slice(batDau, i + 1)); } catch { return null; }
+      }
+    }
+  }
+  return null;
+}
+
+async function hoLyTriageMot(env, g) {
+  const prompt = `Bạn là Hồ Ly — Business Analyst của 1 ERP nội bộ công ty thương mại điện tử Việt Nam.
+Đọc góp ý sau và trả lời DUY NHẤT 1 JSON (không thêm chữ nào khác, không markdown, không giải thích ngoài JSON), đúng các khoá:
+loai (1 trong: loi, cai_tien_trai_nghiem, cai_tien_quy_trinh, tinh_nang_moi, du_lieu_sai, loi_phan_quyen, loi_ket_noi),
+risk (1 trong: LOW, MEDIUM, HIGH),
+ly_do_risk (1 câu tiếng Việt ngắn, vì sao đánh giá mức này),
+spec (Feature Spec ngắn gọn tiếng Việt, gồm 4 dòng: Vấn đề / Luồng hiện tại (suy đoán) / Luồng đề xuất / Acceptance Criteria — tối đa 150 từ tổng cộng).
+
+Tiêu chí đánh giá risk:
+${HOLY_RISK_TIEU_CHI}
+
+Góp ý cần phân tích:
+Tiêu đề: ${g.tieu_de}
+Đang làm gì: ${g.boi_canh}
+Vướng ở đâu: ${g.vuong_o_dau}
+Mong muốn: ${g.mong_muon}
+Tần suất: ${g.tan_suat || 'không rõ'}
+Khu vực: ${g.khu_vuc || 'không rõ'}
+
+Nhắc lại: CHỈ trả về JSON, không chào hỏi, không giải thích thêm, không lặp lại dữ liệu góp ý ở trên.`;
+
+  const kq = await env.AI.run(HOLY_MODEL_AI, {
+    messages: [{ role: 'user', content: prompt }],
+    max_tokens: 900
+  });
+  // Model này trả response SẴN LÀ OBJECT khi output đúng dạng JSON (không
+  // phải chuỗi cần bóc tách như model vision đọc CCCD ở nhansu.js) — chấp
+  // nhận cả 2 dạng cho chắc, phòng khi Cloudflare đổi hành vi model sau này.
+  const data = (kq && typeof kq.response === 'object' && kq.response)
+    ? kq.response
+    : rutJsonGopY(kq && kq.response);
+  if (!data) throw new Error('AI không trả JSON hợp lệ');
+
+  const loaiDeXuat = GOPY_LOAI_HOP_LE.includes(data.loai) ? data.loai : null;
+  const riskHopLe = ['LOW', 'MEDIUM', 'HIGH'].includes(String(data.risk || '').toUpperCase())
+    ? String(data.risk).toUpperCase() : 'MEDIUM';   // không đoán được thì coi MEDIUM (an toàn hơn LOW)
+  const trangThaiDeXuat = riskHopLe === 'HIGH' ? 'cho_quyet_dinh' : 'da_duyet';
+
+  await env.DB.prepare(`
+    UPDATE gop_y SET de_xuat_loai = ?, de_xuat_risk = ?, de_xuat_trang_thai = ?,
+           de_xuat_ly_do = ?, de_xuat_spec = ?, tu_dong_xu_luc = datetime('now', '+7 hours')
+     WHERE id = ?
+  `).bind(loaiDeXuat, riskHopLe, trangThaiDeXuat,
+          String(data.ly_do_risk || '').slice(0, 300), String(data.spec || '').slice(0, 2000), g.id).run();
+}
+
+/* Gọi từ scheduled() mỗi 5 phút — quét tối đa 5 góp ý mới/lần (đủ cho quy mô
+   công ty, tránh 1 lần cron chạy quá lâu). Bỏ qua êm nếu Workers AI chưa
+   bật hoặc 1 dòng lỗi — không chặn các dòng khác/các cron task khác. */
+async function hoLyTuDongTriage(env) {
+  if (!env.AI) return;
+
+  const { results } = await env.DB.prepare(`
+    SELECT id, tieu_de, boi_canh, vuong_o_dau, mong_muon, tan_suat, khu_vuc
+      FROM gop_y WHERE trang_thai = 'moi' AND tu_dong_xu_luc IS NULL
+     ORDER BY tao_luc ASC LIMIT 5
+  `).all();
+
+  for (const g of results) {
+    try { await hoLyTriageMot(env, g); }
+    catch (e) { console.error('Hồ Ly triage #' + g.id + ':', e.message); }
+  }
+}
+
 async function gopYGui(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
@@ -3082,6 +3195,7 @@ async function gopYDanhSach(req, env) {
            (g.dinh_kem IS NOT NULL) AS co_dinh_kem, g.loai, g.trang_thai,
            g.nguoi_phu_trach_id, pt.ho_ten AS nguoi_phu_trach_ten, g.spec_reference,
            g.tao_luc, g.cap_nhat_luc,
+           g.de_xuat_loai, g.de_xuat_risk, g.de_xuat_trang_thai, g.de_xuat_ly_do, g.de_xuat_spec,
            n.ho_ten AS nguoi_gui_ten, n.viet_tat AS nguoi_gui_viet_tat
       FROM gop_y g
       JOIN nhan_su n ON n.id = g.nguoi_gui_id
@@ -3358,6 +3472,7 @@ export default {
       try { await tiktok.dongBoNen(env); } catch (e) { console.error('Cron TikTok:', e.message); }
       try { await kiemTraCanhBaoHoan(env); } catch (e) { console.error('Cron cảnh báo:', e.message); }
       try { await kiemTraLyDoNghiemTrong(env); } catch (e) { console.error('Cron cảnh báo nghiêm trọng:', e.message); }
+      try { await hoLyTuDongTriage(env); } catch (e) { console.error('Cron Hồ Ly triage:', e.message); }
 
       // --- 1 GIỜ/LẦN (nặng: đồng bộ HÀNG NGÀN đơn hàng doanh thu + dọn dữ liệu) ---
       // Doanh thu không cần tươi từng 5 phút; chạy quá thường xuyên làm hệ thống
