@@ -60,6 +60,14 @@ export const API = {
     method: 'POST', body: JSON.stringify({ ma_trang_thai: maTrangThai, ghi_chu: ghiChu, thoi_han: thoiHan })
   }),
 
+  /* ---- Góp ý & Cải tiến ERP ---- */
+  gopYDanhSach: () => goi('/api/gop-y'),
+  gopYGui: (du) => goi('/api/gop-y', { method: 'POST', body: JSON.stringify(du) }),
+  gopYDoiTrangThai: (id, du) => goi('/api/gop-y/trang-thai', {
+    method: 'POST', body: JSON.stringify({ id, ...du })
+  }),
+  gopYLichSu: (id) => goi('/api/gop-y/lich-su?id=' + encodeURIComponent(id)),
+
   /* ---- Vinh danh (Tổng quan) ---- */
   vdDanhSach: () => goi('/api/vinh-danh'),
   vdGui: (nhanSuId, noiDung, soSao) => goi('/api/vinh-danh', {

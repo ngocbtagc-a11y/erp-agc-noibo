@@ -20,6 +20,7 @@ const TAB = [
   { id: 'tongquan',  ten: 'Trạm Mục Tiêu', nhom: null, icon: 'M3 12l9-9 9 9M5 10v10h14V10' },
   { id: 'lichsuviec', ten: 'Lịch sử làm việc', nhom: null, icon: 'M12 8v4l3 3M21 12a9 9 0 11-9-9 9 9 0 019 9z' },
   { id: 'danhba',    ten: 'Danh bạ',    nhom: null, icon: 'M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8' },
+  { id: 'gopy',      ten: 'Góp ý ERP',  nhom: null, icon: 'M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z' },
   { id: 'kinhdoanh', ten: 'Kinh doanh', nhom: 'Kinh doanh & MKT', icon: 'M23 6l-9.5 9.5-5-5L1 18M17 6h6v6' },
   { id: 'donhoan',   ten: 'Kết nối sàn', nhom: 'Kinh doanh & MKT', icon: 'M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71' },
   { id: 'khovan',    ten: 'Kho vận',    nhom: 'Kho vận & Sản xuất', icon: 'M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16zM3.27 6.96L12 12.01l8.73-5.05M12 22.08V12' },
@@ -316,6 +317,31 @@ const TRANG_THAI_HD = {
    trạng thái vừa chọn, người dùng vẫn đổi được. Trạng thái không liệt kê
    ở đây mặc định "Cuối ngày" (an toàn, không lo quên đổi qua hôm sau). */
 const THOI_HAN_MAC_DINH_HD = { meeting: '1h', away: '30p', dnd: '1h' };
+
+/* Góp ý & Cải tiến ERP — 12 mốc trạng thái đúng theo spec Sếp Ngọc
+   25/08/2026 (NEW→...→DONE/BLOCKED), đổi tên tiếng Việt cho người dùng,
+   giữ mã tiếng Việt ở backend/DB (đồng bộ quy ước cong_viec/tai_san).
+   uuTien=true → xuất hiện trong khối "Cần xử lý" (Exception First) của
+   Admin — khớp đúng set GOPY_MOC_THONG_BAO ở backend + NEW/UAT thêm vào. */
+const GOPY_TRANG_THAI = {
+  moi:                  { chu: 'Mới gửi',              mau: 'mute',   uuTien: true  },
+  dang_phan_tich:       { chu: 'Đang phân tích',        mau: 'warn',   uuTien: false },
+  cho_quyet_dinh:       { chu: 'Chờ quyết định',        mau: 'danger', uuTien: true  },
+  da_duyet:             { chu: 'Đã duyệt làm',          mau: 'sage',   uuTien: false },
+  dang_lam:             { chu: 'Đang làm',              mau: 'warn',   uuTien: false },
+  dang_kiem_tra:        { chu: 'Đang kiểm tra',         mau: 'sage',   uuTien: false },
+  can_chinh_sua:        { chu: 'Cần chỉnh sửa',         mau: 'danger', uuTien: true  },
+  cho_nghiem_thu:       { chu: 'Chờ nghiệm thu',        mau: 'warn',   uuTien: true  },
+  nghiem_thu_chua_dat:  { chu: 'Nghiệm thu chưa đạt',   mau: 'danger', uuTien: false },
+  san_sang_phat_hanh:   { chu: 'Sẵn sàng phát hành',    mau: 'ok',     uuTien: false },
+  hoan_thanh:           { chu: 'Hoàn thành',            mau: 'ok',     uuTien: false },
+  bi_chan:              { chu: 'Đang bị chặn',          mau: 'danger', uuTien: true  }
+};
+const GOPY_LOAI = {
+  loi: 'Lỗi (Bug)', cai_tien_trai_nghiem: 'Cải tiến trải nghiệm', cai_tien_quy_trinh: 'Cải tiến quy trình',
+  tinh_nang_moi: 'Tính năng mới', du_lieu_sai: 'Dữ liệu sai', loi_phan_quyen: 'Lỗi phân quyền', loi_ket_noi: 'Lỗi kết nối'
+};
+const GOPY_TAN_SUAT = { lan_dau: 'Lần đầu gặp', thinh_thoang: 'Thỉnh thoảng', thuong_xuyen: 'Thường xuyên', lien_tuc: 'Gần như lúc nào cũng vậy' };
 
 /* ---- Tiện ích ----------------------------------------------------------- */
 
@@ -848,6 +874,27 @@ function nenAnhVuong(file, kichThuoc = 200) {
   });
 }
 
+/* Nén ảnh GIỮ NGUYÊN tỉ lệ (khác nenAnhVuong ở trên — ảnh chụp màn hình
+   góp ý không được cắt vuông, cắt mất chữ/nút đang muốn chỉ ra chỗ lỗi).
+   Chỉ co lại nếu vượt kích thước tối đa, không phóng to ảnh nhỏ. */
+function nenAnhVuaKhung(file, kichThuocToiDa = 1000) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const ti = Math.min(1, kichThuocToiDa / Math.max(img.width, img.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.width * ti);
+      canvas.height = Math.round(img.height * ti);
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL('image/jpeg', 0.8));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Không đọc được ảnh này')); };
+    img.src = url;
+  });
+}
+
 function veAvatarSidebar(capNhat) {
   const wrap = $('#uAvWrap');
   wrap.querySelector('.av')?.remove();
@@ -1297,6 +1344,11 @@ if (TOI.quyen.includes('lichsuviec')) {
 /* -- Chat nội bộ (máy chủ thật) -- */
 if (TOI.quyen.includes('chat')) {
   try { await khoiDongChat(); } catch (e) { console.error('Chat nội bộ:', e); }
+}
+
+/* -- Góp ý & Cải tiến ERP (máy chủ thật) -- */
+if (TOI.quyen.includes('gopy')) {
+  try { await khoiDongGopY(); } catch (e) { console.error('Góp ý ERP:', e); }
 }
 
 /* ==========================================================================
@@ -2840,6 +2892,163 @@ if (TOI.quyen.includes('kinhdoanh')) {
     try { await khoiDongCSKH(); } catch (e) { console.error('CSKH:', e); }
   }
   try { await khoiDongDonHangHuy(); } catch (e) { console.error('Đơn hàng bị hủy:', e); }
+}
+
+/* ==========================================================================
+   GÓP Ý & CẢI TIẾN ERP — Employee = Action First (Gửi góp ý + Yêu cầu của
+   tôi), Admin (Reviewer/Builder trong quy trình) = Exception First (khối
+   "Cần xử lý" lên đầu, xem hết mọi góp ý, triage đổi trạng thái/loại).
+   ========================================================================== */
+async function khoiDongGopY() {
+  let dsGopY = [], laAd = false;
+
+  // Khu vực/module — dùng lại đúng danh sách TAB đã có (Rule 5), khỏi tự
+  // chế 1 danh mục song song rồi lệch tên với sidebar thật.
+  $('#gy-khuvuc').insertAdjacentHTML('beforeend',
+    TAB.filter(t => t.id !== 'gopy').map(t => `<option value="${t.id}">${esc(t.ten)}</option>`).join(''));
+  $('#gyCtTrangThai').innerHTML = Object.entries(GOPY_TRANG_THAI)
+    .map(([ma, tt]) => `<option value="${ma}">${esc(tt.chu)}</option>`).join('');
+
+  const nutMo = $('#gy-nut-mo');
+  function dongMoForm(hien) {
+    $('#gy-form-body').hidden = !hien;
+    nutMo.textContent = hien ? '✕ Đóng' : '+ Gửi góp ý';
+  }
+  nutMo.addEventListener('click', () => dongMoForm($('#gy-form-body').hidden));
+  $('#gy-nut-huy').addEventListener('click', () => { $('#gy-form').reset(); dongMoForm(false); });
+
+  function veDongGopY(g) {
+    const tt = GOPY_TRANG_THAI[g.trang_thai] || GOPY_TRANG_THAI.moi;
+    return `<tr data-id="${g.id}">` +
+      `<td><div class="nm">${esc(g.tieu_de)}</div>${g.khu_vuc ? `<div class="sm">${esc((TAB.find(t => t.id === g.khu_vuc) || {}).ten || g.khu_vuc)}</div>` : ''}</td>` +
+      (laAd ? `<td class="sm">${esc(g.nguoi_gui_ten)}</td>` : '') +
+      `<td><span class="tag ${tt.mau}">${esc(tt.chu)}</span></td>` +
+      `<td class="sm">${thoiGianTruoc(g.cap_nhat_luc || g.tao_luc)}</td>` +
+      `<td><button type="button" class="btn-nho" data-gyxem="${g.id}">Xem</button></td></tr>`;
+  }
+
+  async function taiLai() {
+    let kq;
+    try { kq = await API.gopYDanhSach(); } catch { return; }
+    dsGopY = kq.gop_y || [];
+    laAd = !!kq.la_admin;
+
+    $('#gy-cot-nguoigui').hidden = !laAd;
+    $('#gy-danhsach-tieude').textContent = laAd ? 'Tất cả góp ý' : 'Yêu cầu của tôi';
+
+    const canXuLy = laAd ? dsGopY.filter(g => (GOPY_TRANG_THAI[g.trang_thai] || {}).uuTien) : [];
+    $('#gy-canxuly-panel').hidden = canXuLy.length === 0;
+    $('#gy-canxuly-bang').innerHTML = canXuLy.map(veDongGopY).join('');
+
+    $('#gy-bang').innerHTML = dsGopY.map(veDongGopY).join('');
+    $('#gy-trong').hidden = dsGopY.length > 0;
+  }
+
+  $('#gy-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    $('#gy-loi').textContent = '';
+    const nut = $('#gy-nut-gui');
+    nut.disabled = true;
+    try {
+      const file = $('#gy-anh').files[0];
+      const dinhKem = file ? await nenAnhVuaKhung(file) : null;
+      await API.gopYGui({
+        tieu_de: $('#gy-tieude').value.trim(),
+        boi_canh: $('#gy-boicanh').value.trim(),
+        vuong_o_dau: $('#gy-vuong').value.trim(),
+        mong_muon: $('#gy-mongmuon').value.trim(),
+        tan_suat: $('#gy-tansuat').value || null,
+        khu_vuc: $('#gy-khuvuc').value || null,
+        dinh_kem: dinhKem
+      });
+      $('#gy-form').reset();
+      dongMoForm(false);
+      await taiLai();
+    } catch (err) {
+      $('#gy-loi').textContent = err.message || 'Không gửi được, thử lại nhé.';
+    } finally {
+      nut.disabled = false;
+    }
+  });
+
+  // Modal chi tiết — dùng chung cho cả bảng "Cần xử lý" lẫn bảng chính
+  // (event delegation trên document, khỏi gắn listener riêng từng bảng).
+  const modal = $('#gyChiTietModalNen');
+  async function moChiTiet(id) {
+    const g = dsGopY.find(x => x.id === id);
+    if (!g) return;
+
+    $('#gyCtTieuDe').textContent = g.tieu_de;
+    $('#gyCtNguoiGui').textContent = `${g.nguoi_gui_ten} · ${thoiGianTruoc(g.tao_luc)}`;
+    $('#gyCtBoiCanh').textContent = g.boi_canh;
+    $('#gyCtVuong').textContent = g.vuong_o_dau;
+    $('#gyCtMongMuon').textContent = g.mong_muon;
+    const meta = [];
+    if (g.tan_suat) meta.push('Tần suất: ' + (GOPY_TAN_SUAT[g.tan_suat] || g.tan_suat));
+    if (g.loai) meta.push('Phân loại: ' + (GOPY_LOAI[g.loai] || g.loai));
+    if (g.nguoi_phu_trach_ten) meta.push('Phụ trách: ' + g.nguoi_phu_trach_ten);
+    $('#gyCtMeta').textContent = meta.join(' · ');
+
+    const anh = $('#gyCtAnh');
+    anh.hidden = !g.co_dinh_kem;
+    if (g.co_dinh_kem) anh.src = '/api/gop-y/anh?id=' + encodeURIComponent(g.id) + '&v=' + Date.now();
+
+    const triageKhoi = $('#gyCtTriageKhoi');
+    triageKhoi.hidden = !laAd;
+    if (laAd) {
+      $('#gyCtTrangThai').value = g.trang_thai;
+      $('#gyCtLoai').value = g.loai || '';
+      $('#gyCtGhiChu').value = '';
+      $('#gyCtTriageLoi').textContent = '';
+    }
+
+    $('#gyCtLichSu').innerHTML = '<div class="sm">Đang tải…</div>';
+    modal.hidden = false;
+
+    try {
+      const { lich_su } = await API.gopYLichSu(id);
+      $('#gyCtLichSu').innerHTML = (lich_su || []).length
+        ? lich_su.map(ls => `<div class="sm" style="margin-bottom:4px">` +
+            `${esc(ls.nguoi_doi_ten)} đổi ` +
+            `${ls.tu_trang_thai ? `<b>${esc((GOPY_TRANG_THAI[ls.tu_trang_thai] || {}).chu || ls.tu_trang_thai)}</b> → ` : ''}` +
+            `<b>${esc((GOPY_TRANG_THAI[ls.den_trang_thai] || {}).chu || ls.den_trang_thai)}</b>` +
+            `${ls.ghi_chu ? ` — ${esc(ls.ghi_chu)}` : ''} · ${thoiGianTruoc(ls.luc)}</div>`).join('')
+        : '<div class="sm">Chưa có thay đổi trạng thái nào.</div>';
+    } catch {
+      $('#gyCtLichSu').innerHTML = '<div class="sm">Không tải được lịch sử.</div>';
+    }
+
+    modal.dataset.id = id;
+  }
+
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-gyxem]');
+    if (btn) moChiTiet(parseInt(btn.getAttribute('data-gyxem'), 10));
+  });
+  $('#gyCtDong').addEventListener('click', () => { modal.hidden = true; });
+
+  $('#gyCtTriageForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const id = parseInt(modal.dataset.id, 10);
+    $('#gyCtTriageLoi').textContent = '';
+    const nut = $('#gyCtNutLuu');
+    nut.disabled = true;
+    try {
+      await API.gopYDoiTrangThai(id, {
+        trang_thai: $('#gyCtTrangThai').value,
+        loai: $('#gyCtLoai').value || null,
+        ghi_chu: $('#gyCtGhiChu').value.trim() || null
+      });
+      await taiLai();
+      await moChiTiet(id);   // vẽ lại lịch sử + meta mới ngay trong modal, không cần đóng/mở lại
+    } catch (err) {
+      $('#gyCtTriageLoi').textContent = err.message || 'Không lưu được, thử lại nhé.';
+    } finally {
+      nut.disabled = false;
+    }
+  });
+
+  await taiLai();
 }
 
 /* Vận hành sàn — đơn hàng bị HỦY trước khi giao (Order API, khác Đơn hoàn) */

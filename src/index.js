@@ -3009,6 +3009,176 @@ async function nsTrangThaiHD(req, env) {
   return json({ ok: true });
 }
 
+/* ---- Góp ý & Cải tiến ERP ------------------------------------------------
+   Nhân viên báo vấn đề thực tế, không cần viết yêu cầu kỹ thuật (spec Sếp
+   Ngọc 25/08/2026). Bảng riêng `gop_y`/`gop_y_lich_su` — KHÔNG dùng chung
+   cong_viec (vòng đời/trạng thái khác hẳn "được giao việc", xem migration
+   them-gopy.sql). Reviewer/Builder trong quy trình = Admin (laAdmin) —
+   công ty quy mô nhỏ, không tự bịa role hệ thống mới cho việc này. */
+const GOPY_TRANG_THAI_HOP_LE = [
+  'moi', 'dang_phan_tich', 'cho_quyet_dinh', 'da_duyet', 'dang_lam',
+  'dang_kiem_tra', 'can_chinh_sua', 'cho_nghiem_thu', 'nghiem_thu_chua_dat',
+  'san_sang_phat_hanh', 'hoan_thanh', 'bi_chan'
+];
+// 6 mốc cần phát ERP UPDATE (Telegram + chuông trong app) — spec mục 8.
+const GOPY_MOC_THONG_BAO = new Set(['cho_quyet_dinh', 'da_duyet', 'can_chinh_sua', 'cho_nghiem_thu', 'hoan_thanh', 'bi_chan']);
+const GOPY_TRANG_THAI_NHAN = {
+  cho_quyet_dinh: 'Chờ quyết định', da_duyet: 'Đã duyệt làm', can_chinh_sua: 'Cần chỉnh sửa',
+  cho_nghiem_thu: 'Chờ nghiệm thu', hoan_thanh: 'Hoàn thành', bi_chan: 'Đang bị chặn'
+};
+const GOPY_LOAI_HOP_LE = ['loi', 'cai_tien_trai_nghiem', 'cai_tien_quy_trinh', 'tinh_nang_moi', 'du_lieu_sai', 'loi_phan_quyen', 'loi_ket_noi'];
+const GOPY_TAN_SUAT_HOP_LE = ['lan_dau', 'thinh_thoang', 'thuong_xuyen', 'lien_tuc'];
+const GOPY_DINH_KEM_TOI_DA = 800 * 1024;   // giống ẢNH_DAI_DIEN_TOI_DA — 1 ảnh, không video Phase 1 (D1 không hợp cho file lớn)
+
+async function gopYGui(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+
+  const tieuDe = String(b.tieu_de || '').trim();
+  const boiCanh = String(b.boi_canh || '').trim();
+  const vuongODau = String(b.vuong_o_dau || '').trim();
+  const mongMuon = String(b.mong_muon || '').trim();
+  if (!tieuDe || !boiCanh || !vuongODau || !mongMuon) return loi('Điền đủ Tiêu đề, Đang làm gì, Vướng ở đâu, Mong muốn kết quả');
+
+  const tanSuat = String(b.tan_suat || '') || null;
+  if (tanSuat && !GOPY_TAN_SUAT_HOP_LE.includes(tanSuat)) return loi('Tần suất không hợp lệ');
+  const khuVuc = String(b.khu_vuc || '').trim().slice(0, 40) || null;
+
+  let dinhKem = null;
+  if (b.dinh_kem) {
+    const raw = String(b.dinh_kem).replace(/^data:[^,]*,/, '');
+    let doDai;
+    try { doDai = atob(raw).length; } catch { return loi('Ảnh không hợp lệ'); }
+    if (doDai > GOPY_DINH_KEM_TOI_DA) return loi('Ảnh quá lớn, thử ảnh khác nhé (tối đa 800KB)', 413);
+    dinhKem = raw;
+  }
+
+  const r = await env.DB.prepare(`
+    INSERT INTO gop_y (nguoi_gui_id, tieu_de, boi_canh, vuong_o_dau, mong_muon, tan_suat, khu_vuc, dinh_kem, trang_thai, tao_luc)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'moi', datetime('now', '+7 hours'))
+  `).bind(phien.nhan_su_id, tieuDe, boiCanh, vuongODau, mongMuon, tanSuat, khuVuc, dinhKem).run();
+
+  return json({ ok: true, id: r.meta.last_row_id });
+}
+
+/* Danh sách — người thường chỉ thấy CỦA MÌNH, Admin thấy tất cả (Reviewer/
+   Builder trong quy trình). Admin: Exception First (spec mục 5) — NEW/
+   NEEDS_BUSINESS_DECISION/FIX_REQUIRED/BLOCKED/READY_FOR_UAT lên đầu. */
+async function gopYDanhSach(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+
+  const laAd = laAdmin(phien.vai_tro);
+  const dieuKien = laAd ? '' : 'WHERE g.nguoi_gui_id = ?';
+  const sapXep = laAd
+    ? `ORDER BY CASE g.trang_thai
+         WHEN 'moi' THEN 0 WHEN 'cho_quyet_dinh' THEN 0 WHEN 'can_chinh_sua' THEN 0
+         WHEN 'bi_chan' THEN 0 WHEN 'cho_nghiem_thu' THEN 0 ELSE 1 END, g.tao_luc DESC`
+    : 'ORDER BY g.tao_luc DESC';
+
+  const stmt = env.DB.prepare(`
+    SELECT g.id, g.tieu_de, g.boi_canh, g.vuong_o_dau, g.mong_muon, g.tan_suat, g.khu_vuc,
+           (g.dinh_kem IS NOT NULL) AS co_dinh_kem, g.loai, g.trang_thai,
+           g.nguoi_phu_trach_id, pt.ho_ten AS nguoi_phu_trach_ten, g.spec_reference,
+           g.tao_luc, g.cap_nhat_luc,
+           n.ho_ten AS nguoi_gui_ten, n.viet_tat AS nguoi_gui_viet_tat
+      FROM gop_y g
+      JOIN nhan_su n ON n.id = g.nguoi_gui_id
+      LEFT JOIN nhan_su pt ON pt.id = g.nguoi_phu_trach_id
+      ${dieuKien}
+      ${sapXep}
+  `);
+  const { results } = laAd ? await stmt.all() : await stmt.bind(phien.nhan_su_id).all();
+
+  return json({ gop_y: results, la_admin: laAd });
+}
+
+/* Đổi trạng thái/category/người phụ trách — CHỈ Admin (Reviewer/Builder
+   trong quy trình). Ghi lịch sử (History Must Survive Change), phát
+   ERP UPDATE nếu chạm 1 trong 6 mốc (chuông trong app cho người gửi +
+   Telegram kênh ops chung, reuse guiThongBao/guiTelegram sẵn có). */
+async function gopYDoiTrangThai(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  if (!laAdmin(phien.vai_tro)) return loi('Không có quyền', 403);
+
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  const id = parseInt(b.id, 10);
+  if (!id) return loi('Thiếu id');
+
+  const hienCo = await env.DB.prepare('SELECT trang_thai, nguoi_gui_id, tieu_de FROM gop_y WHERE id = ?').bind(id).first();
+  if (!hienCo) return loi('Không tìm thấy góp ý này', 404);
+
+  const trangThaiMoi = String(b.trang_thai || hienCo.trang_thai);
+  if (!GOPY_TRANG_THAI_HOP_LE.includes(trangThaiMoi)) return loi('Trạng thái không hợp lệ');
+  const loaiMoi = b.loai !== undefined ? (GOPY_LOAI_HOP_LE.includes(b.loai) ? b.loai : null) : undefined;
+  const nguoiPhuTrachMoi = b.nguoi_phu_trach_id !== undefined ? (String(b.nguoi_phu_trach_id || '') || null) : undefined;
+  const ghiChu = String(b.ghi_chu || '').trim().slice(0, 500) || null;
+
+  const gan = [], gia = [];
+  gan.push('trang_thai = ?'); gia.push(trangThaiMoi);
+  gan.push('cap_nhat_luc = datetime(\'now\', \'+7 hours\')');
+  if (loaiMoi !== undefined) { gan.push('loai = ?'); gia.push(loaiMoi); }
+  if (nguoiPhuTrachMoi !== undefined) { gan.push('nguoi_phu_trach_id = ?'); gia.push(nguoiPhuTrachMoi); }
+  gia.push(id);
+  await env.DB.prepare(`UPDATE gop_y SET ${gan.join(', ')} WHERE id = ?`).bind(...gia).run();
+
+  if (trangThaiMoi !== hienCo.trang_thai) {
+    await env.DB.prepare(`
+      INSERT INTO gop_y_lich_su (gop_y_id, tu_trang_thai, den_trang_thai, nguoi_doi_id, ghi_chu, luc)
+      VALUES (?, ?, ?, ?, ?, datetime('now', '+7 hours'))
+    `).bind(id, hienCo.trang_thai, trangThaiMoi, phien.nhan_su_id, ghiChu).run();
+
+    if (GOPY_MOC_THONG_BAO.has(trangThaiMoi)) {
+      const nhan = GOPY_TRANG_THAI_NHAN[trangThaiMoi] || trangThaiMoi;
+      await guiThongBao(env, null, `Góp ý "${hienCo.tieu_de}" của bạn: ${nhan}`, 'gop_y_cap_nhat', String(id), hienCo.nguoi_gui_id);
+      guiTelegram(env, `[Góp ý ERP] "${hienCo.tieu_de}" → ${nhan}`).catch(() => {});
+    }
+  }
+
+  return json({ ok: true });
+}
+
+/* Lịch sử đổi trạng thái 1 góp ý — chủ sở hữu hoặc Admin mới xem được. */
+async function gopYLichSu(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  const id = parseInt(new URL(req.url).searchParams.get('id'), 10);
+  if (!id) return loi('Thiếu id', 400);
+
+  const g = await env.DB.prepare('SELECT nguoi_gui_id FROM gop_y WHERE id = ?').bind(id).first();
+  if (!g) return loi('Không tìm thấy góp ý này', 404);
+  if (!laAdmin(phien.vai_tro) && g.nguoi_gui_id !== phien.nhan_su_id) return loi('Không có quyền', 403);
+
+  const { results } = await env.DB.prepare(`
+    SELECT ls.tu_trang_thai, ls.den_trang_thai, ls.ghi_chu, ls.luc, n.ho_ten AS nguoi_doi_ten
+      FROM gop_y_lich_su ls
+      JOIN nhan_su n ON n.id = ls.nguoi_doi_id
+     WHERE ls.gop_y_id = ?
+     ORDER BY ls.luc ASC
+  `).bind(id).all();
+
+  return json({ lich_su: results });
+}
+
+/* Ảnh đính kèm 1 góp ý — chủ sở hữu hoặc Admin mới xem được (KHÔNG mở cho
+   tất cả như ảnh đại diện — nội dung góp ý có thể riêng tư giữa người gửi
+   và Admin, spec mục 18 "Status message phải là thông tin nội bộ"). */
+async function gopYAnh(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  const id = parseInt(new URL(req.url).searchParams.get('id'), 10);
+  if (!id) return loi('Thiếu id', 400);
+
+  const g = await env.DB.prepare('SELECT nguoi_gui_id, dinh_kem FROM gop_y WHERE id = ?').bind(id).first();
+  if (!g || !g.dinh_kem) return loi('Không có ảnh', 404);
+  if (!laAdmin(phien.vai_tro) && g.nguoi_gui_id !== phien.nhan_su_id) return loi('Không có quyền', 403);
+
+  const bin = Uint8Array.from(atob(g.dinh_kem), c => c.charCodeAt(0));
+  return new Response(bin, { headers: { 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, max-age=3600' } });
+}
+
 /* Xem ảnh đại diện của 1 người — GET /api/nhan-su/anh?id=X (ai đăng nhập rồi
    cũng xem được ảnh của bất kỳ ai, giống tinh thần Danh bạ mở cho tất cả). */
 async function nsAnhXem(req, env) {
@@ -3035,6 +3205,11 @@ const DUONG_DAN = {
   'POST /api/nhan-su/anh-dai-dien': nsAnhDaiDien,
   'POST /api/nhan-su/trang-thai-hd': nsTrangThaiHD,
   'GET  /api/nhan-su/anh':          nsAnhXem,
+  'POST /api/gop-y':               gopYGui,
+  'GET  /api/gop-y':               gopYDanhSach,
+  'POST /api/gop-y/trang-thai':    gopYDoiTrangThai,
+  'GET  /api/gop-y/lich-su':       gopYLichSu,
+  'GET  /api/gop-y/anh':           gopYAnh,
   'GET  /api/chat/tin-nhan': chatDanhSach,
   'GET  /api/chat/chua-doc': chatChuaDoc,
   'POST /api/chat/da-doc':   chatDaDoc,

@@ -8,6 +8,12 @@ Format: `Date | Feature | Domain | Decision | Migration | Breaking impact | Stat
 
 ---
 
+## 2026-08-26
+
+| Feature | Domain | Decision | Migration | Breaking impact | Status |
+|---|---|---|---|---|---|
+| Góp ý & Cải tiến ERP — box nhân viên báo vấn đề thực tế, Admin triage | Domain mới (Toàn công ty gửi, Admin triage) | LOCAL_DOMAIN theo spec Sếp Ngọc 25/08/2026 (mô hình Hồ Ly/Agent A Builder + Agent B Reviewer/QA). Bảng riêng `gop_y`/`gop_y_lich_su` — KHÔNG dùng chung `cong_viec` (vòng đời NEW→TRIAGE→…→DONE/BLOCKED khác hẳn "được giao việc", đè lên sẽ phá mọi UI/filter đang giả định 5 trạng thái cong_viec). Tab `gopy` mở cho MỌI vai trò (thêm vào `TAB` + mọi role trong `quyen.js`, giống congviec/danhba) — nhân viên chỉ xem CỦA MÌNH, Admin (`laAdmin()` có sẵn — không tự bịa role Reviewer mới) xem tất cả + triage đổi trạng thái/loại/người phụ trách, ghi lịch sử. Reuse triệt để: `guiThongBao()`/`guiTelegram()` có sẵn (6 mốc milestone phát cả chuông trong app lẫn Telegram kênh ops chung), pattern ảnh base64-trong-D1 của ảnh đại diện (800KB, không video Phase 1), toàn bộ CSS/component dùng lại (`.form-luoi`, `.panel`, `.modal-rong`, `.tag`, `.dai`) — 0 class CSS mới. Test end-to-end 2 vai trò (nhân viên gửi + xem của mình; Admin triage + xem tất cả + Cần xử lý Exception-First), xác nhận backend chặn đúng khi nhân viên gọi thẳng API triage (403) | Có — `migrations/them-gopy.sql` (đã chạy remote) | Không (2 bảng mới độc lập, không đụng Core/API cũ) | PILOT — chờ Sếp Ngọc/Agent B review trước khi PRODUCTION |
+
 ## 2026-08-25
 
 | Feature | Domain | Decision | Migration | Breaking impact | Status |

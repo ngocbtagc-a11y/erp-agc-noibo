@@ -377,6 +377,140 @@
       </div>
     </section>
 
+    <!-- ---------- Góp ý & Cải tiến ERP ---------- -->
+    <section class="view" id="v-gopy" hidden>
+      <div class="view-head">
+        <h3>Góp ý &amp; Cải tiến ERP</h3>
+        <p>Gặp vướng mắc khi dùng ERP? Gửi ngay — không cần viết yêu cầu kỹ thuật, cứ kể đúng những gì đang xảy ra.</p>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h4>Gửi góp ý mới</h4>
+          <button type="button" class="btn-phu" id="gy-nut-mo" style="width:auto">+ Gửi góp ý</button>
+        </div>
+        <div class="panel-body" id="gy-form-body" hidden>
+          <form id="gy-form" class="form-luoi" autocomplete="off">
+            <div class="field field-rong">
+              <label>Tiêu đề *</label>
+              <input type="text" id="gy-tieude" required maxlength="150" placeholder="Ví dụ: Không lọc được đơn hoàn theo ngày">
+            </div>
+            <div class="field field-rong">
+              <label>Đang làm việc gì? *</label>
+              <textarea id="gy-boicanh" required rows="2" maxlength="500" placeholder="Ví dụ: Đang tra soát đơn hoàn cuối tháng"></textarea>
+            </div>
+            <div class="field field-rong">
+              <label>Vướng ở đâu? *</label>
+              <textarea id="gy-vuong" required rows="2" maxlength="500" placeholder="Ví dụ: Không có ô lọc theo ngày, phải kéo cuộn tìm tay"></textarea>
+            </div>
+            <div class="field field-rong">
+              <label>Mong muốn kết quả gì? *</label>
+              <textarea id="gy-mongmuon" required rows="2" maxlength="500" placeholder="Ví dụ: Có ô chọn khoảng ngày để lọc nhanh"></textarea>
+            </div>
+            <div class="field">
+              <label>Tần suất xảy ra</label>
+              <select id="gy-tansuat">
+                <option value="">— Chọn nếu biết —</option>
+                <option value="lan_dau">Lần đầu gặp</option>
+                <option value="thinh_thoang">Thỉnh thoảng</option>
+                <option value="thuong_xuyen">Thường xuyên</option>
+                <option value="lien_tuc">Gần như lúc nào cũng vậy</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Khu vực/module</label>
+              <select id="gy-khuvuc"><option value="">— Chọn nếu biết —</option></select>
+            </div>
+            <div class="field field-rong">
+              <label>Ảnh chụp màn hình (nếu có)</label>
+              <input type="file" id="gy-anh" accept="image/*">
+            </div>
+            <div class="field field-nut">
+              <button type="submit" class="btn-primary" id="gy-nut-gui" style="width:auto">Gửi góp ý</button>
+              <button type="button" class="btn-phu" id="gy-nut-huy" style="width:auto">Hủy</button>
+            </div>
+          </form>
+          <div class="form-loi" id="gy-loi"></div>
+        </div>
+      </div>
+
+      <div class="panel" id="gy-canxuly-panel" hidden>
+        <div class="panel-head"><h4>Cần xử lý</h4></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Tiêu đề</th><th>Người gửi</th><th>Trạng thái</th><th>Cập nhật</th><th></th></tr></thead>
+            <tbody id="gy-canxuly-bang"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h4 id="gy-danhsach-tieude">Yêu cầu của tôi</h4></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Tiêu đề</th><th id="gy-cot-nguoigui" hidden>Người gửi</th><th>Trạng thái</th><th>Cập nhật</th><th></th></tr></thead>
+            <tbody id="gy-bang"></tbody>
+          </table>
+        </div>
+        <div class="empty" id="gy-trong" hidden>Chưa có góp ý nào — thử gửi 1 vướng mắc thật đang gặp nhé.</div>
+      </div>
+    </section>
+
+    <!-- Góp ý — Chi tiết (xem lịch sử; Admin triage đổi trạng thái/loại/người phụ trách) -->
+    <div class="modal-nen" id="gyChiTietModalNen" hidden>
+      <div class="modal modal-rong">
+        <h4 id="gyCtTieuDe">Chi tiết góp ý</h4>
+        <div class="sm" id="gyCtNguoiGui" style="margin-bottom:10px"></div>
+
+        <div class="kv-md-muc">Đang làm việc gì?</div>
+        <div class="dai" id="gyCtBoiCanh"></div>
+        <div class="kv-md-muc">Vướng ở đâu?</div>
+        <div class="dai" id="gyCtVuong"></div>
+        <div class="kv-md-muc">Mong muốn kết quả gì?</div>
+        <div class="dai" id="gyCtMongMuon"></div>
+        <div class="sm" id="gyCtMeta" style="margin-top:8px"></div>
+        <img id="gyCtAnh" style="max-width:100%; border-radius:var(--r-md); margin-top:10px" hidden>
+
+        <div id="gyCtTriageKhoi" hidden>
+          <div class="kv-md-muc">Xử lý (Admin)</div>
+          <form id="gyCtTriageForm" class="form-luoi">
+            <div class="field">
+              <label>Trạng thái</label>
+              <select id="gyCtTrangThai"></select>
+            </div>
+            <div class="field">
+              <label>Phân loại</label>
+              <select id="gyCtLoai">
+                <option value="">— Chưa phân loại —</option>
+                <option value="loi">Lỗi (Bug)</option>
+                <option value="cai_tien_trai_nghiem">Cải tiến trải nghiệm</option>
+                <option value="cai_tien_quy_trinh">Cải tiến quy trình</option>
+                <option value="tinh_nang_moi">Tính năng mới</option>
+                <option value="du_lieu_sai">Dữ liệu sai</option>
+                <option value="loi_phan_quyen">Lỗi phân quyền</option>
+                <option value="loi_ket_noi">Lỗi kết nối</option>
+              </select>
+            </div>
+            <div class="field field-rong">
+              <label>Ghi chú (lưu vào lịch sử)</label>
+              <input type="text" id="gyCtGhiChu" maxlength="500" placeholder="Tuỳ chọn — vì sao đổi trạng thái này">
+            </div>
+            <div class="field field-nut">
+              <button type="submit" class="btn-primary" id="gyCtNutLuu" style="width:auto">Lưu</button>
+            </div>
+          </form>
+          <div class="form-loi" id="gyCtTriageLoi"></div>
+        </div>
+
+        <div class="kv-md-muc">Lịch sử</div>
+        <div id="gyCtLichSu"></div>
+
+        <div class="modal-nut">
+          <button class="btn-primary" id="gyCtDong">Đóng</button>
+        </div>
+      </div>
+    </div>
+
     <!-- ---------- Chat nội bộ — bong bóng nổi góc phải dưới, kiểu Messenger ---------- -->
     <div class="cnb-widget" id="cnbWidget" hidden>
       <div class="cnb-popup" id="cnbPopup" hidden>

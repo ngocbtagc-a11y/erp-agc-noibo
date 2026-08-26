@@ -42,6 +42,7 @@ trong `quyen.js`), Approval Core, Process/Workflow Core tổng quát.
 | Danh mục nền (Phòng ban/Chức danh/Đơn vị tính/NCC/Kho) | Ban Giám đốc (Phòng ban, Chức danh) / P. Kho Vận-Sản Xuất (còn lại) | `src/dulieunen.js` | `/api/dulieunen/*` | `phong_ban`, `chuc_danh`, `don_vi_tinh`, `nha_cung_cap`, `kho` | PRODUCTION | — | — |
 | Chat nội bộ | Toàn công ty | trong `index.js` | `/api/chat/*` | `tin_nhan_chat` | PRODUCTION | Employee Core | `nhan_su` |
 | Vinh danh | Toàn công ty | trong `index.js` | `/api/vinh-danh/*` | (bảng vinh danh) | PRODUCTION | Employee Core | `nhan_su` |
+| Góp ý & Cải tiến ERP | Toàn công ty (Admin triage) | trong `index.js` | `/api/gop-y/*` | `gop_y`, `gop_y_lich_su` | PILOT (25/08/2026, mới) | Employee Core, Notification, Telegram (tuỳ chọn) | `nhan_su`, `thong_bao` |
 
 ---
 
