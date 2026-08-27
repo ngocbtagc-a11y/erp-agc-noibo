@@ -26,6 +26,7 @@ import * as taisan from './taisan.js';
 import * as ca from './ca.js';
 import * as hopdong from './hopdong.js';
 import * as motacv from './mota-cv.js';
+import * as kynang from './ky-nang.js';
 import { quetNhacNhanSu, thangKeTiep, gioVN } from './nhac-nhan-su.js';
 import { sinhMa } from './dinh-danh.js';
 
@@ -3418,6 +3419,73 @@ async function nsHopDongAn(req, env) {
 }
 
 /* ---- Sinh nhật (SPEC-0007 Đợt 2) ----------------------------------------
+   ⚠️ VÌ SAO PHẢI CÓ ĐƯỜNG SỬA `ngay_sinh` Ở ĐÂY.
+   Audit CTL-0015 §2 kết luận "`ngay_sinh` ĐÃ CÓ SẴN → chỉ cần cron đọc".
+   Cột thì có thật, nhưng đo lại trên D1 local thì **0 người đang làm có
+   `ngay_sinh`**, và quét cả repo thì cột này chỉ được GHI đúng một chỗ:
+   `src/nhansu.js:130`, tức luồng nhận hồ sơ mới / đọc CCCD. Người đã ở trong
+   hệ thống thì KHÔNG có đường nào sửa. Đó đúng là "cột chỉ có chiều ghi" mà
+   BH-32 cảnh báo — phát hành Đợt 2 mà không có đường này thì cron chạy đủ,
+   không lỗi, và IM LẶNG mãi mãi: hỏng đúng kiểu khó phát hiện nhất.
+   `ngay_sinh` là mức 2 (ADR-0011 A2) nên đường đọc/ghi đi cửa `them_nhan_su`,
+   KHÔNG nhét vào danh sách nhân sự chung. */
+async function nsSinhNhatDoc(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  const dich = String(new URL(req.url).searchParams.get('id') || '').trim() || phien.nhan_su_id;
+  if (dich !== phien.nhan_su_id && !duocThemNhanSu(phien.vai_tro)) {
+    return loi('Không đủ quyền xem ngày sinh của người khác', 403);
+  }
+  try {
+    const r = await env.DB.prepare(
+      'SELECT ngay_sinh, cong_khai_sinh_nhat FROM nhan_su WHERE id = ?'
+    ).bind(dich).first();
+    return json({
+      ngay_sinh: r?.ngay_sinh || null,
+      cong_khai_sinh_nhat: r?.cong_khai_sinh_nhat == null ? true : !!r.cong_khai_sinh_nhat
+    });
+  } catch {
+    return json({ ngay_sinh: null, cong_khai_sinh_nhat: true, chua_nap: true });
+  }
+}
+
+/* Sửa ngày sinh. CHỈ vai trò quản lý hồ sơ — đây là dữ liệu hồ sơ nhân sự,
+   không phải tuỳ chọn cá nhân: cho tự sửa thì ngày sinh trên hợp đồng và
+   ngày sinh trong ERP sẽ lệch nhau mà không ai biết. Ghi `nhan_su_lich_su`. */
+async function nsNgaySinhLuu(req, env) {
+  const { phien, loi: l } = await batBuocThemNhanSu(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+
+  const id = String(b.id || '').trim();
+  if (!id) return loi('Thiếu id nhân sự');
+  const ns = await env.DB.prepare('SELECT id, ho_ten, ngay_sinh FROM nhan_su WHERE id = ?').bind(id).first();
+  if (!ns) return loi('Không tìm thấy nhân sự', 404);
+
+  const s = String(b.ngay_sinh || '').trim();
+  // Chỉ nhận YYYY-MM-DD. Lọt "31/12/1990" là mọi truy vấn strftime sau này
+  // trả NULL im lặng, và người đó vĩnh viễn không được chúc.
+  let ngay = null;
+  if (s) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return loi('Ngày sinh chưa đúng định dạng ngày/tháng/năm');
+    const [y, m, d] = s.split('-').map(Number);
+    if (m < 1 || m > 12 || d < 1 || d > 31) return loi('Ngày sinh không có thật');
+    const namNay = new Date(Date.now() + 7 * 3600 * 1000).getUTCFullYear();
+    if (y < 1930 || y > namNay - 14) return loi('Năm sinh không hợp lý — kiểm lại giúp tôi');
+    ngay = s;
+  }
+
+  await env.DB.prepare('UPDATE nhan_su SET ngay_sinh = ? WHERE id = ?').bind(ngay, id).run();
+  try {
+    await env.DB.prepare(`
+      INSERT INTO nhan_su_lich_su (nhan_su_id, loai_su_kien, gia_tri_cu, gia_tri_moi, nguoi_thuc_hien_id, luc)
+      VALUES (?, 'doi_ngay_sinh', ?, ?, ?, datetime('now','+7 hours'))
+    `).bind(id, ns.ngay_sinh || null, ngay, phien.nhan_su_id).run();
+  } catch { /* chưa nạp them-nhansu-lichsu.sql — bỏ qua êm */ }
+  return json({ ok: true, ngay_sinh: ngay });
+}
+
+/* ---- Công tắc riêng tư ---------------------------------------------------
    Công tắc riêng tư: AI ĐƯỢC TẮT? Chính mình — luôn được, không cần xin ai
    (ADR-0011 A2: giấy tờ của chính mình luôn xem/sửa được). Người khác — chỉ
    vai trò quản lý hồ sơ (`them_nhan_su`), đúng một cửa quyền với hợp đồng.
@@ -3483,6 +3551,11 @@ async function nsViecCanLam(req, env) {
     kq.sinh_nhat_thang_sau = results || [];
   } catch { /* không có dữ liệu ngày sinh — dải tự trống */ }
 
+  /* Kỹ năng CHỈ MỘT NGƯỜI biết (SPEC-0007 Đợt 4) — điểm chết của kho. Người
+     đó nghỉ một hôm là phần việc ấy đứng lại, mà hôm nay điều đó chỉ nằm
+     trong đầu quản lý. Chưa nạp migration hoặc chưa ai chấm thì trả rỗng. */
+  kq.diem_chet = await kynang.diemChet(env);
+
   return json(kq);
 }
 
@@ -3516,6 +3589,57 @@ async function mtcvAn(req, env) {
   return motacv.an(env, phien, b);
 }
 
+/* ---- Bộ năng lực (SPEC-0007 Đợt 4) --------------------------------------
+   ĐỌC mở cho mọi người đã đăng nhập (mức 1 · nội bộ, ADR-0011 A2) — hai màn
+   tra cứu chỉ có giá trị khi người đang xếp ca mở được ngay, mà bảng này
+   không chứa lương, giấy tờ hay ngày sinh.
+   GHI thì `ky-nang.js` tự kiểm QUAN HỆ (quản lý trực tiếp / trưởng phòng),
+   nên ở đây chỉ cần đăng nhập và truyền thêm cờ "có phải vai trò quản lý hồ
+   sơ không". KHÔNG thêm hàm nào vào `src/quyen.js` — đụng là CORE_CHANGE. */
+async function knDanhMuc(req, env) {
+  const { loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  return kynang.danhMuc(env, new URL(req.url).searchParams.get('nhom'));
+}
+async function knCuaNguoi(req, env) {
+  const { loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  return kynang.cuaNguoi(env, new URL(req.url).searchParams.get('id'));
+}
+async function knCham(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return kynang.cham(env, phien, b, duocThemNhanSu(phien.vai_tro));
+}
+async function knGo(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return kynang.go(env, phien, b, duocThemNhanSu(phien.vai_tro));
+}
+async function knAiLamDuoc(req, env) {
+  const { loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  const u = new URL(req.url).searchParams;
+  return kynang.aiLamDuoc(env, u.get('ky_nang_id'), u.get('muc'));
+}
+async function knAiThayDuoc(req, env) {
+  const { loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  return kynang.aiThayDuoc(env, new URL(req.url).searchParams.get('id'));
+}
+/* Ai được chấm cho người này — giao diện hỏi để ẩn/hiện form chấm cho gọn
+   mắt. ĐÂY KHÔNG PHẢI CHỖ CHẶN: chặn thật nằm ở `kynang.cham()` trên máy
+   chủ, giả mạo câu trả lời này cũng không ghi được gì. */
+async function knQuyenCham(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  const q = await kynang.duocChamCho(env, phien,
+    new URL(req.url).searchParams.get('id'), duocThemNhanSu(phien.vai_tro));
+  return json(q);
+}
+
 /* Xem ảnh đại diện của 1 người — GET /api/nhan-su/anh?id=X (ai đăng nhập rồi
    cũng xem được ảnh của bất kỳ ai, giống tinh thần Danh bạ mở cho tất cả). */
 async function nsAnhXem(req, env) {
@@ -3545,12 +3669,21 @@ const DUONG_DAN = {
   'GET  /api/nhan-su/hop-dong':      nsHopDongDanhSach,
   'POST /api/nhan-su/hop-dong/luu':  nsHopDongLuu,
   'POST /api/nhan-su/hop-dong/an':   nsHopDongAn,
+  'GET  /api/nhan-su/sinh-nhat':     nsSinhNhatDoc,
+  'POST /api/nhan-su/ngay-sinh':     nsNgaySinhLuu,
   'POST /api/nhan-su/sinh-nhat-cong-khai': nsSinhNhatCongKhai,
   'GET  /api/nhan-su/viec-can-lam':  nsViecCanLam,
   'GET  /api/mo-ta-cong-viec':       mtcvDanhSach,
   'GET  /api/mo-ta-cong-viec/mau':   mtcvMau,
   'POST /api/mo-ta-cong-viec/luu':   mtcvLuu,
   'POST /api/mo-ta-cong-viec/an':    mtcvAn,
+  'GET  /api/ky-nang':               knDanhMuc,
+  'GET  /api/ky-nang/cua-nguoi':     knCuaNguoi,
+  'GET  /api/ky-nang/quyen-cham':    knQuyenCham,
+  'POST /api/ky-nang/cham':          knCham,
+  'POST /api/ky-nang/go':            knGo,
+  'GET  /api/ky-nang/ai-lam-duoc':   knAiLamDuoc,
+  'GET  /api/ky-nang/ai-thay-duoc':  knAiThayDuoc,
   'POST /api/gop-y':               gopYGui,
   'GET  /api/gop-y':               gopYDanhSach,
   'POST /api/gop-y/trang-thai':    gopYDoiTrangThai,

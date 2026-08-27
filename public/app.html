@@ -759,6 +759,102 @@
                lại một ô "Không có việc nào" thừa. -->
           <div class="ns-vieccanlam" id="ns-vieccanlam" hidden></div>
         </div>
+
+        <!-- ========== TRA NĂNG LỰC (SPEC-0007 Đợt 4) ==========
+             HAI câu hỏi thật, không phải một bảng chữ để ngắm:
+               ① Xếp ca    — ai lái được xe nâng, ai vận hành được máy?
+               ② Nghỉ đột xuất — ai thay được người này?
+             Đặt ở tab Nhân sự (quản lý kho cũng vào được tab này) và để GẬP
+             LẠI mặc định, không đẩy bảng nhân sự xuống dưới màn hình.
+             BH-19: gập/mở bằng <details>, không khai `display` cho phần tử
+             nào đang được bật/tắt bằng `hidden`. -->
+        <details class="kn-tra" id="knTra">
+          <summary>Tra năng lực <span class="kn-tra-phu">· ai làm được việc này · ai thay được khi có người nghỉ</span></summary>
+
+          <div class="seg kn-seg" id="knSeg">
+            <button type="button" class="seg-nut active" data-kn="lamduoc">Ai làm được việc này?</button>
+            <button type="button" class="seg-nut" data-kn="thayduoc">Ai thay được khi nghỉ?</button>
+            <button type="button" class="seg-nut" data-kn="cham">Chấm năng lực</button>
+          </div>
+
+          <!-- ① Ai làm được việc này -->
+          <div id="knMan-lamduoc">
+            <div class="kn-hang">
+              <select id="knChonKyNang" class="chon-nho"><option value="">Chọn kỹ năng…</option></select>
+              <select id="knChonMuc" class="chon-nho" title="Mức tối thiểu">
+                <option value="lam_duoc" selected>Từ “Làm được” trở lên</option>
+                <option value="biet">Từ “Biết” trở lên</option>
+                <option value="thanh_thao">Từ “Thành thạo” trở lên</option>
+                <option value="day_duoc">Chỉ “Dạy được người khác”</option>
+              </select>
+            </div>
+            <div class="kn-mota" id="knMoTa"></div>
+            <div class="kn-kq" id="knKqLamDuoc"></div>
+          </div>
+
+          <!-- ② Ai thay được khi nghỉ -->
+          <div id="knMan-thayduoc" hidden>
+            <div class="kn-hang">
+              <select id="knChonNguoiVang" class="chon-nho"><option value="">Chọn người nghỉ…</option></select>
+            </div>
+            <div class="kn-kq" id="knKqThayDuoc"></div>
+          </div>
+
+          <!-- ③ Chấm năng lực — MÀN NHẬP CHÍNH.
+               Phải nằm ở đây chứ không chỉ nằm trong hộp Hồ sơ nhân sự:
+               anh Duy (vai trò quan_ly_kho) KHÔNG mở được hộp hồ sơ, mà anh
+               mới là người chấm cho 29 bạn kho. Chấm cả tổ trong một màn là
+               ~40 phút; bấm vào ra 29 hồ sơ thì không ai làm hết.
+               Ai chấm được cho ai do MÁY CHỦ quyết (`ky-nang.js`), màn này
+               chỉ ẩn/hiện form cho gọn mắt. -->
+          <div id="knMan-cham" hidden>
+            <div class="kn-hang">
+              <select id="knChonNguoiCham" class="chon-nho"><option value="">Chọn người để chấm…</option></select>
+              <select id="knLocNhom" class="chon-nho" title="Lọc danh mục theo nhóm">
+                <option value="">Mọi nhóm kỹ năng</option>
+                <option value="kho">Kho vận</option>
+                <option value="van_hanh">Vận hành sàn</option>
+                <option value="ke_toan">Kế toán</option>
+                <option value="hcns">Hành chính nhân sự</option>
+                <option value="chung">Chung</option>
+              </select>
+            </div>
+            <div class="jd-nhac-vitri" id="knChamNhac"></div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Kỹ năng</th><th>Mức</th><th>Ai xác nhận</th><th></th></tr></thead>
+                <tbody id="knChamBang"></tbody>
+              </table>
+            </div>
+            <div class="empty" id="knChamTrong" hidden>Chưa xác nhận năng lực nào cho người này.</div>
+
+            <form id="knChamForm" class="form-luoi" autocomplete="off" style="margin-top:12px" hidden>
+              <div class="field">
+                <label>Kỹ năng * <span class="goi-y">· chọn từ danh mục, không gõ tự do</span></label>
+                <select id="knChamChon" required><option value="">— Chọn —</option></select>
+              </div>
+              <div class="field">
+                <label>Mức *</label>
+                <select id="knChamMuc" required>
+                  <option value="biet">Biết</option>
+                  <option value="lam_duoc" selected>Làm được</option>
+                  <option value="thanh_thao">Thành thạo</option>
+                  <option value="day_duoc">Dạy được người khác</option>
+                </select>
+              </div>
+              <div class="field field-rong">
+                <label>Ghi chú <span class="goi-y">· để trống cũng được</span></label>
+                <input type="text" id="knChamGhiChu" maxlength="200" placeholder="VD: có chứng chỉ xe nâng, cấp 6/2026">
+              </div>
+              <div class="field field-rong kn-tieuchuan" id="knChamTieuChuan" hidden></div>
+              <div class="field field-nut">
+                <button type="submit" class="btn-primary" style="width:auto">Xác nhận năng lực</button>
+              </div>
+            </form>
+            <div class="form-loi" id="knChamLoi"></div>
+          </div>
+        </details>
+
         <div class="table-wrap">
           <table>
             <thead>
@@ -2395,12 +2491,69 @@
       </div>
     </details>
 
+    <!-- ==================== BỘ NĂNG LỰC (SPEC-0007 Đợt 4) ====================
+         Nhóm gập, cùng lý do với JD: hồ sơ có trần cứng 5 tab.
+         Người chấm là QUẢN LÝ TRỰC TIẾP / trưởng phòng / HCNS — nhân viên
+         KHÔNG tự khai (Rule 9). Không đủ quyền thì form chấm không hiện,
+         nhưng bảng vẫn xem được (năng lực là mức 1 · nội bộ).
+         Danh mục CỐ ĐỊNH: chỉ chọn, KHÔNG có ô gõ tự do — đó là thứ duy nhất
+         ngăn "Excel" / "excel" / "MS Excel" làm hỏng tra cứu. -->
+    <details class="jd-khoi" id="nsSua-knKhoi">
+      <summary>Năng lực <span class="jd-dem" id="nsSua-knDem"></span></summary>
+
+      <div class="jd-nhac-vitri" id="nsSua-knNhac"></div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Kỹ năng</th><th>Mức</th><th>Ai xác nhận</th><th></th></tr></thead>
+          <tbody id="nsSua-knBang"></tbody>
+        </table>
+      </div>
+      <div class="empty" id="nsSua-knTrong" hidden>
+        Chưa xác nhận năng lực nào cho người này.
+      </div>
+
+      <form id="nsSua-knForm" class="form-luoi" autocomplete="off" style="margin-top:12px" hidden>
+        <div class="field">
+          <label>Kỹ năng * <span class="goi-y">· chọn từ danh mục, không gõ tự do</span></label>
+          <select id="kn-chon" required><option value="">— Chọn —</option></select>
+        </div>
+        <div class="field">
+          <label>Mức *</label>
+          <select id="kn-muc" required>
+            <option value="biet">Biết</option>
+            <option value="lam_duoc" selected>Làm được</option>
+            <option value="thanh_thao">Thành thạo</option>
+            <option value="day_duoc">Dạy được người khác</option>
+          </select>
+        </div>
+        <div class="field field-rong">
+          <label>Ghi chú <span class="goi-y">· để trống cũng được</span></label>
+          <input type="text" id="kn-ghichu" maxlength="200" placeholder="VD: có chứng chỉ xe nâng, cấp 6/2026">
+        </div>
+        <div class="field field-rong kn-tieuchuan" id="kn-tieuchuan" hidden></div>
+        <div class="field field-nut">
+          <button type="submit" class="btn-primary" id="kn-nutluu" style="width:auto">Xác nhận năng lực</button>
+        </div>
+      </form>
+      <div class="form-loi" id="kn-loi"></div>
+    </details>
+
     <!-- Công tắc sinh nhật của NGƯỜI ĐANG MỞ HỒ SƠ (SPEC-0007 Đợt 2). Có ô
          này ở đây để HCNS tắt hộ khi ai đó nhờ trực tiếp — nhưng chính chủ
          vẫn tự tắt được ở panel "Trạng thái của tôi", không phải đi xin.
          Lưu NGAY khi tick, không chờ bấm Lưu hồ sơ: nó không thuộc form hồ
          sơ, gộp vào là phải sửa đường lưu nhân sự đang có người khác dùng. -->
     <div class="kv-md-muc">Sinh nhật</div>
+    <!-- Ô NGÀY SINH — không có ô này thì cả Đợt 2 im lặng. Đo trên D1 local:
+         0 người đang làm có `ngay_sinh`, và cột đó trước đợt này chỉ được ghi
+         ở luồng nhận hồ sơ mới (`src/nhansu.js`), người đã vào hệ thống rồi
+         thì không có đường nào sửa (đúng "cột chỉ có chiều ghi" — BH-32).
+         Lưu NGAY khi đổi, cùng lý do với ô tick bên dưới. -->
+    <div class="field" style="max-width:220px">
+      <label>Ngày sinh <span class="goi-y">· để trống = chưa có thông tin</span></label>
+      <input type="date" id="nsSua-ngaysinh">
+    </div>
     <label class="sn-congkhai">
       <input type="checkbox" id="nsSua-sinhnhat">
       <span>Cho ERP chúc sinh nhật người này</span>

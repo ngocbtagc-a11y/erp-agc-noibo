@@ -243,8 +243,121 @@ function veDaiViecCanLam() {
       `${ds.length > 5 ? ' · …' : ''}</span></span></div>`);
   }
 
+  /* Kỹ năng CHỈ MỘT NGƯỜI biết (Đợt 4) — điểm chết. Việc có rủi ro an toàn
+     (`an_toan`) xếp trước và tô đỏ: một người duy nhất biết lái xe nâng khác
+     hẳn một người duy nhất biết dùng Excel. */
+  if (v.diem_chet?.length) {
+    const nguyHiem = v.diem_chet.filter(k => k.an_toan);
+    const ten = v.diem_chet.slice(0, 4).map(k => `${k.ten} (${k.nguoi_duy_nhat})`).join(' · ');
+    dong.push(`<div class="vcl-dong${nguyHiem.length ? ' vcl-do' : ''}"><span>` +
+      `${nguyHiem.length ? '🚨' : '⚠️'} <b>${v.diem_chet.length}</b> kỹ năng chỉ <b>một người</b> làm được` +
+      `${nguyHiem.length ? `, trong đó <b>${nguyHiem.length}</b> là việc có rủi ro an toàn/tiền` : ''}. ` +
+      `Người đó nghỉ một hôm là phần việc ấy đứng lại.` +
+      `<span class="vcl-ten"> ${esc(ten)}${v.diem_chet.length > 4 ? ' …' : ''}</span></span></div>`);
+  }
+
   o.hidden = dong.length === 0;
   o.innerHTML = dong.join('');
+}
+
+/* ==========================================================================
+   BỘ NĂNG LỰC — SPEC-0007 Đợt 4
+   ---------------------------------------------------------------------------
+   Bảng này chỉ đáng tồn tại nếu trả lời được HAI câu hỏi thật:
+     ① Xếp ca kho    — ai lái được xe nâng, ai vận hành được máy?
+     ② Nghỉ đột xuất — ai thay được người này?
+   Cộng cảnh báo ngược: kỹ năng CHỈ MỘT NGƯỜI biết = điểm chết của kho.
+
+   Danh mục CỐ ĐỊNH, chỉ chọn — KHÔNG có một ô gõ tự do nào trong cả module
+   này. Cho gõ tự do là sẽ có "Excel" / "excel" / "MS Excel" và tra cứu hỏng.
+   ========================================================================== */
+
+const KN_MUC_CHU = { biet: 'Biết', lam_duoc: 'Làm được', thanh_thao: 'Thành thạo', day_duoc: 'Dạy được người khác' };
+const KN_MUC_MAU = { biet: 'mute', lam_duoc: '', thanh_thao: 'ok', day_duoc: 'ok' };
+const KN_NHOM_CHU = { kho: 'Kho vận', van_hanh: 'Vận hành sàn', ke_toan: 'Kế toán', hcns: 'Hành chính nhân sự', chung: 'Chung' };
+
+let KN_DANH_MUC = null;   // nạp một lần cho cả phiên — danh mục là dữ liệu nền
+
+async function knNapDanhMuc() {
+  if (KN_DANH_MUC) return KN_DANH_MUC;
+  try { KN_DANH_MUC = (await API.knDanhMuc()).ky_nang || []; } catch { KN_DANH_MUC = []; }
+  return KN_DANH_MUC;
+}
+
+/* Đổ danh mục vào một <select>, gom theo nhóm bằng <optgroup> — 27 kỹ năng
+   phẳng trong một danh sách thì người chấm phải cuộn tìm; gom nhóm thì mở ra
+   là thấy ngay phần của mình. */
+function knDoVaoSelect(sel, ds, giuGiaTri) {
+  const cu = giuGiaTri ? sel.value : '';
+  const theoNhom = new Map();
+  for (const k of ds) {
+    if (!theoNhom.has(k.nhom)) theoNhom.set(k.nhom, []);
+    theoNhom.get(k.nhom).push(k);
+  }
+  sel.innerHTML = '<option value="">— Chọn kỹ năng —</option>' +
+    [...theoNhom].map(([nhom, ks]) =>
+      `<optgroup label="${esc(KN_NHOM_CHU[nhom] || nhom)}">` +
+      ks.map(k => `<option value="${k.id}">${esc(k.ten)}${k.an_toan ? ' ⚠' : ''}</option>`).join('') +
+      '</optgroup>').join('');
+  if (cu) sel.value = cu;
+}
+
+/* Khối "năng lực của một người": bảng + form chấm. Dùng ở HAI chỗ (hộp Hồ sơ
+   nhân sự cho HCNS, và màn Chấm năng lực cho quản lý trực tiếp) nên nhận
+   selector qua tham số thay vì viết hai bản — hai bản là hai lần phải sửa,
+   và lần thứ hai sẽ có người quên. */
+async function veKhoiNangLuc(o) {
+  const ds0 = await knNapDanhMuc();
+  const loc = o.nhom ? ds0.filter(k => k.nhom === o.nhom) : ds0;
+  const oChon = $(o.chon);
+  if (oChon) knDoVaoSelect(oChon, loc, true);
+
+  let ky_nang = [];
+  try { ({ ky_nang } = await API.knCuaNguoi(o.nhanSuId)); } catch { ky_nang = []; }
+  if (o.conDungKhong && !o.conDungKhong()) return;   // đã đổi sang người khác
+
+  let quyen = { duoc: false };
+  try { quyen = await API.knQuyenCham(o.nhanSuId); } catch { /* coi như không được */ }
+  if (o.conDungKhong && !o.conDungKhong()) return;
+
+  veBang(o.bang, ky_nang, k =>
+    `<td>${esc(k.ten)}${k.an_toan ? ' <span class="kn-antoan" title="Việc có rủi ro an toàn hoặc tiền">⚠</span>' : ''}` +
+      `${k.ghi_chu ? `<div class="sm">${esc(k.ghi_chu)}</div>` : ''}</td>` +
+    `<td class="sm"><span class="tag ${KN_MUC_MAU[k.muc] || ''}">${esc(KN_MUC_CHU[k.muc] || k.muc)}</span></td>` +
+    `<td class="sm">${esc(k.nguoi_cham_ten || '—')}<div class="sm">${esc((k.luc || '').slice(0, 10))}</div></td>` +
+    `<td class="sm">${quyen.duoc
+      ? `<button type="button" class="btn-nho btn-phu" data-kn-go="${k.ky_nang_id}">Gỡ</button>` : ''}</td>`
+  );
+  $(o.trong).hidden = ky_nang.length > 0;
+  if (o.dem) $(o.dem).textContent = ky_nang.length ? `· ${ky_nang.length} kỹ năng` : '· chưa chấm';
+  $(o.form).hidden = !quyen.duoc;
+
+  if (o.nhac) {
+    const on = $(o.nhac);
+    on.className = 'jd-nhac-vitri';
+    on.innerHTML = quyen.duoc
+      ? 'Bạn xác nhận với tư cách <b>' + esc({
+          quan_ly_truc_tiep: 'quản lý trực tiếp', truong_phong: 'trưởng phòng',
+          quan_ly_ho_so: 'người quản lý hồ sơ'
+        }[quyen.vi_tri] || 'người có quyền') + '</b>. Chấm sai nghĩa là xếp nhầm người vào việc có rủi ro.'
+      : 'Chỉ <b>quản lý trực tiếp</b>, trưởng phòng hoặc HCNS mới xác nhận được năng lực. ' +
+        'Không ai tự khai năng lực của mình — tự khai thì không ai kiểm được.';
+  }
+  return quyen;
+}
+
+/* Tiêu chuẩn "thế nào là làm được" của kỹ năng đang chọn. Hiện ngay dưới ô
+   chọn: hai quản lý chấm cùng một người mà ra hai kết quả thì cả bảng vô
+   dụng, và cách rẻ nhất để họ chấm giống nhau là cho họ đọc cùng một câu. */
+function knHienTieuChuan(idChon, idDich) {
+  const oChon = $(idChon), oDich = $(idDich);
+  if (!oChon || !oDich) return;
+  const k = (KN_DANH_MUC || []).find(x => String(x.id) === oChon.value);
+  oDich.hidden = !k || !k.mo_ta;
+  if (k && k.mo_ta) {
+    oDich.innerHTML = `<b>Thế nào là làm được:</b> ${esc(k.mo_ta)}` +
+      (k.an_toan ? ' <span class="kn-antoan">⚠ việc có rủi ro an toàn hoặc tiền — chấm kỹ.</span>' : '');
+  }
 }
 
 function veBangNsDoc() {
@@ -3067,6 +3180,161 @@ if (TOI.quyen.includes('nhansu')) {
   $('#ns-lochopdong').addEventListener('change', veLaiBangNs);
   $('#ns-xoaloc').addEventListener('click', xoaLocNS);
 
+  /* ==== TRA NĂNG LỰC (SPEC-0007 Đợt 4) ==================================
+     Nằm NGOÀI khối `them_nhan_su`: anh Duy là `quan_ly_kho`, KHÔNG có
+     `them_nhan_su`, không mở được hộp Hồ sơ nhân sự — mà anh mới đúng là
+     người chấm năng lực cho 29 bạn kho. Đặt màn chấm trong hộp hồ sơ là
+     đúng người duy nhất cần nó lại không vào được.
+     Máy chủ vẫn là nơi chặn thật (`src/ky-nang.js` kiểm quan hệ quản lý);
+     phần dưới chỉ ẩn/hiện cho gọn mắt. */
+  {
+    const dsNguoi = () => (TOI.them_nhan_su ? DS_NHAN_SU_QT : DS_NHAN_SU_DOC).filter(n => n.dang_lam);
+
+    function doNguoiVao(sel, nhan) {
+      const cu = sel.value;
+      sel.innerHTML = `<option value="">${nhan}</option>` + dsNguoi()
+        .map(n => `<option value="${esc(n.id)}">${esc(n.ho_ten)}${n.bo_phan ? ' — ' + esc(n.bo_phan) : ''}</option>`)
+        .join('');
+      if (cu) sel.value = cu;
+    }
+
+    let KN_MO_ROI = false;
+    $('#knTra').addEventListener('toggle', async () => {
+      if (!$('#knTra').open || KN_MO_ROI) return;
+      KN_MO_ROI = true;                       // nạp danh mục ĐÚNG MỘT LẦN, và
+      const ds = await knNapDanhMuc();        // chỉ khi người ta thật sự mở ra
+      const oKn = $('#knChonKyNang');
+      knDoVaoSelect(oKn, ds, false);
+      oKn.querySelector('option[value=""]').textContent = 'Chọn kỹ năng…';
+      doNguoiVao($('#knChonNguoiVang'), 'Chọn người nghỉ…');
+      doNguoiVao($('#knChonNguoiCham'), 'Chọn người để chấm…');
+    });
+
+    $('#knSeg').addEventListener('click', e => {
+      const b = e.target.closest('[data-kn]'); if (!b) return;
+      for (const n of $('#knSeg').querySelectorAll('.seg-nut')) n.classList.toggle('active', n === b);
+      for (const m of ['lamduoc', 'thayduoc', 'cham']) $('#knMan-' + m).hidden = m !== b.dataset.kn;
+    });
+
+    /* ---- ① Ai làm được việc này ---- */
+    async function knVeAiLamDuoc() {
+      const id = $('#knChonKyNang').value;
+      const oKq = $('#knKqLamDuoc'), oMo = $('#knMoTa');
+      if (!id) { oKq.innerHTML = ''; oMo.innerHTML = ''; return; }
+      const k = (KN_DANH_MUC || []).find(x => String(x.id) === id);
+      oMo.innerHTML = k?.mo_ta
+        ? `<b>Thế nào là làm được:</b> ${esc(k.mo_ta)}` +
+          (k.an_toan ? ' <span class="kn-antoan">⚠ việc có rủi ro an toàn hoặc tiền.</span>' : '')
+        : '';
+      oKq.innerHTML = '<div class="sm">Đang tra…</div>';
+      let kq;
+      try { kq = await API.knAiLamDuoc(id, $('#knChonMuc').value); }
+      catch (err) { oKq.innerHTML = `<div class="form-loi">${esc(err.message || 'Không tra được.')}</div>`; return; }
+      if ($('#knChonKyNang').value !== id) return;    // đã đổi kỹ năng trong lúc chờ
+
+      if (kq.chua_nap) { oKq.innerHTML = '<div class="sm">Chưa nạp <code>them-ky-nang.sql</code>.</div>'; return; }
+      if (!kq.nguoi.length) {
+        oKq.innerHTML = `<div class="vcl-dong vcl-do"><span>🚨 <b>Không ai</b> đạt mức này. ` +
+          `Việc này hôm nay <b>không xếp ca được</b> — hoặc chưa ai được chấm, hoặc thật sự chưa ai làm được.</span></div>`;
+        return;
+      }
+      oKq.innerHTML =
+        (kq.diem_chet
+          ? `<div class="vcl-dong vcl-do"><span>🚨 <b>Chỉ một người</b> làm được việc này. ` +
+            `Người này nghỉ là việc đứng lại — nên có người thứ hai được dạy lại.</span></div>`
+          : '') +
+        `<div class="kn-ds">` + kq.nguoi.map(n =>
+          `<div class="kn-nguoi"><b>${esc(n.ho_ten)}</b>` +
+            `<span class="tag ${KN_MUC_MAU[n.muc] || ''}">${esc(KN_MUC_CHU[n.muc] || n.muc)}</span>` +
+            `<span class="kn-phu">${esc(n.chuc_vu || n.bo_phan || '')}` +
+              `${n.nguoi_cham_ten ? ' · xác nhận bởi ' + esc(n.nguoi_cham_ten) : ''}</span></div>`
+        ).join('') + `</div>`;
+    }
+    $('#knChonKyNang').addEventListener('change', knVeAiLamDuoc);
+    $('#knChonMuc').addEventListener('change', knVeAiLamDuoc);
+
+    /* ---- ② Ai thay được khi nghỉ ---- */
+    $('#knChonNguoiVang').addEventListener('change', async () => {
+      const id = $('#knChonNguoiVang').value;
+      const oKq = $('#knKqThayDuoc');
+      if (!id) { oKq.innerHTML = ''; return; }
+      oKq.innerHTML = '<div class="sm">Đang tìm…</div>';
+      let kq;
+      try { kq = await API.knAiThayDuoc(id); }
+      catch (err) { oKq.innerHTML = `<div class="form-loi">${esc(err.message || 'Không tìm được.')}</div>`; return; }
+      if ($('#knChonNguoiVang').value !== id) return;
+
+      if (kq.chua_nap) { oKq.innerHTML = '<div class="sm">Chưa nạp <code>them-ky-nang.sql</code>.</div>'; return; }
+      if (kq.chua_cham) {
+        oKq.innerHTML = '<div class="vcl-dong"><span>Người này <b>chưa được chấm năng lực nào</b> ' +
+          'từ mức “Làm được” trở lên — nên chưa tra được ai thay. Chấm ở mục <b>Chấm năng lực</b>.</span></div>';
+        return;
+      }
+      const tong = kq.can_ky_nang.length;
+      oKq.innerHTML =
+        `<div class="kn-tieu">Phần việc cần gánh: <b>${tong}</b> kỹ năng — ` +
+          kq.can_ky_nang.map(c => esc(c.ten)).join(' · ') + `</div>` +
+        (kq.khong_ai_ganh.length
+          ? `<div class="vcl-dong vcl-do"><span>🚨 <b>Không ai khác</b> làm được: ` +
+            kq.khong_ai_ganh.map(c => esc(c.ten)).join(' · ') +
+            `. Đây là phần sẽ <b>đứng lại</b> nếu người này nghỉ.</span></div>` : '') +
+        (kq.ung_vien.length
+          ? `<div class="kn-ds">` + kq.ung_vien.map(u =>
+              `<div class="kn-nguoi"><b>${esc(u.ho_ten)}</b>` +
+              `<span class="tag ${u.so_phu === tong ? 'ok' : ''}">${u.so_phu}/${tong} kỹ năng</span>` +
+              `<span class="kn-phu">${esc(u.chuc_vu || u.bo_phan || '')}` +
+                `${u.thieu.length ? ' · chưa làm được: ' + esc(u.thieu.join(', ')) : ''}</span></div>`
+            ).join('') + `</div>`
+          : `<div class="vcl-dong vcl-do"><span>🚨 <b>Không có ai</b> gánh được dù chỉ một phần.</span></div>`);
+    });
+
+    /* ---- ③ Chấm năng lực ---- */
+    const knChamO = {
+      bang: '#knChamBang', trong: '#knChamTrong', form: '#knChamForm',
+      chon: '#knChamChon', nhac: '#knChamNhac'
+    };
+    async function knVeManCham() {
+      const id = $('#knChonNguoiCham').value;
+      $('#knChamLoi').textContent = '';
+      if (!id) {
+        $('#knChamBang').innerHTML = ''; $('#knChamTrong').hidden = true;
+        $('#knChamForm').hidden = true; $('#knChamNhac').innerHTML = ''; return;
+      }
+      await veKhoiNangLuc({
+        ...knChamO, nhanSuId: id, nhom: $('#knLocNhom').value || null,
+        conDungKhong: () => $('#knChonNguoiCham').value === id
+      });
+      knHienTieuChuan('#knChamChon', '#knChamTieuChuan');
+    }
+    $('#knChonNguoiCham').addEventListener('change', knVeManCham);
+    $('#knLocNhom').addEventListener('change', knVeManCham);
+    $('#knChamChon').addEventListener('change', () => knHienTieuChuan('#knChamChon', '#knChamTieuChuan'));
+
+    $('#knChamForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      const oLoi = $('#knChamLoi'); oLoi.textContent = '';
+      try {
+        await API.knCham({
+          nhan_su_id: $('#knChonNguoiCham').value,
+          ky_nang_id: $('#knChamChon').value,
+          muc: $('#knChamMuc').value,
+          ghi_chu: $('#knChamGhiChu').value
+        });
+        $('#knChamGhiChu').value = '';
+        await knVeManCham();
+      } catch (err) { oLoi.textContent = err.message || 'Chưa xác nhận được, thử lại nhé.'; }
+    });
+
+    $('#knChamBang').addEventListener('click', async e => {
+      const b = e.target.closest('[data-kn-go]'); if (!b) return;
+      if (!confirm('Gỡ xác nhận năng lực này?')) return;
+      try {
+        await API.knGo($('#knChonNguoiCham').value, parseInt(b.dataset.knGo, 10), 'Gỡ từ màn Chấm năng lực');
+        await knVeManCham();
+      } catch (err) { $('#knChamLoi').textContent = err.message || 'Không gỡ được.'; }
+    });
+  }
+
   if (TOI.them_nhan_su) {
     $('#ns-panel-them').hidden = false;
     $('#ns-thThaoTac').hidden = false;
@@ -3210,12 +3478,37 @@ if (TOI.quyen.includes('nhansu')) {
 
     let NS_SN_DANG_MO = null;   // id người đang mở hồ sơ, để tick không lạc chủ
 
-    function veCongTacSinhNhat(n) {
+    async function veCongTacSinhNhat(n) {
       const o = $('#nsSua-sinhnhat'); if (!o) return;
       NS_SN_DANG_MO = n.id;
       o.checked = n.cong_khai_sinh_nhat !== false;
       o.disabled = false;
+      /* Ngày sinh KHÔNG đi kèm danh sách nhân sự chung (mức 2, ADR-0011 A2)
+         nên phải hỏi riêng khi mở hồ sơ. */
+      const oNg = $('#nsSua-ngaysinh');
+      if (!oNg) return;
+      oNg.value = '';
+      try {
+        const kq = await API.nsSinhNhat(n.id);
+        if (NS_SN_DANG_MO !== n.id) return;          // đã mở hồ sơ người khác
+        oNg.value = (kq.ngay_sinh || '').slice(0, 10);
+      } catch { /* để trống — vẫn nhập mới được */ }
     }
+
+    /* Lưu ngay khi đổi, không chờ nút Lưu hồ sơ: ô này KHÔNG thuộc form hồ
+       sơ, gộp vào là phải sửa đường lưu nhân sự mà người khác đang dùng. */
+    $('#nsSua-ngaysinh')?.addEventListener('change', async () => {
+      const o = $('#nsSua-ngaysinh'), id = NS_SN_DANG_MO;
+      if (!id) return;
+      o.disabled = true;
+      try {
+        await API.nsNgaySinhLuu(id, o.value || null);
+        $('#nsSua-loi').textContent = '';
+        taiViecCanLam();     // dải "sinh nhật tháng sau" phải đổi theo ngay
+      } catch (err) {
+        $('#nsSua-loi').textContent = err.message || 'Chưa lưu được ngày sinh.';
+      } finally { o.disabled = false; }
+    });
 
     $('#nsSua-sinhnhat')?.addEventListener('change', async () => {
       const o = $('#nsSua-sinhnhat');
@@ -3238,6 +3531,55 @@ if (TOI.quyen.includes('nhansu')) {
       } finally {
         o.disabled = false;
       }
+    });
+
+    /* ---- Bộ năng lực trong hồ sơ (SPEC-0007 Đợt 4) ----------------------
+       Bản trong hồ sơ dùng CHUNG hàm với màn Chấm năng lực ở tab Nhân sự —
+       hai bản là hai lần phải sửa, và lần thứ hai sẽ có người quên. */
+
+    let KN_HS_DANG_MO = null;
+
+    async function veKnHoSo(n) {
+      KN_HS_DANG_MO = n.id;
+      $('#kn-loi').textContent = '';
+      $('#kn-ghichu').value = '';
+      await veKhoiNangLuc({
+        nhanSuId: n.id,
+        bang: '#nsSua-knBang', trong: '#nsSua-knTrong', dem: '#nsSua-knDem',
+        form: '#nsSua-knForm', chon: '#kn-chon', nhac: '#nsSua-knNhac',
+        conDungKhong: () => KN_HS_DANG_MO === n.id
+      });
+      knHienTieuChuan('#kn-chon', '#kn-tieuchuan');
+    }
+
+    $('#kn-chon').addEventListener('change', () => knHienTieuChuan('#kn-chon', '#kn-tieuchuan'));
+
+    $('#nsSua-knForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      const oLoi = $('#kn-loi'); oLoi.textContent = '';
+      const nut = $('#kn-nutluu'); nut.disabled = true;
+      try {
+        await API.knCham({
+          nhan_su_id: KN_HS_DANG_MO,
+          ky_nang_id: $('#kn-chon').value,
+          muc: $('#kn-muc').value,
+          ghi_chu: $('#kn-ghichu').value
+        });
+        const n = DS_NHAN_SU_QT.find(x => x.id === KN_HS_DANG_MO);
+        if (n) await veKnHoSo(n);
+      } catch (err) {
+        oLoi.textContent = err.message || 'Chưa xác nhận được, thử lại nhé.';
+      } finally { nut.disabled = false; }
+    });
+
+    $('#nsSua-knBang').addEventListener('click', async e => {
+      const b = e.target.closest('[data-kn-go]'); if (!b) return;
+      if (!confirm('Gỡ xác nhận năng lực này?')) return;
+      try {
+        await API.knGo(KN_HS_DANG_MO, parseInt(b.dataset.knGo, 10), 'Gỡ từ hồ sơ nhân sự');
+        const n = DS_NHAN_SU_QT.find(x => x.id === KN_HS_DANG_MO);
+        if (n) await veKnHoSo(n);
+      } catch (err) { $('#kn-loi').textContent = err.message || 'Không gỡ được.'; }
     });
 
     /* ---- Mô tả công việc theo MBOs (SPEC-0007 Đợt 3) --------------------
@@ -3611,6 +3953,7 @@ if (TOI.quyen.includes('nhansu')) {
       veHopDongHoSo(id);
       veCongTacSinhNhat(n);
       veJdHoSo(n);
+      veKnHoSo(n);
       $('#nsSua-id').value = n.id;
       $('#nsSua-hoten').value = n.ho_ten;
       $('#nsSua-sdt').value = n.sdt || '';

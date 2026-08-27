@@ -71,6 +71,13 @@ export const API = {
   nsSinhNhatCongKhai: (bat, id) => goi('/api/nhan-su/sinh-nhat-cong-khai', {
     method: 'POST', body: JSON.stringify({ bat, id })
   }),
+  /* `ngay_sinh` là mức 2 (ADR-0011 A2) nên đi cửa riêng, KHÔNG nằm trong
+     `/api/nhan-su` chung. Có đường sửa này thì tính năng sinh nhật mới sống:
+     trước đợt này cột đó chỉ ghi được lúc nhận hồ sơ mới. */
+  nsSinhNhat: (id) => goi('/api/nhan-su/sinh-nhat' + (id ? '?id=' + encodeURIComponent(id) : '')),
+  nsNgaySinhLuu: (id, ngaySinh) => goi('/api/nhan-su/ngay-sinh', {
+    method: 'POST', body: JSON.stringify({ id, ngay_sinh: ngaySinh })
+  }),
   nsViecCanLam: () => goi('/api/nhan-su/viec-can-lam'),
 
   /* Mô tả công việc theo MBOs (SPEC-0007 Đợt 3). ĐỌC mở cho mọi người đã
@@ -83,6 +90,20 @@ export const API = {
   mtcvAn: (id, lyDo) => goi('/api/mo-ta-cong-viec/an', {
     method: 'POST', body: JSON.stringify({ id, ly_do: lyDo })
   }),
+
+  /* Bộ năng lực (SPEC-0007 Đợt 4). Hai đường `knAiLamDuoc` / `knAiThayDuoc`
+     là LÝ DO TỒN TẠI của cả bảng: xếp ca và người nghỉ đột xuất. Không có
+     hai màn đó thì đây chỉ là một bảng chữ chết. */
+  knDanhMuc: (nhom) => goi('/api/ky-nang' + (nhom ? '?nhom=' + encodeURIComponent(nhom) : '')),
+  knCuaNguoi: (id) => goi('/api/ky-nang/cua-nguoi?id=' + encodeURIComponent(id)),
+  knQuyenCham: (id) => goi('/api/ky-nang/quyen-cham?id=' + encodeURIComponent(id)),
+  knCham: (du) => goi('/api/ky-nang/cham', { method: 'POST', body: JSON.stringify(du) }),
+  knGo: (nhanSuId, kyNangId, lyDo) => goi('/api/ky-nang/go', {
+    method: 'POST', body: JSON.stringify({ nhan_su_id: nhanSuId, ky_nang_id: kyNangId, ly_do: lyDo })
+  }),
+  knAiLamDuoc: (kyNangId, muc) => goi('/api/ky-nang/ai-lam-duoc?ky_nang_id=' +
+    encodeURIComponent(kyNangId) + (muc ? '&muc=' + encodeURIComponent(muc) : '')),
+  knAiThayDuoc: (id) => goi('/api/ky-nang/ai-thay-duoc?id=' + encodeURIComponent(id)),
 
   nsAnhDaiDien: (anhBase64) => goi('/api/nhan-su/anh-dai-dien', {
     method: 'POST', body: JSON.stringify({ anh: anhBase64 })
