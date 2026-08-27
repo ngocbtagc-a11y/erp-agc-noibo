@@ -32,6 +32,11 @@
     "migration-kiemtra": "node scripts/kiem-tra-migration.mjs",
     "migration-kiemtra-may": "node scripts/kiem-tra-migration.mjs --local",
     "migration-chay": "node scripts/chay-migration.mjs",
+    "nap-saoluu-may": "wrangler d1 execute crm-agc --local --file=migrations/them-sao-luu.sql",
+    "nap-saoluu": "wrangler d1 execute crm-agc --remote --file=migrations/them-sao-luu.sql",
+    "lay-khoa-google": "node scripts/lay-khoa-google.mjs",
+    "sao-luu-thu": "node scripts/thu-sao-luu.mjs",
+    "sao-luu-kiemtra": "node scripts/kiem-tra-ban-sao-luu.mjs",
     "chay": "wrangler dev",
     "dua-len": "wrangler deploy"
   },

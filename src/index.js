@@ -23,6 +23,7 @@ import * as tiktok from './tiktok.js';
 import * as nhansu from './nhansu.js';
 import * as dulieunen from './dulieunen.js';
 import * as taisan from './taisan.js';
+import * as saoLuu from './sao-luu.js';
 import * as ca from './ca.js';
 import * as hopdong from './hopdong.js';
 import * as motacv from './mota-cv.js';
@@ -3858,6 +3859,12 @@ export default {
          tin/loại/người/ngày. Truyền thẳng `guiThongBao` đang chạy vào để
          không sinh ra bản sao thứ hai của cơ chế gửi. */
       try { await quetNhacNhanSu(env, guiThongBao); } catch (e) { console.error('Cron nhắc nhân sự:', e.message); }
+
+      // SAO LƯU DỮ LIỆU (SPEC-0005 Phần B · ADR-0013). Hàm tự biết giờ nào thì
+      // làm gì: 1h–4h sáng thì xuất dữ liệu theo lô, 9h sáng thì hỏi "hôm qua
+      // có bản sao lưu không", còn lại thì về ngay. Chưa cấp quyền Google thì
+      // nó bỏ qua êm, KHÔNG làm hỏng đồng bộ Shopee/TikTok ở trên.
+      try { await saoLuu.chayMotLuot(env, { guiThongBao, guiTelegram }); } catch (e) { console.error('Cron sao lưu:', e.message); }
 
       // --- 1 GIỜ/LẦN (nặng: đồng bộ HÀNG NGÀN đơn hàng doanh thu + dọn dữ liệu) ---
       // Doanh thu không cần tươi từng 5 phút; chạy quá thường xuyên làm hệ thống
