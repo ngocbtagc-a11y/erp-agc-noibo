@@ -563,6 +563,11 @@ img.av { object-fit: cover; display: block; cursor: default; }
   box-shadow: var(--shadow-md); padding: 12px; width: 220px;
   display: flex; flex-direction: column; gap: 3px;
 }
+/* Thuộc tính hidden của HTML CHỈ thắng được [hidden] mặc định của trình
+   duyệt nếu không có rule display nào khác cùng độ ưu tiên đè lên — ở đây
+   .thd-panel có display:flex nên hidden=true set qua JS KHÔNG ẩn được gì
+   (panel cứ hiện mãi dù đã bấm ra ngoài). Ghi đè tường minh để ẩn thật. */
+.thd-panel[hidden] { display: none; }
 .thd-panel-tieu {
   font-size: 12.5px; font-weight: 700; color: var(--ink);
   margin-bottom: 6px;
