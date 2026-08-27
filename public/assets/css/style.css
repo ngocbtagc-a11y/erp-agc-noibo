@@ -3,6 +3,25 @@
    Phong cách: Sage — xanh ô liu, nền be, chữ serif lớn
    ========================================================================== */
 
+/* ĐỪNG XOÁ — CHỐT CHẶN TOÀN CỤC CHO THUỘC TÍNH [hidden]
+   ---------------------------------------------------------------------------
+   Trình duyệt ẩn phần tử có `hidden` bằng luật mặc định `[hidden]{display:none}`.
+   Nhưng CSS của trang LUÔN thắng CSS mặc định của trình duyệt, nên bất kỳ luật
+   nào của mình đặt `display` lên chính phần tử đó đều vô hiệu hoá `hidden` —
+   lệnh `phanTu.hidden = true` trong JS vẫn CHẠY nhưng KHÔNG ẩn được gì.
+
+   Đã có 14 chỗ dính bẫy này (CTL-0008, Sếp Ngọc báo 27/08/2026): nặng nhất là
+   popover "Trạng thái của tôi" nằm lì che chỗ làm việc, và số đỏ tin chưa đọc
+   ở chuông thông báo/chuông chat xem rồi vẫn còn. Dòng dưới chặn tận gốc, kể
+   cả cho code viết sau này.
+
+   ⚠️ TRƯỚC KHI THÊM luật `display` nào có `!important` hoặc trong `@media` mà
+   nhằm LÀM HIỆN một phần tử đang mang `hidden`: dòng này sẽ thắng và phần tử
+   KHÔNG hiện. Đúng một chỗ từng phụ thuộc kiểu đó là tem in tài sản 60×40mm
+   (`#tsInTemVung`) — nay `inTemNhieu()` trong app.js đã chủ động gỡ `hidden`
+   trước khi in nên không còn phụ thuộc nữa. Xem ADR-0008 + REV-0004 mục 2. */
+[hidden] { display: none !important; }
+
 :root {
   --bg:          #ded9d3;
   --surface:     #f2f1ee;
@@ -707,6 +726,10 @@ img.av { object-fit: cover; display: block; cursor: default; }
   margin: 10px 0 8px; padding: 0; border: none; background: none;
   font-size: 12.5px; font-weight: 600; color: var(--text-mute); cursor: pointer;
 }
+/* Chốt [hidden] — cùng khuôn với .thd-panel[hidden], xem chú thích ở đó.
+   Thiếu dòng này thì không có mục tiêu nào đã xong vẫn hiện nút "Đã xong (0)"
+   bấm vào trống trơn (ADR-0008 Đề xuất B). */
+.mt-daxong-toggle[hidden] { display: none; }
 .mt-daxong-toggle:hover { color: var(--text); }
 .mt-daxong-toggle .ico { width: 12px; height: 12px; transition: transform .15s; }
 .mt-daxong-toggle.mo .ico { transform: rotate(180deg); }
@@ -823,6 +846,10 @@ img.av { object-fit: cover; display: block; cursor: default; }
   gap: 14px;
   margin-bottom: 24px;
 }
+/* Chốt [hidden] — cùng khuôn với .thd-panel[hidden]. Thiếu dòng này thì khi
+   chưa có số liệu, khối tóm tắt Tổng quan vẫn chiếm chỗ và hiện khung rỗng
+   (ADR-0008 Đề xuất B). */
+.stats[hidden] { display: none; }
 
 .stat {
   background: var(--card);
@@ -1153,6 +1180,11 @@ tr.canh-bao:hover > td { background: #fbdbd6; }
 .tb-nut { position: relative; background: none; border: none; cursor: pointer; color: var(--text); padding: 8px; border-radius: 10px; display: flex; }
 .tb-nut:hover { background: var(--surface); }
 .tb-badge { position: absolute; top: 2px; right: 2px; min-width: 16px; height: 16px; padding: 0 4px; background: #c0392b; color: #fff; font-size: 10px; font-weight: 700; border-radius: 999px; display: flex; align-items: center; justify-content: center; box-sizing: border-box; }
+/* Chốt [hidden] — cùng khuôn với .thd-panel[hidden]. Đây là lỗi NẶNG NHẤT của
+   nhóm: thiếu dòng này thì `badge.hidden = true` chạy mà số đỏ vẫn nằm đó, cả
+   chuông thông báo (#tbBadge) lẫn chuông chat (#cnbBadge) — xem hết tin rồi
+   vẫn tưởng còn việc chưa đọc (ADR-0008 Đề xuất B). */
+.tb-badge[hidden] { display: none; }
 .tb-panel { position: absolute; top: 46px; right: 0; width: 340px; max-width: 90vw; max-height: 62vh; overflow-y: auto; background: var(--white); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 34px rgba(0,0,0,.16); z-index: 200; }
 .tb-panel-dau { padding: 12px 16px; font-weight: 700; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--white); }
 .tb-item { padding: 12px 16px; border-bottom: 1px solid var(--line); cursor: pointer; font-size: 13px; line-height: 1.45; }
@@ -1341,6 +1373,10 @@ tr.canh-bao:hover > td { background: #fbdbd6; }
   font-size: 12.5px;
   flex-shrink: 0;
 }
+/* Chốt [hidden] — cùng khuôn với .thd-panel[hidden]. Thiếu dòng này thì gửi
+   hoặc huỷ file xong khung đính kèm vẫn nằm lại, tưởng file còn treo nên gửi
+   nhầm lần thứ hai (ADR-0008 Đề xuất B). */
+.chat-file-dinhkem[hidden] { display: none; }
 .chat-file-dinhkem button {
   background: none; border: none; cursor: pointer;
   color: var(--text-mute); font-size: 14px; line-height: 1;
@@ -1414,6 +1450,10 @@ tbody tr.canh-bao:hover .dinh-cot3, tbody tr.canh-bao:hover .dinh-cot4 { backgro
   border-bottom: 1px solid var(--line);
   font-size: 13px; color: var(--ink);
 }
+/* Chốt [hidden] — cùng khuôn với .thd-panel[hidden]. Thiếu dòng này thì bỏ
+   chọn hết rồi thanh "Đã chọn N dòng" vẫn hiện, ở cả 4 màn dùng chung class
+   này: Đối soát, Kế toán–Tài sản, Kế toán–Hàng hoá, Tài sản (ADR-0008 Đề xuất B). */
+.kd-thanh-chon[hidden] { display: none; }
 .kd-thanh-chon b { color: var(--ink); }
 
 /* Đơn đã tra soát rồi — dìm nhẹ để mắt dồn vào đơn còn cần xử lý ở trên */
@@ -1739,6 +1779,10 @@ tr.kd-chiadoi td {
   gap: 14px 16px;
   align-items: end;
 }
+/* Chốt [hidden] — cùng khuôn với .thd-panel[hidden]. Thiếu dòng này thì form
+   kho trong Đơn hoàn (#dln-kho-form) và form sửa Kho vận (#kvSuaForm) đóng rồi
+   vẫn nằm đó (ADR-0008 Đề xuất B). */
+.form-luoi[hidden] { display: none; }
 
 .field-nut { display: flex; align-items: flex-end; }
 .field-nut .btn-primary { width: 100%; }

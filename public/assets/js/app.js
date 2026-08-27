@@ -942,8 +942,12 @@ function veThdPill() {
 }
 veThdPill();
 
-$('#thdNut').addEventListener('click', (e) => {
-  e.stopPropagation();
+/* Không còn `e.stopPropagation()` ở đây và ở panel: trước kia hai lệnh đó
+   sinh ra CHỈ để chặn listener `document click` cũ, mà listener đó đã bỏ.
+   Giữ lại thì chúng âm thầm nuốt mọi click bên trong popover, không cho tới
+   listener cấp `document` nào khác — bẫy cho người sau (REV-0004 FIX-04).
+   Việc bật/tắt giờ do `closest('#thdWrap')` ở listener pointerdown lo. */
+$('#thdNut').addEventListener('click', () => {
   const panel = $('#thdPanel');
   if (!panel.hidden) { panel.hidden = true; return; }
   $('#thdMa').value = TOI.trang_thai_hd || 'available';
@@ -952,7 +956,6 @@ $('#thdNut').addEventListener('click', (e) => {
   panel.hidden = false;
   $('#thdGhiChu').focus();
 });
-$('#thdPanel').addEventListener('click', (e) => e.stopPropagation());
 $('#thdMa').addEventListener('change', () => {
   $('#thdThoiHan').value = THOI_HAN_MAC_DINH_HD[$('#thdMa').value] || 'cuoi_ngay';
 });
@@ -983,11 +986,16 @@ $('#thdLuu').addEventListener('click', async () => {
 document.addEventListener('pointerdown', (e) => {
   if (!e.target.closest('#thdWrap')) $('#thdPanel').hidden = true;
 });
-// Esc đóng popover — bàn phím cũng thoát được, không phải rê chuột đi chỗ khác.
+/* Esc đóng popover — bàn phím cũng thoát được, không phải rê chuột đi chỗ khác.
+   CHỈ trả con trỏ về nút trạng thái khi con trỏ đang thật sự ở trong popover.
+   Panel không khoá focus: mở panel rồi bấm Tab đi chỗ khác thì panel vẫn mở
+   (Tab không sinh pointerdown). Nếu trả focus vô điều kiện thì đang gõ dở ô
+   giữa màn hình mà bấm Esc sẽ bị giật con trỏ về Sidebar (REV-0004 FIX-02). */
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && !$('#thdPanel').hidden) {
+    const dangOTrong = $('#thdWrap').contains(document.activeElement);
     $('#thdPanel').hidden = true;
-    $('#thdNut').focus();
+    if (dangOTrong) $('#thdNut').focus();
   }
 });
 
@@ -4252,6 +4260,24 @@ async function khoiDongTaiSan() {
         `<div class="ts-tem-qr">${svgQR(t.ma_ts)}</div>` +
       `</div>`
     ).join('');
+
+    /* GỠ `hidden` TRƯỚC khi in, đặt lại sau khi in xong.
+       Trước đây `#tsInTemVung` mang `hidden` cố định và tem in ra được CHỈ nhờ
+       `@media print { .ts-in-tem-vung { display: block } }` đè lên luật mặc
+       định `[hidden] { display: none }` của trình duyệt — tức là dựa vào đúng
+       cái cơ chế mà CTL-0008 xác định là lỗi. Ai siết `[hidden]` chặt hơn là
+       tem lập tức in ra giấy trắng, không báo lỗi, không ghi log (REV-0004
+       mục 2, ADR-0008). Giờ tem hiện ra vì mình chủ động gỡ `hidden`, không
+       còn phụ thuộc vào thứ tự đè nhau của CSS nữa.
+
+       Đặt lại bằng `afterprint` chứ không đặt ngay sau `window.print()`: nơi
+       nào print() trả về luôn (không chặn tới lúc đóng hộp thoại) thì đặt lại
+       ngay sẽ giấu mất tem giữa lúc đang in. Nếu `afterprint` không bắn thì
+       màn hình vẫn sạch, vì `.ts-in-tem-vung { display: none }` (lúc xem
+       thường) đã ẩn sẵn rồi. */
+    const vungTem = $('#tsInTemVung');
+    window.addEventListener('afterprint', () => { vungTem.hidden = true; }, { once: true });
+    vungTem.hidden = false;
     window.print();
   }
 
