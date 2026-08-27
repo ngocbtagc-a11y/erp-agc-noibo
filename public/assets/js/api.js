@@ -53,6 +53,17 @@ export const API = {
 
   nhanSu: () => goi('/api/nhan-su'),
   nsLichSu: (id) => goi('/api/nhan-su/lich-su?id=' + encodeURIComponent(id)),
+
+  /* Hợp đồng lao động (SPEC-0007 Đợt 1). `nsHopDongLuu` có thể trả về
+     { can_ly_do: true, canh_bao: [...] } với mã 200 — nghĩa là CHƯA lưu, cần
+     người nhập gõ lý do rồi gọi lại. Kiểm `can_ly_do` trước khi mừng vì `ok`. */
+  nsHopDong: (id) => goi('/api/nhan-su/hop-dong?id=' + encodeURIComponent(id)),
+  nsHopDongLuu: (du) => goi('/api/nhan-su/hop-dong/luu', {
+    method: 'POST', body: JSON.stringify(du)
+  }),
+  nsHopDongAn: (id, lyDo) => goi('/api/nhan-su/hop-dong/an', {
+    method: 'POST', body: JSON.stringify({ id, ly_do: lyDo })
+  }),
   nsAnhDaiDien: (anhBase64) => goi('/api/nhan-su/anh-dai-dien', {
     method: 'POST', body: JSON.stringify({ anh: anhBase64 })
   }),

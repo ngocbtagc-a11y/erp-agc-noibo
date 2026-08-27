@@ -24,6 +24,7 @@ import * as nhansu from './nhansu.js';
 import * as dulieunen from './dulieunen.js';
 import * as taisan from './taisan.js';
 import * as ca from './ca.js';
+import * as hopdong from './hopdong.js';
 import { sinhMa } from './dinh-danh.js';
 
 /* ---- Trả lời dạng JSON -------------------------------------------------- */
@@ -499,6 +500,29 @@ async function qtDanhSach(req, env) {
      ORDER BY n.dang_lam DESC, n.bo_phan, n.ho_ten
   `).all();
 
+  // Hợp đồng đang hiệu lực, MỚI NHẤT mỗi người (SPEC-0007 Đợt 1). Hỏi RIÊNG
+  // một câu rồi ghép trong JS, KHÔNG JOIN vào câu trên: chưa nạp migration
+  // thì bảng chưa có, JOIN sẽ làm hỏng cả danh sách nhân sự — cả module
+  // chết vì một cột hiển thị là cái giá không đáng.
+  try {
+    const { results: hd } = await env.DB.prepare(`
+      SELECT h.nhan_su_id, h.loai, h.ngay_bat_dau, h.ngay_het_han, h.lan_thu
+        FROM hop_dong_lao_dong h
+       WHERE h.hieu_luc = 1
+         AND h.id = (SELECT h2.id FROM hop_dong_lao_dong h2
+                      WHERE h2.nhan_su_id = h.nhan_su_id AND h2.hieu_luc = 1
+                      ORDER BY h2.ngay_bat_dau DESC, h2.id DESC LIMIT 1)
+    `).all();
+    const theoNguoi = new Map((hd || []).map(h => [h.nhan_su_id, h]));
+    for (const n of results) {
+      const h = theoNguoi.get(n.id);
+      n.hd_loai = h ? h.loai : null;
+      n.hd_bat_dau = h ? h.ngay_bat_dau : null;
+      n.hd_het_han = h ? h.ngay_het_han : null;
+      n.hd_lan_thu = h ? h.lan_thu : null;
+    }
+  } catch { /* chưa nạp them-hopdong-laodong.sql — cột hợp đồng để trống */ }
+
   return json({
     nhan_su: results,
     vai_tro: VAI_TRO_HOP_LE.map(v => ({ ma: v, ten: TEN_VAI_TRO[v], nhom: nhomVaiTro(v) }))
@@ -517,7 +541,14 @@ async function chucDanhTuId(env, id) {
   return env.DB.prepare('SELECT id, ten FROM chuc_danh WHERE id = ? AND hoat_dong = 1').bind(id).first();
 }
 
-const LOAI_LAO_DONG_HOP_LE = ['toan_thoi_gian', 'ban_thoi_gian', 'thoi_vu'];
+/* HÌNH THỨC LÀM VIỆC — KHÔNG phải loại hợp đồng (SPEC-0007 §1.1, BH-32).
+   `khoan_viec` thêm vào chứ KHÔNG thay `ban_thoi_gian`: bán thời gian là
+   HỢP ĐỒNG LAO ĐỘNG có đóng BHXH, khoán việc là HỢP ĐỒNG DÂN SỰ không đóng —
+   hai trục pháp lý khác nhau, gộp lại chính là thứ gây phân loại sai BHXH.
+   Đặt một người sang `khoan_viec` cũng là chốt chặn: `src/ca.js` chỉ cho
+   `ban_thoi_gian|thoi_vu` đăng ký ca, nên người khoán tự động không bị xếp ca
+   — đúng bản chất "khoán thì không quản giờ giấc", 0 dòng code thêm. */
+const LOAI_LAO_DONG_HOP_LE = ['toan_thoi_gian', 'ban_thoi_gian', 'thoi_vu', 'khoan_viec'];
 function loaiLaoDongTuBody(b) {
   return LOAI_LAO_DONG_HOP_LE.includes(b.loai_lao_dong) ? b.loai_lao_dong : 'toan_thoi_gian';
 }
@@ -3305,6 +3336,28 @@ async function gopYAnh(req, env) {
   return new Response(bin, { headers: { 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, max-age=3600' } });
 }
 
+/* ---- Hợp đồng lao động (SPEC-0007 Đợt 1) --------------------------------
+   Cùng đúng một cửa quyền với quản lý nhân sự (`them_nhan_su` — Admin/HCNS),
+   KHÔNG mở bề mặt quyền mới, KHÔNG đụng bảng vai trò. Hợp đồng là hồ sơ
+   pháp lý: ai sửa được hồ sơ thì sửa được hợp đồng, không ai khác. */
+async function nsHopDongDanhSach(req, env) {
+  const { loi: l } = await batBuocThemNhanSu(req, env);
+  if (l) return l;
+  return hopdong.danhSach(env, new URL(req.url).searchParams.get('id'));
+}
+async function nsHopDongLuu(req, env) {
+  const { phien, loi: l } = await batBuocThemNhanSu(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return hopdong.luu(env, phien, b);
+}
+async function nsHopDongAn(req, env) {
+  const { phien, loi: l } = await batBuocThemNhanSu(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return hopdong.an(env, phien, b);
+}
+
 /* Xem ảnh đại diện của 1 người — GET /api/nhan-su/anh?id=X (ai đăng nhập rồi
    cũng xem được ảnh của bất kỳ ai, giống tinh thần Danh bạ mở cho tất cả). */
 async function nsAnhXem(req, env) {
@@ -3331,6 +3384,9 @@ const DUONG_DAN = {
   'POST /api/nhan-su/anh-dai-dien': nsAnhDaiDien,
   'POST /api/nhan-su/trang-thai-hd': nsTrangThaiHD,
   'GET  /api/nhan-su/anh':          nsAnhXem,
+  'GET  /api/nhan-su/hop-dong':      nsHopDongDanhSach,
+  'POST /api/nhan-su/hop-dong/luu':  nsHopDongLuu,
+  'POST /api/nhan-su/hop-dong/an':   nsHopDongAn,
   'POST /api/gop-y':               gopYGui,
   'GET  /api/gop-y':               gopYDanhSach,
   'POST /api/gop-y/trang-thai':    gopYDoiTrangThai,
