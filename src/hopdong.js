@@ -42,6 +42,16 @@ function soThang(tu, den) {
   return (dy - ny) * 12 + (dm - nm) + (dd >= nd ? 0 : -1);
 }
 
+/* Số NGÀY giữa 2 mốc — dùng cho mốc đứt quãng 30 ngày. Chỗ này phải đúng
+   từng ngày nên tính bằng mốc UTC, không xấp xỉ theo tháng như `soThang`. */
+function mocNgay(s) {
+  const [y, m, d] = s.split('-').map(Number);
+  return Date.UTC(y, m - 1, d);
+}
+function soNgay(tu, den) {
+  return Math.round((mocNgay(den) - mocNgay(tu)) / 86400000);
+}
+
 /* Danh sách hợp đồng của 1 người — mới nhất trước. Kể cả bản đã ẩn
    (hieu_luc = 0) vì đây là hồ sơ pháp lý: ẩn là để khỏi tính, không phải
    để giấu (Rule 10 — không xoá). */
@@ -65,18 +75,87 @@ export async function danhSach(env, nhanSuId) {
   }
 }
 
-/* `lan_thu` = số hợp đồng XÁC ĐỊNH THỜI HẠN còn hiệu lực đã có của người đó
-   + 1. MÁY tính lúc lưu — gõ tay được thì con số căn cứ pháp lý mất giá trị.
-   Chỉ đếm `xac_dinh_th`: thử việc, không xác định thời hạn và khoán việc
-   không nằm trong giới hạn 2 lần của Đ.20. */
-async function tinhLanThu(env, nhanSuId, loai, boQuaId) {
-  if (loai !== 'xac_dinh_th') return 1;
-  const r = await env.DB.prepare(`
-    SELECT COUNT(*) AS n FROM hop_dong_lao_dong
+/* ==========================================================================
+   `lan_thu` — "đây là hợp đồng xác định thời hạn thứ mấy LIÊN TIẾP"
+   ---------------------------------------------------------------------------
+   QUY TẮC (sửa ISSUE-2 · REV-0009). Bản cũ dùng `COUNT(*)` nên sai 2 chỗ có
+   thật: nhập bù hợp đồng cũ SAU hợp đồng mới, và người nghỉ hẳn rồi quay lại.
+
+   1. Chỉ đếm `xac_dinh_th` còn `hieu_luc = 1`. Thử việc / không xác định thời
+      hạn / khoán việc không nằm trong giới hạn 2 lần của BLLĐ 2019 Đ.20.
+   2. XẾP THEO NGÀY BẮT ĐẦU, không theo thứ tự nhập. Nhập bù hợp đồng 2023 sau
+      khi đã nhập 2024–2026 thì nó phải ra lần 1, và 2024/2025/2026 phải được
+      TÍNH LẠI thành 2/3/4 — chứ không phải hai dòng cùng ghi "lần 3".
+   3. ĐỨT QUÃNG > 30 NGÀY thì chuỗi RESET về 1. Căn cứ: BLLĐ 2019 Đ.20 k.2c —
+      hết hạn mà quá 30 ngày không ký lại thì hợp đồng cũ TỰ trở thành không
+      xác định thời hạn, chuỗi "ký liên tiếp có thời hạn" đã đứt ở đó. Người
+      nghỉ 5 năm quay lại ký mới là lần 1, không phải lần 3.
+      Mốc so: `ngay_het_han` của bản trước → `ngay_bat_dau` của bản sau
+      (bản trước trống hạn thì lấy `ngay_bat_dau` — không xảy ra với
+      `xac_dinh_th` vì đã chặn cứng, chỉ để không vỡ nếu dữ liệu cũ bẩn).
+      Chồng lấn ngày (số ngày âm) vẫn coi là liên tiếp.
+   4. `lan_thu` KHÔNG còn là ảnh chụp lúc lưu: mọi lần thêm/sửa/ẩn/dùng lại
+      đều `tinhLaiLanThu` cho TOÀN BỘ hợp đồng của người đó.
+   ========================================================================== */
+const DUT_QUANG_NGAY = 30;
+
+/* Nhận danh sách {id, ngay_bat_dau, ngay_het_han}, trả về đúng danh sách đó
+   đã xếp theo ngày và gắn thêm `lan_thu_moi`. Thuần hàm — không chạm DB, để
+   dựng ca kiểm chứng được. */
+function xepChuoiLanThu(ds) {
+  const khoaId = h => (h.id == null ? Number.MAX_SAFE_INTEGER : Number(h.id));
+  const sap = ds.slice().sort((a, b) =>
+    a.ngay_bat_dau < b.ngay_bat_dau ? -1 :
+    a.ngay_bat_dau > b.ngay_bat_dau ? 1 :
+    khoaId(a) - khoaId(b));
+
+  let dem = 0, truoc = null;
+  for (const h of sap) {
+    if (!truoc) {
+      dem = 1;
+    } else {
+      const ketTruoc = truoc.ngay_het_han || truoc.ngay_bat_dau;
+      dem = soNgay(ketTruoc, h.ngay_bat_dau) > DUT_QUANG_NGAY ? 1 : dem + 1;
+    }
+    h.lan_thu_moi = dem;
+    truoc = h;
+  }
+  return sap;
+}
+
+async function dsXacDinhTh(env, nhanSuId, boQuaId) {
+  const { results } = await env.DB.prepare(`
+    SELECT id, ngay_bat_dau, ngay_het_han, lan_thu FROM hop_dong_lao_dong
      WHERE nhan_su_id = ? AND loai = 'xac_dinh_th' AND hieu_luc = 1
        AND (? IS NULL OR id <> ?)
-  `).bind(nhanSuId, boQuaId, boQuaId).first();
-  return (r?.n || 0) + 1;
+  `).bind(nhanSuId, boQuaId, boQuaId).all();
+  return results || [];
+}
+
+/* Lần thứ mấy của BẢN ĐANG LƯU — bản này chưa có (hoặc chưa cập nhật) trong
+   DB nên ghép vào danh sách trong bộ nhớ rồi mới xếp chuỗi. */
+async function tinhLanThu(env, nhanSuId, loai, boQuaId, batDau, hetHan) {
+  if (loai !== 'xac_dinh_th') return 1;
+  const ds = await dsXacDinhTh(env, nhanSuId, boQuaId);
+  const dangLuu = { id: boQuaId ?? null, ngay_bat_dau: batDau, ngay_het_han: hetHan, dang_luu: true };
+  ds.push(dangLuu);
+  xepChuoiLanThu(ds);
+  return dangLuu.lan_thu_moi;
+}
+
+/* Tính lại `lan_thu` cho TOÀN BỘ hợp đồng của một người. Gọi sau mọi
+   thêm/sửa/ẩn — nếu không thì ẩn bản lần 1 xong các bản sau vẫn ghi 2, 3,
+   tức bảng hiển thị mâu thuẫn với chính quy tắc của nó. */
+async function tinhLaiLanThu(env, nhanSuId) {
+  try {
+    const ds = await dsXacDinhTh(env, nhanSuId, null);
+    for (const h of xepChuoiLanThu(ds)) {
+      if (h.lan_thu !== h.lan_thu_moi) {
+        await env.DB.prepare('UPDATE hop_dong_lao_dong SET lan_thu = ? WHERE id = ?')
+          .bind(h.lan_thu_moi, h.id).run();
+      }
+    }
+  } catch { /* chưa nạp them-hopdong-laodong.sql — bỏ qua êm */ }
 }
 
 async function ghiLichSu(env, nhanSuId, nguoiId, giaTriMoi, ghiChu) {
@@ -124,7 +203,7 @@ export async function luu(env, phien, b) {
     if (!cu) return loi('Không tìm thấy hợp đồng cần sửa', 404);
   }
 
-  const lanThu = await tinhLanThu(env, nhanSuId, loaiHd, suaId);
+  const lanThu = await tinhLanThu(env, nhanSuId, loaiHd, suaId, batDau, hetHan);
 
   // Chặn MỀM — vẫn lưu được, nhưng phải gõ lý do, và lý do vào lịch sử.
   const canhBao = [];
@@ -160,6 +239,10 @@ export async function luu(env, phien, b) {
       phien.nhan_su_id).run();
   }
 
+  // Bản vừa lưu có thể chen vào GIỮA chuỗi (nhập bù) — các bản sau nó phải
+  // được đánh số lại, nếu không thì hai dòng cùng ghi "lần 3".
+  await tinhLaiLanThu(env, nhanSuId);
+
   await ghiLichSu(env, nhanSuId, phien.nhan_su_id,
     `${loaiHd}${hetHan ? ' · hết hạn ' + hetHan : ''}${lanThu > 1 ? ' · lần ' + lanThu : ''}`,
     [canhBao.join(' '), lyDo].filter(Boolean).join(' — ') || null);
@@ -182,6 +265,10 @@ export async function an(env, phien, b) {
   const moi = hd.hieu_luc ? 0 : 1;
   await env.DB.prepare('UPDATE hop_dong_lao_dong SET hieu_luc = ?, ly_do_an = ? WHERE id = ?')
     .bind(moi, moi ? null : lyDo, id).run();
+
+  // Ẩn/dùng lại là ĐỔI CHUỖI — bản lần 1 bị ẩn thì bản sau phải tụt xuống 1,
+  // không được giữ nguyên con số đã chụp lúc lưu.
+  await tinhLaiLanThu(env, hd.nhan_su_id);
 
   await ghiLichSu(env, hd.nhan_su_id, phien.nhan_su_id,
     moi ? 'hop_dong_mo_lai' : 'hop_dong_an', lyDo);

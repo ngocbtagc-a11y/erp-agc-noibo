@@ -622,7 +622,7 @@ async function qtSuaNhanSu(req, env) {
   const id = String(b.id || '').trim();
   if (!id) return loi('Thiếu id nhân sự');
 
-  const hienCo = await env.DB.prepare('SELECT id, ho_ten, chuc_vu, bo_phan, phong_ban_id, chuc_danh_id, quan_ly_id, trang_thai, trang_thai_dl, ma_nv FROM nhan_su WHERE id = ?').bind(id).first();
+  const hienCo = await env.DB.prepare('SELECT id, ho_ten, chuc_vu, bo_phan, phong_ban_id, chuc_danh_id, quan_ly_id, trang_thai, trang_thai_dl, ma_nv, loai_lao_dong FROM nhan_su WHERE id = ?').bind(id).first();
   if (!hienCo) return loi('Không tìm thấy nhân sự', 404);
 
   // Đã khoá thì chỉ Admin sửa được (Data Lock — xem migration them-khoa-danhmuc-nen.sql)
@@ -694,9 +694,25 @@ async function qtSuaNhanSu(req, env) {
   // (khác cơ chế Data Lock ở trên vốn chỉ log sau khi khoá) — đóng đúng
   // khoảng trống "chưa có audit trail vị trí/phòng ban/quản lý" đã ghi trong
   // báo cáo CORE_CHANGE 25/08/2026. Chỉ ghi khi THẬT SỰ đổi, không ghi khống.
+  /* ⛔ CHUYỂN SANG KHOÁN VIỆC → PHẢI DỌN DÒNG CA ĐÃ CÓ (ISSUE-1 · REV-0009).
+     `loaiLaoDongTuBody` chỉ đổi một chữ trong `nhan_su`, nó KHÔNG đụng tới
+     đăng ký ca và lịch làm việc đã tồn tại. Mà kể từ lúc đổi, người đó biến
+     mất khỏi ma trận Xếp ca → mọi dòng cũ thành CA MỒ CÔI, kẹt im lặng.
+     ~10 bạn kho sắp chuyển đúng đường này, nên chốt chặn phải chạy Ở ĐÂY
+     chứ không chỉ ở cửa đăng ký. Không xoá âm thầm: huỷ có ghi `ca_lich_su`,
+     phần không được phép đụng thì ĐẾM rồi trả về + ghi `nhan_su_lich_su`. */
+  const loaiLaoDongMoi = loaiLaoDongTuBody(b);
+  let donCa = null;
+  if (loaiLaoDongMoi === 'khoan_viec' && hienCo.loai_lao_dong !== 'khoan_viec') {
+    donCa = await ca.donCaKhiChuyenKhoan(env, phien, id);
+  }
+
   const suKien = [];
   const quanLyMoi = String(b.quan_ly_id || '').trim() || null;
   const trangThaiMoi = String(b.trang_thai || 'da_ky').trim();
+  if (loaiLaoDongMoi !== hienCo.loai_lao_dong) {
+    suKien.push(['doi_loai_lao_dong', hienCo.loai_lao_dong, loaiLaoDongMoi]);
+  }
   const phongBanIdMoi = pb ? pb.id : null;
   const chucDanhIdMoi = cd ? cd.id : null;
   if (phongBanIdMoi !== hienCo.phong_ban_id) suKien.push(['doi_phong_ban', hienCo.bo_phan, boPhanMoi]);
@@ -725,7 +741,23 @@ async function qtSuaNhanSu(req, env) {
     } catch { /* chưa nạp migration — bỏ qua, không chặn sửa hồ sơ */ }
   }
 
-  return json({ ok: true });
+  // Dấu vết việc dọn ca — đây là thứ anh Duy đọc lại được trên "Lịch sử hồ
+  // sơ", để không bao giờ có chuyện đăng ký biến mất mà không ai biết vì sao.
+  if (donCa && (donCa.da_huy_dang_ky || donCa.con_da_duyet || donCa.con_lich_lam_viec)) {
+    try {
+      await env.DB.prepare(`
+        INSERT INTO nhan_su_lich_su (nhan_su_id, loai_su_kien, gia_tri_moi, ghi_chu, nguoi_thuc_hien_id, luc)
+        VALUES (?, 'don_ca_khoan_viec', ?, ?, ?, datetime('now','+7 hours'))
+      `).bind(id,
+        `huỷ ${donCa.da_huy_dang_ky} đăng ký chờ`,
+        `Chuyển sang Khoán việc: đã huỷ ${donCa.da_huy_dang_ky} đăng ký ca còn chờ. ` +
+        `Còn ${donCa.con_da_duyet} đăng ký ĐÃ DUYỆT và ${donCa.con_lich_lam_viec} lịch làm việc ` +
+        `sắp tới — hệ thống KHÔNG tự xoá, trưởng phòng cần xem lại và xử lý tay.`,
+        phien.nhan_su_id).run();
+    } catch { /* chưa nạp migration — bỏ qua */ }
+  }
+
+  return json({ ok: true, don_ca: donCa });
 }
 
 /* Xoá HẲN hồ sơ nhân sự — chỉ Admin, chỉ khi chưa có dữ liệu nghiệp vụ nào

@@ -111,6 +111,104 @@ Thêm: `sinhMa` sinh mã cho cả 4 hình thức làm việc.
 
 **Chưa test tay**: mở trình duyệt thật, dựng lại bảng trên điện thoại thật.
 
+---
+
+# VÒNG SỬA 1 — vá REV-0009 (2026-08-27)
+
+## ISSUE-1 · Ca mồ côi khi chuyển sang khoán việc
+
+Ba chỗ, không phải một:
+
+1. **`src/index.js` `qtSuaNhanSu`** — đổi `loai_lao_dong` sang `khoan_viec` thì
+   gọi `ca.donCaKhiChuyenKhoan()`. Nó huỷ đăng ký còn `cho_duyet`/`cho_xep`
+   (có ghi `ca_lich_su`), rồi **ĐẾM** số đăng ký `da_duyet` + `lich_lam_viec`
+   sắp tới còn treo và ghi một dòng `nhan_su_lich_su` `don_ca_khoan_viec` với
+   câu đọc được. **Không xoá âm thầm**: phần đã có quyết định của trưởng phòng
+   hoặc đã thành lịch chính thức thì hệ thống KHÔNG tự đụng (Rule 10) — nó chỉ
+   nói ra. Trả thêm `don_ca` trong response để giao diện dùng sau.
+   Cũng ghi luôn sự kiện `doi_loai_lao_dong` — trước giờ đổi loại lao động
+   không để lại dấu vết nào.
+2. **Sức chứa** (`ca.js` `caDangMo` + `chayPhanBo`) — phép đếm `da_duyet` nay
+   `JOIN nhan_su` và loại `khoan_viec`, để ca của người đã chuyển khoán không
+   còn chiếm chỗ ma.
+3. **`chotLichTuan`** — không khoá `lich_lam_viec` của người `khoan_viec`, và
+   trả về `bo_qua_khoan` + `bo_qua_ai` (tên + số ca) để trưởng phòng THẤY.
+   Đây là điểm rủi ro pháp lý thật: chốt lịch cho người ký khoán = ERP tự sản
+   xuất bằng chứng quan hệ lao động, ngược tờ hợp đồng khoán (BH-33).
+   **Chỉ loại `khoan_viec`**, cố ý KHÔNG lọc trắng theo `ban_thoi_gian|thoi_vu`
+   — lịch của người toàn thời gian vốn vẫn chốt được, siết thêm là đổi hành vi
+   ngoài phạm vi vá này.
+
+## ISSUE-2 · Quy tắc đếm lần ký — CHỌN VÀ VÌ SAO
+
+`tinhLanThu` bỏ `COUNT(*)`. Quy tắc mới, đúng hai điểm:
+
+**(a) Xếp theo `ngay_bat_dau`, không theo thứ tự nhập.** Con số này là căn cứ
+pháp lý về *trình tự ký ngoài đời*, không phải về *trình tự gõ vào máy*. HCNS
+sắp nhập bù hàng loạt nên hai thứ đó chắc chắn lệch nhau.
+
+**(b) Đứt quãng > 30 ngày thì chuỗi RESET về 1.** Căn cứ BLLĐ 2019 Đ.20 k.2c:
+hết hạn mà quá 30 ngày không ký lại thì hợp đồng cũ **tự** trở thành không xác
+định thời hạn — đến đây chuỗi "ký xác định thời hạn liên tiếp" đã đứt theo
+chính luật, hai bên đã sang quan hệ khác. Đếm tiếp qua khoảng đứt là bịa ra
+một chuỗi luật không công nhận. Mốc so: `ngay_het_han` bản trước →
+`ngay_bat_dau` bản sau; đúng 30 ngày vẫn là liên tiếp, 31 ngày mới đứt; chồng
+lấn ngày (số âm) vẫn liên tiếp.
+
+**Vì sao chọn RESET chứ không phải cảnh báo suông:** cảnh báo pháp lý SAI nguy
+hiểm hơn không cảnh báo. Bắt HCNS gõ lý do "vi phạm Đ.20" cho một hợp đồng
+hoàn toàn hợp lệ là dạy người dùng bấm-cho-qua mọi cảnh báo — hỏng luôn cái
+chặn mềm ở những ca vi phạm thật.
+
+**(c) `lan_thu` thôi là ảnh chụp.** Thêm `tinhLaiLanThu(nhanSuId)` chạy sau mọi
+thêm/sửa/ẩn/dùng lại: đánh số lại toàn bộ chuỗi. Nhập bù bản 2023 thì
+2024/2025/2026 tụt thành 2/3/4; ẩn bản lần 1 thì các bản sau tụt xuống.
+
+## ISSUE-3 · Rò lý do giữa các bản ghi
+
+`app.js` nhánh `bSua`: thêm `#nsHd-lydo` = '' và ẩn `#nsHd-fieldlydo`.
+**Cố ý KHÔNG đụng `#nsHd-nhac`** — `capNhatNhacLoaiHd()` gọi ngay phía trên đã
+ghi đè nó theo loại của bản B rồi; hide thêm là xoá luôn lời nhắc hợp lệ.
+
+## Kiểm chứng (BH-16 — mỗi lỗi có ca đối chứng cố ý sai)
+
+Chạy trên `node:sqlite` thật + import **code thật**, mỗi bộ chạy 2 lần: mã mới
+(phải ĐẠT) và mã cũ `4f91cd2` (phải HỎNG — chứng minh phép đo có răng).
+
+| Bộ | Mã mới | Mã cũ `4f91cd2` |
+|---|---|---|
+| ISSUE-1 · 13 ca (khoán + đối chứng `ban_thoi_gian`) | 13/13 ĐẠT | **7 HỎNG** |
+| ISSUE-2 · 12 ca (bù ngược · đứt quãng · tuần tự · biên 30/31 ngày · ẩn/dùng lại · thử việc) | 12/12 ĐẠT | **7 HỎNG** |
+| ISSUE-3 · 5 ca (trích nguyên văn nhánh `bSua` chạy trên DOM giả) | 5/5 ĐẠT | lộ đúng lỗi |
+
+Ca đối chứng **phải không đổi** và đã không đổi trên cả hai mã: ký tuần tự
+2024→2025→2026 vẫn ra 1,2,3 và vẫn bật cảnh báo Đ.20 ở lần 3; thử việc vẫn
+lần 1; người `ban_thoi_gian` vẫn đăng ký/chốt lịch/chiếm sức chứa y như trước.
+
+Bằng chứng nặng nhất, đo được trên mã cũ: `chotLichTuan` **đã khoá**
+`lich_lam_viec` của người `khoan_viec` thành `da_xac_nhan`. Mã mới để nguyên
+`da_xep` và báo tên người bị bỏ qua.
+
+**Vẫn chưa chạy trình duyệt thật** — 3 kịch bản REV-0009 §7 còn nợ.
+
+## ⚠️ Cảnh báo cho ai LÙI CODE (mức THẤP, ghi để khỏi mất)
+
+Lùi *migration* thì sạch. Nhưng lùi **cả code** thì các dòng
+`nhan_su.loai_lao_dong = 'khoan_viec'` vẫn nằm lại trong DB, và
+`loaiLaoDongTuBody` (`src/index.js`) sẽ **âm thầm ép về `toan_thoi_gian`** ở
+lần sửa hồ sơ kế tiếp — không báo lỗi, không ghi gì. Lùi code thì phải rà lại
+đúng những hồ sơ đó (`SELECT id, ho_ten FROM nhan_su WHERE loai_lao_dong =
+'khoan_viec'` **trước khi** lùi) và sửa tay lại sau.
+
+## Bài học đề xuất vòng này (chưa ghi `docs/BAI-HOC.md` — cùng lý do dưới)
+
+**Thêm một chốt chặn ở CỬA VÀO không dọn được những gì đã ở TRONG NHÀ.**
+Chặn `dangKyCa` cho người khoán việc là đúng nhưng chỉ chặn dòng MỚI; dòng đã
+có thì vẫn nằm đó, mà chủ nhân của chúng vừa bị lọc khỏi màn hình quản lý nên
+thành **mồ côi: vẫn có hiệu lực, không ai nhìn thấy**. → Mỗi khi thêm một bộ
+lọc làm ai đó BIẾN MẤT khỏi một danh sách, phải hỏi ngay: *những dòng người đó
+đang có thì sao, và giờ ai còn nhìn thấy chúng?*
+
 ## Bài học đề xuất (chưa ghi vào `docs/BAI-HOC.md` — xem ghi chú cuối)
 
 **Thêm một giá trị vào danh sách chọn không phải là thêm một dòng — grep xem

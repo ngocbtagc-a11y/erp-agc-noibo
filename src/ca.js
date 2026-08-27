@@ -210,7 +210,14 @@ export async function caDangMo(env, phien) {
   const { results } = await env.DB.prepare(`
     SELECT cm.id, cm.ngay, cm.can_bao_nhieu_nguoi, cm.toi_da_nguoi, cm.mo_dang_ky_luc, cm.dong_dang_ky_luc,
            mc.ma_ca, mc.ten_ca, mc.gio_bat_dau, mc.gio_ket_thuc,
-           (SELECT COUNT(*) FROM dang_ky_ca d WHERE d.ca_mo_id = cm.id AND d.trang_thai = 'da_duyet') AS da_duyet,
+           -- Sức chứa KHÔNG tính người đã chuyển sang khoán việc: ca họ từng
+           -- được duyệt vẫn nằm đó (Rule 10 — không xoá) nhưng họ không còn
+           -- được xếp ca, để lại thì ca trông như đủ người mà không ai nhận
+           -- (ISSUE-1 · REV-0009).
+           (SELECT COUNT(*) FROM dang_ky_ca d
+              JOIN nhan_su nd ON nd.id = d.nhan_su_id
+             WHERE d.ca_mo_id = cm.id AND d.trang_thai = 'da_duyet'
+               AND nd.loai_lao_dong <> 'khoan_viec') AS da_duyet,
            dk.id AS dang_ky_id, dk.trang_thai AS dang_ky_trang_thai
       FROM ca_mo cm
       JOIN mau_ca mc ON mc.id = cm.mau_ca_id
@@ -267,6 +274,57 @@ export async function dangKyCa(env, phien, body) {
   }
   await ghiLichSuCa(env, phien, 'dang_ky_ca', id, 'tao', null, 'cho_duyet', null);
   return json({ ok: true, id });
+}
+
+/* ==========================================================================
+   DỌN CA KHI MỘT NGƯỜI CHUYỂN SANG KHOÁN VIỆC — ISSUE-1 · REV-0009
+   ---------------------------------------------------------------------------
+   Chốt chặn `dangKyCa`/`maTranTuan` chỉ chặn ĐĂNG KÝ MỚI, không đụng dòng ĐÃ
+   CÓ. Mà người khoán lại biến mất khỏi hàng nhân sự của ma trận Xếp ca, nên
+   đăng ký cũ của họ thành CA MỒ CÔI: không vẽ được ô nào → trưởng phòng
+   không thấy để duyệt/từ chối, chính người đó cũng không huỷ được (màn Đăng
+   ký ca đã bị dải chặn che). Kẹt vĩnh viễn, và im lặng.
+
+   Cách xử lý — RÕ RÀNG, KHÔNG XOÁ ÂM THẦM:
+   1. `cho_duyet`/`cho_xep`: chuyển `da_huy` + ghi `ca_lich_su` với lý do đọc
+      được. Chưa ai cam kết gì với dòng này; huỷ là trả lại chỗ trong ca.
+   2. `da_duyet` và `lich_lam_viec` đã xếp: KHÔNG đụng (Rule 10 — đã có quyết
+      định của trưởng phòng / đã là bằng chứng). Chỉ ĐẾM rồi trả về để hiện
+      cho quản lý. Chúng hết chiếm sức chứa oan nhờ bộ lọc ở `caDangMo` +
+      `chayPhanBo`, và hết bị khoá nhờ bộ lọc ở `chotLichTuan`.
+   ========================================================================== */
+export async function donCaKhiChuyenKhoan(env, phien, nhanSuId) {
+  const kq = { da_huy_dang_ky: 0, con_da_duyet: 0, con_lich_lam_viec: 0 };
+  try {
+    const { results: cho } = await env.DB.prepare(`
+      SELECT id, trang_thai FROM dang_ky_ca
+       WHERE nhan_su_id = ? AND trang_thai IN ('cho_duyet', 'cho_xep')
+    `).bind(nhanSuId).all();
+
+    for (const dk of cho || []) {
+      await env.DB.prepare(
+        "UPDATE dang_ky_ca SET trang_thai = 'da_huy', cap_nhat_luc = datetime('now','+7 hours') WHERE id = ?"
+      ).bind(dk.id).run();
+      await ghiLichSuCa(env, phien, 'dang_ky_ca', dk.id, 'huy', dk.trang_thai, 'da_huy',
+        'Huỷ tự động: hồ sơ chuyển sang Khoán việc — người khoán việc không xếp ca');
+      kq.da_huy_dang_ky++;
+    }
+
+    const d = await env.DB.prepare(`
+      SELECT COUNT(*) AS n FROM dang_ky_ca dk JOIN ca_mo cm ON cm.id = dk.ca_mo_id
+       WHERE dk.nhan_su_id = ? AND dk.trang_thai = 'da_duyet'
+         AND cm.ngay >= date('now', '+7 hours')
+    `).bind(nhanSuId).first();
+    kq.con_da_duyet = d?.n || 0;
+
+    const l = await env.DB.prepare(`
+      SELECT COUNT(*) AS n FROM lich_lam_viec
+       WHERE nhan_su_id = ? AND trang_thai IN ('da_xep', 'da_xac_nhan')
+         AND ngay >= date('now', '+7 hours')
+    `).bind(nhanSuId).first();
+    kq.con_lich_lam_viec = l?.n || 0;
+  } catch { /* chưa nạp them-dangky-ca.sql — bỏ qua êm, không chặn sửa hồ sơ */ }
+  return kq;
 }
 
 export async function huyDangKyCa(env, phien, body) {
@@ -421,9 +479,13 @@ export async function chayPhanBo(env, phien, body) {
   // Người ĐÃ được xếp từ trước (duyệt tay/gán thủ công trước lần chạy này)
   // vẫn phải tính vào "đã có giờ" + "đã chiếm chỗ trong ca" để không xếp
   // chồng/xếp dư — đọc thêm để rule No-conflict + headcount đúng thực tế.
+  // Cùng lý do như `caDangMo`: người đã chuyển sang khoán việc không còn
+  // chiếm chỗ trong ca (ISSUE-1 · REV-0009).
   const { results: daXepTruoc } = await env.DB.prepare(`
     SELECT dk.nhan_su_id, dk.ca_mo_id FROM dang_ky_ca dk
+      JOIN nhan_su nd ON nd.id = dk.nhan_su_id
      WHERE dk.ca_mo_id IN (${cho}) AND dk.trang_thai = 'da_duyet'
+       AND nd.loai_lao_dong <> 'khoan_viec'
   `).bind(...idsCaMo).all();
 
   const caMoTheoId = {};
@@ -627,17 +689,45 @@ export async function chotLichTuan(env, phien, body) {
     return json({ ok: false, canh_bao: true, con_cho_duyet: conCho[0].n });
   }
 
+  /* ⚠️ KHÔNG chốt lịch cho người KHOÁN VIỆC (ISSUE-1 · REV-0009).
+     Chốt lịch = khoá một lịch làm việc CHÍNH THỨC, có giờ vào/giờ ra, do
+     quản lý ấn định. Với người ký hợp đồng khoán (hợp đồng DÂN SỰ, không
+     BHXH) thì đó chính là bằng chứng "quản lý theo giờ giấc" — tức bằng
+     chứng quan hệ lao động, ngược thẳng tờ hợp đồng khoán họ đã ký. Bảng
+     xếp ca là thứ thanh tra đọc đầu tiên (BH-33).
+     Chỉ loại `khoan_viec` — KHÔNG lọc trắng theo `ban_thoi_gian|thoi_vu`,
+     vì lịch của người toàn thời gian (nguồn `co_dinh`/`xep_thu_cong`) vốn
+     vẫn chốt được từ trước, siết thêm là đổi hành vi ngoài phạm vi vá này. */
   const { results: ds } = await env.DB.prepare(`
-    SELECT id FROM lich_lam_viec WHERE phong_ban_id = ? AND ngay BETWEEN ? AND ? AND trang_thai = 'da_xep'
+    SELECT llv.id FROM lich_lam_viec llv
+      JOIN nhan_su ns ON ns.id = llv.nhan_su_id
+     WHERE llv.phong_ban_id = ? AND llv.ngay BETWEEN ? AND ? AND llv.trang_thai = 'da_xep'
+       AND ns.loai_lao_dong <> 'khoan_viec'
+  `).bind(phongBanId, tuNgay, denNgay).all();
+
+  // Số dòng BỊ BỎ QUA vì người đó đã chuyển sang khoán — trả về để trưởng
+  // phòng THẤY, không im lặng bỏ (anh Duy phải biết chuyện gì đã xảy ra).
+  const { results: boQua } = await env.DB.prepare(`
+    SELECT ns.ho_ten, COUNT(*) AS n FROM lich_lam_viec llv
+      JOIN nhan_su ns ON ns.id = llv.nhan_su_id
+     WHERE llv.phong_ban_id = ? AND llv.ngay BETWEEN ? AND ? AND llv.trang_thai = 'da_xep'
+       AND ns.loai_lao_dong = 'khoan_viec'
+     GROUP BY ns.id ORDER BY ns.ho_ten
   `).bind(phongBanId, tuNgay, denNgay).all();
 
   await env.DB.prepare(`
     UPDATE lich_lam_viec SET trang_thai = 'da_xac_nhan', khoa_luc = datetime('now','+7 hours')
      WHERE phong_ban_id = ? AND ngay BETWEEN ? AND ? AND trang_thai = 'da_xep'
+       AND nhan_su_id NOT IN (SELECT id FROM nhan_su WHERE loai_lao_dong = 'khoan_viec')
   `).bind(phongBanId, tuNgay, denNgay).run();
 
   for (const r of ds) {
     await ghiLichSuCa(env, phien, 'lich_lam_viec', r.id, 'khoa', 'da_xep', 'da_xac_nhan', 'Chốt lịch tuần');
   }
-  return json({ ok: true, da_khoa: ds.length });
+  return json({
+    ok: true,
+    da_khoa: ds.length,
+    bo_qua_khoan: (boQua || []).reduce((s, r) => s + r.n, 0),
+    bo_qua_ai: (boQua || []).map(r => `${r.ho_ten} (${r.n} ca)`)
+  });
 }
