@@ -853,26 +853,18 @@ if (TOI.phai_doi_mk) {
   throw new Error('Phải đổi mật khẩu trước');
 }
 
-/* Nén ảnh về hình vuông nhỏ (canvas, cắt giữa kiểu object-fit:cover) trước
-   khi gửi lên — máy chủ chỉ lưu base64 thẳng vào DB, không tự nén được. */
-function nenAnhVuong(file, kichThuoc = 200) {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      const canvas = document.createElement('canvas');
-      canvas.width = kichThuoc; canvas.height = kichThuoc;
-      const ctx = canvas.getContext('2d');
-      const canh = Math.min(img.width, img.height);
-      const sx = (img.width - canh) / 2, sy = (img.height - canh) / 2;
-      ctx.drawImage(img, sx, sy, canh, canh, 0, 0, kichThuoc, kichThuoc);
-      resolve(canvas.toDataURL('image/jpeg', 0.85));
-    };
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Không đọc được ảnh này')); };
-    img.src = url;
-  });
-}
+/* ==========================================================================
+   ẢNH DÙNG CHUNG — nén + dán (Ctrl+V) + kéo–thả  ·  CTL-0011
+   --------------------------------------------------------------------------
+   Trước đợt này repo có BA hàm nén ảnh gần trùng nhau (`nenAnhVuong` cho ảnh
+   đại diện nhân sự, `nenAnhVuaKhung` cho Góp ý, `nenAnh` cho minh chứng khiếu
+   nại) và toàn bộ logic dán/kéo–thả bị khoá trong closure của `khoiDongGopY()`
+   nên Chat nội bộ không dùng lại được (REV-0002 mục 6).
+
+   Hiến pháp Rule 5 (Reuse → Extend → Create): gộp về MỘT hàm nén có tham số
+   và MỘT bộ tiện ích vùng nhận ảnh dùng chung. Sếp Ngọc duyệt `CORE_CHANGE`
+   ngày 27/08/2026 ("làm luôn đi, sau cái gì mà sau").
+   ========================================================================== */
 
 /* Số byte THẬT của ảnh sau khi giải mã base64 — đúng cách backend đo
    (`atob(raw).length` trong gopYGui), để frontend không đoán sai rồi bị
@@ -884,45 +876,74 @@ function coByteCuaDataUrl(dataUrl) {
   return Math.floor(b64.length * 3 / 4) - demDauBang;
 }
 
-/* Nén ảnh GIỮ NGUYÊN tỉ lệ (khác nenAnhVuong ở trên — ảnh chụp màn hình
-   góp ý không được cắt vuông, cắt mất chữ/nút đang muốn chỉ ra chỗ lỗi).
-   Chỉ co lại nếu vượt kích thước tối đa, không phóng to ảnh nhỏ.
+/* Nén ảnh bằng canvas — MỘT hàm cho mọi chỗ trong ERP. Luôn trả về data URL
+   JPEG (máy chủ chỉ lưu base64/nhị phân thẳng vào D1, không tự nén được).
 
-   `gioiHanByte` > 0: nén cho tới khi LỌT giới hạn của backend — hạ chất
-   lượng trước (chữ trong ảnh chụp màn hình còn đọc được), hết nấc mới thu
-   nhỏ kích thước. Rule 12 (Human Cost): người dùng dán ảnh to thì máy tự
-   lo, không bắt họ mở phần mềm khác cắt/nén rồi quay lại. */
-function nenAnhVuaKhung(file, kichThuocToiDa = 1000, gioiHanByte = 0) {
+   tuyChon:
+   - `cheDo`        'vua-khung' (mặc định) giữ nguyên tỉ lệ, CHỈ co lại chứ
+                    không phóng to · 'vuong' cắt giữa thành ảnh vuông đúng
+                    `canhToiDa`×`canhToiDa` (ảnh đại diện — phải đủ nét ở mọi
+                    kích thước hiển thị nên cho phép phóng to ảnh nhỏ).
+   - `canhToiDa`    cạnh dài nhất (px).
+   - `chatLuong`    chất lượng JPEG lượt vẽ đầu (0–1).
+   - `gioiHanByte`  > 0 thì nén cho tới khi LỌT giới hạn của backend: hạ chất
+                    lượng trước (chữ trong ảnh chụp màn hình còn đọc được),
+                    hết nấc mới thu nhỏ kích thước. Rule 12 (Human Cost) —
+                    người dùng dán ảnh to thì máy tự lo, không bắt họ mở phần
+                    mềm khác cắt/nén rồi quay lại.
+
+   Luôn tô NỀN TRẮNG trước khi vẽ: JPEG không có kênh trong suốt, không tô
+   thì ảnh PNG trong suốt ra nền ĐEN, người dùng tưởng ảnh hỏng. */
+function nenAnhChung(file, tuyChon = {}) {
+  const {
+    cheDo = 'vua-khung',
+    canhToiDa = 1600,
+    chatLuong = 0.8,
+    gioiHanByte = 0,
+    nacChatLuong = [0.7, 0.6, 0.5],
+    soLanThuNho = 6
+  } = tuyChon;
+
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
     const img = new Image();
     img.onload = () => {
       URL.revokeObjectURL(url);
       const canvas = document.createElement('canvas');
-      let ti = Math.min(1, kichThuocToiDa / Math.max(img.width, img.height));
 
-      const ve = (tiLe, chatLuong) => {
-        canvas.width = Math.max(1, Math.round(img.width * tiLe));
-        canvas.height = Math.max(1, Math.round(img.height * tiLe));
+      const ve = (tiLe, cl) => {
+        let sx = 0, sy = 0, sw = img.width, sh = img.height;
+        if (cheDo === 'vuong') {
+          const canh = Math.min(img.width, img.height);
+          sx = (img.width - canh) / 2; sy = (img.height - canh) / 2;
+          sw = canh; sh = canh;
+          canvas.width = canvas.height = Math.max(1, Math.round(canhToiDa * tiLe));
+        } else {
+          canvas.width = Math.max(1, Math.round(img.width * tiLe));
+          canvas.height = Math.max(1, Math.round(img.height * tiLe));
+        }
         const ctx = canvas.getContext('2d');
-        // JPEG không có nền trong suốt — tô trắng trước, nếu không ảnh PNG
-        // trong suốt sẽ ra nền ĐEN, nhìn như ảnh hỏng.
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        return canvas.toDataURL('image/jpeg', chatLuong);
+        ctx.drawImage(img, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+        return canvas.toDataURL('image/jpeg', cl);
       };
 
-      let kq = ve(ti, 0.8);
+      let ti = cheDo === 'vuong'
+        ? 1
+        : Math.min(1, canhToiDa / Math.max(img.width, img.height));
+
+      let kq = ve(ti, chatLuong);
       if (gioiHanByte > 0) {
-        for (const cl of [0.7, 0.6, 0.5]) {
+        for (const cl of nacChatLuong) {
           if (coByteCuaDataUrl(kq) <= gioiHanByte) break;
           kq = ve(ti, cl);
         }
         // Vẫn nặng (ảnh chụp màn hình 4K nhiều chi tiết) → thu nhỏ dần.
-        for (let i = 0; i < 6 && coByteCuaDataUrl(kq) > gioiHanByte; i++) {
+        const clCuoi = nacChatLuong.length ? nacChatLuong[nacChatLuong.length - 1] : chatLuong;
+        for (let i = 0; i < soLanThuNho && coByteCuaDataUrl(kq) > gioiHanByte; i++) {
           ti *= 0.8;
-          kq = ve(ti, 0.5);
+          kq = ve(ti, clCuoi);
         }
       }
       resolve(kq);
@@ -931,6 +952,167 @@ function nenAnhVuaKhung(file, kichThuocToiDa = 1000, gioiHanByte = 0) {
     img.src = url;
   });
 }
+
+/* Lấy file ảnh đầu tiên trong một DataTransfer (clipboard hoặc kéo–thả).
+   Windows/macOS chụp màn hình đều để ảnh ở dạng file trong `items`. */
+function timAnhTrongDuLieu(dl) {
+  if (!dl) return null;
+  for (const it of dl.items || []) {
+    if (it.kind === 'file' && /^image\//.test(it.type || '')) {
+      const f = it.getAsFile();
+      if (f) return f;
+    }
+  }
+  for (const f of dl.files || []) {
+    if (/^image\//.test(f.type || '')) return f;
+  }
+  return null;
+}
+
+/* Đổi data URL đã nén thành File thật — Chat nội bộ gửi tệp nhị phân qua
+   multipart/form-data, không gửi chuỗi base64 như Góp ý. */
+function dataUrlThanhTep(dataUrl, ten) {
+  const s = String(dataUrl || '');
+  const b64 = s.slice(s.indexOf(',') + 1);
+  const loai = (s.match(/^data:([^;,]+)/) || [])[1] || 'image/jpeg';
+  const bin = atob(b64);
+  const u8 = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+  return new File([u8], ten, { type: loai });
+}
+
+/* Gắn KÉO–THẢ + CHỌN TỆP cho một vùng bất kỳ (Góp ý, Chat nội bộ, sau này
+   thêm chỗ nào cũng gọi hàm này, không chép lại).
+
+   Mọi tệp — kể cả tệp KHÔNG phải ảnh — đều được chuyển thẳng cho `khiCoTep`;
+   bên gọi tự quyết định (Góp ý chỉ nhận ảnh và báo lỗi, Chat nhận cả
+   Excel/PDF như trước).
+
+   - `vungTha`   : vùng bắt kéo–thả (thường là cả thân form/popup, vì người
+                   dùng hay thả trượt ra ngoài ô nhỏ vài chục pixel).
+   - `vungSang`  : vùng được gắn class `dang-keo` (mặc định = `vungTha`).
+   - `oChonFile` : <input type="file"> — tự nối vào cùng luồng và tự reset.
+   - `nutChon`   : nút bấm mở hộp thoại chọn tệp.
+   - `vungBamCamUng` : chỉ trên THIẾT BỊ CẢM ỨNG mới coi cả vùng này là nút
+                   mở hộp thoại. Trên máy tính, bấm vào dòng chữ "Ctrl+V"
+                   KHÔNG mở hộp thoại duyệt tệp — đúng thứ Sếp Ngọc muốn
+                   tránh ("Ctrl+C, Ctrl+V là được luôn chứ không cần tìm
+                   file"). REV-0002 lỗi #8. */
+function ganVungThaTep({ vungTha, vungSang, oChonFile, nutChon, vungBamCamUng, khiCoTep }) {
+  if (!vungTha || typeof khiCoTep !== 'function') return;
+  const oSang = vungSang || vungTha;
+
+  /* Bộ ĐẾM dragenter/dragleave. Kéo qua một ô con (textarea, nút…) cũng bắn
+     `dragleave` từ ô con đó — kiểm `e.target === vungTha` như bản cũ sẽ để
+     viền xanh "sẵn sàng nhận thả" KẸT LẠI vĩnh viễn, người dùng phải F5.
+     Đếm 1–1 mới biết chắc con trỏ đã ra hẳn ngoài vùng. REV-0002 lỗi #6. */
+  let demKeo = 0;
+  const coTep = (e) => Array.from((e.dataTransfer && e.dataTransfer.types) || []).includes('Files');
+  const tatVien = () => { demKeo = 0; oSang.classList.remove('dang-keo'); };
+
+  vungTha.addEventListener('dragenter', (e) => {
+    if (!coTep(e)) return;
+    e.preventDefault();
+    demKeo++;
+    oSang.classList.add('dang-keo');
+  });
+  vungTha.addEventListener('dragover', (e) => {
+    if (!coTep(e)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+    oSang.classList.add('dang-keo');
+  });
+  vungTha.addEventListener('dragleave', (e) => {
+    if (!coTep(e)) return;
+    demKeo = Math.max(0, demKeo - 1);
+    if (demKeo === 0) oSang.classList.remove('dang-keo');
+  });
+  vungTha.addEventListener('drop', (e) => {
+    if (!coTep(e)) return;
+    e.preventDefault();
+    tatVien();
+    const f = Array.from(e.dataTransfer.files || [])[0];
+    if (f) khiCoTep(f);
+  });
+  // Thả ra chỗ khác trong trang, hoặc huỷ giữa chừng → viền phải tắt.
+  window.addEventListener('drop', tatVien);
+  window.addEventListener('dragend', tatVien);
+
+  if (oChonFile) {
+    oChonFile.addEventListener('change', () => {
+      const f = oChonFile.files && oChonFile.files[0];
+      /* Reset NGAY sau khi đọc: không reset thì chọn LẠI đúng tệp vừa chọn
+         sẽ không bắn `change` (giá trị không đổi) → im lặng hoàn toàn.
+         REV-0002 lỗi #7. */
+      oChonFile.value = '';
+      if (f) khiCoTep(f);
+    });
+    if (nutChon) {
+      nutChon.addEventListener('click', (e) => { e.preventDefault(); oChonFile.click(); });
+    }
+    if (vungBamCamUng) {
+      vungBamCamUng.addEventListener('click', (e) => {
+        // Ô file ẩn và nút Chọn tệp đều nằm TRONG vùng này; click tổng hợp
+        // của chúng nổi bọt lên đây, không chặn thì mở 2 hộp thoại / lặp vô tận.
+        if (e.target === oChonFile) return;
+        if (nutChon && (e.target === nutChon || nutChon.contains(e.target))) return;
+        if (!window.matchMedia('(hover: none) and (pointer: coarse)').matches) return;
+        oChonFile.click();
+      });
+    }
+  }
+}
+
+/* --------------------------------------------------------------------------
+   TRỌNG TÀI Ctrl+V — MỘT handler `paste` duy nhất cho cả ERP.
+   --------------------------------------------------------------------------
+   Trước đợt này, form Góp ý gắn listener riêng trên `document` và chỉ gác
+   `#v-gopy` — mà Chat nội bộ là bong bóng nổi NGOÀI mọi màn hình, nên
+   Ctrl+V trong ô chat bị form góp ý CƯỚP mất (REV-0002 lỗi #4). Vá riêng
+   từng form không giải được: phải có một người trọng tài.
+
+   Luật định tuyến, xét theo `document.activeElement` chứ KHÔNG xét nội dung
+   clipboard (REV-0002 lỗi #1 — xét nội dung làm cú dán bị NUỐT IM LẶNG khi
+   copy từ web/Word/Excel/ShareX, vì những nguồn đó đặt CẢ chữ lẫn ảnh):
+
+   1. Clipboard không có ảnh  → không can thiệp, để trình duyệt lo.
+   2. Con trỏ đang nằm TRONG một vùng đã đăng ký → ảnh về vùng đó.
+   3. Con trỏ ở `<body>` (chưa bấm vào đâu) → vùng đang mở có ưu tiên cao nhất.
+   4. Con trỏ ở một ô nhập liệu KHÁC (ô tìm kiếm, form khác) → không cướp.
+   5. Vừa có chữ vừa có ảnh và con trỏ đang ở ô chữ → KHÔNG `preventDefault`:
+      chữ vẫn dán vào ô như thường, ảnh vẫn được đính kèm. Cả hai đều xảy ra,
+      không có đường thoát im lặng nào (Rule 7 — Users See Work).
+   -------------------------------------------------------------------------- */
+const VUNG_NHAN_ANH_DAN = [];
+
+function dangKyNhanAnhDan({ vung, dangBat, nhan, uuTien = 0 }) {
+  if (!vung || typeof nhan !== 'function') return;
+  VUNG_NHAN_ANH_DAN.push({ vung, dangBat: dangBat || (() => true), nhan, uuTien });
+  VUNG_NHAN_ANH_DAN.sort((a, b) => b.uuTien - a.uuTien);
+}
+
+function chonVungNhanAnhDan(el) {
+  const dangMo = VUNG_NHAN_ANH_DAN.filter(v => { try { return !!v.dangBat(); } catch { return false; } });
+  if (!dangMo.length) return null;
+  if (el && el !== document.body) {
+    const trong = dangMo.find(v => v.vung.contains(el));
+    if (trong) return trong;
+    if (/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName || '') || el.isContentEditable === true) return null;
+  }
+  return dangMo[0];
+}
+
+document.addEventListener('paste', (e) => {
+  const anh = timAnhTrongDuLieu(e.clipboardData);
+  if (!anh) return;
+  const el = document.activeElement;
+  const dich = chonVungNhanAnhDan(el);
+  if (!dich) return;
+  const oChu = !!el && (/^(INPUT|TEXTAREA)$/.test(el.tagName || '') || el.isContentEditable === true);
+  const coChu = ((e.clipboardData && e.clipboardData.getData('text/plain')) || '').trim() !== '';
+  if (!(oChu && coChu)) e.preventDefault();
+  dich.nhan(anh);
+});
 
 function veAvatarSidebar(capNhat) {
   const wrap = $('#uAvWrap');
@@ -947,7 +1129,9 @@ $('#uAvFile').addEventListener('change', async () => {
   const f = $('#uAvFile').files[0];
   if (!f) return;
   try {
-    const anh = await nenAnhVuong(f, 200);
+    // Ảnh đại diện: cắt vuông giữa 200×200, chất lượng 0.85 — đúng như
+    // `nenAnhVuong()` cũ, chỉ đổi sang hàm nén dùng chung (CTL-0011).
+    const anh = await nenAnhChung(f, { cheDo: 'vuong', canhToiDa: 200, chatLuong: 0.85 });
     await API.nsAnhDaiDien(anh);
     TOI.co_anh = true;
     veAvatarSidebar(true);
@@ -2549,18 +2733,102 @@ async function khoiDongChat() {
     veGanDay();   // đối tác mới lần đầu chat thì cũng cần hiện luôn bong bóng
   };
 
-  // Chọn / bỏ file đính kèm
-  $('#chat-nut-tep').addEventListener('click', () => $('#chat-tep').click());
-  $('#chat-tep').addEventListener('change', () => {
-    const f = $('#chat-tep').files[0] || null;
-    tepDangChon = f;
-    $('#chat-file-dinhkem').hidden = !f;
-    $('#chat-file-ten').textContent = f ? `${f.name} (${dinhDangCo(f.size)})` : '';
-  });
-  $('#chat-file-bo').addEventListener('click', () => {
+  /* ---- Đính kèm: DÁN (Ctrl+V) · KÉO–THẢ · CHỌN TỆP  ·  CTL-0011 ----------
+     Góp ý #1 của Sếp Ngọc: "đoạn chat ko tiếp nhận ảnh chụp màn hình, muốn
+     paste nhanh như chat trong Zalo". Dùng CHUNG tiện ích với form Góp ý
+     (`ganVungThaTep` + trọng tài Ctrl+V `dangKyNhanAnhDan`), không chép lại
+     một bản thứ hai.
+
+     ẢNH được nén ngay tại máy (JPEG, cạnh dài 1600px) rồi mới gửi. TỆP KHÔNG
+     PHẢI ẢNH (Excel, PDF…) giữ nguyên như trước, không đụng tới.
+
+     Giới hạn: backend `chatGui()` chặn ĐỘC LẬP ở 4MB (`CHAT_TEP_TOI_DA`,
+     src/index.js) — KHÁC mức 800KB của Góp ý vì chat còn gửi cả tệp tài
+     liệu. Nén ở giao diện chỉ là tiện lợi, KHÔNG thay thế hàng rào máy chủ.
+     Không đổi schema, không đổi backend: cột `tep_ten/tep_loai/
+     tep_kich_thuoc/tep_du_lieu` của bảng `tin_nhan_chat` đã có sẵn và đã
+     hiển thị ảnh (`.chat-anh`) từ trước. */
+  const CHAT_ANH_TOI_DA = Math.round(3.8 * 1024 * 1024);   // chừa dư dưới 4MB của backend
+  const oTepChat = $('#chat-tep'), khoiTepChat = $('#chat-file-dinhkem'),
+        tenTepChat = $('#chat-file-ten'), hinhTepChat = $('#chat-file-hinh'),
+        oLoiChat = $('#chat-loi');
+  let dangXuLyTepChat = 0, luotTepChat = 0;   // bộ đếm + số thứ tự lượt, như bên Góp ý
+
+  function veTepDangChon() {
+    const f = tepDangChon;
+    khoiTepChat.hidden = !f;
+    tenTepChat.textContent = f ? `${f.name} (${dinhDangCo(f.size)})` : '';
+    // Thu hồi URL tạm của ảnh xem trước trước đó, tránh rò rỉ bộ nhớ.
+    if (hinhTepChat.dataset.url) {
+      URL.revokeObjectURL(hinhTepChat.dataset.url);
+      delete hinhTepChat.dataset.url;
+    }
+    if (f && /^image\//.test(f.type || '')) {
+      const u = URL.createObjectURL(f);
+      hinhTepChat.dataset.url = u;
+      hinhTepChat.src = u;
+      hinhTepChat.hidden = false;
+    } else {
+      hinhTepChat.removeAttribute('src');
+      hinhTepChat.hidden = true;
+    }
+  }
+
+  function boTepChat() {
+    luotTepChat++;              // huỷ hiệu lực lượt nén đang chạy dở (nếu có)
     tepDangChon = null;
-    $('#chat-tep').value = '';
-    $('#chat-file-dinhkem').hidden = true;
+    oTepChat.value = '';
+    veTepDangChon();
+    oLoiChat.textContent = '';
+  }
+
+  async function nhanTepChat(f) {
+    const luot = ++luotTepChat;
+    if (!f) return;
+    oLoiChat.textContent = '';
+    // Không phải ảnh → giữ nguyên đường cũ, backend tự chặn 4MB.
+    if (!/^image\//.test(f.type || '')) {
+      tepDangChon = f;
+      veTepDangChon();
+      return;
+    }
+    dangXuLyTepChat++;
+    oLoiChat.textContent = 'Đang xử lý ảnh…';
+    try {
+      const nen = await nenAnhChung(f, {
+        canhToiDa: 1600, chatLuong: 0.8, gioiHanByte: CHAT_ANH_TOI_DA
+      });
+      if (luot !== luotTepChat) return;
+      const goc = String(f.name || '').replace(/\.[^.]+$/, '').trim();
+      tepDangChon = dataUrlThanhTep(nen, (goc || 'anh-dan-' + Date.now()) + '.jpg');
+      veTepDangChon();
+      oLoiChat.textContent = '';
+    } catch (err) {
+      if (luot !== luotTepChat) return;
+      // Xoá tệp đang giữ TRƯỚC khi báo lỗi — không để tệp cũ lén gửi đi
+      // trong khi màn hình đang báo đỏ (cùng lỗi REV-0002 #2 bên Góp ý).
+      tepDangChon = null;
+      oTepChat.value = '';
+      veTepDangChon();
+      oLoiChat.textContent = err.message || 'Không đọc được ảnh này, thử ảnh khác nhé.';
+    } finally {
+      dangXuLyTepChat--;
+    }
+  }
+
+  $('#chat-nut-tep').addEventListener('click', () => oTepChat.click());
+  $('#chat-file-bo').addEventListener('click', boTepChat);
+
+  // Kéo–thả tệp vào bất kỳ đâu trong bong bóng chat + nối ô chọn tệp.
+  ganVungThaTep({ vungTha: popup, oChonFile: oTepChat, khiCoTep: nhanTepChat });
+
+  /* Ctrl+V — ưu tiên 20, CAO HƠN form Góp ý (10): bong bóng chat nổi chồng
+     lên mọi màn hình, đang mở chat mà dán thì rõ ràng là muốn gửi vào chat. */
+  dangKyNhanAnhDan({
+    vung: popup,
+    dangBat: () => !popup.hidden,
+    nhan: nhanTepChat,
+    uuTien: 20
   });
 
   // Gửi
@@ -2568,16 +2836,20 @@ async function khoiDongChat() {
     e.preventDefault();
     const oNoiDung = $('#chat-noidung');
     const noiDung = oNoiDung.value.trim();
+    // Ảnh nén xong ngay lúc dán/chọn; chỉ chặn trường hợp bấm Gửi ĐÚNG LÚC
+    // máy còn đang nén — tránh gửi đi mà mất ảnh.
+    if (dangXuLyTepChat > 0) {
+      oLoiChat.textContent = 'Đang xử lý ảnh, chờ một chút rồi bấm Gửi nhé.';
+      return;
+    }
     if (!noiDung && !tepDangChon) return;
-    $('#chat-loi').textContent = '';
+    oLoiChat.textContent = '';
     const nutGui = $('#chat-nut-gui');
     nutGui.disabled = true;
     try {
       const { id } = await API.chatGui(noiDung, tepDangChon, nguoiNhanHienTai?.id);
       oNoiDung.value = '';
-      $('#chat-tep').value = '';
-      tepDangChon = null;
-      $('#chat-file-dinhkem').hidden = true;
+      boTepChat();
       // Hiện luôn tin vừa gửi (khỏi đợi vòng hỏi lại tiếp theo)
       if (id > idCuoi) await hoiTinMoi();
       cuoiTrang();
@@ -2969,6 +3241,12 @@ async function khoiDongGopY() {
     .map(([ma, tt]) => `<option value="${ma}">${esc(tt.chu)}</option>`).join('');
 
   const nutMo = $('#gy-nut-mo');
+  /* CHỦ Ý: nút "✕ Đóng" chỉ THU form lại, GIỮ NGUYÊN bản nháp — cả chữ đang
+     gõ dở lẫn ảnh đã dán. Mở lại là còn y nguyên.
+     Chỉ nút "Hủy" mới xoá sạch (reset form + xoá ảnh).
+     Đây là phương án (a) của REV-0002 lỗi #3: bản build trước KHAI SAI rằng
+     "đóng form thì xoá ảnh". Hành vi thật là giữ nháp, và giữ nháp mới đúng
+     Rule 12 (Human Cost) — bấm nhầm ✕ mà mất cả đoạn vừa gõ là quá đắt. */
   function dongMoForm(hien) {
     $('#gy-form-body').hidden = !hien;
     nutMo.textContent = hien ? '✕ Đóng' : '+ Gửi góp ý';
@@ -2988,7 +3266,13 @@ async function khoiDongGopY() {
      đổ về CÙNG hàm `nhanAnh()` nên không đá nhau. */
   const GOPY_ANH_TOI_DA = 780 * 1024;   // backend chặn 800KB (GOPY_DINH_KEM_TOI_DA) — chừa dư an toàn
   let anhDinhKem = null;                // data URL đã nén, hoặc null
-  let dangXuLyAnh = false;
+  /* BỘ ĐẾM, không phải cờ boolean: `nhanAnh()` là hàm bất đồng bộ, dán ảnh A
+     rồi dán ngay ảnh B thì hai lượt chạy chồng nhau — lượt A xong trước sẽ
+     tắt cờ trong khi B còn đang nén, chốt chặn lúc bấm Gửi mất tác dụng.
+     `luotAnh` là số thứ tự lượt: kết quả của lượt cũ bị bỏ, ảnh cuối cùng
+     người dùng dán mới là ảnh được giữ. REV-0002 lỗi #5. */
+  let dangXuLyAnh = 0;
+  let luotAnh = 0;
 
   const vungDan = $('#gy-anh-dan'), oChonFile = $('#gy-anh');
   const khungXem = $('#gy-anh-xem'), hinhXem = $('#gy-anh-hinh');
@@ -3008,23 +3292,38 @@ async function khoiDongGopY() {
     baoAnh('');
   }
 
-  /* Nhận 1 File/Blob ảnh từ bất kỳ đường nào (dán, chọn file), nén cho lọt
-     giới hạn rồi hiện xem trước ngay. Không bao giờ ném lỗi ra ngoài — báo
-     tại chỗ bằng tiếng người. */
+  /* Báo lỗi ảnh: XOÁ ảnh đang giữ TRƯỚC rồi mới báo.
+     Thứ tự này bắt buộc — `xoaAnhDinhKem()` có `baoAnh('')` bên trong, gọi
+     ngược lại sẽ nuốt mất dòng báo lỗi.
+     Vì sao phải xoá: bản trước chỉ báo đỏ mà giữ nguyên ảnh cũ, nên dán ảnh A
+     thành công rồi dán tiếp ảnh B hỏng → màn hình báo "không phải ảnh" nhưng
+     bấm Gửi thì ảnh A VẪN ĐI KÈM. Thấy sao gửi vậy. REV-0002 lỗi #2. */
+  function loiAnh(chu) {
+    xoaAnhDinhKem();
+    baoAnh(chu, true);
+  }
+
+  /* Nhận 1 File/Blob ảnh từ bất kỳ đường nào (dán, kéo–thả, chọn tệp), nén
+     cho lọt giới hạn rồi hiện xem trước ngay. Không bao giờ ném lỗi ra
+     ngoài — báo tại chỗ bằng tiếng người. */
   async function nhanAnh(file) {
+    const luot = ++luotAnh;   // lượt mới huỷ hiệu lực mọi lượt đang chạy dở
     if (!file || !/^image\//.test(file.type || '')) {
-      baoAnh('Cái vừa dán/thả không phải ảnh. Chụp màn hình rồi dán lại nhé.', true);
+      loiAnh('Cái vừa dán/thả không phải ảnh. Chụp màn hình rồi dán lại nhé.');
       return;
     }
-    dangXuLyAnh = true;
+    dangXuLyAnh++;
     baoAnh('Đang xử lý ảnh…');
     try {
       const goc = file.size || 0;
-      const nen = await nenAnhVuaKhung(file, 1600, GOPY_ANH_TOI_DA);
+      const nen = await nenAnhChung(file, {
+        canhToiDa: 1600, chatLuong: 0.8, gioiHanByte: GOPY_ANH_TOI_DA
+      });
+      if (luot !== luotAnh) return;   // đã có ảnh mới hơn → bỏ kết quả này
       const co = coByteCuaDataUrl(nen);
       if (co > GOPY_ANH_TOI_DA) {
         // Rất hiếm (đã hạ chất lượng + thu nhỏ 6 vòng vẫn chưa lọt).
-        baoAnh('Ảnh này nặng bất thường, thử chụp lại phần màn hình nhỏ hơn nhé.', true);
+        loiAnh('Ảnh này nặng bất thường, thử chụp lại phần màn hình nhỏ hơn nhé.');
         return;
       }
       anhDinhKem = nen;
@@ -3035,75 +3334,41 @@ async function khoiDongGopY() {
       // thì thành tiếng ồn, người dùng thôi không đọc nữa.
       baoAnh(goc > GOPY_ANH_TOI_DA ? 'Ảnh hơi nặng nên đã tự nén lại, gửi bình thường.' : '');
     } catch (err) {
-      baoAnh(err.message || 'Không đọc được ảnh này, thử ảnh khác nhé.', true);
+      if (luot !== luotAnh) return;
+      loiAnh(err.message || 'Không đọc được ảnh này, thử ảnh khác nhé.');
     } finally {
-      dangXuLyAnh = false;
+      dangXuLyAnh--;
     }
   }
 
-  // Lấy file ảnh đầu tiên trong clipboard (Windows/macOS chụp màn hình đều
-  // để ảnh ở dạng file trong `items`).
-  function timAnhTrongClipboard(dl) {
-    if (!dl) return null;
-    for (const it of dl.items || []) {
-      if (it.kind === 'file' && /^image\//.test(it.type || '')) return it.getAsFile();
-    }
-    for (const f of dl.files || []) {
-      if (/^image\//.test(f.type || '')) return f;
-    }
-    return null;
-  }
-
-  /* Dán ở BẤT KỲ đâu trong form đang mở — giống Zalo, không bắt phải bấm
-     đúng một ô nhỏ trước. Chỉ cướp sự kiện khi clipboard thật sự có ảnh và
-     không có chữ (dán chữ vào textarea vẫn chạy như thường). */
-  document.addEventListener('paste', (e) => {
-    if ($('#v-gopy').hidden || $('#gy-form-body').hidden) return;
-    if ((e.clipboardData && e.clipboardData.getData('text/plain') || '').trim()) return;
-    const file = timAnhTrongClipboard(e.clipboardData);
-    if (!file) return;
-    e.preventDefault();
+  function nhayVungDan() {
     vungDan.classList.add('dang-dan');
     setTimeout(() => vungDan.classList.remove('dang-dan'), 400);
-    nhanAnh(file);
+  }
+
+  /* Kéo–thả + chọn tệp: dùng tiện ích chung `ganVungThaTep()` ở đầu file.
+     Bắt trên CẢ thân form đang mở, không riêng ô nhỏ — người dùng hay thả
+     trượt ra ngoài vài chục pixel. Lưu ý: chỉ chặn được trong phạm vi
+     `#gy-form-body`; thả ra vùng khác của trang thì trình duyệt vẫn tự mở
+     tệp đó (REV-0002 ghi nhận N3 — sửa lời khai cho đúng, chưa chặn ở cấp
+     `window` vì sẽ ảnh hưởng mọi màn hình khác). */
+  ganVungThaTep({
+    vungTha: $('#gy-form-body'),
+    oChonFile,
+    nutChon: $('#gy-anh-chon'),
+    vungBamCamUng: vungDan,
+    khiCoTep: nhanAnh
   });
 
-  /* Kéo–thả ảnh. Bắt trên CẢ form đang mở, không riêng ô nhỏ: người dùng
-     hay thả trượt ra ngoài vài chục pixel, mà thả trượt ra ngoài thì trình
-     duyệt tự mở ảnh đó và NUỐT mất cả form đang gõ dở (Rule 12 — Human Cost). */
-  const thanForm = $('#gy-form-body');
-  const coTepKeoVao = (e) => Array.from((e.dataTransfer && e.dataTransfer.types) || []).includes('Files');
-  thanForm.addEventListener('dragover', (e) => {
-    if (!coTepKeoVao(e)) return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'copy';
-    thanForm.classList.add('dang-keo');
-  });
-  thanForm.addEventListener('dragleave', (e) => {
-    if (e.target === thanForm) thanForm.classList.remove('dang-keo');
-  });
-  thanForm.addEventListener('drop', (e) => {
-    if (!coTepKeoVao(e)) return;
-    e.preventDefault();
-    thanForm.classList.remove('dang-keo');
-    const f = Array.from(e.dataTransfer.files || [])[0];
-    if (f) nhanAnh(f);
-  });
-
-  // Điện thoại không có Ctrl+V: chạm vào vùng này = mở máy ảnh/thư viện ảnh.
-  // Nút "Chọn tệp ảnh" nằm trong vùng, click của nó nổi bọt lên đây nên chỉ
-  // cần MỘT handler (bấm 2 lần mở 2 hộp thoại là lỗi hay gặp khi tách ra).
-  // Phải loại trừ chính ô file: `oChonFile.click()` cũng phát ra click nổi
-  // bọt lên đây, không chặn thì gọi lại chính nó → lặp vô tận.
-  vungDan.addEventListener('click', (e) => {
-    if (e.target === oChonFile) return;
-    oChonFile.click();
-  });
-
-  // Đường chọn tệp cũ — vẫn còn nguyên, chỉ nối vào cùng luồng nén/xem trước.
-  oChonFile.addEventListener('change', () => {
-    const f = oChonFile.files[0];
-    if (f) nhanAnh(f); else xoaAnhDinhKem();
+  /* Ctrl+V: đăng ký với trọng tài dùng chung thay vì tự gắn listener trên
+     `document` — bản trước gác mỗi `#v-gopy` nên cướp mất Ctrl+V của bong
+     bóng Chat nội bộ (REV-0002 lỗi #4). Ưu tiên 10, thấp hơn Chat (20) vì
+     Chat nổi CHỒNG LÊN màn hình Góp ý. */
+  dangKyNhanAnhDan({
+    vung: $('#gy-form-body'),
+    dangBat: () => !$('#v-gopy').hidden && !$('#gy-form-body').hidden,
+    nhan: (f) => { nhayVungDan(); nhanAnh(f); },
+    uuTien: 10
   });
 
   $('#gy-anh-xoa').addEventListener('click', xoaAnhDinhKem);
@@ -3143,7 +3408,7 @@ async function khoiDongGopY() {
     const nut = $('#gy-nut-gui');
     // Ảnh đã được nén xong ngay lúc dán/chọn, chỉ chặn trường hợp bấm Gửi
     // đúng lúc máy còn đang nén — tránh gửi đi mà mất ảnh.
-    if (dangXuLyAnh) {
+    if (dangXuLyAnh > 0) {
       $('#gy-loi').textContent = 'Đang xử lý ảnh, chờ một chút rồi bấm Gửi nhé.';
       return;
     }
@@ -5458,30 +5723,12 @@ async function khoiDongKho() {
   });
 }
 
-/* Nén ảnh minh chứng khiếu nại — giữ nguyên tỉ lệ (khác nenAnhVuong dùng cho
-   avatar, cắt vuông), giới hạn cạnh dài nhất 1280px, JPEG chất lượng 0.72:
-   đủ rõ để làm bằng chứng, đủ nhẹ để nằm gọn trong giới hạn 2MB/giá trị D1. */
-function nenAnh(file) {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      const MAX = 1280;
-      let w = img.width, h = img.height;
-      if (w > MAX || h > MAX) {
-        const ti = w > h ? MAX / w : MAX / h;
-        w = Math.round(w * ti); h = Math.round(h * ti);
-      }
-      const canvas = document.createElement('canvas');
-      canvas.width = w; canvas.height = h;
-      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-      resolve(canvas.toDataURL('image/jpeg', 0.72));
-    };
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Không đọc được ảnh này')); };
-    img.src = url;
-  });
-}
+/* Ảnh minh chứng khiếu nại: cạnh dài nhất 1280px, JPEG chất lượng 0.72 — đủ
+   rõ để làm bằng chứng, đủ nhẹ để nằm gọn trong giới hạn 2MB/giá trị của D1.
+   CTL-0011: hàm `nenAnh()` riêng đã bỏ, dùng chung `nenAnhChung()` ở đầu file
+   với ĐÚNG tham số cũ (không thêm vòng tự lọt giới hạn — giữ nguyên hành vi
+   màn hình Khiếu nại trong đợt này). */
+const NEN_ANH_KHIEU_NAI = { canhToiDa: 1280, chatLuong: 0.72 };
 
 /* ==========================================================================
    ĐƠN HOÀN — Shopee
@@ -5662,7 +5909,7 @@ async function khoiDongDonHoan() {
   $('#knAnh').addEventListener('change', async () => {
     const files = [...$('#knAnh').files].slice(0, Math.max(0, 6 - anhDangChon.length));
     for (const f of files) {
-      try { anhDangChon.push({ base64: await nenAnh(f) }); }
+      try { anhDangChon.push({ base64: await nenAnhChung(f, NEN_ANH_KHIEU_NAI) }); }
       catch { alert(`Không đọc được ảnh "${f.name}", thử ảnh khác nhé.`); }
     }
     veAnhLuoi();

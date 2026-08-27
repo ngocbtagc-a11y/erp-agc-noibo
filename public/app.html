@@ -563,7 +563,11 @@
         <div class="chat-khung" id="chat-khung">
           <div class="empty" id="chat-trong" hidden>Chưa có tin nhắn nào — gõ dòng đầu tiên nhé.</div>
         </div>
+        <!-- Xem trước tệp sắp gửi. Ảnh thì hiện luôn hình thu nhỏ — dán
+             Ctrl+V xong phải THẤY mình vừa dán cái gì rồi mới bấm Gửi
+             (CTL-0011); tệp khác (Excel/PDF…) vẫn chỉ hiện tên như trước. -->
         <div class="chat-file-dinhkem" id="chat-file-dinhkem" hidden>
+          <img class="chat-file-hinh" id="chat-file-hinh" alt="Ảnh sắp gửi" hidden>
           <span id="chat-file-ten"></span>
           <button type="button" id="chat-file-bo" title="Bỏ file này">✕</button>
         </div>

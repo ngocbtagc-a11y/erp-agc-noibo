@@ -531,10 +531,15 @@ img.av { object-fit: cover; display: block; cursor: default; }
    dùng đúng class .btn-phu / .btn-nho chung, không đẻ thêm kiểu nút riêng. */
 .gy-anh-dan {
   display: flex; flex-direction: column; align-items: center; gap: 5px;
-  padding: 18px 14px; text-align: center; cursor: pointer;
+  padding: 18px 14px; text-align: center;
   border: 1.5px dashed var(--sage-pale); border-radius: var(--r-md);
   background: var(--sage-wash); color: var(--ink-soft);
   transition: border-color .14s, background .14s;
+  /* Trên MÁY TÍNH vùng này KHÔNG phải nút: bấm vào dòng chữ "Ctrl+V" mà bị
+     đẩy vào hộp thoại duyệt tệp của Windows là đúng thứ Sếp Ngọc muốn tránh
+     (REV-0002 lỗi #8). Nút "Chọn tệp ảnh" bên trong lo việc đó. Thiết bị
+     cảm ứng — không có Ctrl+V — mới bật lại con trỏ "bấm được" ở dưới. */
+  cursor: default;
 }
 .gy-anh-dan:hover { border-color: var(--sage-dark); background: var(--card); }
 /* Đang dán / đang kéo tệp vào — nổi rõ để người dùng biết thả ở đây là trúng */
@@ -558,6 +563,8 @@ img.av { object-fit: cover; display: block; cursor: default; }
 @media (hover: none) and (pointer: coarse) {
   .gy-anh-may { display: none; }
   .gy-anh-dienthoai { display: block; }
+  /* Cảm ứng: không có Ctrl+V nên cả vùng mới là nút mở thư viện ảnh */
+  .gy-anh-dan { cursor: pointer; }
 }
 /* Con trỏ khi kéo tệp qua cả form đang mở — thả đâu trong form cũng ăn */
 #gy-form-body.dang-keo .gy-anh-dan { border-color: var(--sage-dark); background: var(--card); }
@@ -582,7 +589,10 @@ img.av { object-fit: cover; display: block; cursor: default; }
 .gy-anh-tt { margin-top: 8px; font-size: 12.5px; color: var(--ink-soft); }
 .gy-anh-tt.loi { color: var(--danger); }
 
-/* Điện thoại: không có Ctrl+V, chạm vào vùng này để mở thư viện ảnh */
+/* Màn hình hẹp: thu gọn khoảng đệm và chiều cao ảnh xem trước cho vừa mắt.
+   (Việc "chạm để mở thư viện ảnh" nằm ở khối @media (hover:none) phía trên —
+   theo LOẠI thiết bị, không theo bề rộng. REV-0002 ghi nhận N2: comment cũ
+   ở đây lạc chỗ, gây hiểu nhầm cho người đọc code sau.) */
 @media (max-width: 640px) {
   .gy-anh-dan { padding: 14px 12px; }
   .gy-anh-xem img { max-height: 200px; }
@@ -1441,6 +1451,23 @@ tr.canh-bao:hover > td { background: #fbdbd6; }
    hoặc huỷ file xong khung đính kèm vẫn nằm lại, tưởng file còn treo nên gửi
    nhầm lần thứ hai (ADR-0008 Đề xuất B). */
 .chat-file-dinhkem[hidden] { display: none; }
+/* Ảnh xem trước trước khi gửi (CTL-0011). Cố ý KHÔNG đặt `display` ở đây —
+   thẻ <img> mang thuộc tính [hidden] khi chưa có ảnh, đặt display sẽ đè mất
+   luật mặc định của trình duyệt và ảnh cũ nằm lì lại — đúng cái bẫy mà dòng
+   `.chat-file-dinhkem[hidden]` ngay trên vừa phải vá. */
+.chat-file-hinh {
+  width: 40px; height: 40px;
+  object-fit: cover; border-radius: var(--r-sm);
+  background: var(--surface-2); flex-shrink: 0;
+}
+.chat-file-dinhkem #chat-file-ten {
+  flex: 1; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* Đang kéo tệp vào bong bóng chat — thả đâu trong popup cũng ăn */
+.cnb-popup.dang-keo {
+  outline: 2px dashed var(--sage); outline-offset: -4px;
+}
 .chat-file-dinhkem button {
   background: none; border: none; cursor: pointer;
   color: var(--text-mute); font-size: 14px; line-height: 1;
