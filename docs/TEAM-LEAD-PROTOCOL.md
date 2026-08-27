@@ -85,6 +85,37 @@ Token là tài nguyên có hạn của gói đã trả. Xài phí = Sếp mở m
 Runner tự động phải **đo và ghi lại token mỗi lượt chạy**, để Gạo báo Sếp con số
 thật thay vì ước lượng.
 
+### Chạy song song tốn token TUYẾN TÍNH — bài học 27/08
+
+Gạo mở **4 Agent cùng lúc**, mỗi đứa ngốn 150–250 nghìn token → **cháy hạn mức
+phiên**, cả 4 chết giữa chừng, mất sạch việc đang làm dở.
+
+**Song song KHÔNG miễn phí.** 4 Agent = 4 lần tiền, dù chỉ 1 việc gấp.
+
+Luật:
+
+- **Mặc định chạy 1 Agent.** Chỉ mở thêm khi việc thứ hai **thật sự gấp** và
+  **không đụng file của việc thứ nhất**.
+- **Tối đa 2 Agent cùng lúc.** Vượt là phải có lý do ghi ra giấy.
+- **Việc trên đường tới phát hành đi trước.** Việc khảo sát, phân tích, dọn nợ
+  kỹ thuật xếp sau — không mở song song chỉ để "cho nó chạy luôn".
+- Agent chết giữa chừng là **mất toàn bộ token đã tiêu** mà không được gì.
+  Chạy ít mà xong còn hơn chạy nhiều rồi chết cả loạt.
+
+### Bắt Agent làm việc tiết kiệm — ghi vào mọi câu lệnh giao việc
+
+Không chỉ câu lệnh của Gạo phải ngắn — **cách Agent làm việc cũng phải tiết kiệm**:
+
+1. **Đọc đúng vùng, không đọc cả file.** Biết dòng nào thì đọc dòng đó.
+2. **Không `grep` cả repo** khi đã biết file cần tìm.
+3. **Phép đo vừa đủ chứng minh, không dựng bàn thử hoành tráng.** Một ca đối
+   chứng đúng chỗ có giá trị hơn 30 ca dàn trải.
+4. **Báo cáo tối đa ~150 dòng.** Chi tiết dài viết vào file, phần trả về chỉ
+   nêu kết luận và số đo then chốt. Bản review 500 dòng là lãng phí.
+5. **Không chép lại nội dung đã có trong repo** — trỏ đường dẫn.
+6. **Không soi lại thứ vòng trước đã xác nhận sạch.** Nêu rõ trong câu lệnh
+   những mục được phép bỏ qua.
+
 ### Tốt hơn sau mỗi lần làm việc
 
 [BAI-HOC.md](BAI-HOC.md) là bộ nhớ dài hạn của nhóm.
@@ -104,6 +135,45 @@ lên Sếp hơn vòng trước. Không cải thiện được thì phải nói r
 *"Thực sự quá quan trọng thì tôi duyệt"* — nâng ngưỡng escalate. Chỉ đưa lên:
 tiền · dữ liệu thật · phân quyền · tích hợp ngoài · nhân sự/pháp lý · và việc
 mà **sai thì không lùi lại được**. Còn lại tự quyết, ghi vào `docs/decisions/`.
+
+## 0c. TƯ VẤN LUẬT — bắt buộc, và phải là luật MỚI NHẤT
+
+> Sếp Ngọc 2026-08-27: *"chạy phần mềm nhớ tư vấn cả luật nhé Gạo, luật thì
+> phải là luật mới nhất."*
+
+Phần mềm quản trị doanh nghiệp **không chỉ là kỹ thuật**. Thiết kế sai một
+trường dữ liệu có thể khiến công ty vi phạm mà không ai biết, và chỉ lòi ra
+khi có thanh tra hoặc tranh chấp.
+
+### Khi nào bắt buộc có mục "Chiếu theo luật"
+
+Mọi tính năng chạm tới: **nhân sự · hợp đồng lao động · lương · BHXH · thuế ·
+giấy phép kinh doanh · an toàn thực phẩm · hoá đơn chứng từ · dữ liệu cá nhân ·
+hợp đồng nhà cung cấp**.
+
+Mục đó phải có: **số hiệu văn bản · ngày hiệu lực · điều khoản liên quan ·
+rủi ro nếu làm sai (kèm mức phạt nếu tra được)**.
+
+### Ba luật cứng
+
+1. **TRA, ĐỪNG NHỚ.** Kiến thức nền của Agent có thể đã cũ hơn hiện tại.
+   Dùng WebSearch/WebFetch, **dẫn nguồn**. Viết luật theo trí nhớ là vi phạm
+   BH-03.
+2. **Kiểm bản mới nhất còn hiệu lực.** Luật Việt Nam sửa đổi liên tục —
+   phải kiểm cả văn bản ban hành **sau** thời điểm kiến thức nền.
+3. **Bản chất thắng hình thức.** Đổi tên một loại hợp đồng **không đổi được
+   bản chất pháp lý** của quan hệ đó. Thanh tra và toà án nhìn quan hệ thực tế,
+   không nhìn nhãn. Thiết kế phần mềm phải phản ánh bản chất, không tiếp tay
+   cho việc dán nhãn sai.
+
+### Ranh giới
+
+Gạo và Hồ Ly **nêu rủi ro và tiêu chí**, không thay Sếp quyết, và **không phải
+là luật sư**. Việc phân loại từng trường hợp cụ thể là quyết định của ERP Owner.
+Rủi ro nghiêm trọng → khuyến nghị Sếp hỏi luật sư hoặc dùng skill `agc-phapche`.
+
+Điều tuyệt đối không làm: **im lặng cho qua** khi thấy rủi ro pháp lý, chỉ vì
+Sếp đã ra chỉ đạo. Nói một lần cho rõ, rồi làm theo quyết định của Sếp.
 
 ## 1. Mỗi task phải trả lời được 6 câu
 

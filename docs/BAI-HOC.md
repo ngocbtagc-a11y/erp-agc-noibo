@@ -115,6 +115,40 @@ BH-03 đòi.** Và đừng dừng ở "cùng khuôn = cùng lỗi": lỗi tràn 
 thì ghi vào báo cáo là **đã kiểm và an toàn**, đừng im lặng bỏ qua — im lặng thì
 lượt review sau lại phải đi tìm lại từ đầu.
 
+**BH-32 · Trước khi thêm một cột, `grep` tên nó trong `migrations/` — audit đọc
+`schema.sql` là đọc thiếu.**
+CTL-0015 audit kỹ và kết luận "chưa có loại hình hợp đồng". Nhưng
+`nhan_su.loai_lao_dong` (`toan_thoi_gian|ban_thoi_gian|thoi_vu`) **đã có** từ
+`them-dangky-ca.sql:19` và `src/ca.js` đang dùng thật — nó không nằm trong
+`schema.sql` vì được thêm bằng `ALTER TABLE` ở một migration sau. Suýt thiết kế một
+danh sách chọn thứ hai chồng lên nó, mà chồng chỗ này là **trộn hai trục pháp lý khác
+nhau** (hình thức làm việc vs loại hợp đồng) — đúng thứ gây phân loại sai BHXH.
+Cùng lần đó, `grep` ngược lại tìm ra ba cột **ghi-một-chiều**: `so_cccd`, `so_bhxh`,
+`anh_cccd` được `INSERT` ở `src/nhansu.js:130` nhưng **không có một `SELECT` nào** đọc
+ra, và `anh_cccd` trỏ vào R2 đã chốt không bật.
+→ **Sự thật về schema nằm ở `schema.sql` HỢP với mọi `ALTER TABLE` trong
+`migrations/`, không nằm ở riêng cái nào.** Và kiểm một cột thì kiểm **cả hai chiều**:
+có ai ghi vào không, **có ai đọc ra không**. Cột chỉ có chiều ghi là tính năng chết mà
+trông như đang chạy.
+
+**BH-33 · Tính năng chạm luật thì phải TRA VĂN BẢN, và tra cả cái ERP đang tự ghi lại.**
+Sếp yêu cầu đổi "bán thời gian" thành "Khoán". Nếu làm đúng chữ — đổi nhãn — thì hỏng:
+khoán việc là **hợp đồng dân sự**, bán thời gian là **hợp đồng lao động có đóng BHXH**,
+hai trục khác nhau chứ không phải hai tên của một thứ. Tra ra BLLĐ 2019 Đ.13 k.1 và
+Luật BHXH 2024 (41/2024/QH15, hiệu lực **01/07/2025**) dùng **cùng một câu**: thoả
+thuận *mang tên gọi khác* mà có **trả công + quản lý, điều hành, giám sát** thì vẫn là
+quan hệ lao động, vẫn BHXH bắt buộc — hậu quả 0,03%/ngày (NĐ 274/2025), quá 60 ngày
+thành trốn đóng, phạt 2–25 triệu (NĐ 12/2022). Nặng hơn nữa: **chính ERP này** đang ghi
+`lich_lam_viec` + xếp ca cho 17 parttime kho — tức là hệ thống **tự sản xuất bằng
+chứng** ngược lại tờ hợp đồng, và bảng xếp ca là thứ thanh tra đọc đầu tiên.
+→ **Mọi tính năng chạm nhân sự · hợp đồng · lương · BHXH · thuế · giấy phép phải có mục
+"Chiếu theo luật": số hiệu văn bản + ngày hiệu lực + rủi ro nếu sai — tra bằng
+WebSearch, không viết theo trí nhớ (BH-03 áp cho luật).** Và hỏi thêm một câu mà không
+văn bản nào nhắc: *"hệ thống của mình đang lưu lại bằng chứng về điều gì?"*
+Bù lại, chốt chặn tốt nhất thường **đã có sẵn**: `src/ca.js` vốn lọc trắng
+`IN ('ban_thoi_gian','thoi_vu')`, nên chỉ cần đặt người khoán sang giá trị mới là họ
+tự động không xếp ca được — **0 dòng code**. Tìm chốt sẵn có trước khi dựng chốt mới.
+
 **BH-04 · Đừng đoán nguyên nhân rồi giao Khỉ Đột sửa theo phỏng đoán.**
 Gạo nêu 4 giả thuyết cho lỗi cửa sổ không đóng. **Cả 4 đều sai.** Nguyên nhân
 thật là một dòng CSS đè mất luật mặc định của trình duyệt.
@@ -271,3 +305,150 @@ nguy hiểm (hết token, risk HIGH, khung giờ, cổng diff, prompt phình), *
 Actions, 0 token Claude**. Chính bài kiểm đó tìm ra BH-23.
 → **Tách phần logic thuần khỏi phần gọi mạng, rồi kiểm phần thuần trên máy.**
 Để dành lượt chạy tốn tiền cho đúng thứ chỉ chạy thật mới biết.
+
+*(Đính chính REV-0007: "100 phép kiểm" ở trên là lời khai, không phải số đo. Chạy
+đúng commit `baa1787` ra **98 đạt · 2 hỏng**, tất định trên cả Windows lẫn Linux.)*
+
+**BH-28 · Bài kiểm tự viết phải bị đo bằng MUTANT, không bằng số câu.**
+Nghiệm thu CTL-0002a, Hồ Ly chép mã nguồn ra **28 bản, mỗi bản cố ý gỡ đúng một chốt
+chặn**, rồi chạy chính `tu-kiem.mjs` của Khỉ Đột lên từng bản. **15/28 mutant lọt** —
+trong đó có: thêm nguyên văn `git push origin HEAD:main` vào workflow, đổi
+`permissions` thành `write-all`, xoá `timeout-minutes`, bỏ `--draft`, gỡ cổng chặn
+risk HIGH, gỡ `AND g.risk = ?` khỏi truy vấn chọn việc, và `KILL_SWITCH` không chặn
+gì nữa. Bài kiểm báo y hệt bản gốc, không một dòng đỏ. Nó kiểm rất tốt **tầng hàm
+thuần** (phân loại lỗi, glob, prompt, khung giờ) và **mù gần như hoàn toàn tầng chốt
+chặn + tầng nối dây** — đúng chỗ chứa cả 4 lỗi nặng của bản đó.
+→ **"Bài kiểm đạt" không phải bằng chứng an toàn. Bằng chứng là: gỡ chốt ra thì bài
+kiểm có đỏ không.** Trước khi dùng một bộ tự kiểm làm cổng phát hành, dựng mutant cho
+**từng** tính chất an toàn đã hứa. Tính chất nào không có mutant bắt được thì tính
+chất đó **chưa được kiểm**, dù có bao nhiêu dấu ✅ bên cạnh. Đây là BH-16 áp cho
+chính bài kiểm, không phải cho code.
+
+**BH-29 · Phép kiểm khớp phải CHÚ THÍCH thì nó đo chú thích, không đo code.**
+Ba dòng của `tu-kiem.mjs` **luôn đạt bất kể code đúng sai**: `timeout-minutes: 30` và
+`--draft` đều có mặt trong **chú thích đầu file YAML**, nên xoá hẳn chúng khỏi phần
+thi hành vẫn ✅; còn dòng "không có quyền merge" cắt chuỗi giữa `permissions:` và
+`concurrency:` rồi tìm chữ `merge` — xoá hẳn khối `permissions` thì chuỗi rỗng, vẫn
+✅, và GitHub vốn **không có** quyền nào tên `merge` nên nó **về mặt cấu trúc không
+thể hỏng**. Cùng bản này: bộ bỏ chú thích SQL `.replace(/--.*$/, '')` **không bỏ được
+gì** trên file CRLF, vì `\r` là ký tự kết thúc dòng trong JS nên `.` không khớp nó và
+`$` (thiếu cờ `m`) không khớp trước nó — gây 2 báo động giả, và làm phép kiểm "không
+có DROP" soi nhầm cả chú thích.
+→ **Quét mã nguồn để nghiệm thu thì phải BỎ CHÚ THÍCH TRƯỚC, và phải tự chứng minh
+phép kiểm CÓ THỂ hỏng** — làm sai đúng thứ nó canh, thấy nó đỏ mới tính. Và **chuẩn
+hoá xuống dòng bằng `.gitattributes` (`* text=auto eol=lf`)**: CRLF lọt vào blob là
+mầm của cả hai lỗi phép-đo ở bản này.
+
+**BH-30 · Chốt chặn phải ăn ĐẦU RA THẬT của công cụ, không ăn mảng do bài kiểm bịa.**
+Cổng chặn file cấm của CTL-0002a được kiểm bằng mảng `{duong_dan, trang_thai:'M'}` do
+chính bài kiểm dựng — nên nó **chưa bao giờ** thấy dạng dữ liệu thật thứ hai của
+`git diff --name-status`: dòng **đổi tên** có **ba cột** (`R100  cũ  mới`). Code lấy
+`phan[phan.length - 1]` = chỉ giữ **đường dẫn mới**, vứt sạch đường dẫn cũ; và `R100`
+không bắt đầu bằng `D` nên phép chặn xoá file cũng không bắt. Đo trên git thật: đổi
+tên `src/quyen.js` hoặc `wrangler.toml` → **lọt cổng**, mà cổng vẫn in *"✅ 1 file đã
+đổi, tất cả trong phạm vi"*. Đổi tên `wrangler.toml` là deploy chết im lặng.
+**Đúng cùng loại với BH-23**, sống thêm một vòng chỉ vì bàn thử dùng dữ liệu giả.
+→ **Kiểm một cổng thì dựng repo/DB/file THẬT rồi cho nó ăn đầu ra thật của công cụ.**
+Và với mọi công cụ, hỏi trước: *"lệnh này còn trả về dạng dòng nào nữa mà mình chưa
+thấy?"* — `git` còn `R` (đổi tên), `C` (sao chép), và đường dẫn có dấu bị bọc ngoặc kép.
+
+**BH-31 · `actions/checkout` để mặc định là ĐỂ SẴN CHÌA KHOÁ `main` ngay trong thư
+mục Agent đang làm việc.**
+CTL-0002a khai *"AI không bao giờ tự merge vào main"*, và đúng là không có dòng code
+nào merge. Nhưng `actions/checkout@v4` mặc định `persist-credentials: true` — nó **ghi
+thông tin đăng nhập của job vào `.git/config`** ngay trong thư mục làm việc, mà job có
+`contents: write`, tức **đủ quyền push thẳng lên `main`**, và `main` nối thẳng
+`deploy.yml` ra production. Cổng diff chỉ soi *nội dung diff*, không soi Agent đã chạy
+lệnh gì. Thứ duy nhất thật sự chặn là **branch protection** — một nút bấm trên GitHub,
+không nằm trong repo, không kiểm được bằng code.
+→ **Mọi workflow thả Agent vào cây làm việc phải đặt `persist-credentials: false`**,
+rồi cấp token riêng cho đúng bước cần đẩy. Rộng hơn: **một tính chất an toàn chỉ được
+coi là "đã chặn" khi chỉ ra được DÒNG CODE hoặc CẤU HÌNH ĐÃ BẬT nào chặn nó.**
+*"Không có dòng nào làm việc đó"* là mô tả hiện trạng, không phải chốt chặn — hiện
+trạng đổi sau một lần sửa, chốt chặn thì không.
+
+**BH-34 · Thêm một giá trị vào cột thì `grep` TÊN CỘT, đừng `grep` tên giá trị — và
+chốt chặn mới chỉ chặn dòng SẮP TẠO, không dọn dòng ĐÃ CÓ.**
+Hai nửa của cùng một lần trượt tay, đều lộ ra ở SPEC-0007 Đợt 1 (REV-0009).
+*Nửa một (Khỉ Đột tự bắt được):* `src/index.js:572` sinh mã nhân sự bằng
+`sinhMa(env, 'nhan_su_' + loai_lao_dong)` — khoá tra bảng được **ghép lúc chạy**, nên
+`grep 'khoan_viec'` **không bao giờ** tìm ra chỗ đó; quên khai `nhan_su_khoan_viec`
+trong `CAU_HINH_MA` là **mọi lần thêm người khoán việc đều ném lỗi**. → Thêm giá trị
+vào một cột thì grep **tên cột**, rồi soi riêng những chỗ tên cột bị **nối chuỗi**
+thành khoá tra bảng khác. Cách quét: liệt kê file bằng `git ls-tree` rồi lọc
+`\('[a-z_]+' *\+` và `` `[a-z_]+_${ `` — toàn repo chỉ có đúng 1 chỗ, tìm hết trong
+một lượt.
+*Nửa hai (không ai bắt, phải đo mới thấy):* giá trị mới `khoan_viec` được dùng làm
+**chốt chặn** — `ca.js` chỉ cho `ban_thoi_gian|thoi_vu` đăng ký ca, nên "0 dòng code
+thêm" mà người khoán tự động không bị xếp ca. Đúng, nhưng **chỉ đúng với dòng sắp
+tạo**. Người đã có `dang_ky_ca` `cho_duyet` và `lich_lam_viec` `da_xep` rồi mới chuyển
+loại thì những dòng cũ **vẫn nằm nguyên, mà hàng để vẽ chúng thì đã bị lọc mất** — đăng
+ký kẹt vĩnh viễn, ca vẫn chiếm chỗ, và `chotLich` vẫn khoá lịch đó vào bản chính thức
+(đúng thứ BH-33 cảnh báo: ERP tự sản xuất bằng chứng ngược tờ hợp đồng).
+→ **Mọi chốt chặn dựa trên một giá trị trong hồ sơ đều phải trả lời: "người ĐANG ở
+trạng thái cũ, có dữ liệu cũ, thì dữ liệu đó đi đâu?"** Chặn ghi mới là nửa việc; nửa
+còn lại là dọn hoặc **cho người ta THẤY** phần đã có. Và câu hỏi đó chỉ lộ ra khi
+**dựng dữ liệu cũ rồi chạy thật câu truy vấn** — đọc code thì nó vô hình, vì phần thiếu
+không nằm ở dòng nào cả.
+
+
+**BH-35 · "Cột đã có sẵn" không có nghĩa là "dữ liệu đã có sẵn", và càng
+không có nghĩa là "người dùng nhập được".**
+Audit CTL-0015 chốt *"`ngay_sinh` ĐÃ CÓ SẴN → chỉ cần cron đọc, đây là việc rẻ
+nhất"*. Đúng là cột có thật. Nhưng đo trên D1 local thì **0 người đang làm có
+`ngay_sinh`**, và quét repo thì cột đó chỉ được ghi ở **một** chỗ — luồng nhận
+hồ sơ mới. 24 người đang ở trong hệ thống thì không có đường nào nhập. Phát
+hành như vậy thì cron chạy đủ, log sạch, không một dòng lỗi, và **im lặng mãi
+mãi**. BH-32 đã dạy phải kiểm **cả hai chiều** của một cột; bài này thêm chiều
+thứ ba: → **Trước khi xây tính năng lên một cột có sẵn, hỏi ba câu chứ không
+phải một: ① cột có tồn tại không · ② có ai ĐỌC ra không · ③ hôm nay có BAO
+NHIÊU DÒNG có giá trị thật, và người dùng nhập giá trị đó Ở MÀN HÌNH NÀO?**
+Câu ③ chỉ trả lời được bằng cách `COUNT(*)` trên DB thật — đọc schema không bao
+giờ thấy.
+
+**BH-36 · Xây màn nhập liệu thì phải kiểm NGƯỜI SẼ NHẬP có mở được màn đó không.**
+Bộ năng lực suýt chỉ có form chấm nằm trong hộp Hồ sơ nhân sự — hộp đó gác sau
+`them_nhan_su`. Nhưng người chấm cho 29 bạn kho là **anh Duy, vai trò
+`quan_ly_kho`, không có `them_nhan_su`**: đúng người duy nhất cần dùng lại là
+người duy nhất không vào được. Lỗi này đọc code không thấy, vì code chạy đúng
+100% — nó chỉ chạy đúng cho một người không có việc gì để làm ở đó. → **Sau khi
+đặt một màn nhập vào sau một cửa quyền, tra ngược `QUYEN_THEO_VAI_TRO` xem
+NGƯỜI THẬT sẽ nhập mang vai trò gì, và vai trò đó có qua cửa không.** Human
+Cost (Rule 12) hỏi "tốn mấy phút"; câu này hỏi trước đó một bước — *"người ấy
+có bấm vào được không"*.
+
+**BH-37 · Đồng hồ giả phải đi qua THAM SỐ, không đi qua ghi đè `Date.now`.**
+Bàn thử Đợt 2 lần đầu ghi đè `Date.now` để giả ngày. Nó **không khống chế được
+gì**: `new Date()` đọc thẳng đồng hồ máy, không gọi `Date.now`. Thêm nữa hàm
+khôi phục chạy **trước** khi promise xong. Kết quả: 6 phép kiểm về Chủ nhật /
+ngoài giờ / bản tin tháng đều **báo ✅ giả**. Suýt kết luận "code đúng" trong
+khi bàn thử chưa bao giờ chạy đúng ngày mình nghĩ. Cùng họ BH-17. → **Với mọi
+logic phụ thuộc thời gian, để lộ một tham số `luc = new Date()` ở cửa vào và
+cho bàn thử truyền mốc giả vào đó.** Một dòng mã sản phẩm, đổi lại là bàn thử
+chạy được mọi ngày trong năm. Và khi một phép kiểm thời gian *"tự nhiên đạt"*,
+kiểm ngay xem đồng hồ giả có thật sự tác dụng không — in `duocGuiNhac(vn).ly_do`
+ra trước khi tin.
+
+**BH-38 · Ca "không có kết quả" và ca "chưa có dữ liệu" phải trả về HAI câu
+khác nhau.** Màn *"ai thay được người này"* nếu trả một danh sách rỗng thì
+người xếp ca đọc ra *"không ai thay được"* → điều động gấp, gọi người từ nhà.
+Nhưng sự thật có thể là *"người này chưa được chấm năng lực nào"* → việc phải
+làm là **chấm**, không phải điều động. Cùng một mảng rỗng, hai hành động ngược
+nhau, và hệ thống không nói ra thì người dùng đoán — thường đoán sai. Áp cùng
+chỗ khác: *"chưa có hợp đồng trong ERP"* ≠ *"không có hợp đồng"*; *"chưa nạp
+migration"* ≠ *"không có dữ liệu"*. → **Mỗi màn tra cứu phải phân biệt được ba
+trạng thái: có kết quả · không có kết quả · chưa có dữ liệu để mà tra** — và
+nói thành ba câu riêng. Bàn thử phải có ca cho **cả ba**, không chỉ ca có kết quả.
+
+**BH-39 · Đưa một màn ra khỏi cửa quyền thì phải đưa cả ĐƯỜNG DỮ LIỆU của nó ra theo.**
+Đây là phần tiếp của BH-36, và là lỗi CHẶN PHÁT HÀNH của REV-0010. Màn "Chấm năng
+lực" đã được dời ra ngoài khối `them_nhan_su` cho đúng anh Duy — nhưng ô chọn người
+vẫn ăn `DS_NHAN_SU_DOC`, nạp từ `GET /api/nhan-su`, mà câu SQL nhánh "không xem
+lương" **không chọn cột `dang_lam` ra**. Dòng lọc `.filter(n => n.dang_lam)` bên
+dưới thế là quét sạch mọi người. Kết quả: đúng người duy nhất cần dùng mở được màn,
+và thấy một ô rỗng. 136 phép tự kiểm ngoại tuyến đều xanh, vì bàn thử tự dựng dữ
+liệu giả nên **không bao giờ đọc hình dạng thật của phản hồi API**. → **Khi một màn
+phục vụ hai vai trò đi hai đường dữ liệu khác nhau (`A ? DS_X : DS_Y`), phải so
+từng khoá của hai đường đó — chứ không chỉ kiểm màn có hiện ra không.** Và cách duy
+nhất bắt được: **đăng nhập bằng đúng vai trò yếu nhất rồi bấm thử**. Đọc code không
+thấy, vì code chạy đúng 100% — nó chỉ chạy đúng cho vai trò không cần đến nó.

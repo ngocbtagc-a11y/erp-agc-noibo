@@ -112,6 +112,38 @@ Trả lời "phải F5" là **chưa xong**, kể cả khi mọi thứ khác đã
 5. Người dùng phải **thấy dữ liệu vừa đổi**, không được lặng lẽ thay số dưới
    tay họ khi đang thao tác dở.
 
+**Information Design — cột nào được lên màn** (bổ sung 27/08/2026 — Sếp Ngọc):
+
+> *"khi thiết kế layout thì luôn ưu tiên trải nghiệm người dùng thật, các tab
+> nên hiển thị được các thông tin cơ bản nhất."*
+
+**Luật: một cột chỉ được lên màn nếu nó trả lời một câu hỏi người dùng mang tới
+TRƯỚC khi bấm vào.** Phải bấm mở ra mới biết thì cột đó là trang trí.
+
+Cách chọn cột — 4 bước, làm theo thứ tự:
+
+1. **Ai mở màn này, để làm gì?** Khác vai trò thì khác cột. HCNS mở tab Nhân sự
+   khác hẳn nhân viên mở tab Nhân sự.
+2. **Họ mang câu hỏi gì tới?** Viết ra 3–5 câu hỏi thật, bằng lời người dùng.
+3. **Mỗi cột = câu trả lời cho một câu hỏi.** Không có câu hỏi tương ứng →
+   **không có cột**.
+4. **Một dòng phải đủ để quyết định có cần mở ra không.** Nếu ai cũng phải mở
+   từng dòng mới biết gì, danh sách đó thất bại.
+
+**Ngân sách cột — chọn cho điện thoại TRƯỚC:**
+ERP là PWA, kho và HCNS dùng điện thoại. Màn nhỏ chứa được **3–4 trường**.
+Chọn 3–4 cột sống còn trước, rồi mới thêm cột cho màn to — **không** làm ngược
+lại rồi cắt bớt.
+
+**Exception-First**: cái bất thường phải **thấy được ngay mà không cần lọc** —
+hợp đồng quá hạn, việc trễ, tài sản mất. Người dùng không phải đi tìm vấn đề.
+
+**Cấm**: đưa cột lên chỉ vì "dữ liệu có sẵn" hoặc "cho đầy đủ". Mỗi cột thừa
+làm ba cột quan trọng khó thấy hơn.
+
+Cơ chế danh sách *(tìm kiếm, lọc, sắp xếp, phân trang, trạng thái rỗng)*:
+xem [LIST_UX_AUDIT.md](./LIST_UX_AUDIT.md) — **hai thứ khác nhau, đừng trộn**.
+
 ### Rule 8 — Traceable & Recoverable
 Mọi thay đổi production quan trọng phải traceable, auditable, recoverable.
 Hiện tại: git log (message chi tiết, có ngày/người chốt), `lich_su_thay_doi_nen`
