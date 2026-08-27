@@ -3207,6 +3207,15 @@ if (TOI.quyen.includes('nhansu')) {
         $('#nsHd-hethan').value = (h.ngay_het_han || '').slice(0, 10);
         $('#nsHd-sohd').value = h.so_hd || '';
         $('#nsHd-lanthu').value = h.loai === 'xac_dinh_th' ? String(h.lan_thu || 1) : '—';
+        // Lý do là của RIÊNG bản đang sửa — không được mang sang bản khác
+        // (ISSUE-3 · REV-0009). Để sót lại thì máy chủ thấy `ly_do` khác rỗng
+        // nên BỎ QUA toàn bộ cảnh báo Đ.20: cảnh báo im lặng biến mất, còn lý
+        // do của bản A bị ghi vào `nhan_su_lich_su` làm căn cứ cho bản B.
+        // (`#nsHd-nhac` KHÔNG đụng ở đây: `capNhatNhacLoaiHd()` gọi ngay phía
+        //  trên đã ghi đè nó theo loại hợp đồng của bản B, nên hộp "Khoan đã"
+        //  của bản A đã bị thay — hide thêm là xoá luôn lời nhắc hợp lệ.)
+        $('#nsHd-lydo').value = '';
+        $('#nsHd-fieldlydo').hidden = true;
         $('#nsHd-nutluu').textContent = 'Lưu thay đổi';
         $('#nsHd-nutmoi').hidden = false;
         $('#nsHd-loi').textContent = '';
