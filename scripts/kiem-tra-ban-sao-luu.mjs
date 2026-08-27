@@ -11,19 +11,29 @@
    DÙNG:
      npm run sao-luu-kiemtra -- "C:\\Users\\Admin\\Downloads\\2026-08-27"
 
-   CA ĐỐI CHỨNG (bắt buộc chạy ít nhất một lần — BH-16):
+   HAI CA ĐỐI CHỨNG (bắt buộc chạy ít nhất một lần — BH-16):
+
      npm run sao-luu-kiemtra -- "…\\2026-08-27" --bo-file=nhan_su.csv
-   Giả vờ mất một file. Lệnh này PHẢI báo hỏng. Nếu nó vẫn báo "ĐẠT" thì phép
-   kiểm hỏng, chứ không phải bản sao lưu tốt.
+   Giả vờ MẤT một file. Lệnh này PHẢI báo hỏng.
+
+     npm run sao-luu-kiemtra -- "…\\2026-08-27" --sua-byte=nhan_su.csv
+   Giả vờ ai đó SỬA ĐÚNG MỘT KÝ TỰ giữa file mà GIỮ NGUYÊN KÍCH THƯỚC — dạng
+   hỏng của bit rot, của lỗi ghi Drive, của người sửa lén. Số dòng khớp, số
+   byte khớp; chỉ mã kiểm crc32 là lệch. Lệnh này PHẢI báo hỏng.
+
+   Cả hai mà vẫn báo "ĐẠT" thì PHÉP KIỂM hỏng, chứ không phải bản sao lưu tốt.
    ========================================================================== */
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { kiemTraKeKhai, demDongCsv } from '../src/sao-luu.js';
+import { crc32 } from '../src/zip.js';
 
 const thamSo = process.argv.slice(2);
 const thuMuc = thamSo.find(t => !t.startsWith('--'));
 const boFile = (thamSo.find(t => t.startsWith('--bo-file=')) || '').split('=')[1];
+const suaFile = (thamSo.find(t => t.startsWith('--sua-byte=')) || '').split('=')[1];
+const caDoiChung = boFile || suaFile;
 
 if (!thuMuc) {
   console.error('Thiếu đường dẫn thư mục bản sao lưu.\n' +
@@ -40,21 +50,43 @@ if (!fs.existsSync(duongKe)) {
 }
 const vanKe = fs.readFileSync(duongKe, 'utf8').replace(/^\uFEFF/, '');
 const keKhai = vanKe.trim().split(/\r?\n/).slice(1).filter(Boolean).map(d => {
-  const [bang, so_dong, co_byte] = d.split(',');
-  return { bang, so_dong: Number(so_dong), co_byte: Number(co_byte) };
+  // Cột 4 `crc32` là MÃ KIỂM (B1). Bản kê khai đời cũ không có cột này — để
+  // `crc` là undefined thì `kiemTraKeKhai` sẽ kêu `thieu_ma_kiem`, đúng ý.
+  const [bang, so_dong, co_byte, crc32Ke] = d.split(',');
+  const o = { bang, so_dong: Number(so_dong), co_byte: Number(co_byte) };
+  if (crc32Ke !== undefined && crc32Ke !== '') o.crc = Number(crc32Ke) >>> 0;
+  return o;
 });
 
-/* ---- Liệt kê thứ THẬT SỰ có --------------------------------------------- */
+/* ---- Liệt kê thứ THẬT SỰ có ---------------------------------------------
+   Đọc BYTE THÔ (không phải chuỗi) để tính crc32 — phải là đúng những byte nằm
+   trên đĩa, kể cả BOM, chứ không phải chuỗi đã qua giải mã. */
 let thucTe = fs.readdirSync(thuMuc)
   .filter(t => fs.statSync(path.join(thuMuc, t)).isFile())
   .map(ten => {
     const d = path.join(thuMuc, ten);
     const o = { ten, co_byte: fs.statSync(d).size };
     if (ten.endsWith('.csv') && ten !== 'KIEM-TRA.csv') {
-      o.so_dong = demDongCsv(fs.readFileSync(d, 'utf8'));
+      let bytes = fs.readFileSync(d);
+      if (ten === suaFile) {
+        // Sửa ĐÚNG MỘT byte ở giữa, KHÔNG đổi kích thước. Chỉ trong bộ nhớ —
+        // file trên đĩa của Sếp không bị đụng tới.
+        bytes = Buffer.from(bytes);
+        const i = Math.floor(bytes.length / 2);
+        bytes[i] = bytes[i] === 0x41 ? 0x42 : 0x41;
+        console.log(`⚠️  CA ĐỐI CHỨNG: giả vờ "${ten}" bị sửa 1 byte ở vị trí ${i} ` +
+          `(kích thước GIỮ NGUYÊN ${bytes.length} byte).`);
+      }
+      o.so_dong = demDongCsv(bytes.toString('utf8'));
+      o.crc = crc32(bytes, 0);
     }
     return o;
   });
+
+if (suaFile && !thucTe.some(t => t.ten === suaFile)) {
+  console.error(`Không thấy file "${suaFile}" để chạy ca đối chứng --sua-byte.`);
+  process.exit(2);
+}
 
 if (boFile) {
   console.log(`⚠️  CA ĐỐI CHỨNG: giả vờ thiếu file "${boFile}".`);
@@ -70,9 +102,10 @@ console.log(`Kê khai : ${keKhai.length} bảng, ` +
   `${(keKhai.reduce((t, k) => t + k.co_byte, 0) / 1048576).toFixed(2)} MB`);
 
 if (kq.dat) {
-  console.log('\n✅ ĐẠT — bản sao lưu đủ file, đủ dòng, đủ byte.');
-  if (boFile) {
-    console.log('\n❌❌ NHƯNG CA ĐỐI CHỨNG VỪA THẤT BẠI: đã bỏ một file mà vẫn báo ĐẠT.');
+  console.log('\n✅ ĐẠT — đủ file, đủ dòng, đủ byte, MÃ KIỂM từng file khớp.');
+  if (caDoiChung) {
+    console.log(`\n❌❌ NHƯNG CA ĐỐI CHỨNG VỪA THẤT BẠI: đã ` +
+      `${boFile ? 'bỏ một file' : 'sửa một byte'} mà vẫn báo ĐẠT.`);
     console.log('   → PHÉP KIỂM HỎNG. Không được tin kết quả của lệnh này nữa.');
     process.exit(1);
   }
@@ -81,5 +114,8 @@ if (kq.dat) {
 
 console.log(`\n❌ HỎNG — ${kq.loi.length} vấn đề:`);
 for (const l of kq.loi) console.log('   · ' + l);
-if (boFile) console.log('\n✅ Ca đối chứng ĐÚNG như mong đợi: bỏ một file thì nó báo hỏng.');
-process.exit(boFile ? 0 : 1);
+if (caDoiChung) {
+  console.log(`\n✅ Ca đối chứng ĐÚNG như mong đợi: ` +
+    `${boFile ? 'bỏ một file' : 'sửa một byte mà giữ nguyên cỡ'} thì nó báo hỏng.`);
+}
+process.exit(caDoiChung ? 0 : 1);

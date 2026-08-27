@@ -9,7 +9,7 @@
 
    HAI NHỊP, cả hai đều bắt buộc:
 
-     ① HẰNG NGÀY  — máy tự chạy 1h–4h sáng, để trên Drive công ty, giữ 30 bản.
+     ① HẰNG NGÀY  — máy tự chạy 0h–8h sáng, để trên Drive công ty, giữ 30 bản.
                     Cứu khi hỏng dữ liệu.
      ② HẰNG THÁNG — mùng 1, một file .zip đưa tận tay Sếp qua Telegram.
                     Sếp tự cất. Vì bản ngày nằm trên Drive công ty — MẤT TÀI
@@ -37,18 +37,26 @@ import { crc32, dauTep, cuoiTep, mucLuc } from './zip.js';
    Cloudflare cho 10 ms CPU MỖI LƯỢT CRON trên gói miễn phí — và 10 ms đó là
    của CẢ lượt, dùng chung với đồng bộ Shopee/TikTok đang chạy trước ta.
 
-     một lô 2.000 dòng = 4,3 ms CPU  (bản ngày) · 4,9 ms (bản tháng, thêm CRC32)
+     một lô 2.000 dòng = 5,3 ms CPU trung vị · 5,6 ms xấu nhất
+                         (đã GỒM CRC32 cho cả bản ngày — vá B1 REV-0011.
+                          Riêng CRC32 tốn +0,24 ms; phần còn lại là ghép CSV.)
      bản ngày năm 1    = 69 lô       (103.000 dòng, 21 bảng, 18,2 MB)
      cửa sổ 0h–8h      = 96 lượt cron, bỏ lượt đầu mỗi giờ → 88 lượt dùng được
-     sức chứa một đêm  = 110 lô      (66 lượt × 1 lô, rồi 22 lượt × 2 lô từ 6h)
+     sức chứa một đêm  = 88 lô       (88 lượt × 1 lô — xem LO_KHI_TRE)
 
-   → MỘT lô mỗi lượt = 4,3 ms trong trần 10 ms, còn 5,7 ms cho phần cron của
-     người khác. 69 ≤ 110 nên xong trong một đêm (khoảng 6h10), dư cho bản tháng.
+   → MỘT lô mỗi lượt = 5,6 ms xấu nhất trong trần 10 ms, còn 4,4 ms cho phần
+     cron của người khác. 69 ≤ 88 nên xong trong một đêm, dư 19 lô cho bản tháng.
 
-   ⚠️ TRẦN CỦA THIẾT KẾ NÀY (BH-22): ~220.000 dòng/ngày — nay đang dùng 63%
-   sức. Vượt qua đó thì một đêm KHÔNG đủ lượt, và code TỰ BÁO ĐỘNG chứ không
-   im lặng (xem `boPhienQuaHan`). Lúc đó phải đổi hướng: Workers Paid cho 30
-   GIÂY CPU mỗi lượt cron thay vì 10 ms, hoặc sao lưu phần thay đổi trong ngày.
+   ⚠️ TRẦN CỦA THIẾT KẾ NÀY (BH-22): ~176.000 dòng/ngày — nay đang dùng 78%
+   sức (chật hơn trước vì `LO_KHI_TRE` đã hạ 2 → 1, M3 REV-0011). Vượt qua đó
+   thì một đêm KHÔNG đủ lượt, và code TỰ BÁO ĐỘNG chứ không im lặng (xem
+   `boPhienQuaHan`). Lúc đó phải đổi hướng: Workers Paid cho 30 GIÂY CPU mỗi
+   lượt cron thay vì 10 ms, hoặc sao lưu phần thay đổi trong ngày.
+
+   ⚠️ Số trên đo bằng Node trên máy Sếp, KHÔNG phải `workerd` trên hạ tầng
+   Cloudflare, và cùng lượt cron còn 5 việc chạy trước ta chưa ai đo. Là số
+   đại diện, không phải bảo chứng — tuần đầu phải soi log Cloudflare tìm dòng
+   "Exceeded CPU".
    -------------------------------------------------------------------------- */
 
 /** Số dòng đọc mỗi lô. */
@@ -64,7 +72,13 @@ export const DONG_MOI_LO = 2000;
     Google "nhận tới đâu rồi" mà đi tiếp. Tệ nhất là mất một lượt, không phải
     hỏng bản sao lưu. Đổi rủi ro đó lấy việc CÓ bản sao lưu là đáng. */
 export const LO_MOI_LUOT = 1;
-export const LO_KHI_TRE = 2;
+/** M3 (REV-0011 §3): HẠ TỪ 2 XUỐNG 1. Số 4,3 ms đo trên Node desktop chứ không
+    phải `workerd`, và cùng lượt cron còn NĂM việc chạy TRƯỚC ta mà chưa ai đo
+    (`shopee.dongBoNen`, `tiktok.dongBoNen`, `kiemTraCanhBaoHoan`,
+    `kiemTraLyDoNghiemTrong`, `hoLyTuDongTriage`). "Còn dư 0,3 ms" là phép tính
+    trên một nửa dữ liệu. Giữ 1 lô/lượt cho tới khi có số đo thật trên workerd —
+    88 lượt/đêm vẫn thừa cho 69 lô. */
+export const LO_KHI_TRE = 1;
 export const GIO_TANG_TOC = 6;
 
 /** Cửa sổ chạy: 0h–8h sáng giờ VN. Kho vào làm từ 8h nên cả cửa sổ này là giờ
@@ -95,7 +109,9 @@ export const BANG_KHONG_SAO_LUU = new Set([
   'phien',                 // phiên đăng nhập — phục hồi xong đăng nhập lại là có
   'lan_dang_nhap_hong',    // nhật ký chống dò mật khẩu, không có giá trị lịch sử
   'schema_migrations',     // do công cụ tự dựng lại
-  'sao_luu_phien', 'sao_luu_thu_muc', 'sao_luu_canh_bao'  // trạng thái của chính việc sao lưu
+  // trạng thái của chính việc sao lưu — kể cả `sao_luu_ban` (L1 REV-0011: nó bị
+  // sót lại trong khi 3 bảng anh em đều đã có mặt)
+  'sao_luu_phien', 'sao_luu_thu_muc', 'sao_luu_canh_bao', 'sao_luu_ban'
 ]);
 
 /** Chỉ vào bản THÁNG, không vào bản ngày. Lý do (SOURCE-OF-TRUTH.md): chủ sở
@@ -131,7 +147,39 @@ const TEN_BANG_HOP_LE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 export const BOM = '﻿';
 
-/** Một ô CSV. Quy tắc ở SPEC-0005 Mục 9.1.
+/* --------------------------------------------------------------------------
+   ⛔ B2 (REV-0011 §6) — BẢN SAO LƯU TỰ MỞ ĐƯỜNG CHẠY MÃ TRÊN MÁY SẾP
+
+   Excel (và Google Trang tính) coi ô bắt đầu bằng `= + - @` là CÔNG THỨC và
+   CHẠY nó ngay lúc mở file. Mà `ghi_chu`, `gop_y`, `tin_nhan_chat` là ô NHÂN
+   VIÊN TỰ GÕ: một người gõ `=HYPERLINK("http://…"&A1,"Bấm")` vào ô góp ý, ba
+   tuần sau Sếp bấm đúp `gop_y.csv` theo đúng hướng dẫn — là nó chạy. Rào bằng
+   dấu nháy CSV không cứu được: Excel bóc nháy rồi mới xét.
+
+   CÁCH VÁ — RÀO BẰNG MỘT DẤU NHÁY ĐƠN ĐỨNG TRƯỚC, VÀ RÀO ĐẢO NGƯỢC ĐƯỢC.
+   Ô nguy hiểm được viết ra thành `"'<nội dung>"`. Excel / LibreOffice / Google
+   Trang tính đều hiểu dấu `'` đứng đầu là "đây là chữ, đừng tính" → hiện
+   nguyên văn, KHÔNG chạy.
+
+   VÌ SAO KHÔNG DÙNG lại mẹo `="…"` như cột số 0 đứng đầu: `="…"` không chứa
+   được ký tự xuống dòng (Excel báo lỗi công thức), mà `ghi_chu` thì đầy xuống
+   dòng. Dấu `'` chứa được mọi thứ.
+
+   ⚠️ HOÀN NGUYÊN ĐÚNG LÀ BẮT BUỘC — vá kiểu làm hỏng giá trị gốc là đổi một lỗ
+   lấy một lỗ tệ hơn. Nên chính dấu `'` cũng nằm trong danh sách phải rào: giá
+   trị gốc `'abc` được viết ra thành `''abc`. Nhờ vậy quy tắc đọc ngược chỉ có
+   MỘT câu — "thấy dấu ' đứng đầu thì bóc ĐÚNG MỘT dấu" — và không bao giờ nhập
+   nhằng. Xem `docO()` bên dưới và ca thử vòng tròn trong `npm run sao-luu-thu`.
+   -------------------------------------------------------------------------- */
+
+/** Ký tự mở đầu bắt buộc phải rào:
+      61 43 45 64  →  = + - @   Excel chạy cả ô như công thức
+       9 10 13     →  Tab \n \r Excel cắt bỏ khoảng trắng đầu rồi mới xét, cắt
+                                xong thì ký tự nguy hiểm phía sau lại lộ ra đầu
+      39          →  '          dấu rào của chính ta — rào nó để đọc ngược được */
+const DAU_O_NGUY = new Set([61, 43, 45, 64, 9, 10, 13, 39]);
+
+/** Một ô CSV. Quy tắc ở SPEC-0005 Mục 9.1 + vá B2.
     @param boc  cột này có thuộc diện bọc ="0..." không — TÍNH SẴN MỘT LẦN cho
                 cả bảng chứ không tra Set 22.000 lần mỗi lô. */
 export function oCsv(giaTri, boc) {
@@ -142,11 +190,16 @@ export function oCsv(giaTri, boc) {
   if (kieu === 'string') s = giaTri;
   else if (giaTri instanceof ArrayBuffer || ArrayBuffer.isView(giaTri)) return '[nhi_phan]';
   else s = String(giaTri);
+  if (s === '') return '';
 
   // Số 0 đứng đầu: Excel mặc định coi là số và xoá mất. Bọc thành công thức
-  // ="0987654321" thì Excel giữ nguyên. Trông lạ trong Notepad nhưng Excel
-  // mới là chỗ người ta sẽ mở nó.
+  // ="0987654321" thì Excel giữ nguyên. An toàn vì ruột chỉ có chữ số — không
+  // nhét được payload vào. Trông lạ trong Notepad nhưng Excel mới là chỗ người
+  // ta sẽ mở nó.
   if (boc && s.charCodeAt(0) === 48 && /^0\d+$/.test(s)) return '"=""' + s + '"""';
+
+  // ⛔ B2: ô bắt đầu bằng ký tự nguy hiểm → rào bằng ' và bọc nháy.
+  if (DAU_O_NGUY.has(s.charCodeAt(0))) return '"\'' + s.replace(/"/g, '""') + '"';
 
   // Quét bằng mã ký tự thay vì biểu thức chính quy: rẻ hơn, và ô CSV thường
   // rất ngắn nên vòng lặp này gần như luôn dừng ở vài ký tự đầu.
@@ -155,6 +208,51 @@ export function oCsv(giaTri, boc) {
     if (c === 44 || c === 34 || c === 10 || c === 13) return '"' + s.replace(/"/g, '""') + '"';
   }
   return s;
+}
+
+/* --------------------------------------------------------------------------
+   ĐỌC NGƯỢC — nửa còn lại của phép vá B2
+   ---------------------------------------------------------------------------
+   Nhận GIÁ TRỊ ĐÃ TÁCH KHỎI CSV (`phanTichCsv` đã bóc nháy, đã gộp `""` → `"`)
+   và trả về ĐÚNG CHUỖI BAN ĐẦU trong database. Ai viết công cụ phục hồi thì
+   dùng đúng hai hàm này, đừng tự tách bằng `split(',')`.
+
+   Hai luật, xét theo đúng thứ tự này:
+     ① Bắt đầu bằng `'`  → bóc ĐÚNG MỘT dấu. (rào B2)
+     ② Đúng dạng `="0…"` → lấy ruột.          (rào giữ số 0 đứng đầu)
+   Không nhập nhằng: giá trị gốc mà THẬT SỰ là chuỗi `="0123"` thì bắt đầu bằng
+   `=` nên đã rơi vào luật ① lúc ghi, ra `'="0123"` — luật ① bóc trước.
+   -------------------------------------------------------------------------- */
+export function docO(o) {
+  if (typeof o !== 'string' || o === '') return o;
+  if (o.charCodeAt(0) === 39) return o.slice(1);
+  const m = /^="(0\d+)"$/.exec(o);
+  return m ? m[1] : o;
+}
+
+/** Tách một văn bản CSV thành mảng các hàng, mỗi hàng là mảng ô THÔ (chưa
+    `docO`). Hiểu nháy kép, `""` lồng, và xuống dòng NẰM TRONG ô. */
+export function phanTichCsv(vanBan) {
+  const s = vanBan.charCodeAt(0) === 0xFEFF ? vanBan.slice(1) : vanBan;
+  const hang = [];
+  let cot = [], o = '', trongNhay = false;
+  const chotO = () => { cot.push(o); o = ''; };
+  const chotHang = () => { chotO(); hang.push(cot); cot = []; };
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (trongNhay) {
+      if (c !== '"') { o += c; continue; }
+      if (s[i + 1] === '"') { o += '"'; i++; } else trongNhay = false;
+      continue;
+    }
+    if (c === '"') trongNhay = true;
+    else if (c === ',') chotO();
+    else if (c === '\r' && s[i + 1] === '\n') { chotHang(); i++; }
+    else if (c === '\n') chotHang();
+    else o += c;
+  }
+  if (o !== '' || cot.length) chotHang();
+  return hang;
 }
 
 /* Với mỗi danh sách cột, tính SẴN cột nào phải bọc ="0...". Nhớ theo chính
@@ -215,8 +313,8 @@ const MA_HOA = new TextEncoder();
    ========================================================================== */
 
 /**
- * @param {Array} keKhai  [{bang, so_dong, co_byte}]  — bản kê khai lúc ghi
- * @param {Array} thucTe  [{ten, co_byte, so_dong?}]  — thứ thật sự đang có
+ * @param {Array} keKhai  [{bang, so_dong, co_byte, crc}] — bản kê khai lúc ghi
+ * @param {Array} thucTe  [{ten, co_byte, so_dong?, crc?}] — thứ thật sự đang có
  * @returns {{dat:boolean, loi:string[]}}
  */
 export function kiemTraKeKhai(keKhai, thucTe) {
@@ -236,6 +334,18 @@ export function kiemTraKeKhai(keKhai, thucTe) {
     }
     if (t.so_dong !== undefined && Number(t.so_dong) !== Number(k.so_dong)) {
       loi.push(`lech_dong: ${ten} kê khai ${k.so_dong} dòng, thật ${t.so_dong} dòng`);
+    }
+
+    /* ---- ⛔ B1 — MÃ KIỂM CRC32: chỗ DUY NHẤT bắt được file bị SỬA RUỘT ------
+       Tên · số dòng · số byte đều mù trước ca "sửa một ký tự, giữ nguyên cỡ" —
+       đúng dạng hỏng của bit rot, của lỗi ghi Drive, của người sửa lén. CRC32
+       nhìn TỪNG BYTE nên đổi một ký tự là lệch ngay. */
+    if (k.crc === undefined || k.crc === null || k.crc === '') {
+      loi.push(`thieu_ma_kiem: ${ten} — bản kê khai KHÔNG có cột crc32, ` +
+        `không kiểm được ruột file. Bản sao lưu này ghi bằng bản mã cũ.`);
+    } else if (t.crc !== undefined && (Number(t.crc) >>> 0) !== (Number(k.crc) >>> 0)) {
+      loi.push(`lech_ma_kiem: ${ten} kê khai crc32 ${Number(k.crc) >>> 0}, ` +
+        `thật ${Number(t.crc) >>> 0} — file ĐÚNG CỠ nhưng RUỘT ĐÃ KHÁC.`);
     }
     co.delete(ten);
   }
@@ -265,9 +375,14 @@ export function demDongCsv(vanBan) {
    4. Hai file chữ đi kèm mỗi bản sao lưu
    ========================================================================== */
 
+/** ⛔ B1: cột `crc32` là mã kiểm từng byte. Để trống khi không có — để phép
+    kiểm KÊU LÊN (`thieu_ma_kiem`) thay vì âm thầm chấm ĐẠT. */
 export function keKhaiCsv(keKhai) {
-  let s = BOM + 'bang,so_dong,co_byte,ten_tep\r\n';
-  for (const k of keKhai) s += `${k.bang},${k.so_dong},${k.co_byte},${k.bang}.csv\r\n`;
+  let s = BOM + 'bang,so_dong,co_byte,crc32,ten_tep\r\n';
+  for (const k of keKhai) {
+    const ma = (k.crc === undefined || k.crc === null) ? '' : String(Number(k.crc) >>> 0);
+    s += `${k.bang},${k.so_dong},${k.co_byte},${ma},${k.bang}.csv\r\n`;
+  }
   return s;
 }
 
@@ -300,11 +415,29 @@ Chữ tiếng Việt hiện đúng dấu, số điện thoại giữ nguyên s�
 Riêng cột số điện thoại và mã nhân viên nhìn trong Notepad sẽ thấy dạng
 ="0987654321" — đó là cố ý, mở bằng Excel là hiện đúng.
 
+HAI DẤU LẠ TRONG FILE — CỐ Ý CẢ, ĐỪNG SỬA
+------------------------------------------
+1. Dạng ="0987654321"  → giữ số 0 đứng đầu, Excel mở ra hiện 0987654321.
+2. Một dấu nháy đơn '  đứng ngay đầu ô → ô đó bắt đầu bằng = + - @ hoặc dấu
+   nháy đơn. Excel coi ô bắt đầu bằng = + - @ là PHÉP TÍNH và tự chạy nó. Nhân
+   viên gõ gì vào ô ghi chú thì máy chép nguyên vào đây, nên nếu không chặn thì
+   mở file ra là máy chạy thứ người khác gõ. Dấu ' chính là cái chặn đó.
+
+   Muốn lấy lại đúng chữ ban đầu: bỏ ĐÚNG MỘT dấu ' ở đầu ô. Không mất gì cả —
+   ô nào vốn đã bắt đầu bằng ' thì máy ghi thành hai dấu, bỏ một còn một.
+
 CẦN GÌ THÌ XEM Ở ĐÂU
 --------------------
 ${motTaBang(keKhai)}
-Muốn biết chắc bản này còn đủ không: mở file KIEM-TRA.csv. Nó ghi mỗi bảng có
-bao nhiêu dòng và nặng bao nhiêu. So với từng file thật là biết có thiếu không.
+Muốn biết chắc bản này còn NGUYÊN VẸN không: mở file KIEM-TRA.csv. Nó ghi mỗi
+bảng có bao nhiêu dòng, nặng bao nhiêu byte, và một MÃ KIỂM (cột crc32).
+
+Mã kiểm là con số tính ra từ TỪNG BYTE của file. Đổi đúng một chữ cái trong
+file mà không đổi kích thước thì số dòng và số byte vẫn khớp — chỉ mã kiểm là
+lệch. Đó là cách duy nhất biết được file có bị sửa ruột hay hỏng ngầm không.
+
+Người kỹ thuật chấm cả thư mục bằng một lệnh:
+  npm run sao-luu-kiemtra -- "đường-dẫn-thư-mục-vừa-tải-về"
 
 CẤT Ở ĐÂU
 ---------
@@ -397,7 +530,7 @@ export async function chayMotLuot(env, bao) {
     try { await kiemTraDungLuong(env, bao); } catch (e) { console.error('Sao lưu dung lượng:', e.message); }
   }
 
-  // ---- Ngoài cửa sổ 0h–7h sáng thì thôi ----------------------------------
+  // ---- Ngoài cửa sổ 0h–8h sáng thì thôi ----------------------------------
   if (gio < GIO_BAT_DAU || gio >= GIO_KET_THUC) return { bo: 'ngoai_gio' };
 
   // Lượt đầu mỗi giờ (phút 0–4) là lượt NẶNG NHẤT của cron: đó là lúc
@@ -457,8 +590,20 @@ async function moPhienMoi(env, bao) {
   return null;
 }
 
+/** "Bản này đã có chưa?" — M2 ca (b): CÂU HỎI NÀY TỪNG TRẢ LỜI SAI.
+    `taoPhien()` ghi HAI dòng vào hai bảng. Cron chết đúng giữa hai lệnh →
+    `sao_luu_ban` có dòng, `sao_luu_phien` không → câu hỏi cũ ("có dòng nào
+    không") trả TRUE → ngày đó VĨNH VIỄN KHÔNG CÓ BẢN SAO LƯU. Lớp B 9h sáng
+    bắt được nên không im lặng, nhưng mất trắng một đêm.
+
+    Nay: đã có = đã XONG, hoặc đã HỎNG (đã báo động rồi, làm lại vô ích và sẽ
+    lặp vô tận), hoặc đang có phiên chạy dở THẬT. Còn đúng một ca lọt lưới cũ —
+    `dang_chay` mà KHÔNG có phiên — thì nay làm lại được. */
 async function coBan(env, id) {
-  const r = await env.DB.prepare('SELECT 1 FROM sao_luu_ban WHERE id = ?').bind(id).first();
+  const r = await env.DB.prepare(
+    `SELECT 1 FROM sao_luu_ban b WHERE b.id = ? AND (b.trang_thai IN ('xong','hong')
+       OR EXISTS (SELECT 1 FROM sao_luu_phien p WHERE p.ban_id = b.id))`
+  ).bind(id).first();
   return !!r;
 }
 
@@ -476,12 +621,15 @@ async function taoPhien(env, loai, moc) {
     thuMucId = await khoFile.timHoacTaoThuMuc(env, 'BAN-THANG', 'BAN-THANG-CUA-SEP', goc);
   }
 
+  // M2 ca (b): `OR REPLACE` chứ không `INSERT` trần — lần trước có thể đã ghi
+  // được dòng này rồi mới chết, và `coBan()` nay CỐ Ý cho làm lại ca đó.
   await env.DB.prepare(
-    `INSERT INTO sao_luu_ban (id, loai, moc, trang_thai, thu_muc_id) VALUES (?, ?, ?, 'dang_chay', ?)`
+    `INSERT OR REPLACE INTO sao_luu_ban (id, loai, moc, trang_thai, thu_muc_id)
+     VALUES (?, ?, ?, 'dang_chay', ?)`
   ).bind(banId, loai, moc, thuMucId).run();
 
   await env.DB.prepare(
-    `INSERT INTO sao_luu_phien (ban_id, danh_sach) VALUES (?, ?)`
+    `INSERT OR REPLACE INTO sao_luu_phien (ban_id, danh_sach) VALUES (?, ?)`
   ).bind(banId, JSON.stringify(bangs)).run();
 
   return env.DB.prepare('SELECT * FROM sao_luu_phien WHERE ban_id = ?').bind(banId).first();
@@ -585,21 +733,26 @@ async function motLo(env, p, bao) {
   if (!p.muc_dang_mo) {
     if (laThang) {
       if (!p.upload_url) {
+        const tenZip = `sao-luu-AGC-${p.ban_id.slice(6)}.zip`;
+        await khoFile.donTepTrungTen(env, { ten: tenZip, thuMucId: ban.thu_muc_id });
         p.upload_url = await khoFile.moPhienTaiLen(env, {
-          ten: `sao-luu-AGC-${p.ban_id.slice(6)}.zip`,
-          kieu: 'application/zip', thuMucId: ban.thu_muc_id
+          ten: tenZip, kieu: 'application/zip', thuMucId: ban.thu_muc_id
         });
       }
       p.muc_bat_dau = viTriHienTai(p);
       themByte(p, dauTep(`${bang}.csv`));
     } else {
+      // M2 ca (a): lượt trước có thể đã chốt xong file này rồi mới chết, chưa
+      // kịp ghi `chi_so_bang++`. Dọn bản sót trước khi ghi lại, kẻo Drive có
+      // hai file trùng tên → lúc phục hồi báo `thua_tep` giả.
+      await khoFile.donTepTrungTen(env, { ten: `${bang}.csv`, thuMucId: ban.thu_muc_id });
       p.upload_url = await khoFile.moPhienTaiLen(env, {
         ten: `${bang}.csv`, kieu: 'text/csv', thuMucId: ban.thu_muc_id
       });
       p.byte_da_gui = 0; p.du = new Uint8Array(0); p.muc_bat_dau = 0;
     }
     p.muc_dang_mo = 1; p.muc_so_dong = 0; p.muc_co_byte = 0; p.muc_crc = 0; p.rid_cuoi = 0;
-    themNoiDung(p, BOM + dongTieuDe(cot), laThang);
+    themNoiDung(p, BOM + dongTieuDe(cot));
   }
 
   // ---- Đọc một lô dòng --------------------------------------------------
@@ -613,7 +766,7 @@ async function motLo(env, p, bao) {
   for (const r of results) van += dongCsv(cot, r);
   if (results.length) p.rid_cuoi = results[results.length - 1].__rid;
   p.muc_so_dong += results.length;
-  themNoiDung(p, van, laThang);
+  themNoiDung(p, van);
 
   const hetBang = results.length < DONG_MOI_LO;
 
@@ -628,7 +781,7 @@ async function motLo(env, p, bao) {
     const zm = JSON.parse(p.zip_muc);
     zm.push({ ten: `${bang}.csv`, crc: p.muc_crc, coByte: p.muc_co_byte, viTriDau: p.muc_bat_dau, luc: Date.now() });
     p.zip_muc = JSON.stringify(zm);
-    keKhai.push({ bang, so_dong: p.muc_so_dong, co_byte: p.muc_co_byte });
+    keKhai.push({ bang, so_dong: p.muc_so_dong, co_byte: p.muc_co_byte, crc: p.muc_crc });
     await dayPhanDayDu(env, p);
   } else {
     const tong = p.byte_da_gui + p.du.length;
@@ -642,7 +795,7 @@ async function motLo(env, p, bao) {
     if (kq.coByte !== undefined && Number(kq.coByte) !== tong) {
       throw new Error(`Canary lệch ở ${bang}.csv: gửi ${tong} byte, Drive lưu ${kq.coByte} byte`);
     }
-    keKhai.push({ bang, so_dong: p.muc_so_dong, co_byte: tong, tep_id: kq.tepId });
+    keKhai.push({ bang, so_dong: p.muc_so_dong, co_byte: tong, crc: p.muc_crc, tep_id: kq.tepId });
   }
 
   p.ke_khai = JSON.stringify(keKhai);
@@ -659,12 +812,16 @@ function viTriHienTai(p) { return p.byte_da_gui + p.du.length; }
 /** Thêm byte thô vào bộ đệm (dùng cho phần khung của zip). */
 function themByte(p, bytes) { p.du = noiByte(p.du, bytes); }
 
-/** Thêm nội dung CSV. Với bản tháng còn phải cộng dồn CRC32 và cỡ của mục. */
-function themNoiDung(p, van, laThang) {
+/** Thêm nội dung CSV, cộng dồn cỡ và MÃ KIỂM CRC32 của mục.
+    ⛔ B1: trước đây chỉ bản THÁNG mới tính CRC (zip cần). Nay bản NGÀY cũng
+    tính, vì `KIEM-TRA.csv` phải kê được mã kiểm — không có nó thì phép kiểm mù
+    trước ca "sửa một ký tự, giữ nguyên cỡ". Giá: +0,56 ms/lô (đo lại ở
+    `npm run sao-luu-thu`), vẫn trong trần 10 ms. */
+function themNoiDung(p, van) {
   if (!van) return;
   const bytes = MA_HOA.encode(van);
   p.muc_co_byte += bytes.length;
-  if (laThang) p.muc_crc = crc32(bytes, p.muc_crc);
+  p.muc_crc = crc32(bytes, p.muc_crc);
   p.du = noiByte(p.du, bytes);
 }
 
@@ -713,8 +870,15 @@ async function hoanTat(env, p, bao) {
     tepId = kq.tepId;
     duongDan = khoFile.duongDanTep(tepId);
   } else {
-    await khoFile.luuFile(env, { duLieu: vanDoc, tenFile: 'DOC-CACH-DOC.txt', kieu: 'text/plain; charset=utf-8', thuMucId: ban.thu_muc_id });
-    await khoFile.luuFile(env, { duLieu: vanKe, tenFile: 'KIEM-TRA.csv', kieu: 'text/csv; charset=utf-8', thuMucId: ban.thu_muc_id });
+    // M2 ca (c): `hoanTat` có thể bị cắt giữa hai lần ghi này, lượt sau ghi
+    // lại → hai `DOC-CACH-DOC.txt` trong cùng thư mục. Dọn trước.
+    for (const [ten, noi, kieu] of [
+      ['DOC-CACH-DOC.txt', vanDoc, 'text/plain; charset=utf-8'],
+      ['KIEM-TRA.csv', vanKe, 'text/csv; charset=utf-8']
+    ]) {
+      await khoFile.donTepTrungTen(env, { ten, thuMucId: ban.thu_muc_id });
+      await khoFile.luuFile(env, { duLieu: noi, tenFile: ten, kieu, thuMucId: ban.thu_muc_id });
+    }
     tongByte = keKhai.reduce((t, k) => t + Number(k.co_byte), 0);
     duongDan = khoFile.duongDanThuMuc(ban.thu_muc_id);
 

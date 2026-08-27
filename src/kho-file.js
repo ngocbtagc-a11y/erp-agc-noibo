@@ -296,6 +296,39 @@ export async function layFile(env, { nha, khoa, pham }) {
   return new Response(b);
 }
 
+/* --------------------------------------------------------------------------
+   M2 (REV-0011 §7) — CHỐNG HAI FILE TRÙNG TÊN SAU KHI CRON CHẾT NỬA CHỪNG
+
+   Ca thật: Google đã CHỐT xong `thong_bao.csv`, nhưng cron bị cắt trước khi
+   `luuPhien()` kịp ghi `chi_so_bang++`. Lượt sau ta tưởng bảng đó chưa làm →
+   mở phiên tải MỚI → Drive có HAI file cùng tên `thong_bao.csv`. Tải cả thư
+   mục về máy thì Windows đặt tên file thứ hai là `thong_bao (1).csv`, và
+   `kiemTraKeKhai` báo `thua_tep` — BÁO ĐỘNG GIẢ đúng lúc người ta hoảng nhất,
+   vì lúc đó là lúc đang phục hồi.
+
+   Vá: trước khi mở một file mới, XOÁ HẲN bản cùng tên còn sót trong thư mục
+   đó. Bản sót luôn là bản dở hoặc bản trùng — bản thật đang sắp được ghi đè.
+   `files.list` chạy được với scope hẹp `drive.file` vì ta chỉ hỏi về file do
+   chính ERP tạo ra. Tốn 1 lượt gọi mạng mỗi lần mở file (21 lần/đêm, trần 50
+   lượt gọi MỖI lượt cron) — rẻ so với một báo động giả lúc phục hồi.
+   -------------------------------------------------------------------------- */
+export async function donTepTrungTen(env, { ten, thuMucId }) {
+  if (nhaDangDung(env) !== 'drive' || !thuMucId) return 0;
+  const q = encodeURIComponent(
+    `name = '${String(ten).replace(/\\/g, '\\\\').replace(/'/g, "\\'")}' ` +
+    `and '${thuMucId}' in parents and trashed = false`);
+  const res = await goiDrive(env, `${GOC_DRIVE}/files?q=${q}&fields=files(id)&pageSize=20`);
+  if (!res.ok) {
+    // Không hỏi được thì THÔI, đừng chặn việc sao lưu vì một phép dọn dẹp.
+    console.error(`Dọn tệp trùng "${ten}" hỏng (${res.status}) — bỏ qua.`);
+    return 0;
+  }
+  const ds = (await res.json().catch(() => ({}))).files || [];
+  for (const f of ds) await xoaFile(env, { nha: 'drive', khoa: f.id });
+  if (ds.length) console.log(`Sao lưu: dọn ${ds.length} bản sót cùng tên "${ten}".`);
+  return ds.length;
+}
+
 /** Xoá file. CHỈ dùng cho bản sao lưu quá hạn giữ — SPEC-0005 Mục 7.5 cấm
     tuyệt đối xoá tài liệu gốc, bản sao lưu thì là bản chụp nên được dọn. */
 export async function xoaFile(env, { nha, khoa }) {

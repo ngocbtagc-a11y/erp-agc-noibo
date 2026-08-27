@@ -179,3 +179,76 @@ ra màn hình dòng lệnh, Sếp dán thẳng vào két Cloudflare.
 Kho tài liệu scan: bảng `tai_lieu` · luồng 3 lần bấm · `duocXemTaiLieu()` trong
 `quyen.js` · xem lại/tải về/ẩn. `src/kho-file.js` đã dựng sẵn đúng để Phần A
 dùng lại — `luuFile`/`layFile`/`xoaFile` đã có và đã chạy.
+
+---
+
+## 11. VÒNG SỬA 1 — vá REV-0011 (Hồ Ly, `26c4e95`)
+
+### ⛔ B1 · Bản kê khai không bắt được file bị sửa ruột — ĐÃ VÁ
+
+`KIEM-TRA.csv` thêm cột **`crc32`**: `bang,so_dong,co_byte,crc32,ten_tep`.
+Bản NGÀY nay cũng cộng dồn CRC32 (trước chỉ bản tháng làm, vì zip cần) —
+`themNoiDung()` bỏ tham số `laThang`, luôn tính. `kiemTraKeKhai()` thêm hai lỗi:
+`lech_ma_kiem` (đúng cỡ, khác ruột) và `thieu_ma_kiem` (kê khai không có cột
+crc32 → **KÊU**, không âm thầm chấm ĐẠT).
+
+Ca vòng trước lọt lưới nay bị bắt — sửa 1 byte THẬT trên đĩa, cỡ 11.172 byte
+không đổi, số dòng không đổi:
+`lech_ma_kiem: nhan_su.csv kê khai crc32 480602698, thật 2211738341`.
+Đối chứng ngược: trả lại nguyên trạng → ĐẠT lại.
+
+### ⛔ B2 · Ô nhân viên tự gõ chạy được như công thức Excel — ĐÃ VÁ
+
+**Cách vá đã chọn: rào bằng một dấu nháy đơn `'` đứng trước, và rào ĐẢO NGƯỢC
+ĐƯỢC.** Ô bắt đầu bằng `=` `+` `-` `@` `Tab` `\n` `\r` — và bằng chính `'` —
+được ghi ra thành `"'<nội dung>"`.
+
+Vì sao **không** dùng lại mẹo `="…"` của cột số 0 đứng đầu: `="…"` không chứa
+được ký tự xuống dòng (Excel báo lỗi công thức), mà `ghi_chu` thì đầy xuống
+dòng. Dấu `'` chứa được mọi thứ, và cả ba công cụ (Excel · LibreOffice · Google
+Trang tính) đều hiểu `'` đầu ô là "đây là chữ, đừng tính".
+
+Vì sao rào cả `'`: để quy tắc đọc ngược chỉ có MỘT câu — *thấy `'` đứng đầu thì
+bóc ĐÚNG MỘT dấu* — và không bao giờ nhập nhằng. Giá trị gốc `'abc` ghi ra
+thành `''abc`, đọc về vẫn là `'abc`.
+
+Nửa còn lại của phép vá nằm cùng file, để ai viết công cụ phục hồi dùng lại:
+`docO()` (bóc rào một ô) và `phanTichCsv()` (tách CSV, hiểu nháy lồng và xuống
+dòng trong ô).
+
+**Bằng chứng hoàn nguyên đúng** (`npm run sao-luu-thu`, mục ④b) — đi trọn vòng
+gốc → ô CSV → ghép file → `phanTichCsv` → `docO` → **so hex từng byte**:
+**15/15 ca vừa CHẶN được vừa HOÀN NGUYÊN đúng**, gồm `=1+1` ·
+`=HYPERLINK("http://…"&A1,…)` · `+84…` · `-2+3` · `@SUM(A1:A9)` ·
+`Tab`/`\n`/`\r` đứng trước · `'=1+1` (vốn đã có nháy) · ghi chú thật có nháy +
+phẩy + xuống dòng · `="0123"` (trông y hệt cái rào, không nhập nhằng) · ô rỗng.
+Cột bọc `="0…"` cũng hoàn nguyên đúng.
+
+### Bốn lỗi nhỏ
+
+| | Vá gì |
+|---|---|
+| **M2** | `donTepTrungTen()` mới trong `kho-file.js` — xoá bản sót cùng tên trước khi mở file mới (ca (a) và (c): Drive đẻ hai file trùng tên → `thua_tep` giả lúc phục hồi). Ca (b): `coBan()` nay coi `dang_chay` mà KHÔNG có phiên là **chưa có** → làm lại được; `taoPhien()` đổi sang `INSERT OR REPLACE`. `xong`/`hong` vẫn tính là đã có, để không lặp vô tận. |
+| **M3** | `LO_KHI_TRE` 2 → **1**. Trần thiết kế hạ 220k → **176k dòng/ngày**, nay dùng **78%** sức (trước 63%). Vẫn xong trong một đêm: 69 ≤ 88 lô, dư 19 lô cho bản tháng. |
+| **M4** | `zip.js ghi()` chặn ồn ào ở mốc 4 GB. Đo: `cuoiTep(crc, 5.000.000.000)` nay **throw** thay vì ghi ra 705.032.704; đối chứng đúng trần `4.294.967.295` vẫn ghi được. |
+| **L** | Bước 9 đổi `set X=…` → `$env:X = "…"`, thêm lệnh `echo` kiểm nhanh và cảnh báo gõ nhầm `cmd` thì **không báo lỗi**. Rà cả 12 bước: thêm `npx wrangler login` (Bước 10), Google đổi tên *OAuth consent screen* → *Google Auth Platform* (Bước 4–5), Bước 12 thêm `Clear-Host` + đóng cửa sổ vì refresh token vừa in ra màn hình. Phần Chuẩn bị nói rõ **phải là PowerShell**, kèm cách nhận biết. |
+| **L1** | `sao_luu_ban` vào `BANG_KHONG_SAO_LUU` (3 bảng anh em đã có sẵn). |
+| **L2** | Giờ chạy thống nhất **0h–8h** ở cả 3 nơi: `sao-luu.js` (2 chỗ), `index.js`, hướng dẫn. |
+
+### Số đo CPU mới (`npm run sao-luu-thu`)
+
+Một lô 2.000 dòng: **5,26 ms trung vị · 5,60 ms xấu nhất** (đã gồm CRC32).
+Không CRC32: 5,02 / 5,11 ms → **giá của B1 là +0,24 ms mỗi lô**.
+Một lượt cron = 1 lô ⇒ **5,60 ms xấu nhất trong trần 10 ms, dư 4,4 ms**.
+
+⚠️ Số nền của máy đã trôi so với vòng trước (4,34 → 5,02 ms cho cùng phép đo
+không CRC) — máy lúc đo bận hơn. **Không phải CRC32 làm chậm.** Và vẫn là Node
+trên máy Sếp, không phải `workerd`: tuần đầu phải soi log Cloudflare tìm
+"Exceeded CPU".
+
+### Còn nợ, KHÔNG vá trong vòng này
+
+- **M1** — `ADR-0013` vẫn là file chưa theo dõi trong thư mục làm việc của repo
+  chính, không nằm trên nhánh nào, trong khi mã viện dẫn nó hơn 10 lần. Nằm
+  ngoài worktree này. **Một lệnh `git clean` là mất quyết định của Sếp.**
+- **L4** — chưa ai mở bằng Excel thật. Máy này không có Excel/LibreOffice.

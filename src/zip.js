@@ -37,7 +37,20 @@ export function crc32(bytes, truoc = 0) {
 }
 
 /* ---- Tiện ích ghi số ---------------------------------------------------- */
+/** M4 (REV-0011 §1): TRẦN 4 GB — KÊU LÊN, ĐỪNG TRÀN IM LẶNG.
+    Ô số trong ZIP chỉ 4 byte. Quá 4.294.967.295 thì `>>>` cắt cụt âm thầm: đo
+    thật `cuoiTep(crc, 5.000.000.000)` ghi ra 705.032.704 — file .zip trông vẫn
+    "mở được" nhưng RUỘT SAI, không ai biết cho tới lúc phục hồi. Nay chặn ồn
+    ào. Bản tháng đang 18 MB nên còn xa, nhưng "còn xa" không phải lý do để im
+    lặng khi tới nơi. */
+const TRAN_4GB = 4294967295;
 function ghi(bytes, viTri, giaTri, soByte) {
+  if (soByte === 4 && (giaTri > TRAN_4GB || giaTri < 0)) {
+    throw new Error(
+      `Vượt trần ZIP 4 GB: cần ghi số ${giaTri} vào ô 4 byte. Định dạng ZIP ` +
+      `thường không chứa nổi — phải bật Zip64, hoặc chia bản tháng thành nhiều ` +
+      `file. Dừng ở đây, KHÔNG ghi ra file nén sai ruột.`);
+  }
   for (let i = 0; i < soByte; i++) bytes[viTri + i] = (giaTri >>> (i * 8)) & 0xFF;
 }
 
