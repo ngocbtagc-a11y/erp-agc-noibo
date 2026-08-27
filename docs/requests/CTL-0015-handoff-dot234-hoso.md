@@ -217,6 +217,28 @@ kết quả BẮT BUỘC phải khác**:
 | Mẫu đúng ngành | Tìm chữ *"lò hơi công nghiệp"* | **Không thấy** ⇒ phép kiểm không phải luôn-đạt |
 | Quét `DROP` | Quét **không bỏ chú thích** | Báo động giả ⇒ chứng minh bước bỏ chú thích là cần |
 
+### Mutant — chứng minh cổng chặn THẬT SỰ chặn (BH-23 · BH-28)
+
+*"Bài kiểm đạt" không phải bằng chứng. Bằng chứng là: gỡ chốt ra thì bài kiểm
+có đỏ không.* Hai mutant chạy trên cây làm việc thật:
+
+| Mutant | Kết quả |
+|---|---|
+| Thêm `UPDATE <bảng cấm> SET x = 1` vào `src/ky-nang.js` | **bắt được** — 24 đạt · **1 hỏng** |
+| Thêm một dòng bất kỳ vào `src/quyen.js` | **bắt được** — 24 đạt · **1 hỏng** |
+| Gỡ cả hai mutant | 25 đạt · 0 hỏng |
+
+**Chính lượt mutant này lòi ra hai lỗi của bàn thử**, không phải của code:
+
+1. **BH-24 sống lại nguyên xi.** Ca đối chứng ban đầu viết **nguyên văn** câu
+   `UPDATE <bảng cấm>` trong `tu-kiem-giao-dien-0007.mjs`. Lượt chạy kế tiếp
+   nó **tự bắt chính mình**: dòng đó nằm trong diff. Sửa theo đúng BH-24 —
+   mẫu nhận diện **ghép từ mảnh**, và miễn trừ **đúng một tệp** (tệp bàn thử),
+   nói rõ đã miễn trừ gì.
+2. **`git diff A..HEAD` chỉ nhìn phần ĐÃ COMMIT.** Mutant chưa commit thì lọt
+   sạch, mà cổng vẫn in *"25 đạt · 0 hỏng"* — đúng loại hỏng-im-lặng của BH-23.
+   Đổi sang `git diff <gốc nhánh>` (so với **cây làm việc**) thì mới bắt được.
+
 ### Migration áp lên D1 THẬT
 
 Không chỉ dựng SQLite mới — copy **bản sao D1 local thật** (46 bảng, đủ schema

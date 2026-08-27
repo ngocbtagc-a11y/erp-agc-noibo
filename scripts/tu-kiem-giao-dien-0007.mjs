@@ -85,8 +85,13 @@ const css = readFileSync(new URL('public/assets/css/style.css', goc), 'utf8');
 
 /* --- ④ Ràng buộc: KHÔNG đụng src/quyen.js -------------------------------- */
 {
+  /* So với `4f91cd2` (gốc nhánh), KHÔNG so `4f91cd2..HEAD`: dạng hai chấm chỉ
+     nhìn phần ĐÃ COMMIT, nên một vi phạm còn nằm trong cây làm việc sẽ lọt.
+     Đo bằng mutant: thêm một câu `UPDATE` vào bảng bị cấm rồi CHƯA commit —
+     bản `..HEAD` in "25 đạt · 0 hỏng", bản này bắt được. Cổng chưa thử cho nó
+     chặn thật thì coi như chưa có cổng (BH-23/BH-28). */
   const repo = decodeURIComponent(new URL('.', goc).pathname).replace(/^\//, '');
-  const dienBien = execSync('git diff --name-only 4f91cd2..HEAD', { cwd: repo })
+  const dienBien = execSync('git diff --name-only 4f91cd2', { cwd: repo })
     .toString().split('\n').map(s => s.trim()).filter(Boolean);
   kiem('KHÔNG đụng src/quyen.js', dienBien.includes('src/quyen.js'), false);
   kiem('KHÔNG đụng src/ca.js', dienBien.includes('src/ca.js'), false);
@@ -95,16 +100,32 @@ const css = readFileSync(new URL('public/assets/css/style.css', goc), 'utf8');
      "congviec" trong tên nhưng không đụng bảng `cong_viec` một dòng nào —
      kiểm theo tên là báo động giả, đúng loại BH-29. Bỏ chú thích trước khi
      quét, không thì phép kiểm đo chú thích. */
-  const themVao = execSync('git diff -U0 4f91cd2..HEAD', { cwd: repo }).toString()
-    .split('\n').filter(d => d.startsWith('+') && !d.startsWith('+++'))
-    .map(d => d.slice(1))
-    .filter(d => !/^\s*(--|\/\/|\*|\/\*)/.test(d));
-  const chamBangCam = themVao.filter(d =>
-    /\b(ALTER\s+TABLE|INSERT\s+INTO|UPDATE|DELETE\s+FROM)\s+(cong_viec|gop_y)\b/i.test(d));
-  kiem('KHÔNG có câu SQL nào ghi vào bảng cong_viec / gop_y (Rule 13)', chamBangCam, []);
-  kiem('ĐỐI CHỨNG · phép kiểm bắt được nếu có câu như vậy',
-    ['  UPDATE cong_viec SET x = 1'].filter(d =>
-      /\b(ALTER\s+TABLE|INSERT\s+INTO|UPDATE|DELETE\s+FROM)\s+(cong_viec|gop_y)\b/i.test(d)).length, 1);
+  /* ⚠️ BH-24 — nghiệm thu bằng `grep` thì CHÍNH BÀI KIỂM cũng bị `grep`.
+     Bản đầu của phép kiểm này viết nguyên văn câu `UPDATE cong_viec ...` làm
+     ca đối chứng, và lượt chạy kế tiếp nó tự bắt chính mình: dòng đó nằm
+     trong diff. Nên ① mẫu nhận diện GHÉP TỪ MẢNH (đừng "dọn dẹp" dòng này),
+     ② miễn trừ chính tệp bàn thử, và nói rõ đã miễn trừ gì. */
+  const BANG_CAM = ['cong', 'viec'].join('_') + '|' + ['gop', 'y'].join('_');
+  const MAU_GHI = new RegExp(
+    '\\b(ALTER\\s+TABLE|INSERT\\s+INTO|UPDATE|DELETE\\s+FROM)\\s+(' + BANG_CAM + ')\\b', 'i');
+
+  // Tách diff theo file để miễn trừ đúng một tệp, không miễn trừ cả lượt.
+  const khoiFile = execSync('git diff -U0 4f91cd2', { cwd: repo }).toString().split('\ndiff --git ');
+  const themVao = [];
+  for (const khoi of khoiFile) {
+    if (/scripts\/tu-kiem-giao-dien-0007\.mjs/.test(khoi.split('\n')[0] || '')) continue;  // miễn trừ
+    for (const d of khoi.split('\n')) {
+      if (!d.startsWith('+') || d.startsWith('+++')) continue;
+      const noi = d.slice(1);
+      if (/^\s*(--|\/\/|\*|\/\*)/.test(noi)) continue;    // bỏ chú thích (BH-29)
+      themVao.push(noi);
+    }
+  }
+  kiem('KHÔNG có câu SQL nào ghi vào bảng bị cấm (Rule 13)', themVao.filter(d => MAU_GHI.test(d)), []);
+  kiem('ĐỐI CHỨNG · mẫu nhận diện CÓ THỂ bắt được câu như vậy',
+    MAU_GHI.test('  UPDATE ' + ['cong', 'viec'].join('_') + ' SET x = 1'), true);
+  kiem('ĐỐI CHỨNG · và diff đã quét KHÔNG rỗng (rỗng thì mọi phép trên vô nghĩa)',
+    themVao.length > 50, true);
   kiem('ĐỐI CHỨNG · danh sách file KHÔNG rỗng (nếu rỗng thì 3 phép trên vô nghĩa)',
     dienBien.length > 0, true);
 }
