@@ -3074,7 +3074,11 @@ if (TOI.quyen.includes('nhansu')) {
     // đây thiếu 'khoan_viec' nên hồ sơ người khoán sẽ hiện trống một dòng.
     const NHAN_SU_KIEN = {
       vao_lam: '🙋 Vào làm', doi_phong_ban: 'Đổi phòng ban', doi_chuc_danh: 'Đổi chức danh',
-      doi_quan_ly: 'Đổi quản lý trực tiếp', doi_trang_thai: 'Đổi trạng thái hợp đồng', nghi_viec: 'Nghỉ việc'
+      doi_quan_ly: 'Đổi quản lý trực tiếp', doi_trang_thai: 'Đổi trạng thái hợp đồng', nghi_viec: 'Nghỉ việc',
+      // SPEC-0007 Đợt 1 — hai sự kiện này backend ĐÃ ghi từ vòng trước nhưng
+      // từ điển thiếu ⇒ hồ sơ hiện mã thô (N-2 · REV-0013).
+      doi_loai_lao_dong: 'Đổi loại lao động', don_ca_khoan_viec: '⚠️ Dọn ca do chuyển Khoán việc',
+      hop_dong: 'Hợp đồng lao động'
     };
 
     // Header tổng quan + khối Tài khoản ERP (Employee Profile Phase 1) —
@@ -3109,9 +3113,17 @@ if (TOI.quyen.includes('nhansu')) {
         // doi_trang_thai lưu MÃ trạng thái thô (da_ky/thu_viec...) ở backend
         // — các loại sự kiện khác đã lưu sẵn TÊN (bo_phan/chuc_vu/họ tên
         // quản lý), dịch riêng chỉ mã này qua từ điển TRANG_THAI đã có.
-        const dichGiaTri = v => h.loai_su_kien === 'doi_trang_thai' ? (TRANG_THAI[v]?.chu || v) : v;
+        // `doi_loai_lao_dong` cũng lưu mã thô (ban_thoi_gian/khoan_viec…) —
+        // dịch nốt, nếu không hồ sơ hiện "ban_thoi_gian → khoan_viec" (N-2).
+        const dichGiaTri = v =>
+          h.loai_su_kien === 'doi_trang_thai' ? (TRANG_THAI[v]?.chu || v) :
+          h.loai_su_kien === 'doi_loai_lao_dong' ? (LOAI_LD_CHU[v] || v) : v;
+        // `ghi_chu` là chỗ backend cất câu giải thích đầy đủ (vd: còn N đăng ký
+        // ĐÃ DUYỆT phải xử lý tay). Có ghi mà không vẽ ra thì bằng không —
+        // Rule 8 Traceable (N-2 · REV-0013).
+        const ghiChu = h.ghi_chu ? `<div class="phu" style="white-space:normal">${esc(h.ghi_chu)}</div>` : '';
         return `<td class="sm">${esc(luc)}</td>` +
-          `<td class="sm">${esc(NHAN_SU_KIEN[h.loai_su_kien] || h.loai_su_kien)}${h.gia_tri_cu || h.gia_tri_moi ? `<div class="phu">${esc(dichGiaTri(h.gia_tri_cu) || '—')} → ${esc(dichGiaTri(h.gia_tri_moi) || '—')}</div>` : ''}</td>` +
+          `<td class="sm">${esc(NHAN_SU_KIEN[h.loai_su_kien] || h.loai_su_kien)}${h.gia_tri_cu || h.gia_tri_moi ? `<div class="phu">${esc(dichGiaTri(h.gia_tri_cu) || '—')} → ${esc(dichGiaTri(h.gia_tri_moi) || '—')}</div>` : ''}${ghiChu}</td>` +
           `<td class="sm">${esc(h.nguoi_thuc_hien_ten || '—')}</td>`;
       });
       oTrong.hidden = lich_su.length > 0;
@@ -3120,6 +3132,18 @@ if (TOI.quyen.includes('nhansu')) {
     /* ---- Hợp đồng lao động trong hồ sơ (SPEC-0007 Đợt 1) ---------------- */
 
     let NS_HD_DANG_MO = null;   // id nhân sự đang mở hộp hồ sơ
+
+    /* Lưu/ẩn/dùng lại một hợp đồng có thể ĐÁNH SỐ LẠI các bản khác của cùng
+       người (nhập bù, ẩn bản lần 1...). Bản nào bị đẩy lên lần ≥ 3 là vi phạm
+       giới hạn 2 lần của BLLĐ Đ.20 — phải báo, dù nó KHÔNG phải bản vừa nhập
+       (N-5 · REV-0013). Dùng alert vì hộp #nsHd-nhac bị vẽ lại sau khi lưu. */
+    function nhacDayLen3(kq) {
+      const ds = kq && Array.isArray(kq.canh_bao_khac) ? kq.canh_bao_khac : [];
+      if (!ds.length) return;
+      alert('⚠️ Lượt này làm đổi số lần ký của hợp đồng KHÁC trong hồ sơ:\n\n'
+        + ds.map(c => '  • ' + c).join('\n\n')
+        + '\n\nMời anh/chị mở lại bảng hợp đồng của người này để rà.');
+    }
 
     /* Đưa form về trạng thái "nhập bản mới": xoá id đang sửa, xoá ô lý do.
        KHÔNG tự điền sẵn loại hợp đồng — đoán hộ chỗ này là đoán hộ một quyết
@@ -3228,9 +3252,10 @@ if (TOI.quyen.includes('nhansu')) {
           : 'Dùng lại hợp đồng này vì sao?');
         if (!lyDo || !lyDo.trim()) return;
         try {
-          await API.nsHopDongAn(parseInt(bAn.dataset.hdAn, 10), lyDo.trim());
+          const kqAn = await API.nsHopDongAn(parseInt(bAn.dataset.hdAn, 10), lyDo.trim());
           await veHopDongHoSo(NS_HD_DANG_MO);
           await taiLaiNhanSuQuanTri();
+          nhacDayLen3(kqAn);
         } catch (err) {
           $('#nsHd-loi').textContent = err.message || 'Không đổi được, thử lại nhé.';
         }
@@ -3268,6 +3293,7 @@ if (TOI.quyen.includes('nhansu')) {
         }
         await veHopDongHoSo(NS_HD_DANG_MO);
         await taiLaiNhanSuQuanTri();
+        nhacDayLen3(kq);
       } catch (err) {
         oLoi.textContent = err.message || 'Không lưu được, thử lại nhé.';
       } finally {
@@ -3361,9 +3387,19 @@ if (TOI.quyen.includes('nhansu')) {
         const luongMoi = $('#nsSua-luong').value.trim();
         if (TOI.la_admin && luongMoi) body.luong = luongMoi;
         if (TOI.la_admin) body.ma_nv = $('#nsSua-manv').value.trim();
-        await API.qtSuaNhanSu(body);
+        const kqSua = await API.qtSuaNhanSu(body);
         dongHopSuaNhanSu();
         await taiLaiNhanSuQuanTri();
+        // Chuyển sang Khoán việc thì máy tự dọn ca — phải NÓI RA ngay, đừng
+        // để người sửa đóng hộp rồi mới biết mất đăng ký (N-2 · REV-0013).
+        const dc = kqSua && kqSua.don_ca;
+        if (dc && (dc.da_huy_dang_ky || dc.con_da_duyet || dc.con_lich_lam_viec)) {
+          alert(`Đã chuyển sang Khoán việc — máy đã dọn ca:\n\n`
+            + `  • Huỷ ${dc.da_huy_dang_ky || 0} đăng ký ca còn chờ duyệt.\n`
+            + `  • Còn ${dc.con_da_duyet || 0} đăng ký ĐÃ DUYỆT và ${dc.con_lich_lam_viec || 0} lịch làm việc sắp tới.\n\n`
+            + `Hai mục sau máy KHÔNG tự xoá — trưởng phòng xem lại và xử lý tay nhé.\n`
+            + `Toàn bộ đã ghi vào Lịch sử hồ sơ của người này.`);
+        }
       } catch (err) {
         oLoi.textContent = err.message || 'Không lưu được, thử lại nhé.';
       } finally {
@@ -5594,7 +5630,18 @@ async function khoiDongXepCa() {
           if (!confirm(`Còn ${kq.con_cho_duyet} đăng ký chưa duyệt trong tuần này. Vẫn chốt lịch?`)) return;
           kq = await API.caChotLichTuan({ phong_ban_id: phongBanId, tu_ngay: tu, den_ngay: den, xac_nhan: true });
         }
-        alert(`Đã chốt ${kq.da_khoa || 0} ca làm việc trong tuần.`);
+        /* Máy chủ CỐ Ý bỏ qua người ký hợp đồng khoán việc (ISSUE-1 · REV-0009).
+           Phải nói ra TÊN từng người, nếu không anh Duy chỉ thấy "đã chốt 12 ca"
+           mà không biết ai bị bỏ lại — đúng cái im lặng cần dẹp (N-1 · REV-0013). */
+        let tb = `Đã chốt ${kq.da_khoa || 0} ca làm việc trong tuần.`;
+        const boQuaAi = Array.isArray(kq.bo_qua_ai) ? kq.bo_qua_ai : [];
+        if (boQuaAi.length) {
+          tb += `\n\n⚠️ BỎ QUA ${kq.bo_qua_khoan || 0} ca của ${boQuaAi.length} người ký hợp đồng khoán việc:\n`
+              + boQuaAi.map(t => `  • ${t}`).join('\n')
+              + `\n\nHợp đồng khoán việc là hợp đồng dân sự — không chốt lịch theo giờ được.`
+              + `\nMấy ca này vẫn để nguyên, anh/chị tự thoả thuận trực tiếp với các bạn nhé.`;
+        }
+        alert(tb);
         await taiMaTran();
       } catch (err) { alert(err.message || 'Không chốt được lịch tuần.'); }
     });
