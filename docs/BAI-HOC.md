@@ -90,6 +90,31 @@ khác hẳn lúc bắt đầu. `checkout` ngược lại là phá ngang phiên r
 đọc được bản byte-đúng mà không chạm gì. Và **neo bản review vào SHA commit, không
 neo vào tên nhánh** — nhánh di chuyển, commit thì không.
 
+**BH-28 · Cắt code bằng số dòng thì phải KIỂM ĐOẠN CẮT trước khi tin kết quả.**
+Bàn thử lỗi HEIC (CTL-0011 vòng 2) cắt `coByteCuaDataUrl` theo số dòng nhưng lấy
+dư xuống dưới, **nuốt nửa một khối chú thích `/* … */` chưa đóng**. Dấu `/*` hở đó
+comment mất **toàn bộ** phần trang phía sau cho tới `*/` kế tiếp — `nenAnhChung`
+và hàm in kết quả biến mất khỏi phạm vi toàn cục, trang vẫn tải, vẫn "chạy", chỉ
+ném một `ReferenceError` trông như lỗi lặt vặt. Suýt đi truy code sản phẩm.
+→ **Cắt nguyên văn theo số dòng là đúng (không gõ tay), nhưng phải có chốt tự
+kiểm ngay sau khi cắt: đếm `{` = `}` VÀ đếm `/*` = `*/`.** Lệch thì dừng, báo
+"BÀN THỬ HỎNG", đừng chạy tiếp. Cùng họ BH-17: nghi bàn thử trước, nghi code sau.
+
+**BH-29 · Vá một khuôn code hỏng thì phải quét cả repo tìm anh em của nó — và
+kết luận "an toàn" cũng phải có SỐ ĐO, không được suy đoán.**
+Vá `String.fromCharCode(...)` ở `chatGui()` xong, quét toàn bộ file `git ls-files`
+theo dõi thì tìm ra **chỗ thứ hai giống hệt**: `src/auth.js:20`. Nếu chỉ nhìn
+khuôn code mà kết luận thì phải xếp nó là lỗi. Nhưng đi ngược lên **từng chỗ gọi**
+`sangBase64()` thì thấy đầu vào lớn nhất là **32 byte** (salt 16B, hash 32B, token
+32B) — không đời nào chạm ngưỡng ~122KB. Nên đáp án đúng là **có anh em, nhưng
+anh em an toàn, cố ý không sửa**.
+→ **Quét thì quét bằng danh sách file có thật (`git ls-files`), nói rõ đã loại gì
+(thư mục build `.wrangler`, vendor minified) — đó mới là "phương pháp quét" mà
+BH-03 đòi.** Và đừng dừng ở "cùng khuôn = cùng lỗi": lỗi tràn ngăn xếp phụ thuộc
+**kích thước đầu vào thật**, nên phải truy chỗ gọi rồi mới kết luận. Chỗ an toàn
+thì ghi vào báo cáo là **đã kiểm và an toàn**, đừng im lặng bỏ qua — im lặng thì
+lượt review sau lại phải đi tìm lại từ đầu.
+
 **BH-04 · Đừng đoán nguyên nhân rồi giao Khỉ Đột sửa theo phỏng đoán.**
 Gạo nêu 4 giả thuyết cho lỗi cửa sổ không đóng. **Cả 4 đều sai.** Nguyên nhân
 thật là một dòng CSS đè mất luật mặc định của trình duyệt.

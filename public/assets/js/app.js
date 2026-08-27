@@ -2805,12 +2805,26 @@ async function khoiDongChat() {
       oLoiChat.textContent = '';
     } catch (err) {
       if (luot !== luotTepChat) return;
-      // Xoá tệp đang giữ TRƯỚC khi báo lỗi — không để tệp cũ lén gửi đi
-      // trong khi màn hình đang báo đỏ (cùng lỗi REV-0002 #2 bên Góp ý).
-      tepDangChon = null;
-      oTepChat.value = '';
-      veTepDangChon();
-      oLoiChat.textContent = err.message || 'Không đọc được ảnh này, thử ảnh khác nhé.';
+      /* Nén hỏng thì GIỮ TỆP GỐC, không xoá (REV-0006 lỗi #2).
+         Ảnh HEIC của iPhone mang type "image/heic" nên lọt vào đây, nhưng
+         <img> trên Chrome/Windows không giải mã được → trước bản vá này tệp
+         bị xoá hẳn, tức là chat MẤT khả năng gửi ảnh iPhone vốn đang chạy tốt.
+         Chat gửi được tệp nhị phân bất kỳ nên gửi nguyên bản là an toàn;
+         backend `chatGui()` vẫn chặn 4MB độc lập.
+         KHÁC với Góp ý: cột `gop_y.dinh_kem` chặn 800KB và chỉ nhận base64
+         nên bên đó BẮT BUỘC giữ nguyên hành vi báo lỗi + xoá tệp. */
+      if (f.size <= CHAT_ANH_TOI_DA) {
+        tepDangChon = f;
+        veTepDangChon();
+        oLoiChat.textContent = 'Không nén được ảnh này, sẽ gửi nguyên bản.';
+      } else {
+        // Quá to mà lại không nén được → không còn đường nào, phải xoá thật.
+        tepDangChon = null;
+        oTepChat.value = '';
+        veTepDangChon();
+        oLoiChat.textContent = `Ảnh này không nén được mà lại nặng ${dinhDangCo(f.size)} `
+          + '— quá giới hạn 4MB của chat. Sếp đổi sang ảnh JPG/PNG nhẹ hơn nhé.';
+      }
     } finally {
       dangXuLyTepChat--;
     }

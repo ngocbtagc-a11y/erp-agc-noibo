@@ -389,7 +389,19 @@ async function chatGui(req, env) {
     tepLoai = String(tep.type || 'application/octet-stream');
     tepKichThuoc = tep.size;
     const buf = await tep.arrayBuffer();
-    tepB64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+    /* Duyệt THEO LÔ, không trải cả mảng vào tham số hàm.
+       Cách cũ `String.fromCharCode(...new Uint8Array(buf))` biến MỖI BYTE thành
+       một tham số hàm — ảnh 300KB = 307.200 tham số → tràn ngăn xếp
+       (`RangeError: Maximum call stack size exceeded`). Đo được ngưỡng gãy nằm
+       trong khoảng 100–200KB, mà ảnh chụp màn hình sau khi nén là 200–800KB,
+       tức là ĐA SỐ ảnh dán vào chat sẽ báo "Không gửi được" (REV-0006 lỗi #1).
+       Lô 0x8000 = 32.768 tham số/lần gọi, an toàn trên mọi engine V8. */
+    const u8 = new Uint8Array(buf);
+    let chuoi = '';
+    for (let i = 0; i < u8.length; i += 0x8000) {
+      chuoi += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000));
+    }
+    tepB64 = btoa(chuoi);
   }
 
   if (!noiDung && !tepB64) return loi('Tin nhắn trống');
