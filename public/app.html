@@ -671,12 +671,14 @@
               </select>
             </div>
             <div class="field">
-              <label>Loại lao động <span class="hint">· để dùng được Đăng ký ca</span></label>
+              <label>Hình thức làm việc <span class="hint">· quyết định có đăng ký ca được không</span></label>
               <select id="qtLoaiLaoDong">
                 <option value="toan_thoi_gian">Toàn thời gian</option>
-                <option value="ban_thoi_gian">Part-time</option>
+                <option value="ban_thoi_gian">Part-time (bán thời gian)</option>
                 <option value="thoi_vu">Thời vụ</option>
+                <option value="khoan_viec">Khoán việc</option>
               </select>
+              <div class="hd-nhac" id="qtNhacKhoan" hidden></div>
             </div>
             <div class="field" id="qtFieldLuong">
               <label>Lương (đồng/tháng)</label>
@@ -714,14 +716,28 @@
               <option value="can_trao_doi">Cần trao đổi</option>
               <option value="parttime">Bán thời gian</option>
             </select>
-            <select id="ns-locloaild" class="chon-nho" title="Lọc theo loại lao động">
-              <option value="">Tất cả loại LĐ</option>
+            <select id="ns-locloaild" class="chon-nho" title="Lọc theo hình thức làm việc">
+              <option value="">Tất cả hình thức</option>
               <option value="toan_thoi_gian">Toàn thời gian</option>
               <option value="ban_thoi_gian">Part-time</option>
               <option value="thoi_vu">Thời vụ</option>
+              <option value="khoan_viec">Khoán việc</option>
+            </select>
+            <select id="ns-lochopdong" class="chon-nho" title="Lọc theo hợp đồng" hidden>
+              <option value="">Mọi hợp đồng</option>
+              <option value="thieu">Chưa có thông tin hợp đồng</option>
+              <option value="thu_viec">Thử việc</option>
+              <option value="xac_dinh_th">Xác định thời hạn</option>
+              <option value="khong_xac_dinh_th">Không xác định thời hạn</option>
+              <option value="khoan_viec">Khoán việc</option>
             </select>
             <button type="button" class="btn-nho btn-phu" id="ns-xoaloc" hidden>Xoá bộ lọc</button>
           </div>
+          <!-- Exception-First (SPEC-0007 Đợt 1): 24 người đang làm chưa có
+               thông tin hợp đồng nào trong ERP — cột trống là VIỆC CẦN LÀM,
+               không phải hệ thống hỏng. Dải này nói thẳng còn thiếu bao nhiêu
+               hồ sơ và bấm vào là lọc ra đúng những người đó. -->
+          <div class="ns-thieuhd" id="ns-thieuhd" hidden></div>
         </div>
         <div class="table-wrap">
           <table>
@@ -730,6 +746,10 @@
                 <th>Nhân sự</th>
                 <th>Bộ phận</th>
                 <th>Trạng thái</th>
+                <!-- Một cột "Hợp đồng" gộp loại + ngày hết hạn thay vì hai cột
+                     rời: ERP chạy trên điện thoại, mỗi cột thêm là một lần
+                     phải kéo ngang. Ngày vào làm đã có sẵn cột bên cạnh. -->
+                <th id="ns-thHopDong" hidden>Hợp đồng</th>
                 <th>Vào làm</th>
                 <th class="num" id="ns-thLuong">Lương</th>
                 <th id="ns-thThaoTac" hidden></th>
@@ -2260,12 +2280,14 @@
         </select>
       </div>
       <div class="field">
-        <label>Loại lao động <span class="hint">· để dùng được Đăng ký ca</span></label>
+        <label>Hình thức làm việc <span class="hint">· quyết định có đăng ký ca được không</span></label>
         <select id="nsSua-loailaodong">
           <option value="toan_thoi_gian">Toàn thời gian</option>
-          <option value="ban_thoi_gian">Part-time</option>
+          <option value="ban_thoi_gian">Part-time (bán thời gian)</option>
           <option value="thoi_vu">Thời vụ</option>
+          <option value="khoan_viec">Khoán việc</option>
         </select>
+        <div class="hd-nhac" id="nsSuaNhacKhoan" hidden></div>
       </div>
       <div class="field" id="nsSua-fieldluong">
         <label>Đổi lương (đồng/tháng) <span class="goi-y">· để trống = giữ nguyên</span></label>
@@ -2277,6 +2299,67 @@
       </div>
     </form>
     <div class="form-loi" id="nsSua-loi"></div>
+
+    <!-- Hợp đồng lao động (SPEC-0007 Đợt 1) — bảng RIÊNG, không nhồi cột vào
+         nhan_su: một người ký nhiều hợp đồng nối tiếp, và thứ luật đòi chính
+         là "đây là hợp đồng thứ mấy" (BLLĐ 2019 Đ.20). -->
+    <div class="kv-md-muc">Hợp đồng lao động</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Loại</th><th>Từ ngày</th><th>Hết hạn</th><th>Lần</th><th>Số HĐ</th><th></th></tr></thead>
+        <tbody id="nsSua-hopdong"></tbody>
+      </table>
+    </div>
+    <div class="empty" id="nsSua-hopdong-trong" hidden>
+      Chưa có thông tin hợp đồng. Thêm ở ngay bên dưới — đây là hồ sơ pháp lý, không phải mục tuỳ chọn.
+    </div>
+
+    <form id="nsHdForm" class="form-luoi" autocomplete="off" style="margin-top:12px">
+      <input type="hidden" id="nsHd-id">
+      <div class="field">
+        <label>Loại hợp đồng *</label>
+        <select id="nsHd-loai" required>
+          <option value="">— Chọn —</option>
+          <option value="thu_viec">Thử việc</option>
+          <option value="xac_dinh_th">Xác định thời hạn</option>
+          <option value="khong_xac_dinh_th">Không xác định thời hạn</option>
+          <option value="khoan_viec">Khoán việc (hợp đồng dân sự)</option>
+        </select>
+        <div class="hd-nhac" id="nsHd-nhac" hidden></div>
+      </div>
+      <div class="field">
+        <label>Pháp nhân ký</label>
+        <select id="nsHd-phapnhan">
+          <option value="cong_ty">Công ty TNHH</option>
+          <option value="hkd">Hộ kinh doanh (cũ)</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Ngày bắt đầu *</label>
+        <input type="date" id="nsHd-batdau" required>
+      </div>
+      <div class="field" id="nsHd-fieldhethan">
+        <label>Ngày hết hạn</label>
+        <input type="date" id="nsHd-hethan">
+      </div>
+      <div class="field">
+        <label>Số hợp đồng <span class="goi-y">· để trống cũng được</span></label>
+        <input type="text" id="nsHd-sohd" placeholder="VD: 12/2026/HĐLĐ">
+      </div>
+      <div class="field">
+        <label>Lần ký thứ <span class="goi-y">· máy tự tính, không sửa được</span></label>
+        <input type="text" id="nsHd-lanthu" value="—" readonly>
+      </div>
+      <div class="field field-rong" id="nsHd-fieldlydo" hidden>
+        <label>Lý do vẫn ký như vậy *</label>
+        <input type="text" id="nsHd-lydo" placeholder="Ghi ngắn gọn — lý do này được lưu vào lịch sử hồ sơ">
+      </div>
+      <div class="field field-nut" style="display:flex; gap:10px">
+        <button type="submit" class="btn-primary" id="nsHd-nutluu" style="width:auto">Lưu hợp đồng</button>
+        <button type="button" class="btn-phu" id="nsHd-nutmoi" style="width:auto" hidden>Nhập bản mới</button>
+      </div>
+    </form>
+    <div class="form-loi" id="nsHd-loi"></div>
 
     <div class="kv-md-muc">Lịch sử thay đổi</div>
     <div class="table-wrap">

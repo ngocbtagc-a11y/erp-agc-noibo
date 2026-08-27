@@ -141,10 +141,14 @@ function locNhanSu(ds) {
   const boPhan = $('#ns-locbophan')?.value || '';
   const trangThai = $('#ns-loctrangthai')?.value || '';
   const loaiLd = $('#ns-locloaild')?.value || '';
+  const hopDong = $('#ns-lochopdong')?.value || '';
   return ds.filter(n => {
     if (boPhan && (n.bo_phan || '').trim() !== boPhan) return false;
     if (trangThai && n.trang_thai !== trangThai) return false;
     if (loaiLd && n.loai_lao_dong !== loaiLd) return false;
+    // 'thieu' = chưa có bản hợp đồng nào còn hiệu lực trong ERP
+    if (hopDong === 'thieu' && n.hd_loai) return false;
+    if (hopDong && hopDong !== 'thieu' && n.hd_loai !== hopDong) return false;
     if (k && !boDau(`${n.ma_nv || ''} ${n.ho_ten} ${n.sdt || ''} ${n.email || ''}`).includes(k)) return false;
     return true;
   });
@@ -155,6 +159,7 @@ function xoaLocNS() {
   if ($('#ns-locbophan')) $('#ns-locbophan').value = '';
   if ($('#ns-loctrangthai')) $('#ns-loctrangthai').value = '';
   if ($('#ns-locloaild')) $('#ns-locloaild').value = '';
+  if ($('#ns-lochopdong')) $('#ns-lochopdong').value = '';
   TOI.them_nhan_su ? veBangNsQuanTri() : veBangNsDoc();
 }
 
@@ -168,7 +173,27 @@ function veTrongNS(tong, sauLoc) {
     $('#ns-trongxoaloc')?.addEventListener('click', xoaLocNS);
   }
   const nutLoc = $('#ns-xoaloc');
-  if (nutLoc) nutLoc.hidden = !($('#ns-tim')?.value || $('#ns-locbophan')?.value || $('#ns-loctrangthai')?.value || $('#ns-locloaild')?.value);
+  if (nutLoc) nutLoc.hidden = !($('#ns-tim')?.value || $('#ns-locbophan')?.value
+    || $('#ns-loctrangthai')?.value || $('#ns-locloaild')?.value || $('#ns-lochopdong')?.value);
+}
+
+/* Dải Exception-First: còn bao nhiêu người ĐANG LÀM chưa có hợp đồng trong
+   ERP. Chỉ đếm `dang_lam = 1` — người đã nghỉ không còn là việc phải làm.
+   Đủ 100% thì dải tự biến mất, không để lại một dòng chúc mừng thừa. */
+function veDaiThieuHopDong() {
+  const o = $('#ns-thieuhd'); if (!o) return;
+  const dangLam = DS_NHAN_SU_QT.filter(n => n.dang_lam);
+  const thieu = dangLam.filter(n => !n.hd_loai);
+  o.hidden = thieu.length === 0 || dangLam.length === 0;
+  if (o.hidden) return;
+  o.innerHTML =
+    `<span>📋 <b>${thieu.length}/${dangLam.length}</b> người đang làm chưa có thông tin hợp đồng trong ERP. ` +
+    `Ô “Hợp đồng” của họ để trống là vì chưa nhập, không phải hệ thống lỗi.</span>` +
+    `<button type="button" class="btn-nho" id="ns-thieuhd-loc">Xem ${thieu.length} người này</button>`;
+  $('#ns-thieuhd-loc').addEventListener('click', () => {
+    const oLoc = $('#ns-lochopdong');
+    if (oLoc) { oLoc.value = 'thieu'; veBangNsQuanTri(); }
+  });
 }
 
 function veBangNsDoc() {
@@ -207,10 +232,12 @@ function veBangNsQuanTri() {
         `<div class="sm">${esc(n.chuc_vu || tt.chu || '')}</div></div></div></td>` +
       `<td>${esc(n.bo_phan || '—')}</td>` +
       `<td><span class="tag ${tt.mau}">${esc(tt.chu)}</span></td>` +
+      `<td>${veOHopDong(n)}</td>` +
       `<td class="sm">${esc(n.ngay_vao || '')}</td>` +
       `<td>${thaoTac}</td>`;
   });
   veTrongNS(DS_NHAN_SU_QT, ds);
+  veDaiThieuHopDong();
 }
 
 function locTaiKhoanQT(ds) {
@@ -297,6 +324,77 @@ const TRANG_THAI = {
   can_trao_doi: { chu: 'Cần trao đổi', mau: 'danger' },
   parttime:     { chu: 'Bán thời gian', mau: 'mute' }
 };
+
+/* ==========================================================================
+   HỢP ĐỒNG LAO ĐỘNG — SPEC-0007 Đợt 1
+   ---------------------------------------------------------------------------
+   HAI trục khác nhau, đừng lẫn:
+   · HÌNH THỨC LÀM VIỆC (`loai_lao_dong`) — toàn/bán thời gian/thời vụ/khoán.
+   · LOẠI HỢP ĐỒNG (`hop_dong_lao_dong.loai`) — thử việc/xác định thời hạn/
+     không xác định thời hạn/khoán việc.
+   "Bán thời gian" và "Khoán việc" KHÔNG thay thế nhau: bán thời gian là hợp
+   đồng lao động có đóng BHXH, khoán việc là hợp đồng dân sự không đóng.
+   ========================================================================== */
+const LOAI_LD_CHU  = { toan_thoi_gian: 'Toàn thời gian', ban_thoi_gian: 'Part-time', thoi_vu: 'Thời vụ', khoan_viec: 'Khoán việc' };
+const LOAI_LD_NGAN = { toan_thoi_gian: 'Toàn TG', ban_thoi_gian: 'Part-time', thoi_vu: 'Thời vụ', khoan_viec: 'Khoán' };
+const LOAI_HD_CHU  = {
+  thu_viec: 'Thử việc', xac_dinh_th: 'Xác định thời hạn',
+  khong_xac_dinh_th: 'Không xác định thời hạn', khoan_viec: 'Khoán việc'
+};
+
+/* Lời nhắc khi chọn "Khoán" — NHẮC để chọn đúng, không phải doạ. Bốn điều
+   kiện lấy thẳng từ BLLĐ 2019 Đ.13 k.1 và Luật BHXH 2024 (41/2024/QH15, hiệu
+   lực 01/07/2025): thoả thuận mang TÊN GỌI KHÁC mà vẫn có trả công + quản lý,
+   điều hành, giám sát thì vẫn là quan hệ lao động, vẫn BHXH bắt buộc. */
+const NHAC_KHOAN_HTML =
+  '<b>Chọn “Khoán việc” là chọn một loại hợp đồng khác hẳn.</b> Khoán việc là hợp đồng ' +
+  '<b>dân sự</b>, không đóng BHXH. Chỉ đúng khi cả bốn điều dưới đây đều đúng:' +
+  '<ul>' +
+    '<li>Trả theo <b>kết quả bàn giao</b>, không trả theo tháng.</li>' +
+    '<li><b>Không xếp ca, không chấm công</b> người này.</li>' +
+    '<li>Họ tự quyết làm lúc nào, ở đâu.</li>' +
+    '<li>Công việc có <b>điểm kết thúc rõ ràng</b>.</li>' +
+  '</ul>' +
+  'Thiếu một trong bốn thì đây <b>vẫn là hợp đồng lao động</b>, dù tờ giấy đề tên gì — ' +
+  'và phải đóng BHXH. Đặt hình thức này thì người đó <b>không đăng ký ca được nữa</b>, ' +
+  'đúng như hợp đồng khoán yêu cầu.';
+
+/* Ngày YYYY-MM-DD → dd/mm/yyyy. Trả '' nếu trống, để nơi gọi tự quyết hiện gì.
+   Tên KHÁC `ngayVN()` đã có sẵn ở dưới vì đầu vào khác hẳn: cái kia nhận unix
+   (giây) của Shopee/Đối soát, cái này nhận chuỗi ngày của D1. */
+function ngayIsoVN(s) {
+  if (!s || !/^\d{4}-\d{2}-\d{2}/.test(s)) return '';
+  const [y, m, d] = s.slice(0, 10).split('-');
+  return `${d}/${m}/${y}`;
+}
+
+/* Số ngày từ hôm nay tới mốc (âm = đã quá hạn). Chỉ để tô màu nhắc mắt,
+   KHÔNG phải cơ chế nhắc — nhắc hạn hợp đồng nối vào SPEC-0004, làm đợt sau. */
+function conBaoNhieuNgay(s) {
+  if (!s) return null;
+  const homNay = new Date(); homNay.setHours(0, 0, 0, 0);
+  const moc = new Date(s + 'T00:00:00');
+  if (isNaN(moc)) return null;
+  return Math.round((moc - homNay) / 86400000);
+}
+
+/* Ô "Hợp đồng" trong bảng Danh sách nhân sự. Trống thì hiện "Chưa có thông
+   tin" bằng chữ nghiêng mờ — nhìn ra ngay là CHƯA NHẬP, không phải vỡ giao
+   diện (Exception-First: 24 người hiện có đều rơi vào ô này). */
+function veOHopDong(n) {
+  if (!n.hd_loai) return '<span class="hd-o"><span class="hd-trong">Chưa có thông tin</span></span>';
+  const ten = LOAI_HD_CHU[n.hd_loai] || n.hd_loai;
+  const lan = n.hd_loai === 'xac_dinh_th' && n.hd_lan_thu > 1 ? ` <span class="sm">· lần ${n.hd_lan_thu}</span>` : '';
+  if (!n.hd_het_han) {
+    return `<span class="hd-o">${esc(ten)}${lan}<span class="hd-han">Không có ngày hết hạn</span></span>`;
+  }
+  const con = conBaoNhieuNgay(n.hd_het_han);
+  let cls = '', them = '';
+  if (con !== null && con < 0) { cls = ' qua-han'; them = ` · quá hạn ${-con} ngày`; }
+  else if (con !== null && con <= 45) { cls = ' sap-het'; them = ` · còn ${con} ngày`; }
+  return `<span class="hd-o">${esc(ten)}${lan}` +
+    `<span class="hd-han${cls}">Hết hạn ${ngayIsoVN(n.hd_het_han)}${them}</span></span>`;
+}
 
 /* Trạng thái HIỆN DIỆN (Presence) tự đặt — khác TRANG_THAI ở trên (trạng
    thái HỢP ĐỒNG). Đây là GIAO TIẾP nội bộ, không phải chấm công/lịch nghỉ:
@@ -2889,11 +2987,34 @@ if (TOI.quyen.includes('nhansu')) {
   $('#ns-locbophan').addEventListener('change', veLaiBangNs);
   $('#ns-loctrangthai').addEventListener('change', veLaiBangNs);
   $('#ns-locloaild').addEventListener('change', veLaiBangNs);
+  $('#ns-lochopdong').addEventListener('change', veLaiBangNs);
   $('#ns-xoaloc').addEventListener('click', xoaLocNS);
 
   if (TOI.them_nhan_su) {
     $('#ns-panel-them').hidden = false;
     $('#ns-thThaoTac').hidden = false;
+    // Cột + bộ lọc Hợp đồng CHỈ mở cho người quản lý nhân sự (Admin/HCNS) —
+    // bảng đọc-thường vẽ ít ô hơn, hiện <th> lên là lệch cột toàn bảng, và
+    // hạn hợp đồng cũng không phải thứ cả công ty cần nhìn.
+    $('#ns-thHopDong').hidden = false;
+    $('#ns-lochopdong').hidden = false;
+
+    // Lời nhắc hiện NGAY TẠI CHỖ khi chọn "Khoán việc" — ngay dưới ô vừa
+    // chọn, lúc người ta còn đang cân nhắc. Đưa ra hộp cảnh báo sau khi bấm
+    // Lưu thì đã muộn: lúc đó người ta chỉ muốn bấm cho xong.
+    function ganNhacKhoan(idSelect, idNhac) {
+      const oSel = $(idSelect), oNhac = $(idNhac);
+      if (!oSel || !oNhac) return;
+      const capNhat = () => {
+        const khoan = oSel.value === 'khoan_viec';
+        oNhac.hidden = !khoan;
+        if (khoan) oNhac.innerHTML = NHAC_KHOAN_HTML;
+      };
+      oSel.addEventListener('change', capNhat);
+      capNhat();
+    }
+    ganNhacKhoan('#qtLoaiLaoDong', '#qtNhacKhoan');
+    ganNhacKhoan('#nsSua-loailaodong', '#nsSuaNhacKhoan');
     if (!TOI.la_admin) {
       const oLuong = document.getElementById('qtFieldLuong');
       if (oLuong) oLuong.remove();
@@ -2932,6 +3053,9 @@ if (TOI.quyen.includes('nhansu')) {
           luong: $('#qtLuong').value
         });
         $('#qtFormThem').reset();
+        // .reset() đưa select về mặc định nhưng KHÔNG bắn 'change' — không
+        // bắn tay thì lời nhắc "Khoán" của người vừa thêm còn dính lại.
+        $('#qtLoaiLaoDong').dispatchEvent(new Event('change'));
         veQtChucDanh(); veQtPhongBan();
         await taiLaiNhanSuQuanTri();
       } catch (err) {
@@ -2946,7 +3070,8 @@ if (TOI.quyen.includes('nhansu')) {
     $('#nsSua-nuthuy').addEventListener('click', dongHopSuaNhanSu);
     nsSuaModal.addEventListener('click', e => { if (e.target === nsSuaModal) dongHopSuaNhanSu(); });
 
-    const LOAI_LD_CHU = { toan_thoi_gian: 'Toàn thời gian', ban_thoi_gian: 'Part-time', thoi_vu: 'Thời vụ' };
+    // LOAI_LD_CHU nay khai báo 1 chỗ ở đầu tệp (SPEC-0007 Đợt 1) — bản cũ ở
+    // đây thiếu 'khoan_viec' nên hồ sơ người khoán sẽ hiện trống một dòng.
     const NHAN_SU_KIEN = {
       vao_lam: '🙋 Vào làm', doi_phong_ban: 'Đổi phòng ban', doi_chuc_danh: 'Đổi chức danh',
       doi_quan_ly: 'Đổi quản lý trực tiếp', doi_trang_thai: 'Đổi trạng thái hợp đồng', nghi_viec: 'Nghỉ việc'
@@ -2992,6 +3117,155 @@ if (TOI.quyen.includes('nhansu')) {
       oTrong.hidden = lich_su.length > 0;
     }
 
+    /* ---- Hợp đồng lao động trong hồ sơ (SPEC-0007 Đợt 1) ---------------- */
+
+    let NS_HD_DANG_MO = null;   // id nhân sự đang mở hộp hồ sơ
+
+    /* Đưa form về trạng thái "nhập bản mới": xoá id đang sửa, xoá ô lý do.
+       KHÔNG tự điền sẵn loại hợp đồng — đoán hộ chỗ này là đoán hộ một quyết
+       định pháp lý, để người nhập tự chọn. */
+    function dongHoSoHopDongForm() {
+      $('#nsHd-id').value = '';
+      $('#nsHd-loai').value = '';
+      $('#nsHd-phapnhan').value = 'cong_ty';
+      $('#nsHd-batdau').value = '';
+      $('#nsHd-hethan').value = '';
+      $('#nsHd-sohd').value = '';
+      $('#nsHd-lanthu').value = '—';
+      $('#nsHd-lydo').value = '';
+      $('#nsHd-fieldlydo').hidden = true;
+      $('#nsHd-nutmoi').hidden = true;
+      $('#nsHd-loi').textContent = '';
+      $('#nsHd-nutluu').textContent = 'Lưu hợp đồng';
+      capNhatNhacLoaiHd();
+    }
+
+    /* Nhắc tại chỗ theo loại hợp đồng vừa chọn + bật/tắt ô Ngày hết hạn cho
+       khớp: "không xác định thời hạn" thì ô đó vô nghĩa, để hở là mời người
+       ta điền vào rồi tự mâu thuẫn. */
+    function capNhatNhacLoaiHd() {
+      const loai = $('#nsHd-loai').value;
+      const oNhac = $('#nsHd-nhac'), oHan = $('#nsHd-hethan');
+      const khongHan = loai === 'khong_xac_dinh_th';
+      oHan.disabled = khongHan;
+      if (khongHan) oHan.value = '';
+      $('#nsHd-fieldhethan').hidden = khongHan;
+
+      if (loai === 'khoan_viec') {
+        oNhac.hidden = false; oNhac.innerHTML = NHAC_KHOAN_HTML;
+      } else if (loai === 'xac_dinh_th') {
+        oNhac.hidden = false;
+        oNhac.innerHTML = '<b>Bắt buộc có ngày hết hạn.</b> Loại này tối đa <b>36 tháng</b> ' +
+          'một lần ký và chỉ được ký <b>2 lần liên tiếp</b> với cùng một người (BLLĐ 2019 Đ.20). ' +
+          'Hết hạn mà quá <b>30 ngày</b> chưa ký lại thì luật tự coi là <b>không xác định thời hạn</b> — ' +
+          'điều này không đảo ngược được.';
+      } else {
+        oNhac.hidden = true; oNhac.innerHTML = '';
+      }
+    }
+    $('#nsHd-loai').addEventListener('change', capNhatNhacLoaiHd);
+    $('#nsHd-nutmoi').addEventListener('click', dongHoSoHopDongForm);
+
+    async function veHopDongHoSo(id) {
+      NS_HD_DANG_MO = id;
+      dongHoSoHopDongForm();
+      let hop_dong = [];
+      try { ({ hop_dong } = await API.nsHopDong(id)); } catch { /* im lặng — hộp vẫn dùng được */ }
+      if (NS_HD_DANG_MO !== id) return;   // đã mở hồ sơ người khác trong lúc chờ
+
+      veBang('#nsSua-hopdong', hop_dong, h => {
+        const an = !h.hieu_luc;
+        const han = h.ngay_het_han ? ngayIsoVN(h.ngay_het_han) : '—';
+        const con = h.hieu_luc ? conBaoNhieuNgay(h.ngay_het_han) : null;
+        let nhanHan = esc(han);
+        if (con !== null && con < 0) nhanHan += ` <span class="tag danger">quá hạn</span>`;
+        else if (con !== null && con <= 45) nhanHan += ` <span class="tag warn">còn ${con} ngày</span>`;
+        return `<td class="sm">${esc(LOAI_HD_CHU[h.loai] || h.loai)}${an ? ' <span class="tag mute">đã ẩn</span>' : ''}</td>` +
+          `<td class="sm">${esc(ngayIsoVN(h.ngay_bat_dau))}</td>` +
+          `<td class="sm">${nhanHan}</td>` +
+          `<td class="sm">${h.loai === 'xac_dinh_th' ? esc(String(h.lan_thu || 1)) : '—'}</td>` +
+          `<td class="sm">${esc(h.so_hd || '—')}</td>` +
+          `<td class="sm"><button type="button" class="btn-nho" data-hd-sua="${h.id}">Sửa</button> ` +
+            `<button type="button" class="btn-nho btn-phu" data-hd-an="${h.id}" data-hd-hieuluc="${h.hieu_luc}">${an ? 'Dùng lại' : 'Ẩn'}</button></td>`;
+      });
+      $('#nsSua-hopdong-trong').hidden = hop_dong.length > 0;
+      $('#nsSua-hopdong').dataset.ds = JSON.stringify(hop_dong);
+    }
+
+    $('#nsSua-hopdong').addEventListener('click', async e => {
+      const bSua = e.target.closest('[data-hd-sua]');
+      const bAn = e.target.closest('[data-hd-an]');
+      if (bSua) {
+        const ds = JSON.parse($('#nsSua-hopdong').dataset.ds || '[]');
+        const h = ds.find(x => String(x.id) === bSua.dataset.hdSua);
+        if (!h) return;
+        $('#nsHd-id').value = h.id;
+        $('#nsHd-loai').value = h.loai;
+        capNhatNhacLoaiHd();
+        $('#nsHd-phapnhan').value = h.phap_nhan || 'cong_ty';
+        $('#nsHd-batdau').value = (h.ngay_bat_dau || '').slice(0, 10);
+        $('#nsHd-hethan').value = (h.ngay_het_han || '').slice(0, 10);
+        $('#nsHd-sohd').value = h.so_hd || '';
+        $('#nsHd-lanthu').value = h.loai === 'xac_dinh_th' ? String(h.lan_thu || 1) : '—';
+        $('#nsHd-nutluu').textContent = 'Lưu thay đổi';
+        $('#nsHd-nutmoi').hidden = false;
+        $('#nsHd-loi').textContent = '';
+        return;
+      }
+      if (bAn) {
+        const dangHieuLuc = bAn.dataset.hdHieuluc === '1';
+        const lyDo = prompt(dangHieuLuc
+          ? 'Ẩn hợp đồng này vì sao? (bản ghi KHÔNG bị xoá, chỉ thôi không tính nữa)'
+          : 'Dùng lại hợp đồng này vì sao?');
+        if (!lyDo || !lyDo.trim()) return;
+        try {
+          await API.nsHopDongAn(parseInt(bAn.dataset.hdAn, 10), lyDo.trim());
+          await veHopDongHoSo(NS_HD_DANG_MO);
+          await taiLaiNhanSuQuanTri();
+        } catch (err) {
+          $('#nsHd-loi').textContent = err.message || 'Không đổi được, thử lại nhé.';
+        }
+      }
+    });
+
+    $('#nsHdForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      const oLoi = $('#nsHd-loi'); oLoi.textContent = '';
+      const nut = $('#nsHd-nutluu');
+      if (!NS_HD_DANG_MO) return;
+      nut.disabled = true;
+      try {
+        const kq = await API.nsHopDongLuu({
+          id: $('#nsHd-id').value || null,
+          nhan_su_id: NS_HD_DANG_MO,
+          loai: $('#nsHd-loai').value,
+          phap_nhan: $('#nsHd-phapnhan').value,
+          ngay_bat_dau: $('#nsHd-batdau').value,
+          ngay_het_han: $('#nsHd-hethan').value,
+          so_hd: $('#nsHd-sohd').value,
+          ly_do: $('#nsHd-lydo').value
+        });
+        // CHƯA lưu — máy chủ đòi một dòng lý do trước khi ghi bản vi phạm
+        // BLLĐ Đ.20 vào hồ sơ. Chặn MỀM: gõ lý do rồi bấm lại là lưu được.
+        if (kq && kq.can_ly_do) {
+          $('#nsHd-fieldlydo').hidden = false;
+          $('#nsHd-nhac').hidden = false;
+          $('#nsHd-nhac').innerHTML = '<b>Khoan đã.</b><ul>' +
+            kq.canh_bao.map(c => `<li>${esc(c)}</li>`).join('') +
+            '</ul>Vẫn ký như vậy thì ghi một dòng lý do bên dưới rồi bấm Lưu lại — ' +
+            'lý do sẽ được lưu vào lịch sử hồ sơ.';
+          $('#nsHd-lydo').focus();
+          return;
+        }
+        await veHopDongHoSo(NS_HD_DANG_MO);
+        await taiLaiNhanSuQuanTri();
+      } catch (err) {
+        oLoi.textContent = err.message || 'Không lưu được, thử lại nhé.';
+      } finally {
+        nut.disabled = false;
+      }
+    });
+
     function moHopSuaNhanSu(id) {
       const n = DS_NHAN_SU_QT.find(x => x.id === id);
       if (!n) return;
@@ -3002,12 +3276,16 @@ if (TOI.quyen.includes('nhansu')) {
       veDauHoSo(n);
       veKhoiTaiKhoan(n);
       veLichSuHoSo(id);
+      veHopDongHoSo(id);
       $('#nsSua-id').value = n.id;
       $('#nsSua-hoten').value = n.ho_ten;
       $('#nsSua-sdt').value = n.sdt || '';
       $('#nsSua-email').value = n.email || '';
       $('#nsSua-trangthai').value = n.trang_thai || 'da_ky';
+      // Đặt .value bằng mã KHÔNG kích hoạt sự kiện 'change' — phải bắn tay,
+      // không thì mở hồ sơ một người đang Khoán sẽ không thấy lời nhắc nào.
       $('#nsSua-loailaodong').value = n.loai_lao_dong || 'toan_thoi_gian';
+      $('#nsSua-loailaodong').dispatchEvent(new Event('change'));
       $('#nsSua-fieldmanv').hidden = !TOI.la_admin;
       $('#nsSua-manv').value = n.ma_nv || '';
 
@@ -5135,7 +5413,7 @@ async function khoiDongXepCa() {
         cacNgay.map(ng => `<th>${nhanNgayNgan(ng)}</th>`).join('') + '</tr>';
 
       // ---- Ma trận: body ----
-      const NHAN_LLD = { toan_thoi_gian: 'Toàn TG', ban_thoi_gian: 'Part-time', thoi_vu: 'Thời vụ' };
+      const NHAN_LLD = LOAI_LD_NGAN;   // khai báo chung đầu tệp (SPEC-0007 Đợt 1)
       const tbody = $('#xc-matrix-tbody');
       tbody.innerHTML = '';
       $('#xc-matrix-trong').hidden = nhan_su.length > 0;

@@ -18,6 +18,10 @@ const CAU_HINH_MA = {
   nhan_su_toan_thoi_gian: { prefix: '01-', so_chu_so: 4 },   // 01-0001
   nhan_su_ban_thoi_gian:  { prefix: '02-', so_chu_so: 4 },   // 02-0001
   nhan_su_thoi_vu:        { prefix: '03-', so_chu_so: 4 },   // 03-0001
+  // 04 = Khoán việc (SPEC-0007 Đợt 1). BẮT BUỘC phải có dòng này: mã nhân sự
+  // sinh theo 'nhan_su_' + loai_lao_dong, thiếu cấu hình thì sinhMa() ném lỗi
+  // và KHÔNG thêm được người khoán việc nào.
+  nhan_su_khoan_viec:     { prefix: '04-', so_chu_so: 4 },   // 04-0001
   tai_san: { prefix: 'TS', so_chu_so: 4 }    // TS0001
 };
 
