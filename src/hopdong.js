@@ -86,7 +86,7 @@ export async function danhSach(env, nhanSuId) {
    2. XẾP THEO NGÀY BẮT ĐẦU, không theo thứ tự nhập. Nhập bù hợp đồng 2023 sau
       khi đã nhập 2024–2026 thì nó phải ra lần 1, và 2024/2025/2026 phải được
       TÍNH LẠI thành 2/3/4 — chứ không phải hai dòng cùng ghi "lần 3".
-   3. ĐỨT QUÃNG > 30 NGÀY thì chuỗi RESET về 1. Căn cứ: BLLĐ 2019 Đ.20 k.2c —
+   3. ĐỨT QUÃNG > 30 NGÀY thì chuỗi RESET về 1. Căn cứ: BLLĐ 2019 Đ.20 k.2b —
       hết hạn mà quá 30 ngày không ký lại thì hợp đồng cũ TỰ trở thành không
       xác định thời hạn, chuỗi "ký liên tiếp có thời hạn" đã đứt ở đó. Người
       nghỉ 5 năm quay lại ký mới là lần 1, không phải lần 3.
@@ -125,7 +125,7 @@ function xepChuoiLanThu(ds) {
 
 async function dsXacDinhTh(env, nhanSuId, boQuaId) {
   const { results } = await env.DB.prepare(`
-    SELECT id, ngay_bat_dau, ngay_het_han, lan_thu FROM hop_dong_lao_dong
+    SELECT id, so_hd, ngay_bat_dau, ngay_het_han, lan_thu FROM hop_dong_lao_dong
      WHERE nhan_su_id = ? AND loai = 'xac_dinh_th' AND hieu_luc = 1
        AND (? IS NULL OR id <> ?)
   `).bind(nhanSuId, boQuaId, boQuaId).all();
@@ -145,17 +145,34 @@ async function tinhLanThu(env, nhanSuId, loai, boQuaId, batDau, hetHan) {
 
 /* Tính lại `lan_thu` cho TOÀN BỘ hợp đồng của một người. Gọi sau mọi
    thêm/sửa/ẩn — nếu không thì ẩn bản lần 1 xong các bản sau vẫn ghi 2, 3,
-   tức bảng hiển thị mâu thuẫn với chính quy tắc của nó. */
+   tức bảng hiển thị mâu thuẫn với chính quy tắc của nó.
+
+   TRẢ VỀ danh sách các bản BỊ ĐẨY LÊN lần ≥ 3 do lượt này (N-5 · REV-0013).
+   Đánh số lại mà không bật lại cảnh báo Đ.20 là nửa vời: nhập bù một hợp đồng
+   cũ có thể đẩy một bản ĐÃ LƯU lên "lần 3" — tức vi phạm giới hạn 2 lần —
+   trong khi `canhBao` của `luu()` chỉ soi đúng bản đang lưu. Người nhập phải
+   được báo về CẢ những bản khác vừa đổi số. */
 async function tinhLaiLanThu(env, nhanSuId) {
+  const dayLen3 = [];
   try {
     const ds = await dsXacDinhTh(env, nhanSuId, null);
     for (const h of xepChuoiLanThu(ds)) {
       if (h.lan_thu !== h.lan_thu_moi) {
         await env.DB.prepare('UPDATE hop_dong_lao_dong SET lan_thu = ? WHERE id = ?')
           .bind(h.lan_thu_moi, h.id).run();
+        if (h.lan_thu_moi >= 3) dayLen3.push(h);
       }
     }
   } catch { /* chưa nạp them-hopdong-laodong.sql — bỏ qua êm */ }
+  return dayLen3;
+}
+
+/* Câu chữ cảnh báo cho các bản bị đánh số lại lên lần ≥ 3. */
+function canhBaoDayLen3(ds) {
+  return (ds || []).map(h =>
+    `Hợp đồng ${h.so_hd ? '"' + h.so_hd + '"' : 'bắt đầu ' + h.ngay_bat_dau} vừa được ` +
+    `đánh số lại thành lần thứ ${h.lan_thu_moi} (trước là lần ${h.lan_thu || '?'}). ` +
+    `BLLĐ 2019 Đ.20: từ lần thứ 3 phải ký không xác định thời hạn — bản này cần rà lại.`);
 }
 
 async function ghiLichSu(env, nhanSuId, nguoiId, giaTriMoi, ghiChu) {
@@ -241,13 +258,13 @@ export async function luu(env, phien, b) {
 
   // Bản vừa lưu có thể chen vào GIỮA chuỗi (nhập bù) — các bản sau nó phải
   // được đánh số lại, nếu không thì hai dòng cùng ghi "lần 3".
-  await tinhLaiLanThu(env, nhanSuId);
+  const canhBaoKhac = canhBaoDayLen3(await tinhLaiLanThu(env, nhanSuId));
 
   await ghiLichSu(env, nhanSuId, phien.nhan_su_id,
     `${loaiHd}${hetHan ? ' · hết hạn ' + hetHan : ''}${lanThu > 1 ? ' · lần ' + lanThu : ''}`,
-    [canhBao.join(' '), lyDo].filter(Boolean).join(' — ') || null);
+    [canhBao.join(' '), canhBaoKhac.join(' '), lyDo].filter(Boolean).join(' — ') || null);
 
-  return json({ ok: true, canh_bao: canhBao, lan_thu: lanThu });
+  return json({ ok: true, canh_bao: canhBao, canh_bao_khac: canhBaoKhac, lan_thu: lanThu });
 }
 
 /* Ẩn (hieu_luc = 0) — KHÔNG xoá. Hợp đồng nhập nhầm vẫn phải để lại dấu vết:
@@ -267,11 +284,13 @@ export async function an(env, phien, b) {
     .bind(moi, moi ? null : lyDo, id).run();
 
   // Ẩn/dùng lại là ĐỔI CHUỖI — bản lần 1 bị ẩn thì bản sau phải tụt xuống 1,
-  // không được giữ nguyên con số đã chụp lúc lưu.
-  await tinhLaiLanThu(env, hd.nhan_su_id);
+  // không được giữ nguyên con số đã chụp lúc lưu. Dùng lại một bản cũ có thể
+  // đẩy bản sau lên lần 3 ⇒ cũng phải bật cảnh báo Đ.20 (N-5).
+  const canhBaoKhac = canhBaoDayLen3(await tinhLaiLanThu(env, hd.nhan_su_id));
 
   await ghiLichSu(env, hd.nhan_su_id, phien.nhan_su_id,
-    moi ? 'hop_dong_mo_lai' : 'hop_dong_an', lyDo);
+    moi ? 'hop_dong_mo_lai' : 'hop_dong_an',
+    [lyDo, canhBaoKhac.join(' ')].filter(Boolean).join(' — '));
 
-  return json({ ok: true, hieu_luc: moi });
+  return json({ ok: true, hieu_luc: moi, canh_bao_khac: canhBaoKhac });
 }
