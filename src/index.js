@@ -25,6 +25,7 @@ import * as dulieunen from './dulieunen.js';
 import * as taisan from './taisan.js';
 import * as ca from './ca.js';
 import * as hopdong from './hopdong.js';
+import { quetNhacNhanSu, thangKeTiep, gioVN } from './nhac-nhan-su.js';
 import { sinhMa } from './dinh-danh.js';
 
 /* ---- Trả lời dạng JSON -------------------------------------------------- */
@@ -107,6 +108,16 @@ async function toiLaAi(req, env) {
   const ns = await env.DB.prepare('SELECT (anh_chan_dung IS NOT NULL) AS co_anh, phong_ban_id, loai_lao_dong FROM nhan_su WHERE id = ?')
                          .bind(phien.nhan_su_id).first();
   const trangThai = await docTrangThaiHienDien(env, phien.nhan_su_id);
+  /* Công tắc riêng tư sinh nhật (SPEC-0007 Đợt 2) — hỏi RIÊNG một câu, KHÔNG
+     nhét vào câu SELECT ở trên: chưa nạp them-sinhnhat-congkhai.sql thì cột
+     chưa tồn tại, và một cột thiếu trong câu đó là ĐĂNG NHẬP CHẾT CẢ HỆ
+     THỐNG. Mặc định BẬT khi chưa có cột — đúng câu 1 Mục 13 Sếp đã chốt. */
+  let congKhaiSinhNhat = 1;
+  try {
+    const r = await env.DB.prepare('SELECT cong_khai_sinh_nhat FROM nhan_su WHERE id = ?')
+                          .bind(phien.nhan_su_id).first();
+    if (r && r.cong_khai_sinh_nhat != null) congKhaiSinhNhat = r.cong_khai_sinh_nhat;
+  } catch { /* chưa nạp migration — giữ mặc định BẬT */ }
   // Phòng ban mà mình là trưởng phòng (Xếp ca tuần + các quyền theo phòng
   // ban khác dùng chung field này) — KHÔNG suy từ vai trò, đọc thẳng DB vì
   // đây là quan hệ theo TỪNG phòng ban cụ thể (xem src/ca.js laTruongPhong).
@@ -126,6 +137,7 @@ async function toiLaAi(req, env) {
     loai_lao_dong: ns ? ns.loai_lao_dong : null,
     trang_thai_hd: trangThai.ma,
     trang_thai_ghi_chu: trangThai.ghi_chu,
+    cong_khai_sinh_nhat: !!congKhaiSinhNhat,
     phong_ban_quan_ly: phongBanQuanLy,
     quyen: q.tab,
     xem_luong: q.xem_luong,
@@ -522,6 +534,20 @@ async function qtDanhSach(req, env) {
       n.hd_lan_thu = h ? h.lan_thu : null;
     }
   } catch { /* chưa nạp them-hopdong-laodong.sql — cột hợp đồng để trống */ }
+
+  /* Công tắc riêng tư sinh nhật (SPEC-0007 Đợt 2) — hỏi riêng, cùng lý do
+     với khối trên: cột có thể chưa tồn tại, mà nhét vào câu SELECT chính là
+     làm chết cả danh sách nhân sự. Chưa có cột → coi như BẬT.
+     KHÔNG trả `ngay_sinh` ở đây: tab `nhansu` còn mở cho quản lý kho, mà
+     ngày sinh là mức 2 theo ADR-0011 A2. Ngày sinh chỉ đi qua
+     `/api/nhan-su/viec-can-lam` (cửa `them_nhan_su`). */
+  try {
+    const { results: ck } = await env.DB.prepare(
+      'SELECT id, cong_khai_sinh_nhat FROM nhan_su'
+    ).all();
+    const theoId = new Map((ck || []).map(r => [r.id, r.cong_khai_sinh_nhat]));
+    for (const n of results) n.cong_khai_sinh_nhat = theoId.has(n.id) ? !!theoId.get(n.id) : true;
+  } catch { for (const n of results) n.cong_khai_sinh_nhat = true; }
 
   return json({
     nhan_su: results,
@@ -3390,6 +3416,75 @@ async function nsHopDongAn(req, env) {
   return hopdong.an(env, phien, b);
 }
 
+/* ---- Sinh nhật (SPEC-0007 Đợt 2) ----------------------------------------
+   Công tắc riêng tư: AI ĐƯỢC TẮT? Chính mình — luôn được, không cần xin ai
+   (ADR-0011 A2: giấy tờ của chính mình luôn xem/sửa được). Người khác — chỉ
+   vai trò quản lý hồ sơ (`them_nhan_su`), đúng một cửa quyền với hợp đồng.
+   KHÔNG thêm vai trò, KHÔNG sửa `src/quyen.js`. */
+async function nsSinhNhatCongKhai(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+
+  const dich = String(b.id || '').trim() || phien.nhan_su_id;
+  if (dich !== phien.nhan_su_id && !duocThemNhanSu(phien.vai_tro)) {
+    return loi('Bạn chỉ đổi được công tắc sinh nhật của chính mình', 403);
+  }
+  const bat = b.bat ? 1 : 0;
+  try {
+    await env.DB.prepare('UPDATE nhan_su SET cong_khai_sinh_nhat = ? WHERE id = ?').bind(bat, dich).run();
+  } catch {
+    return loi('Chưa nạp migration them-sinhnhat-congkhai.sql', 503);
+  }
+  return json({ ok: true, cong_khai_sinh_nhat: !!bat });
+}
+
+/* Dải Exception-First của tab Nhân sự: HCNS mở ra là THẤY NGAY việc phải làm,
+   không phải tự đi tìm (Rule 7). Ba nhóm, tất cả đều chỉ tính `dang_lam = 1`:
+   hợp đồng quá hạn · sắp hết hạn (<45 ngày) · sinh nhật tháng sau.
+   "Người đang làm mà chưa có hợp đồng" đã tính sẵn ở giao diện từ Đợt 1 —
+   không hỏi lại lần hai.
+   Cửa quyền: `them_nhan_su` (Admin/HCNS). `ngay_sinh` và hạn hợp đồng là mức
+   2 theo ADR-0011 A2, KHÔNG được rơi vào danh sách nhân sự chung — tab
+   `nhansu` còn mở cho cả quản lý kho. */
+async function nsViecCanLam(req, env) {
+  const { loi: l } = await batBuocThemNhanSu(req, env);
+  if (l) return l;
+
+  const kq = { qua_han: [], sap_het: [], sinh_nhat_thang_sau: [], thang_sau: null };
+
+  try {
+    const { results } = await env.DB.prepare(`
+      SELECT n.id, n.ho_ten, n.bo_phan, h.loai, h.ngay_het_han,
+             CAST(julianday(h.ngay_het_han) - julianday(date('now','+7 hours')) AS INTEGER) AS con_ngay
+        FROM hop_dong_lao_dong h
+        JOIN nhan_su n ON n.id = h.nhan_su_id AND n.dang_lam = 1
+       WHERE h.hieu_luc = 1 AND h.ngay_het_han IS NOT NULL
+         AND h.id = (SELECT h2.id FROM hop_dong_lao_dong h2
+                      WHERE h2.nhan_su_id = h.nhan_su_id AND h2.hieu_luc = 1
+                      ORDER BY h2.ngay_bat_dau DESC, h2.id DESC LIMIT 1)
+         AND julianday(h.ngay_het_han) - julianday(date('now','+7 hours')) < 45
+       ORDER BY h.ngay_het_han
+    `).all();
+    for (const r of results || []) (r.con_ngay < 0 ? kq.qua_han : kq.sap_het).push(r);
+  } catch { /* chưa nạp them-hopdong-laodong.sql */ }
+
+  // Tháng sau tính bằng CHÍNH hàm cron dùng — hai nơi lệch nhau thì dải trên
+  // màn hình sẽ nói khác cái tin nhắn HCNS nhận được.
+  const { nam, thang, mm } = thangKeTiep(gioVN());
+  kq.thang_sau = `${thang}/${nam}`;
+  try {
+    const { results } = await env.DB.prepare(`
+      SELECT id, ho_ten, bo_phan, ngay_sinh FROM nhan_su
+       WHERE dang_lam = 1 AND ngay_sinh IS NOT NULL AND strftime('%m', ngay_sinh) = ?
+       ORDER BY strftime('%d', ngay_sinh), ho_ten
+    `).bind(mm).all();
+    kq.sinh_nhat_thang_sau = results || [];
+  } catch { /* không có dữ liệu ngày sinh — dải tự trống */ }
+
+  return json(kq);
+}
+
 /* Xem ảnh đại diện của 1 người — GET /api/nhan-su/anh?id=X (ai đăng nhập rồi
    cũng xem được ảnh của bất kỳ ai, giống tinh thần Danh bạ mở cho tất cả). */
 async function nsAnhXem(req, env) {
@@ -3419,6 +3514,8 @@ const DUONG_DAN = {
   'GET  /api/nhan-su/hop-dong':      nsHopDongDanhSach,
   'POST /api/nhan-su/hop-dong/luu':  nsHopDongLuu,
   'POST /api/nhan-su/hop-dong/an':   nsHopDongAn,
+  'POST /api/nhan-su/sinh-nhat-cong-khai': nsSinhNhatCongKhai,
+  'GET  /api/nhan-su/viec-can-lam':  nsViecCanLam,
   'POST /api/gop-y':               gopYGui,
   'GET  /api/gop-y':               gopYDanhSach,
   'POST /api/gop-y/trang-thai':    gopYDoiTrangThai,
@@ -3573,6 +3670,12 @@ export default {
       try { await kiemTraCanhBaoHoan(env); } catch (e) { console.error('Cron cảnh báo:', e.message); }
       try { await kiemTraLyDoNghiemTrong(env); } catch (e) { console.error('Cron cảnh báo nghiêm trọng:', e.message); }
       try { await hoLyTuDongTriage(env); } catch (e) { console.error('Cron Hồ Ly triage:', e.message); }
+      /* Nhắc nhân sự (SPEC-0007 Đợt 2) — CÙNG cron này, KHÔNG thêm trigger
+         thứ hai. Hàm tự đóng cửa ngoài 8h–18h và Chủ nhật (ADR-0013), tự
+         chống trùng bằng bảng `thong_bao`, nên gọi mỗi 5 phút vẫn đúng 1
+         tin/loại/người/ngày. Truyền thẳng `guiThongBao` đang chạy vào để
+         không sinh ra bản sao thứ hai của cơ chế gửi. */
+      try { await quetNhacNhanSu(env, guiThongBao); } catch (e) { console.error('Cron nhắc nhân sự:', e.message); }
 
       // --- 1 GIỜ/LẦN (nặng: đồng bộ HÀNG NGÀN đơn hàng doanh thu + dọn dữ liệu) ---
       // Doanh thu không cần tươi từng 5 phút; chạy quá thường xuyên làm hệ thống

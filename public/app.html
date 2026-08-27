@@ -60,6 +60,21 @@
                 <option value="khong_han">Không tự xoá</option>
               </select>
               <button type="button" class="btn-nho btn-primary thd-panel-luu" id="thdLuu">Lưu</button>
+
+              <!-- Công tắc riêng tư sinh nhật (SPEC-0007 Đợt 2). Đặt ở đây vì
+                   đây là panel "của tôi" DUY NHẤT đang có — không dựng thêm
+                   một màn hình cài đặt cá nhân thứ hai cho đúng một ô tick.
+                   Mặc định BẬT (Sếp Ngọc chốt câu 1 Mục 13); ai ngại lộ tuổi
+                   thì tự tắt, không phải đi xin HCNS. -->
+              <div class="thd-panel-tieu" style="margin-top:12px">Sinh nhật</div>
+              <label class="sn-congkhai">
+                <input type="checkbox" id="snCongKhai">
+                <span>Cho ERP chúc sinh nhật tôi</span>
+              </label>
+              <div class="sn-congkhai-nhac">
+                Tắt thì không ai nhận thông báo sinh nhật của bạn. Khi bật, lời chúc
+                chỉ tới <b>bạn và quản lý trực tiếp</b> — không bắn cả công ty.
+              </div>
             </div>
           </div>
         </div>
@@ -738,6 +753,11 @@
                không phải hệ thống hỏng. Dải này nói thẳng còn thiếu bao nhiêu
                hồ sơ và bấm vào là lọc ra đúng những người đó. -->
           <div class="ns-thieuhd" id="ns-thieuhd" hidden></div>
+          <!-- Đợt 2 nối tiếp cùng dải: hợp đồng quá hạn · sắp hết hạn ·
+               sinh nhật tháng sau. Mỗi nhóm là MỘT dòng, không có gì thì
+               dòng đó không tồn tại — dải rỗng thì biến mất hẳn, không để
+               lại một ô "Không có việc nào" thừa. -->
+          <div class="ns-vieccanlam" id="ns-vieccanlam" hidden></div>
         </div>
         <div class="table-wrap">
           <table>
@@ -2299,6 +2319,21 @@
       </div>
     </form>
     <div class="form-loi" id="nsSua-loi"></div>
+
+    <!-- Công tắc sinh nhật của NGƯỜI ĐANG MỞ HỒ SƠ (SPEC-0007 Đợt 2). Có ô
+         này ở đây để HCNS tắt hộ khi ai đó nhờ trực tiếp — nhưng chính chủ
+         vẫn tự tắt được ở panel "Trạng thái của tôi", không phải đi xin.
+         Lưu NGAY khi tick, không chờ bấm Lưu hồ sơ: nó không thuộc form hồ
+         sơ, gộp vào là phải sửa đường lưu nhân sự đang có người khác dùng. -->
+    <div class="kv-md-muc">Sinh nhật</div>
+    <label class="sn-congkhai">
+      <input type="checkbox" id="nsSua-sinhnhat">
+      <span>Cho ERP chúc sinh nhật người này</span>
+    </label>
+    <div class="sn-congkhai-nhac" id="nsSua-sinhnhat-nhac">
+      Bật thì đúng ngày sinh nhật, ERP nhắn cho <b>chính người đó và quản lý trực tiếp</b>.
+      Danh sách sinh nhật tháng sau vẫn gửi cho HCNS dù công tắc này tắt.
+    </div>
 
     <!-- Hợp đồng lao động (SPEC-0007 Đợt 1) — bảng RIÊNG, không nhồi cột vào
          nhan_su: một người ký nhiều hợp đồng nối tiếp, và thứ luật đòi chính

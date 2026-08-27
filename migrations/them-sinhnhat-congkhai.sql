@@ -1,0 +1,27 @@
+-- ==========================================================================
+-- MIGRATION — Công tắc riêng tư sinh nhật · SPEC-0007 Đợt 2
+-- --------------------------------------------------------------------------
+-- `nhan_su.ngay_sinh` ĐÃ CÓ SẴN — migration này KHÔNG thêm lại (Rule 5, BH-32).
+-- Thứ duy nhất còn thiếu là công tắc cho từng người tự tắt nếu không muốn
+-- công khai tuổi.
+--
+-- MẶC ĐỊNH = 1 (BẬT) — Sếp Ngọc chốt câu 1 Mục 13 của SPEC-0007. Chọn mặc
+-- định TẮT thì gần như cả năm đầu không ai được chúc, tính năng trông như
+-- hỏng; rủi ro riêng tư thấp vì lời chúc chỉ tới ĐÚNG HAI người: chính chủ
+-- và quản lý trực tiếp, không bắn cả công ty.
+--
+-- KHÔNG thêm cột cờ "đã gửi tháng này" — bảng `thong_bao` tự nó là sổ đã gửi
+-- (SPEC-0007 §5, cùng khuôn SPEC-0004). Thêm cột cờ là dựng cơ chế nhắc thứ
+-- hai, đúng thứ CTL-0015 §5 cấm.
+--
+--   Nạp máy:  node scripts/chay-migration.mjs migrations/them-sinhnhat-congkhai.sql
+--   Nạp mây:  node scripts/chay-migration.mjs migrations/them-sinhnhat-congkhai.sql --remote
+--
+-- LÙI LẠI (rollback): cột này chưa có gì trỏ vào, và mọi truy vấn đọc nó đều
+-- bọc try/catch nên gỡ ra hệ thống vẫn chạy (chỉ là ai cũng được chúc):
+--   ALTER TABLE nhan_su DROP COLUMN cong_khai_sinh_nhat;
+--   DELETE FROM schema_migrations WHERE filename = 'them-sinhnhat-congkhai.sql';
+-- Không DROP bảng nào, không UPDATE một dòng dữ liệu cũ nào.
+-- ==========================================================================
+
+ALTER TABLE nhan_su ADD COLUMN cong_khai_sinh_nhat INTEGER NOT NULL DEFAULT 1;

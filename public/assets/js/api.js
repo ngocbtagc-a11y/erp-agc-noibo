@@ -64,6 +64,15 @@ export const API = {
   nsHopDongAn: (id, lyDo) => goi('/api/nhan-su/hop-dong/an', {
     method: 'POST', body: JSON.stringify({ id, ly_do: lyDo })
   }),
+
+  /* Sinh nhật (SPEC-0007 Đợt 2). `id` bỏ trống = đổi công tắc của CHÍNH MÌNH
+     — ai cũng gọi được. Truyền `id` người khác thì MÁY CHỦ đòi quyền quản lý
+     hồ sơ; giao diện chỉ ẩn nút cho gọn mắt, không phải chỗ chặn thật. */
+  nsSinhNhatCongKhai: (bat, id) => goi('/api/nhan-su/sinh-nhat-cong-khai', {
+    method: 'POST', body: JSON.stringify({ bat, id })
+  }),
+  nsViecCanLam: () => goi('/api/nhan-su/viec-can-lam'),
+
   nsAnhDaiDien: (anhBase64) => goi('/api/nhan-su/anh-dai-dien', {
     method: 'POST', body: JSON.stringify({ anh: anhBase64 })
   }),

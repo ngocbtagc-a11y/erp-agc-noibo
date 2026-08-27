@@ -84,6 +84,9 @@ async function taiLaiNhanSuQuanTri() {
   const oLuongTh = $('#ns-thLuong'); if (oLuongTh) oLuongTh.hidden = true;
   napBoLocBoPhanNS(nhan_su);
   veBangNsQuanTri();
+  // Dải "việc cần làm" nạp SONG SONG, không `await`: hỏng đường này thì bảng
+  // nhân sự vẫn phải hiện đủ (SPEC-0007 Đợt 2). Nó tự vẽ lại khi có dữ liệu.
+  taiViecCanLam();
 
   // Quản trị (tài khoản) — chỉ hiện nếu tab đó tồn tại trong DOM cho vai trò này.
   const oQtBang = $('#qtBang');
@@ -196,6 +199,54 @@ function veDaiThieuHopDong() {
   });
 }
 
+/* ---- Dải "việc cần làm" (SPEC-0007 Đợt 2) --------------------------------
+   Ba nhóm còn lại của Exception-First: hợp đồng QUÁ HẠN · SẮP hết hạn <45
+   ngày · sinh nhật THÁNG SAU. Dữ liệu về từ `/api/nhan-su/viec-can-lam` —
+   một cửa riêng có kiểm quyền `them_nhan_su`, KHÔNG nhét `ngay_sinh` và hạn
+   hợp đồng vào danh sách nhân sự chung (tab `nhansu` còn mở cho quản lý kho,
+   mà hai thứ đó là mức 2 theo ADR-0011 A2).
+
+   Nạp MỘT lần rồi vẽ lại từ bộ nhớ: đổi bộ lọc là vẽ lại bảng, mà gọi API
+   theo mỗi lần đổi bộ lọc thì gõ 1 chữ vào ô tìm là bắn cả chục lượt. */
+let VIEC_CAN_LAM = null;
+
+async function taiViecCanLam() {
+  if (!TOI.them_nhan_su) return;         // không đủ quyền thì không hỏi, khỏi ăn 403
+  try { VIEC_CAN_LAM = await API.nsViecCanLam(); } catch { VIEC_CAN_LAM = null; }
+  veDaiViecCanLam();
+}
+
+function veDaiViecCanLam() {
+  const o = $('#ns-vieccanlam'); if (!o) return;
+  const v = VIEC_CAN_LAM;
+  if (!v) { o.hidden = true; o.innerHTML = ''; return; }
+
+  const ten = (ds, n = 4) => ds.slice(0, n).map(x => x.ho_ten).join(', ')
+    + (ds.length > n ? ` và ${ds.length - n} người nữa` : '');
+  const dong = [];
+
+  if (v.qua_han?.length) {
+    dong.push(`<div class="vcl-dong vcl-do"><span>🚨 <b>${v.qua_han.length}</b> hợp đồng ĐÃ QUÁ HẠN — ` +
+      `quá <b>30 ngày</b> không ký lại thì luật tự coi là không xác định thời hạn, và không đảo ngược được ` +
+      `(BLLĐ 2019 Đ.20).<span class="vcl-ten"> ${esc(ten(v.qua_han))}</span></span></div>`);
+  }
+  if (v.sap_het?.length) {
+    dong.push(`<div class="vcl-dong"><span>⏳ <b>${v.sap_het.length}</b> hợp đồng hết hạn trong <b>45 ngày</b> tới.` +
+      `<span class="vcl-ten"> ${esc(ten(v.sap_het))}</span></span></div>`);
+  }
+  if (v.sinh_nhat_thang_sau?.length) {
+    // Chỉ ngày/tháng, KHÔNG hiện năm sinh — dải này để bao quát lịch, không
+    // phải để công khai tuổi của ai.
+    const ds = v.sinh_nhat_thang_sau.map(x => `${String(x.ngay_sinh).slice(8, 10)}/${String(x.ngay_sinh).slice(5, 7)} ${x.ho_ten}`);
+    dong.push(`<div class="vcl-dong vcl-nhe"><span>🎂 Tháng <b>${esc(v.thang_sau || '')}</b> có ` +
+      `<b>${ds.length}</b> sinh nhật.<span class="vcl-ten"> ${esc(ds.slice(0, 5).join(' · '))}` +
+      `${ds.length > 5 ? ' · …' : ''}</span></span></div>`);
+  }
+
+  o.hidden = dong.length === 0;
+  o.innerHTML = dong.join('');
+}
+
 function veBangNsDoc() {
   const ds = locNhanSu(DS_NHAN_SU_DOC);
   $('#ns-hint').textContent = NS_XEM_LUONG_DOC
@@ -238,6 +289,7 @@ function veBangNsQuanTri() {
   });
   veTrongNS(DS_NHAN_SU_QT, ds);
   veDaiThieuHopDong();
+  veDaiViecCanLam();
 }
 
 function locTaiKhoanQT(ds) {
@@ -1297,6 +1349,31 @@ $('#thdLuu').addEventListener('click', async () => {
     nutLuu.disabled = false;
   }
 });
+/* Công tắc riêng tư sinh nhật của CHÍNH MÌNH (SPEC-0007 Đợt 2).
+   Không có nút Lưu riêng: tick là lưu ngay. Một ô tick mà bắt bấm thêm nút
+   thứ hai thì nửa số người sẽ tick rồi đóng panel, tưởng đã tắt mà chưa tắt.
+   Hỏng thì TRẢ Ô VỀ TRẠNG THÁI CŨ — để ô hiện sai trạng thái thật là tệ hơn
+   là báo lỗi, vì người ta tin mắt mình chứ không tin máy chủ. */
+{
+  const oSn = $('#snCongKhai');
+  if (oSn) {
+    oSn.checked = TOI.cong_khai_sinh_nhat !== false;
+    oSn.addEventListener('change', async () => {
+      const muon = oSn.checked;
+      oSn.disabled = true;
+      try {
+        await API.nsSinhNhatCongKhai(muon);
+        TOI.cong_khai_sinh_nhat = muon;
+      } catch (err) {
+        oSn.checked = !muon;
+        alert(err.message || 'Chưa đổi được, thử lại nhé.');
+      } finally {
+        oSn.disabled = false;
+      }
+    });
+  }
+}
+
 /* Đóng khi bấm/chạm ra ngoài. Dùng `pointerdown` chứ không dùng `click`:
    pointerdown bắn đều cho chuột, cảm ứng và bút — kho dùng điện thoại là
    chính, mà `click` trên `document` có máy iOS cũ không bắn khi chạm vào
@@ -3129,6 +3206,40 @@ if (TOI.quyen.includes('nhansu')) {
       oTrong.hidden = lich_su.length > 0;
     }
 
+    /* ---- Công tắc sinh nhật trong hồ sơ (SPEC-0007 Đợt 2) --------------- */
+
+    let NS_SN_DANG_MO = null;   // id người đang mở hồ sơ, để tick không lạc chủ
+
+    function veCongTacSinhNhat(n) {
+      const o = $('#nsSua-sinhnhat'); if (!o) return;
+      NS_SN_DANG_MO = n.id;
+      o.checked = n.cong_khai_sinh_nhat !== false;
+      o.disabled = false;
+    }
+
+    $('#nsSua-sinhnhat')?.addEventListener('change', async () => {
+      const o = $('#nsSua-sinhnhat');
+      const id = NS_SN_DANG_MO;
+      if (!id) return;
+      const muon = o.checked;
+      o.disabled = true;
+      try {
+        await API.nsSinhNhatCongKhai(muon, id);
+        // Cập nhật bộ nhớ để đóng/mở lại hồ sơ không thấy trạng thái cũ.
+        const n = DS_NHAN_SU_QT.find(x => x.id === id);
+        if (n) n.cong_khai_sinh_nhat = muon;
+        if (id === TOI.id) {
+          TOI.cong_khai_sinh_nhat = muon;
+          const oToi = $('#snCongKhai'); if (oToi) oToi.checked = muon;
+        }
+      } catch (err) {
+        if (NS_SN_DANG_MO === id) o.checked = !muon;   // chưa đổi người thì trả ô về cũ
+        $('#nsSua-loi').textContent = err.message || 'Chưa đổi được công tắc sinh nhật.';
+      } finally {
+        o.disabled = false;
+      }
+    });
+
     /* ---- Hợp đồng lao động trong hồ sơ (SPEC-0007 Đợt 1) ---------------- */
 
     let NS_HD_DANG_MO = null;   // id nhân sự đang mở hộp hồ sơ
@@ -3312,6 +3423,7 @@ if (TOI.quyen.includes('nhansu')) {
       veKhoiTaiKhoan(n);
       veLichSuHoSo(id);
       veHopDongHoSo(id);
+      veCongTacSinhNhat(n);
       $('#nsSua-id').value = n.id;
       $('#nsSua-hoten').value = n.ho_ten;
       $('#nsSua-sdt').value = n.sdt || '';
