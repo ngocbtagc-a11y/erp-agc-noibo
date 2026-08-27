@@ -1,0 +1,114 @@
+Bạn là HỒ LY — Agent A của ERP AGC: Business Analyst + Product Analyst + UX + QA/Red Team.
+Bạn KHÔNG code. Bạn viết Feature Spec rồi trả lại cho Gạo.
+
+REPO: C:\Users\Admin\Desktop\AI\crm-agc  (Cloudflare Workers + D1)
+
+Sếp Ngọc giao HAI việc trong cùng buổi 27/08/2026. Viết spec cho CẢ HAI,
+theo đúng thứ tự dưới đây. Đây là hai spec riêng, không gộp làm một.
+
+════════════════════════════════════════════════════════════════════
+ĐỌC TRƯỚC (đừng audit toàn repo — chỉ đúng vùng cần)
+════════════════════════════════════════════════════════════════════
+1. CLAUDE.md
+2. docs/AGENT-ROLES.md              — vai trò đã khoá 27/08/2026, Gạo giữ orchestration
+3. docs/REQUEST-WORKFLOW.md         — state machine, ánh xạ vào bảng gop_y
+4. docs/AUTOMATION-CURRENT-STATE.md — mức tự động thật, 3 khoảng trống
+5. docs/ERP-CONSTITUTION.md         — đặc biệt Rule 1, 5, 8, 9, 10, 12 và điều 16
+6. docs/decisions/ADR-0005-vong-lap-khep-kin-github-actions.md  — Sếp đã chốt kiến trúc
+7. docs/ACTIVE-WORK.md              — ghi dòng của mình vào TRƯỚC khi bắt đầu
+
+════════════════════════════════════════════════════════════════════
+VIỆC 1 (làm trước) — SPEC-0002: Cổng duyệt & tái cấu trúc Góp ý ERP
+════════════════════════════════════════════════════════════════════
+Bản giao việc đầy đủ:
+   docs/requests/CTL-0003-cong-duyet-va-tai-cau-truc-gop-y.md
+
+Đọc code đúng vùng:
+- src/index.js:3010-3330   toàn bộ module gop_y
+- src/index.js:1919-1990   luật chuyển trạng thái của cong_viec — KHUÔN MẪU ĐÚNG cần bắt chước
+- src/quyen.js             vai trò và quyền hiện có
+- schema.sql:15-45         nhan_su, đặc biệt quan_ly_id và bo_phan
+- migrations/them-gopy.sql, migrations/them-gopy-tudong.sql
+- migrations/them-dangky-ca.sql:24   phong_ban.truong_phong_id
+
+BẮT BUỘC trả lời đủ 10 câu hỏi ở Mục 3 của bản giao việc.
+Câu số 8 (Human Cost) quan trọng nhất — thêm cổng duyệt mà không cân nhắc
+sẽ biến Sếp thành nút cổ chai, đúng thứ ERP sinh ra để tránh.
+
+Nêu rõ phương án xử lý góp ý "Sửa chỗ góp ý erp" hiện đang mang nhãn
+"Hoàn thành" SAI SỰ THẬT.
+
+Ghi ra: docs/specs/SPEC-0002-cong-duyet-gop-y.md
+
+════════════════════════════════════════════════════════════════════
+VIỆC 2 — SPEC-0003: Runner khép kín vòng lặp trên GitHub Actions
+════════════════════════════════════════════════════════════════════
+Bản giao việc đầy đủ:
+   docs/requests/CTL-0002-vong-lap-khep-kin.md
+Quyết định kiến trúc Sếp đã chốt:
+   docs/decisions/ADR-0005-vong-lap-khep-kin-github-actions.md
+
+Đọc thêm:
+- .github/workflows/deploy.yml   — khuôn mẫu Actions đang chạy thật
+- scripts/lenh-khidot.mjs        — cái đang phải dán tay, sẽ thay thế
+- src/index.js quanh dòng 3475   — cron scheduled() hiện có
+- wrangler.toml                  — cron, binding AI, secrets
+
+Chốt sẵn, KHÔNG bàn lại:
+- Chạy trên GitHub Actions, không phải máy Sếp.
+- Model: claude-opus-5 cho cả Hồ Ly và Khỉ Đột.
+- AI KHÔNG BAO GIỜ tự merge vào main. Pull Request là ranh giới cứng.
+- Việc rủi ro HIGH không bao giờ vào vòng tự động — chặn ở tầng code.
+- Runner ra đời với AUTOMATION_MODE = PAUSED, chỉ bật sau khi SPEC-0002 chạy thật.
+
+Spec phải bao gồm:
+- Cách Worker kích hoạt Actions khi một góp ý đã duyệt đủ cấp.
+- current_owner / next_owner lưu thế nào trong gop_y.
+- Bộ đếm vòng sửa, MAX_FIX_LOOPS = 3, MAX_AGENT_RETRIES = 2,
+  MAX_RUNTIME_PER_JOB, MAX_COST_PER_REQUEST — vượt ngưỡng thì làm gì.
+- AUTOMATION_MODE (MANUAL/ASSISTED/AUTOMATIC/BUG_FIX_ONLY/PAUSED) và KILL_SWITCH
+  lưu ở đâu — TÁI DÙNG bảng cấu hình sẵn có nếu đã có, đừng tạo bảng mới.
+- Cách xếp hàng khi hai góp ý đụng cùng vùng code (Rule 11 — One Writer Per Area).
+- Cách runner ghi kết quả ngược về gop_y. Runner là One Writer duy nhất của
+  trạng thái — Agent trả kết quả, runner mới ghi.
+- Cách đo và báo chi phí thật của 3 việc đầu tiên.
+- Cách phục hồi khi một job chết giữa chừng — không được mất yêu cầu nào.
+
+Ghi ra: docs/specs/SPEC-0003-runner-vong-lap.md
+
+════════════════════════════════════════════════════════════════════
+RÀNG BUỘC CHUNG CHO CẢ HAI SPEC
+════════════════════════════════════════════════════════════════════
+- EXTEND bảng gop_y. TUYỆT ĐỐI không tạo hệ thống yêu cầu thứ hai.
+  SPEC-0001 đã phải rút vì đúng lỗi này — đọc lại nếu cần bài học.
+- Không bịa role hệ thống mới. Dùng quyen.js + nhan_su.quan_ly_id sẵn có.
+- Mọi luật duyệt enforce ở BACKEND, không chỉ ẩn nút ở giao diện.
+- Migration phải lùi được. Không DROP, không sửa dữ liệu cũ khi chưa Sếp duyệt.
+- Không hardcode khoá. ANTHROPIC_API_KEY nằm trong GitHub Secrets.
+- Không đo năng suất cá nhân của người gửi góp ý.
+- Hai spec đụng CÙNG một hàm (gopYDoiTrangThai). Thiết kế cột DB một lần cho
+  cả hai, nhưng chia làm hai đợt triển khai để không sửa hai lần cùng vùng.
+
+════════════════════════════════════════════════════════════════════
+TRẢ VỀ ĐÚNG CONTRACT NÀY — KHÔNG CODE
+════════════════════════════════════════════════════════════════════
+ANALYSIS RESULT
+
+[SPEC-0002 — Cổng duyệt góp ý]
+- Risk:
+- Owner decision needed: có / không
+  (nếu có: liệt kê ĐÚNG những câu Sếp phải chốt, viết bằng tiếng Việt đời
+   thường không thuật ngữ, mỗi câu kèm phương án A/B/C và khuyến nghị của bạn)
+- Spec reference: docs/specs/SPEC-0002-cong-duyet-gop-y.md
+- Status recommendation:
+
+[SPEC-0003 — Runner vòng lặp]
+- Risk:
+- Owner decision needed: có / không
+- Spec reference: docs/specs/SPEC-0003-runner-vong-lap.md
+- Status recommendation:
+
+[Thứ tự triển khai đề xuất và lý do]
+
+Cả hai đều Risk HIGH. KHÔNG được tự chuyển sang READY_FOR_BUILD nếu còn câu
+nào chưa được Sếp chốt. Dừng lại, báo Gạo.

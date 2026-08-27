@@ -20,7 +20,7 @@ này phải làm ERP **dễ phát triển hơn** khi thêm người, không ph�
 
 | Vai trò | Là ai | Sở hữu | Không sở hữu |
 |---|---|---|---|
-| **ERP Owner** | Sếp (Nguyễn Duy Phong) — duy nhất | Source of Truth, Shared Core, kiến trúc cross-domain/integration/permission, go-live, thay đổi ảnh hưởng toàn công ty | — |
+| **ERP Owner** | **Nguyễn Duy Phong** và **Bùi Thị Ngọc** — **NGANG QUYỀN** (chốt 27/08/2026) | Source of Truth, Shared Core, kiến trúc cross-domain/integration/permission, go-live, thay đổi ảnh hưởng toàn công ty | — |
 | **Domain Owner** | Trưởng phòng (4 phòng: Ban Giám đốc / Kho Vận-Sản Xuất / Kinh Doanh-MKT / Support) | business rules, nghiệp vụ thực tế, trạng thái nghiệp vụ, SLA, yêu cầu form, báo cáo phòng, acceptance criteria | architecture chung |
 | **Developer Agent** | Claude Code A/B, developer khác | đọc toàn repo, phát triển Domain, reuse Core, viết test, đề xuất migration, refactor cục bộ | Source of Truth, Core, Auth, Permission architecture, integration contract, destructive migration production, deploy chưa qua gate |
 | **Key User** | Nhân viên nghiệp vụ thật | test, phản hồi, xác nhận flow/dữ liệu/UX | kiến trúc/code |
@@ -79,6 +79,38 @@ mặc định. Feature chưa tính DONE nếu còn chỗ nào chỉ đúng sau k
 làm cụ thể (naming convention `window.LAM_MOI_*`, Mutation Impact Map, khi
 nào cần double-submit guard): xem
 [UX_ENGINEERING_STANDARD.md § UI State Consistency](./UX_ENGINEERING_STANDARD.md#ui-state-consistency--sau-mutation-không-được-bắt-f5).
+
+**Cross-User Freshness** (bổ sung 27/08/2026 — Sếp Ngọc):
+
+> *"những trạng thái này sẽ tự động cập nhật sang màn hình của cấp trên khi
+> nhân viên đã nhận việc, ko cứ là phải load lại"*
+
+Điều bổ sung 23/08 chỉ lo **màn hình của chính người vừa bấm**. Chưa đủ.
+
+**Người A đổi trạng thái thì màn hình người B đang mở phải tự đúng theo, không
+bắt B bấm F5.** Áp cho mọi dữ liệu dùng chung nhiều người: công việc, mục tiêu,
+góp ý, đơn hoàn, tồn kho, phân ca, thông báo.
+
+Câu hỏi bắt buộc khi thiết kế **mọi** tính năng có dữ liệu nhiều người cùng xem:
+
+> *"Người khác đổi cái này thì màn hình tôi đang mở có tự đúng theo không,
+> hay tôi phải F5?"*
+
+Trả lời "phải F5" là **chưa xong**, kể cả khi mọi thứ khác đã chạy.
+
+**Cách làm — rẻ trước, không đánh đổi bằng tiền:**
+
+1. Dùng cách **rẻ nhất còn đủ tươi**. Với ERP 20 người, hỏi lại theo nhịp là đủ:
+   một đường gọi cực nhẹ trả về **dấu mốc thay đổi**, chỉ tải lại dữ liệu thật
+   khi dấu mốc đổi.
+2. **Chỉ hỏi khi tab đang hiện** — tab ẩn thì dừng hẳn. Đây là chốt tiết kiệm
+   lớn nhất.
+3. **Không** dùng kết nối thường trực (WebSocket/Durable Objects) khi hỏi theo
+   nhịp còn đủ — đó là đường dẫn thẳng ra khỏi hạn mức miễn phí.
+4. Tính trước số lượt gọi mỗi ngày, đối chiếu hạn mức miễn phí, ghi con số vào
+   Feature Spec. Không ước lượng bằng cảm tính.
+5. Người dùng phải **thấy dữ liệu vừa đổi**, không được lặng lẽ thay số dưới
+   tay họ khi đang thao tác dở.
 
 ### Rule 8 — Traceable & Recoverable
 Mọi thay đổi production quan trọng phải traceable, auditable, recoverable.
@@ -259,3 +291,60 @@ Ví dụ: module đang PILOT chỉ thêm vào tab-list của vai trò đang test
 vai trò khác không thấy tab — không cần bảng `feature_flags` cho tới khi
 có ≥2 feature cần bật/tắt độc lập với vai trò (lúc đó mới đáng 1 bảng
 `feature_flags(ten, bat, doi_tuong)` đơn giản).
+
+---
+
+# PHẦN BỔ SUNG — ban hành 2026-08-27
+
+> Gộp từ `C:\Users\Admin\ERP\docs\ERP-CONSTITUTION.md` theo ADR-0004.
+> **Không đánh số lại 12 Rule ở trên** — nhiều tài liệu và commit đang trích
+> dẫn "Rule 5", "Rule 9". Phần này bổ sung, không thay thế.
+
+## Rule 13 — One Writer Per Area
+
+Mỗi vùng code, mỗi trường dữ liệu, mỗi bước quy trình chỉ có **một** người
+hoặc một Agent được ghi tại một thời điểm. Người khác đọc thoải mái, muốn
+sửa thì hỏi người đang giữ.
+
+Bảng ghi danh: [ACTIVE-WORK.md](ACTIVE-WORK.md).
+Áp dụng cho cả Agent: Gạo không dispatch hai việc đụng cùng vùng chạy song song.
+
+## Rule 14 — Core Stable, Edge Evolves Fast
+
+Lõi (Core, Source of Truth, phân quyền, schema chung) đổi chậm và phải có cổng.
+Rìa (một màn hình, một báo cáo, một bộ lọc) được đổi nhanh, tự triển khai
+trong guardrail. Đừng bắt việc rìa đi qua thủ tục của việc lõi.
+
+## Rule 15 — Ship → Use → Measure → Improve
+
+Ra bản dùng được, cho người dùng thật dùng, đo, rồi mới cải tiến.
+Không thiết kế hoàn hảo trên giấy rồi mới ship.
+
+## Điều cấm
+
+16. Repo / docs / database là shared memory. **Hội thoại AI KHÔNG phải
+    Source of Truth.** Business rule quan trọng không được chỉ nằm trong chat.
+17. Không tạo feature chỉ vì "có thể làm".
+18. **Không tự động hoá một process chưa hiểu đủ.** Tự động hoá một quy trình
+    đang hỏng chỉ làm nó hỏng nhanh hơn.
+19. Không bắt nhân viên nhập lại dữ liệu ERP đã biết.
+20. Không tạo KPI chỉ vì có data.
+
+## Quy chiếu quản trị — MBOs
+
+Công ty vận hành theo **MBOs** (Management by Objectives). Mọi tính năng liên
+quan tới giao việc, đánh giá hiệu suất, báo cáo nhân sự phải theo tư duy
+**outcome-based** (đầu ra cụ thể), không activity-based (mô tả hoạt động).
+
+Khi thiết kế tính năng quản lý con người, luôn hỏi **"đầu ra cụ thể là gì?"**
+thay vì "nhân viên phải làm gì?".
+
+## Khi hai nguyên tắc mâu thuẫn — thứ tự ưu tiên
+
+1. **An toàn dữ liệu và khả năng phục hồi** (Rule 8, 9, 10)
+2. **Source of Truth** (Rule 1)
+3. **Chi phí thời gian của người thật** (Rule 12 — Human Cost)
+4. **Tốc độ ra tính năng** (Rule 15)
+
+Vẫn không giải được → `NEEDS_OWNER_DECISION`, đưa ERP Owner quyết.
+Không tự chọn giúp.

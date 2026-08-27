@@ -41,3 +41,38 @@ Owner" khi cần quyết định.
 - Hệ thống ngoài (Shopee/TikTok/MISA...) luôn là System Owner cho đúng dữ
   liệu gốc của nó — ERP không bao giờ tự nhận là nguồn thật cho đơn hàng
   hay sổ sách mà mình chỉ đồng bộ về.
+
+---
+
+## Source of Truth của chính hệ điều phối (Gạo / Hồ Ly / Khỉ Đột)
+
+Bổ sung 2026-08-27 khi gộp tài liệu từ `C:\Users\Admin\ERP` về đây (ADR-0004).
+
+| Dữ kiện | Source of Truth | Owner |
+|---|---|---|
+| Trạng thái mỗi yêu cầu phát triển | Bảng **`gop_y`** trong D1 | Runner (khi có) — hiện là Admin qua UI |
+| Lịch sử chuyển trạng thái | Bảng **`gop_y_lich_su`** | Runner / Admin |
+| Nội dung yêu cầu tầng điều phối | `docs/requests/` | GẠO |
+| Đặc tả tính năng | `docs/specs/` | HỒ LY |
+| Kết quả review | `docs/reviews/` | HỒ LY |
+| Quyết định của Owner | `docs/decisions/` | ERP Owner |
+| Vai trò Agent | `docs/AGENT-ROLES.md` | ERP Owner |
+| Mức tự động thật | `docs/AUTOMATION-CURRENT-STATE.md` | GẠO |
+| Hàng đợi điều phối | `docs/CONTROL-TOWER-WORK.md` | GẠO |
+
+> Hội thoại AI **không** phải Source of Truth. Không để business rule quan
+> trọng chỉ nằm trong chat.
+
+## Cảnh báo: hai pháp nhân đang chạy song song
+
+Công ty đang vận hành song song **Công ty TNHH Alpha Green Commerce** và
+**HKD Onfod cũ**, nhân sự cũng đang chia đôi (mục tiêu Q3/2026 là hợp nhất
+về một pháp nhân duy nhất).
+
+Đây là nguồn xung đột Source of Truth điển hình: **nhân sự**, **tồn kho** và
+**công nợ** có thể đang tồn tại hai bản, mỗi bản đúng theo một pháp nhân.
+
+Trước khi tự động hoá bất cứ thứ gì chạm vào ba nhóm dữ liệu này, phải làm rõ
+bản nào là chuẩn (Hiến pháp điều 16 — không tự động hoá một process chưa hiểu
+đủ). Feature nào đụng tới mà chưa rõ → ghi vào mục "Open Question" của Feature
+Spec, hỏi ERP Owner trước, không đoán.
