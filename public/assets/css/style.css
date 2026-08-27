@@ -524,6 +524,70 @@ img.av { object-fit: cover; display: block; cursor: default; }
   border-radius: var(--r-md); padding: 13px 15px;
 }
 
+/* Vùng đính kèm ảnh trong form Gửi góp ý (góp ý #1 của Sếp Ngọc 26/08/2026:
+   "muốn Ctrl+C, Ctrl+V là được luôn chứ không cần tìm file"). ERP chưa có
+   component vùng thả tệp nào để dùng lại (Rule 5: Reuse → Extend → Create),
+   nên tạo mới ở đây — nhưng chỉ dựng bằng biến màu/bo góc sẵn có và nút bấm
+   dùng đúng class .btn-phu / .btn-nho chung, không đẻ thêm kiểu nút riêng. */
+.gy-anh-dan {
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+  padding: 18px 14px; text-align: center; cursor: pointer;
+  border: 1.5px dashed var(--sage-pale); border-radius: var(--r-md);
+  background: var(--sage-wash); color: var(--ink-soft);
+  transition: border-color .14s, background .14s;
+}
+.gy-anh-dan:hover { border-color: var(--sage-dark); background: var(--card); }
+/* Đang dán / đang kéo tệp vào — nổi rõ để người dùng biết thả ở đây là trúng */
+.gy-anh-dan.dang-dan {
+  border-color: var(--sage-dark); border-style: solid; background: var(--card);
+  box-shadow: var(--shadow-sm);
+}
+.gy-anh-bieutuong { font-size: 22px; line-height: 1; }
+.gy-anh-dan b { font-size: 14px; color: var(--ink); font-weight: 600; line-height: 1.45; }
+.gy-anh-dan b kbd {
+  font-family: var(--sans); font-size: 11.5px; font-weight: 600;
+  padding: 1px 6px; border-radius: var(--r-sm);
+  background: var(--surface-2); border: 1px solid var(--line); color: var(--ink);
+}
+.gy-anh-goiy { font-size: 12.5px; color: var(--text-mute); line-height: 1.45; }
+.gy-anh-nut { width: auto; margin-top: 6px; }
+/* Máy tính (có chuột/bàn phím) thấy lời nhắc Ctrl+V; thiết bị cảm ứng thấy
+   lời nhắc "chạm vào đây". Dùng `pointer: coarse` chứ không dùng bề rộng —
+   máy tính bảng rộng vẫn là cảm ứng, không có Ctrl+V. */
+.gy-anh-dienthoai { display: none; }
+@media (hover: none) and (pointer: coarse) {
+  .gy-anh-may { display: none; }
+  .gy-anh-dienthoai { display: block; }
+}
+/* Con trỏ khi kéo tệp qua cả form đang mở — thả đâu trong form cũng ăn */
+#gy-form-body.dang-keo .gy-anh-dan { border-color: var(--sage-dark); background: var(--card); }
+
+.gy-anh-xem[hidden] { display: none; }
+.gy-anh-xem {
+  margin-top: 10px; padding: 10px;
+  border: 1px solid var(--line); border-radius: var(--r-md); background: var(--card);
+}
+.gy-anh-xem img {
+  display: block; width: 100%; max-height: 260px;
+  object-fit: contain; object-position: left center;
+  border-radius: var(--r-sm); background: var(--surface-2);
+}
+.gy-anh-xem-duoi {
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 8px; margin-top: 8px;
+}
+.gy-anh-cotin { font-size: 12.5px; color: var(--text-mute); }
+
+.gy-anh-tt[hidden] { display: none; }
+.gy-anh-tt { margin-top: 8px; font-size: 12.5px; color: var(--ink-soft); }
+.gy-anh-tt.loi { color: var(--danger); }
+
+/* Điện thoại: không có Ctrl+V, chạm vào vùng này để mở thư viện ảnh */
+@media (max-width: 640px) {
+  .gy-anh-dan { padding: 14px 12px; }
+  .gy-anh-xem img { max-height: 200px; }
+}
+
 /* Danh sách vinh danh: xếp 2 cột trên màn rộng, tự về 1 cột khi hẹp/điện thoại */
 #vd-list {
   display: grid;

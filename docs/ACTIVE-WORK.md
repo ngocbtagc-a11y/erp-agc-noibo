@@ -10,7 +10,10 @@ hoặc ERP Owner trước khi cùng sửa.
 
 | Area | Owner/Agent | Branch | Task | Started | Status | Affected files/modules |
 |---|---|---|---|---|---|---|
-| _(chưa có việc đang chạy — xoá dòng ví dụ này khi ghi dòng thật đầu tiên)_ | — | — | — | — | — | — |
+| Góp ý ERP — PHÂN TÍCH (không code) | HỒ LY (Agent A) | — (chỉ ghi `docs/`) | Viết SPEC-0002 (cổng duyệt góp ý) + SPEC-0003 (runner vòng lặp) | 2026-08-27 | waiting_review | docs/specs/SPEC-0002-cong-duyet-gop-y.md, docs/specs/SPEC-0003-runner-vong-lap.md |
+| `gop_y` — TRẠNG THÁI & DANH SÁCH (đặt trước) | (chưa giao) KHỈ ĐỘT | — | SPEC-0002: `src/index.js:3010-3330` (`gopYDoiTrangThai`, `gopYDanhSach`, `gopYLichSu`), phần **danh sách** trong `public/app.html` + `app.js` tab `gopy`, `migrations/them-gopy-lichsu-tacnhan.sql`, `migrations/them-gopy-congduyet.sql` | 2026-08-27 | blocked | Chờ Sếp chốt **9 câu** ở SPEC-0002 mục "Cần ERP Owner quyết" (câu 9 chặn cả SPEC-0003). **KHÔNG đụng** `#gy-form`/`gopYGui`/`dinh_kem` — vùng của nhánh `feature/gopy-paste-anh`. |
+| Runner vòng lặp — FILE MỚI (đặt trước) | (chưa giao) KHỈ ĐỘT | — | SPEC-0003 Đợt A (CTL-0002a): `.github/workflows/agent-runner.yml`, `scripts/runner/*.mjs`, `src/runner.js`, `migrations/them-cau-hinh-he-thong.sql`, `migrations/them-agent-run.sql` | 2026-08-27 | blocked | Chờ Sếp chốt 5 câu SPEC-0003. Toàn file MỚI, **không đụng** `src/index.js` vùng `gop_y` → chạy song song với SPEC-0002 được. Đợt B chờ SPEC-0002 merge. |
+| `gop_y` — FORM GỬI GÓP Ý (chỉ ô đính kèm ảnh) | KHỈ ĐỘT (Agent B) | `feature/gopy-paste-anh` | Góp ý #1 của Sếp Ngọc: dán (Ctrl+V) / kéo thả ảnh chụp màn hình thẳng vào form gửi góp ý + thay ô "Chọn tệp" trần bằng vùng đính kèm có xem trước | 2026-08-27 | waiting_review | `public/app.html` (khối `#gy-anh` trong `#gy-form`), `public/assets/js/app.js` (`nenAnhVuaKhung`, `coByteCuaDataUrl`, phần đính kèm + submit `#gy-form` trong `khoiDongGopY`), `public/assets/css/style.css` (khối `.gy-anh-*`). **KHÔNG đụng** `gopYDoiTrangThai`/`gopYDanhSach`/`gopYLichSu`/`docs/specs/` — vùng của Hồ Ly. Backend `gopYGui` giữ nguyên, không migration. Chờ Sếp Ngọc nghiệm thu rồi mới merge. |
 
 **Status hợp lệ**: `in_progress` · `blocked` · `waiting_review` · `done`
 (xoá dòng khi `done` và đã merge).

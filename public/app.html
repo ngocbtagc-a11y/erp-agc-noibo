@@ -421,9 +421,33 @@
               <label>Khu vực/module</label>
               <select id="gy-khuvuc"><option value="">— Chọn nếu biết —</option></select>
             </div>
+            <!-- Đính kèm ảnh: dán thẳng (Ctrl+V) / kéo thả / chọn tệp — góp ý #1
+                 của Sếp Ngọc 26/08/2026 ("muốn Ctrl+C, Ctrl+V là được luôn chứ
+                 không cần tìm file"). Ô <input type=file> trần trước đây được
+                 giấu đi và thay bằng nút .btn-phu dùng chung của ERP; đường chọn
+                 tệp vẫn còn nguyên cho ai đã quen, chỉ không còn là đường DUY NHẤT. -->
             <div class="field field-rong">
               <label>Ảnh chụp màn hình (nếu có)</label>
-              <input type="file" id="gy-anh" accept="image/*">
+              <div class="gy-anh-dan" id="gy-anh-dan">
+                <span class="gy-anh-bieutuong" aria-hidden="true">🖼️</span>
+                <!-- Hai lời nhắc, CSS chọn đúng một cái theo loại thiết bị: máy
+                     tính có bàn phím thì nói Ctrl+V, điện thoại cảm ứng thì nói
+                     chạm — không doạ người dùng điện thoại bằng phím tắt họ
+                     không có (ERP là PWA, phần lớn thao tác vận hành dùng máy). -->
+                <b class="gy-anh-may">Dán ảnh bằng <kbd>Ctrl</kbd> + <kbd>V</kbd>, kéo thả vào đây, hoặc chọn tệp</b>
+                <b class="gy-anh-dienthoai">Chạm vào đây để chụp ảnh hoặc chọn ảnh có sẵn trong máy</b>
+                <span class="gy-anh-goiy gy-anh-may" id="gy-anh-goiy">Chụp màn hình xong bấm Ctrl + V là ảnh vào thẳng đây, không phải đi tìm tệp.</span>
+                <button type="button" class="btn-phu gy-anh-nut" id="gy-anh-chon">Chọn tệp ảnh</button>
+                <input type="file" id="gy-anh" accept="image/*" hidden>
+              </div>
+              <div class="gy-anh-xem" id="gy-anh-xem" hidden>
+                <img id="gy-anh-hinh" alt="Ảnh sẽ gửi kèm góp ý">
+                <div class="gy-anh-xem-duoi">
+                  <span class="gy-anh-cotin" id="gy-anh-cotin"></span>
+                  <button type="button" class="btn-nho" id="gy-anh-xoa">Xoá ảnh</button>
+                </div>
+              </div>
+              <div class="gy-anh-tt" id="gy-anh-tt" hidden></div>
             </div>
             <div class="field field-nut">
               <button type="submit" class="btn-primary" id="gy-nut-gui" style="width:auto">Gửi góp ý</button>
