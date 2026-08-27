@@ -975,7 +975,21 @@ $('#thdLuu').addEventListener('click', async () => {
     nutLuu.disabled = false;
   }
 });
-document.addEventListener('click', () => { $('#thdPanel').hidden = true; });
+/* Đóng khi bấm/chạm ra ngoài. Dùng `pointerdown` chứ không dùng `click`:
+   pointerdown bắn đều cho chuột, cảm ứng và bút — kho dùng điện thoại là
+   chính, mà `click` trên `document` có máy iOS cũ không bắn khi chạm vào
+   vùng trống (CTL-0008 giả thuyết 2). Chặn bằng `closest('#thdWrap')` thay
+   vì dựa vào stopPropagation nên không lo thứ tự sự kiện làm hỏng nút bật/tắt. */
+document.addEventListener('pointerdown', (e) => {
+  if (!e.target.closest('#thdWrap')) $('#thdPanel').hidden = true;
+});
+// Esc đóng popover — bàn phím cũng thoát được, không phải rê chuột đi chỗ khác.
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !$('#thdPanel').hidden) {
+    $('#thdPanel').hidden = true;
+    $('#thdNut').focus();
+  }
+});
 
 const d = new Date();
 $('#ngayHomNay').textContent = 'Hôm nay, ' +

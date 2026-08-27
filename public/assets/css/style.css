@@ -563,11 +563,19 @@ img.av { object-fit: cover; display: block; cursor: default; }
   box-shadow: var(--shadow-md); padding: 12px; width: 220px;
   display: flex; flex-direction: column; gap: 3px;
 }
-/* Thuộc tính hidden của HTML CHỈ thắng được [hidden] mặc định của trình
-   duyệt nếu không có rule display nào khác cùng độ ưu tiên đè lên — ở đây
-   .thd-panel có display:flex nên hidden=true set qua JS KHÔNG ẩn được gì
-   (panel cứ hiện mãi dù đã bấm ra ngoài). Ghi đè tường minh để ẩn thật. */
+/* BẮT BUỘC — `display: flex` ở trên đè mất `display: none` mặc định của
+   thuộc tính [hidden] (CSS của mình luôn thắng CSS mặc định trình duyệt).
+   Thiếu dòng này thì lệnh `thdPanel.hidden = true` trong app.js CHẠY nhưng
+   KHÔNG ẩn được gì — popover "Trạng thái của tôi" bung ra và nằm lì suốt
+   phiên làm việc. Cùng khuôn với `.cnb-popup[hidden]`,
+   `.combo1-panel[hidden]`, `.modal-nen[hidden]`.
+
+   Lịch sử: anh Phạm Khương Duy báo lỗi và sửa đúng chỗ này (a4d3272,
+   27/08/2026); Sếp Ngọc báo cùng lỗi, rà rộng ra thì thấy 13 phần tử khác
+   trong ERP dính đúng bệnh — xem chốt toàn cục `[hidden]` cuối file và
+   `docs/reviews/REV-0003-ra-soat-dong-cua-so.md` (CTL-0008). */
 .thd-panel[hidden] { display: none; }
+
 .thd-panel-tieu {
   font-size: 12.5px; font-weight: 700; color: var(--ink);
   margin-bottom: 6px;
