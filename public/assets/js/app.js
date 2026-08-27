@@ -3240,6 +3240,192 @@ if (TOI.quyen.includes('nhansu')) {
       }
     });
 
+    /* ---- Mô tả công việc theo MBOs (SPEC-0007 Đợt 3) --------------------
+       Gắn theo CHỨC DANH, không theo người: 24 người nhưng ~8 chức danh, và
+       JD vốn thuộc về VỊ TRÍ — người nghỉ thì JD phải ở lại cho người sau.
+       Chỗ ép outcome nằm ở `do_bang` bắt buộc (ràng buộc NOT NULL dưới DB),
+       giao diện chỉ nhắc thêm cho dễ hiểu, KHÔNG phải chốt chặn. */
+
+    let JD_DANG_MO = null;      // { nhan_su_id, chuc_danh_id }
+
+    const JD_NHIP_CHU = { ngay: 'Hằng ngày', tuan: 'Hằng tuần', thang: 'Hằng tháng', quy: 'Hằng quý' };
+
+    /* Bản sao danh sách động từ hoạt động của `src/mota-cv.js`. CỐ Ý sao chép
+       thay vì nạp từ máy chủ: đây chỉ là lời nhắc trong lúc gõ, gọi API mỗi
+       phím là vô lý. MÁY CHỦ mới là nơi phán quyết — lệch nhau thì cũng chỉ
+       lệch một câu nhắc, không lệch dữ liệu. */
+    const JD_MO_DAU_HOAT_DONG = ['quản lý', 'theo dõi', 'hỗ trợ', 'phối hợp', 'thực hiện', 'đảm bảo'];
+    function jdDongTuHoatDong(s) {
+      const t = String(s || '').trim().toLowerCase();
+      return JD_MO_DAU_HOAT_DONG.find(v => t.startsWith(v)) || null;
+    }
+
+    function jdResetForm() {
+      $('#jd-id').value = '';
+      $('#jd-daura').value = '';
+      $('#jd-dobang').value = '';
+      $('#jd-nhip').value = 'thang';
+      $('#jd-pham-vi').value = 'chuc_danh';
+      $('#jd-nutluu').textContent = 'Lưu đầu ra';
+      $('#jd-nutmoi').hidden = true;
+      $('#jd-loi').textContent = '';
+      jdCapNhatNhac();
+    }
+
+    function jdCapNhatNhac() {
+      const o = $('#jd-nhac'), dt = jdDongTuHoatDong($('#jd-daura').value);
+      o.hidden = !dt;
+      if (dt) {
+        o.innerHTML = `<b>“${esc(dt)}…” là một HOẠT ĐỘNG, chưa phải đầu ra.</b> ` +
+          `Đầu ra là thứ <b>bàn giao được</b> — hỏi tiếp: làm xong thì có cái gì trên tay? ` +
+          `Ví dụ “${esc(dt)} kho” → “Số liệu tồn kho khớp giữa ERP và đếm thực tế”. ` +
+          `<i>Vẫn lưu được — đây là lời nhắc, không phải lỗi.</i>`;
+      }
+    }
+    $('#jd-daura').addEventListener('input', jdCapNhatNhac);
+    $('#jd-nutmoi').addEventListener('click', jdResetForm);
+
+    async function veJdHoSo(n) {
+      JD_DANG_MO = { nhan_su_id: n.id, chuc_danh_id: n.chuc_danh_id || null };
+      jdResetForm();
+      $('#jd-mauKhoi').hidden = true;
+      $('#jd-chonmau').value = '';
+
+      let kq = { mo_ta: [] };
+      try { kq = await API.mtcv({ nhan_su_id: n.id }); } catch { /* hồ sơ vẫn dùng được */ }
+      if (JD_DANG_MO?.nhan_su_id !== n.id) return;   // đã mở hồ sơ người khác
+
+      JD_DANG_MO.chuc_danh_id = kq.chuc_danh_id || null;
+      const ds = kq.mo_ta || [];
+
+      $('#nsSua-jdDem').textContent = ds.length ? `· ${ds.length} đầu ra` : '· chưa viết';
+
+      /* Nói RÕ đang sửa cho ai. Sửa ở đây là sửa cho CẢ VỊ TRÍ — không nói ra
+         thì người dùng tưởng mình đang sửa riêng một người, và tháng sau sẽ
+         ngạc nhiên vì người khác cùng chức danh cũng đổi theo. */
+      const oVt = $('#nsSua-jdViTri');
+      if (kq.chua_co_chuc_danh) {
+        oVt.className = 'jd-nhac-vitri jd-canh';
+        oVt.innerHTML = '⚠️ Người này <b>chưa được gán chức danh</b>. Mô tả công việc gắn theo ' +
+          'chức danh, nên phải chọn chức danh ở phần trên rồi Lưu hồ sơ trước.';
+      } else if (kq.chua_nap) {
+        oVt.className = 'jd-nhac-vitri jd-canh';
+        oVt.innerHTML = '⚠️ Chưa nạp <code>them-mota-congviec.sql</code> — phần này chưa dùng được.';
+      } else {
+        oVt.className = 'jd-nhac-vitri';
+        oVt.innerHTML = `Đây là mô tả công việc của chức danh <b>${esc(kq.chuc_danh_ten || '—')}</b>. ` +
+          `Sửa ở đây là sửa cho <b>mọi người</b> giữ chức danh này — chọn “Riêng người này” ` +
+          `nếu chỉ là phần kiêm nhiệm.`;
+      }
+      const dungDuoc = !kq.chua_co_chuc_danh && !kq.chua_nap;
+      $('#jd-nutluu').disabled = !dungDuoc;
+      $('#jd-chonmau').disabled = !dungDuoc;
+
+      veBang('#nsSua-jdBang', ds, m => {
+        const rieng = m.nhan_su_id
+          ? ' <span class="tag mute">riêng người này</span>' : '';
+        return `<td>${esc(m.dau_ra)}${rieng}</td>` +
+          `<td class="sm">${esc(m.do_bang)}</td>` +
+          `<td class="sm">${esc(JD_NHIP_CHU[m.nhip] || m.nhip)}</td>` +
+          `<td class="sm"><button type="button" class="btn-nho" data-jd-sua="${m.id}">Sửa</button> ` +
+            `<button type="button" class="btn-nho btn-phu" data-jd-an="${m.id}">Ẩn</button></td>`;
+      });
+      $('#nsSua-jdTrong').hidden = ds.length > 0 || !dungDuoc;
+      $('#nsSua-jdBang').dataset.ds = JSON.stringify(ds);
+    }
+
+    $('#nsSua-jdBang').addEventListener('click', async e => {
+      const bSua = e.target.closest('[data-jd-sua]');
+      const bAn = e.target.closest('[data-jd-an]');
+      if (bSua) {
+        const ds = JSON.parse($('#nsSua-jdBang').dataset.ds || '[]');
+        const m = ds.find(x => String(x.id) === bSua.dataset.jdSua);
+        if (!m) return;
+        $('#jd-id').value = m.id;
+        $('#jd-daura').value = m.dau_ra;
+        $('#jd-dobang').value = m.do_bang;
+        $('#jd-nhip').value = m.nhip || 'thang';
+        $('#jd-pham-vi').value = m.nhan_su_id ? 'ca_nhan' : 'chuc_danh';
+        $('#jd-nutluu').textContent = 'Lưu thay đổi';
+        $('#jd-nutmoi').hidden = false;
+        jdCapNhatNhac();
+        return;
+      }
+      if (bAn) {
+        if (!confirm('Ẩn đầu ra này? Bản ghi KHÔNG bị xoá — chỉ thôi không tính nữa.')) return;
+        try {
+          await API.mtcvAn(parseInt(bAn.dataset.jdAn, 10), 'Ẩn từ hồ sơ nhân sự');
+          const n = DS_NHAN_SU_QT.find(x => x.id === JD_DANG_MO?.nhan_su_id);
+          if (n) await veJdHoSo(n);
+        } catch (err) {
+          $('#jd-loi').textContent = err.message || 'Không ẩn được, thử lại nhé.';
+        }
+      }
+    });
+
+    $('#nsSua-jdForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      const oLoi = $('#jd-loi'); oLoi.textContent = '';
+      if (!JD_DANG_MO?.chuc_danh_id) { oLoi.textContent = 'Người này chưa có chức danh.'; return; }
+      const nut = $('#jd-nutluu'); nut.disabled = true;
+      try {
+        const kq = await API.mtcvLuu({
+          id: $('#jd-id').value || null,
+          chuc_danh_id: JD_DANG_MO.chuc_danh_id,
+          nhan_su_id: $('#jd-pham-vi').value === 'ca_nhan' ? JD_DANG_MO.nhan_su_id : null,
+          dau_ra: $('#jd-daura').value,
+          do_bang: $('#jd-dobang').value,
+          nhip: $('#jd-nhip').value
+        });
+        // `canh_bao` ở đây nghĩa là ĐÃ LƯU nhưng câu chữ còn là hoạt động —
+        // khác hẳn `can_ly_do` của hợp đồng (chưa lưu). Không được lẫn.
+        if (kq.canh_bao?.length) oLoi.textContent = 'Đã lưu. ' + kq.canh_bao.join(' ');
+        const n = DS_NHAN_SU_QT.find(x => x.id === JD_DANG_MO.nhan_su_id);
+        if (n) await veJdHoSo(n);
+      } catch (err) {
+        oLoi.textContent = err.message || 'Chưa lưu được, thử lại nhé.';
+      } finally {
+        nut.disabled = false;
+      }
+    });
+
+    /* Mẫu điền sẵn — KHÔNG có mẫu thì tính năng chết ngay tuần đầu. Bấm một
+       dòng mẫu là đổ vào form để SỬA rồi mới lưu; cố ý không có nút "nhập cả
+       bộ", vì một tập JD nhập hàng loạt mà chưa ai đọc lại thì không ai coi
+       đó là cam kết của mình. */
+    $('#jd-chonmau').addEventListener('change', async () => {
+      const nhom = $('#jd-chonmau').value;
+      const khoi = $('#jd-mauKhoi');
+      if (!nhom) { khoi.hidden = true; return; }
+      let mau = [];
+      try { ({ mau } = await API.mtcvMau(nhom)); } catch { mau = []; }
+      $('#jd-mauTieu').innerHTML = mau.length
+        ? `Bấm một dòng để đổ vào ô bên trên, <b>sửa cho đúng vị trí của mình</b> rồi mới Lưu. ` +
+          `Đây là gợi ý, không phải mô tả công việc đã duyệt.`
+        : 'Chưa nạp <code>them-mota-congviec.sql</code> nên chưa có mẫu nào.';
+      $('#jd-mauDs').innerHTML = mau.map((m, i) =>
+        `<button type="button" class="jd-mau-nut" data-mau="${i}">` +
+          `<b>${esc(m.dau_ra)}</b><span>${esc(m.do_bang)}</span>` +
+          `<i>${esc(JD_NHIP_CHU[m.nhip] || m.nhip)}</i></button>`).join('');
+      $('#jd-mauDs').dataset.ds = JSON.stringify(mau);
+      khoi.hidden = false;
+    });
+
+    $('#jd-mauDs').addEventListener('click', e => {
+      const b = e.target.closest('[data-mau]'); if (!b) return;
+      const mau = JSON.parse($('#jd-mauDs').dataset.ds || '[]');
+      const m = mau[parseInt(b.dataset.mau, 10)];
+      if (!m) return;
+      $('#jd-id').value = '';
+      $('#jd-daura').value = m.dau_ra;
+      $('#jd-dobang').value = m.do_bang;
+      $('#jd-nhip').value = m.nhip;
+      $('#jd-nutluu').textContent = 'Lưu đầu ra';
+      $('#jd-nutmoi').hidden = true;
+      jdCapNhatNhac();
+      $('#jd-daura').focus();
+    });
+
     /* ---- Hợp đồng lao động trong hồ sơ (SPEC-0007 Đợt 1) ---------------- */
 
     let NS_HD_DANG_MO = null;   // id nhân sự đang mở hộp hồ sơ
@@ -3424,6 +3610,7 @@ if (TOI.quyen.includes('nhansu')) {
       veLichSuHoSo(id);
       veHopDongHoSo(id);
       veCongTacSinhNhat(n);
+      veJdHoSo(n);
       $('#nsSua-id').value = n.id;
       $('#nsSua-hoten').value = n.ho_ten;
       $('#nsSua-sdt').value = n.sdt || '';

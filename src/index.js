@@ -25,6 +25,7 @@ import * as dulieunen from './dulieunen.js';
 import * as taisan from './taisan.js';
 import * as ca from './ca.js';
 import * as hopdong from './hopdong.js';
+import * as motacv from './mota-cv.js';
 import { quetNhacNhanSu, thangKeTiep, gioVN } from './nhac-nhan-su.js';
 import { sinhMa } from './dinh-danh.js';
 
@@ -3485,6 +3486,36 @@ async function nsViecCanLam(req, env) {
   return json(kq);
 }
 
+/* ---- Mô tả công việc theo MBOs (SPEC-0007 Đợt 3) -------------------------
+   ĐỌC mở cho MỌI người đã đăng nhập — JD là mức 1 · nội bộ theo ADR-0011 A2.
+   MBOs mà mỗi người giấu đầu ra của mình thì không ai đối chiếu được với ai;
+   và JD không chứa lương, không chứa giấy tờ, không chứa ngày sinh.
+   GHI đi qua đúng một cửa với hồ sơ và hợp đồng (`them_nhan_su`) — theo đúng
+   luồng câu 3 Mục 13: quản lý mảng VIẾT nội dung, HCNS NHẬP vào. */
+async function mtcvDanhSach(req, env) {
+  const { loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  const u = new URL(req.url).searchParams;
+  return motacv.danhSach(env, u.get('chuc_danh_id'), u.get('nhan_su_id'), u.get('ke_ca_an') === '1');
+}
+async function mtcvMau(req, env) {
+  const { loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  return motacv.mau(env, new URL(req.url).searchParams.get('nhom'));
+}
+async function mtcvLuu(req, env) {
+  const { phien, loi: l } = await batBuocThemNhanSu(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return motacv.luu(env, phien, b);
+}
+async function mtcvAn(req, env) {
+  const { phien, loi: l } = await batBuocThemNhanSu(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return motacv.an(env, phien, b);
+}
+
 /* Xem ảnh đại diện của 1 người — GET /api/nhan-su/anh?id=X (ai đăng nhập rồi
    cũng xem được ảnh của bất kỳ ai, giống tinh thần Danh bạ mở cho tất cả). */
 async function nsAnhXem(req, env) {
@@ -3516,6 +3547,10 @@ const DUONG_DAN = {
   'POST /api/nhan-su/hop-dong/an':   nsHopDongAn,
   'POST /api/nhan-su/sinh-nhat-cong-khai': nsSinhNhatCongKhai,
   'GET  /api/nhan-su/viec-can-lam':  nsViecCanLam,
+  'GET  /api/mo-ta-cong-viec':       mtcvDanhSach,
+  'GET  /api/mo-ta-cong-viec/mau':   mtcvMau,
+  'POST /api/mo-ta-cong-viec/luu':   mtcvLuu,
+  'POST /api/mo-ta-cong-viec/an':    mtcvAn,
   'POST /api/gop-y':               gopYGui,
   'GET  /api/gop-y':               gopYDanhSach,
   'POST /api/gop-y/trang-thai':    gopYDoiTrangThai,

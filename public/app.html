@@ -2320,6 +2320,81 @@
     </form>
     <div class="form-loi" id="nsSua-loi"></div>
 
+    <!-- ==================== MÔ TẢ CÔNG VIỆC (SPEC-0007 Đợt 3) ====================
+         KHÔNG đẻ thêm tab (trần cứng 5 tab — SPEC-0007 §8). JD nằm trong
+         chính hồ sơ, dạng NHÓM GẬP: mở ra khi cần viết, đóng lại thì hồ sơ
+         vẫn ngắn. Gắn theo CHỨC DANH nên sửa ở đây là sửa cho cả vị trí —
+         nói thẳng điều đó ra, không để ai tưởng mình đang sửa riêng một người.
+         BH-19: nhóm gập dùng <details>, không dùng thuộc tính `hidden` nào. -->
+    <details class="jd-khoi" id="nsSua-jdKhoi">
+      <summary>Mô tả công việc <span class="jd-dem" id="nsSua-jdDem"></span></summary>
+
+      <div class="jd-nhac-vitri" id="nsSua-jdViTri"></div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Đầu ra (bàn giao được)</th><th>Đo bằng</th><th>Nhịp</th><th></th></tr></thead>
+          <tbody id="nsSua-jdBang"></tbody>
+        </table>
+      </div>
+      <div class="empty" id="nsSua-jdTrong" hidden>
+        Chưa có mô tả công việc cho vị trí này. Bấm <b>Lấy mẫu</b> bên dưới để bắt đầu —
+        mẫu là gợi ý, quản lý mảng phải sửa cho đúng vị trí rồi mới lưu.
+      </div>
+
+      <form id="nsSua-jdForm" class="form-luoi" autocomplete="off" style="margin-top:12px">
+        <input type="hidden" id="jd-id">
+        <div class="field field-rong">
+          <label>Đầu ra * <span class="goi-y">· DANH TỪ — thứ bàn giao được, không phải việc phải làm</span></label>
+          <input type="text" id="jd-daura" required maxlength="200"
+                 placeholder="VD: Bảng công tháng đã chốt">
+          <div class="hd-nhac" id="jd-nhac" hidden></div>
+        </div>
+        <div class="field field-rong">
+          <label>Đo bằng gì * <span class="goi-y">· một con số, một mốc thời gian, hoặc một điều kiện đúng/sai</span></label>
+          <input type="text" id="jd-dobang" required maxlength="300"
+                 placeholder="VD: Gửi kế toán trước ngày 3, không phải sửa lại sau khi đã gửi">
+        </div>
+        <div class="field">
+          <label>Nhịp</label>
+          <select id="jd-nhip">
+            <option value="ngay">Hằng ngày</option>
+            <option value="tuan">Hằng tuần</option>
+            <option value="thang" selected>Hằng tháng</option>
+            <option value="quy">Hằng quý</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Áp dụng cho</label>
+          <select id="jd-pham-vi">
+            <option value="chuc_danh">Cả chức danh này</option>
+            <option value="ca_nhan">Riêng người này (kiêm nhiệm)</option>
+          </select>
+        </div>
+        <div class="field field-nut" style="display:flex; gap:10px; flex-wrap:wrap">
+          <button type="submit" class="btn-primary" id="jd-nutluu" style="width:auto">Lưu đầu ra</button>
+          <button type="button" class="btn-phu" id="jd-nutmoi" style="width:auto" hidden>Nhập dòng mới</button>
+          <select id="jd-chonmau" class="chon-nho" title="Lấy mẫu điền sẵn cho vị trí thật của công ty">
+            <option value="">Lấy mẫu…</option>
+            <option value="kho">Kho vận</option>
+            <option value="ke_toan">Kế toán &amp; Tài chính</option>
+            <option value="hcns">Hành chính nhân sự</option>
+            <option value="van_hanh_san">Vận hành sàn TMĐT</option>
+          </select>
+        </div>
+      </form>
+      <div class="form-loi" id="jd-loi"></div>
+
+      <!-- Bảng mẫu: bấm một dòng là đổ vào form ở trên để SỬA rồi mới lưu.
+           Cố ý KHÔNG có nút "nhập cả 6 dòng" — nhập hàng loạt mẫu chưa sửa
+           chính là cách nhanh nhất để có một tập JD trông đầy mà không ai
+           thấy mình đã cam kết gì. -->
+      <div id="jd-mauKhoi" hidden>
+        <div class="jd-mau-tieu" id="jd-mauTieu"></div>
+        <div class="jd-mau-ds" id="jd-mauDs"></div>
+      </div>
+    </details>
+
     <!-- Công tắc sinh nhật của NGƯỜI ĐANG MỞ HỒ SƠ (SPEC-0007 Đợt 2). Có ô
          này ở đây để HCNS tắt hộ khi ai đó nhờ trực tiếp — nhưng chính chủ
          vẫn tự tắt được ở panel "Trạng thái của tôi", không phải đi xin.

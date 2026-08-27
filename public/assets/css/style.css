@@ -2246,3 +2246,53 @@ tr.kd-chiadoi td {
 }
 .ns-vieccanlam .vcl-ten { color: var(--text-mute); font-size: 12px; }
 .ns-vieccanlam .btn-nho { flex: none; }
+
+/* ==========================================================================
+   MÔ TẢ CÔNG VIỆC (JD) — SPEC-0007 Đợt 3
+   ---------------------------------------------------------------------------
+   Nhóm GẬP, không phải tab mới: SPEC-0007 §8 đặt trần cứng 5 tab cho hồ sơ,
+   và "đừng biến nó thành cái phễu 12 tab" là yêu cầu thẳng của Sếp.
+   Dùng <details>/<summary> — gập/mở là hành vi sẵn có của trình duyệt, không
+   cần một dòng JS nào, và bàn phím lẫn trình đọc màn hình đều dùng được.
+   ========================================================================== */
+.jd-khoi {
+  margin-top: 14px; border: 1px solid var(--line); border-radius: var(--r-sm);
+  padding: 0 12px 12px;
+}
+.jd-khoi > summary {
+  cursor: pointer; padding: 11px 0; font-weight: 650; font-size: 14px;
+  list-style: revert;
+}
+.jd-khoi[open] > summary { border-bottom: 1px solid var(--line); margin-bottom: 10px; }
+.jd-khoi .jd-dem { font-weight: 400; color: var(--text-mute); font-size: 12.5px; }
+
+.jd-nhac-vitri {
+  font-size: 12.5px; line-height: 1.55; color: var(--text-mute); margin-bottom: 10px;
+}
+.jd-nhac-vitri.jd-canh {
+  color: var(--ink); padding: 9px 11px; border-radius: var(--r-sm);
+  background: var(--warn-wash); border-left: 3px solid var(--warn);
+}
+
+/* Bảng mẫu điền sẵn: mỗi mẫu là một nút CAO, hiện đủ cả "đầu ra" lẫn "đo
+   bằng" — chỉ hiện tên đầu ra thì người ta không học được cách viết, mà học
+   cách viết mới là mục đích của bộ mẫu. */
+.jd-mau-tieu { font-size: 12.5px; color: var(--text-mute); margin: 12px 0 8px; line-height: 1.55; }
+.jd-mau-ds { display: grid; gap: 8px; }
+.jd-mau-nut {
+  text-align: left; width: 100%; cursor: pointer;
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-sm);
+  padding: 9px 11px; font: inherit; color: var(--ink); line-height: 1.45;
+}
+.jd-mau-nut:hover { border-color: var(--brand, var(--warn)); }
+.jd-mau-nut b { display: block; font-size: 13px; font-weight: 650; }
+.jd-mau-nut span { display: block; font-size: 12px; color: var(--text-mute); margin-top: 2px; }
+.jd-mau-nut i { display: block; font-size: 11px; color: var(--text-mute); margin-top: 3px; font-style: normal; }
+
+/* Điện thoại: bảng JD có 4 cột chữ dài. Cho vùng bảng tự cuộn ngang (đã có
+   .table-wrap), nhưng thu nhỏ chữ để phần lớn trường hợp không phải cuộn. */
+@media (max-width: 620px) {
+  .jd-khoi { padding: 0 9px 10px; }
+  .jd-khoi table { font-size: 12px; }
+  .jd-mau-nut b { font-size: 12.5px; }
+}

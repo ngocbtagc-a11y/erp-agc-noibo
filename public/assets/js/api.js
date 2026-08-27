@@ -73,6 +73,17 @@ export const API = {
   }),
   nsViecCanLam: () => goi('/api/nhan-su/viec-can-lam'),
 
+  /* Mô tả công việc theo MBOs (SPEC-0007 Đợt 3). ĐỌC mở cho mọi người đã
+     đăng nhập; GHI đi qua cửa quản lý hồ sơ. `mtcvLuu` có thể trả 200 kèm
+     `canh_bao` — đó là NHẮC ("đây là hoạt động, chưa phải đầu ra"), đã lưu
+     rồi, khác hẳn `can_ly_do` của hợp đồng (chưa lưu). */
+  mtcv: (q) => goi('/api/mo-ta-cong-viec?' + new URLSearchParams(q).toString()),
+  mtcvMau: (nhom) => goi('/api/mo-ta-cong-viec/mau' + (nhom ? '?nhom=' + encodeURIComponent(nhom) : '')),
+  mtcvLuu: (du) => goi('/api/mo-ta-cong-viec/luu', { method: 'POST', body: JSON.stringify(du) }),
+  mtcvAn: (id, lyDo) => goi('/api/mo-ta-cong-viec/an', {
+    method: 'POST', body: JSON.stringify({ id, ly_do: lyDo })
+  }),
+
   nsAnhDaiDien: (anhBase64) => goi('/api/nhan-su/anh-dai-dien', {
     method: 'POST', body: JSON.stringify({ anh: anhBase64 })
   }),
