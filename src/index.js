@@ -244,12 +244,17 @@ async function layNhanSu(req, env) {
   // ĐÂY LÀ CHỖ QUAN TRỌNG NHẤT CỦA CẢ HỆ THỐNG:
   // hai câu lệnh khác nhau tuỳ vai trò. Người không có quyền thì cột lương
   // không được chọn ra khỏi database — không phải "lấy ra rồi ẩn đi".
+  // REV-0010 ISSUE-1: `dang_lam` phải có ở CẢ HAI nhánh. Giao diện lọc bằng
+  // `.filter(n => n.dang_lam)`; nhánh không-xem-lương thiếu cột này thì mọi
+  // dòng thành `undefined` và ô "Chọn người để chấm" của anh Duy TRỐNG TRƠN —
+  // máy chủ trả 200, log sạch, không ai biết. Cột này không nhạy cảm (câu lệnh
+  // đã `WHERE dang_lam = 1`), thêm vào không mở thêm bề mặt quyền nào.
   const cauLenh = xemLuong
     ? `SELECT id, ma_nv, ho_ten, viet_tat, chuc_vu, bo_phan, trang_thai,
-              ngay_vao, luong, (anh_chan_dung IS NOT NULL) AS co_anh
+              ngay_vao, dang_lam, luong, (anh_chan_dung IS NOT NULL) AS co_anh
          FROM nhan_su WHERE dang_lam = 1 ORDER BY bo_phan, ho_ten`
     : `SELECT id, ma_nv, ho_ten, viet_tat, chuc_vu, bo_phan, trang_thai,
-              ngay_vao, (anh_chan_dung IS NOT NULL) AS co_anh
+              ngay_vao, dang_lam, (anh_chan_dung IS NOT NULL) AS co_anh
          FROM nhan_su WHERE dang_lam = 1 ORDER BY bo_phan, ho_ten`;
 
   const { results } = await env.DB.prepare(cauLenh).all();
@@ -3470,6 +3475,15 @@ async function nsNgaySinhLuu(req, env) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return loi('Ngày sinh chưa đúng định dạng ngày/tháng/năm');
     const [y, m, d] = s.split('-').map(Number);
     if (m < 1 || m > 12 || d < 1 || d > 31) return loi('Ngày sinh không có thật');
+    // REV-0010 ISSUE-3: kiểm ĐỊNH DẠNG chưa đủ, phải kiểm NGÀY CÓ THẬT.
+    // `1995-02-31` qua được vòng trên, nhưng `strftime('%m-%d', ...)` của
+    // SQLite nắn thành `03-03` ⇒ người đó bị chúc nhầm ngày MÃI MÃI.
+    // Dựng lại Date theo UTC rồi so đủ ba thành phần: tháng 2 ngày 30/31,
+    // 29/02 năm không nhuận, 31/04... đều bị chặn ngay tại đây.
+    const thu = new Date(Date.UTC(y, m - 1, d));
+    if (thu.getUTCFullYear() !== y || thu.getUTCMonth() !== m - 1 || thu.getUTCDate() !== d) {
+      return loi('Ngày sinh không có thật — kiểm lại ngày/tháng giúp tôi');
+    }
     const namNay = new Date(Date.now() + 7 * 3600 * 1000).getUTCFullYear();
     if (y < 1930 || y > namNay - 14) return loi('Năm sinh không hợp lý — kiểm lại giúp tôi');
     ngay = s;

@@ -253,16 +253,35 @@ cong_khai_sinh_nhat = 1 cho 2/2 người (mặc định BẬT, không ai bị t�
 Mẫu JD: 24 · Danh mục kỹ năng: 27
 ```
 
+> **Đính chính con số (REV-0010 §6).** Ba migration **của riêng Đợt 2+3+4** thêm
+> đúng **4 bảng**: 46 → **50** (`mo_ta_cong_viec`, `jd_mau`, `ky_nang`,
+> `nhan_su_ky_nang`) — `them-sinhnhat-congkhai.sql` chỉ `ALTER`, không thêm bảng.
+> Con số **51** ở khối trên là vì lượt đo áp **cả 4** migration, tức có thêm
+> `hop_dong_lao_dong` vốn thuộc **Đợt 1**. Hồ Ly đo 50 là đúng với phạm vi nhánh
+> này; 51 đúng với trạng thái sau khi gộp cả Đợt 1. Ghi rõ để sau này không ai
+> đi tìm một cái bảng không tồn tại.
+
 Chính lượt đo này lòi ra lỗ hổng `ngay_sinh` (0 người có ngày sinh).
 
-### ⚠️ Chưa chạy được: `wrangler dev` trên máy này
+### ~~Chưa chạy được `wrangler dev`~~ → ĐÃ CHẠY ĐƯỢC (vòng sửa 1 · 27/08/2026)
 
-`workerd` **crash khi khởi động** (`*** std::terminate() called with no
-exception`) ở cả `wrangler d1 execute --local` lẫn `wrangler dev`. Nên **chưa
-có lượt bấm thử trên trình duyệt thật**. Phần giao diện được kiểm bằng: id
-trùng · mọi `$('#id')` có thật trong HTML · BH-19 (`hidden` vs `display`) ·
-`node --check`. **Đây là khoảng trống có thật, nói ra chứ không giấu** — cần
-một lượt bấm tay trước khi phát hành.
+Bản giao trước khai `workerd` crash (`*** std::terminate()`). **Không còn đúng.**
+Hồ Ly dựng được, và tôi dựng lại được theo đúng cách đó:
+
+1. Worktree riêng của nhánh (BH-15/18 — không `checkout` đè cây chính), nối
+   `node_modules` bằng junction, **sao chép** `.wrangler/state` từ repo chính.
+2. `node scripts/chay-migration.mjs` cho cả 4 migration trên **bản sao** D1.
+3. Dựng tài khoản thử `duykho` (`quan_ly_kho`) + `hcnstest` (`hcns`), kèm 3
+   nhân viên kho có `quan_ly_id = t_duy` và 1 kế toán **ngoài** nhóm để đối chứng.
+4. `npx wrangler dev --port 8801 --local` → **chạy, `/api/*` trả 200**.
+
+**Cái bẫy làm tôi tưởng nó crash:** khởi `wrangler dev` từ một lượt gọi đồng bộ
+rồi để lượt gọi đó hết giờ — tiến trình con **bị giết theo**, còn log vẫn đứng ở
+dòng `Ready on http://127.0.0.1:8801`, nên nhìn như server sống mà cổng đã đóng.
+Phải chạy nền thật sự. Đây là lỗi **bàn thử**, không phải lỗi `workerd`.
+
+**Khoảng trống "chưa bấm trình duyệt" đã lấp bằng lượt bấm thật** — và chính nó
+lòi ra thêm một tầng của ISSUE-1 mà đọc code không thấy (mục dưới).
 
 ---
 
@@ -346,13 +365,150 @@ migration"* ≠ *"không có dữ liệu"*. → **Mỗi màn tra cứu phải ph
 trạng thái: có kết quả · không có kết quả · chưa có dữ liệu để mà tra** — và
 nói thành ba câu riêng. Bàn thử phải có ca cho **cả ba**, không chỉ ca có kết quả.
 
+---
+
+## VÒNG SỬA 1 (REV-0010) — 27/08/2026 · Khỉ Đột
+
+Năm lỗi Hồ Ly nêu đã vá hết. **Mỗi lỗi có một ca đối chứng cố ý sai (BH-16)** —
+làm hỏng lại đúng chỗ vừa vá, đo thấy lỗi tái hiện, rồi trả nguyên. Bàn đo nào
+không đỏ được ở bước đó thì không dùng để chứng minh gì.
+
+### ISSUE-1 (CHẶN) — ô "Chọn người để chấm" trống với anh Duy
+
+Vá **hai tầng**, cố ý:
+- `src/index.js` `layNhanSu()` — thêm `dang_lam` vào **cả hai** nhánh SQL. Cột
+  này không nhạy cảm (câu lệnh đã `WHERE dang_lam = 1`), không mở bề mặt quyền.
+- `public/assets/js/app.js:3197` — đổi `.filter(n => n.dang_lam)` thành
+  `.filter(n => n.dang_lam !== 0)`: chỉ loại người **đã nghỉ**, thay vì loại sạch
+  khi thiếu cột. Sau này ai lỡ bỏ cột lần nữa thì giao diện **vẫn sống**.
+
+**Đo trên trình duyệt thật** (Chrome thật, bấm thật vào form đăng nhập → tab
+Nhân sự → `<details>` "Tra năng lực"):
+
+| Đăng nhập | Ô "Chọn người để chấm…" | Cột lương |
+|---|---|---|
+| `duykho` (`quan_ly_kho` — anh Duy) | **9 mục** (1 dòng gợi ý + **8 người**, đủ 3 bạn kho) | **không có** |
+| `hcnstest` (`hcns`) — ca đối chứng | **9 mục**, y như trước, không hụt ai | có |
+
+> **Tầng thứ hai của ISSUE-1, chỉ lượt bấm thật mới thấy.** Bấm nút "Chấm năng
+> lực" xong ô vẫn trống — vì `doNguoiVao()` chỉ chạy trong sự kiện `toggle` của
+> `<details id="knTra">`, tức **phải mở "Tra năng lực" trước**, và chỉ chạy đúng
+> một lần (`KN_MO_ROI`). Đọc code không thấy khác biệt này; `curl` cũng không.
+> Không phải lỗi, nhưng là thứ tự bấm mà **hướng dẫn cho Sếp phải nói đúng**.
+
+**Ca đối chứng (bỏ lại cột `dang_lam` khỏi SQL, đo lại rồi trả nguyên):**
+
+```
+BẢN VÁ   : {"coCot":true,  "locCu":8, "locMoi":8}
+CỐ Ý SAI : {"coCot":false, "locCu":0, "locMoi":8}   ← lỗi cũ tái hiện đúng
+TRẢ VỀ   : {"coCot":true,  "locCu":8, "locMoi":8}
+```
+
+`locCu = 0` chính là lỗi Hồ Ly đo được; `locMoi = 8` chứng minh tầng đỡ thứ hai
+giữ được kể cả khi tầng máy chủ hỏng lại.
+
+### ISSUE-2 — bản tin tháng spam quản lý khi không còn tài khoản HCNS
+
+`src/nhac-nhan-su.js` `quetBanTinThangSau()`: **mỗi đường gửi một cột mốc riêng**
+(`ns_sinhnhat_thang` cho HCNS, `ns_sinhnhat_thang_ql` cho quản lý trực tiếp).
+Đường này hỏng không kéo đường kia hỏng theo.
+
+Bàn đo SQLite **thật** (`node:sqlite`, vỏ D1 mỏng — để chính SQLite tính
+`strftime`), chạy trên bản sao riêng:
+
+| Cảnh | Trước vá | Sau vá |
+|---|---|---|
+| Có HCNS · 6 lượt cron | `thang`=1 · `thang_ql`=1 | `thang`=1 · `thang_ql`=1 |
+| **Xoá sạch HCNS/admin · 6 lượt** | **`thang_ql`=6** | **`thang_ql`=1** |
+| Xoá sạch HCNS · **30 lượt** (ép mạnh) | **`thang_ql`=30** | **`thang_ql`=1** |
+
+Cột "Trước vá" là ca đối chứng cố ý sai — dựng lại đúng cách chống trùng cũ, ra
+đúng con số 6 của Hồ Ly, và 30 lượt thì 30 tin. Sau vá đứng yên ở 1.
+
+### ISSUE-3 — `nsNgaySinhLuu` nhận ngày không có thật
+
+Kiểm định dạng chưa đủ; nay dựng lại `Date.UTC(y, m-1, d)` rồi so **đủ ba thành
+phần**. Đo bằng POST thật lên `wrangler dev`, vai HCNS:
+
+| Gửi lên | Trước | Sau |
+|---|---|---|
+| `1995-02-31` | **200** → SQLite nắn `03-03` (chúc nhầm mãi mãi) | **400** "Ngày sinh không có thật" |
+| `1995-04-31` | 200 → nắn `05-01` | **400** |
+| `1995-02-29` (không nhuận) | 200 → nắn `03-01` | **400** |
+| `1995-13-01` | 200 → `NULL` (không bao giờ được chúc) | **400** |
+| `1995-00-10` | 400 | **400** |
+| `2030-05-05` (tương lai) | 400 | **400** |
+| `1800-05-05` (quá xa) | 400 | **400** |
+| `1996-02-29` (nhuận, hợp lệ) | 200 | **200** ✔ vẫn nhận |
+| `1995-02-28` (hợp lệ) | 200 | **200** ✔ vẫn nhận |
+
+Hai dòng cuối là ca đối chứng ngược: siết chặt mà **không** chặn nhầm ngày thật.
+
+### ISSUE-4 — seed JD nhân đôi khi chạy lại
+
+`migrations/them-mota-congviec.sql`: `UNIQUE (nhom, dau_ra)` + `INSERT OR IGNORE`
+ở cả 4 khối, **đúng khuôn `them-ky-nang.sql`**. Thêm
+`CREATE UNIQUE INDEX IF NOT EXISTS` để ràng buộc áp được cho cả bảng đã trót tạo
+trước đó (SQLite không `ALTER` được ràng buộc). Mục **LÙI LẠI** bổ sung `DROP INDEX`.
+
+Chạy migration **3 lần liên tiếp** trên D1 thật: `jd_mau` = **24 · 24 · 24**
+(trước vá: 24 → 48 → 72). `ky_nang` giữ 27 như cũ.
+
+### ISSUE-5 — trích dẫn pháp lý trong mẫu JD
+
+Quét **cả 24 mẫu**: chỉ **2 chỗ** viện dẫn văn bản, 22 mẫu còn lại là chỉ tiêu
+vận hành nội bộ. **Tra lại cả hai bằng WebSearch — cả hai CÓ THẬT**, nên giữ và
+ghi đủ số hiệu thay vì bỏ đi:
+
+- **NĐ 274/2025/NĐ-CP** — có thật, hiệu lực **30/11/2025**: chậm/trốn đóng BHXH
+  bắt buộc + BHTN phải nộp thêm **0,03%/ngày** trên số tiền và số ngày chậm.
+  Nguồn: `baohiemxahoi.gov.vn`, `luatvietnam.vn`.
+- **BLLĐ 2019 Điều 20 khoản 2** — có thật: hợp đồng hết hạn mà người lao động vẫn
+  làm việc, quá **30 ngày** không ký hợp đồng mới thì hợp đồng đã giao kết **trở
+  thành** hợp đồng không xác định thời hạn.
+
+Đầu phần seed có thêm khối chú thích ghi rõ đã tra ngày nào, nguồn nào, và luật
+cho mẫu mới: **có trích luật thì phải tra nguồn trước, không thì bỏ số hiệu.**
+
+### Tests sau vá
+
+`tu-kiem-nhac-nhan-su` **53/0** · `tu-kiem-jd` **38/0** · `tu-kiem-ky-nang`
+**45/0** · `tu-kiem-giao-dien-0007` **25/0** — **161 đạt · 0 hỏng**, cộng lượt
+bấm trình duyệt thật và 3 ca đối chứng cố ý sai ở trên.
+
+### Bài học vòng này
+
+- **BH-mới · "136 ca xanh" không thay được một lượt bấm.** Cả 3 bộ tự kiểm
+  ngoại tuyến đều xanh mà vẫn lọt ISSUE-1, vì bàn thử **tự dựng dữ liệu giả** nên
+  không bao giờ thấy **hình dạng thật** của phản hồi API. Tính năng nào đọc
+  `Object.keys()` của một phản hồi thì phải có ít nhất một ca gọi API **thật**.
+- **BH-mới · Bộ lọc phải loại thứ mình biết là xấu, đừng giữ thứ mình đoán là
+  tốt.** `.filter(n => n.dang_lam)` là "giữ thứ trông đúng" — thiếu cột thì quét
+  sạch, im lặng. `.filter(n => n.dang_lam !== 0)` là "loại thứ chắc chắn sai" —
+  hỏng dữ liệu thì cùng lắm hiện thừa, chứ không hiện **rỗng**. Với danh sách
+  người, rỗng là chế độ hỏng tệ nhất: không ai biết mình đang thiếu ai.
+- **BH-mới · Chống trùng phải tự ghi cột mốc của chính mình.** Đường gửi A mượn
+  cột mốc của đường gửi B thì B tắt là A spam vô hạn. Mỗi đường một `loai` riêng.
+- **BH-mới · "Server crash" phải chứng minh bằng cổng, không bằng log.** Tôi
+  khai `wrangler dev` crash trong khi thật ra tiến trình con bị giết theo lượt
+  gọi hết giờ, log vẫn dừng ở dòng `Ready`. Trước khi khai một công cụ hỏng:
+  chạy nền thật sự rồi gọi vào cổng một lần.
+
+---
+
 ## Việc còn để lại
 
-- **Cần một lượt bấm tay trên trình duyệt** trước khi phát hành (`workerd` không
-  chạy được ở máy này).
+- ~~Cần một lượt bấm tay trên trình duyệt~~ — **đã bấm** (vòng sửa 1). Sếp vẫn
+  nên bấm lại 4 màn theo REV-0010 §7 trước khi bật, **và lưu ý thứ tự**: mở
+  "Tra năng lực" **trước**, rồi mới chọn "Chấm năng lực".
+- **PHIẾU RIÊNG — 6 cột ghi-một-chiều còn lại** (REV-0010 §2, Hồ Ly đo:
+  ĐỌC=0 · UI=0 · dữ liệu thật 0 dòng, y nguyên trên cả nhánh gốc):
+  `so_cccd` · `so_bhxh` · `gioi_tinh` · `que_quan` · `noi_thuong_tru` · `anh_cccd`.
+  **Không chặn đợt này** (không tính năng nào của Đợt 2/3/4 đọc chúng), nhưng
+  tính năng nào sau này chạm vào là lặp lại đúng lỗi `ngay_sinh` vừa vá. Mở phiếu
+  theo SPEC-0007 §14; `so_cccd`/`anh_cccd` còn ràng buộc ADR-0011 A2 nên phải hỏi
+  Sếp trước, không tự quyết.
 - `cong_viec.jd_dau_ra_id` — nối JD vào Trạm Mục Tiêu, mở khi hết Rule 13.
-- `so_cccd` / `so_bhxh` / `anh_cccd` — vẫn là cột ghi-một-chiều, **cố ý không
-  đụng** (ngoài phạm vi bản giao việc). Phiếu riêng theo SPEC-0007 §14.
 - Nhắc hạn hợp đồng (T-45/T-15/T-3, D+1…D+25) theo SPEC-0007 §4: **chưa làm**.
   Đợt 1 hoãn sang "đợt sau", bản giao việc Đợt 2 chỉ yêu cầu sinh nhật. Cơ chế
   đã sẵn: cắm thêm một hàm vào `quetNhacNhanSu()` là xong, dải Exception-First

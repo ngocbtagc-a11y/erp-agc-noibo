@@ -22,10 +22,14 @@
 --   Nạp mây:  node scripts/chay-migration.mjs migrations/them-mota-congviec.sql --remote
 --
 -- LÙI LẠI (rollback): hai bảng độc lập, chưa có gì trỏ vào:
+--   DROP INDEX IF EXISTS ix_jd_mau_nhom_dau_ra;
 --   DROP TABLE mo_ta_cong_viec;
 --   DROP TABLE jd_mau;
 --   DELETE FROM schema_migrations WHERE filename = 'them-mota-congviec.sql';
 -- Không DROP cột nào, không UPDATE một dòng dữ liệu cũ nào.
+--
+-- CHẠY LẠI ĐƯỢC (REV-0010 ISSUE-4): `INSERT OR IGNORE` + `UNIQUE(nhom, dau_ra)`
+-- ⇒ nạp bao nhiêu lần `jd_mau` vẫn đúng 24 dòng, không nhân đôi.
 -- ==========================================================================
 
 CREATE TABLE IF NOT EXISTS mo_ta_cong_viec (
@@ -61,6 +65,18 @@ CREATE INDEX IF NOT EXISTS idx_mtcv_ns ON mo_ta_cong_viec (nhan_su_id) WHERE nha
 -- ⚠️ Mẫu là GỢI Ý, không phải JD đã duyệt. Quản lý mảng phải sửa lại cho đúng
 -- vị trí của mình rồi mới lưu — Agent không được bịa đầu ra thay người sẽ đi
 -- đòi đầu ra đó (SPEC-0007 §6, câu 3 Mục 13: quản lý mảng viết, HCNS nhập).
+--
+-- TRÍCH DẪN PHÁP LÝ TRONG MẪU — đã tra nguồn 27/08/2026 (REV-0010 ISSUE-5).
+-- JD là thứ người ta đọc rồi tin, nên chỉ để lại số hiệu nào xác minh được:
+--   · NĐ 274/2025/NĐ-CP — có thật, hiệu lực 30/11/2025, chậm/trốn đóng BHXH
+--     bắt buộc + BHTN phải nộp thêm 0,03%/ngày trên số tiền và số ngày chậm.
+--     Nguồn: baohiemxahoi.gov.vn · luatvietnam.vn.
+--   · BLLĐ 2019 Điều 20 khoản 2 — có thật: hợp đồng hết hạn mà người lao động
+--     vẫn làm việc, quá 30 ngày hai bên không ký hợp đồng mới thì hợp đồng đã
+--     giao kết TRỞ THÀNH hợp đồng không xác định thời hạn.
+-- Chỉ có hai chỗ trích luật trong cả 24 mẫu; 22 mẫu còn lại là chỉ tiêu vận
+-- hành nội bộ, không viện dẫn văn bản nào. Thêm mẫu mới có trích luật thì phải
+-- tra nguồn trước, hoặc bỏ số hiệu và chỉ mô tả nội dung.
 -- --------------------------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS jd_mau (
@@ -69,11 +85,22 @@ CREATE TABLE IF NOT EXISTS jd_mau (
   dau_ra   TEXT NOT NULL,
   do_bang  TEXT NOT NULL,
   nhip     TEXT NOT NULL,
-  thu_tu   INTEGER NOT NULL DEFAULT 0
+  thu_tu   INTEGER NOT NULL DEFAULT 0,
+  -- REV-0010 ISSUE-4: chống trùng ngay ở DB, đúng khuôn `them-ky-nang.sql`.
+  -- Thiếu ràng buộc này thì chạy lại migration lần hai là seed NHÂN ĐÔI
+  -- (24 → 48 mẫu) — im lặng, không báo lỗi, HCNS mở ra thấy mỗi mẫu hai lần.
+  UNIQUE (nhom, dau_ra)
 );
 
+-- Bảng có thể đã được tạo TRƯỚC khi có ràng buộc trên (bản nháp đã nạp một
+-- lần). SQLite không sửa được ràng buộc của bảng cũ bằng ALTER, nên dựng thêm
+-- chỉ mục UNIQUE — nó áp cho cả bảng cũ lẫn bảng mới. Nếu bảng cũ đã lỡ có
+-- dòng trùng, lệnh này BÁO LỖI VÀ DỪNG (ồn ào, không hỏng dữ liệu) — dọn trùng
+-- rồi nạp lại, đừng bỏ qua.
+CREATE UNIQUE INDEX IF NOT EXISTS ix_jd_mau_nhom_dau_ra ON jd_mau (nhom, dau_ra);
+
 -- ---- KHO VẬN (anh Phạm Khương Duy) ---------------------------------------
-INSERT INTO jd_mau (nhom, dau_ra, do_bang, nhip, thu_tu) VALUES
+INSERT OR IGNORE INTO jd_mau (nhom, dau_ra, do_bang, nhip, thu_tu) VALUES
  ('kho', 'Số liệu tồn kho khớp giữa ERP và đếm thực tế',
          'Chênh lệch sau kiểm kê tháng ≤ 0,5% số lượng và = 0 với hàng giá trị cao', 'thang', 1),
  ('kho', 'Đơn đóng xong trong ngày, không tồn sang hôm sau',
@@ -88,13 +115,13 @@ INSERT INTO jd_mau (nhom, dau_ra, do_bang, nhip, thu_tu) VALUES
          '100% người vận hành xe nâng/máy có xác nhận của quản lý trong hồ sơ năng lực', 'quy', 6);
 
 -- ---- KẾ TOÁN & TÀI CHÍNH (chị Phan Thị Hằng) -----------------------------
-INSERT INTO jd_mau (nhom, dau_ra, do_bang, nhip, thu_tu) VALUES
+INSERT OR IGNORE INTO jd_mau (nhom, dau_ra, do_bang, nhip, thu_tu) VALUES
  ('ke_toan', 'Sổ sách tháng đã khoá, số liệu không phải sửa lại sau khi chốt',
              'Chốt sổ xong trước ngày 10 tháng sau; số bút toán điều chỉnh sau chốt = 0', 'thang', 1),
  ('ke_toan', 'Đối soát sàn khớp với tiền thực nhận',
              'Chênh lệch giữa báo cáo Shopee/TikTok và sao kê ngân hàng được giải trình 100%, phần chưa rõ ≤ 0,3% doanh thu tháng', 'thang', 2),
  ('ke_toan', 'Nghĩa vụ thuế và BHXH nộp đúng hạn, không phát sinh tiền chậm nộp',
-             'Số tiền phạt/chậm nộp trong kỳ = 0 (NĐ 274/2025: chậm đóng BHXH tính 0,03%/ngày)', 'thang', 3),
+             'Số tiền phạt/chậm nộp trong kỳ = 0 (NĐ 274/2025/NĐ-CP, hiệu lực 30/11/2025: chậm đóng BHXH bắt buộc/BHTN nộp thêm 0,03%/ngày trên số tiền chậm đóng)', 'thang', 3),
  ('ke_toan', 'Báo cáo lãi lỗ theo từng sàn gửi Ban giám đốc',
              'Gửi trước ngày 15 hàng tháng, có số liệu tới từng nhóm hàng, không phải hỏi lại để bổ sung', 'thang', 4),
  ('ke_toan', 'Công nợ nhà cung cấp và công nợ sàn không quá hạn',
@@ -105,7 +132,7 @@ INSERT INTO jd_mau (nhom, dau_ra, do_bang, nhip, thu_tu) VALUES
 -- ---- HÀNH CHÍNH NHÂN SỰ (bạn Vũ Lan Hương) -------------------------------
 -- Đây đúng chỗ Sếp Ngọc đang vướng: không biết giao việc thế nào để bạn cam
 -- kết được đầu ra rõ. Ba dòng đầu lấy thẳng từ SPEC-0007 §6.
-INSERT INTO jd_mau (nhom, dau_ra, do_bang, nhip, thu_tu) VALUES
+INSERT OR IGNORE INTO jd_mau (nhom, dau_ra, do_bang, nhip, thu_tu) VALUES
  ('hcns', 'Bảng công tháng đã chốt',
           'Gửi kế toán trước ngày 3, không phải sửa lại sau khi đã gửi', 'thang', 1),
  ('hcns', 'Hồ sơ nhân sự đầy đủ',
@@ -113,14 +140,14 @@ INSERT INTO jd_mau (nhom, dau_ra, do_bang, nhip, thu_tu) VALUES
  ('hcns', 'Nhân sự mới đủ giấy tờ trong 7 ngày',
           'Số người quá 7 ngày kể từ ngày vào mà còn thiếu giấy tờ = 0', 'tuan', 3),
  ('hcns', 'Không hợp đồng nào hết hạn mà chưa ký lại',
-          'Số hợp đồng quá hạn trên dải cảnh báo tab Nhân sự = 0 (quá 30 ngày là luật tự đổi loại hợp đồng, BLLĐ 2019 Đ.20)', 'tuan', 4),
+          'Số hợp đồng quá hạn trên dải cảnh báo tab Nhân sự = 0 (BLLĐ 2019 Điều 20 khoản 2: hết hạn mà vẫn làm việc, quá 30 ngày không ký lại thì hợp đồng tự thành KHÔNG xác định thời hạn)', 'tuan', 4),
  ('hcns', 'Khách hỏi qua Shopee/TikTok được trả lời trong giờ cam kết',
           'Tỉ lệ trả lời trong 1 giờ ≥ 90% trong khung 8h–18h (phần kiêm nhiệm CSKH)', 'tuan', 5),
  ('hcns', 'Buổi check-in tuần có biên bản chốt việc',
           'Mỗi thứ Tư 15h có 1 biên bản ghi việc đã xong / việc tuần tới, gửi trong ngày', 'tuan', 6);
 
 -- ---- VẬN HÀNH SÀN TMĐT (bạn Nguyễn Thị Huyền) ----------------------------
-INSERT INTO jd_mau (nhom, dau_ra, do_bang, nhip, thu_tu) VALUES
+INSERT OR IGNORE INTO jd_mau (nhom, dau_ra, do_bang, nhip, thu_tu) VALUES
  ('van_hanh_san', 'Đơn mới được đẩy sang kho trong giờ cam kết',
                   'Không đơn nào quá 2 giờ trong giờ làm việc mà chưa chuyển kho', 'ngay', 1),
  ('van_hanh_san', 'Sức khoẻ gian hàng giữ trong ngưỡng an toàn của sàn',

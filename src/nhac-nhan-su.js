@@ -192,7 +192,17 @@ async function quetChucSinhNhat(env, guiThongBao, vn) {
 async function quetBanTinThangSau(env, guiThongBao, vn) {
   if (!trongCuaSoCuoiThang(vn)) return 0;
   const thangNay = thangVN(vn);
-  if (await daGuiTrongThang(env, 'ns_sinhnhat_thang', thangNay)) return 0;
+  /* REV-0010 ISSUE-2 — MỖI ĐƯỜNG GỬI MỘT CỘT MỐC RIÊNG.
+     Trước đây cả hai đường (HCNS và quản lý trực tiếp) cùng soi một cột mốc
+     `ns_sinhnhat_thang` — cột mốc đó chỉ được ghi khi CÓ người nhận HCNS.
+     Không tài khoản nào đang kích hoạt mang `hcns`/`admin`/`admin_backup` và
+     còn `dang_lam = 1` ⇒ cột mốc không bao giờ ghi, còn bản tin cho quản lý
+     VẪN gửi lại mỗi lượt cron: 5 phút/lượt, khung 8h–18h, cửa sổ 5 ngày ⇒ tối
+     đa ~600 tin đổ vào máy anh Duy. Tách đôi thì đường này hỏng không kéo
+     đường kia hỏng theo. */
+  const xongHCNS = await daGuiTrongThang(env, 'ns_sinhnhat_thang', thangNay);
+  const xongQL   = await daGuiTrongThang(env, 'ns_sinhnhat_thang_ql', thangNay);
+  if (xongHCNS && xongQL) return 0;
 
   const { nam, thang, mm } = thangKeTiep(vn);
 
@@ -224,7 +234,7 @@ async function quetBanTinThangSau(env, guiThongBao, vn) {
      vận hành để bao quát cả tháng, mà HCNS vốn đã xem được hồ sơ (SPEC-0007
      §5). Bản tin chỉ nêu NGÀY/THÁNG, không nêu năm sinh, nên vẫn không lộ
      tuổi của người đã tắt công tắc. */
-  for (const id of await nguoiNhanHCNS(env)) {
+  if (!xongHCNS) for (const id of await nguoiNhanHCNS(env)) {
     await guiThongBao(env, null,
       `📅 Sinh nhật tháng ${thang}/${nam} — ${ds.length} người:\n` + ds.map(dong).join('\n'),
       'ns_sinhnhat_thang', null, id);
@@ -236,7 +246,7 @@ async function quetBanTinThangSau(env, guiThongBao, vn) {
      xuất hiện. Đây là ADR-0011 A2 (xem được bản ghi VÀ đủ mức nhạy cảm) áp
      nguyên xi, KHÔNG đẻ luật quyền thứ hai. */
   const theoQuanLy = new Map();
-  for (const n of ds) {
+  if (!xongQL) for (const n of ds) {
     if (!n.quan_ly_id || n.quan_ly_id === n.id || !n.cong_khai) continue;
     if (!theoQuanLy.has(n.quan_ly_id)) theoQuanLy.set(n.quan_ly_id, []);
     theoQuanLy.get(n.quan_ly_id).push(n);

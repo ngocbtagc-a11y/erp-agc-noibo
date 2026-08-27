@@ -3188,7 +3188,13 @@ if (TOI.quyen.includes('nhansu')) {
      Máy chủ vẫn là nơi chặn thật (`src/ky-nang.js` kiểm quan hệ quản lý);
      phần dưới chỉ ẩn/hiện cho gọn mắt. */
   {
-    const dsNguoi = () => (TOI.them_nhan_su ? DS_NHAN_SU_QT : DS_NHAN_SU_DOC).filter(n => n.dang_lam);
+    /* REV-0010 ISSUE-1 — hai lớp đỡ, cố ý:
+       (1) `/api/nhan-su` nay TRẢ cột `dang_lam` ở cả nhánh không-xem-lương;
+       (2) chỉ loại người ĐÃ NGHỈ (`dang_lam === 0`). Trước đây `.filter(n =>
+       n.dang_lam)` quét sạch danh sách khi API thiếu cột — im lặng tuyệt đối.
+       `DS_NHAN_SU_DOC` vốn đã lọc `WHERE dang_lam = 1` từ máy chủ; chỉ
+       `DS_NHAN_SU_QT` mới lẫn người nghỉ, và ở đó cột luôn có thật. */
+    const dsNguoi = () => (TOI.them_nhan_su ? DS_NHAN_SU_QT : DS_NHAN_SU_DOC).filter(n => n.dang_lam !== 0);
 
     function doNguoiVao(sel, nhan) {
       const cu = sel.value;
