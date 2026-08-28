@@ -5059,7 +5059,13 @@ async function khoiDongDonHangHuy() {
       if (kq.loi && kq.loi.length) {
         oLoi.textContent = `Đồng bộ được ${kq.so_don} đơn, nhưng có lỗi: ${kq.loi.join(' · ')}`;
       } else {
-        oLoi.style.color = 'var(--ok)';
+        /* REV-0026/H2 — trước đây là 'var(--ok)': 3.05:1 trên nền
+           '--danger-wash' của '.form-loi'. Câu này vận hành sàn đọc MỖI LẦN
+           đồng bộ. Đợt 2 quét sạch 'var(--ok)' trong CSS nhưng KHÔNG quét JS
+           — quét màu thì phải quét CẢ HAI chỗ đặt màu, CSS lẫn JS.
+           'var(--ok-dark)' = 5.02:1, giữ nguyên SẮC xanh 101° nên không đổi
+           nghĩa "đã xong". */
+        oLoi.style.color = 'var(--ok-dark)';
         oLoi.textContent = `Đã đồng bộ xong: ${kq.so_don} đơn hàng (Shopee + TikTok).`;
       }
       await taiDonHangHuy();
@@ -7210,8 +7216,12 @@ async function khoiDongKho() {
         `<td><div class="nm">${esc(r.ten)}</div></td>` +
         `<td class="sm">${esc(r.ma_sku)}</td>` +
         `<td class="num">${esc(tienVN(r.ton_dau))}</td>` +
-        `<td class="num" style="color:var(--sage,#3f6b3f)">+${esc(tienVN(r.nhap))}</td>` +
-        `<td class="num" style="color:#b3462f">-${esc(tienVN(r.xuat))}</td>` +
+        /* ĐỢT 2c — hai mã dán cứng ở đây nằm NGOÀI bảng màu style.css:
+           #3f6b3f là xanh của bảng CŨ, #b3462f là một sắc đỏ tự chế. Bảng màu
+           tách làm hai chính là cách nó âm thầm lệch đi (đúng loại lỗi
+           REV-0026/H1). Dùng token bộ màu mang nghĩa: xanh = nhập, đỏ = xuất. */
+        `<td class="num" style="color:var(--ok-dark)">+${esc(tienVN(r.nhap))}</td>` +
+        `<td class="num" style="color:var(--danger-dark)">-${esc(tienVN(r.xuat))}</td>` +
         `<td class="num"><b>${esc(tienVN(r.ton_cuoi))}</b></td>`);
       $('#kv-bc-trong').hidden = bang.length > 0;
     } catch (err) {

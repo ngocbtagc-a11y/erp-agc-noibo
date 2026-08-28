@@ -4,9 +4,15 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#f5ecdf">
   <title>Dọn kẹt ERP AGC</title>
   <style>
-    :root { --sage:#9aab86; --ink:#3f4d33; --mute:#8a8a81; --bg:#f2f1ee; --line:#dcdad4; }
+    /* REV-0026/H7 — trang này còn nguyên bảng màu TRƯỚC CTL-0023 (sage nhạt
+       #9aab86, ô liu #3f4d33, xám #f2f1ee). Nó là trang Sếp mở đúng lúc ERP
+       kẹt, tức là lúc dễ mất niềm tin nhất; mở ra thấy một ERP khác hẳn thì
+       tưởng vào nhầm chỗ. Đồng bộ với style.css Đợt 2c — chép GIÁ TRỊ chứ
+       không nhập file, trang dọn kẹt phải chạy được cả khi CSS chính hỏng. */
+    :root { --sage:#4e8122; --ink:#2c2117; --mute:#695c50; --bg:#f5ecdf; --line:#e2d0ba; --card:#fffcf4; }
     * { box-sizing:border-box; }
     body {
       margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
@@ -15,9 +21,9 @@
       padding:24px;
     }
     .hop {
-      background:#fff; border:1px solid var(--line); border-radius:16px;
+      background:var(--card); border:1px solid var(--line); border-radius:16px;
       padding:32px 28px; max-width:420px; width:100%; text-align:center;
-      box-shadow:0 8px 30px rgba(0,0,0,.06);
+      box-shadow:0 8px 30px rgba(44,33,23,.07);
     }
     .icon { font-size:44px; margin-bottom:10px; }
     h1 { font-size:20px; margin:0 0 8px; }
@@ -30,7 +36,7 @@
     }
     @keyframes q { to { transform:rotate(360deg); } }
     a.btn {
-      display:inline-block; margin-top:6px; background:var(--sage); color:#fff;
+      display:inline-block; margin-top:6px; background:var(--sage); color:var(--card);
       text-decoration:none; padding:11px 22px; border-radius:10px; font-weight:600; font-size:15px;
     }
   </style>

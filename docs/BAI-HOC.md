@@ -496,7 +496,7 @@ người soi phải **đo trên đúng nền tảng đích** trước khi phát 
 "chuẩn SQL" ≠ cái runtime thật cho phép. Và khi sai thì **đính chính công khai ngay trong
 bản review kế tiếp**, ghi rõ chỗ sai — không im lặng sửa.
 
-**BH-43 · Phép đo CHỌN TAY chỉ đo được cái mình đã nghĩ ra. Nó không đo được cái mình quên.**
+**BH-45 · Phép đo CHỌN TAY chỉ đo được cái mình đã nghĩ ra. Nó không đo được cái mình quên.**
 CTL-0023 Đợt 1 đổi bảng màu và tự viết `do-tuong-phan-mau.mjs` để chứng minh. Bộ 28 cặp
 chữ–nền **do người ngồi liệt kê**: mọi cặp đều ĐẠT, báo cáo nói "sạch". REV-0024 dựng phép
 đo riêng và lòi ra ba chỗ **kho đọc hằng ngày** vẫn trượt — `.tag-new` 3.58:1,
@@ -513,3 +513,29 @@ màu rất đẹp trong khi `var(--bg)` chỉ được dùng **đúng một lầ
 ΔL\* với mặt thẻ: câu hỏi không phải "màu có đúng chuẩn không" mà **"đổi xong Sếp có NHÌN
 THẤY khác không"**. Đo chuẩn mà trượt mục đích thì vẫn là trượt.
 
+
+**BH-46 · Một token gánh HAI VAI thì sửa vai này hỏng vai kia — và phép đo chỉ nhìn một vai sẽ KHEN cái đang hỏng.**
+CTL-0023 Đợt 1 hạ `--ink` từ `#3f4d33` xuống `#1e2417` để chữ dễ đọc hơn. Phép đo tương phản
+reo hò: mọi cặp chữ–nền tốt lên, `--ink` trên thẻ trắng đạt **15,13:1**, không một cặp nào rớt
+ngưỡng, REV-0024 và REV-0025 đều **PASS**. Sếp mở lên và nói: *"đéo mẹ **đen thùi lùi**"*.
+Vì `--ink` **vừa là màu CHỮ vừa là NỀN thanh bên**. Hạ nó xuống làm chữ sáng hơn thì đồng thời
+kéo thanh bên xuống **L\* 13,23** — một khối gần đen rộng 244px chắn suốt chiều cao màn hình,
+nuốt trọn cảm giác "sáng sủa" mà cả Đợt 1 đánh đổi để có. **Phép đo không hề sai một con số
+nào.** Nó chỉ đo đúng cái vai mà nó biết là có: "chữ này trên nền kia có đọc được không". Nó
+không có câu hỏi *"cái token này còn được dùng làm gì nữa?"* — nên vai thứ hai hỏng ngay dưới
+mũi nó mà bảng đo vẫn toàn chữ ĐẠT.
+→ **Token có hai vai là NỢ, không phải tiết kiệm.** Trước khi đổi giá trị một token, đếm nó
+được dùng làm **màu chữ** bao nhiêu lần và làm **nền** bao nhiêu lần. Ra cả hai thì **tách token
+trước, đổi giá trị sau** — Đợt 2 tách `--sidebar-bg` ra khỏi `--ink`, nền thanh bên đi từ
+**L\* 13,23 → 97,97**, và `--ink` từ đó chỉ còn đúng một vai.
+→ **Hệ quả cay hơn, suýt lọt:** chính `do-tuong-phan-mau.mjs` cũng **dán cứng** `T('ink')` làm
+nền cho mọi selector `.sb-*`. Đổi thanh bên sang sáng mà không sửa bàn đo thì nó **nói dối theo
+CẢ HAI CHIỀU**: chữ tối MỚI bị chấm trên nền gần đen → báo "tàng hình" hàng loạt; còn bộ chữ
+sáng CŨ (`#8fc47a`, trắng .55…) — thứ trên nền kem chỉ còn **1,04–1,93:1**, tàng hình thật —
+lại được khen ĐẠT. Bàn đo có hằng số về thiết kế thì **nó chỉ đúng cho tới lần đổi thiết kế kế
+tiếp**. Đọc token, đừng dán cứng màu.
+→ Và đúng vòng này, ca đối chứng bắt được **lỗi thật của người viết**: bản nháp cho mục menu
+đang chọn hover TỐI đi theo phản xạ, trong khi chữ ở đó là chữ TỐI — ra **3,24:1**, trượt.
+Hướng hover phụ thuộc **màu chữ**, không phụ thuộc thói quen. Cùng vòng, 10 con số tôi viết vào
+chú thích CSS mà **chưa đo** đều lệch thật (98,42 vs 97,97 · 15,5 vs 15,13 · 5,41 vs 5,30…) —
+`getComputedStyle` trên DOM thật mới lòi ra. **Số chưa đo thì đừng viết ra như số đã đo.**
