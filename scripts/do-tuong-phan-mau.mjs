@@ -1,180 +1,282 @@
 /* ==========================================================================
-   ĐO TƯƠNG PHẢN CHỮ/NỀN — CTL-0023 Đợt 1 (đổi bảng màu nền sáng)
+   ĐO TƯƠNG PHẢN CHỮ/NỀN — CTL-0023 (bảng màu nền sáng)
    ---------------------------------------------------------------------------
-   Chạy:  node scripts/do-tuong-phan-mau.mjs
-   Không cần trình duyệt, không cần dev server.
+   Chạy:  node scripts/do-tuong-phan-mau.mjs [đường-dẫn-style.css]
+   Không cần trình duyệt, không cần dev server. Có tham số để đo bản CŨ:
+     git show main:public/assets/css/style.css > cu.css
+     node scripts/do-tuong-phan-mau.mjs cu.css
 
    VÌ SAO CÓ FILE NÀY: nhân viên kho đọc ERP trên điện thoại NGOÀI NẮNG và
    DƯỚI ĐÈN KHO. Nền sáng mà chữ nhạt là không đọc được — đẹp mà vô dụng.
-   "Nhìn ổn" không phải là phép đo. File này đọc THẲNG biến trong style.css,
-   dựng lại đúng những cặp chữ–nền ĐANG CÓ THẬT trong CSS (mỗi cặp ghi kèm số
-   dòng để soi lại), rồi tính tỉ số tương phản theo WCAG 2.1.
+   "Nhìn ổn" không phải là phép đo.
 
-   NGƯỠNG: chữ thường ≥ 4.5:1 · chữ lớn (≥18.66px đậm hoặc ≥24px) ≥ 3:1.
+   BH-43 (REV-0024) — HAI LỖ HỔNG CỦA BẢN TRƯỚC, ĐÃ VÁ:
+     ① Bản trước chỉ đọc khối `:root` ĐẦU TIÊN → mù hoàn toàn khối `:root`
+        thứ hai (`--tim`, `--tim-wash`). Nay gom TẤT CẢ khối `:root`.
+     ② Bản trước dùng danh sách 28 cặp CHỌN TAY → đo 0/81 chỗ dán cứng màu
+        ngoài `:root`, nên bỏ sót `.tag-new`, `.mt-the-pct.warn`,
+        `.xc-ngay-tt.du_thua` — toàn chỗ kho đọc HẰNG NGÀY. Nay TỰ QUÉT mọi
+        luật CSS: luật nào đặt cả `color` lẫn `background` thì thành một cặp,
+        không cần ai nhớ ra nó.
+
+   NGƯỠNG: chữ thường ≥ 4.5:1 · chữ lớn (≥18.66px + đậm, hoặc ≥24px) ≥ 3:1.
 
    BH-16 — CA ĐỐI CHỨNG: phép đo nào cũng phải chứng minh nó BẮT ĐƯỢC lỗi.
-   Cuối file cố ý đặt một màu chữ quá nhạt; nếu phép đo báo ĐẠT thì phép đo
-   hỏng, không phải màu đúng.
+   Cuối file dựng lại ĐÚNG từng màu sai đã vá; nếu phép đo báo ĐẠT thì phép
+   đo hỏng, không phải màu đúng.
    ========================================================================== */
 
 import { readFileSync } from 'node:fs';
 
-const goc = new URL('../', import.meta.url);
-const css = readFileSync(new URL('public/assets/css/style.css', goc), 'utf8');
+const duongDan = process.argv[2] || new URL('../public/assets/css/style.css', import.meta.url);
+/* Xoá chú thích nhưng GIỮ NGUYÊN số ký tự và số dòng → số dòng báo ra khớp
+   với file thật, soi lại được ngay. */
+const css = readFileSync(duongDan, 'utf8').replace(/\/\*[\s\S]*?\*\//g, m => m.replace(/[^\n]/g, ' '));
+const dong = vt => css.slice(0, vt).split('\n').length;
 
-/* --- Đọc biến từ khối :root ĐẦU TIÊN của style.css ------------------------ */
-const dau = css.search(/^:root\s*\{/m);              // khai báo thật, không phải chữ ':root' trong ghi chú
-if (dau < 0) throw new Error('Không tìm thấy khối :root trong style.css');
-const khoi = css.slice(dau, css.indexOf('}', dau));
+/* ── 1. Gom biến từ MỌI khối :root (BH-29 ①) ─────────────────────────────── */
 const M = {};
-for (const m of khoi.matchAll(/--([a-z0-9-]+)\s*:\s*(#[0-9a-fA-F]{3,8})\s*;/g)) M[m[1]] = m[2];
+let soKhoiRoot = 0;
+for (const m of css.matchAll(/(?:^|\})\s*:root\s*\{([^}]*)\}/g)) {
+  soKhoiRoot++;
+  for (const d of m[1].matchAll(/--([a-z0-9-]+)\s*:\s*([^;]+);/g)) M[d[1]] = d[2].trim();
+}
+if (!soKhoiRoot) throw new Error('Không tìm thấy khối :root nào trong style.css');
 
-/* --- WCAG 2.1 ------------------------------------------------------------- */
-function rgb(h) {
-  h = h.replace('#', '');
-  if (h.length === 3) h = [...h].map(c => c + c).join('');
-  return [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16));
+/* ── 2. Màu: giải mã, pha alpha, WCAG 2.1 ────────────────────────────────── */
+const TEN = { white: [255, 255, 255, 1], black: [0, 0, 0, 1] };
+
+function giaiMau(s, sau = 0) {
+  if (sau > 6 || !s) return null;
+  s = String(s).trim();
+  const v = s.match(/^var\(\s*(--[a-z0-9-]+)\s*(?:,([\s\S]*))?\)$/);
+  if (v) {
+    const gt = M[v[1].slice(2)];
+    return gt !== undefined ? giaiMau(gt, sau + 1) : (v[2] ? giaiMau(v[2], sau + 1) : null);
+  }
+  if (TEN[s.toLowerCase()]) return TEN[s.toLowerCase()].slice();
+  const h = s.match(/^#([0-9a-fA-F]{3,8})$/);
+  if (h) {
+    let x = h[1];
+    if (x.length === 3 || x.length === 4) x = [...x].map(c => c + c).join('');
+    if (x.length !== 6 && x.length !== 8) return null;
+    const n = i => parseInt(x.slice(i, i + 2), 16);
+    return [n(0), n(2), n(4), x.length === 8 ? n(6) / 255 : 1];
+  }
+  const r = s.match(/^rgba?\(([^)]*)\)$/i);
+  if (r) {
+    const p = r[1].split(/[,/\s]+/).filter(Boolean).map(parseFloat);
+    if (p.length < 3 || p.slice(0, 3).some(Number.isNaN)) return null;
+    return [p[0], p[1], p[2], p.length > 3 && !Number.isNaN(p[3]) ? p[3] : 1];
+  }
+  return null;
 }
-function sang([r, g, b]) {                       // relative luminance
+const hex = c => '#' + c.slice(0, 3).map(n => Math.round(n).toString(16).padStart(2, '0')).join('');
+const pha = (tren, duoi) => {                    // `tren` có alpha, `duoi` đặc
+  const a = tren[3];
+  return [0, 1, 2].map(i => tren[i] * a + duoi[i] * (1 - a)).concat(1);
+};
+function sang(c) {
   const f = v => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
-  return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
-}
-function tron(tren, duoi, a) {                   // chữ mờ (rgba) đè lên nền đặc
-  const [r1, g1, b1] = rgb(tren), [r2, g2, b2] = rgb(duoi);
-  return [r1 * a + r2 * (1 - a), g1 * a + g2 * (1 - a), b1 * a + b2 * (1 - a)];
+  return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]);
 }
 function ti(chu, nen) {
-  const a = sang(Array.isArray(chu) ? chu : rgb(chu));
-  const b = sang(Array.isArray(nen) ? nen : rgb(nen));
+  const a = sang(chu), b = sang(nen);
   const [hi, lo] = a > b ? [a, b] : [b, a];
   return (hi + 0.05) / (lo + 0.05);
 }
-const v = t => M[t] || (() => { throw new Error('Thiếu biến --' + t + ' trong :root'); })();
+const Lsao = c => { const y = sang(c); return y > 0.008856 ? 116 * Math.cbrt(y) - 16 : 903.3 * y; };
+const T = t => giaiMau('var(--' + t + ')') || (() => { throw new Error('Thiếu --' + t); })();
 
-/* --- Danh sách cặp chữ–nền CÓ THẬT trong style.css ------------------------ */
-/* [tên, màu chữ, màu nền, ngưỡng, ghi chú dòng CSS] */
-const CAP = [
-  ['Chữ thân bài trên nền trang',        v('text'),      v('bg'),        4.5, 'body — d.67'],
-  ['Chữ thân bài trên mặt thẻ',          v('text'),      v('card'),      4.5, '.panel — d.972'],
-  ['Tiêu đề (--ink) trên mặt thẻ',       v('ink'),       v('card'),      4.5, '42 chỗ dùng --ink'],
-  ['Chữ phụ (--text-mute) trên thẻ',     v('text-mute'), v('card'),      4.5, '.sm, .hint — 63 chỗ'],
-  ['Chữ phụ trên nền trang',             v('text-mute'), v('bg'),        4.5, 'chữ phụ ngoài thẻ'],
-  ['Chữ phụ trên --surface-2',           v('text-mute'), v('surface-2'), 4.5, '.tag.mute d.1602'],
-  ['Chữ thân bài trên --surface',        v('text'),      v('surface'),   4.5, 'ô nhập, thẻ chìm'],
-  ['--ink trên --surface',               v('ink'),       v('surface'),   4.5, 'd.684'],
-  ['--ink-soft trên --surface-2',        v('ink-soft'),  v('surface-2'), 4.5, '.seg-nut d.2010'],
-  ['--ink-soft trên --sage-wash',        v('ink-soft'),  v('sage-wash'), 4.5, '.tag.sage d.1603'],
-  ['--ink trên --sage-wash',             v('ink'),       v('sage-wash'), 4.5, 'tbody tr:hover d.1050'],
-  ['TRẮNG trên --sage (nút chính)',      v('white'),     v('sage'),      4.5, '.btn-primary d.286'],
-  ['TRẮNG trên --sage (bong bóng chat)', v('white'),     v('sage'),      4.5, '.chat-cua-toi d.1402'],
-  ['TRẮNG trên --sage-dark',             v('white'),     v('sage-dark'), 4.5, '.chat-avt d.1369'],
-  ['--ink trên --sage (menu đang mở)',   v('ink'),       v('sage'),      4.5, '.sb-item.active d.451'],
-  ['--ink trên --sage-pale (ảnh đại diện)', v('ink'),    v('sage-pale'), 4.5, '.sb-user .av d.476'],
-  ['Chữ thanh bên rgba(255,255,255,.78)', tron('#ffffff', v('ink'), .78), v('ink'), 4.5, '.sidebar d.348'],
-  ['Nút Thoát rgba(255,255,255,.6)',     tron('#ffffff', v('ink'), .60),  v('ink'), 4.5, '.sb-logout d.690'],
-  ['TRẮNG trên nền thanh bên (--ink)',   v('white'),     v('ink'),       4.5, '.sb-user b d.624'],
-  ['--warn trên --warn-wash',            v('warn'),      v('warn-wash'), 4.5, 'MÀU MANG NGHĨA, giữ nguyên'],
-  ['--danger trên --danger-wash',        v('danger'),    v('danger-wash'), 4.5, 'MÀU MANG NGHĨA, giữ nguyên'],
-  ['--ok trên --ok-wash',                v('ok'),        v('ok-wash'),   4.5, 'MÀU MANG NGHĨA, giữ nguyên'],
-  ['--warn trên mặt thẻ',                v('warn'),      v('card'),      4.5, '.hd-han.sap-het d.2210'],
-  ['--danger trên mặt thẻ',              v('danger'),    v('card'),      4.5, '.cv-nhom-dau.danger d.2367'],
-];
-if (M['cam']) {
-  CAP.push(
-    ['--cam-dark trên mặt thẻ',    v('cam-dark'), v('card'),     4.5, 'số liệu cần chú ý (Đợt 2)'],
-    ['--cam-dark trên --cam-wash', v('cam-dark'), v('cam-wash'), 4.5, 'nhãn "đang chờ bạn" (Đợt 2)'],
-    ['TRẮNG trên --cam-dark',      v('white'),    v('cam-dark'), 4.5, 'nút hành động chính (Đợt 2)'],
-    ['--ink trên --cam',           v('ink'),      v('cam'),      4.5, 'cam là màu NỀN cho chữ đậm'],
-  );
+/* ── 3. Bổ đôi CSS thành từng luật lá (kể cả luật nằm trong @media) ──────── */
+function quet(text, goc = 0) {
+  const ra = [];
+  let i = 0, dauSel = 0;
+  while (i < text.length) {
+    const c = text[i];
+    if (c === '{') {
+      const sel = text.slice(dauSel, i).replace(/\s+/g, ' ').trim();
+      let d = 1, j = i + 1;
+      while (j < text.length && d > 0) { if (text[j] === '{') d++; else if (text[j] === '}') d--; j++; }
+      const than = text.slice(i + 1, j - 1);
+      if (than.includes('{')) ra.push(...quet(than, goc + i + 1));
+      else ra.push({ sel, than, vt: goc + dauSel });
+      i = j; dauSel = j;
+    } else if (c === '}') { i++; dauSel = i; }
+    else i++;
+  }
+  return ra;
+}
+const LUAT = quet(css).filter(r => r.sel && !r.sel.startsWith('@'));
+
+const khai = (than, ten) => {                    // lấy khai báo CUỐI cùng
+  let ra = null;
+  for (const m of than.matchAll(new RegExp('(?:^|[;\\s])' + ten + '\\s*:\\s*([^;}]+)', 'g'))) ra = m[1].trim();
+  return ra;
+};
+const RE_MAU = /var\(\s*--[a-z0-9-]+\s*(?:,[^()]*)?\)|rgba?\([^()]*\)|#[0-9a-fA-F]{3,8}\b|\b(?:white|black)\b/gi;
+const mauTrong = s => [...(s || '').matchAll(RE_MAU)].map(m => giaiMau(m[0])).filter(Boolean);
+const nenCua = sel => {
+  const r = LUAT.find(x => x.sel === sel);
+  return r ? mauTrong(khai(r.than, 'background') || khai(r.than, 'background-color') || '') : [];
+};
+
+/* ── 4. Bốn tầng nền — mọi chữ "trôi nổi" đều rơi xuống một trong bốn ────── */
+const TANG = [['--surface-2', T('surface-2')], ['--bg', T('bg')], ['--surface', T('surface')], ['--card', T('card')]];
+
+function nguong(than) {
+  const cs = parseFloat((khai(than, 'font-size') || '').replace(/[^\d.]/g, '')) || 15;
+  const dam = parseFloat(khai(than, 'font-weight') || '400') || 400;
+  return (cs >= 24 || (cs >= 18.66 && dam >= 700)) ? 3 : 4.5;
 }
 
-/* --- In bảng -------------------------------------------------------------- */
+/* ── 5. NỀN CHA — chữ không tự khai nền thì nó rơi xuống đâu? ────────────── */
+/*  Đây là chỗ bộ 28 cặp cũ mù: `.thd-nut` nền là rgba trắng .08 — pha lên
+    nền SÁNG thì chữ trắng biến mất, pha lên thanh bên TỐI thì đọc tốt. Phải
+    biết cha là ai mới đo đúng. Ba nguồn, xét theo thứ tự:               */
+/*  Nền hero = từng chặng gradient, ĐÃ CỘNG hai lớp phủ của `::after` (chữ
+    nằm TRÊN `::after` vì có z-index, nên lớp phủ tính vào nền của chữ). */
+const changHero = nenCua('.login-hero');
+const phuHero = nenCua('.login-hero::after').filter(c => c[3] > 0 && c[3] < 1);
+const nenHero = [];
+for (const g of changHero) { nenHero.push(g); for (const p of phuHero) nenHero.push(pha(p, g)); }
+
+/*  ① khớp CHỮ: luật nào có nền đặc và selector của nó là tiền tố tổ tiên  */
+const KHUNG = LUAT.map(r => ({ sel: r.sel, nen: mauTrong(khai(r.than, 'background') || khai(r.than, 'background-color') || '').filter(c => c[3] >= 1) }))
+  .filter(k => k.nen.length).sort((a, b) => b.sel.length - a.sel.length);
+/*  ② vùng nền TỐI đã biết mà CSS không nói ra bằng selector lồng nhau      */
+/*  `.thd-panel*` KHÔNG nằm trong danh sách này: popover đó có nền `--card`
+    trắng dù nút mở nó nằm trên thanh bên tối — nhét nhầm vào đây là đo ra
+    "chữ đen trên nền đen" giả. */
+const VUNG_TOI = [[/^\.sb-|^\.sidebar|^\.av-wrap|^\.thd-(nut|cham|wrap|ok|sage|warn|danger|mute)/, () => [T('ink')], '.sidebar'],
+                  [/^\.hero-|^\.login-hero/, () => nenHero, '.login-hero']];
+function nenCha(sel) {
+  const k = KHUNG.find(x => sel.startsWith(x.sel + ' '));
+  if (k) return [k.nen, k.sel];
+  for (const [re, lay, ten] of VUNG_TOI) if (re.test(sel)) return [lay(), ten];
+  return [TANG.map(t => t[1]), '4 tầng nền'];       // trôi nổi → thử cả bốn
+}
+
+/* ── 6. TỰ QUÉT MỌI LUẬT CÓ `color` ──────────────────────────────────────── */
+const CAP = [];
+const daCo = new Set();
+const themCap = (ten, chu, nen, ng, ghi) => {
+  const k = ten + hex(chu) + hex(nen) + ng;
+  if (daCo.has(k)) return;
+  daCo.add(k);
+  CAP.push({ ten, r: ti(chu, nen), ng, ghi, chu: hex(chu), nen: hex(nen) });
+};
+for (const r of LUAT) {
+  const cChu = giaiMau(khai(r.than, 'color') || '');
+  if (!cChu || cChu[3] === 0) continue;
+  const ng = nguong(r.than), ghi = 'd.' + dong(r.vt);
+  const [dsCha, tenCha] = nenCha(r.sel);
+  const dsNen = mauTrong(khai(r.than, 'background') || khai(r.than, 'background-color') || '').filter(c => c[3] > 0);
+  if (dsNen.length) {
+    /* luật TỰ CHỨA cả chữ lẫn nền — cặp chắc chắn nhất, đo từng chặng */
+    for (const n of dsNen) {
+      const dsThat = n[3] >= 1 ? [[n, '']] : dsCha.map(c => [pha(n, c), ' / ' + tenCha]);
+      for (const [nn, hau] of dsThat) themCap(r.sel + hau, cChu[3] >= 1 ? cChu : pha(cChu, nn), nn, ng, ghi);
+    }
+  } else {
+    /* CHỈ đặt chữ → đo trên nền cha XẤU NHẤT (không in cả 4 cho đỡ nhiễu) */
+    let xau = null;
+    for (const n of dsCha) {
+      const c = cChu[3] >= 1 ? cChu : pha(cChu, n);
+      if (!xau || ti(c, n) < xau[0]) xau = [ti(c, n), c, n];
+    }
+    if (xau) themCap(r.sel + ' / ' + tenCha, xau[1], xau[2], ng, ghi);
+  }
+}
+
+/* ── 7. In bảng ──────────────────────────────────────────────────────────── */
+CAP.sort((a, b) => a.r - b.r);
 let dat = 0, truot = 0;
-const in1 = (ten, r, nguong, ghi) => {
-  const ok = r >= nguong;
+console.log('\n═══ ĐO TƯƠNG PHẢN — WCAG 2.1 ═══');
+console.log(`  Nguồn: ${String(duongDan).replace(/^file:\/\/\//, '')}`);
+console.log(`  ${soKhoiRoot} khối :root · ${Object.keys(M).length} biến · ${LUAT.length} luật lá · ${CAP.length} cặp chữ–nền\n`);
+for (const c of CAP) {
+  const ok = c.r >= c.ng;
   ok ? dat++ : truot++;
-  console.log(`  ${ok ? 'ĐẠT ' : 'TRƯỢT'}  ${r.toFixed(2).padStart(6)}:1  (cần ${nguong})  ${ten.padEnd(40)} ${ghi}`);
-};
-console.log('\n═══ ĐO TƯƠNG PHẢN — WCAG 2.1 ═══\n');
-console.log('  Nền   --bg      = ' + v('bg') + '   |  Mặt thẻ --card = ' + v('card'));
-console.log('  Xanh  --sage    = ' + v('sage') + '   |  Chữ đậm --ink  = ' + v('ink'));
-if (M['cam']) console.log('  Cam   --cam     = ' + v('cam'));
-console.log('');
-for (const [ten, c, n, ng, ghi] of CAP) in1(ten, ti(c, n), ng, ghi);
+  if (!ok || process.env.DAY_DU) {
+    console.log(`  ${ok ? 'ĐẠT ' : 'TRƯỢT'} ${c.r.toFixed(2).padStart(6)}:1 (cần ${c.ng})  ${c.chu} trên ${c.nen}  ${c.ten.slice(0, 54).padEnd(54)} ${c.ghi}`);
+  }
+}
+console.log(`  (mặc định chỉ in dòng TRƯỢT; đặt DAY_DU=1 để in cả ${dat} dòng ĐẠT)`);
 
-/* --- Nền và mặt thẻ có TÁCH RA khỏi nhau không ---------------------------
-   Dùng L* (CIE Lab) chứ KHÔNG dùng hiệu độ sáng thô: gần vùng trắng, hiệu
-   độ sáng thô phóng đại rất mạnh (#ded9d3 vs #ffffff chênh 0.30 nghe như
-   "cách xa", thực tế mắt chỉ thấy L* 87 vs 100). L* mới là thang mắt đọc. */
-const Lsao = h => { const y = sang(rgb(h)); return y > 0.008856 ? 116 * Math.cbrt(y) - 16 : 903.3 * y; };
-const in2 = (ten, a, b, nguong, ok, xau) => {
+/* ── 8. Bốn tầng nền có tách nhau không ──────────────────────────────────── */
+console.log('\n═══ PHÂN CẤP MẶT PHẲNG (ΔL*) ═══\n');
+const in2 = (ten, a, b, ng, ok, xau) => {
   const d = Math.abs(Lsao(a) - Lsao(b));
-  console.log(`  ${ten}: L* ${Lsao(a).toFixed(1)} ↔ ${Lsao(b).toFixed(1)}  = ΔL* ${d.toFixed(1)}  ${d >= nguong ? '→ ' + ok : '→ ' + xau}`);
-  if (d < nguong) truot++;
+  console.log(`  ${d >= ng ? 'ĐẠT ' : 'TRƯỢT'} ${ten}: L* ${Lsao(a).toFixed(2)} ↔ ${Lsao(b).toFixed(2)} = ΔL* ${d.toFixed(2)}  → ${d >= ng ? ok : xau}`);
+  if (d < ng) truot++;
 };
-console.log('');
-in2('Nền ↔ mặt thẻ         ', v('bg'), v('card'), 2, 'thẻ NỔI khỏi nền', 'QUÁ SÁT — thẻ chìm, trang thành tấm giấy phẳng');
-in2('Nền ↔ --surface       ', v('bg'), v('surface'), 2, 'khung đăng nhập .login-shell còn nổi', 'KHUNG ĐĂNG NHẬP TAN VÀO NỀN (d.94)');
-in2('--surface ↔ mặt thẻ   ', v('surface'), v('card'), 2, 'ô nhập/dòng di chuột còn chìm rõ', 'Ô NHẬP MẤT HÌNH trong thẻ trắng');
-in2('Rãnh .seg ↔ nút chọn  ', v('surface-2'), v('card'), 3, 'nút đang chọn còn thấy', 'nút .seg đang chọn BIẾN MẤT');
-in2('Đường kẻ ↔ mặt thẻ    ', v('line'), v('card'), 3, 'viền thẻ còn nhìn ra', 'VIỀN TÀNG HÌNH — thẻ mất khung');
-in2('Đường kẻ ↔ nền trang  ', v('line'), v('bg'), 2, 'viền còn thấy cả ngoài nền', 'viền chìm khi đặt trên nền trang');
-
-/* Thứ tự bốn tầng — đảo tầng là hỏng phân cấp, mà nhìn mắt rất khó ra. */
-const tang = [['--surface-2', v('surface-2')], ['--bg', v('bg')], ['--surface', v('surface')], ['--card', v('card')]];
-const dungThuTu = tang.every((t, i) => i === 0 || Lsao(t[1]) > Lsao(tang[i - 1][1]));
-console.log(`\n  Thứ tự tầng ${tang.map(t => t[0] + '(' + Lsao(t[1]).toFixed(1) + ')').join(' < ')}`);
-console.log(`  ${dungThuTu ? '→ ĐÚNG thứ tự chìm→nổi' : '→ ✗ ĐẢO TẦNG — phân cấp mặt phẳng hỏng'}`);
+/* F1 — ĐỌC THẲNG nền `.main` TỪ CSS, không tin lời khai. `.app` phủ 100vh
+   nên `.main` mới là nền Sếp thật sự nhìn thấy sau khi đăng nhập. */
+const nenMain = nenCua('.main')[0];
+console.log(`  Nền vùng nội dung (.main) đọc từ CSS = ${hex(nenMain)}   (--bg=${hex(T('bg'))} · --surface=${hex(T('surface'))})`);
+in2('.main ↔ mặt thẻ (.panel)', nenMain, T('card'), 4, 'THẺ TRẮNG NỔI RÕ trên màn làm việc', '✗ thẻ chìm — Sếp sẽ nói "vẫn thế"');
+in2('Nền --bg ↔ mặt thẻ      ', T('bg'), T('card'), 2, 'thẻ nổi khỏi nền', 'QUÁ SÁT — trang thành tấm giấy phẳng');
+in2('Nền --bg ↔ --surface    ', T('bg'), T('surface'), 2, 'khung đăng nhập còn nổi', 'KHUNG ĐĂNG NHẬP TAN VÀO NỀN');
+in2('--surface ↔ mặt thẻ     ', T('surface'), T('card'), 2, 'ô nhập/dòng di chuột còn chìm rõ', 'Ô NHẬP MẤT HÌNH trong thẻ trắng');
+in2('Rãnh .seg ↔ nút chọn    ', T('surface-2'), T('card'), 3, 'nút đang chọn còn thấy', 'nút .seg đang chọn BIẾN MẤT');
+in2('Đường kẻ ↔ mặt thẻ      ', T('line'), T('card'), 3, 'viền thẻ còn nhìn ra', 'VIỀN TÀNG HÌNH');
+in2('Đường kẻ ↔ nền trang    ', T('line'), T('bg'), 2, 'viền còn thấy ngoài nền', 'viền chìm khi đặt trên nền trang');
+const dungThuTu = TANG.every((t, i) => i === 0 || Lsao(t[1]) > Lsao(TANG[i - 1][1]));
+console.log(`\n  Thứ tự tầng ${TANG.map(t => t[0] + '(' + Lsao(t[1]).toFixed(2) + ')').join(' < ')}`);
+console.log(`  ${dungThuTu ? 'ĐẠT   ĐÚNG thứ tự chìm→nổi' : 'TRƯỢT ✗ ĐẢO TẦNG — phân cấp mặt phẳng hỏng'}`);
 if (!dungThuTu) truot++;
 
-/* --- TEM TÀI SẢN 60×40mm IN RA GIẤY (ADR-0008) ---------------------------
-   Đã suýt hỏng một lần. Kiểm hai thứ:
-   ① Chữ trên tem KHÔNG được lấy màu từ `:root` — tem phải đen tuyền dù bảng
-     màu đổi thế nào. Nếu ai đó thay `#000` bằng `var(--ink)` thì tem sẽ nhạt
-     dần theo bảng màu, và chỉ lộ ra khi cầm tờ tem in xong trên tay.
-   ② Nếu người dùng bật "in cả nền", `body{background:var(--bg)}` sẽ phủ kín
-     tem → tốn mực. Nền càng sáng càng đỡ. */
+/* ── 10. TEM TÀI SẢN 60×40mm IN RA GIẤY (ADR-0008) ───────────────────────── */
 console.log('\n═══ TEM TÀI SẢN 60×40mm — @media print ═══\n');
 {
   const dauTem = css.indexOf('.ts-tem {');
   const vungTem = css.slice(dauTem, css.indexOf('@media print', dauTem) + 200);
   const dungBien = [...vungTem.matchAll(/color:\s*var\(--([a-z0-9-]+)\)/g)].map(m => m[1]);
   const ok1 = dungBien.length === 0;
-  console.log(`  ${ok1 ? 'ĐẠT ' : 'TRƯỢT'}  Chữ tem không phụ thuộc bảng màu` +
-              (ok1 ? '  (đen tuyền #000/#333, cố định)' : `  ← DÍNH BIẾN: ${dungBien.join(', ')}`));
+  console.log(`  ${ok1 ? 'ĐẠT ' : 'TRƯỢT'}  Chữ tem KHÔNG phụ thuộc bảng màu` + (ok1 ? '  (đen tuyền #000/#333, cố định)' : `  ← DÍNH BIẾN: ${dungBien.join(', ')}`));
   if (!ok1) truot++;
   const ok2 = /background:\s*var\(--/.test(vungTem.slice(0, vungTem.indexOf('@media print')));
-  console.log(`  ${!ok2 ? 'ĐẠT ' : 'TRƯỢT'}  Nền tem không phụ thuộc bảng màu`);
+  console.log(`  ${!ok2 ? 'ĐẠT ' : 'TRƯỢT'}  Nền tem KHÔNG phụ thuộc bảng màu`);
   if (ok2) truot++;
-  console.log(`  ĐẠT    Chữ #000 trên giấy trắng: ${ti('#000000', '#ffffff').toFixed(2)}:1`);
-  console.log(`  ĐẠT    Chữ #333 (dòng phụ) trên giấy trắng: ${ti('#333333', '#ffffff').toFixed(2)}:1`);
-  const mucCu = (100 - Lsao('#ded9d3')).toFixed(1), mucMoi = (100 - Lsao(v('bg'))).toFixed(1);
-  console.log(`  Nếu người dùng bật "in cả nền": phủ mực nền cũ ${mucCu}% → mới ${mucMoi}%  → ${+mucMoi < +mucCu ? 'ĐỠ TỐN MỰC HƠN TRƯỚC' : 'TỐN HƠN — xem lại'}`);
+  const ok3 = /visibility/.test(vungTem.slice(vungTem.indexOf('@media print')));
+  console.log(`  ${ok3 ? 'ĐẠT ' : 'TRƯỢT'}  @media print giữ cơ chế visibility (ADR-0008) nguyên vẹn`);
+  if (!ok3) truot++;
+  console.log(`  ĐẠT    Chữ #000 trên giấy trắng: ${ti(giaiMau('#000'), giaiMau('#fff')).toFixed(2)}:1`);
+  console.log(`  ĐẠT    Chữ #333 (dòng phụ) trên giấy trắng: ${ti(giaiMau('#333'), giaiMau('#fff')).toFixed(2)}:1`);
+  const mucCu = (100 - Lsao(giaiMau('#ded9d3'))).toFixed(2), mucMoi = (100 - Lsao(T('bg'))).toFixed(2);
+  console.log(`  Nếu bật "in cả nền": phủ mực nền cũ ${mucCu}% → mới ${mucMoi}%  → ${+mucMoi < +mucCu ? 'ĐỠ TỐN MỰC HƠN TRƯỚC' : 'TỐN HƠN — xem lại'}`);
 }
 
-/* --- BH-16 · CA ĐỐI CHỨNG ------------------------------------------------- */
+/* ── 11. BH-16 · CA ĐỐI CHỨNG — dựng lại ĐÚNG từng màu đã vá ────────────── */
 console.log('\n═══ CA ĐỐI CHỨNG (BH-16) — phép đo phải BẮT ĐƯỢC màu sai ═══\n');
+const nenXc = giaiMau('var(--bg2, #f3f4f0)');
 const doiChung = [
-  ['Chữ #CFC9C0 (xám nhạt) trên mặt thẻ', '#cfc9c0', v('card'), 4.5],
-  ['Chữ #9aab86 (sage CŨ) trên mặt thẻ',  '#9aab86', v('card'), 4.5],
-  ['TRẮNG trên #6CA839 (xanh logo nguyên bản)', '#ffffff', '#6ca839', 4.5],
+  ['Chữ #cfc9c0 (xám nhạt) trên mặt thẻ', ti(giaiMau('#cfc9c0'), T('card')), 4.5],
+  ['Chữ #9aab86 (sage CŨ) trên mặt thẻ', ti(giaiMau('#9aab86'), T('card')), 4.5],
+  ['TRẮNG trên #6ca839 (xanh logo) — vì sao KHÔNG làm nền cho chữ trắng', ti(giaiMau('#fff'), giaiMau('#6ca839')), 4.5],
+  ['TRẮNG cỡ LỚN + ĐẬM trên #6ca839 — font-weight KHÔNG cứu nổi', ti(giaiMau('#fff'), giaiMau('#6ca839')), 3],
+  ['F1 hoàn nguyên: .main = --surface → ΔL* nền↔thẻ', Math.abs(Lsao(T('surface')) - Lsao(T('card'))), 4],
+  ['F2 hoàn nguyên: .hero-foot trắng .82 trên #9aab86 cũ', ti(pha(giaiMau('rgba(255,255,255,.82)'), giaiMau('#9aab86')), giaiMau('#9aab86')), 4.5],
+  ['F3 hoàn nguyên: .topbar #f2f1ee cũ lệch nền .main mới (ΔL*, nghịch)', 1 / Math.max(Math.abs(Lsao(giaiMau('#f2f1ee')) - Lsao(nenMain)), 1e-9), 1 / 0.8],
+  ['F5a hoàn nguyên: .tag-new chữ trắng trên #e8590c', ti(giaiMau('#fff'), giaiMau('#e8590c')), 4.5],
+  ['F5b hoàn nguyên: .mt-the-pct.warn --warn trên --surface', ti(T('warn'), T('surface')), 4.5],
+  ['F5c hoàn nguyên: .xc-ngay-tt.du_thua #8a6d00 trên đầu bảng', ti(giaiMau('#8a6d00'), nenXc), 4.5],
+  ['F6 hoàn nguyên: .sb-item.active --ink trên --sage', ti(T('ink'), T('sage')), 4.5],
 ];
 let batDuoc = 0;
-for (const [ten, c, n, ng] of doiChung) {
-  const r = ti(c, n);
-  const batLoi = r < ng;
-  if (batLoi) batDuoc++;
-  console.log(`  ${batLoi ? 'BẮT ĐƯỢC' : 'KHÔNG BẮT ĐƯỢC ←HỎNG'}  ${r.toFixed(2)}:1  ${ten}`);
+for (const [ten, r, ng] of doiChung) {
+  const bat = r < ng;
+  if (bat) batDuoc++;
+  console.log(`  ${bat ? 'BẮT ĐƯỢC      ' : 'KHÔNG BẮT ←HỎNG'} ${r.toFixed(2).padStart(6)} (ngưỡng ${ng})  ${ten}`);
 }
 
 console.log('\n───────────────────────────────────────────────────────────');
-console.log(`  Cặp thật: ${dat} đạt · ${truot} trượt`);
-console.log(`  Đối chứng: bắt được ${batDuoc}/${doiChung.length} màu cố ý sai`);
+console.log(`  Cặp chữ–nền: ${dat} đạt · ${truot} trượt   (trên ${CAP.length} cặp TỰ QUÉT, không chọn tay)`);
+console.log(`  Đối chứng: bắt được ${batDuoc}/${doiChung.length} trường hợp cố ý sai`);
 if (batDuoc !== doiChung.length) {
   console.log('\n  ✗ PHÉP ĐO HỎNG — không bắt được màu cố ý sai. Sửa phép đo trước.');
   process.exit(2);
 }
-console.log(truot === 0
-  ? '\n  ✓ Mọi cặp chữ–nền đạt ngưỡng WCAG.'
-  : `\n  ✗ Còn ${truot} cặp dưới ngưỡng — xem dòng TRƯỢT ở trên.`);
+console.log(truot === 0 ? '\n  ✓ Mọi cặp chữ–nền đạt ngưỡng WCAG.' : `\n  ✗ Còn ${truot} chỗ dưới ngưỡng — xem dòng TRƯỢT ở trên.`);
 process.exit(truot === 0 ? 0 : 1);

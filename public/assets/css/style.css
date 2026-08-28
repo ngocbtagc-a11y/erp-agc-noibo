@@ -71,8 +71,22 @@
      bóng chat (d.1402) đặt CHỮ TRẮNG lên nền này — trắng trên #6ca839 chỉ
      2.88:1, không đọc nổi. Giữ nguyên SẮC 92° của logo, hạ độ sáng xuống
      hsl(92°, 58%, 32%) = #4e8122 → chữ trắng đạt 4.68:1.
-     Nhận diện nằm ở sắc màu, không nằm ở độ sáng. */
+     Nhận diện nằm ở sắc màu, không nằm ở độ sáng.
+
+     REV-0024 hỏi lại: font-weight có cứu được #6ca839 không? ĐO RA LÀ KHÔNG.
+     Trắng trên #6ca839 = 2.88:1. Ngưỡng chữ LỚN + ĐẬM đã là mức dễ nhất mà
+     WCAG cho phép và nó vẫn là 3:1 — 2.88 < 3.00, nên chữ có đậm tới đâu
+     nút vẫn trượt. font-weight đổi độ dày nét, KHÔNG đổi tỉ số tương phản.
+     → Nền có chữ TRẮNG buộc phải giữ `--sage` = #4e8122.
+
+     Nhưng có ĐÚNG MỘT chỗ đặt chữ ĐẬM MÀU TỐI (`--ink`) lên nền xanh:
+     `.sb-item.active` — mục menu đang mở, nằm ngay dưới logo trên thanh bên,
+     hiện trên MỌI màn. Ở đó #6ca839 đạt 5.53:1, tốt hơn hẳn #4e8122 (3.40:1,
+     vốn đã trượt từ bản cũ 3.68:1). Nên `--sage-logo` dùng ĐÚNG màu logo,
+     và dùng ĐÚNG chỗ đó: vừa vá lỗi tương phản, vừa đặt xanh lá thật của
+     thương hiệu ngay cạnh logo thật để hai màu không lệch nhau. */
   --sage:        #4e8122;
+  --sage-logo:   #6ca839;   /* ĐÚNG màu logo — CHỈ cho nền có chữ tối */
   --sage-dark:   #3c651a;
   --sage-pale:   #bbd79b;
   --sage-wash:   #eef6e3;
@@ -94,6 +108,11 @@
      người dùng đọc sai trạng thái. (Nợ kỹ thuật đã biết: `--warn` trên nền
      nhạt mới đạt 3.2–3.3:1 — sửa cần đổi cả sắc, để riêng một phiếu.) */
   --warn:        #b8863b;
+  /* REV-0024/F5: `--warn` là màu TÔ (viền, thanh, chấm) — đủ dùng. Nhưng khi
+     nó làm CHỮ trên mặt sáng thì chỉ 3.2–3.3:1, không đọc nổi ngoài nắng.
+     `--warn-dark` giữ nguyên sắc vàng-hổ-phách (39° so với 36°) nhưng đủ tối
+     để đạt ≥4.5:1. Đây KHÔNG phải đổi màu mang nghĩa — vàng vẫn là vàng. */
+  --warn-dark:   #7e5a15;
   --warn-wash:   #f7efe1;
   --danger:      #a85641;
   --danger-wash: #f7e8e4;
@@ -160,7 +179,13 @@ button { cursor: pointer; border: none; background: none; }
 
 .login-hero {
   position: relative;
-  background: linear-gradient(150deg, #4a5a3c 0%, #6b7d55 45%, #9aab86 100%);
+  /* F2 (REV-0024) — chiếm 52,5% màn Sếp nhìn ĐẦU TIÊN, và là chỗ cuối cùng
+     còn dùng bảng màu ô liu cũ (#9aab86). Dựng lại từ token xanh mới.
+     ĐO TRƯỚC KHI CHỌN: chữ `.hero-foot` là trắng alpha, nên chặng SÁNG NHẤT
+     của gradient quyết định đọc được hay không. Trên #9aab86 cũ, trắng .82
+     chỉ 2.15:1 — chữ mô tả gần như tàng hình. Chặng sáng nhất giờ là
+     `--sage-dark` (#3c651a): trắng .90 đạt ≥4.5:1 kể cả sau lớp loé sáng. */
+  background: linear-gradient(150deg, var(--sage-dark) 0%, var(--ink) 100%);
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -173,8 +198,12 @@ button { cursor: pointer; border: none; background: none; }
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(circle at 78% 18%, rgba(255,255,255,.22), transparent 46%),
-    radial-gradient(circle at 12% 88%, rgba(63,77,51,.34), transparent 52%);
+    /* Lớp loé sáng nằm DƯỚI chữ (`.hero-word` z-1, `.hero-foot` z-2) nên nó
+       cộng thẳng vào nền của chữ. Ở .22 nó kéo tương phản trắng .82 xuống
+       ~3,1:1 dù gradient đã tối — hạ về .10 mới đủ chỗ cho chữ. */
+    radial-gradient(circle at 78% 18%, rgba(255,255,255,.10), transparent 46%),
+    /* Vệt tối lấy theo `--ink` MỚI (#1e2417); bản cũ còn dùng #3f4d33. */
+    radial-gradient(circle at 12% 88%, rgba(30,36,23,.42), transparent 52%);
   pointer-events: none;
 }
 
@@ -202,7 +231,9 @@ button { cursor: pointer; border: none; background: none; }
 .hero-foot {
   position: relative;
   z-index: 2;
-  color: rgba(255,255,255,.82);
+  /* .82 → .90: ở 13px chữ thường cần 4.5:1. Trên nền hero mới, .82 chỉ đạt
+     ~4,0:1 sau lớp loé sáng; .90 đưa lên ≥4,5:1. (Bản cũ: 2,15:1.) */
+  color: rgba(255,255,255,.90);
   font-size: 13px;
   max-width: 300px;
 }
@@ -282,7 +313,7 @@ button { cursor: pointer; border: none; background: none; }
 .field textarea:focus {
   outline: none;
   border-color: var(--sage);
-  box-shadow: 0 0 0 3px rgba(154,171,134,.22);
+  box-shadow: 0 0 0 3px rgba(108,168,57,.22);
 }
 
 .field input[type="file"] {
@@ -477,7 +508,8 @@ button { cursor: pointer; border: none; background: none; }
 .xc-ngay-tt { font-size: 11px; font-weight: 600; margin-top: 2px; }
 .xc-ngay-tt.du     { color: #256a25; }
 .xc-ngay-tt.thieu  { color: #a1291f; }
-.xc-ngay-tt.du_thua{ color: #8a6d00; }
+/* Xếp Ca — kho đọc hằng ngày. #8a6d00 trên nền đầu bảng chỉ 4.04:1. */
+.xc-ngay-tt.du_thua{ color: var(--warn-dark); }
 
 .sb-nhom {
   font-size: 11px;
@@ -506,7 +538,9 @@ button { cursor: pointer; border: none; background: none; }
 .sb-item:hover { background: rgba(255,255,255,.08); color: var(--white); }
 
 .sb-item.active {
-  background: var(--sage);
+  /* Chữ ở đây là `--ink` (tối), không phải trắng → dùng được ĐÚNG màu logo.
+     `--ink`/#6ca839 = 5.53:1 (trên `--sage` cũ chỉ 3.40:1 — trượt). */
+  background: var(--sage-logo);
   color: var(--ink);
   font-weight: 600;
 }
@@ -762,7 +796,13 @@ img.av { object-fit: cover; display: block; cursor: default; }
 .main {
   flex: 1;
   margin-left: var(--sidebar-w);
-  background: var(--surface);
+  /* F1 (REV-0024) — PHẢI là `--bg`, KHÔNG phải `--surface`.
+     `.app` phủ kín 100vh nên nền `body` không lộ ra ở đâu cả: `.main` mới LÀ
+     nền thật của mọi màn làm việc. Để `--surface` ở đây thì ① đổi `--bg`
+     không ai nhìn thấy, ② mặt CHÌM và mặt NỀN dùng chung một màu nên thẻ
+     trắng hết nổi (ΔL* nền↔thẻ tụt còn 2.69). Đặt `--bg`: đúng mô hình nền
+     kem + thẻ trắng, ΔL* về 6.34, `--surface` trả về đúng vai mặt chìm. */
+  background: var(--bg);
   min-width: 0;
 }
 
@@ -770,7 +810,10 @@ img.av { object-fit: cover; display: block; cursor: default; }
   position: sticky;
   top: 0;
   z-index: 30;
-  background: rgba(242,241,238,.88);
+  /* F3 (REV-0024): trước đây đóng băng `--surface` CŨ (#f2f1ee — xám lạnh).
+     Sau F1 vùng nội dung là kem #f3ece1 nên vệt xám này lộ hẳn ra. Dán cứng
+     vì cần alpha cho `backdrop-filter`; giá trị = `--surface` MỚI. */
+  background: rgba(250,247,241,.88);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--line);
@@ -942,7 +985,8 @@ img.av { object-fit: cover; display: block; cursor: default; }
   font-variant-numeric: tabular-nums;
 }
 .mt-the-pct span   { font-size: 10px; font-weight: 600; opacity: .65; margin-left: 1px; }
-.mt-the-pct.warn   { color: var(--warn); }
+/* Số % tiến độ — Trạm Mục Tiêu, đọc hằng ngày. `--warn` ở đây chỉ 3.23:1. */
+.mt-the-pct.warn   { color: var(--warn-dark); }
 .mt-the-pct.danger { color: var(--danger); }
 .mt-the-pct.cho    { color: var(--text-mute); }
 
@@ -1218,7 +1262,7 @@ td .sm { font-size: 12px; color: var(--text-mute); white-space: nowrap; }
   outline: none;
   background: var(--white);
   border-color: var(--sage);
-  box-shadow: 0 0 0 3px rgba(154,171,134,.22);
+  box-shadow: 0 0 0 3px rgba(108,168,57,.22);
 }
 
 .search input::placeholder { color: var(--text-mute); }
@@ -1253,16 +1297,22 @@ td .sm { font-size: 12px; color: var(--text-mute); white-space: nowrap; }
   font-family: inherit;
   cursor: pointer;
 }
-.chon-nho:focus { outline: none; border-color: var(--sage); box-shadow: 0 0 0 3px rgba(154,171,134,.22); }
+.chon-nho:focus { outline: none; border-color: var(--sage); box-shadow: 0 0 0 3px rgba(108,168,57,.22); }
 
 /* Hàng đơn hoàn quá 12h chưa nhận — tô đỏ để kho/vận hành thấy ngay */
 tr.canh-bao > td { background: #fdecea; }
 tr.canh-bao:hover > td { background: #fbdbd6; }
 .phu { font-size: 11px; color: var(--text-mute); margin-top: 3px; line-height: 1.3; }
-.canh-bao-chu { color: #c0392b; font-weight: 700; }
+/* Dòng "đơn hoàn quá 12h chưa nhận" — KHO đọc hằng ngày. #c0392b trên nền
+   hàng tô đỏ (#fbdbd6 khi di chuột) chỉ 4.20:1. REV-0024 §3 xếp chỗ này
+   cùng nhóm với .tag-new / .mt-the-pct.warn: trượt ở chỗ đọc hằng ngày thì
+   không hoãn được. Đậm lại, giữ nguyên sắc đỏ. */
+.canh-bao-chu { color: #92221a; font-weight: 700; }
 
-/* Tag "new" nhỏ cho đơn mới chưa xử lý */
-.tag-new { display: inline-block; margin-left: 6px; padding: 1px 6px; font-size: 10px; font-weight: 700; text-transform: uppercase; color: #fff; background: #e8590c; border-radius: 999px; vertical-align: middle; letter-spacing: .3px; }
+/* Tag "new" nhỏ cho đơn mới chưa xử lý — vận hành sàn đọc MỖI NGÀY.
+   Nền cũ #e8590c cho chữ trắng 3.58:1 ở cỡ 10px: trượt. Thay bằng `--cam-dark`
+   (#b45606 — chính là cam thương hiệu bản đậm) → 4.91:1. */
+.tag-new { display: inline-block; margin-left: 6px; padding: 1px 6px; font-size: 10px; font-weight: 700; text-transform: uppercase; color: #fff; background: var(--cam-dark); border-radius: 999px; vertical-align: middle; letter-spacing: .3px; }
 
 /* Ô chọn người phối hợp (nhiều người) trong Trạm Mục Tiêu */
 .cv-ph-search { margin-bottom: 8px; }
@@ -1285,7 +1335,7 @@ tr.canh-bao:hover > td { background: #fbdbd6; }
   background: var(--white); font-family: inherit; font-size: 14px; color: var(--text);
   cursor: pointer; text-align: left;
 }
-.combo1-hienthi:focus { outline: none; border-color: var(--sage); box-shadow: 0 0 0 3px rgba(154,171,134,.22); }
+.combo1-hienthi:focus { outline: none; border-color: var(--sage); box-shadow: 0 0 0 3px rgba(108,168,57,.22); }
 .combo1-hienthi.rong { color: var(--text-mute); }
 .combo1-hienthi .ico { flex: none; opacity: .55; transition: transform .12s; }
 .combo1.mo .combo1-hienthi .ico { transform: rotate(180deg); }
@@ -1546,7 +1596,7 @@ tr.canh-bao:hover > td { background: #fbdbd6; }
 }
 .chat-nhap input[type="text"]:focus {
   outline: none; background: var(--white); border-color: var(--sage);
-  box-shadow: 0 0 0 3px rgba(154,171,134,.22);
+  box-shadow: 0 0 0 3px rgba(108,168,57,.22);
 }
 .chat-nut-tep { flex-shrink: 0; padding: 10px; border-radius: 50%; width: auto; }
 
@@ -1847,7 +1897,7 @@ tr.kd-chiadoi td {
   display: none;
   position: fixed;
   inset: 0;
-  background: rgba(63,77,51,.42);
+  background: rgba(30,36,23,.45);
   z-index: 35;
   backdrop-filter: blur(2px);
 }
@@ -1977,7 +2027,7 @@ tr.kd-chiadoi td {
 .modal-nen {
   position: fixed;
   inset: 0;
-  background: rgba(63,77,51,.5);
+  background: rgba(30,36,23,.5);
   backdrop-filter: blur(3px);
   display: grid;
   place-items: center;
