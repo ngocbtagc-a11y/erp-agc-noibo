@@ -1,6 +1,14 @@
 /* ==========================================================================
    ERP Alpha Green Commerce — Bảng màu & kiểu chữ
-   Phong cách: Sage — xanh ô liu, nền be, chữ serif lớn
+   Phong cách: nền kem sáng, thẻ trắng, xanh lá + cam LẤY TỪ LOGO CÔNG TY.
+
+   CTL-0023 Đợt 1 (28/08/2026) — CHỈ đổi giá trị trong khối `:root` bên dưới,
+   KHÔNG sửa một selector nào. 2.000 dòng CSS phía dưới đang chạy đúng trên
+   mọi màn; viết lại là chắc chắn vỡ ở màn ít ai mở và không ai phát hiện ra.
+
+   Mọi cặp chữ–nền dưới đây đã ĐO bằng `node scripts/do-tuong-phan-mau.mjs`
+   (WCAG 2.1, kèm ca đối chứng BH-16). Nhân viên kho đọc điện thoại ngoài nắng
+   và dưới đèn kho — ĐỔI MÀU XONG PHẢI CHẠY LẠI PHÉP ĐO, đừng nhìn bằng mắt.
    ========================================================================== */
 
 /* ĐỪNG XOÁ — CHỐT CHẶN TOÀN CỤC CHO THUỘC TÍNH [hidden]
@@ -23,21 +31,68 @@
 [hidden] { display: none !important; }
 
 :root {
-  --bg:          #ded9d3;
-  --surface:     #f2f1ee;
-  --surface-2:   #e9e7e2;
+  /* --- Nền & mặt ---------------------------------------------------------
+     Thủ phạm chính của "xấu và đục" là `--bg: #ded9d3` — xám nâu L*87, cả
+     màn phủ một lớp bụi. Nay là kem sáng L*93.7.
+     ⚠️ ĐỪNG đẩy `--bg` lên trắng hẳn: `--card` đã là #ffffff, nền trắng nữa
+     thì thẻ mất viền nhìn, cả trang thành một tấm giấy phẳng. Chênh L* giữa
+     nền và thẻ phải còn ≥2 — `do-tuong-phan-mau.mjs` kiểm số này.
+
+     BỐN TẦNG, THỨ TỰ KHÔNG ĐƯỢC ĐẢO:
+       --surface-2 (chìm nhất) < --bg < --surface < --card (trắng, nổi nhất)
+     `--surface` gánh HAI vai trái ngược nhau và đây là chỗ dễ vỡ nhất:
+       · mặt CHÌM bên trong thẻ trắng — ô nhập, dòng di chuột (15 chỗ)
+       · nhưng `.login-shell` lại là THẺ NỔI đặt thẳng trên `--bg`
+     Nên `--bg` PHẢI tối hơn `--surface` rõ rệt. Bản nháp đầu đặt
+     `--bg: #f7f2ea` cạnh `--surface: #f7f3ec` — lệch L* 0.3, cả khung đăng
+     nhập tan vào nền, đo bằng mắt không thấy. `do-tuong-phan-mau.mjs` kiểm
+     cả bốn khoảng cách này; đổi màu xong phải chạy lại.
+     Và ĐỪNG đẩy `--bg` lên sát trắng như trang mẫu (#FFF8F1): trang mẫu chỉ
+     có 2 tầng, ERP có 4 — sát trắng là ba tầng trên dính vào nhau. */
+  --bg:          #f3ece1;
+  --surface:     #faf7f1;
+  --surface-2:   #efe8dc;
   --card:        #ffffff;
-  --ink:         #3f4d33;
-  --ink-soft:    #5a6b4b;
-  --sage:        #9aab86;
-  --sage-dark:   #7d8f68;
-  --sage-pale:   #c9d3ba;
-  --sage-wash:   #eef1e8;
-  --text:        #55554e;
-  --text-mute:   #8a8a81;
-  --line:        #dcdad4;
+
+  /* --- Chữ ---------------------------------------------------------------
+     `--ink` gánh HAI vai: chữ tiêu đề trên thẻ trắng (42 chỗ) VÀ nền thanh
+     bên (`.sidebar` d.348, chữ trắng đè lên). Gần đen thì tốt cho cả hai. */
+  --ink:         #1e2417;
+  --ink-soft:    #3c5a2a;
+  --text:        #3a362f;
+  --text-mute:   #6e675e;   /* cũ #8a8a81 chỉ đạt 3.48:1 trên thẻ — không đọc được ngoài nắng */
+  --line:        #e5dccd;
   --white:       #ffffff;
 
+  /* --- Xanh lá thương hiệu -----------------------------------------------
+     Lấy từ logo công ty (public/assets/img/logo.png, đo bằng sharp): lá xanh
+     là #6ca839, hệ màu hsl(92°, 49%, 44%).
+     ⚠️ KHÔNG dùng thẳng #6ca839 làm `--sage`: `.btn-primary` (d.286) và bong
+     bóng chat (d.1402) đặt CHỮ TRẮNG lên nền này — trắng trên #6ca839 chỉ
+     2.88:1, không đọc nổi. Giữ nguyên SẮC 92° của logo, hạ độ sáng xuống
+     hsl(92°, 58%, 32%) = #4e8122 → chữ trắng đạt 4.68:1.
+     Nhận diện nằm ở sắc màu, không nằm ở độ sáng. */
+  --sage:        #4e8122;
+  --sage-dark:   #3c651a;
+  --sage-pale:   #bbd79b;
+  --sage-wash:   #eef6e3;
+
+  /* --- Cam thương hiệu (MỚI — trước đây ERP thiếu hẳn nửa bộ nhận diện) ---
+     `--cam` = #eb7c17, đo đúng từ chiếc lá cam trong logo.
+     DÙNG VÀO ĐÂU: nút hành động chính · số liệu cần chú ý · nhãn "đang chờ
+     bạn". KHÔNG dùng cam cho lỗi — lỗi đã có `--danger` đỏ riêng.
+     ⚠️ `--cam` là màu NỀN cho chữ đậm (trắng trên nó chỉ 2.83:1). Cần chữ
+     trắng thì dùng `--cam-dark` (4.91:1). Cam làm CHỮ trên nền sáng cũng
+     phải là `--cam-dark`.
+     Đợt 1 chỉ KHAI ba biến này; nối vào selector nào là việc của Đợt 2. */
+  --cam:         #eb7c17;
+  --cam-dark:    #b45606;
+  --cam-wash:    #fef5ec;
+
+  /* --- MÀU MANG NGHĨA — ĐỪNG ĐỔI ----------------------------------------
+     Vàng = sắp đến hạn, đỏ = quá hạn/lỗi, xanh = xong. Đổi sắc ở đây là
+     người dùng đọc sai trạng thái. (Nợ kỹ thuật đã biết: `--warn` trên nền
+     nhạt mới đạt 3.2–3.3:1 — sửa cần đổi cả sắc, để riêng một phiếu.) */
   --warn:        #b8863b;
   --warn-wash:   #f7efe1;
   --danger:      #a85641;
@@ -50,9 +105,12 @@
   --r-lg: 22px;
   --r-pill: 999px;
 
-  --shadow-sm: 0 1px 3px rgba(63, 77, 51, .06);
-  --shadow-md: 0 6px 22px rgba(63, 77, 51, .09);
-  --shadow-lg: 0 18px 50px rgba(63, 77, 51, .14);
+  /* Nền sáng lên thì chênh sáng nền↔thẻ hẹp lại (ΔL* 13.0 → 6.3), thẻ phải
+     nhờ VIỀN + BÓNG mới nổi. Đổi tông bóng theo `--ink` mới và tăng nhẹ độ
+     đậm — đây là phần bù cho việc làm nền sáng, không phải trang trí. */
+  --shadow-sm: 0 1px 2px rgba(30, 36, 23, .05), 0 2px 6px rgba(30, 36, 23, .05);
+  --shadow-md: 0 6px 22px rgba(30, 36, 23, .10);
+  --shadow-lg: 0 18px 50px rgba(30, 36, 23, .15);
 
   --sans: 'Be Vietnam Pro', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --serif: 'Playfair Display', Georgia, 'Times New Roman', serif;
