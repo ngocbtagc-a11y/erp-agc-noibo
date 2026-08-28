@@ -85,6 +85,13 @@ UPDATE tai_khoan SET duyet_gopy = 1
 --
 -- Ngoại lệ DUY NHẤT: DB chưa có tài khoản nào đang hoạt động (bàn thử dựng
 -- lược đồ trắng) — ở đó không có gì để backfill, không phải lỗi.
+--
+-- NGƯỜI SAU PHẢI BIẾT (REV-0030 Câu 5): chốt kiểm đòi ĐÚNG 1 người giữ cờ.
+-- Nếu Sếp ĐANG UỶ QUYỀN (2 người giữ cờ) mà ai đó chạy lại chính file này thì
+-- nó GÃY OAN — không phải backfill hụt, mà là uỷ quyền hợp lệ. Thực tế không
+-- xảy ra vì `scripts/chay-migration.mjs` + `schema_migrations` chặn chạy lần
+-- hai ngay tại câu INSERT đầu file. Và ĐỪNG nới chốt này thành `>= 1`: nới ra
+-- là mất đúng cái nó sinh ra để bắt (backfill bắt trúng 0 người).
 -- Ràng buộc được ĐẶT TÊN: SQLite in tên ràng buộc chứ không in tên bảng, nên
 -- tên phải tự nói ra chuyện gì hỏng khi nó gãy.
 CREATE TABLE IF NOT EXISTS kiem_backfill_duyet_gopy (

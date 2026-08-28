@@ -7947,7 +7947,18 @@ if (TOI.quyen.includes('quantri')) {
       btn.disabled = true;
       try {
         const kq = await API.qtDatLaiMatKhau(parseInt(btn.dataset.datlai, 10));
-        hienMatKhauTam('Đã đặt lại mật khẩu', kq.ten_dang_nhap, kq.mat_khau_tam);
+        /* Tài khoản đang giữ quyền duyệt góp ý ERP: máy chủ CỐ Ý không trả
+           mật khẩu tạm về đây (ADR-0015 — mật khẩu về tay người bấm là mượn
+           được danh tính chủ tài khoản). Nói thẳng cho người bấm biết, đừng
+           mở hộp mật khẩu rỗng ghi "undefined". */
+        if (kq.da_gui_kenh_rieng) {
+          alert('Đã khôi phục đăng nhập cho "' + kq.ten_dang_nhap + '".\n\n'
+            + 'Mật khẩu tạm KHÔNG hiện ở đây — máy chủ gửi thẳng vào Telegram riêng của '
+            + 'chủ tài khoản (người giữ quyền duyệt góp ý ERP). Bạn không cần chép gì cả.\n\n'
+            + 'Cả nhóm Telegram chung cũng nhận được một dòng ghi nhận việc bạn vừa làm.');
+        } else {
+          hienMatKhauTam('Đã đặt lại mật khẩu', kq.ten_dang_nhap, kq.mat_khau_tam);
+        }
         await taiLaiNhanSuQuanTri();
       } catch (err) { alert(err.message); btn.disabled = false; }
     } else if (btn.dataset.khoa) {

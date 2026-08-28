@@ -9,7 +9,7 @@
 import {
   bamMatKhau, kiemTraMatKhau, sinhMatKhauTam, taoPhien, docPhien, xoaPhien, xoaPhienHetHan,
   dangBiKhoa, ghiNhanSai, xoaLanSai,
-  cookieDangNhap, cookieDangXuat, layTokenTuCookie
+  cookieDangNhap, cookieDangXuat, layTokenTuCookie, layCoThieuCotDuyetGopY
 } from './auth.js';
 
 import {
@@ -55,8 +55,69 @@ function loi(thongDiep, status = 400) {
 
 async function batBuocDangNhap(req, env) {
   const phien = await docPhien(env.DB, layTokenTuCookie(req));
+  // LẤY CỜ TRƯỚC KHI RETURN — kể cả khi phiên không hợp lệ. Lấy là xoá, nên
+  // bỏ sót một nhánh là kẹt cờ sang lượt sau và cảnh báo lệch người.
+  if (layCoThieuCotDuyetGopY()) await canhBaoThieuCotDuyetGopY(env);
   if (!phien) return { loi: json({ loi: 'Chưa đăng nhập' }, 401) };
   return { phien };
+}
+
+/* ---- Cảnh báo hạ tầng, TỐI ĐA 1 TIN/NGÀY (REV-0030 lỗi 5) ---------------
+   Dùng lại đúng khuôn `INSERT OR IGNORE INTO sao_luu_canh_bao (khoa)` đã có
+   sẵn trong src/sao-luu.js (khoá = <việc>-<ngày VN>): bảng có PRIMARY KEY
+   trên `khoa` nên hai lượt cron chồng nhau cũng chỉ bắn một tin.
+
+   BỌC TRY/CATCH TOÀN BỘ: đây là đường CẢNH BÁO, nó không bao giờ được phép
+   làm hỏng cái nó đang cảnh báo. Bảng chưa có, Telegram chưa cấu hình, mạng
+   hỏng — đều im lặng đi tiếp. */
+async function canhBaoMotLanMoiNgay(env, viec, text) {
+  try {
+    const ngay = new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
+    const khoa = `${viec}-${ngay}`;
+    const da = await env.DB.prepare('SELECT 1 FROM sao_luu_canh_bao WHERE khoa = ?').bind(khoa).first();
+    if (da) return false;
+    await env.DB.prepare('INSERT OR IGNORE INTO sao_luu_canh_bao (khoa) VALUES (?)').bind(khoa).run();
+    await guiTelegram(env, text);
+    return true;
+  } catch { return false; }
+}
+
+/* Còn ai duyệt được góp ý ở cấp cuối không? Không còn thì BÁO, đừng để hàng
+   chờ đứng im mà cả công ty tưởng đang chạy (REV-0030, lỗ dữ liệu "khôi phục
+   bản sao lưu chụp trước migration"). Có tài khoản mà không ai giữ cờ mới là
+   bất thường — DB trắng thì im. */
+async function canhBaoKhongConNguoiDuyetGopY(env) {
+  let n, tong;
+  try {
+    tong = (await env.DB.prepare('SELECT COUNT(*) AS n FROM tai_khoan WHERE kich_hoat = 1').first())?.n || 0;
+    if (!tong) return false;
+    n = (await env.DB.prepare(
+      'SELECT COUNT(*) AS n FROM tai_khoan WHERE duyet_gopy = 1 AND kich_hoat = 1').first())?.n || 0;
+  } catch (e) {
+    // Thiếu cột đã có đường cảnh báo riêng ở docPhien — không báo hai lần.
+    if (/no such column/i.test(String(e && e.message))) return false;
+    throw e;
+  }
+  if (n > 0) return false;
+  const cho = (await env.DB.prepare(
+    `SELECT COUNT(*) AS n FROM gop_y WHERE trang_thai IN ('moi', 'cho_quyet_dinh')`).first())?.n || 0;
+  return canhBaoMotLanMoiNgay(env, 'khong-con-nguoi-duyet-gopy',
+    '🔴 [ERP] KHÔNG CÒN AI DUYỆT ĐƯỢC GÓP Ý Ở CẤP CUỐI.\n\n' +
+    `Đang có ${tong} tài khoản hoạt động nhưng KHÔNG tài khoản nào giữ cờ duyet_gopy. ` +
+    `${cho} góp ý đang đứng ở cổng duyệt.\n\n` +
+    'Hay gặp nhất: vừa khôi phục một bản sao lưu chụp TRƯỚC khi nạp migration ' +
+    'them-quyen-duyet-gopy.sql. Trong ERP không bật lại được (cấp cờ chỉ người đang giữ cờ ' +
+    'làm được), phải chạy ở tầng dữ liệu:\n' +
+    'npx wrangler d1 execute crm-agc --remote --command ' +
+    '"UPDATE tai_khoan SET duyet_gopy = 1 WHERE ten_dang_nhap = \'<số của Sếp>\'"');
+}
+
+async function canhBaoThieuCotDuyetGopY(env) {
+  return canhBaoMotLanMoiNgay(env, 'thieu-cot-duyet-gopy',
+    '🔴 [ERP] THIẾU CỘT tai_khoan.duyet_gopy trong CSDL.\n\n' +
+    'Hệ thống vẫn chạy nhưng KHÔNG AI duyệt được góp ý ở cấp cuối (cờ về false ' +
+    'theo chiều an toàn) — cả hàng góp ý sẽ đứng.\n\n' +
+    'Cách sửa: node scripts/chay-migration.mjs them-quyen-duyet-gopy.sql --remote');
 }
 
 /* ---- Các đầu việc ------------------------------------------------------- */
@@ -912,12 +973,22 @@ async function qtTaoTaiKhoan(req, env) {
        là cửa nặng nhất: nó không chỉ vượt cổng, nó làm HỒ SƠ DUYỆT NÓI DỐI
        (Rule 10) — lịch sử ghi Sếp duyệt trong khi Sếp không hề bấm (cửa 5b).
    Người bị lấy quyền duyệt không được phép tắt người duyệt, bằng bất kỳ cửa
-   nào trong bốn cửa trên.
+   nào trong ba cửa đầu.
 
-   Đường cứu khi Sếp mất máy / quên mật khẩu: KHÔNG đi vòng qua admin nữa mà
-   chạy thẳng ở tầng DB (đã chép vào ADR-0015 mục Hệ quả):
-     npx wrangler d1 execute crm-agc --remote \
-       --command "UPDATE tai_khoan SET duyet_gopy = 1 WHERE ten_dang_nhap='<số mới>'"
+   CỬA 5b NAY MỞ LẠI THEO Ý SẾP (REV-0030 lỗi 2 — "cho a ấy duyệt khôi phục
+   cho tôi đi chứ"): anh Phong BẤM ĐƯỢC (200), nhưng mật khẩu tạm KHÔNG hiện
+   ra cho anh — nó đi thẳng vào chat Telegram riêng của Sếp. Chi tiết và năm
+   đường rò đã soi: xem ngay trên qtDatLaiMatKhau() bên dưới.
+
+   Đường cứu khi Sếp mất máy / quên mật khẩu / mất luôn Telegram — chạy thẳng
+   ở tầng DB, cố ý KHÔNG đi vòng qua tài khoản admin (chép ở ADR-0015):
+     · bật lại cờ duyệt:
+       npx wrangler d1 execute crm-agc --remote \
+         --command "UPDATE tai_khoan SET duyet_gopy = 1 WHERE ten_dang_nhap='<số mới>'"
+     · đặt lại MẬT KHẨU (lệnh trên KHÔNG làm được — hash là PBKDF2, không gõ
+       tay được; và scripts/tao-tai-khoan.mjs thì ghi seed.sql XOÁ SẠCH dữ
+       liệu cũ, chạy trên bản thật là mất công ty):
+       node scripts/dat-lai-mat-khau.mjs <số điện thoại> --remote
    ========================================================================== */
 
 /* Tài khoản này có phải NGƯỜI DUY NHẤT còn duyệt được góp ý không?
@@ -953,7 +1024,44 @@ async function dangGiuCoDuyetGopY(env, tkId) {
 const LOI_MAT_NGUOI_DUYET =
   'Không thể — đây là người DUY NHẤT còn duyệt được góp ý ERP. Bật cờ duyệt cho người thay trước (tab Quản trị), rồi hãy làm việc này.';
 
-/* Đặt lại mật khẩu cho một tài khoản → trả mật khẩu tạm MỘT LẦN */
+/* Đặt lại mật khẩu cho một tài khoản → trả mật khẩu tạm MỘT LẦN.
+
+   ĐƯỜNG KHÔI PHỤC CHO SẾP (Sếp Ngọc chốt 28/08/2026: "cho a ấy duyệt khôi
+   phục cho tôi đi chứ") — REV-0030 lỗi 2, thay cho bản 403 cứng của REV-0027.
+
+   VẤN ĐỀ CŨ (cửa 5b): mật khẩu tạm được TRẢ THẲNG cho người bấm, nên anh
+   Phong đặt lại mật khẩu tài khoản Sếp là ĐĂNG NHẬP ĐƯỢC BẰNG TÀI KHOẢN SẾP
+   và duyệt dưới tên Sếp — hồ sơ duyệt nói dối (Rule 10). REV-0027 bịt bằng
+   403, nhưng như thế Sếp mất máy là không còn ai khôi phục hộ được.
+
+   CÁCH LÀM ĐÚNG: TÁCH "AI ĐƯỢC BẤM" KHỎI "AI NHẬN ĐƯỢC MẬT KHẨU".
+     · Anh Phong (admin) BẤM ĐƯỢC → 200, không còn 403.
+     · Mật khẩu tạm KHÔNG đi qua tay anh: JSON trả về BỎ HẲN trường
+       `mat_khau_tam` (bỏ khoá, không phải để rỗng — xem BH-44), mật khẩu đi
+       thẳng vào chat Telegram RIÊNG của Sếp với con bot.
+     · Anh bấm xong tự đăng nhập ngay thì KHÔNG VÀO ĐƯỢC — đó mới là cái chặn
+       thật, chặn bằng đường đi của bí mật chứ không bằng một câu `if`.
+     · Chưa cấu hình `TELEGRAM_CHAT_ID_SEP` → 403 như cũ: không có đường giao
+       thì không mở cửa.
+     · GỬI TRƯỚC, GHI SAU. Telegram không nhận thì KHÔNG đụng vào mật khẩu
+       hiện tại — đổi hash rồi mới phát hiện không gửi được là khoá chết tài
+       khoản Sếp bằng chính đường cứu.
+
+   NĂM ĐƯỜNG RÒ ĐÃ SOI (mật khẩu tạm không được lọt đường nào):
+     (a) JSON trả về            → bỏ hẳn khoá `mat_khau_tam`
+     (b) Workers Logs           → KHÔNG console.log/error mật khẩu ở bất kỳ
+                                  nhánh nào ([observability] đang bật, admin
+                                  Cloudflare đọc được)
+     (c) bảng `thong_bao`       → tin báo cho Sếp KHÔNG kèm mật khẩu (bảng này
+                                  nằm trong bản sao lưu CSV đẩy lên Drive —
+                                  xem MO_TA_BANG.thong_bao trong src/sao-luu.js)
+     (d) Telegram NHÓM CHUNG    → tin "[Bảo mật] ai vừa khôi phục cho ai" là
+                                  tin KHÁC, không kèm mật khẩu
+     (e) `tai_khoan` trong sao lưu → chỉ có hash, đường này vốn sạch, giữ nguyên
+
+   PHÁT HIỆN ĐƯỢC, KHÔNG CẦN CHẶN: cả công ty thấy dòng "[Bảo mật] X vừa khôi
+   phục tài khoản Y" trên Telegram nhóm, Sếp nhận thêm một tin trong ERP và
+   MỘT DÒNG `nhan_su_lich_su` — không làm lén được. */
 async function qtDatLaiMatKhau(req, env) {
   const { phien, loi: l } = await batBuocAdmin(req, env);
   if (l) return l;
@@ -964,21 +1072,74 @@ async function qtDatLaiMatKhau(req, env) {
   const tkId = parseInt(b.tai_khoan_id, 10);
   if (!tkId) return loi('Thiếu tài khoản');
 
-  // CỬA 5b — mật khẩu tạm được TRẢ VỀ cho người gọi, nên đặt lại mật khẩu của
-  // người giữ cờ duyệt = mượn được danh tính người đó. Chỉ chính chủ mới đặt
-  // lại được mật khẩu của một tài khoản đang giữ cờ duyệt góp ý.
-  if (tkId !== phien.tai_khoan_id && await dangGiuCoDuyetGopY(env, tkId))
-    return loi('Không thể đặt lại mật khẩu của người đang giữ quyền duyệt góp ý ERP — mật khẩu tạm trả về đây sẽ cho phép đăng nhập bằng tài khoản đó và duyệt dưới tên người đó.', 403);
-
-  const tk = await env.DB.prepare('SELECT id, ten_dang_nhap FROM tai_khoan WHERE id = ?').bind(tkId).first();
+  const tk = await env.DB.prepare(`
+    SELECT t.id, t.ten_dang_nhap, t.nhan_su_id, n.ho_ten
+      FROM tai_khoan t LEFT JOIN nhan_su n ON n.id = t.nhan_su_id
+     WHERE t.id = ?`).bind(tkId).first();
   if (!tk) return loi('Không tìm thấy tài khoản', 404);
 
+  // Chính chủ tự đặt lại mật khẩu của mình thì không có ai để mượn danh tính —
+  // đường cũ, giữ nguyên.
+  const khoiPhucHo = tkId !== phien.tai_khoan_id && await dangGiuCoDuyetGopY(env, tkId);
+
+  if (khoiPhucHo && !env.TELEGRAM_CHAT_ID_SEP)
+    return loi('Chưa cấu hình kênh riêng để gửi mật khẩu tạm cho người giữ quyền duyệt góp ý ' +
+               '(secret TELEGRAM_CHAT_ID_SEP). Không có đường giao an toàn thì không mở cửa này — ' +
+               'xem ADR-0015, mục "Đường khôi phục đăng nhập cho ERP Owner".', 403);
+
   const matKhauTam = sinhMatKhauTam(10);
+  const nguoiBam = phien.ho_ten || phien.ten_dang_nhap;
+  const luc = new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 16).replace('T', ' ');
+
+  if (khoiPhucHo) {
+    // GỬI TRƯỚC KHI GHI. Không gửi được thì tài khoản không bị đụng tới.
+    const daGui = await guiTelegram(env,
+      `🔑 [ERP] Mật khẩu tạm để đăng nhập lại\n\n` +
+      `Tài khoản: ${tk.ten_dang_nhap}\n` +
+      `Mật khẩu tạm: ${matKhauTam}\n\n` +
+      `Người bấm khôi phục: ${nguoiBam} — lúc ${luc}.\n` +
+      `Mật khẩu này KHÔNG hiện ra cho người bấm, chỉ có ở đây.\n` +
+      `Đăng nhập xong hệ thống bắt đổi mật khẩu ngay.\n\n` +
+      `Nếu bạn KHÔNG yêu cầu việc này: đăng nhập ngay và đổi mật khẩu, rồi hỏi lại ${nguoiBam}.`,
+      env.TELEGRAM_CHAT_ID_SEP);
+    if (!daGui)
+      return loi('Không gửi được mật khẩu tạm vào kênh riêng của ERP Owner — mật khẩu hiện tại ' +
+                 'KHÔNG bị thay đổi. Kiểm tra TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID_SEP rồi thử lại.', 502);
+  }
+
   await env.DB.prepare('UPDATE tai_khoan SET mat_khau_hash = ?, phai_doi_mk = 1 WHERE id = ?')
               .bind(await bamMatKhau(matKhauTam), tkId).run();
 
   // Đá hết phiên cũ của người đó ra — buộc đăng nhập lại bằng mật khẩu mới
   await env.DB.prepare('DELETE FROM phien WHERE tai_khoan_id = ?').bind(tkId).run();
+
+  if (khoiPhucHo) {
+    const ten = tk.ho_ten || tk.ten_dang_nhap;
+    // (c) — tin trong ERP KHÔNG kèm mật khẩu.
+    await guiThongBao(env, null,
+      `[Bảo mật] ${nguoiBam} vừa khôi phục đăng nhập cho tài khoản của bạn lúc ${luc}. ` +
+      `Mật khẩu tạm đã gửi thẳng vào Telegram riêng của bạn, không qua tay ai. ` +
+      `Nếu không phải bạn yêu cầu, hãy đăng nhập và đổi mật khẩu ngay.`,
+      'bao_mat', null, tk.nhan_su_id);
+    // Không phải chỉ một dòng log: một dòng SỰ KIỆN trong hồ sơ nhân sự.
+    if (tk.nhan_su_id && phien.nhan_su_id) {
+      try {
+        await env.DB.prepare(`
+          INSERT INTO nhan_su_lich_su (nhan_su_id, loai_su_kien, gia_tri_cu, gia_tri_moi,
+                                       nguoi_thuc_hien_id, ghi_chu, luc)
+          VALUES (?, 'khoi_phuc_dang_nhap', NULL, ?, ?, ?, datetime('now', '+7 hours'))`)
+          .bind(tk.nhan_su_id, tk.ten_dang_nhap, phien.nhan_su_id,
+                `${nguoiBam} khôi phục đăng nhập hộ. Mật khẩu tạm gửi thẳng kênh riêng của ERP Owner, ` +
+                `KHÔNG hiện cho người bấm.`).run();
+      } catch (e) { console.error('Ghi nhan_su_lich_su khôi phục đăng nhập:', e.message); }
+    }
+    // (d) — Telegram NHÓM CHUNG: cả công ty thấy, không kèm mật khẩu.
+    guiTelegram(env,
+      `🔐 [Bảo mật] ${nguoiBam} vừa khôi phục đăng nhập cho ${ten} (${tk.ten_dang_nhap}) lúc ${luc}. ` +
+      `Mật khẩu tạm KHÔNG đi qua tay người bấm — gửi thẳng cho chủ tài khoản.`).catch(() => {});
+    // (a) — BỎ HẲN khoá `mat_khau_tam` khỏi thân trả về.
+    return json({ ok: true, ten_dang_nhap: tk.ten_dang_nhap, da_gui_kenh_rieng: true });
+  }
 
   return json({ ok: true, ten_dang_nhap: tk.ten_dang_nhap, mat_khau_tam: matKhauTam });
 }
@@ -2794,15 +2955,27 @@ async function vdGui(req, env) {
   return json({ ok: true, id: r.meta.last_row_id });
 }
 
-/* Gửi cảnh báo qua Telegram. Chưa cấu hình token/chat thì bỏ qua êm (trả false). */
-async function guiTelegram(env, text) {
-  const token = env.TELEGRAM_BOT_TOKEN, chatId = env.TELEGRAM_CHAT_ID;
-  if (!token || !chatId) return false;
+/* Gửi cảnh báo qua Telegram. Chưa cấu hình token/chat thì bỏ qua êm (trả false).
+
+   THAM SỐ `chatId` (REV-0030 lỗi 2): mặc định vẫn là `env.TELEGRAM_CHAT_ID`
+   — CHAT DÙNG CHUNG của công ty, có cả anh Phong. Mọi lời gọi cũ không đổi
+   một chữ. Truyền `env.TELEGRAM_CHAT_ID_SEP` để gửi vào chat 1-1 giữa Sếp và
+   CHÍNH CON BOT NÀY (Sếp nhắn /start cho bot một lần, lấy chat id, rồi
+   `npx wrangler secret put TELEGRAM_CHAT_ID_SEP`).
+
+   VÌ SAO KHÔNG ĐẺ CƠ CHẾ THỨ HAI: ERP chưa từng gửi mail (grep smtp|resend|
+   mailgun|MailChannels ra 0 kết quả) và `guiThongBao` thì nằm TRONG ERP —
+   vô dụng đúng lúc Sếp không đăng nhập được. Mở rộng một tham số của hàm đã
+   chạy thật là đường rẻ nhất và ít mặt hỏng nhất. Chi phí 0. */
+async function guiTelegram(env, text, chatId = null) {
+  const token = env.TELEGRAM_BOT_TOKEN;
+  const dich = chatId || env.TELEGRAM_CHAT_ID;
+  if (!token || !dich) return false;
   try {
     const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId, text, disable_web_page_preview: true })
+      body: JSON.stringify({ chat_id: dich, text, disable_web_page_preview: true })
     });
     return res.ok;
   } catch { return false; }
@@ -3663,9 +3836,18 @@ Nhắc lại: CHỈ trả về JSON, không chào hỏi, không giải thích th
 async function hoLyTuDongTriage(env) {
   if (!env.AI) return;
 
+  /* REV-0030 lỗi 6 — QUÉT CẢ 'cho_phan_tich'. Từ Việc 7, góp ý của người giữ
+     cờ (Sếp) vào THẲNG 'cho_phan_tich', không đi qua 'moi' một giây nào. Câu
+     cũ chỉ quét 'moi' nên góp ý CỦA CHÍNH SẾP không bao giờ được Hồ Ly chấm
+     (đo được: de_xuat_risk = null, tu_dong_xu_luc = null) — Sếp mất bản nháp
+     `de_xuat_spec` cho đúng những việc mình quan tâm nhất. Cùng ca đó xảy ra
+     với mọi góp ý được duyệt nhanh hơn nhịp cron 5 phút.
+     `tu_dong_xu_luc IS NULL` vẫn là chốt chặn: mỗi dòng chỉ chấm ĐÚNG MỘT
+     LẦN, thêm trạng thái vào đây không làm máy chấm lại cái đã chấm. Và hàm
+     này vẫn CHỈ ghi các cột de_xuat_* — không có đường nào tự đổi trang_thai. */
   const { results } = await env.DB.prepare(`
     SELECT id, tieu_de, boi_canh, vuong_o_dau, mong_muon, tan_suat, khu_vuc
-      FROM gop_y WHERE trang_thai = 'moi' AND tu_dong_xu_luc IS NULL
+      FROM gop_y WHERE trang_thai IN ('moi', 'cho_phan_tich') AND tu_dong_xu_luc IS NULL
      ORDER BY tao_luc ASC LIMIT 5
   `).all();
 
@@ -3745,6 +3927,8 @@ async function gopYGui(req, env) {
           nguoiGuiGiuCo ? phien.nhan_su_id : null).run();
 
   const id = r.meta.last_row_id;
+  // Đồng hồ hàng chờ bắt đầu chạy TỪ ĐÂY (cửa 14).
+  await gopYDongDauChoDuyet(env, id);
   if (nguoiGuiGiuCo) {
     await gopYGhiLichSu(env, id, 'moi', 'cho_phan_tich', {
       nguoiDoiId: phien.nhan_su_id,
@@ -3800,6 +3984,36 @@ async function gopYGhiLichSu(env, gopYId, tu, den, o = {}) {
           laMay ? o.tacNhan : null,
           o.uyQuyenBoiId || null, o.jobId || null,
           (o.ghiChu || null)).run();
+}
+
+/* ---- ĐỒNG HỒ SLA — CỬA THỨ 14 (REV-0030 lỗi 1) --------------------------
+   Trước bản vá, `gopYNhacSla()` đo tuổi hàng chờ bằng `cap_nhat_luc`. Mà MỌI
+   câu UPDATE trong `gopYDoiTrangThai()` đều ghi `cap_nhat_luc = now`, kể cả
+   nhánh "lưu tại chỗ" KHÔNG đổi trạng thái. Đo được: góp ý chờ cổng 1 từ
+   24/08 (4 ngày) → anh Phong bấm "giao người phụ trách" → 200 → đồng hồ nhảy
+   về hôm nay → cron KHÔNG đẩy lên Sếp nữa. Chặn-rồi-gỡ-chặn y hệt. LẶP VÔ
+   HẠN, không một dòng cảnh báo, NỔ CẢ KHI KHÔNG AI CỐ Ý.
+
+   Đây đúng là cùng họ với cửa thứ tư (L2 — `next_owner`), chỉ khác cột: rút
+   đồng hồ ra là rút việc khỏi hàng chờ của Sếp vô thời hạn — phá đúng MỘT
+   TRONG BA CHỖ ĐỠ mà ADR-0015 hứa với Sếp cho rủi ro "một người duyệt".
+
+   VÁ: một cột RIÊNG `cho_duyet_tu_luc`, tách hẳn khỏi `cap_nhat_luc`. Nó chỉ
+   được đóng dấu khi việc THẬT SỰ vào một hàng chờ mới (gửi mới · qua một
+   cổng duyệt · đổi trạng thái), không bao giờ vì một lần lưu tại chỗ.
+
+   PHÒNG THỦ như L4: chưa nạp migration thì nuốt đúng lỗi "no such column" —
+   đồng hồ lùi về `cap_nhat_luc` như cũ, chứ không 500 khi gửi góp ý. */
+async function gopYDongDauChoDuyet(env, id) {
+  if (!id) return false;
+  try {
+    await env.DB.prepare(
+      `UPDATE gop_y SET cho_duyet_tu_luc = datetime('now', '+7 hours') WHERE id = ?`).bind(id).run();
+    return true;
+  } catch (e) {
+    if (!/no such column/i.test(String(e && e.message))) throw e;
+    return false;
+  }
 }
 
 /* Danh sách — người gửi thấy của mình; QUẢN LÝ CẤP 1 thấy thêm của cấp dưới
@@ -4066,6 +4280,7 @@ async function gopYDuyet(req, env) {
                hoan_tac_luc = datetime('now', '+7 hours'),
                cap_nhat_luc = datetime('now', '+7 hours') WHERE id = ?`)
         .bind(lyDo, gopYAnhChup(g, 'bi_tu_choi', 'NGUOI_GUI'), phien.nhan_su_id, id).run();
+      await gopYDongDauChoDuyet(env, id);       // cửa 14 — sang hàng chờ của NGƯỜI GỬI
       await gopYGhiLichSu(env, id, g.trang_thai, 'bi_tu_choi',
         { nguoiDoiId: phien.nhan_su_id, ghiChu: 'Chưa duyệt — ' + lyDo });
       await guiThongBao(env, null,
@@ -4142,6 +4357,10 @@ async function gopYDuyet(req, env) {
     gan.push('hoan_tac_json = ?', 'hoan_tac_boi_id = ?', "hoan_tac_luc = datetime('now', '+7 hours')");
     gia.push(gopYAnhChup(g, tt, nxt), phien.nhan_su_id, id);
     await env.DB.prepare(`UPDATE gop_y SET ${gan.join(', ')} WHERE id = ?`).bind(...gia).run();
+    // Cửa 14 — qua một cổng duyệt là VÀO MỘT HÀNG CHỜ MỚI (cổng 2, hoặc bước
+    // tiếp theo). Đóng dấu lại đồng hồ ở đây là ĐÚNG; cái sai là đóng dấu khi
+    // chỉ lưu tại chỗ.
+    await gopYDongDauChoDuyet(env, id);
 
     if (tt !== g.trang_thai) {
       await gopYGhiLichSu(env, id, g.trang_thai, tt,
@@ -4193,7 +4412,7 @@ async function gopYDoiTrangThai(req, env) {
   const g = await env.DB.prepare(`
     SELECT g.trang_thai, g.nguoi_gui_id, g.tieu_de, g.risk, g.bang_chung_url,
            g.can_xac_minh_lai, g.so_lan_gui_lai, g.nguoi_phu_trach_id,
-           n.dang_lam AS nguoi_gui_dang_lam
+           n.dang_lam AS nguoi_gui_dang_lam, n.ho_ten AS nguoi_gui_ten
       FROM gop_y g JOIN nhan_su n ON n.id = g.nguoi_gui_id WHERE g.id = ?`).bind(id).first();
   if (!g) return loi('Không tìm thấy góp ý này', 404);
 
@@ -4227,6 +4446,9 @@ async function gopYDoiTrangThai(req, env) {
 
   const gan = [], gia = [];
   let ghiChuLichSu = ghiChu, goCoXacMinh = false;
+  // Dòng lịch sử NÓI RÕ LÝ DO viết thêm sau dòng chính (ca bỏ qua cổng 1 khi
+  // gửi lại — cửa 15). Bỏ qua âm thầm là sai, y như lúc gửi mới.
+  let ghiChuBoQua = null;
 
   // ---- Ngoại lệ 0: LƯU mà KHÔNG đổi trạng thái ----------------------------
   // Ma trận chỉ nói về việc CHUYỂN trạng thái. Sửa phân loại, giao người phụ
@@ -4272,10 +4494,30 @@ async function gopYDoiTrangThai(req, env) {
              'duyet_cap1_nguon = NULL', 'duyet_owner_boi_id = NULL', 'duyet_owner_luc = NULL',
              'risk = NULL', 'risk_chot_boi_id = NULL', 'risk_chot_luc = NULL', 'nhac_duyet_luc = NULL');
     gia.push(lanMoi);
+    /* CỬA 15 (REV-0030) — GỬI LẠI BỎ QUÊN VIỆC 7.
+       Ở dưới, khối "ma trận" tính lại next_owner từ GOPY_OWNER_THEO_TT.moi =
+       ['NGUOI_GUI','QL_CAP1']. Với người KHÔNG CÓ AI Ở CẤP 1 (quản lý phòng,
+       trưởng phòng — chính ca Việc 7 đã xử ở gopYGui) thì việc rơi về chờ
+       một người KHÔNG TỒN TẠI. Sếp vẫn nhìn thấy nó trong panel nhờ
+       `|| coDuyet` ở app.js nên không mất việc, NHƯNG SLA sẽ ghi "quá 5 ngày
+       chưa có ai duyệt ở CẤP QUẢN LÝ" trong khi không có quản lý nào — hồ sơ
+       nói sai. Gửi mới thì đúng, gửi lại thì sai: cùng một luật phải cho ra
+       cùng một kết quả. */
+    const ql1GuiLai = await nguoiDuyetCap1(env, g.nguoi_gui_id);
     // Gửi lại lần thứ 3 trở đi thì lên thẳng Sếp — cắt giằng co giữa nhân
     // viên và quản lý, không để việc chết chìm ở cổng 1.
-    if (lanMoi >= GOPY_GUI_LAI_LEN_SEP) { gan.push("next_owner = 'OWNER'", "current_owner = 'NGUOI_GUI'"); }
-    ghiChuLichSu = ghiChu || `Người gửi đã sửa và gửi lại (lần ${lanMoi})`;
+    if (lanMoi >= GOPY_GUI_LAI_LEN_SEP) {
+      gan.push("next_owner = 'OWNER'", "current_owner = 'NGUOI_GUI'");
+    } else if (!ql1GuiLai.id) {
+      gan.push("next_owner = 'OWNER'", "current_owner = 'NGUOI_GUI'");
+      ghiChuBoQua = `Bỏ qua cổng duyệt cấp 1 vì người gửi không có ai duyệt cấp trên (${ql1GuiLai.nguon}) — chuyển thẳng lên ERP Owner.`;
+    }
+    /* CỬA 16 (REV-0030) — admin gửi lại HỘ người khác thì dòng lịch sử không
+       được ghi "Người gửi đã sửa và gửi lại". Truy ra được nhờ `nguoi_doi_id`
+       thật, nhưng chữ trong sổ vẫn phải đúng sự thật (Rule 10). */
+    ghiChuLichSu = ghiChu || (laNguoiGui
+      ? `Người gửi đã sửa và gửi lại (lần ${lanMoi})`
+      : `${phien.ho_ten || phien.ten_dang_nhap} gửi lại hộ ${g.nguoi_gui_ten || g.nguoi_gui_id} (lần ${lanMoi})`);
   }
   // ---- Ma trận chuyển trạng thái vận hành ---------------------------------
   else {
@@ -4375,9 +4617,30 @@ async function gopYDoiTrangThai(req, env) {
   gia.push(id);
   await env.DB.prepare(`UPDATE gop_y SET ${gan.join(', ')} WHERE id = ?`).bind(...gia).run();
 
+  /* CỬA THỨ 14 (REV-0030 lỗi 1) — ĐỒNG HỒ SLA chỉ được đóng dấu lại khi việc
+     THẬT SỰ chuyển sang một hàng chờ khác. `cap_nhat_luc` ở câu trên vẫn ghi
+     mỗi lần lưu (đúng nghĩa của nó: "sửa lần cuối lúc nào"), nhưng nó KHÔNG
+     còn là đồng hồ nữa. Điều kiện này chính là cả bản vá: giao người phụ
+     trách / dán bằng chứng / gỡ cờ xác minh / chặn rồi gỡ chặn đều KHÔNG đẩy
+     lùi được ngày thứ 5 nữa.
+
+     `!raVaoBiChan` đi kèm, cùng lý do với cửa thứ sáu ở khối trên: "Bị chặn"
+     nghĩa là ĐÓNG BĂNG. Nếu gỡ chặn đóng dấu lại đồng hồ thì chặn-rồi-gỡ-chặn
+     vẫn là một vòng lặp vô hạn đẩy lùi ngày thứ 5 — vá cột mà bỏ ngỏ đúng cái
+     vòng lặp thì coi như chưa vá. Đóng băng ở đây là GIỮ NGUYÊN mốc cũ (thời
+     gian bị chặn vẫn tính vào tuổi hàng chờ), không phải trừ đi — sai số nếu
+     có thì nghiêng về phía việc LÊN SẾP SỚM HƠN, không bao giờ nghiêng về
+     phía giấu việc khỏi Sếp. */
+  if (trangThaiMoi !== g.trang_thai && !raVaoBiChan) await gopYDongDauChoDuyet(env, id);
+
   if (trangThaiMoi !== g.trang_thai) {
     await gopYGhiLichSu(env, id, g.trang_thai, trangThaiMoi,
       { nguoiDoiId: phien.nhan_su_id, ghiChu: ghiChuLichSu });
+    // Ca bỏ qua cổng 1 khi gửi lại (cửa 15) — ghi thêm MỘT dòng nói rõ vì sao,
+    // đúng như lúc gửi mới. Người sau không phải đoán vì sao thiếu dấu duyệt.
+    if (ghiChuBoQua)
+      await gopYGhiLichSu(env, id, trangThaiMoi, trangThaiMoi,
+        { nguoiDoiId: phien.nhan_su_id, ghiChu: ghiChuBoQua });
 
     if (GOPY_MOC_THONG_BAO.has(trangThaiMoi)) {
       const nhan = GOPY_TRANG_THAI_NHAN[trangThaiMoi] || trangThaiMoi;
@@ -4402,7 +4665,22 @@ async function gopYDoiTrangThai(req, env) {
    KHÔNG mạo danh ai. Đây đúng là thứ bảng cũ không làm được và là lý do phải
    dựng lại gop_y_lich_su trước tiên. Gọi từ cron 5 phút đã có sẵn. */
 async function gopYNhacSla(env) {
-  const NGAY_CHO = `julianday(datetime('now', '+7 hours')) - julianday(COALESCE(g.cap_nhat_luc, g.tao_luc))`;
+  /* CỬA THỨ 14 — đồng hồ đọc từ CỘT RIÊNG `cho_duyet_tu_luc`, không đọc
+     `cap_nhat_luc` nữa (xem gopYDongDauChoDuyet). COALESCE giữ hai bậc lùi
+     cho dữ liệu cũ chưa backfill và cho ca chưa nạp migration. */
+  try {
+    return await gopYNhacSlaVoi(env,
+      `julianday(datetime('now', '+7 hours')) - julianday(COALESCE(g.cho_duyet_tu_luc, g.cap_nhat_luc, g.tao_luc))`);
+  } catch (e) {
+    if (!/no such column/i.test(String(e && e.message))) throw e;
+    console.warn('[ERP] Thiếu cột gop_y.cho_duyet_tu_luc — SLA góp ý tạm đo bằng cap_nhat_luc. ' +
+                 'Nạp migrations/them-gopy-cho-duyet-tu-luc.sql.');
+    return await gopYNhacSlaVoi(env,
+      `julianday(datetime('now', '+7 hours')) - julianday(COALESCE(g.cap_nhat_luc, g.tao_luc))`);
+  }
+}
+
+async function gopYNhacSlaVoi(env, NGAY_CHO) {
   const CHUA_NHAC = `(g.nhac_duyet_luc IS NULL OR julianday(datetime('now', '+7 hours')) - julianday(g.nhac_duyet_luc) >= 1)`;
 
   // 1) Quá 5 ngày ở cổng 1 → tự đẩy lên Sếp.
@@ -4996,6 +5274,15 @@ export default {
       // SLA cổng duyệt góp ý (SPEC-0002) — thêm 1 hàm vào chuỗi cron đã có,
       // KHÔNG tạo cron mới. Lỗi ở đây không được chặn các việc nền khác.
       try { await gopYNhacSla(env); } catch (e) { console.error('Cron SLA góp ý:', e.message); }
+
+      // KHÔNG CÒN AI DUYỆT ĐƯỢC GÓP Ý — tự phát hiện, tối đa 1 tin/ngày.
+      // Ca thật đã lường (REV-0030): khôi phục một bản sao lưu CSV chụp TRƯỚC
+      // migration → cột `duyet_gopy` không có trong file → mọi dòng về mặc
+      // định 0 → không ai duyệt được, VÀ không ai bật lại được từ trong ERP
+      // (cấp cờ chỉ người đang giữ cờ làm được). Hàng chờ đứng im, 200 hết,
+      // không một dòng cảnh báo. Ba câu SQL rẻ, chạy 5 phút/lần.
+      try { await canhBaoKhongConNguoiDuyetGopY(env); }
+      catch (e) { console.error('Cron kiểm người duyệt góp ý:', e.message); }
 
       // --- 1 GIỜ/LẦN (nặng: đồng bộ HÀNG NGÀN đơn hàng doanh thu + dọn dữ liệu) ---
       // Doanh thu không cần tươi từng 5 phút; chạy quá thường xuyên làm hệ thống

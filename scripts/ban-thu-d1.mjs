@@ -194,11 +194,20 @@ export function dungDB() {
 /* ---- ③ Chặn mạng: Telegram không được ra Internet trong bàn thử ---------- */
 
 export const TELEGRAM = [];
+/* TELEGRAM_CT — cùng những tin ấy nhưng GIỮ CẢ `chat_id`. Từ REV-0030, một bí
+   mật (mật khẩu tạm của ERP Owner) đi Telegram tới CHAT RIÊNG của Sếp, còn
+   tin "[Bảo mật] ai vừa khôi phục cho ai" đi CHAT NHÓM chung. Bàn đo phải
+   phân biệt được hai cái đó, không thì phép đo "không rò ra nhóm chung" là
+   phép đo giả. `TELEGRAM` (chỉ text) giữ nguyên cho mọi bàn đo cũ. */
+export const TELEGRAM_CT = [];
 const fetchThat = globalThis.fetch;
 globalThis.fetch = async (url, init) => {
   const u = String(url);
   if (u.includes('api.telegram.org')) {
-    try { TELEGRAM.push(JSON.parse(init?.body || '{}').text || ''); } catch { TELEGRAM.push(''); }
+    let than = {};
+    try { than = JSON.parse(init?.body || '{}'); } catch { than = {}; }
+    TELEGRAM.push(than.text || '');
+    TELEGRAM_CT.push({ chatId: String(than.chat_id ?? ''), text: than.text || '' });
     return new Response('{"ok":true}', { status: 200 });
   }
   return fetchThat(url, init);

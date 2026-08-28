@@ -522,7 +522,7 @@ mọi người xem được dòng đó, rồi nhờ một biến trong `app.js` 
 → Máy chủ **ngừng gửi** (xoá hẳn khoá khỏi JSON, không đặt `null`) và **ngừng nhận** (403 ở
 handler). Giao diện chỉ đi theo cho đỡ vô nghĩa, không bao giờ là chỗ chặn.
 
-**BH-45 · Một cái cờ quyền, NĂM cửa tắt được nó. Bịt đúng cửa người ta chỉ cho là bịt hụt.**
+**BH-47 · Một cái cờ quyền, NĂM cửa tắt được nó. Bịt đúng cửa người ta chỉ cho là bịt hụt.**
 REV-0027 chỉ ra 3 cửa vòng qua cổng duyệt góp ý; đi tìm tiếp thì ra **6**. Guard "không tắt
 cái cờ cuối cùng" nằm chặt ở `quyen-duyet-gopy`, nhưng cờ sống trên một **dòng
 `tai_khoan`** — mà dòng đó thì `khoa-tai-khoan` khoá được, `xoa-tai-khoan` xoá được,
@@ -533,10 +533,13 @@ lên Sếp tụt về cổng 1 mà **không ai cố ý**.
 → Hỏi "**cái quyền này SỐNG Ở ĐÂU, và có bao nhiêu đường chạm được vào chỗ đó?**" rồi liệt
 kê **hết** đường, gọi từng đường bằng tư cách kẻ bị tước quyền. Và bàn đo phải có ca cho
 từng đường: bản cũ chạy **45 ĐẠT / 0 TRƯỢT** mà không bắt được một lỗi nào trong sáu —
-bàn đo xanh mà lỗi vẫn còn thì **bàn đo là thứ đầu tiên phải sửa** (bản mới: 89 phép, 10 ca
-đối chứng, cây cũ chấm lại **64 ĐẠT / 25 TRƯỢT**).
+bàn đo xanh mà lỗi vẫn còn thì **bàn đo là thứ đầu tiên phải sửa** (bản mới: **90 phép**, 10
+ca đối chứng, cây cũ chấm lại **65 ĐẠT / 25 TRƯỢT**).
+→ *Đính chính (REV-0030):* bản đầu của bài học này ghi "89 phép" và "64/25" — **lệch số đo
+thật**. Số trong lời khai phải đúng bằng số chạy ra, kể cả khi lệch 1 và "chỉ là chữ": người
+sau đọc lời khai để quyết định có tin bàn đo hay không.
 
-**BH-46 · Thứ tự triển khai dựa vào trí nhớ con người là thứ sẽ sai một ngày nào đó.**
+**BH-48 · Thứ tự triển khai dựa vào trí nhớ con người là thứ sẽ sai một ngày nào đó.**
 `docPhien()` đọc `t.duyet_gopy` không phòng thủ: quên nạp migration trước khi deploy code
 là **500 toàn hệ thống** — nhân viên kho chẳng dính gì tới góp ý cũng mất đăng nhập (đo:
 `/toi-la-ai`, `/danh-ba`, `/thong-bao`, `/kho/san-pham` — 4/4 đường 500). "DB trước, code
@@ -546,3 +549,42 @@ cột thì cờ về `false` — **hỏng theo chiều an toàn**, hệ thống 
 Cùng nguyên tắc cho migration: backfill bắt hụt phải **gãy to** (`CHECK constraint failed:
 backfill_duyet_gopy_phai_bat_dung_1_nguoi`), không được báo thành công rồi để cả hàng chờ
 đứng mà không ai biết.
+
+**BH-49 · Vá xong một cột thì đi hỏi tiếp: CÒN CỘT NÀO NỮA ĐANG GÁNH VIỆC NÀY? — và mọi
+nhánh "nuốt lỗi cho êm" đều phải có một đường kêu.**
+REV-0027 bịt cửa "lưu tại chỗ ghi đè `next_owner`" và tuyên bố hàng chờ của Sếp đã an toàn.
+REV-0030 tìm ra **cùng một lỗi ở cột bên cạnh**: SLA đo tuổi hàng chờ bằng `cap_nhat_luc`,
+mà **mọi** câu UPDATE — kể cả nhánh lưu tại chỗ vừa vá — đều ghi `cap_nhat_luc = now`. Đo
+được: việc chờ cổng 1 từ 23/08, admin bấm "giao người phụ trách" → `200` → cron **không**
+đẩy lên Sếp nữa; chặn-rồi-gỡ-chặn cho kết quả y hệt. **Lặp vô hạn, không một dòng cảnh báo,
+nổ cả khi không ai cố ý** — và nó phá đúng một trong ba chỗ đỡ mà ADR-0015 đã hứa với Sếp
+cho rủi ro "một người duyệt".
+→ Gốc bệnh là **một cột gánh hai nghĩa**: "sửa lần cuối lúc nào" và "vào hàng chờ từ lúc
+nào" không phải một thứ. Tách hẳn thành `cho_duyet_tu_luc`, chỉ đóng dấu khi việc THẬT SỰ
+sang hàng chờ mới. Sau khi vá một cơ chế, đếm lại **tất cả** các cột mà cơ chế ấy đọc và
+hỏi từng cột "ai ghi được vào mày?" — vá `next_owner` mà quên đồng hồ thì lời hứa với Sếp
+vẫn là lời hứa giả.
+
+→ **Cùng vòng, cùng họ — hỏng theo chiều an toàn mà IM LẶNG thì mới hỏng được một nửa.**
+`docPhien()` nuốt lỗi thiếu cột rất gọn (BH-48) — nhưng đo tiếp thì: `thong_bao` **+0**,
+Telegram **+0**, `console` **0 dòng**. Cả công ty chạy tiếp ở mức không-quyền, cả hàng góp ý
+đứng, **và không ai biết vì sao**. Cùng loại: khôi phục một bản sao lưu chụp **trước**
+migration làm cờ `duyet_gopy` về 0 toàn bộ — ERP không tự bật lại được, cũng không kêu một
+tiếng nào.
+→ Mỗi nhánh "nuốt lỗi cho êm" phải kèm **một đường kêu**: `console.warn` (Workers Logs đang
+bật `[observability]`) **+** một tin Telegram, chống lặp bằng đúng khuôn
+`INSERT OR IGNORE INTO sao_luu_canh_bao (khoa)` đã có sẵn — 1 tin/ngày, không phải mỗi
+request một tin. Và thêm chốt **tự phát hiện** cho trạng thái chết người ("không còn ai
+duyệt được") ngay trong cron 5 phút đã có: ba câu SQL, chi phí 0.
+
+→ **Và "đường cứu" chưa ai chạy thử thì chưa phải đường cứu.**
+ADR-0015 kê một lệnh `wrangler` làm đường cứu khi Sếp mất máy. Đọc kỹ và thử thì lệnh ấy
+**cứu được cái cờ, không cứu được lối vào**: `mat_khau_hash` là PBKDF2, không gõ tay ra
+được. Và `scripts/tao-tai-khoan.mjs` **không dùng thay được** — nó ghi `seed.sql` **xoá sạch
+dữ liệu cũ**, chạy trên bản thật là mất công ty. Tức là suốt thời gian đó, **quên mật khẩu +
+hỏng đường khôi phục = không còn cách nào vào**, mà không ai biết.
+→ Viết đường cứu thì phải **chạy thử đường cứu**, và bàn đo phải chứng minh nó **không phá
+gì**: chụp cả CSDL trước/sau, so từng bảng, kèm ca đối chứng cho chính phép so đó (cố tình
+xoá một bảng — phép đo có bắt được không?). Cùng tinh thần với đường khôi phục đăng nhập
+mới: **gửi bí mật đi trước, ghi CSDL sau** — gửi hỏng thì không đụng gì, chứ đổi mật khẩu
+rồi mới phát hiện không gửi được là khoá chết tài khoản bằng chính đường cứu.

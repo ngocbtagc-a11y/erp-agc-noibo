@@ -81,6 +81,49 @@ Dùng khi Cách 1 chưa thiết lập, hoặc cần deploy gấp từ máy đã 
 
 ---
 
+## Sếp Ngọc không đăng nhập được — làm gì?
+
+Đây là **đường cứu**, không phải việc hằng ngày. Ba nấc, đi từ trên xuống.
+Chi tiết và lý do: `docs/decisions/ADR-0015-chi-sep-ngoc-duyet-gop-y.md`.
+
+**Nấc 1 — nhờ anh Phong khôi phục hộ (đường thường dùng).**
+Anh Phong vào tab **Quản trị** → tài khoản của Sếp → **Đặt lại mật khẩu**.
+Máy trả `200` nhưng **không hiện mật khẩu cho anh** — mật khẩu tạm được gửi
+thẳng vào **chat Telegram riêng giữa Sếp và bot ERP**. Cả nhóm Telegram chung
+sẽ thấy một dòng `[Bảo mật] ... vừa khôi phục tài khoản ...` (không kèm mật
+khẩu), nên không ai làm lén được.
+
+> Cài đặt **một lần** để nấc này chạy được: Sếp nhắn `/start` cho bot ERP, lấy
+> chat id, rồi chạy `npx wrangler secret put TELEGRAM_CHAT_ID_SEP`.
+> Chưa cài thì nút này trả **403** — cố ý: không có đường giao an toàn thì
+> không mở cửa.
+
+**Nấc 2 — mất luôn Telegram: đặt lại mật khẩu ở tầng dữ liệu.**
+
+```
+node scripts/dat-lai-mat-khau.mjs <số điện thoại của Sếp> --remote
+```
+
+Script in rõ đang đổi cho ai rồi **bắt gõ lại số điện thoại** mới ghi. Nó chỉ
+đổi **đúng một tài khoản**, **không xoá gì**, **không đụng bảng nào khác**.
+
+> ⚠️ **TUYỆT ĐỐI KHÔNG** dùng `scripts/tao-tai-khoan.mjs` thay cho việc này.
+> File đó ghi `seed.sql` **xoá sạch dữ liệu cũ** — chạy trên bản thật là **mất
+> công ty**. Nó chỉ dành cho lần dựng đầu tiên trên DB trắng.
+
+**Nấc 3 — vào được rồi mà không ai duyệt được góp ý** (hay gặp sau khi khôi
+phục một bản sao lưu chụp **trước** khi nạp `them-quyen-duyet-gopy.sql`):
+
+```
+npx wrangler d1 execute crm-agc --remote \
+  --command "UPDATE tai_khoan SET duyet_gopy = 1, kich_hoat = 1 WHERE ten_dang_nhap = '<số của Sếp>'"
+```
+
+ERP tự phát hiện ca này và bắn Telegram trong vòng 5 phút, nên thường Sếp sẽ
+được báo trước khi kịp thắc mắc.
+
+---
+
 ## Ai nên có quyền deploy?
 
 Quyền đẩy code lên `main` = quyền đưa thay đổi lên bản thật cho cả công ty dùng.

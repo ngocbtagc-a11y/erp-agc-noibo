@@ -40,3 +40,8 @@ erp-agc-noibo/
 .thu-sao-luu/
 .thu-khoi-phuc/
 .thu-gop-thang/
+
+# Thư mục tạm của bàn đo: bản src bị làm hỏng cố ý (ca đối chứng BH-16) và
+# bản src cũ dựng ra để lấy số ĐO TRƯỚC. Bàn đo tự tạo, tự xoá.
+.dc-*/
+.src-cu/

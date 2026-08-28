@@ -24,10 +24,21 @@
      DC-H  đọc phiên không phòng thủ         → REV-0027 L4
      DC-I  vẫn bắt người gửi tự duyệt        → Việc 7
      DC-K  bỏ qua cổng cho CẢ nhân viên      → Việc 7, chiều cắt quá tay
+     DC-L  đồng hồ SLA đọc cap_nhat_luc      → REV-0030 lỗi 1 (cửa 14)
+     DC-M  gửi lại bỏ quên Việc 7            → REV-0030 cửa 15
+     DC-N  gửi lại hộ mà sổ ghi sai người    → REV-0030 cửa 16
+     DC-O  trả thẳng mật khẩu tạm cho người bấm → REV-0030 lỗi 2, đường rò (a)
+     DC-P  thiếu cột mà không báo ai         → REV-0030 lỗi 5
+     DC-Q  triage chỉ quét 'moi'             → REV-0030 lỗi 6
 
    BÀN ĐO CŨ (45 ĐẠT / 0 TRƯỢT) KHÔNG BẮT ĐƯỢC L1/L2/L3 — bàn đo xanh mà lỗi
-   vẫn còn thì bàn đo là thứ đầu tiên phải sửa (BH-45). Bản này 89 phép; chấm
-   lại cây cũ `2e5084d` bằng chính nó ra 64 ĐẠT / 25 TRƯỢT:
+   vẫn còn thì bàn đo là thứ đầu tiên phải sửa (BH-47).
+
+   SỐ TRONG LỜI KHAI PHẢI ĐÚNG BẰNG SỐ CHẠY RA (REV-0030): bản REV-0027 ghi
+   "89 phép" trong khi chạy ra 90, và khai cây `2e5084d` là 64/25 trong khi
+   chạy ra 65/25. Sửa cả hai chỗ. Bản REV-0030 này: 146 phép, 16 ca đối
+   chứng; chấm lại cây REV-0027 (`d06446a`) bằng chính nó ra 124 ĐẠT /
+   22 TRƯỢT — đúng sáu lỗi REV-0030 nêu, không thiếu không thừa:
      GOPY_SRC=<thư mục src cũ> node scripts/do-quyen-duyet-gopy.mjs
 
    Chạy:  node scripts/do-quyen-duyet-gopy.mjs
@@ -36,7 +47,9 @@
 import { readFileSync, writeFileSync, mkdirSync, rmSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { dungDB, dungEnv, taoPhienThat, goiAPI, datDongHo, cacCauSQL, ok, tongKet } from './ban-thu-d1.mjs';
+import { dungDB, dungEnv, taoPhienThat, goiAPI, goiCron, datDongHo, cacCauSQL,
+         TELEGRAM, TELEGRAM_CT, ok, tongKet } from './ban-thu-d1.mjs';
+import { kiemTraMatKhau } from '../src/auth.js';
 
 const GOC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -108,10 +121,10 @@ function moi(db) {
 
 /* ---- Một vòng đo trên MỘT bản src --------------------------------------- */
 
-async function motVong(thuMucSrc) {
+async function motVong(thuMucSrc, themEnv = {}) {
   const { db, d1 } = dungDB();
   moi(db);
-  const env = dungEnv(d1);
+  const env = dungEnv(d1, themEnv);
   // Windows: import() cần file:// URL, không nhận đường dẫn 'C:\...'.
   // ?v= để mỗi ca đối chứng nạp một bản mới, không dính bộ nhớ đệm module.
   const url = pathToFileURL(path.join(thuMucSrc, 'index.js')).href + `?v=${Math.random()}`;
@@ -144,6 +157,45 @@ async function motVong(thuMucSrc) {
       WHERE trang_thai IN ('moi', 'cho_quyet_dinh') AND next_owner = 'OWNER'`).get()?.n;
 
   return { db, env, worker, phien, ds, duyet, doiTT, lichSu, capCo, hoanTac, post, get, gui, dong, hangCho };
+}
+
+/* ---- Tiện ích cho REV-0030 ---------------------------------------------- */
+
+/* Ảnh chụp TOÀN BỘ CSDL — mọi bảng, mọi dòng. Dùng cho hai việc:
+   ① chứng minh mật khẩu tạm KHÔNG lọt vào bất kỳ bảng nào (kể cả `thong_bao`
+      và `tai_khoan` — hai bảng NẰM TRONG bản sao lưu CSV đẩy lên Drive);
+   ② chứng minh script đặt lại mật khẩu KHÔNG XOÁ GÌ. */
+function anhChupDB(db) {
+  const bang = db.prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+                 .all().map(r => r.name);
+  const o = {};
+  for (const b of bang) {
+    try { o[b] = db.prepare(`SELECT * FROM "${b}"`).all(); } catch { o[b] = null; }
+  }
+  return o;
+}
+function moiChuTrongDB(db) {
+  return JSON.stringify(anhChupDB(db));
+}
+function soSanhDB(a, b) {
+  const khac = [];
+  for (const t of new Set([...Object.keys(a), ...Object.keys(b)])) {
+    if (JSON.stringify(a[t]) !== JSON.stringify(b[t]))
+      khac.push({ bang: t, truoc: (a[t] || []).length, sau: (b[t] || []).length });
+  }
+  return khac;
+}
+
+/* Bắt MỌI dòng console mà mã sản phẩm in ra trong lúc chạy `fn`.
+   Cần cho hai phép đo ngược nhau: (b) mật khẩu tạm KHÔNG được lọt vào Workers
+   Logs, và ngược lại (lỗi 5) thiếu cột thì PHẢI có ít nhất một dòng. */
+async function batConsole(fn) {
+  const cu = { log: console.log, warn: console.warn, error: console.error };
+  const dong = [];
+  const bat = (...a) => dong.push(a.map(x => (typeof x === 'string' ? x : JSON.stringify(x))).join(' '));
+  console.log = bat; console.warn = bat; console.error = bat;
+  try { return { kq: await fn(), dong }; }
+  finally { Object.assign(console, cu); }
 }
 
 const khoaCua = (than, id) => {
@@ -658,6 +710,467 @@ console.log('\n=== MIGRATION TỰ KIỂM (REV-0027 L5) =========================
   db.close?.();
 }
 
+/* ---- MIGRATION CỘT ĐỒNG HỒ: lùi–tiến–lùi–tiến, và backfill có sót không -- */
+
+console.log('\n=== MIGRATION cho_duyet_tu_luc (thêm–lùi–thêm–lùi–thêm) ========\n');
+{
+  const { db } = dungDB();          // đã có sẵn them-gopy-cho-duyet-tu-luc.sql
+  const cot = () => db.prepare("SELECT name FROM pragma_table_info('gop_y')").all().map(r => r.name);
+  const chay = (f) => {
+    for (const c of cacCauSQL(readFileSync(path.join(GOC, 'migrations', f), 'utf8'))) db.exec(c);
+  };
+  ok('Cột cho_duyet_tu_luc có mặt sau khi nạp migrations', cot().includes('cho_duyet_tu_luc'));
+
+  let sach = true;
+  for (let vong = 1; vong <= 2; vong++) {
+    try {
+      chay('lui-gopy-cho-duyet-tu-luc.sql');
+      if (cot().includes('cho_duyet_tu_luc')) sach = false;
+      chay('them-gopy-cho-duyet-tu-luc.sql');
+      if (!cot().includes('cho_duyet_tu_luc')) sach = false;
+    } catch (e) { sach = false; console.log('   lỗi vòng ' + vong + ': ' + e.message); }
+  }
+  ok('Lùi–tiến 2 vòng: không vòng nào lỗi, cột về đúng chỗ', sach);
+  ok('Chạy file xuôi lần 2 bị chặn đúng bằng schema_migrations',
+     (() => { try { chay('them-gopy-cho-duyet-tu-luc.sql'); return false; }
+              catch (e) { return /UNIQUE|schema_migrations/i.test(e.message); } })());
+  ok('KHÔNG đụng cột nghiệp vụ cũ của gop_y',
+     ['trang_thai', 'current_owner', 'next_owner', 'risk', 'cap_nhat_luc', 'tao_luc',
+      'duyet_cap1_luc', 'duyet_owner_luc'].every(c => cot().includes(c)));
+
+  // Backfill lấy ĐÚNG đồng hồ cũ, không để việc nào nhảy vọt hay bị lùi.
+  {
+    const { db: db2 } = dungDB();
+    for (const c of cacCauSQL(readFileSync(path.join(GOC, 'migrations', 'lui-gopy-cho-duyet-tu-luc.sql'), 'utf8'))) db2.exec(c);
+    db2.exec("DELETE FROM gop_y_lich_su; DELETE FROM gop_y; DELETE FROM tai_khoan; DELETE FROM nhan_su;");
+    db2.exec("INSERT INTO nhan_su (id, ho_ten, viet_tat, chuc_vu, bo_phan) VALUES ('N1','Nguyễn Văn An','NVA','NV','Kho vận')");
+    db2.exec(`INSERT INTO gop_y (id, nguoi_gui_id, tieu_de, boi_canh, vuong_o_dau, mong_muon,
+                trang_thai, tao_luc, cap_nhat_luc)
+              VALUES (1,'N1','cũ có cap_nhat_luc','bc','vd','mm','moi','2026-08-20 08:00:00','2026-08-23 10:00:00'),
+                     (2,'N1','cũ chưa từng sửa','bc','vd','mm','moi','2026-08-21 08:00:00',NULL)`);
+    for (const c of cacCauSQL(readFileSync(path.join(GOC, 'migrations', 'them-gopy-cho-duyet-tu-luc.sql'), 'utf8'))) db2.exec(c);
+    const d = db2.prepare('SELECT id, cho_duyet_tu_luc FROM gop_y ORDER BY id').all();
+    ok('Backfill lấy đúng đồng hồ cũ (cap_nhat_luc, thiếu thì tao_luc), không sót dòng nào',
+       d.length === 2 && d[0].cho_duyet_tu_luc === '2026-08-23 10:00:00'
+                      && d[1].cho_duyet_tu_luc === '2026-08-21 08:00:00',
+       d.map(x => `#${x.id}=${x.cho_duyet_tu_luc}`).join(' · '));
+    db2.close?.();
+  }
+  db.close?.();
+}
+
+/* ==========================================================================
+   CỬA THỨ 14 (REV-0030 lỗi 1) — ĐỒNG HỒ SLA CÓ BỊ ĐẨY LÙI ĐƯỢC KHÔNG?
+   Đo bằng đúng cái Sếp quan tâm: SAU KHI CHẠY CRON, việc có lên tới Sếp không.
+   ========================================================================== */
+
+const CU5NGAY = '2026-08-23 10:00:00';    // đúng 5 ngày trước mốc đo (28/08 10:00)
+const HOM_NAY = '2026-08-28 09:00:00';
+
+async function doDongHoSla(thuMucSrc) {
+  const t = await motVong(thuMucSrc);
+  const d = {};
+
+  t.db.exec("DELETE FROM gop_y_lich_su; DELETE FROM gop_y;");
+  const g = t.db.prepare(`INSERT INTO gop_y
+    (id, nguoi_gui_id, tieu_de, boi_canh, vuong_o_dau, mong_muon, trang_thai,
+     current_owner, next_owner, de_xuat_risk, tao_luc, cap_nhat_luc, cho_duyet_tu_luc)
+    VALUES (?,?,?,'bc','vd','mm','moi','NGUOI_GUI','QL_CAP1','MEDIUM',?,?,?)`);
+  g.run(11, 'AN', 'Chờ cổng 1 từ 23/08 — bị giao người phụ trách', CU5NGAY, CU5NGAY, CU5NGAY);
+  g.run(12, 'AN', 'Chờ cổng 1 từ 23/08 — bị chặn rồi gỡ chặn',     CU5NGAY, CU5NGAY, CU5NGAY);
+  g.run(13, 'AN', 'Vừa gửi sáng nay (ca ngược — không siết oan)',  HOM_NAY, HOM_NAY, HOM_NAY);
+  g.run(14, 'AN', 'Chờ cổng 1 từ 23/08 — qua cổng 1 đàng hoàng',   CU5NGAY, CU5NGAY, CU5NGAY);
+
+  const dongHo = (id) => t.db.prepare(
+    'SELECT cap_nhat_luc, cho_duyet_tu_luc FROM gop_y WHERE id = ?').get(id);
+
+  d.truoc11 = dongHo(11);
+  // ① "Lưu tại chỗ" — anh Phong CHỈ giao người phụ trách, không đổi trạng thái.
+  d.giaoViec = (await t.doiTT('PHONG', { id: 11, nguoi_phu_trach_id: 'DUY' })).status;
+  d.sau11 = dongHo(11);
+
+  // ② Chặn rồi gỡ chặn — cùng một vòng lặp, chỉ khác nút bấm.
+  d.chan = (await t.doiTT('SEP', { id: 12, trang_thai: 'bi_chan', ghi_chu: 'chờ hỏi lại' })).status;
+  d.goChan = (await t.doiTT('PHONG', { id: 12, trang_thai: 'moi' })).status;
+  d.sau12 = dongHo(12);
+
+  // ③ ĐÓNG DẤU ĐÚNG LÚC — qua cổng 1 đàng hoàng thì đồng hồ PHẢI chạy lại.
+  d.duyetCap1 = (await t.duyet('DUY', { id: 14, quyet_dinh: 'duyet' })).status;
+  d.sau14 = dongHo(14);
+
+  // Cron thật — đây mới là câu trả lời cuối cùng: việc có lên tới Sếp không.
+  await goiCron(t.worker, t.env);
+  d.chuLai = {};
+  for (const id of [11, 12, 13]) d.chuLai[id] = t.dong(id)?.next_owner;
+
+  t.db.close?.();
+  return d;
+}
+
+console.log('\n=== CỬA THỨ 14: ĐỒNG HỒ SLA CÓ ĐẨY LÙI ĐƯỢC KHÔNG? ============\n');
+const s = await doDongHoSla(SRC);
+ok('Giao người phụ trách KHÔNG đẩy lùi đồng hồ hàng chờ',
+   s.giaoViec === 200 && s.sau11?.cho_duyet_tu_luc === CU5NGAY,
+   `HTTP ${s.giaoViec} · đồng hồ ${s.truoc11?.cho_duyet_tu_luc} → ${s.sau11?.cho_duyet_tu_luc} ` +
+   `(cap_nhat_luc thì vẫn nhảy: ${s.sau11?.cap_nhat_luc} — đúng nghĩa của cột đó)`);
+ok('Chặn rồi gỡ chặn KHÔNG đẩy lùi đồng hồ (đóng băng, không đặt lại)',
+   s.chan === 200 && s.goChan === 200 && s.sau12?.cho_duyet_tu_luc === CU5NGAY,
+   `chặn ${s.chan} · gỡ ${s.goChan} · đồng hồ ${s.sau12?.cho_duyet_tu_luc}`);
+ok('SLA VẪN đẩy được cả hai việc lên Sếp sau khi bị bấm',
+   s.chuLai[11] === 'OWNER' && s.chuLai[12] === 'OWNER',
+   `#11 chờ ${s.chuLai[11]} · #12 chờ ${s.chuLai[12]}`);
+ok('CA NGƯỢC — việc vừa gửi sáng nay KHÔNG bị đẩy lên Sếp oan',
+   s.chuLai[13] === 'QL_CAP1', `#13 chờ ${s.chuLai[13]}`);
+ok('Đóng dấu ĐÚNG LÚC: qua cổng 1 đàng hoàng thì đồng hồ chạy lại',
+   s.duyetCap1 === 200 && s.sau14?.cho_duyet_tu_luc > CU5NGAY,
+   `HTTP ${s.duyetCap1} · đồng hồ ${CU5NGAY} → ${s.sau14?.cho_duyet_tu_luc}`);
+
+/* ==========================================================================
+   CỬA 15 · 16 (REV-0030) — GỬI LẠI SAU KHI BỊ TỪ CHỐI
+   ========================================================================== */
+
+async function doGuiLai(thuMucSrc) {
+  const t = await motVong(thuMucSrc);
+  const r = {};
+  const ls = (id) => t.db.prepare(
+    'SELECT ghi_chu, tu_trang_thai, den_trang_thai, nguoi_doi_id FROM gop_y_lich_su WHERE gop_y_id = ? ORDER BY id').all(id);
+
+  // ① CỬA 15 — người KHÔNG CÓ AI Ở CẤP 1 (anh Phong) gửi lại
+  const a = (await t.gui('PHONG', 'Quản lý gửi: rút gọn phiếu nhập')).than?.id;
+  r.sepTuChoiPhong = (await t.duyet('SEP', { id: a, quyet_dinh: 'tu_choi', ly_do: 'chưa rõ mong muốn' })).status;
+  r.phongGuiLai = (await t.doiTT('PHONG', { id: a, trang_thai: 'moi' })).status;
+  r.sauPhongGuiLai = t.dong(a);
+  r.lsPhongGuiLai = ls(a);
+
+  // ② CA NGƯỢC — nhân viên CÓ quản lý cấp 1 gửi lại thì VẪN về cổng 1
+  const b = (await t.gui('AN', 'Nhân viên gửi: máy quét kêu to')).than?.id;
+  r.duyTuChoiAn = (await t.duyet('DUY', { id: b, quyet_dinh: 'tu_choi', ly_do: 'thiếu ảnh' })).status;
+  r.anGuiLai = (await t.doiTT('AN', { id: b, trang_thai: 'moi' })).status;
+  r.sauAnGuiLai = t.dong(b);
+  r.lsAnGuiLai = ls(b);
+
+  // ③ CỬA 16 — admin gửi lại HỘ người khác thì sổ phải ghi đúng ai bấm
+  const c = (await t.gui('AN', 'Nhân viên gửi: đèn kho hỏng')).than?.id;
+  await t.duyet('DUY', { id: c, quyet_dinh: 'tu_choi', ly_do: 'gửi nhầm mục' });
+  r.adminGuiLaiHo = (await t.doiTT('PHONG', { id: c, trang_thai: 'moi' })).status;
+  r.lsAdminGuiLaiHo = ls(c);
+
+  t.db.close?.();
+  return r;
+}
+
+console.log('\n=== CỬA 15 · 16: GỬI LẠI SAU KHI BỊ TỪ CHỐI ====================\n');
+const gl = await doGuiLai(SRC);
+const coBoQua = (ls) => ls.some(x => /[Bb]ỏ qua cổng duyệt cấp 1/.test(x.ghi_chu || ''));
+ok('CỬA 15 — người không có ai ở cấp 1 gửi lại: KHÔNG tụt về QL_CAP1',
+   gl.phongGuiLai === 200 && gl.sauPhongGuiLai?.next_owner === 'OWNER',
+   `HTTP ${gl.phongGuiLai} · chờ ${gl.sauPhongGuiLai?.next_owner}`);
+ok('CỬA 15 — có ghi dòng lịch sử nói rõ vì sao bỏ qua cổng 1',
+   coBoQua(gl.lsPhongGuiLai),
+   (gl.lsPhongGuiLai.map(x => x.ghi_chu).filter(Boolean).pop() || '(không có dòng nào)').slice(0, 60));
+ok('CA NGƯỢC — nhân viên CÓ quản lý gửi lại thì VẪN về cổng 1 (không cắt quá tay)',
+   gl.anGuiLai === 200 && gl.sauAnGuiLai?.next_owner === 'QL_CAP1' && !coBoQua(gl.lsAnGuiLai),
+   `HTTP ${gl.anGuiLai} · chờ ${gl.sauAnGuiLai?.next_owner} · dòng "bỏ qua": ${coBoQua(gl.lsAnGuiLai) ? 'CÓ (sai)' : 'không'}`);
+ok('CỬA 16 — admin gửi lại hộ: sổ KHÔNG ghi "Người gửi đã sửa"',
+   gl.adminGuiLaiHo === 200
+     && gl.lsAdminGuiLaiHo.some(x => /gửi lại hộ/.test(x.ghi_chu || ''))
+     && !gl.lsAdminGuiLaiHo.some(x => /Người gửi đã sửa/.test(x.ghi_chu || '')),
+   (gl.lsAdminGuiLaiHo.map(x => x.ghi_chu).filter(Boolean).pop() || '(trống)').slice(0, 60));
+
+/* ==========================================================================
+   REV-0030 LỖI 2 — ĐƯỜNG KHÔI PHỤC ĐĂNG NHẬP CHO SẾP
+   Sếp Ngọc: "cho a ấy duyệt khôi phục cho tôi đi chứ".
+   Anh Phong BẤM ĐƯỢC, nhưng mật khẩu tạm KHÔNG được đi qua tay anh —
+   và phải chứng minh nó không lọt CẢ NĂM ĐƯỜNG RÒ.
+   ========================================================================== */
+
+const CHAT_SEP = '777';          // chat 1-1 giữa Sếp và bot
+const CHAT_NHOM = '1';           // chat dùng chung (dungEnv đặt sẵn)
+
+async function doKhoiPhuc(thuMucSrc) {
+  const r = {};
+  const hashCua = (t, id) => t.db.prepare('SELECT mat_khau_hash FROM tai_khoan WHERE id = ?').get(id)?.mat_khau_hash;
+
+  // ① CÓ kênh riêng — đường chính
+  {
+    TELEGRAM.length = 0; TELEGRAM_CT.length = 0;
+    const t = await motVong(thuMucSrc, { TELEGRAM_CHAT_ID_SEP: CHAT_SEP });
+    const { kq, dong } = await batConsole(() =>
+      t.post('/api/quan-tri/dat-lai-mat-khau', 'PHONG', { tai_khoan_id: 1 }));
+    r.ma = kq.status;
+    r.than = kq.than || {};
+    r.console = dong.join('\n');
+    r.rieng = TELEGRAM_CT.filter(x => x.chatId === CHAT_SEP);
+    r.nhom  = TELEGRAM_CT.filter(x => x.chatId === CHAT_NHOM);
+    const m = (r.rieng[0]?.text || '').match(/Mật khẩu tạm:\s*(\S+)/);
+    r.mk = m ? m[1] : null;
+    r.hashSau = hashCua(t, 1);
+    r.mkDungHash = r.mk ? await kiemTraMatKhau(r.mk, r.hashSau) : false;
+    r.duLieu = moiChuTrongDB(t.db);
+    r.tinChoSep = t.db.prepare("SELECT noi_dung FROM thong_bao WHERE nguoi_nhan_id = 'SEP'").all();
+    r.nsLichSu = t.db.prepare("SELECT * FROM nhan_su_lich_su WHERE nhan_su_id = 'SEP'").all();
+    const tk = t.db.prepare('SELECT phai_doi_mk FROM tai_khoan WHERE id = 1').get();
+    r.phaiDoiMk = tk?.phai_doi_mk;
+    r.conPhien = t.db.prepare('SELECT COUNT(*) AS n FROM phien WHERE tai_khoan_id = 1').get()?.n;
+    t.db.close?.();
+  }
+
+  // ② CHƯA cấu hình kênh riêng → 403, và KHÔNG được đụng mật khẩu hiện tại
+  {
+    const t = await motVong(thuMucSrc);
+    const truoc = hashCua(t, 1);
+    const kq = await t.post('/api/quan-tri/dat-lai-mat-khau', 'PHONG', { tai_khoan_id: 1 });
+    r.khongCoSecret = kq.status;
+    r.hashDoiKhiKhongSecret = hashCua(t, 1) !== truoc;
+    t.db.close?.();
+  }
+
+  // ③ Có secret nhưng KHÔNG GỬI ĐƯỢC (mất token bot) → 502, mật khẩu cũ nguyên vẹn
+  {
+    const t = await motVong(thuMucSrc, { TELEGRAM_CHAT_ID_SEP: CHAT_SEP, TELEGRAM_BOT_TOKEN: '' });
+    const truoc = hashCua(t, 1);
+    const kq = await t.post('/api/quan-tri/dat-lai-mat-khau', 'PHONG', { tai_khoan_id: 1 });
+    r.guiHong = kq.status;
+    r.hashDoiKhiGuiHong = hashCua(t, 1) !== truoc;
+    t.db.close?.();
+  }
+
+  // ④ CA NGƯỢC — người thường vẫn 200 + mật khẩu tạm trả thẳng như cũ
+  {
+    const t = await motVong(thuMucSrc, { TELEGRAM_CHAT_ID_SEP: CHAT_SEP });
+    const kq = await t.post('/api/quan-tri/dat-lai-mat-khau', 'PHONG', { tai_khoan_id: 4 });
+    r.maAn = kq.status; r.mkAn = kq.than?.mat_khau_tam || null;
+    // ⑤ và chính chủ tự đặt lại mật khẩu của mình cũng không bị siết
+    const tuMinh = await t.post('/api/quan-tri/dat-lai-mat-khau', 'SEP', { tai_khoan_id: 1 });
+    r.maTuMinh = tuMinh.status; r.mkTuMinh = tuMinh.than?.mat_khau_tam || null;
+    t.db.close?.();
+  }
+  return r;
+}
+
+console.log('\n=== LỖI 2: KHÔI PHỤC ĐĂNG NHẬP HỘ SẾP =========================\n');
+const kp = await doKhoiPhuc(SRC);
+ok('Anh Phong BẤM ĐƯỢC khôi phục cho Sếp → 200 (không còn 403)',
+   kp.ma === 200 && kp.than.da_gui_kenh_rieng === true, `HTTP ${kp.ma} · ${JSON.stringify(kp.than)}`);
+ok('Mật khẩu tạm ĐÃ tới chat RIÊNG của Sếp và mở được tài khoản',
+   kp.rieng.length === 1 && !!kp.mk && kp.mkDungHash,
+   `${kp.rieng.length} tin riêng · mật khẩu ${kp.mk ? 'có' : 'KHÔNG CÓ'} · khớp hash: ${kp.mkDungHash}`);
+console.log('  · năm đường rò —');
+ok('  (a) JSON trả về KHÔNG có trường mat_khau_tam (bỏ khoá, không phải để rỗng)',
+   !('mat_khau_tam' in kp.than) && !JSON.stringify(kp.than).includes(kp.mk || '\u0000'),
+   Object.keys(kp.than).join(','));
+ok('  (b) KHÔNG một dòng console/Workers Logs nào chứa mật khẩu tạm',
+   !!kp.mk && !kp.console.includes(kp.mk), `${kp.console.split('\n').filter(Boolean).length} dòng log`);
+ok('  (c) KHÔNG lọt vào bảng nào của CSDL (gồm thong_bao + tai_khoan — hai bảng nằm trong bản sao lưu CSV)',
+   !!kp.mk && !kp.duLieu.includes(kp.mk));
+ok('  (d) KHÔNG lọt vào Telegram NHÓM CHUNG',
+   kp.nhom.length >= 1 && !kp.nhom.some(x => x.text.includes(kp.mk || '\u0000')),
+   `${kp.nhom.length} tin nhóm · ${(kp.nhom[0]?.text || '').slice(0, 50)}`);
+ok('  (e) tai_khoan chỉ giữ hash — mật khẩu cũ cũng không đọc ra được',
+   /^pbkdf2\$/.test(String(kp.hashSau)) && !String(kp.hashSau).includes(kp.mk || '\u0000'));
+ok('Sếp ĐƯỢC BÁO: một tin trong ERP nói rõ ai bấm, lúc nào (không kèm mật khẩu)',
+   kp.tinChoSep.some(x => /Bảo mật/.test(x.noi_dung) && /Nguyễn Duy Phong/.test(x.noi_dung))
+     && !kp.tinChoSep.some(x => x.noi_dung.includes(kp.mk || '\u0000')),
+   (kp.tinChoSep.map(x => x.noi_dung).find(x => /Bảo mật/.test(x)) || '(không có)').slice(0, 60));
+ok('Có MỘT dòng nhan_su_lich_su, không phải chỉ một dòng log',
+   kp.nsLichSu.length === 1 && kp.nsLichSu[0].loai_su_kien === 'khoi_phuc_dang_nhap'
+     && kp.nsLichSu[0].nguoi_thuc_hien_id === 'PHONG',
+   `${kp.nsLichSu.length} dòng · ${kp.nsLichSu[0]?.loai_su_kien} bởi ${kp.nsLichSu[0]?.nguoi_thuc_hien_id}`);
+ok('Cả công ty thấy: Telegram nhóm có dòng "[Bảo mật] ai vừa khôi phục cho ai"',
+   kp.nhom.some(x => /Bảo mật/.test(x.text) && /Nguyễn Duy Phong/.test(x.text)));
+ok('phai_doi_mk = 1 và mọi phiên cũ của Sếp bị đá ra',
+   kp.phaiDoiMk === 1 && kp.conPhien === 0, `phai_doi_mk=${kp.phaiDoiMk} · còn ${kp.conPhien} phiên`);
+ok('Chưa cấu hình TELEGRAM_CHAT_ID_SEP → 403 và KHÔNG đụng mật khẩu hiện tại',
+   kp.khongCoSecret === 403 && !kp.hashDoiKhiKhongSecret,
+   `HTTP ${kp.khongCoSecret} · mật khẩu ${kp.hashDoiKhiKhongSecret ? 'ĐÃ BỊ ĐỔI (sai)' : 'nguyên vẹn'}`);
+ok('Gửi Telegram hỏng → 502 và mật khẩu cũ NGUYÊN VẸN (không khoá chết tài khoản Sếp)',
+   kp.guiHong === 502 && !kp.hashDoiKhiGuiHong,
+   `HTTP ${kp.guiHong} · mật khẩu ${kp.hashDoiKhiGuiHong ? 'ĐÃ BỊ ĐỔI (sai)' : 'nguyên vẹn'}`);
+ok('CA NGƯỢC — khôi phục cho người thường vẫn 200 + mật khẩu tạm trả thẳng',
+   kp.maAn === 200 && !!kp.mkAn, `HTTP ${kp.maAn} · mật khẩu tạm ${kp.mkAn ? 'có' : 'KHÔNG (siết oan)'}`);
+ok('CA NGƯỢC — chính chủ tự đặt lại mật khẩu của mình cũng không bị siết',
+   kp.maTuMinh === 200 && !!kp.mkTuMinh, `HTTP ${kp.maTuMinh} · mật khẩu tạm ${kp.mkTuMinh ? 'có' : 'KHÔNG'}`);
+
+/* ==========================================================================
+   REV-0030 LỖI 3 — SCRIPT ĐẶT LẠI MẬT KHẨU Ở TẦNG DỮ LIỆU
+   Phải chứng minh nó KHÔNG XOÁ GÌ. Không nhận lời hứa: chụp cả CSDL trước và
+   sau, so từng bảng.
+   ========================================================================== */
+
+console.log('\n=== LỖI 3: SCRIPT ĐẶT LẠI MẬT KHẨU TẦNG DỮ LIỆU ================\n');
+{
+  const duong = path.join(GOC, 'scripts', 'dat-lai-mat-khau.mjs');
+  const mod = await import(pathToFileURL(duong).href);
+  // Bỏ chú thích trước khi soi — chú thích có nhắc tới `DELETE FROM` của
+  // tao-tai-khoan.mjs, soi cả chú thích là bắt nhầm chính lời cảnh báo.
+  const nguon = readFileSync(duong, 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ \t]*\/\/.*$/gm, '');
+  // Soi SQL, không soi tiếng Anh: `.replace()` của JavaScript là hàm chuỗi,
+  // không phải `REPLACE INTO` của SQL — bắt cả nó là phép đo nói dối.
+  ok('Trong mã KHÔNG có DELETE FROM / DROP / TRUNCATE / REPLACE INTO nào',
+     !/\b(DELETE\s+FROM|DROP\s+(TABLE|INDEX|COLUMN)|TRUNCATE|REPLACE\s+INTO)\b/i.test(nguon));
+  ok('KHÔNG ghi seed.sql, KHÔNG ghi file nào cả',
+     !/seed\.sql|writeFileSync|appendFileSync/i.test(nguon));
+  ok('Câu GHI duy nhất đúng khuôn "UPDATE tai_khoan SET ... WHERE ten_dang_nhap"',
+     /^UPDATE tai_khoan SET mat_khau_hash = '[^']+', phai_doi_mk = 1 WHERE ten_dang_nhap = '[^']+'$/
+       .test(mod.cauDatLai('0911994696', 'pbkdf2$100000$AAAA$BBBB')));
+  ok('Câu TRA CỨU chỉ đọc (SELECT), không ghi gì',
+     /^SELECT /.test(mod.cauTraCuu('0911994696')));
+  ok('Từ chối tên đăng nhập lạ (chốt chặn chèn SQL)',
+     !mod.tenDangNhapHopLe("0911994696' OR '1'='1")
+       && !mod.tenDangNhapHopLe('') && mod.tenDangNhapHopLe('0911994696'));
+
+  const { db } = dungDB();
+  moi(db);
+  db.exec('UPDATE tai_khoan SET ten_dang_nhap = lower(ten_dang_nhap)');
+  const truoc = anhChupDB(db);
+  const soBang = Object.keys(truoc).length;
+  const mk = mod.sinhMatKhauTam(12);
+  const hash = await mod.bamMatKhau(mk);
+  db.exec(mod.cauDatLai('tksep', hash));
+  const sau = anhChupDB(db);
+  const khac = soSanhDB(truoc, sau);
+
+  ok(`ĐÚNG MỘT bảng đổi trong ${soBang} bảng, và là tai_khoan`,
+     khac.length === 1 && khac[0].bang === 'tai_khoan',
+     khac.map(x => `${x.bang} (${x.truoc}→${x.sau})`).join(', ') || 'không bảng nào đổi');
+  ok('KHÔNG mất một dòng nào ở bất kỳ bảng nào',
+     Object.keys(truoc).every(b => (truoc[b] || []).length === (sau[b] || []).length));
+  const doiDong = sau.tai_khoan.filter((x, i) => JSON.stringify(x) !== JSON.stringify(truoc.tai_khoan[i]));
+  ok('Trong tai_khoan chỉ ĐÚNG MỘT dòng đổi, đúng tài khoản được chỉ định',
+     doiDong.length === 1 && doiDong[0].ten_dang_nhap === 'tksep',
+     `${doiDong.length} dòng · ${doiDong.map(x => x.ten_dang_nhap).join(',')}`);
+  {
+    const i = sau.tai_khoan.findIndex(x => x.ten_dang_nhap === 'tksep');
+    const cotDoi = Object.keys(sau.tai_khoan[i])
+      .filter(c => sau.tai_khoan[i][c] !== truoc.tai_khoan[i][c]);
+    ok('Chỉ ĐÚNG HAI cột đổi: mat_khau_hash + phai_doi_mk',
+       cotDoi.length === 2 && cotDoi.includes('mat_khau_hash') && cotDoi.includes('phai_doi_mk'),
+       cotDoi.join(','));
+    ok('Cờ duyet_gopy của Sếp KHÔNG bị đụng tới',
+       sau.tai_khoan[i].duyet_gopy === truoc.tai_khoan[i].duyet_gopy,
+       `duyet_gopy = ${sau.tai_khoan[i].duyet_gopy}`);
+    ok('Hash sinh ra ĐĂNG NHẬP ĐƯỢC bằng đúng kiemTraMatKhau() của src/auth.js',
+       await kiemTraMatKhau(mk, sau.tai_khoan[i].mat_khau_hash));
+  }
+  /* CA ĐỐI CHỨNG CHO CHÍNH PHÉP ĐO NÀY (BH-16): nếu script LÀM ĐÚNG cái mà
+     tao-tai-khoan.mjs làm (xoá sạch rồi dựng lại), phép đo trên có bắt được
+     không? Không bắt được thì "không xoá gì" chỉ là chữ. */
+  {
+    const { db: db2 } = dungDB();
+    moi(db2);
+    const t1 = anhChupDB(db2);
+    db2.exec('DELETE FROM nhan_su');                 // đúng kiểu seed.sql
+    const khac2 = soSanhDB(t1, anhChupDB(db2));
+    ok('ĐỐI CHỨNG — phép đo BẮT ĐƯỢC nếu script xoá dữ liệu như seed.sql',
+       khac2.some(x => x.bang === 'nhan_su' && x.sau < x.truoc),
+       khac2.map(x => `${x.bang} (${x.truoc}→${x.sau})`).join(', '));
+    db2.close?.();
+  }
+  db.close?.();
+}
+
+/* ==========================================================================
+   REV-0030 LỖI 5 — L4 HỎNG AN TOÀN NHƯNG IM LẶNG VĨNH VIỄN
+   ========================================================================== */
+
+async function doImLang(thuMucSrc) {
+  const { db, d1 } = dungDB();
+  moi(db);
+  const env = dungEnv(d1);
+  const url = pathToFileURL(path.join(thuMucSrc, 'index.js')).href + `?v=${Math.random()}`;
+  const worker = (await import(url)).default;
+  const tokenAn = await taoPhienThat(env, 4);
+
+  db.exec('DROP INDEX IF EXISTS idx_taikhoan_duyetgopy');
+  db.exec('ALTER TABLE tai_khoan DROP COLUMN duyet_gopy');
+
+  TELEGRAM.length = 0; TELEGRAM_CT.length = 0;
+  const { dong } = await batConsole(async () => {
+    for (const d of DUONG_SONG_CON) await goiAPI(worker, env, d, tokenAn);
+  });
+  const r = { dongLog: dong.filter(x => /duyet_gopy/i.test(x)).length, tin: TELEGRAM.length };
+  // Lượt thứ hai trong CÙNG MỘT NGÀY — không được bắn thêm tin nào nữa.
+  await batConsole(async () => {
+    for (const d of DUONG_SONG_CON) await goiAPI(worker, env, d, tokenAn);
+  });
+  r.tinSauLuot2 = TELEGRAM.length;
+  db.close?.();
+  return r;
+}
+
+console.log('\n=== LỖI 5: THIẾU CỘT THÌ CÓ AI ĐƯỢC BÁO KHÔNG? =================\n');
+const im = await doImLang(SRC);
+ok('Có ít nhất một dòng console nói rõ thiếu cột duyet_gopy',
+   im.dongLog >= 1, im.dongLog + ' dòng');
+ok('Có ĐÚNG MỘT tin Telegram cảnh báo', im.tin === 1, im.tin + ' tin');
+ok('Chạy lại trong cùng ngày KHÔNG bắn thêm tin (chống lặp bằng sao_luu_canh_bao)',
+   im.tinSauLuot2 === 1, im.tinSauLuot2 + ' tin sau 2 lượt');
+
+/* ==========================================================================
+   REV-0030 LỖI 6 — GÓP Ý CỦA SẾP CÓ ĐƯỢC HỒ LY CHẤM KHÔNG?
+   + LỖ DỮ LIỆU: khôi phục bản sao lưu chụp TRƯỚC migration → cờ về 0 toàn bộ
+   ========================================================================== */
+
+const AI_GIA = { run: async () => ({
+  response: '{"loai":"loi","risk":"MEDIUM","ly_do_risk":"chỉ 1 màn hình","spec":"SPEC-NHAP-CUA-MAY"}' }) };
+
+async function doTriage(thuMucSrc) {
+  const t = await motVong(thuMucSrc, { AI: AI_GIA });
+  t.db.exec("DELETE FROM gop_y_lich_su; DELETE FROM gop_y;");
+  const idSep = (await t.gui('SEP', 'Sếp tự góp ý: gộp báo cáo tồn kho')).than?.id;
+  const idAn  = (await t.gui('AN',  'Nhân viên góp ý: máy quét kêu to')).than?.id;
+  await goiCron(t.worker, t.env);
+  const doc = (id) => t.db.prepare(
+    'SELECT trang_thai, de_xuat_risk, de_xuat_spec, tu_dong_xu_luc FROM gop_y WHERE id = ?').get(id);
+  const r = { sep: doc(idSep), an: doc(idAn) };
+  // Chạy cron lần hai — đã chấm rồi thì KHÔNG chấm lại (tu_dong_xu_luc IS NULL).
+  const truoc = r.sep?.tu_dong_xu_luc;
+  await goiCron(t.worker, t.env);
+  r.chamLai = doc(idSep)?.tu_dong_xu_luc !== truoc;
+  t.db.close?.();
+  return r;
+}
+
+async function doMatHetCo(thuMucSrc) {
+  const t = await motVong(thuMucSrc);
+  TELEGRAM.length = 0;
+  // Đúng ca: khôi phục một bản sao lưu CSV chụp TRƯỚC migration → cột có
+  // nhưng mọi dòng về mặc định 0.
+  t.db.exec('UPDATE tai_khoan SET duyet_gopy = 0');
+  await goiCron(t.worker, t.env);
+  const dem = () => TELEGRAM.filter(x => /KHÔNG CÒN AI DUYỆT/i.test(x)).length;
+  const r = { tin: dem() };
+  await goiCron(t.worker, t.env);
+  r.tinSauLuot2 = dem();
+  // CA NGƯỢC — bật lại cờ cho đúng 1 người thì KHÔNG được báo oan
+  const t2 = await motVong(thuMucSrc);
+  TELEGRAM.length = 0;
+  await goiCron(t2.worker, t2.env);
+  r.tinKhiVanConNguoiDuyet = TELEGRAM.filter(x => /KHÔNG CÒN AI DUYỆT/i.test(x)).length;
+  t.db.close?.(); t2.db.close?.();
+  return r;
+}
+
+console.log('\n=== LỖI 6: HỒ LY CÓ CHẤM GÓP Ý CỦA SẾP KHÔNG? ==================\n');
+const tr = await doTriage(SRC);
+ok('Góp ý của Sếp vào thẳng cho_phan_tich VẪN được Hồ Ly chấm',
+   tr.sep?.trang_thai === 'cho_phan_tich' && tr.sep?.de_xuat_risk === 'MEDIUM'
+     && !!tr.sep?.de_xuat_spec && !!tr.sep?.tu_dong_xu_luc,
+   `${tr.sep?.trang_thai} · risk ${tr.sep?.de_xuat_risk} · spec ${tr.sep?.de_xuat_spec ? 'có' : 'KHÔNG'}`);
+ok('CA NGƯỢC — góp ý "moi" của nhân viên vẫn được chấm như cũ',
+   tr.an?.trang_thai === 'moi' && tr.an?.de_xuat_risk === 'MEDIUM',
+   `${tr.an?.trang_thai} · risk ${tr.an?.de_xuat_risk}`);
+ok('Chạy cron lần hai KHÔNG chấm lại cái đã chấm', !tr.chamLai);
+
+console.log('\n— LỖ DỮ LIỆU: sao lưu chụp TRƯỚC migration → cờ về 0 toàn bộ —');
+const mh = await doMatHetCo(SRC);
+ok('Không còn ai giữ cờ → ERP TỰ PHÁT HIỆN và báo Telegram', mh.tin === 1, mh.tin + ' tin');
+ok('Chống lặp: lượt cron sau trong cùng ngày không bắn thêm',
+   mh.tinSauLuot2 === 1, mh.tinSauLuot2 + ' tin');
+ok('CA NGƯỢC — vẫn còn người giữ cờ thì KHÔNG báo oan',
+   mh.tinKhiVanConNguoiDuyet === 0, mh.tinKhiVanConNguoiDuyet + ' tin');
+
 /* ---- BH-16: bốn ca đối chứng -------------------------------------------- */
 
 console.log('\n=== CA ĐỐI CHỨNG (BH-16) — phép đo phải BẮT ĐƯỢC lỗi ===========\n');
@@ -733,7 +1246,49 @@ const DC2 = [
                 'const [cur, nxt] = true ? GOPY_OWNER_THEO_TT.cho_phan_tich') : s,
     doViec7,
     (d) => d.anGopY?.trang_thai !== 'moi' || d.anGopY?.next_owner !== 'QL_CAP1',
-    'góp ý của nhân viên thường cũng bỏ qua cả hai cổng (cắt quá tay)']
+    'góp ý của nhân viên thường cũng bỏ qua cả hai cổng (cắt quá tay)'],
+
+  /* ---- Ca đối chứng cho SÁU lỗi REV-0030 ------------------------------- */
+
+  ['L-dong-ho-doc-cap-nhat-luc', (f, s) => f === 'index.js'
+    ? s.replace('julianday(COALESCE(g.cho_duyet_tu_luc, g.cap_nhat_luc, g.tao_luc))',
+                'julianday(COALESCE(g.cap_nhat_luc, g.tao_luc))') : s,
+    doDongHoSla,
+    (d) => d.chuLai?.[11] !== 'OWNER' || d.chuLai?.[12] !== 'OWNER',
+    'đồng hồ SLA đo bằng cap_nhat_luc → một cú "giao người phụ trách" là đẩy lùi ngày thứ 5 (cửa 14)'],
+
+  ['M-gui-lai-bo-quen-viec-7', (f, s) => f === 'index.js'
+    ? s.replace('    } else if (!ql1GuiLai.id) {', '    } else if (false) {') : s,
+    doGuiLai,
+    (d) => d.sauPhongGuiLai?.next_owner !== 'OWNER',
+    'gửi lại sau từ chối tụt về QL_CAP1 không tồn tại (cửa 15)'],
+
+  ['N-gui-lai-ho-noi-doi', (f, s) => f === 'index.js'
+    ? s.replace('`${phien.ho_ten || phien.ten_dang_nhap} gửi lại hộ ${g.nguoi_gui_ten || g.nguoi_gui_id} (lần ${lanMoi})`',
+                '`Người gửi đã sửa và gửi lại (lần ${lanMoi})`') : s,
+    doGuiLai,
+    (d) => (d.lsAdminGuiLaiHo || []).some(x => /Người gửi đã sửa/.test(x.ghi_chu || '')),
+    'admin gửi lại hộ nhưng sổ ghi "Người gửi đã sửa" (cửa 16)'],
+
+  ['O-tra-thang-mat-khau-tam', (f, s) => f === 'index.js'
+    ? s.replace("return json({ ok: true, ten_dang_nhap: tk.ten_dang_nhap, da_gui_kenh_rieng: true });",
+                'return json({ ok: true, ten_dang_nhap: tk.ten_dang_nhap, da_gui_kenh_rieng: true, mat_khau_tam: matKhauTam });') : s,
+    doKhoiPhuc,
+    (d) => !!d.mk && JSON.stringify(d.than || {}).includes(d.mk),
+    'mật khẩu tạm của Sếp rò về tay người bấm qua JSON (lỗi 2, đường rò a)'],
+
+  ['P-canh-bao-thieu-cot-im-lang', (f, s) => f === 'auth.js'
+    ? s.replace('    thieuCotDuyetGopY = true;', '    thieuCotDuyetGopY = false;') : s,
+    doImLang,
+    (d) => d.tin !== 1,
+    'thiếu cột duyet_gopy mà không ai được báo — im lặng vĩnh viễn (lỗi 5)'],
+
+  ['Q-triage-chi-quet-moi', (f, s) => f === 'index.js'
+    ? s.replace("FROM gop_y WHERE trang_thai IN ('moi', 'cho_phan_tich') AND tu_dong_xu_luc IS NULL",
+                "FROM gop_y WHERE trang_thai = 'moi' AND tu_dong_xu_luc IS NULL") : s,
+    doTriage,
+    (d) => !d.sep?.de_xuat_risk || !d.sep?.tu_dong_xu_luc,
+    'góp ý của Sếp không bao giờ được Hồ Ly chấm (lỗi 6)']
 ];
 
 let batDu = 0;
