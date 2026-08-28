@@ -2178,3 +2178,28 @@ tr.kd-chiadoi td {
     display: block; position: fixed; top: 0; left: 0; margin: 0;
   }
 }
+
+/* ---- Góp ý — thẻ duyệt (SPEC-0002) --------------------------------------
+   ERP là PWA, người duyệt chính (quản lý kho) duyệt trên điện thoại. Bảng 7
+   cột không vừa 430px nên dưới 720px bỏ bảng, dùng thẻ. Nút Duyệt/Chưa duyệt
+   cao 40px để chạm được bằng ngón cái, không phải mở modal mới duyệt được
+   việc rủi ro thấp. */
+.gy-the-ds { display: flex; flex-direction: column; gap: 8px; }
+.gy-the {
+  border: 1px solid var(--vien, #e3e3e0); border-radius: var(--r-md, 10px);
+  padding: 10px 12px; background: var(--nen-2, #fff);
+}
+.gy-the-dau { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; flex-wrap: wrap; }
+.gy-the-chon { display: flex; align-items: center; margin: 0; }
+.gy-the-chon input { width: 18px; height: 18px; }
+.gy-the-ten { cursor: pointer; margin-bottom: 4px; }
+.gy-the-nut { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.gy-the-nut > button { min-height: 40px; flex: 1 1 auto; }
+.gy-tick { font-size: 11px; opacity: .75; margin-left: 4px; white-space: nowrap; }
+.gy-risk-mo { opacity: .6; }
+
+.gy-chi-dienthoai { display: none; }
+@media (max-width: 720px) {
+  .gy-chi-may { display: none; }
+  .gy-chi-dienthoai { display: flex; }
+}

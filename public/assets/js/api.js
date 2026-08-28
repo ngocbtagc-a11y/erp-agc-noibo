@@ -66,6 +66,9 @@ export const API = {
   gopYDoiTrangThai: (id, du) => goi('/api/gop-y/trang-thai', {
     method: 'POST', body: JSON.stringify({ id, ...du })
   }),
+  // Cổng duyệt (SPEC-0002) — `du` nhận { id } hoặc { ids: [...] } để duyệt
+  // hàng loạt, kèm quyet_dinh ('duyet'|'tu_choi'), risk, ly_do, ghi_chu.
+  gopYDuyet: (du) => goi('/api/gop-y/duyet', { method: 'POST', body: JSON.stringify(du) }),
   gopYLichSu: (id) => goi('/api/gop-y/lich-su?id=' + encodeURIComponent(id)),
 
   /* ---- Vinh danh (Tổng quan) ---- */
