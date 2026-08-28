@@ -2344,3 +2344,64 @@ tr.kd-chiadoi td {
   .kn-tra { padding: 0 9px 10px; }
   .kn-hang > select { width: 100%; }
 }
+
+/* ==========================================================================
+   SPEC-0004 — "Việc của tôi hôm nay" · "Ai đang đọng việc" · "Đáng ghi nhận"
+   ---------------------------------------------------------------------------
+   MÀU GIỮ NGUYÊN QUY ƯỚC ĐANG CHẠY: đỏ = quá hạn, vàng = đến hạn. Thêm ĐÚNG
+   MỘT màu tím cho "đang chờ BẠN duyệt" — đó là trạng thái mới được làm nổi,
+   không phải trễ, và không được lẫn với đỏ. Không đẻ bảng màu thứ hai.
+   ĐIỆN THOẠI MỘT TAY: mọi dòng chạm được ≥44px, xếp DỌC, không bảng ngang.
+   ========================================================================== */
+
+:root {
+  --tim:      #6b5b95;
+  --tim-wash: #efecf6;
+}
+.tag.tim { background: var(--tim-wash); color: var(--tim); }
+
+.cv-homnay { border-left: 4px solid var(--danger); }
+.cv-nhom { margin-bottom: 14px; }
+.cv-nhom:last-child { margin-bottom: 0; }
+.cv-nhom-dau { font-weight: 700; font-size: 13.5px; color: var(--ink); margin-bottom: 6px; }
+.cv-nhom-dau.danger { color: var(--danger); }
+.cv-nhom-dau.warn   { color: var(--warn); }
+.cv-nhom-dau.tim    { color: var(--tim); }
+
+/* Cả DÒNG là vùng chạm — không có link chữ nhỏ phải nhắm. 44px là ngưỡng
+   ngón tay, không phải con số cho đẹp. */
+.cv-dong {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  width: 100%; min-height: 44px; padding: 9px 12px; margin-bottom: 6px;
+  text-align: left; background: var(--surface); border: 1px solid var(--line);
+  border-left: 3px solid var(--line); border-radius: var(--r-sm);
+  font: inherit; font-size: 13.5px; color: var(--text); cursor: pointer;
+}
+.cv-dong:hover { background: var(--surface-2); }
+.cv-dong.qua-han   { border-left-color: var(--danger); }
+.cv-dong.den-han   { border-left-color: var(--warn); }
+.cv-dong.cho-duyet { border-left-color: var(--tim); }
+.cv-dong-ten { font-weight: 600; color: var(--ink); }
+.cv-dong-phu { flex: none; font-size: 12px; color: var(--text-mute); white-space: nowrap; }
+
+/* HAI BẢNG CÙNG KÍCH THƯỚC, NẰM CẠNH NHAU — bố cục là thông điệp: hệ thống
+   nhìn cả hai chiều, không phải chỉ đi bắt lỗi. `1fr 1fr` là cố ý; đừng đổi
+   thành `2fr 1fr` cho "bảng đọng việc to hơn". */
+.cv-hai-bang { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+.cv-hai-bang > .panel { margin: 0; }
+.cv-dong-the {
+  padding: 10px 0; border-bottom: 1px solid var(--line);
+}
+.cv-dong-the:last-child { border-bottom: 0; }
+.cv-dong-the .nm { font-weight: 600; color: var(--ink); font-size: 14px; }
+.cv-dong-the .sm { font-size: 12.5px; color: var(--text-mute); margin-top: 3px; line-height: 1.7; }
+/* Nút ⭐ chiếm hết chiều ngang thẻ, bấm được bằng ngón cái — Sếp hay bấm lúc
+   đang di chuyển, không phải lúc ngồi trước máy tính. */
+.cv-nut-ghinhan { width: 100%; min-height: 40px; margin-top: 8px; }
+
+@media (max-width: 780px) {
+  /* Xếp dọc, cuộn dọc — KHÔNG cuộn ngang ở bất kỳ đâu. */
+  .cv-hai-bang { grid-template-columns: 1fr; }
+  .cv-dong { flex-direction: column; align-items: flex-start; gap: 2px; }
+  .cv-dong-phu { white-space: normal; }
+}

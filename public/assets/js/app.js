@@ -1865,6 +1865,10 @@ if (TOI.quyen.includes('danhba')) {
 if (TOI.quyen.includes('congviec')) {
   try { await khoiDongCongViec(); } catch (e) { console.error('Trạm Mục Tiêu:', e); }
   try { await veTongQuanTheoVaiTro(); } catch (e) { console.error('Tóm tắt Tổng quan:', e); }
+  // SPEC-0004 — "Việc của tôi hôm nay" + "Ai đang đọng việc" + "Đáng ghi nhận".
+  // Bọc try/catch riêng: chưa nạp migration thì ba khối này im, phần Trạm Mục
+  // Tiêu đang chạy KHÔNG được hỏng theo.
+  try { await veHomNay(); } catch (e) { console.error('Việc của tôi hôm nay:', e); }
 }
 
 /* -- Lịch sử làm việc (máy chủ thật) -- */
@@ -1880,6 +1884,127 @@ if (TOI.quyen.includes('chat')) {
 /* -- Góp ý & Cải tiến ERP (máy chủ thật) -- */
 if (TOI.quyen.includes('gopy')) {
   try { await khoiDongGopY(); } catch (e) { console.error('Góp ý ERP:', e); }
+}
+
+/* ==========================================================================
+   SPEC-0004 — "VIỆC CỦA TÔI HÔM NAY" · "AI ĐANG ĐỌNG VIỆC" · "ĐÁNG GHI NHẬN"
+   ---------------------------------------------------------------------------
+   EXCEPTION-FIRST xuyên suốt: khối nào không có gì bất thường thì BIẾN MẤT,
+   không hiện khối rỗng và không hiện "🎉 bạn không có việc trễ".
+   ĐIỆN THOẠI MỘT TAY: mọi dòng là một khối chạm được ≥44px (class `cv-dong`),
+   xếp DỌC, không có bảng ngang ở màn <720px — kho vận dùng điện thoại là
+   chính. Ngân sách thao tác: 0 lần bấm để thấy việc quá hạn (nó nằm sẵn ở màn
+   đầu), 1 chạm để mở đúng việc.
+   ========================================================================== */
+
+async function veHomNay() {
+  let kq;
+  try { kq = await API.cvHomNay(); } catch { return; }
+  const t = kq.toi || {};
+
+  /* ---- ① Việc của tôi hôm nay ---- */
+  const khoi = [];
+  const dong = (mau, nhan, id, phu) =>
+    `<button type="button" class="cv-dong ${mau}" data-cv-mo="${id}">` +
+      `<span class="cv-dong-ten">${esc(nhan)}</span>` +
+      (phu ? `<span class="cv-dong-phu">${esc(phu)}</span>` : '') +
+    `</button>`;
+
+  if ((t.qua_han || []).length) {
+    khoi.push(`<div class="cv-nhom"><div class="cv-nhom-dau danger">🔴 ${t.qua_han.length} việc quá hạn</div>` +
+      t.qua_han.map(v => dong('qua-han', v.tieu_de, v.id, `trễ ${v.tre} ngày`)).join('') + '</div>');
+  }
+  if ((t.den_han_hom_nay || []).length) {
+    khoi.push(`<div class="cv-nhom"><div class="cv-nhom-dau warn">🟡 ${t.den_han_hom_nay.length} việc đến hạn hôm nay</div>` +
+      t.den_han_hom_nay.map(v => dong('den-han', v.tieu_de, v.id, '')).join('') + '</div>');
+  }
+  if ((t.chua_bat_dau || []).length) {
+    khoi.push(`<div class="cv-nhom"><div class="cv-nhom-dau">⏳ ${t.chua_bat_dau.length} việc chưa bắt đầu</div>` +
+      t.chua_bat_dau.map(v => dong('', v.tieu_de, v.id, `giao ${v.dong} ngày trước`)).join('') + '</div>');
+  }
+  /* Chữ BẠN in đậm là CỐ Ý: người giao việc thường không nghĩ mình đang là
+     người làm chậm. Đây là lỗ hổng đau nhất — nhân viên nộp xong, người giao
+     quên duyệt, việc chết ở giữa, và người chịu tiếng lại là nhân viên. */
+  if ((t.cho_toi_duyet || []).length) {
+    khoi.push(`<div class="cv-nhom"><div class="cv-nhom-dau tim">🟣 ${t.cho_toi_duyet.length} việc đang chờ <b>BẠN</b> duyệt</div>` +
+      t.cho_toi_duyet.map(v => dong('cho-duyet', v.tieu_de, v.id,
+        `${v.nguoi_nhan_ten}${v.dong != null ? ` — đã chờ ${v.dong} ngày` : ''}`)).join('') + '</div>');
+  }
+
+  const panel = $('#cv-homnay-panel');
+  panel.hidden = khoi.length === 0;
+  if (khoi.length) {
+    $('#cv-homnay-body').innerHTML = khoi.join('');
+    // 1 chạm là mở đúng việc, không qua danh sách trung gian.
+    $('#cv-homnay-body').querySelectorAll('[data-cv-mo]').forEach(b => {
+      b.addEventListener('click', () => {
+        const id = b.dataset.cvMo;
+        const laDuyet = b.classList.contains('cho-duyet');
+        if (window.MO_DEN_VIEC_CUA_TOI) window.MO_DEN_VIEC_CUA_TOI(laDuyet ? 'giao' : 'nhan', id);
+      });
+    });
+  }
+
+  /* Công tắc tự tắt nhắc — đặt NGAY TRONG ứng dụng là có chủ đích: không cho
+     tắt ở đây thì người ta tắt chuông ở tầng điện thoại, và lúc đó không ai
+     biết gì cả. Tắt ở đây thì Sếp còn thấy và còn hỏi được vì sao.
+     Và tắt nhắc KHÔNG tắt trách nhiệm: việc quá hạn vẫn leo cấp lên quản lý,
+     vẫn vào bản tin tuần của Sếp. */
+  const nutTat = $('#cv-nhactat-nut');
+  if (nutTat) {
+    let tat = kq.nhac_tat === 1;
+    const veNut = () => { nutTat.textContent = tat ? '🔕 Đang tắt nhắc — bật lại' : '🔔 Đang nhận nhắc việc'; };
+    veNut();
+    nutTat.onclick = async () => {
+      try { await API.cvNhacTat(tat ? 0 : 1); tat = !tat; veNut(); }
+      catch (e) { alert(e.message || 'Không đổi được cài đặt nhắc việc'); }
+    };
+  }
+
+  /* ---- ② + ③ Hai bảng NẰM CẠNH NHAU, CÙNG KÍCH THƯỚC ----
+     Bố cục là thông điệp: hệ thống nhìn cả hai chiều. Nếu chỉ có bảng bắt lỗi
+     thì Trạm Mục Tiêu bị hiểu là máy giám sát, và cách phòng thủ tự nhiên của
+     mọi người là tránh nhận việc có hạn chót rõ ràng — đúng thứ phá hỏng MBOs. */
+  const ql = kq.quan_ly;
+  const bangDong = $('#cv-dongviec-panel');
+  if (ql && (ql.dong_viec || []).length) {
+    bangDong.hidden = false;
+    $('#cv-dongviec-pv').textContent = ql.pham_vi === 'cong_ty' ? 'Toàn công ty' : 'Nhóm bạn quản lý';
+    $('#cv-dongviec-body').innerHTML = ql.dong_viec.map(n => {
+      const canhBao = n.tre_nhat > 7;   // máy đã hết cách nhắc — cần NGƯỜI vào cuộc
+      const so = [];
+      if (n.qua_han) so.push(`<span class="tag danger">🔴 ${n.qua_han} quá hạn</span> <span class="sm">trễ nhất ${n.tre_nhat} ngày</span>`);
+      if (n.cho_duyet) so.push(`<span class="tag tim">🟣 ${n.cho_duyet} chờ chính người này duyệt</span> <span class="sm">đọng nhất ${n.dong_nhat} ngày</span>`);
+      return `<div class="cv-dong-the">` +
+        `<div class="nm">${esc(n.ho_ten)}${canhBao ? ' <span class="tag danger" title="Quá 7 ngày — nhắc máy đã hết tác dụng, cần hỏi trực tiếp">⚠️</span>' : ''}</div>` +
+        `<div class="sm">${so.join('<br>')}</div></div>`;
+    }).join('');
+  } else { bangDong.hidden = true; }
+
+  const ghiNhan = kq.ghi_nhan || [];
+  const bangGhiNhan = $('#cv-ghinhan-panel');
+  if (ghiNhan.length) {
+    bangGhiNhan.hidden = false;
+    /* KHÔNG đếm số việc, KHÔNG xếp hạng, KHÔNG có "quán quân tuần" — đây là
+       danh sách NHỮNG LẦN LÀM TỐT, không phải bảng thi đua (điều cấm 20). */
+    $('#cv-ghinhan-body').innerHTML = ghiNhan.map(v => {
+      const nhan = v.som > 0 ? `nộp sớm ${v.som} ngày` : 'đúng hạn';
+      return `<div class="cv-dong-the">` +
+        `<div class="nm">${esc(v.nguoi_nhan_ten)} <span class="tag sage">${esc(nhan)}</span></div>` +
+        `<div class="sm">“${esc(v.tieu_de)}”</div>` +
+        `<button type="button" class="btn-nho btn-primary cv-nut-ghinhan" data-ns="${esc(v.nguoi_nhan_id)}" data-viec="${esc(v.tieu_de)}">⭐ Ghi nhận</button>` +
+        `</div>`;
+    }).join('');
+    $('#cv-ghinhan-body').querySelectorAll('.cv-nut-ghinhan').forEach(b => {
+      b.addEventListener('click', () => {
+        // MỘT CHẠM → mở đúng form Vinh danh có sẵn, điền sẵn người + lời khen
+        // nháp (sửa được). Máy chỉ chỗ — NGƯỜI mới khen.
+        if (window.MO_FORM_VINH_DANH) window.MO_FORM_VINH_DANH(b.dataset.ns, `Hoàn thành đúng hạn: ${b.dataset.viec}`);
+      });
+    });
+  } else { bangGhiNhan.hidden = true; }
+
+  $('#cv-hai-bang').hidden = bangDong.hidden && bangGhiNhan.hidden;
 }
 
 /* ==========================================================================
@@ -1929,23 +2054,44 @@ async function khoiDongVinhDanh() {
     dongMoFormVd(false);
   });
 
+  /* NÚT ⭐ GHI NHẬN — MỘT CHẠM, mở ĐÚNG form Vinh danh đang chạy với dữ liệu
+     điền sẵn. KHÔNG endpoint mới, KHÔNG bảng mới: vẫn là `vdGui` cũ.
+     Vì sao đáng làm: rào cản thật không phải Sếp không muốn khen, mà là phải
+     NHỚ ai đã làm gì rồi TỰ ĐI TÌM mà khen. Bảng "Đáng ghi nhận" bỏ khâu nhớ,
+     nút này bỏ khâu đi tìm. Còn lại đúng một chạm và một câu Sếp tự viết.
+     Số sao mặc định 3 — MÁY KHÔNG TỰ CỘNG SAO BAO GIỜ: sao tự động biến ngay
+     thành điểm KPI, và người ta sẽ chọn việc dễ, xin hạn dài, chia nhỏ việc
+     để cộng sao (điều cấm 20). Máy chỉ chỗ, NGƯỜI mới khen. */
+  function moFormVinhDanh(nhanSuId, loiKhenNhap) {
+    dongMoFormVd(true);
+    chonNguoi.value = nhanSuId;
+    veNguoiVd();
+    $('#vd-noidung').value = loiKhenNhap || '';
+    const oSao = $('#vd-so-sao');
+    if (oSao) oSao.value = 3;
+    $('#vd-noidung').focus();
+    $('#vd-form').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+  window.MO_FORM_VINH_DANH = moFormVinhDanh;
+
   async function taiLai() {
     let kq;
     try { kq = await API.vdDanhSach(); } catch { return; }
     const ds = kq.vinh_danh || [];
 
+    /* GỢI Ý — ĐÃ ĐỔI CÁCH TÍNH (SPEC-0004 câu 7). Bản cũ gợi ý "ai hoàn thành
+       NHIỀU VIỆC NHẤT tuần này", tức đang xếp hạng năng suất (điều cấm 20) và
+       dạy người ta chia nhỏ việc để lên đầu bảng. Bản mới gợi ý MỘT LẦN LÀM
+       TỐT CỤ THỂ: việc gần nhất nộp đúng hạn — không đếm, không xếp hạng. */
     const goiYBody = $('#vd-goiy-body');
-    if (kq.goi_y && kq.goi_y.so_viec > 0) {
+    if (kq.goi_y && kq.goi_y.tieu_de) {
+      const g = kq.goi_y;
       goiYBody.hidden = false;
       $('#vd-goiy').innerHTML =
-        `💡 <span>${esc(kq.goi_y.nguoi_nhan_ten)} vừa hoàn thành ${kq.goi_y.so_viec} việc ở Trạm Mục Tiêu tuần này</span>` +
+        `💡 <span>${esc(g.nguoi_nhan_ten)} vừa hoàn thành đúng hạn: “${esc(g.tieu_de)}”</span>` +
         `<button type="button" class="btn-nho" id="vd-goiy-nut">Vinh danh luôn</button>`;
-      $('#vd-goiy-nut').addEventListener('click', () => {
-        dongMoFormVd(true);
-        chonNguoi.value = kq.goi_y.nguoi_nhan_id;
-        $('#vd-noidung').value = `Hoàn thành ${kq.goi_y.so_viec} việc ở Trạm Mục Tiêu tuần này, làm tốt lắm!`;
-        $('#vd-noidung').focus();
-      });
+      $('#vd-goiy-nut').addEventListener('click',
+        () => moFormVinhDanh(g.nguoi_nhan_id, `Hoàn thành đúng hạn: ${g.tieu_de}`));
     } else {
       goiYBody.hidden = true;
     }

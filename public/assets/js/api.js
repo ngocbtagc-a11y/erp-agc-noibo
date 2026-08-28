@@ -128,6 +128,10 @@ export const API = {
 
   /* ---- Trạm Việc: giao việc cho nhân viên ---- */
   cvDanhSach: () => goi('/api/cong-viec/danh-sach'),
+  // SPEC-0004: "Việc của tôi hôm nay" + "Ai đang đọng việc" + "Đáng ghi nhận"
+  // — MỘT lần gọi cho cả ba khối, vì cả ba đọc cùng một bộ dữ liệu.
+  cvHomNay: () => goi('/api/cong-viec/hom-nay'),
+  cvNhacTat: (tat) => goi('/api/cong-viec/nhac-tat', { method: 'POST', body: JSON.stringify({ tat }) }),
   cvTao: (cv) => goi('/api/cong-viec/tao', { method: 'POST', body: JSON.stringify(cv) }),
   cvCapNhat: (id, trangThai, ketQua) => goi('/api/cong-viec/cap-nhat', {
     method: 'POST', body: JSON.stringify({ id, trang_thai: trangThai, ket_qua: ketQua })
