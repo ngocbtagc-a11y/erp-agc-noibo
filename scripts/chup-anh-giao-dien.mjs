@@ -41,6 +41,28 @@ if (commitCss) {
       { cwd: GOC, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 }), 'utf8');
 }
 
+/* ⚠️ REV-0029/K4 — MỘT TẤM ẢNH ĐÃ NÓI DỐI, VÀ ĐÂY LÀ CHỖ VÁ.
+   `1440-trammuctieu-sau.png` bộ trước chụp trúng lúc `.sb-item.active` đang
+   chạy `transition: background .14s`: viên cam mục menu đang chọn ra ảnh
+   NHẠT THẾCH — pixel (234,208,179), tức `--cam` mới ngấm ~12,5%. Trong khi
+   `1440-khovan-sau.png` cho (235,124,23) = `#eb7c17` ĐẶC, và CSS d.731
+   không đổi một chữ. Tức LỖI MÁY CHỤP, không phải lỗi màu — nhưng Sếp mở
+   đúng ảnh đó là kết luận sai ngay, mà kết luận sai về màu thì kéo theo cả
+   một vòng sửa vô ích.
+   Vì sao KHÔNG chữa bằng cách "chờ lâu hơn": `--virtual-time-budget` tua
+   ĐỒNG HỒ ẢO, còn transition CSS chạy theo khung hình hợp thành thật —
+   hai đồng hồ khác nhau, tăng ngân sách chỉ làm bẫy hiếm đi chứ không hết,
+   và một phép đo "thường thì đúng" là phép đo không dùng được.
+   → Chữa bằng cách BỎ HẲN transition trong BẢN TẠM lúc chụp: mọi phần tử
+   nhảy thẳng tới giá trị cuối. Ảnh thành TẤT ĐỊNH, chụp bao nhiêu lần cũng
+   ra đúng một tấm.
+   → CHỈ tắt `transition`, KHÔNG đụng `animation`: có `@keyframes` mở đầu
+   bằng `opacity:0`, tắt animation là phần tử đứng luôn ở 0 → tàng hình, tự
+   đẻ ra một lời nói dối mới đúng loại vừa vá.
+   → Chỉ sửa BẢN TẠM trong thư mục tạm; `public/` không đụng tới. */
+const TAT_HOAT_ANH =
+  `<style id="chup-tat-transition">*,*::before,*::after{transition:none !important}</style>\n`;
+
 /* Chuyển tab: bấm đúng cái nút mà `app.js` vừa sinh ra — `moTab` nằm trong
    module, bên ngoài không với tới được. */
 const STUB = `<script>
@@ -58,10 +80,14 @@ const dApp = join(tam, 'app.html');
    `--virtual-time-budget` không bao giờ đếm hết và Chrome treo, không bao giờ
    trả ảnh. Chỉ gỡ ở bản tạm — mã nguồn thật không đụng tới. */
 const boSW = s => s.replace(/'serviceWorker' in navigator/g, 'false');
-writeFileSync(dApp, boSW(readFileSync(dApp, 'utf8').replace('<script type="module"', STUB + '<script type="module"')), 'utf8');
+/* Nhét thẻ tắt transition NGAY TRƯỚC `</head>` — phải nằm SAU `style.css`
+   thì `!important` của nó mới thắng, và phải có mặt từ lần vẽ ĐẦU TIÊN,
+   không phải do JS gắn vào sau (gắn sau là đã lỡ một khung hình động rồi). */
+const tatHA = s => s.includes('</head>') ? s.replace('</head>', TAT_HOAT_ANH + '</head>') : TAT_HOAT_ANH + s;
+writeFileSync(dApp, tatHA(boSW(readFileSync(dApp, 'utf8').replace('<script type="module"', STUB + '<script type="module"'))), 'utf8');
 for (const f of ['index.html', 'reset.html']) {
   const p = join(tam, f);
-  if (existsSync(p)) writeFileSync(p, boSW(readFileSync(p, 'utf8')), 'utf8');
+  if (existsSync(p)) writeFileSync(p, tatHA(boSW(readFileSync(p, 'utf8'))), 'utf8');
 }
 
 /* ---- Máy chủ tĩnh + dữ liệu giả cho /api/* ------------------------------ */
@@ -110,7 +136,11 @@ for (const [ten, duong] of MAN) {
     await new Promise((ok, hong) => {
       const p = spawn(CHROME, ['--headless=new', '--disable-gpu', '--no-sandbox', '--hide-scrollbars',
         '--no-first-run', '--no-default-browser-check', '--disable-extensions',
-        '--force-device-scale-factor=1', '--virtual-time-budget=8000',
+        /* 8000 → 12000: STUB bấm tab ở mốc 500ms, sau đó `app.js` còn vẽ
+           bảng. Tắt transition đã làm ảnh tất định; nới ngân sách chỉ để
+           chắc phần DỰNG (không phải phần động) kịp xong. */
+        '--force-device-scale-factor=1', '--virtual-time-budget=12000',
+        '--run-all-compositor-stages-before-draw',
         `--window-size=${w},${h}`, `--screenshot=${ra}`, `http://127.0.0.1:${CONG}/${duong}`],
         { stdio: 'ignore', timeout: 90000 });
       p.on('exit', ok); p.on('error', hong);

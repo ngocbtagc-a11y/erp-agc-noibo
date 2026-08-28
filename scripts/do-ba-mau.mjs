@@ -32,10 +32,42 @@ const duongDan = process.argv[2] || new URL('../public/assets/css/style.css', im
 const rawGoc = readFileSync(duongDan, 'utf8');
 
 /* ── Giải mã màu ─────────────────────────────────────────────────────────── */
-const TEN = { white: [255, 255, 255, 1], black: [0, 0, 0, 1] };
+/*  REV-0029/K1 — BÀI HỌC ĐẮT NHẤT VÒNG NÀY, chép nguyên vào đây để đời sau
+    không đạp lại: bản trước chỉ giải mã `#hex` · `rgb()` · `rgba()` · hai
+    TÊN `white`/`black`. Hồ Ly tiêm `rgba(255,255,255,1)` + `rgba(0,0,0,1)`
+    — trắng tuyền và đen tuyền, đục 100% — vào CSS rồi chạy file này, nó
+    VẪN in "ĐẠT". Hai lỗ hổng chồng nhau:
+      · `TRANG_DEN` khớp CHUỖI NGUYÊN `#fff|#ffffff|white|#000|…` nên dạng
+        `rgba(…)` không đời nào khớp;
+      · mà sắc độ của trắng/đen = 0 nên nó cũng bị `KHONG_SAC` gạt khỏi §①.
+        Trắng dạng `rgba` rơi vào KHE giữa hai mục, không mục nào soi.
+    Và 4 ca đối chứng cũ bắt được cả 4 vì CẢ 4 ĐỀU LÀ `#hex` — bộ đối chứng
+    tự chọn đúng loại mình bắt được.
+    → LUẬT: ca đối chứng phải phủ mọi DẠNG VIẾT, không chỉ mọi GIÁ TRỊ.
+    → Nay giải mã đủ: `#hex` 3/4/6/8 · `rgb()`/`rgba()` (số và %) ·
+      `hsl()`/`hsla()` (deg/rad/turn/grad) · tên màu CSS · `color-mix()`
+      (bắt qua chính các mã màu nằm trong ngoặc của nó).
+    → Và §② nay so THEO GIÁ TRỊ RGB đã giải mã, không so theo chuỗi nữa.  */
+const TEN = {
+  white: [255, 255, 255], black: [0, 0, 0],
+  /* Tên màu CSS hay bị dán ẩu. Đủ để §② bắt mọi bí danh của trắng/đen
+     tuyền, và để §① nhìn thấy một họ màu thứ tư viết bằng tên. */
+  red: [255, 0, 0], lime: [0, 255, 0], blue: [0, 0, 255], yellow: [255, 255, 0],
+  cyan: [0, 255, 255], aqua: [0, 255, 255], magenta: [255, 0, 255], fuchsia: [255, 0, 255],
+  silver: [192, 192, 192], gray: [128, 128, 128], grey: [128, 128, 128],
+  maroon: [128, 0, 0], olive: [128, 128, 0], green: [0, 128, 0], purple: [128, 0, 128],
+  teal: [0, 128, 128], navy: [0, 0, 128], orange: [255, 165, 0], pink: [255, 192, 203],
+  gold: [255, 215, 0], brown: [165, 42, 42], beige: [245, 245, 220], ivory: [255, 255, 240],
+  snow: [255, 250, 250], whitesmoke: [245, 245, 245], violet: [238, 130, 238],
+  indigo: [75, 0, 130], crimson: [220, 20, 60], salmon: [250, 128, 114],
+  khaki: [240, 230, 140], tan: [210, 180, 140], plum: [221, 160, 221],
+  orchid: [218, 112, 214], turquoise: [64, 224, 208], lavender: [230, 230, 250]
+};
+const so = (t, thang) => /%$/.test(t) ? parseFloat(t) / 100 * thang : parseFloat(t);
 function giaiMau(s) {
   s = String(s).trim();
-  if (TEN[s.toLowerCase()]) return TEN[s.toLowerCase()].slice();
+  const t = TEN[s.toLowerCase()];
+  if (t) return [...t, 1];
   const h = s.match(/^#([0-9a-fA-F]{3,8})$/);
   if (h) {
     let x = h[1];
@@ -46,9 +78,33 @@ function giaiMau(s) {
   }
   const r = s.match(/^rgba?\(([^)]*)\)$/i);
   if (r) {
-    const p = r[1].split(/[,/\s]+/).filter(Boolean).map(parseFloat);
-    if (p.length < 3 || p.slice(0, 3).some(Number.isNaN)) return null;
-    return [p[0], p[1], p[2], p.length > 3 && !Number.isNaN(p[3]) ? p[3] : 1];
+    const p = r[1].split(/[,/\s]+/).filter(Boolean);
+    if (p.length < 3) return null;
+    const v = p.slice(0, 3).map(x => so(x, 255));
+    if (v.some(Number.isNaN)) return null;
+    let a = 1;
+    if (p.length > 3) { a = so(p[3], 1); if (Number.isNaN(a)) a = 1; }
+    return [...v, a];
+  }
+  const l = s.match(/^hsla?\(([^)]*)\)$/i);
+  if (l) {
+    const p = l[1].split(/[,/\s]+/).filter(Boolean);
+    if (p.length < 3) return null;
+    let H = parseFloat(p[0]);
+    if (Number.isNaN(H)) return null;
+    if (/rad$/i.test(p[0])) H = H * 180 / Math.PI;
+    else if (/turn$/i.test(p[0])) H *= 360;
+    else if (/grad$/i.test(p[0])) H *= 0.9;
+    const S = parseFloat(p[1]) / 100, L = parseFloat(p[2]) / 100;
+    if (Number.isNaN(S) || Number.isNaN(L)) return null;
+    let a = 1;
+    if (p.length > 3) { a = so(p[3], 1); if (Number.isNaN(a)) a = 1; }
+    const C = (1 - Math.abs(2 * L - 1)) * S;
+    const hh = ((H % 360) + 360) % 360 / 60;
+    const X = C * (1 - Math.abs(hh % 2 - 1));
+    const seg = [[C, X, 0], [X, C, 0], [0, C, X], [0, X, C], [X, 0, C], [C, 0, X]][Math.floor(hh) % 6];
+    const m = L - C / 2;
+    return [Math.round((seg[0] + m) * 255), Math.round((seg[1] + m) * 255), Math.round((seg[2] + m) * 255), a];
   }
   return null;
 }
@@ -82,7 +138,15 @@ const MIEN = [
 ];
 
 /* ── Trích mọi mã màu (giữ nguyên số dòng để soi lại được) ───────────────── */
-const RE_MAU = /rgba?\([^()]*\)|#[0-9a-fA-F]{3,8}\b|(?<![-\w])(?:white|black)(?![-\w])/gi;
+/*  Tên màu CSS chỉ tính khi đứng ở VỊ TRÍ GIÁ TRỊ — tức sau `:` `,` `(`
+    hoặc khoảng trắng bên trong khai báo — chứ không phải khi nó là tên lớp
+    (`.beige`) hay tên biến (`--tan-nhat`). Guard `(?<![-\w#.])` chặn đúng
+    hai ca đó mà vẫn bắt `color: white` và `color-mix(in srgb, white 40%…)`.
+    `color-mix()` KHÔNG cần luật riêng: mọi mã màu nằm trong ngoặc của nó
+    đều bị chính RE_MAU này quét trúng như mã màu thường.                   */
+const TEN_RE = Object.keys(TEN).sort((a, b) => b.length - a.length).join('|');
+const RE_MAU = new RegExp(
+  `rgba?\\([^()]*\\)|hsla?\\([^()]*\\)|#[0-9a-fA-F]{3,8}\\b|(?<![-\\w#.])(?:${TEN_RE})(?![-\\w])`, 'gi');
 function trich(raw) {
   const css = raw.replace(/\/\*[\s\S]*?\*\//g, m => m.replace(/[^\n]/g, ' '));
   const vungMien = [];
@@ -130,13 +194,25 @@ function cum(gocs, khe = 22) {
   return ra;
 }
 
-const TRANG_DEN = /^(#fff|#ffffff|white|#000|#000000|black)$/i;
+/*  §② so THEO GIÁ TRỊ đã giải mã, KHÔNG so theo chuỗi.
+    Bản cũ dùng `/^(#fff|#ffffff|white|#000|#000000|black)$/i` — khớp chuỗi
+    nguyên, nên `rgba(255,255,255,1)` lọt sạch (REV-0029/K1). Nay chỉ hỏi
+    một câu duy nhất: ba kênh RGB có đúng 255 cả ba, hay đúng 0 cả ba, mà
+    alpha > 0 không? Câu hỏi đó không phụ thuộc dạng viết, nên mọi bí danh
+    của trắng/đen tuyền — `#fff` `#ffffff` `#ffffffff` `white` `rgb(100%,
+    100%,100%)` `rgba(255,255,255,.92)` `hsl(0,0%,100%)` `hsl(0 0% 0%)`
+    hay nằm trong `color-mix()` — đều rơi vào cùng một cái lưới.            */
+function laTrangDen(x) {
+  const [r, g, b, a] = x.c;
+  if (!(a > 0)) return false;
+  return (r === 255 && g === 255 && b === 255) || (r === 0 && g === 0 && b === 0);
+}
 
 function chay(raw, im = true) {
   const ds = trich(raw);
   const kq = phanHo(ds);
-  const trangDen = ds.filter(x => TRANG_DEN.test(x.ma) && !x.mien);
-  const duocMien = ds.filter(x => TRANG_DEN.test(x.ma) && x.mien);
+  const trangDen = ds.filter(x => laTrangDen(x) && !x.mien);
+  const duocMien = ds.filter(x => laTrangDen(x) && x.mien);
   if (!im) return { kq, trangDen, ds };
 
   console.log(`\n═══ LUẬT BA MÀU — ${String(duongDan).replace(/^file:\/\/\//, '')} ═══`);
@@ -245,12 +321,48 @@ console.log('\n─── ④ CA ĐỐI CHỨNG (BH-16) — phép kiểm phải B
       · hồng #ff4fa3 góc sắc 335° — SÁT mép đỏ 340°, ca khó nhất: nếu ranh
         giới bị nới ẩu thì ca này lọt, và ta biết ngay.
       · #ffffff — trắng tuyền dán ở dòng thường (ngoài vùng miễn), phải bị
-        luật ① bắt.                                                          */
+        luật ① bắt.
+    ⚠️ BỐN CA TRÊN ĐỀU LÀ `#hex` — VÀ ĐÓ CHÍNH LÀ CHỖ HỎNG (REV-0029/K1).
+    Bộ đối chứng cũ bắt được cả 4 không phải vì phép kiểm khoẻ, mà vì nó
+    tự chọn đúng loại mình bắt được. Hồ Ly tiêm ĐÚNG ca dưới đây thì nó im.
+    → Sáu ca mới phủ theo DẠNG VIẾT, mỗi ca một dạng khác nhau:
+      · `rgba(255,255,255,1)` + `rgba(0,0,0,1)` — ĐÚNG ca đã lọt qua bản cũ;
+      · `hsl()` — dạng chưa từng được giải mã trước vòng này;
+      · `hsl()` tím 258° — vừa dạng mới, vừa họ màu thứ tư, kiểm cả §① lẫn
+        khả năng giải mã hsl trong một ca;
+      · tên màu CSS `white` — bí danh chuỗi;
+      · `color-mix()` — kiểm rằng mã màu trong ngoặc lồng vẫn bị quét.
+    Bất kỳ ai thêm dạng viết mới vào CSS: THÊM MỘT CA Ở ĐÂY TRƯỚC.          */
 const CA = [
   ['tím  #7c4dff (258°)', ':root{--doi-chung:#7c4dff}\n', r => r.kq.lac.some(x => x.ma === '#7c4dff')],
   ['lơ   #00bcd4 (187°)', ':root{--doi-chung:#00bcd4}\n', r => r.kq.lac.some(x => x.ma === '#00bcd4')],
   ['hồng #ff4fa3 (335°)', ':root{--doi-chung:#ff4fa3}\n', r => r.kq.lac.some(x => x.ma === '#ff4fa3')],
-  ['trắng tuyền #ffffff ngoài vùng miễn', '.doi-chung{color:#ffffff}\n', r => r.trangDen.some(x => x.ma === '#ffffff')]
+  ['trắng tuyền #ffffff ngoài vùng miễn', '.doi-chung{color:#ffffff}\n', r => r.trangDen.some(x => x.ma === '#ffffff')],
+  /* Ca của Hồ Ly, nguyên văn — bản trước in "ĐẠT" khi có dòng này. */
+  ['trắng tuyền dạng rgba() — CA ĐÃ LỌT REV-0029',
+   '.hl-doi-chung{color:rgba(255,255,255,1)}\n',
+   r => r.trangDen.some(x => /^rgba\(255,255,255/i.test(x.ma))],
+  ['đen  tuyền dạng rgba() — CA ĐÃ LỌT REV-0029',
+   '.hl-doi-chung-2{background:rgba(0,0,0,1)}\n',
+   r => r.trangDen.some(x => /^rgba\(0,0,0/i.test(x.ma))],
+  ['trắng tuyền dạng hsl(0,0%,100%)',
+   '.doi-chung-hsl{color:hsl(0,0%,100%)}\n',
+   r => r.trangDen.some(x => /^hsl\(0,0%,100%/i.test(x.ma))],
+  ['đen  tuyền dạng hsl(0 0% 0%)',
+   '.doi-chung-hsl2{background:hsl(0 0% 0%)}\n',
+   r => r.trangDen.some(x => /^hsl\(0 0% 0%/i.test(x.ma))],
+  ['tím dạng hsl(258 100% 65%) — họ thứ tư viết bằng hsl',
+   ':root{--doi-chung-hsl3:hsl(258 100% 65%)}\n',
+   r => r.kq.lac.some(x => /^hsl\(258/i.test(x.ma))],
+  ['trắng tuyền viết bằng TÊN màu CSS `white`',
+   '.doi-chung-ten{color:white}\n',
+   r => r.trangDen.some(x => /^white$/i.test(x.ma))],
+  ['trắng tuyền nằm trong color-mix()',
+   '.doi-chung-mix{background:color-mix(in srgb, #ffffff 40%, var(--cam))}\n',
+   r => r.trangDen.some(x => x.ma === '#ffffff')],
+  ['tím viết bằng TÊN màu CSS `purple` (300°) — họ thứ tư',
+   ':root{--doi-chung-ten2:purple}\n',
+   r => r.kq.lac.some(x => /^purple$/i.test(x.ma))]
 ];
 let bat = 0;
 for (const [ten, them, kiem] of CA) {

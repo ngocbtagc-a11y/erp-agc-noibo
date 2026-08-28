@@ -335,7 +335,7 @@ button { cursor: pointer; border: none; background: none; }
     /* Lớp loé sáng nằm DƯỚI chữ (`.hero-word` z-1, `.hero-foot` z-2) nên nó
        cộng thẳng vào nền của chữ. Ở .22 nó kéo tương phản trắng .82 xuống
        ~3,1:1 dù gradient đã tối — hạ về .10 mới đủ chỗ cho chữ. */
-    radial-gradient(circle at 78% 18%, rgba(255,255,255,.10), transparent 46%),
+    radial-gradient(circle at 78% 18%, rgba(255,252,244,.10), transparent 46%),
     /* Vệt tối lấy theo `--ink` MỚI (#1e2417); bản cũ còn dùng #3f4d33. */
     radial-gradient(circle at 12% 88%, rgba(44,33,23,.42), transparent 52%);
   pointer-events: none;
@@ -356,7 +356,7 @@ button { cursor: pointer; border: none; background: none; }
   font-family: var(--serif);
   font-size: clamp(72px, 11vw, 132px);
   line-height: .8;
-  color: rgba(255,255,255,.96);
+  color: rgba(255,252,244,.96);
   font-weight: 500;
   letter-spacing: -.03em;
   user-select: none;
@@ -367,7 +367,7 @@ button { cursor: pointer; border: none; background: none; }
   z-index: 2;
   /* .82 → .90: ở 13px chữ thường cần 4.5:1. Trên nền hero mới, .82 chỉ đạt
      ~4,0:1 sau lớp loé sáng; .90 đưa lên ≥4,5:1. (Bản cũ: 2,15:1.) */
-  color: rgba(255,255,255,.90);
+  color: rgba(255,252,244,.90);
   font-size: 13px;
   max-width: 300px;
 }
@@ -784,8 +784,34 @@ img.av { object-fit: cover; display: block; cursor: default; }
 /* ĐỢT 2c — cùng phép sửa như `.mt-panel` (xem chú thích dài ở đó): kéo đầu
    TỐI của dải sáng lên (#a06b2a → #bc7e31) rồi đặt chữ `--ink` thay chữ kem.
    `--ink` trên dải mới: 7.71 / 6.13 / 4.61:1 — h4 cũ chỉ 2.19:1. */
+/* ĐỢT 2d — SẾP NGỌC CHỐT: BỎ DẢI MÀU TO, VỀ NỀN NHẠT.
+   Lý do không phải tương phản (dải 2c đã đạt 7.79/6.10/4.61) mà là LUẬT ③
+   *"một khung nhìn, một điểm nhấn"*: màn Tổng quan đang có BA mảng cam-vàng
+   to — dải Vinh danh, dải Trạm Mục Tiêu, và viên cam mục menu đang chọn.
+   Mắt bị hai dải to giữ, chỗ "mình đang đứng đâu" thành thứ yếu. Giữ cam
+   cho MỤC MENU ĐANG CHỌN và NÚT HÀNH ĐỘNG CHÍNH; hai dải này lùi về nền
+   nhạt — vẫn ấm, vẫn nổi, không tranh với nút bấm.
+   Vì sao là `--sidebar-bg #ebdcca` mà KHÔNG đẻ token mới (Hồ Ly đo sẵn,
+   REV-0029 §8): hai thanh nằm TRÊN mặt thẻ `--card` L* 98,99 nên mốc phải
+   tính với CARD, không phải với nền trang. ΔL* ≥5 mới ra một dải, ≥8 mới
+   "nhìn thấy ngay".
+     --cam-wash #fef5ec  ΔL* 1,99 ✗ tan vào thẻ
+     --surface  #faf5eb  ΔL* 2,32 ✗
+     --warn-wash#f7efe1  ΔL* 4,28 ~ (mà chỉ 0,95 với --bg ✗)
+     --surface-2#f1e7da  ΔL* 6,90 ✔
+     --sidebar-bg#ebdcca ΔL* 10,49 ✔✔ (và 5,27 với --bg ✔)
+   Thêm: góc sắc 32,7° — ấm đúng họ, cạnh nút cam không bẩn; và nó buộc hai
+   thanh vào CÙNG CHẤT LIỆU với thanh bên, cả màn thành một bộ.
+   Phân biệt hai thanh mà KHÔNG tốn thêm mảng màu (luật ④): sợi 3px
+   `inset` — hổ phách `--warn` cho Vinh danh, cam `--cam` cho Trạm Mục Tiêu.
+   `inset` KHÔNG chiếm chỗ nên mật độ vẫn 0 pixel; sợi này là NHÃN, không
+   phải điểm nhấn.
+   Chữ trên nền mới: h4 `--ink` = 11,68:1 ✔ (thừa xa 4,5).
+   ⚠️ ĐỪNG đặt `--cam-text` thẳng lên `#ebdcca`: chỉ 4,17:1 — TRƯỢT.
+   `border-bottom: none` GIỮ NGUYÊN: thêm lại đường kẻ là dịch 1 pixel. */
 .vd-panel .panel-head {
-  background: linear-gradient(120deg, #e3ae4a 0%, #cf9740 60%, #bc7e31 100%);
+  background: var(--sidebar-bg);
+  box-shadow: inset 0 3px 0 var(--warn);
   border-bottom: none;
 }
 .vd-panel .panel-head h4 {
@@ -1153,8 +1179,14 @@ img.av { object-fit: cover; display: block; cursor: default; }
    hứng" Sếp Ngọc chốt 21/08 còn nguyên, chỉ khác là bây giờ đọc được.
    Bỏ `text-shadow`: bóng tối vốn để cứu chữ trắng; chữ nâu trên nền sáng
    không cần, để lại chỉ làm chữ bẩn. Bỏ bóng không dịch 1 pixel nào. */
+/* ĐỢT 2d — SẾP NGỌC CHỐT: về nền nhạt, LÝ DO Y HỆT `.vd-panel .panel-head`
+   (chú thích đầy đủ ở đó, không chép lại). Cùng `--sidebar-bg`, chỉ khác
+   sợi nhãn 3px: Trạm Mục Tiêu nhận `--cam`, Vinh danh nhận `--warn`.
+   Sau vòng này màn Tổng quan còn ĐÚNG MỘT mảng cam — viên `.sb-item.active`
+   ở thanh bên — cộng hai sợi 3px. Luật ③ đạt sạch. */
 .mt-panel .panel-head {
-  background: linear-gradient(120deg, #ef8434 0%, #e2792e 55%, #de6a22 100%);
+  background: var(--sidebar-bg);
+  box-shadow: inset 0 3px 0 var(--cam);
   border-bottom: none;
 }
 .mt-panel .panel-head h4 {
@@ -1164,17 +1196,27 @@ img.av { object-fit: cover; display: block; cursor: default; }
 }
 /* KHÔNG hạ `opacity` ở đây cho "nhẹ mắt": opacity ăn thẳng vào tương phản
    đúng như alpha (thử .82 → tụt còn 3.5:1 ở đầu tối của dải). Muốn phân
-   cấp thì dùng CỠ CHỮ, đã có sẵn trong `.hint`. */
-.mt-panel .panel-head .hint { color: var(--ink); }
+   cấp thì dùng CỠ CHỮ, đã có sẵn trong `.hint`.
+   ĐỢT 2d — nền nay là `--sidebar-bg` nhạt, không còn dải cam, nên `.hint`
+   TRẢ VỀ đúng `--text-mute` như mọi panel khác: 4,81:1 trên `#ebdcca` ✔.
+   Giữ nó ở `--ink` thì h4 và hint bằng nhau, mất phân cấp mà chẳng được gì.
+   Viết thẳng ra thay vì xoá luật — để lần sau ai đọc còn thấy chỗ này ĐÃ
+   được cân nhắc, và để số luật CSS không nhảy. */
+.mt-panel .panel-head .hint { color: var(--text-mute); }
 /* ĐỢT 2 — nút "Thêm mục tiêu"/"Giao việc" trên đầu thẻ CAM. Trắng .22 trên
    dải cam chỉ 2.35–3.71:1: nút mờ nhất lại nằm trên panel nổi nhất.
    Sửa bằng cách ĐẢO NGƯỢC: nền gần trắng đặc, chữ `--cam-text`. Đo trên cả
    hai đầu dải màu (#e2792e sáng nhất → #a84c15 tối nhất): 5.17:1 và 5.02:1.
    Bỏ chữ trắng ở đây là đúng LUẬT BA DÒNG trong `:root` — không đặt chữ
-   trắng lên nền cam. Kích thước nút không đổi. */
+   trắng lên nền cam. Kích thước nút không đổi.
+   ĐỢT 2d (REV-0029/K1) — mặt nút vốn viết `rgba(255,255,255,.92)`: TRẮNG
+   TUYỀN, phạm luật ①. Anh em sinh đôi `#vd-nut-mo` cách đây 370 dòng đã
+   viết đúng `rgba(255,252,244,.92)` (kem `--white`) mà nút này không được
+   sửa theo — vì phép kiểm cũ mù dạng `rgba()`. Nay đồng bộ kem. Chênh
+   lệch độ sáng 255→252/244 dưới 1,3% nên tương phản chữ không đổi. */
 .mt-panel .panel-head #mt-nut-mo-form,
 .mt-panel .panel-head #cv-nut-mo-form {
-  background: rgba(255,255,255,.92);
+  background: rgba(255,252,244,.92);
   color: var(--cam-text);
   font-weight: 600;
 }
