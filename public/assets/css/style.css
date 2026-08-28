@@ -1443,9 +1443,24 @@ tr.canh-bao:hover > td { background: #fbdbd6; }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .cnb-dau-ten .sm { font-size: 11px; color: var(--text-mute); }
+/* Nút "←" (về kênh chung) và "✕" (đóng chat) trên thanh tiêu đề cửa sổ chat.
+   ĐO ĐƯỢC ngày 2026-08-28 ở bề ngang 375px (iPhone SE): bản cũ chỉ 24 x 29.8px
+   và 24 x 29.1px — dưới ngưỡng ngón tay 44px (WCAG 2.5.5 / Apple HIG). Từ
+   CTL-0014 thanh này còn có thêm nút chuông 44px, nên nút 24px nằm sát nút 44px
+   càng dễ bấm trượt. Nhân viên kho bấm bằng ngón cái khi đang bê hàng.
+   `box-sizing: border-box` bắt buộc — thiếu nó thì padding cộng ra ngoài và số
+   đo thật lệch khỏi con số khai trong CSS. Kiểm lại bằng
+   `scripts/do-nut-thongbao-44px.mjs`.
+   `display: flex` ở đây KHÔNG làm hiện nút "←" khi nó mang `hidden` (app.html
+   để nút này `hidden` cho tới khi vào chat riêng): chốt toàn cục
+   `[hidden]{display:none!important}` đầu file thắng. Bàn đo có ca thử riêng
+   canh đúng chuyện này — đừng gỡ chốt đó. */
 .cnb-lui, .cnb-dong {
   background: none; border: none; cursor: pointer; color: var(--text-mute);
-  font-size: 16px; padding: 4px 8px; border-radius: 8px; flex-shrink: 0; line-height: 1;
+  font-size: 16px; border-radius: 8px; flex-shrink: 0; line-height: 1;
+  box-sizing: border-box;
+  min-width: 44px; min-height: 44px;
+  display: flex; align-items: center; justify-content: center;
 }
 .cnb-lui:hover, .cnb-dong:hover { background: var(--surface-2); color: var(--ink); }
 
