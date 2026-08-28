@@ -452,3 +452,47 @@ phục vụ hai vai trò đi hai đường dữ liệu khác nhau (`A ? DS_X : D
 từng khoá của hai đường đó — chứ không chỉ kiểm màn có hiện ra không.** Và cách duy
 nhất bắt được: **đăng nhập bằng đúng vai trò yếu nhất rồi bấm thử**. Đọc code không
 thấy, vì code chạy đúng 100% — nó chỉ chạy đúng cho vai trò không cần đến nó.
+
+**BH-40 · Trần thiết kế phụ thuộc ĐỘ NẶNG MỖI DÒNG, không chỉ số dòng.**
+Bổ sung cho BH-22. Bàn thử CTL-0013 gieo một bộ dữ liệu nặng bất thường (22 cột,
+mọi dòng đều có ô nhiều dòng) và đẩy một lô 2.000 dòng lên **p95 10,65 ms — chạm
+đúng trần 10 ms**, trong khi cùng số dòng với dữ liệu thường chỉ mất ~4,5 ms.
+→ **Khi chốt một trần thời gian theo "bao nhiêu dòng một lô", phải nói rõ nó ứng
+với dòng nặng cỡ nào.** Bảng nhiều cột chữ dài (`cong_viec`, `thong_bao`) ăn gấp
+đôi bảng mã ngắn cùng số dòng. Đo trần bằng bảng nhẹ nhất rồi đem áp cho mọi
+bảng là tự đặt bẫy cho chính mình.
+
+**BH-41 · `PRAGMA defer_foreign_keys` là lệnh RỖNG khi ở ngoài giao dịch — và
+"xoá rồi ghi lại" mà không có giao dịch thì không có đường lùi.**
+Lỗi CHẶN của REV-0014. File `KHOI-PHUC.sql` sinh ra có `PRAGMA defer_foreign_keys
+= ON;` rồi 11 câu `DELETE FROM` rồi hàng loạt `INSERT`, **không có `BEGIN`/
+`COMMIT`**. Đo thật: chạy với `foreign_keys = ON` → `FOREIGN KEY constraint
+failed`; cho lệnh chết giữa chừng → `nhan_su` từ 600 dòng còn **0 dòng, không
+hoàn tác**. Bọc thêm `BEGIN`/`COMMIT` vào đúng file đó → hết cả hai lỗi.
+→ **Mọi kịch bản "xoá trắng rồi ghi lại" đều phải nằm trong một giao dịch** —
+vừa để `defer_foreign_keys` có chỗ mà hoãn, vừa để còn đường lùi khi đứt gánh
+giữa đường. Đây còn là bẫy hay tái phát: **đường phụ đã làm đúng (`--vao-sqlite`
+có đủ `BEGIN`/`COMMIT`/`ROLLBACK`) mà đường CHÍNH — đường tài liệu dạy Sếp dùng
+— lại bị bỏ sót.** Bàn thử xanh vì SQLite mặc định TẮT `foreign_keys`; phải
+**chủ động bật `PRAGMA foreign_keys = ON` trong ca thử** thì mới lộ ra.
+
+> ⚠️ **Đính chính BH-41 (REV-0015, 2026-08-28):** câu *"bọc thêm `BEGIN`/`COMMIT` vào
+> đúng file đó"* chỉ đúng với **công cụ SQLite thường** (sqlite3, DB Browser, `node:sqlite`).
+> Với **D1** thì ngược hẳn: D1 **cấm** `BEGIN` và **tự bọc** cả file. Phần còn lại của
+> BH-41 vẫn đúng. Xem BH-42.
+
+**BH-42 · Người soi cũng sai được — và số đo thắng lập luận, kể cả lập luận của người soi.**
+REV-0014 (Hồ Ly) chặn phát hành CTL-0013 vì `KHOI-PHUC.sql` thiếu `BEGIN`/`COMMIT`, và ép
+một bản vá: bọc giao dịch **vô điều kiện**. Lập luận đúng với SQLite chuẩn, nghe rất chắc,
+và **sai**. Khỉ Đột không nghe theo — nó đi đo trên D1: ① D1 **cấm** lệnh `BEGIN`
+(*"please use the state.storage.transaction() … instead of … BEGIN"*, mã thoát 1, **không
+ghi một dòng nào**); ② D1 **tự bọc** cả file trong một giao dịch — cho file lỗi giữa chừng
+thì `DELETE` bị hoàn tác, **3/3 dòng cũ còn nguyên**. Làm đúng lời người soi thì đường
+khôi phục CHÍNH của Sếp *chết hẳn*. Vòng 4 Hồ Ly tự đo lại cả hai: khớp từng con số, và
+đính chính công khai trong REV-0015.
+→ **Kết luận của Review Gate không phải mệnh lệnh, nó là một giả thuyết có thẩm quyền.**
+Người build có quyền — và có nghĩa vụ — **bác lại bằng số đo**, không bằng cãi. Ngược lại,
+người soi phải **đo trên đúng nền tảng đích** trước khi phát lệnh CHẶN: SQLite ≠ D1,
+"chuẩn SQL" ≠ cái runtime thật cho phép. Và khi sai thì **đính chính công khai ngay trong
+bản review kế tiếp**, ghi rõ chỗ sai — không im lặng sửa.
+
