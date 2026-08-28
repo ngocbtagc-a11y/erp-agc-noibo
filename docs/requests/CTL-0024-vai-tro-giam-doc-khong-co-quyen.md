@@ -1,4 +1,9 @@
-# CTL-0023 — Vai trò `giam_doc` / `pho_giam_doc` không có trong bảng quyền
+# CTL-0024 — Vai trò `giam_doc` / `pho_giam_doc` không có trong bảng quyền
+
+> Phiếu này mở ở commit `b7e87bf` với số **CTL-0023** — TRÙNG với
+> `CTL-0023-lam-lai-giao-dien-sang-hien-dai.md` đã có sẵn trên `main`. Vòng 2
+> đổi thành **CTL-0024** (số còn trống). Ai gặp "CTL-0023 vai trò giám đốc"
+> trong nhật ký git thì đọc phiếu này.
 
 - **Requester**: KHỈ ĐỘT (phát hiện khi làm CTL-0003 / SPEC-0002), 2026-08-28
 - **Category**: `FIX_REQUIRED` — nghi mất quyền trên bản thật

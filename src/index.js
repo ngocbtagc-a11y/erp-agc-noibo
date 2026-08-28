@@ -3343,8 +3343,35 @@ async function gopYDanhSach(req, env) {
   `);
   const { results } = laAd ? await stmt.all() : await stmt.bind(phien.nhan_su_id).all();
 
+  /* ---- CẮT RUỘT NỘI BỘ Ở ĐÂY, KHÔNG CHE Ở GIAO DIỆN (BH-44) ------------
+     Bản trước trả đủ các trường này cho MỌI dòng người gửi xem được, rồi
+     nhờ biến `xemRuot` trong app.js che đi. Che ở trình duyệt không phải
+     phân quyền: mở tab Network là đọc được link PR và mức rủi ro nội bộ.
+     Nay máy chủ NGỪNG GỬI — xoá hẳn khoá khỏi object, không đặt null, để
+     trong JSON không còn gì mà lộ.
+
+     Ai vẫn được nhận: Admin/Sếp · quản lý cấp 1 của NGƯỜI GỬI (người phải
+     bấm duyệt) · người được giao phụ trách (phải có link PR mà làm).
+     Ai không: người xem dòng này chỉ vì họ là NGƯỜI GỬI — kể cả khi bản
+     thân họ đang là trưởng phòng của một phòng khác (ca biên: với góp ý
+     của chính mình, chức trưởng phòng không cho thêm quyền nào).
+
+     Người gửi KHÔNG mất gì họ cần: trạng thái, next_owner, tên quản lý
+     đang giữ, mốc đã duyệt cấp 1 / Sếp, lý do từ chối công khai
+     (`ly_do_tu_choi`), số lần gửi lại, số ngày chờ — đều nằm ngoài danh
+     sách này và vẫn trả về đủ. */
+  const GOPY_RUOT_NOI_BO = ['risk', 'bang_chung_url', 'de_xuat_loai', 'de_xuat_risk',
+                            'de_xuat_trang_thai', 'de_xuat_ly_do', 'de_xuat_spec'];
+  const gopY = laAd ? results : results.map(g => {
+    if (g.quan_ly_cap1_id === phien.nhan_su_id || g.nguoi_phu_trach_id === phien.nhan_su_id)
+      return g;
+    const cat = { ...g };
+    for (const k of GOPY_RUOT_NOI_BO) delete cat[k];
+    return cat;
+  });
+
   return json({
-    gop_y: results, la_admin: laAd, toi_la: phien.nhan_su_id,
+    gop_y: gopY, la_admin: laAd, toi_la: phien.nhan_su_id,
     cong_duyet_bat: CONG_DUYET_BAT
   });
 }
@@ -3751,6 +3778,17 @@ async function gopYLichSu(req, env) {
   if (!g) return loi('Không tìm thấy góp ý này', 404);
   if (!await gopYDuocXem(env, phien, id)) return loi('Không có quyền', 403);
 
+  /* `ghi_chu` là ô "Ghi chú duyệt" quản lý và Sếp viết CHO NHAU (app.js còn
+     tự điền "🦊 Hồ Ly (AI) đề xuất: …", và lý do duyệt vượt cấp nằm ở đây).
+     Người gửi không được đọc. Cắt ở MÁY CHỦ (BH-44), không che ở giao diện.
+     Người gửi VẪN thấy đủ đường đi của góp ý mình: đổi từ trạng thái nào
+     sang trạng thái nào, ai đổi, lúc nào, người hay máy đổi — nên câu hỏi
+     "góp ý của tôi đi tới đâu rồi" vẫn trả lời được. Còn lý do từ chối
+     CÔNG KHAI nằm ở `gop_y.ly_do_tu_choi`, trả riêng ở danh sách, không
+     dính bản cắt này. */
+  const xemGhiChu = laAdmin(phien.vai_tro)
+    || (await nguoiDuyetCap1(env, g.nguoi_gui_id)).id === phien.nhan_su_id;
+
   const { results } = await env.DB.prepare(`
     SELECT ls.tu_trang_thai, ls.den_trang_thai, ls.ghi_chu, ls.luc,
            ls.nguoi_thuc_hien_loai, ls.tac_nhan, ls.job_id,
@@ -3762,7 +3800,9 @@ async function gopYLichSu(req, env) {
      ORDER BY ls.luc ASC, ls.id ASC
   `).bind(id).all();
 
-  return json({ lich_su: results });
+  return json({
+    lich_su: xemGhiChu ? results : results.map(({ ghi_chu, ...r }) => r)
+  });
 }
 
 /* Ảnh đính kèm 1 góp ý — chủ sở hữu hoặc Admin mới xem được (KHÔNG mở cho

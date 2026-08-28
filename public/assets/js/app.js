@@ -3452,11 +3452,18 @@ async function khoiDongGopY() {
 
   /* Chip rủi ro. `risk` là mức ĐÃ CHỐT; chưa ai chốt thì hiện đề xuất của Hồ
      Ly ở dạng MỜ kèm 🦊 — người dùng phải phân biệt được "máy đoán" với "người
-     đã quyết" (Rule 9). Đây là lần đầu de_xuat_risk hiện ra màn hình. */
+     đã quyết" (Rule 9). Đây là lần đầu de_xuat_risk hiện ra màn hình.
+
+     KHÔNG lọc quyền ở đây: từ bản vá REV-0018, MÁY CHỦ đã ngừng gửi
+     `risk`/`de_xuat_risk` cho người chỉ xem với tư cách người gửi
+     (src/index.js — GOPY_RUOT_NOI_BO). Hai trường đó thành `undefined` →
+     hàm trả CHUỖI RỖNG và để chỗ gọi tự quyết vẽ gì: ô bảng vẽ gạch ngang
+     cho thẳng cột, thẻ thì để trắng. Không chip rỗng, không lỗi JS. Đây chỉ
+     là lớp phòng thân — ranh giới quyền thật nằm ở máy chủ (BH-44). */
   function gyChipRisk(g) {
     if (g.risk) return `<span class="tag ${GOPY_RISK_MAU[g.risk] || 'mute'}">${GOPY_RISK_CHU[g.risk] || g.risk}</span>`;
     if (g.de_xuat_risk) return `<span class="tag mute gy-risk-mo" title="Hồ Ly đề xuất, chưa ai chốt">🦊 ${GOPY_RISK_CHU[g.de_xuat_risk] || g.de_xuat_risk}</span>`;
-    return '<span class="sm">—</span>';
+    return '';
   }
 
   /* "Đang chờ ai" — dịch mã kỹ thuật sang TÊN NGƯỜI THẬT. Người dùng không
@@ -3568,7 +3575,7 @@ async function khoiDongGopY() {
       `<td><div class="nm">${esc(g.tieu_de)}</div>${g.khu_vuc ? `<div class="sm">${esc(gyKhuVuc(g))}</div>` : ''}</td>` +
       (laAd ? `<td class="sm">${esc(g.nguoi_gui_ten)}<div class="sm">${esc(g.nguoi_gui_bo_phan || '')}</div></td>` : '') +
       `<td class="sm">${thoiGianTruoc(g.tao_luc)}</td>` +
-      `<td>${gyChipRisk(g)}</td>` +
+      `<td>${gyChipRisk(g) || '<span class="sm">—</span>'}</td>` +
       `<td>${gyNhanTrangThai(g)} ${gyTickCong(g)}</td>` +
       `<td class="sm">${esc(gyChoAi(g))}</td>` +
       `<td><button type="button" class="btn-nho" data-gyxem="${g.id}">Xem</button></td></tr>`;
