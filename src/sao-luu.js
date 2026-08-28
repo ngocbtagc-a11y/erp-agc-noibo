@@ -664,7 +664,7 @@ CÓ TRỤC TRẶC
   · "please use the state.storage.transaction() ... instead of ... BEGIN"
       → Đang chạy một file .sql sinh ra cho sqlite3 (có dòng BEGIN) vào ERP.
         ERP không nhận dòng đó. Sinh lại bản đúng bằng lệnh:
-              node KHOI-PHUC.mjs --dong-y
+              node KHOI-PHUC.mjs
         rồi chạy lại Bước 5. Lỗi này dừng trước khi ghi, không mất gì.
   · Chạy nửa chừng thì mất điện / mất mạng / lỡ đóng cửa sổ
       → DỮ LIỆU KHÔNG MẤT. Cả file .sql chạy trọn trong MỘT giao dịch: hoặc vào
@@ -677,7 +677,7 @@ CÓ TRỤC TRẶC
         KIEM-TRA.csv để biết đang đứng ở đâu.
   · Muốn chạy file KHOI-PHUC.sql bằng sqlite3 hoặc DB Browser (không qua ERP)
       → Sinh lại bản dành riêng cho công cụ đó, nó tự bọc giao dịch:
-              node KHOI-PHUC.mjs --sql-cho-sqlite --dong-y
+              node KHOI-PHUC.mjs --sql-cho-sqlite
         Bản mặc định KHÔNG bọc, vì ERP tự bọc hộ và cấm file tự bọc lấy.
 
 
