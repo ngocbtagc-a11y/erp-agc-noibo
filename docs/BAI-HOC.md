@@ -513,3 +513,36 @@ màu rất đẹp trong khi `var(--bg)` chỉ được dùng **đúng một lầ
 ΔL\* với mặt thẻ: câu hỏi không phải "màu có đúng chuẩn không" mà **"đổi xong Sếp có NHÌN
 THẤY khác không"**. Đo chuẩn mà trượt mục đích thì vẫn là trượt.
 
+
+**BH-44 · Che ở trình duyệt không phải phân quyền. Ẩn nút chỉ là hàng rào giấy.**
+Vòng 2 của cổng duyệt góp ý trả **đủ** ruột nội bộ (mức rủi ro, link PR, ghi chú riêng) cho
+mọi người xem được dòng đó, rồi nhờ một biến trong `app.js` che đi. Mở tab Network là đọc
+được. Cùng lỗi ấy lặp ở tầng nút bấm: giấu nút "Duyệt" của anh Phong mà `POST
+/api/gop-y/duyet` vẫn nhận — gọi thẳng API là qua.
+→ Máy chủ **ngừng gửi** (xoá hẳn khoá khỏi JSON, không đặt `null`) và **ngừng nhận** (403 ở
+handler). Giao diện chỉ đi theo cho đỡ vô nghĩa, không bao giờ là chỗ chặn.
+
+**BH-45 · Một cái cờ quyền, NĂM cửa tắt được nó. Bịt đúng cửa người ta chỉ cho là bịt hụt.**
+REV-0027 chỉ ra 3 cửa vòng qua cổng duyệt góp ý; đi tìm tiếp thì ra **6**. Guard "không tắt
+cái cờ cuối cùng" nằm chặt ở `quyen-duyet-gopy`, nhưng cờ sống trên một **dòng
+`tai_khoan`** — mà dòng đó thì `khoa-tai-khoan` khoá được, `xoa-tai-khoan` xoá được,
+`xoa-nhan-su` xoá kèm được, và `dat-lai-mat-khau` **trả thẳng mật khẩu tạm** cho người gọi
+(cửa nặng nhất: không vượt cổng mà **mượn danh tính** — hồ sơ duyệt ghi tên Sếp trong khi
+Sếp không hề bấm). Cùng khuôn ở tầng dữ liệu: hai cửa **ghi đè `next_owner`** kéo việc đã
+lên Sếp tụt về cổng 1 mà **không ai cố ý**.
+→ Hỏi "**cái quyền này SỐNG Ở ĐÂU, và có bao nhiêu đường chạm được vào chỗ đó?**" rồi liệt
+kê **hết** đường, gọi từng đường bằng tư cách kẻ bị tước quyền. Và bàn đo phải có ca cho
+từng đường: bản cũ chạy **45 ĐẠT / 0 TRƯỢT** mà không bắt được một lỗi nào trong sáu —
+bàn đo xanh mà lỗi vẫn còn thì **bàn đo là thứ đầu tiên phải sửa** (bản mới: 89 phép, 10 ca
+đối chứng, cây cũ chấm lại **64 ĐẠT / 25 TRƯỢT**).
+
+**BH-46 · Thứ tự triển khai dựa vào trí nhớ con người là thứ sẽ sai một ngày nào đó.**
+`docPhien()` đọc `t.duyet_gopy` không phòng thủ: quên nạp migration trước khi deploy code
+là **500 toàn hệ thống** — nhân viên kho chẳng dính gì tới góp ý cũng mất đăng nhập (đo:
+`/toi-la-ai`, `/danh-ba`, `/thong-bao`, `/kho/san-pham` — 4/4 đường 500). "DB trước, code
+sau" vẫn đúng, nhưng nó là **quy trình**, không được là **điều kiện sống còn**.
+→ ~12 dòng `try/catch` bắt đúng `no such column` rồi chạy lại với `0 AS duyet_gopy`: thiếu
+cột thì cờ về `false` — **hỏng theo chiều an toàn**, hệ thống chạy tiếp ở mức không-quyền.
+Cùng nguyên tắc cho migration: backfill bắt hụt phải **gãy to** (`CHECK constraint failed:
+backfill_duyet_gopy_phai_bat_dung_1_nguoi`), không được báo thành công rồi để cả hàng chờ
+đứng mà không ai biết.

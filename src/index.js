@@ -816,6 +816,14 @@ async function qtXoaNhanSu(req, env) {
   const ns = await env.DB.prepare('SELECT id FROM nhan_su WHERE id = ?').bind(id).first();
   if (!ns) return loi('Không tìm thấy nhân sự', 404);
 
+  // CỬA 5a (REV-0027) — hàm này XOÁ LUÔN tai_khoan bên dưới, nên nó là một
+  // đường thứ ba tới cùng một hậu quả: cờ duyệt góp ý biến mất khỏi DB.
+  {
+    const tkNs = await env.DB.prepare('SELECT id FROM tai_khoan WHERE nhan_su_id = ?').bind(id).first();
+    if (tkNs && await laNguoiDuyetGopYCuoiCung(env, tkNs.id))
+      return loi(LOI_MAT_NGUOI_DUYET, 409);
+  }
+
   try {
     await env.DB.prepare('DELETE FROM tai_khoan WHERE nhan_su_id = ?').bind(id).run();
     await env.DB.prepare('DELETE FROM nhan_su WHERE id = ?').bind(id).run();
@@ -889,9 +897,65 @@ async function qtTaoTaiKhoan(req, env) {
   return json({ ok: true, ten_dang_nhap: ten, mat_khau_tam: matKhauTam });
 }
 
+/* ==========================================================================
+   BỐN CỬA CÓ THỂ LÀM BIẾN MẤT NGƯỜI DUYỆT GÓP Ý (REV-0027 L3 + cửa thứ năm)
+   --------------------------------------------------------------------------
+   qtQuyenDuyetGopY chặn rất chặt "không tắt cái cờ cuối cùng" (409). Nhưng
+   cờ nằm trên một DÒNG tai_khoan — mà dòng đó thì admin khoá được, xoá được,
+   xoá theo hồ sơ nhân sự được, và đặt lại mật khẩu được. Đo được trước bản vá:
+     · khoa-tai-khoan tài khoản Sếp  → 200, cờ vẫn =1 nhưng kich_hoat=0 →
+       còn 0 người duyệt ĐANG HOẠT ĐỘNG; Sếp gọi API 401, hết đường uỷ quyền.
+     · xoa-tai-khoan                → 200, cờ biến mất khỏi DB.
+     · xoa-nhan-su                  → 200, xoá luôn tai_khoan bên dưới (cửa 5a).
+     · dat-lai-mat-khau             → 200 + TRẢ THẲNG mật khẩu tạm cho người
+       gọi → anh Phong đăng nhập BẰNG TÀI KHOẢN SẾP và duyệt với tên Sếp. Đây
+       là cửa nặng nhất: nó không chỉ vượt cổng, nó làm HỒ SƠ DUYỆT NÓI DỐI
+       (Rule 10) — lịch sử ghi Sếp duyệt trong khi Sếp không hề bấm (cửa 5b).
+   Người bị lấy quyền duyệt không được phép tắt người duyệt, bằng bất kỳ cửa
+   nào trong bốn cửa trên.
+
+   Đường cứu khi Sếp mất máy / quên mật khẩu: KHÔNG đi vòng qua admin nữa mà
+   chạy thẳng ở tầng DB (đã chép vào ADR-0015 mục Hệ quả):
+     npx wrangler d1 execute crm-agc --remote \
+       --command "UPDATE tai_khoan SET duyet_gopy = 1 WHERE ten_dang_nhap='<số mới>'"
+   ========================================================================== */
+
+/* Tài khoản này có phải NGƯỜI DUY NHẤT còn duyệt được góp ý không?
+   Thiếu cột `duyet_gopy` (chưa nạp migration) → coi như chưa có cơ chế cờ,
+   trả false: hỏng theo chiều an toàn, không chặn oan việc quản trị. */
+async function laNguoiDuyetGopYCuoiCung(env, tkId) {
+  try {
+    const tk = await env.DB.prepare(
+      'SELECT duyet_gopy, kich_hoat FROM tai_khoan WHERE id = ?').bind(tkId).first();
+    if (!tk || !tk.duyet_gopy || !tk.kich_hoat) return false;
+    const con = await env.DB.prepare(
+      'SELECT COUNT(*) AS n FROM tai_khoan WHERE duyet_gopy = 1 AND kich_hoat = 1 AND id <> ?')
+      .bind(tkId).first();
+    return !con || !con.n;
+  } catch (e) {
+    if (/no such column/i.test(String(e && e.message))) return false;
+    throw e;
+  }
+}
+
+/* Tài khoản này có đang GIỮ cờ duyệt góp ý không (bất kể còn ai khác giữ)? */
+async function dangGiuCoDuyetGopY(env, tkId) {
+  try {
+    const tk = await env.DB.prepare(
+      'SELECT duyet_gopy FROM tai_khoan WHERE id = ?').bind(tkId).first();
+    return !!(tk && tk.duyet_gopy);
+  } catch (e) {
+    if (/no such column/i.test(String(e && e.message))) return false;
+    throw e;
+  }
+}
+
+const LOI_MAT_NGUOI_DUYET =
+  'Không thể — đây là người DUY NHẤT còn duyệt được góp ý ERP. Bật cờ duyệt cho người thay trước (tab Quản trị), rồi hãy làm việc này.';
+
 /* Đặt lại mật khẩu cho một tài khoản → trả mật khẩu tạm MỘT LẦN */
 async function qtDatLaiMatKhau(req, env) {
-  const { loi: l } = await batBuocAdmin(req, env);
+  const { phien, loi: l } = await batBuocAdmin(req, env);
   if (l) return l;
 
   let b;
@@ -899,6 +963,12 @@ async function qtDatLaiMatKhau(req, env) {
 
   const tkId = parseInt(b.tai_khoan_id, 10);
   if (!tkId) return loi('Thiếu tài khoản');
+
+  // CỬA 5b — mật khẩu tạm được TRẢ VỀ cho người gọi, nên đặt lại mật khẩu của
+  // người giữ cờ duyệt = mượn được danh tính người đó. Chỉ chính chủ mới đặt
+  // lại được mật khẩu của một tài khoản đang giữ cờ duyệt góp ý.
+  if (tkId !== phien.tai_khoan_id && await dangGiuCoDuyetGopY(env, tkId))
+    return loi('Không thể đặt lại mật khẩu của người đang giữ quyền duyệt góp ý ERP — mật khẩu tạm trả về đây sẽ cho phép đăng nhập bằng tài khoản đó và duyệt dưới tên người đó.', 403);
 
   const tk = await env.DB.prepare('SELECT id, ten_dang_nhap FROM tai_khoan WHERE id = ?').bind(tkId).first();
   if (!tk) return loi('Không tìm thấy tài khoản', 404);
@@ -929,6 +999,12 @@ async function qtKhoaTaiKhoan(req, env) {
   if (tkId === phien.tai_khoan_id && !kichHoat) {
     return loi('Không thể tự khoá tài khoản của chính mình');
   }
+
+  // REV-0027 L3 — khoá tài khoản người duyệt cuối cùng = tắt cổng duyệt góp ý
+  // bằng cửa sau: cờ vẫn còn trên dòng đó nhưng kich_hoat = 0 nên không ai
+  // duyệt được, và chính người đó cũng 401 nên hết đường uỷ quyền cho ai.
+  if (!kichHoat && await laNguoiDuyetGopYCuoiCung(env, tkId))
+    return loi(LOI_MAT_NGUOI_DUYET, 409);
 
   await env.DB.prepare('UPDATE tai_khoan SET kich_hoat = ? WHERE id = ?').bind(kichHoat, tkId).run();
   if (!kichHoat) {
@@ -1050,6 +1126,9 @@ async function qtXoaTaiKhoan(req, env) {
       return loi('Không thể xoá — đây là tài khoản Admin cuối cùng còn hoạt động', 409);
     }
   }
+
+  // REV-0027 L3 — xoá hẳn dòng tai_khoan là làm cờ duyệt biến mất khỏi DB.
+  if (await laNguoiDuyetGopYCuoiCung(env, tkId)) return loi(LOI_MAT_NGUOI_DUYET, 409);
 
   await env.DB.prepare('DELETE FROM tai_khoan WHERE id = ?').bind(tkId).run();
   return json({ ok: true });
@@ -3620,12 +3699,65 @@ async function gopYGui(req, env) {
     dinhKem = raw;
   }
 
-  const r = await env.DB.prepare(`
-    INSERT INTO gop_y (nguoi_gui_id, tieu_de, boi_canh, vuong_o_dau, mong_muon, tan_suat, khu_vuc, dinh_kem, trang_thai, tao_luc)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'moi', datetime('now', '+7 hours'))
-  `).bind(phien.nhan_su_id, tieuDe, boiCanh, vuongODau, mongMuon, tanSuat, khuVuc, dinhKem).run();
+  /* ---- VIỆC 7 — KHÔNG AI DUYỆT GÓP Ý CỦA CHÍNH MÌNH --------------------
+     Sếp Ngọc 28/08/2026, sau khi dùng thật: "lỗi của tôi tự góp ý mà vẫn bắt
+     tôi duyệt, bị ngu à :))))". Đúng: một cái cổng bắt người ta gật với chính
+     mình thì không phải cổng duyệt, chỉ là một cú bấm thừa mỗi ngày.
 
-  return json({ ok: true, id: r.meta.last_row_id });
+       · NGƯỜI GIỮ CỜ DUYỆT (Sếp) gửi → vào thẳng 'cho_phan_tich', không qua
+         cửa nào. Không có ai ở trên để duyệt, và tự gật với mình thì không
+         thêm được sự thật nào.
+       · KHÔNG CÓ AI Ở CẤP 1 (điển hình là quản lý phòng / trưởng phòng —
+         GOPY_SQL_QL1 đã loại chính mình bằng `<> n.id`) → bỏ qua cổng 1, đi
+         thẳng lên Sếp. Trước bản vá việc này nằm ở next_owner='QL_CAP1' chờ
+         một người KHÔNG TỒN TẠI, và chỉ thoát ra được nhờ SLA sau 5 ngày.
+       · Nhân viên thường → nguyên như cũ: quản lý cấp 1 rồi mới tới Sếp.
+
+     BỎ QUA NHƯNG KHÔNG ÂM THẦM: mỗi ca bỏ qua ghi MỘT DÒNG lịch sử nói rõ vì
+     sao, để sau này không ai phải đoán vì sao góp ý đó không có dấu duyệt.
+
+     VÒNG LẶP (Sếp vừa giữ cờ, vừa là quản lý cấp 1 của chính mình): nhánh cờ
+     xét TRƯỚC và `return` luôn, nên không có đường nào chạy hai nhánh. Ở tầng
+     dưới, GOPY_SQL_QL1 cũng đã cấm một người làm quản lý cấp 1 của chính mình. */
+  const nguoiGuiGiuCo = duocDuyetGopY(phien);
+  const ql1 = await nguoiDuyetCap1(env, phien.nhan_su_id);
+  // Người giữ cờ: chốt luôn mức rủi ro theo đề xuất máy (chưa có thì MEDIUM,
+  // đúng sàn an toàn của cổng duyệt) — nếu không thì việc này kẹt ở bước
+  // 'da_duyet' vì `canRisk` mà không còn cổng nào để chốt rủi ro nữa.
+  const tt = nguoiGuiGiuCo ? 'cho_phan_tich' : 'moi';
+  const [cur, nxt] = nguoiGuiGiuCo ? GOPY_OWNER_THEO_TT.cho_phan_tich
+                   : (!ql1.id ? ['NGUOI_GUI', 'OWNER'] : GOPY_OWNER_THEO_TT.moi);
+
+  const r = await env.DB.prepare(`
+    INSERT INTO gop_y (nguoi_gui_id, tieu_de, boi_canh, vuong_o_dau, mong_muon, tan_suat, khu_vuc, dinh_kem,
+                       trang_thai, current_owner, next_owner, tao_luc,
+                       risk, risk_chot_boi_id, risk_chot_luc,
+                       duyet_cap1_boi_id, duyet_cap1_luc, duyet_cap1_nguon,
+                       duyet_owner_boi_id, duyet_owner_luc)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', '+7 hours'),
+            ?, ?, ${nguoiGuiGiuCo ? "datetime('now', '+7 hours')" : 'NULL'},
+            ?, ${nguoiGuiGiuCo ? "datetime('now', '+7 hours')" : 'NULL'}, ?,
+            ?, ${nguoiGuiGiuCo ? "datetime('now', '+7 hours')" : 'NULL'})
+  `).bind(phien.nhan_su_id, tieuDe, boiCanh, vuongODau, mongMuon, tanSuat, khuVuc, dinhKem,
+          tt, cur, nxt,
+          nguoiGuiGiuCo ? 'MEDIUM' : null, nguoiGuiGiuCo ? phien.nhan_su_id : null,
+          nguoiGuiGiuCo ? phien.nhan_su_id : null, nguoiGuiGiuCo ? 'TU_DUYET_OWNER' : null,
+          nguoiGuiGiuCo ? phien.nhan_su_id : null).run();
+
+  const id = r.meta.last_row_id;
+  if (nguoiGuiGiuCo) {
+    await gopYGhiLichSu(env, id, 'moi', 'cho_phan_tich', {
+      nguoiDoiId: phien.nhan_su_id,
+      ghiChu: 'Bỏ qua cả hai cổng duyệt vì người gửi cũng là người duyệt cấp cuối — không ai duyệt góp ý của chính mình. Rủi ro tạm ghi Trung bình.'
+    });
+  } else if (!ql1.id) {
+    await gopYGhiLichSu(env, id, 'moi', 'moi', {
+      nguoiDoiId: phien.nhan_su_id,
+      ghiChu: `Bỏ qua cổng duyệt cấp 1 vì người gửi không có ai duyệt cấp trên (${ql1.nguon}) — chuyển thẳng lên ERP Owner.`
+    });
+  }
+
+  return json({ ok: true, id, trang_thai: tt, next_owner: nxt });
 }
 
 /* Người duyệt cấp 1 của một nhân sự (ADR-0006 B1). Trả kèm `nguon` để ĐÓNG
@@ -4173,7 +4305,15 @@ async function gopYDoiTrangThai(req, env) {
       //  · chỉ Sếp HOẶC chính người đã gửi góp ý này. NGƯỜI LÀM không tự bấm được
       //  · bắt buộc link bằng chứng, thiếu là 400 chứ không phải cảnh báo suông
       hoan_thanh:          { tu: ['san_sang_phat_hanh'], ai: laOwner || laNguoiGui, batBuocBangChung: true },
-      bi_chan:             { tu: dangChay, ai: laOwner, batBuocGhiChu: true }
+      // CỬA THỨ BA (REV-0027 L1) — cùng loại với `da_huy` ở trên, chỉ khác tên.
+      // `dangChay` chứa cả 'moi' lẫn 'cho_quyet_dinh', nên "Chặn" một việc
+      // ĐANG NẰM Ở CỔNG DUYỆT là rút nó khỏi hàng chờ của Sếp vô thời hạn —
+      // từ chối trá hình (đo được: 2 cú bấm rút 2/5 việc khỏi hàng chờ).
+      // Chặn việc ĐÃ QUA cổng (đang phân tích / đang làm / chờ nghiệm thu…)
+      // vẫn là việc vận hành — admin bấm được như cũ, không cắt quá tay.
+      bi_chan:             { tu: dangChay, ai: dangOCongDuyet ? laDuyetCuoi : laOwner,
+                             batBuocGhiChu: true,
+                             loiRieng: 'Góp ý này đang chờ duyệt — chặn nó lúc này chính là từ chối nó, chỉ ERP Owner làm được' }
     };
     const luat = CHUYEN_HOP_LE[trangThaiMoi];
     if (!luat || !luat.tu.includes(g.trang_thai)) {
@@ -4204,8 +4344,29 @@ async function gopYDoiTrangThai(req, env) {
   if (loaiMoi !== undefined) { if (!laOwner) return loi('Chỉ ERP Owner mới phân loại được', 403); gan.push('loai = ?'); gia.push(loaiMoi); }
   if (nguoiPhuTrachMoi !== undefined) { if (!laOwner) return loi('Chỉ ERP Owner mới giao người phụ trách được', 403); gan.push('nguoi_phu_trach_id = ?'); gia.push(nguoiPhuTrachMoi); }
 
-  // current_owner/next_owner do BACKEND tự tính — client không gửi lên được.
-  if (!gan.some(x => x.startsWith('next_owner'))) {
+  /* current_owner/next_owner do BACKEND tự tính — client không gửi lên được.
+
+     CỬA THỨ TƯ (REV-0027 L2) — `trangThaiMoi !== g.trang_thai` là điều kiện
+     MỚI, và là cả bản vá. Nhánh "lưu tại chỗ" (giao người phụ trách, dán bằng
+     chứng, gỡ cờ xác minh) KHÔNG chuyển trạng thái, nên không có gì để tính
+     lại; vậy mà bản cũ vẫn ghi đè hai cột này từ GOPY_OWNER_THEO_TT. Với
+     trạng thái 'moi' bảng đó trả ['NGUOI_GUI','QL_CAP1'] → việc đã được SLA
+     đẩy lên Sếp ngày thứ 5, và việc gửi lại lần thứ 3 (hai cơ chế ADR-0015 kê
+     làm chỗ đỡ cho "một người duyệt"), đều TỤT VỀ cổng 1 chỉ vì admin bấm
+     giao người phụ trách — 200, không cảnh báo, không có đường nào trong giao
+     diện đưa lại về OWNER. Nổ cả khi không ai cố ý.
+     Trạng thái không đổi thì NGƯỜI ĐANG CHỜ cũng không đổi.
+
+     CÙNG GỐC, CỬA THỨ SÁU (tự tìm thêm, cùng loại L2): VÀO và RA khỏi
+     'bi_chan' cũng không được tính lại. Bảng trên cho bi_chan là OWNER/OWNER,
+     nên chặn rồi gỡ chặn = XOÁ SẠCH thông tin "ai đang chờ": việc đã được SLA
+     đẩy lên Sếp, gỡ chặn xong rơi về cổng 1 (GOPY_OWNER_THEO_TT.moi) và Sếp
+     mất nó khỏi hàng chờ. "Bị chặn" nghĩa là ĐÓNG BĂNG — ai đang chờ thì vẫn
+     là người đó khi rã băng. Panel "Chờ tôi duyệt" lọc theo trang_thai trước
+     (app.js gyDangChoToi) nên việc bị chặn vẫn không hiện ra, không cần nhồi
+     OWNER vào để giấu nó. */
+  const raVaoBiChan = trangThaiMoi === 'bi_chan' || g.trang_thai === 'bi_chan';
+  if (trangThaiMoi !== g.trang_thai && !raVaoBiChan && !gan.some(x => x.startsWith('next_owner'))) {
     const [cur, nxt] = GOPY_OWNER_THEO_TT[trangThaiMoi] || ['OWNER', 'OWNER'];
     gan.push('current_owner = ?', 'next_owner = ?'); gia.push(cur, nxt);
   }

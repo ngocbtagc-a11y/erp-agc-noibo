@@ -62,3 +62,35 @@ trực tiếp gật là đủ (~60% số góp ý — ADR-0006 A1); (b) **SLA nh�
   nhập toàn hệ thống**, không riêng màn Góp ý.
 - Lùi: `migrations/lui-quyen-duyet-gopy.sql`, và phải **deploy code cũ trước**
   rồi mới lùi DB. Lùi xong quyền quay về "admin nào cũng duyệt được".
+- **Bốn cửa quản trị không được phép tắt người duyệt** (REV-0027 L3 + cửa thứ
+  năm): `khoa-tai-khoan`, `xoa-tai-khoan`, `xoa-nhan-su` trả **409** khi đối
+  tượng là người **duy nhất** còn `duyet_gopy = 1 AND kich_hoat = 1`; và
+  `dat-lai-mat-khau` trả **403** với **mọi** tài khoản đang giữ cờ (trừ chính
+  chủ) — mật khẩu tạm được trả thẳng cho người gọi, nên đặt lại mật khẩu của
+  Sếp là mượn được danh tính Sếp mà duyệt, và hồ sơ duyệt sẽ nói dối.
+- **Thiếu cột `duyet_gopy` không còn làm sập đăng nhập:** `docPhien()` bắt
+  đúng lỗi `no such column` rồi lùi về `0 AS duyet_gopy` → cờ về `false`, hệ
+  thống chạy tiếp ở mức không-quyền. Thứ tự "DB trước, code sau" **vẫn giữ**,
+  nhưng nay nó là quy trình chứ không còn là điều kiện sống còn.
+- **Migration tự kiểm:** `them-quyen-duyet-gopy.sql` gãy bằng `CHECK
+  constraint failed: kiem_backfill_duyet_gopy` nếu backfill bật cờ cho khác 1
+  tài khoản. Không còn ca "migration báo thành công mà không ai duyệt được".
+- **Không ai duyệt góp ý của chính mình** (Sếp chốt 28/08/2026, sau khi dùng
+  thật): người **giữ cờ** gửi góp ý thì vào thẳng `cho_phan_tich`; người
+  **không có ai ở cấp 1** (quản lý phòng/trưởng phòng) bỏ qua cổng 1, lên
+  thẳng Sếp; nhân viên thường vẫn đi đủ hai cổng. Mỗi ca bỏ qua ghi **một
+  dòng lịch sử** nói rõ lý do — bỏ qua âm thầm là sai.
+
+## Đường cứu tầng DB — mất điện thoại, quên mật khẩu, nghỉ dài (REV-0027 L6)
+
+Cờ duyệt chỉ đi ra từ tay người đang giữ nó, nên nếu Sếp **không đăng nhập
+được** thì không còn ai bật cờ cho ai. Đây là đường cứu chính thức, chạy thẳng
+ở tầng DB — cố ý **không** đi vòng qua tài khoản admin:
+
+```
+npx wrangler d1 execute crm-agc --remote \
+  --command "UPDATE tai_khoan SET duyet_gopy = 1, kich_hoat = 1 WHERE ten_dang_nhap = '<số mới của Sếp>'"
+```
+
+Trước đây câu này chỉ nằm ở chú thích cuối `migrations/them-quyen-duyet-gopy.sql`
+— đường cứu giấu trong comment migration thì coi như không có.

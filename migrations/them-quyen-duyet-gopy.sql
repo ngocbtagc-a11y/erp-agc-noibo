@@ -66,8 +66,44 @@ UPDATE tai_khoan SET duyet_gopy = 1
  WHERE NOT EXISTS (SELECT 1 FROM tai_khoan WHERE duyet_gopy = 1)
    AND nhan_su_id = (SELECT id FROM nhan_su WHERE ho_ten = 'Bùi Thị Ngọc' ORDER BY id LIMIT 1);
 
--- ---- Tự đối chiếu sau khi chạy (chạy tay, phải ra ĐÚNG 1 dòng) ----------
+-- ==========================================================================
+-- TỰ KIỂM BẮT BUỘC — MIGRATION PHẢI GÃY TO NẾU BACKFILL HỤT (REV-0027 L5)
+-- --------------------------------------------------------------------------
+-- Trước bản vá này, hai câu UPDATE trên có thể bắt trúng 0 tài khoản (số điện
+-- thoại đăng nhập đã đổi VÀ họ tên trong hồ sơ lệch một dấu cách) mà migration
+-- vẫn báo "thành công". Kết quả: KHÔNG AI duyệt được góp ý, KHÔNG AI cấp được
+-- cờ cho ai, cả hàng chờ đứng — và không một dòng log nào nói ra điều đó.
+-- "Nhớ chạy câu đối chiếu bằng tay" là thứ sẽ quên đúng vào hôm bận nhất, nên
+-- nó phải là RÀNG BUỘC CỦA DB, không phải một dòng chú thích.
+--
+-- CÁCH LÀM: SQLite không có RAISE ngoài trigger, nên mượn CHECK. ok = 0 thì
+-- INSERT gãy → cả file dừng, wrangler in đỏ:
+--     CHECK constraint failed: backfill_duyet_gopy_phai_bat_dung_1_nguoi
+-- Thấy dòng đó nghĩa là BACKFILL KHÔNG BẮT ĐÚNG 1 NGƯỜI — ĐỪNG deploy code;
+-- tra lại số điện thoại đăng nhập của Sếp rồi bật tay:
+--     UPDATE tai_khoan SET duyet_gopy = 1 WHERE ten_dang_nhap = '<số của Sếp>';
+--
+-- Ngoại lệ DUY NHẤT: DB chưa có tài khoản nào đang hoạt động (bàn thử dựng
+-- lược đồ trắng) — ở đó không có gì để backfill, không phải lỗi.
+-- Ràng buộc được ĐẶT TÊN: SQLite in tên ràng buộc chứ không in tên bảng, nên
+-- tên phải tự nói ra chuyện gì hỏng khi nó gãy.
+CREATE TABLE IF NOT EXISTS kiem_backfill_duyet_gopy (
+  ok INTEGER NOT NULL
+    CONSTRAINT backfill_duyet_gopy_phai_bat_dung_1_nguoi CHECK (ok = 1)
+);
+
+INSERT INTO kiem_backfill_duyet_gopy (ok)
+SELECT CASE
+         WHEN (SELECT COUNT(*) FROM tai_khoan WHERE kich_hoat = 1) = 0 THEN 1
+         WHEN (SELECT COUNT(*) FROM tai_khoan WHERE duyet_gopy = 1 AND kich_hoat = 1) = 1 THEN 1
+         ELSE 0
+       END;
+
+DROP TABLE kiem_backfill_duyet_gopy;
+
+-- ---- Đối chiếu bằng mắt sau khi chạy (phải ra ĐÚNG 1 dòng, ĐÚNG TÊN Sếp) --
 --   SELECT t.ten_dang_nhap, n.ho_ten FROM tai_khoan t
 --     JOIN nhan_su n ON n.id = t.nhan_su_id WHERE t.duyet_gopy = 1;
--- Ra 0 dòng = KHÔNG AI duyệt được cấp cuối, cả hàng góp ý đứng. Bật tay:
---   UPDATE tai_khoan SET duyet_gopy = 1 WHERE ten_dang_nhap = '<số của Sếp>';
+-- Câu tự kiểm ở trên đã chặn ca "0 dòng". Câu này để nhìn tận mắt ĐÚNG TÊN:
+-- số điện thoại cũ của Sếp nay có thể đã là của người khác — đếm vẫn ra 1 mà
+-- cờ rơi vào tay người khác.

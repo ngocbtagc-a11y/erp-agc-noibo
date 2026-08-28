@@ -102,18 +102,35 @@ export async function docPhien(db, token) {
   // 28/08/2026 — xem duocDuyetGopY() trong src/quyen.js). Đọc THẲNG vào
   // phiên để cổng duyệt không phải hỏi DB thêm một câu mỗi lần bấm, và để
   // quyền được kiểm ở MÁY CHỦ chứ không phải ẩn nút ở trình duyệt.
-  // THỨ TỰ TRIỂN KHAI: cột này phải có trong DB TRƯỚC khi deploy code —
-  // thiếu cột là câu này lỗi và MẤT ĐĂNG NHẬP TOÀN HỆ THỐNG, không riêng
-  // màn Góp ý (REV-0018 mục 6: DB trước, code sau).
-  const d = await db.prepare(`
+  // THỨ TỰ TRIỂN KHAI: cột này NÊN có trong DB trước khi deploy code (REV-0018
+  // mục 6: DB trước, code sau) — nhưng thứ tự triển khai dựa vào TRÍ NHỚ CON
+  // NGƯỜI là thứ sẽ sai một ngày nào đó, và ngày 28/08/2026 nó đã sai một lần.
+  //
+  // ĐỌC PHÒNG THỦ (REV-0027 L4): trước bản vá này, thiếu cột `duyet_gopy` làm
+  // ĐÚNG CÂU NÀY lỗi → docPhien() ném → /toi-la-ai, /danh-ba, /thong-bao,
+  // /kho/san-pham đều 500 với MỌI phiên (đo được: nhân viên kho chẳng dính gì
+  // tới góp ý cũng mất đăng nhập). Nay bắt đúng lỗi "no such column" rồi chạy
+  // lại với `0 AS duyet_gopy`: thiếu cột thì cờ về false — hỏng theo chiều AN
+  // TOÀN (đúng khuôn KHONG_QUYEN của src/quyen.js), không sập cả công ty.
+  // CHỈ nuốt đúng lỗi thiếu cột đó; mọi lỗi DB khác vẫn ném ra như cũ.
+  const cauPhien = (cotDuyet) => `
     SELECT p.tai_khoan_id, p.het_han,
-           t.ten_dang_nhap, t.vai_tro, t.kich_hoat, t.phai_doi_mk, t.duyet_gopy,
+           t.ten_dang_nhap, t.vai_tro, t.kich_hoat, t.phai_doi_mk, ${cotDuyet},
            n.id AS nhan_su_id, n.ho_ten, n.viet_tat, n.chuc_vu, n.phong_ban_id
       FROM phien p
       JOIN tai_khoan t ON t.id = p.tai_khoan_id
       JOIN nhan_su  n ON n.id = t.nhan_su_id
      WHERE p.token_hash = ?
-  `).bind(await bamToken(token)).first();
+  `;
+  const bam = await bamToken(token);
+  let d;
+  try {
+    d = await db.prepare(cauPhien('t.duyet_gopy')).bind(bam).first();
+  } catch (e) {
+    if (!/no such column/i.test(String(e && e.message)) ||
+        !/duyet_gopy/i.test(String(e && e.message))) throw e;
+    d = await db.prepare(cauPhien('0 AS duyet_gopy')).bind(bam).first();
+  }
 
   if (!d) return null;
   if (!d.kich_hoat) return null;
