@@ -59,6 +59,10 @@ export const KHOI_PHUC_MJS = String.raw`#!/usr/bin/env node
 
    Thêm --dong-y thì không hỏi lại (dùng cho máy chạy tự động). Người thật thì
    ĐỪNG dùng cờ này.
+
+   Thêm --sql-cho-sqlite thì file KHOI-PHUC.sql tự bọc BEGIN/COMMIT, để chạy
+   bằng sqlite3 hay DB Browser. Bản mặc định KHÔNG bọc vì nó dành cho ERP:
+   D1 tự bọc cả file trong một giao dịch và CẤM lệnh BEGIN.
    ========================================================================== */
 
 import fs from 'node:fs';
@@ -79,6 +83,13 @@ const raSqlite = layCo('--vao-sqlite');
 const raSql = layCo('--ra') || path.join(thuMuc, 'KHOI-PHUC.sql');
 const khongHoi = coCo('--dong-y');
 const rongLaChuoi = coCo('--rong-la-chuoi');
+/* File .sql mặc định sinh ra để nạp vào ERP qua: wrangler d1 execute --file
+   D1 TỰ bọc cả file trong một giao dịch và CẤM lệnh BEGIN (nó báo lỗi
+   "please use the state.storage.transaction() ... instead of ... BEGIN").
+   Nên mặc định KHÔNG phát BEGIN/COMMIT.
+   Chạy file .sql bằng công cụ SQLite thường (sqlite3, DB Browser) thì không có
+   ai bọc hộ — thêm cờ này để tự bọc. Xem REV-0014. */
+const choSqlite = coCo('--sql-cho-sqlite');
 
 console.log('');
 console.log('KHÔI PHỤC BẢN SAO LƯU ERP — ALPHA GREEN COMMERCE');
@@ -388,6 +399,24 @@ if (raSqlite) {
   manh.push('--   ' + thuMuc);
   manh.push('-- Sinh lúc: ' + new Date().toISOString());
   manh.push('-- CẢNH BÁO: file này XOÁ SẠCH rồi GHI ĐÈ ' + keKhai.length + ' bảng.');
+  manh.push('-- Chạy nửa chừng mà chết (mất điện, mất mạng, lỡ đóng cửa sổ) thì');
+  manh.push('-- KHÔNG mất dữ liệu: cả file nằm trọn trong MỘT giao dịch, chưa chốt');
+  manh.push('-- thì database tự hoàn tác về nguyên trạng.');
+  if (choSqlite) {
+    manh.push('-- Bản này dành cho công cụ SQLite thường (sqlite3, DB Browser):');
+    manh.push('-- giao dịch do chính file này mở và chốt.');
+    manh.push('BEGIN;');
+  } else {
+    manh.push('-- Bản này dành cho ERP (wrangler d1 execute --file). D1 TỰ bọc cả');
+    manh.push('-- file trong một giao dịch và CẤM lệnh BEGIN, nên ở đây không có');
+    manh.push('-- BEGIN/COMMIT — cố thêm vào là D1 báo lỗi và không chạy gì cả.');
+    manh.push('-- Muốn chạy file này bằng sqlite3/DB Browser thì sinh lại với cờ:');
+    manh.push('--   node KHOI-PHUC.mjs --sql-cho-sqlite');
+  }
+  /* PRAGMA này chỉ có tác dụng khi nằm TRONG giao dịch: nó hoãn kiểm khoá ngoại
+     đến lúc chốt, và tự tắt sau mỗi COMMIT/ROLLBACK. Ở bản sqlite phải đặt SAU
+     lệnh BEGIN — đặt trước là lệnh rỗng (lỗi REV-0014 bắt được). Ở bản D1 thì
+     nó đã nằm sẵn trong giao dịch mà D1 tự mở. */
   manh.push('PRAGMA defer_foreign_keys = ON;');
   manh.push('');
 
@@ -412,6 +441,9 @@ if (raSqlite) {
     }
     manh.push('');
   }
+
+  /* Chốt giao dịch do chính file mở. Bản D1 không có, vì D1 tự chốt. */
+  if (choSqlite) { manh.push('COMMIT;'); manh.push(''); }
 
   fs.writeFileSync(raSql, manh.join('\n'), 'utf8');
   const mb = (fs.statSync(raSql).size / 1048576).toFixed(1);

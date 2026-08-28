@@ -500,23 +500,118 @@ if (fs.existsSync(duongSqlRa)) {
   const sql = fs.readFileSync(duongSqlRa, 'utf8');
   cham(sql.includes('PRAGMA defer_foreign_keys = ON;'), 'file .sql có mở khoá ngoại tạm để không kẹt thứ tự bảng');
   cham(BANG.every(b => sql.includes(`DELETE FROM ${b};`)), 'file .sql xoá trắng đủ mọi bảng trước khi ghi');
-  /* Chạy thẳng file .sql đó vào một database rỗng — chứng minh nó là SQL hợp lệ. */
-  const duongSqlDb = path.join(ra, 'tu-file-sql.db');
-  const dbSql = new DatabaseSync(duongSqlDb);
-  dbSql.exec('PRAGMA foreign_keys = OFF');
-  dbSql.exec(fs.readFileSync(path.join(goc, 'schema.sql'), 'utf8'));
-  let cl = fs.readdirSync(path.join(goc, 'migrations')).filter(f => f.endsWith('.sql'));
-  for (let v = 0; v < 6 && cl.length; v++) {
-    const tr = [];
-    for (const f of cl) { try { dbSql.exec(fs.readFileSync(path.join(goc, 'migrations', f), 'utf8')); } catch (e) { tr.push(f); } }
-    if (tr.length === cl.length) break; cl = tr;
+
+  /* REV-0014 (CHẶN): cả file phải chạy trong MỘT giao dịch.
+     Bản MẶC ĐỊNH đi vào ERP qua `wrangler d1 execute --file`. Đo thật trên D1
+     cục bộ: D1 TỰ bọc cả file trong một giao dịch, và CẤM lệnh BEGIN — phát
+     BEGIN ra là D1 từ chối chạy. Nên bản này PHẢI KHÔNG có BEGIN/COMMIT. */
+  cham(!/\bBEGIN;/.test(sql) && !/\bCOMMIT;/.test(sql),
+    'bản .sql cho ERP KHÔNG tự phát BEGIN/COMMIT (D1 tự bọc và cấm BEGIN)');
+  cham(/D1 TỰ bọc/.test(sql) && /--sql-cho-sqlite/.test(sql),
+    'bản .sql cho ERP nói rõ ai bọc giao dịch và cách sinh bản cho sqlite3');
+
+  /* Dựng một database đích giống thật: schema + migrations. */
+  function dungDich(duong) {
+    const d = new DatabaseSync(duong);
+    d.exec('PRAGMA foreign_keys = OFF');       // chỉ TẮT lúc dựng schema
+    d.exec(fs.readFileSync(path.join(goc, 'schema.sql'), 'utf8'));
+    let cl = fs.readdirSync(path.join(goc, 'migrations')).filter(f => f.endsWith('.sql'));
+    for (let v = 0; v < 6 && cl.length; v++) {
+      const tr = [];
+      for (const f of cl) { try { d.exec(fs.readFileSync(path.join(goc, 'migrations', f), 'utf8')); } catch (e) { tr.push(f); } }
+      if (tr.length === cl.length) break; cl = tr;
+    }
+    /* BẬT LẠI trước khi chạy bản khôi phục. Vòng 3 để OFF ở đây nên lỗi thiếu
+       giao dịch lọt qua — SQLite mặc định TẮT khoá ngoại. */
+    d.exec('PRAGMA foreign_keys = ON');
+    return d;
   }
+  const demTong = (d) => BANG.reduce((s, b) => {
+    try { return s + d.prepare(`SELECT COUNT(*) c FROM ${b}`).get().c; } catch (e) { return s; }
+  }, 0);
+
+  /* Bản .sql dành cho công cụ SQLite thường — bản này TỰ bọc giao dịch, vì
+     sqlite3/DB Browser không bọc hộ ai cả. Mọi ca chạy thật bên dưới dùng bản
+     này, vì node:sqlite chính là một công cụ SQLite thường. */
+  const duongSqlS = path.join(ra, 'KHOI-PHUC-sqlite.sql');
+  chayKhoiPhuc(thuMucGiaiNen, ['--dong-y', '--sql-cho-sqlite', `--ra=${duongSqlS}`]);
+  cham(fs.existsSync(duongSqlS), 'cờ --sql-cho-sqlite đẻ ra bản .sql riêng cho sqlite3');
+  const sqlS = fs.readFileSync(duongSqlS, 'utf8');
+  const iBegin = sqlS.indexOf('BEGIN;');
+  const iPragma = sqlS.indexOf('PRAGMA defer_foreign_keys = ON;');
+  const iDelete = sqlS.indexOf('DELETE FROM ');
+  cham(iBegin !== -1, 'bản sqlite MỞ giao dịch bằng BEGIN;');
+  cham(sqlS.trimEnd().endsWith('COMMIT;'), 'bản sqlite CHỐT bằng COMMIT; ở cuối cùng');
+  cham(iBegin !== -1 && iPragma > iBegin,
+    'PRAGMA defer_foreign_keys nằm SAU BEGIN (ngoài giao dịch là lệnh rỗng)');
+  cham(iBegin !== -1 && iDelete > iBegin,
+    'không có lệnh DELETE nào chạy TRƯỚC khi mở giao dịch');
+
+  /* Chạy thẳng file .sql vào database rỗng — CÓ bật khoá ngoại. */
+  const duongSqlDb = path.join(ra, 'tu-file-sql.db');
+  const dbSql = dungDich(duongSqlDb);
+  cham(dbSql.prepare('PRAGMA foreign_keys').get().foreign_keys === 1,
+    '⚠️ bàn thử ĐANG BẬT PRAGMA foreign_keys = ON (không bật thì ca này lọt)');
   let sqlOk = true, sqlLoi = '';
-  try { dbSql.exec(sql); } catch (e) { sqlOk = false; sqlLoi = e.message.slice(0, 100); }
+  try { dbSql.exec(sqlS); } catch (e) { sqlOk = false; sqlLoi = e.message.slice(0, 100); }
   const demSql = sqlOk ? dbSql.prepare('SELECT COUNT(*) c FROM nhan_su').get().c : -1;
+  const tongDu = sqlOk ? demTong(dbSql) : -1;
   dbSql.close();
-  cham(sqlOk && demSql === SO_NS, 'file .sql chạy thật vào database rỗng ra đủ dòng',
+  cham(sqlOk && demSql === SO_NS, 'file .sql chạy thật vào database rỗng ra đủ dòng (khoá ngoại BẬT)',
     sqlOk ? `nhan_su ${demSql}/${SO_NS} dòng` : sqlLoi);
+
+  /* ------------------------------------------------------------------------
+     CA ĐỐI CHỨNG BH-16 — NGẮT GIỮA CHỪNG KHI ĐANG KHÔI PHỤC.
+     Cắt file .sql ngay sau lô INSERT đầu tiên (đúng ranh giới câu lệnh) rồi
+     đóng kết nối mà KHÔNG chạy tới COMMIT — mô phỏng đúng cảnh mất điện / mất
+     mạng / đóng cửa sổ. Dữ liệu CŨ phải còn NGUYÊN, không mất dòng nào.
+     ------------------------------------------------------------------------ */
+  const dongSql = sqlS.split('\n');
+  let iIns = dongSql.findIndex(l => l.startsWith('INSERT INTO '));
+  let iHet = iIns;
+  while (iHet < dongSql.length && !dongSql[iHet].trimEnd().endsWith(';')) iHet++;
+  const sqlCut = dongSql.slice(0, iHet + 1).join('\n');   // có BEGIN + mọi DELETE, KHÔNG có COMMIT
+  cham(iIns !== -1 && !/\bCOMMIT;/.test(sqlCut) && /DELETE FROM /.test(sqlCut),
+    'dựng được bản .sql bị cắt ngang: có đủ lệnh XOÁ, chưa tới COMMIT');
+
+  /* Đích đã có dữ liệu cũ (chạy bản đầy đủ một lần) rồi mới bị ngắt ngang. */
+  const duongNgat = path.join(ra, 'ngat-giua-chung.db');
+  const dbN = dungDich(duongNgat);
+  dbN.exec(sqlS);                                  // đổ đầy dữ liệu "đang dùng"
+  const truoc = demTong(dbN);
+  const truocNs = dbN.prepare('SELECT COUNT(*) c FROM nhan_su').get().c;
+  dbN.close();
+
+  const dbN2 = new DatabaseSync(duongNgat);
+  dbN2.exec('PRAGMA foreign_keys = ON');
+  try { dbN2.exec(sqlCut); } catch (e) { /* chết giữa chừng — đúng kịch bản */ }
+  dbN2.close();                                    // đóng khi giao dịch CHƯA chốt → SQLite tự hoàn tác
+
+  const dbN3 = new DatabaseSync(duongNgat);
+  const sau = demTong(dbN3);
+  const sauNs = dbN3.prepare('SELECT COUNT(*) c FROM nhan_su').get().c;
+  dbN3.close();
+  cham(sau === truoc && sauNs === truocNs,
+    '🔴 NGẮT GIỮA CHỪNG: dữ liệu cũ CÒN NGUYÊN, không mất dòng nào',
+    `tổng ${sau}/${truoc} ô dòng · nhan_su ${sauNs}/${truocNs}`);
+
+  /* Đối chứng của đối chứng (BH-26): bỏ ĐÚNG dòng BEGIN, mọi thứ khác y hệt.
+     Lệch cơ học — không có giao dịch thì DELETE ăn ngay, dữ liệu PHẢI mất. */
+  const duongNgatXau = path.join(ra, 'ngat-giua-chung-KHONG-BEGIN.db');
+  const dbX3 = dungDich(duongNgatXau);
+  dbX3.exec(sqlS);
+  const truocX = demTong(dbX3);
+  dbX3.close();
+  const dbX4 = new DatabaseSync(duongNgatXau);
+  dbX4.exec('PRAGMA foreign_keys = ON');
+  try { dbX4.exec(sqlCut.replace('BEGIN;\n', '')); } catch (e) { /* kệ */ }
+  dbX4.close();
+  const dbX5 = new DatabaseSync(duongNgatXau);
+  const sauX = demTong(dbX5);
+  dbX5.close();
+  cham(sauX < truocX,
+    'ĐỐI CHỨNG: bỏ BEGIN ra thì cùng ca đó MẤT dữ liệu → phép đo trên đủ nhạy',
+    `còn ${sauX}/${truocX} dòng (phải nhỏ hơn)`);
 }
 
 /* ==========================================================================

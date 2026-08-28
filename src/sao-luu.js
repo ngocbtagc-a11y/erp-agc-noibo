@@ -631,12 +631,54 @@ CÓ TRỤC TRẶC
   · "Không thấy file KIEM-TRA.csv trong thư mục này"
       → Đang đứng nhầm chỗ, hoặc chưa giải nén file .zip. Giải nén rồi cd vào
         đúng thư mục vừa giải nén ra.
+  · Windows báo file .zip HỎNG, không giải nén được
+      ("The compressed (zipped) folder is invalid", hoặc bấm đúp không mở ra gì)
+      → File .zip bị hỏng lúc tải về, KHÔNG phải bản sao lưu hỏng. Làm theo
+        thứ tự này, dừng lại ngay khi được:
+        ① Tải lại file .zip đó từ Google Drive một lần nữa — hay gặp nhất là
+           tải dở nửa chừng. Đối chiếu dung lượng file vừa tải với dung lượng
+           Drive hiển thị, phải bằng nhau.
+        ② Vẫn hỏng thì thử giải nén bằng 7-Zip (miễn phí, 7-zip.org) — nó đọc
+           được nhiều file mà Windows chê.
+        ③ Vẫn hỏng thì LẤY BẢN SAO LƯU KHÁC. Trên Drive còn nhiều bản của các
+           ngày trước, mỗi bản đứng độc lập, lấy bản gần nhất còn mở được là
+           dùng bình thường — chỉ mất phần dữ liệu phát sinh sau ngày đó.
+        ④ Không bản nào mở được thì báo bộ phận kỹ thuật, kèm tên file và
+           dung lượng. ĐỪNG cố sửa file .zip bằng công cụ vá lỗi trên mạng.
+  · Giải nén ra rồi nhưng KHÔNG THẤY file KHOI-PHUC.mjs
+      → Thiếu đúng cái công cụ chạy Bước 5. Bản sao lưu vẫn còn nguyên giá trị:
+        toàn bộ dữ liệu nằm trong các file .csv, chúng mới là thứ quan trọng.
+        ① Cách nhanh nhất: tải một bản sao lưu KHÁC trên Drive, chép riêng file
+           KHOI-PHUC.mjs từ bản đó sang thư mục này. File này giống hệt nhau ở
+           mọi bản, không gắn với ngày nào — chép sang là chạy được ngay.
+        ② Không có bản nào khác thì vẫn đọc được hết dữ liệu mà không cần công
+           cụ: bấm đúp bất kỳ file .csv nào, Excel mở ra xem bình thường. Nhập
+           lại vào phần mềm khác thì đọc PHẦN 3 bên dưới.
+        ③ Cần khôi phục vào ERP thật thì báo bộ phận kỹ thuật — họ sinh lại
+           file này từ mã nguồn trong vài phút.
   · "FOREIGN KEY constraint failed" lúc chạy Bước 5
       → Chạy lại đúng lệnh đó thêm một lần. File .sql đã có sẵn dòng
         PRAGMA defer_foreign_keys = ON để tránh chuyện này.
-  · Chạy nửa chừng thì mất điện / mất mạng
-      → Chạy lại Bước 5 từ đầu. Lệnh đó xoá trắng rồi ghi lại nên chạy mấy lần
-        cũng ra cùng một kết quả, không bị nhân đôi dữ liệu.
+      → Lỗi này KHÔNG làm mất dữ liệu — xem mục ngay dưới đây.
+      → Vẫn báo lỗi ở lần thứ hai thì dừng lại, báo bộ phận kỹ thuật.
+  · "please use the state.storage.transaction() ... instead of ... BEGIN"
+      → Đang chạy một file .sql sinh ra cho sqlite3 (có dòng BEGIN) vào ERP.
+        ERP không nhận dòng đó. Sinh lại bản đúng bằng lệnh:
+              node KHOI-PHUC.mjs --dong-y
+        rồi chạy lại Bước 5. Lỗi này dừng trước khi ghi, không mất gì.
+  · Chạy nửa chừng thì mất điện / mất mạng / lỡ đóng cửa sổ
+      → DỮ LIỆU KHÔNG MẤT. Cả file .sql chạy trọn trong MỘT giao dịch: hoặc vào
+        được hết, hoặc không vào gì cả. Chưa chốt xong mà đứt thì cơ sở dữ liệu
+        tự hoàn tác sạch, quay về đúng như trước lúc chạy — không bao giờ có
+        cảnh xoá xong mà chưa kịp ghi lại.
+      → Cứ chạy lại Bước 5 từ đầu. Chạy mấy lần cũng ra cùng một kết quả, không
+        bị nhân đôi dữ liệu.
+      → Muốn chắc thì làm Bước 6 ① trước khi chạy lại: đếm thử vài bảng, so với
+        KIEM-TRA.csv để biết đang đứng ở đâu.
+  · Muốn chạy file KHOI-PHUC.sql bằng sqlite3 hoặc DB Browser (không qua ERP)
+      → Sinh lại bản dành riêng cho công cụ đó, nó tự bọc giao dịch:
+              node KHOI-PHUC.mjs --sql-cho-sqlite --dong-y
+        Bản mặc định KHÔNG bọc, vì ERP tự bọc hộ và cấm file tự bọc lấy.
 
 
 ${'='.repeat(78)}
