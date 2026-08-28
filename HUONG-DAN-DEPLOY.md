@@ -81,6 +81,31 @@ Dùng khi Cách 1 chưa thiết lập, hoặc cần deploy gấp từ máy đã 
 
 ---
 
+## Bật thông báo tin nhắn lên điện thoại (CTL-0014) — làm 3 bước, MỘT LẦN
+
+Thiếu bước nào thì tính năng **im lặng không báo lỗi**: ERP chạy bình thường,
+chỉ là không ai nhận được thông báo khi đã đóng app. Chi phí 0 đồng, không
+đăng ký dịch vụ nào.
+
+```
+1) npm run nap-daythongbao      # tạo bảng push_dangky + push_nhat_ky trên bản thật
+2) npm run khoa-vapid           # tự sinh cặp khoá, in ra 2 lệnh cần chạy tiếp
+3) npx wrangler secret put VAPID_KHOA_CONG_KHAI
+   npx wrangler secret put VAPID_KHOA_BI_MAT
+```
+
+- Khoá **bí mật** chỉ dán vào lệnh `secret put`, **không lưu vào file nào**.
+- Nhân viên phải tự bấm **"Bật thông báo"** trong cửa sổ chat. ERP cố ý KHÔNG
+  hỏi quyền lúc vừa đăng nhập: hỏi sai lúc là bị bấm Chặn, mà **trình duyệt
+  không cho hỏi lại lần thứ hai**.
+- **iPhone**: chỉ nhận được khi đã mở bằng Safari → Chia sẻ → *Thêm vào màn hình
+  chính*, rồi mở ERP từ biểu tượng đó. Chưa làm thì vẫn nghe tiếng kêu lúc đang
+  mở ERP. Cửa sổ chat tự hiện đúng hướng dẫn này khi phát hiện máy iPhone.
+
+Kiểm lại bất cứ lúc nào: `npm run tu-kiem-thongbao` (42 phép kiểm, có ca đối chứng).
+
+---
+
 ## Ai nên có quyền deploy?
 
 Quyền đẩy code lên `main` = quyền đưa thay đổi lên bản thật cho cả công ty dùng.

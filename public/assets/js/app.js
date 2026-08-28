@@ -3029,6 +3029,202 @@ async function khoiDongLichSuViec() {
 }
 
 /* ==========================================================================
+   THÔNG BÁO TIN NHẮN (CTL-0014) — yêu cầu gốc của chị Phạm Thị Lan:
+   "Không hiện thông báo khi có tin nhắn đến".
+   ---------------------------------------------------------------------------
+   ĐO TRƯỚC KHI XÂY. ERP đã có SỐ ĐỎ đếm tin chưa đọc, và số đó TỰ cập nhật 6
+   giây một lần (`setInterval(hoiChuaDocToanCuc, 6000)` ngay dưới đây) — nên
+   chị Lan KHÔNG thiếu chuyện "phải F5 mới thấy". Thứ thiếu là hai cái khác:
+     · Số đỏ hiện lên hoàn toàn IM LẶNG — không tiếng, không rung. Trước bản
+       này không một chỗ nào trong file gọi Audio/AudioContext/vibrate.
+     · Đóng ERP ra là điếc — `public/sw.js` không có handler `push`.
+
+   BA LỚP, tách ra vì mỗi lớp sống được ở một loại máy khác nhau:
+     ① ÂM NHẸ + RUNG — chạy trên MỌI máy, KHÔNG cần xin quyền gì. Kể cả iPhone
+       chưa "Thêm vào màn hình chính". Đây là đường lùi để không có ai bị bỏ
+       lại hoàn toàn im lặng.
+     ② THÔNG BÁO HỆ THỐNG khi ERP mở nhưng ở tab nền — cần quyền.
+     ③ WEB PUSH khi đã đóng hẳn ERP — cần quyền + service worker (máy chủ lo,
+       xem `src/day-thong-bao.js`).
+
+   Âm thanh dựng bằng WebAudio, KHÔNG tải file mp3: thêm 0 byte tài sản, chạy
+   được cả khi mất mạng, và không phải xin thêm hạn mức nào.
+   ========================================================================== */
+const TBDay = (() => {
+  const KHOA_HOAN = 'erp-tbday-hoan-den';   // mốc "để sau" — nhớ ở MÁY, không tốn DB
+
+  let batTrenMayChu = false;   // két Cloudflare đã có khoá VAPID chưa
+  let khoaCongKhai = null;
+  let chatTat = 0;             // người dùng tự tắt loại "tin nhắn"
+  let amCtx = null;
+
+  const laIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const daCaiManHinhChinh =
+    window.matchMedia?.('(display-mode: standalone)')?.matches || navigator.standalone === true;
+
+  /* iPhone CHỈ nhận thông báo đẩy khi PWA đã được Thêm vào màn hình chính
+     (iOS 16.4+). Chưa cài thì `Notification` thường không tồn tại — gọi vào là
+     ném lỗi. Hàm này là cái chốt để không bao giờ hỏi quyền ở nơi không hỏi được. */
+  function hoiQuyenDuoc() {
+    if (typeof Notification === 'undefined') return false;
+    if (laIOS && !daCaiManHinhChinh) return false;
+    return true;
+  }
+  function daChoQuyen() {
+    return typeof Notification !== 'undefined' && Notification.permission === 'granted';
+  }
+
+  /* ---- ① Âm nhẹ + rung — không cần quyền, chạy mọi máy ------------------ */
+
+  /** Hai nốt ngắn, âm lượng thấp. `manh` dùng cho tin đến khi KHÔNG mở cửa sổ
+   *  đó; tin đến ngay trong cửa sổ đang đọc thì chỉ cần tiếng khẽ. */
+  function am(manh = false) {
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      // Dựng muộn: iOS chỉ cho tạo/chạy AudioContext sau một cú chạm thật.
+      if (!amCtx) amCtx = new AC();
+      if (amCtx.state === 'suspended') amCtx.resume().catch(() => {});
+      const t0 = amCtx.currentTime;
+      const to = manh ? 0.10 : 0.045;          // rất khẽ — đây là nơi dễ gây khó chịu nhất
+      [880, 1174.66].forEach((hz, i) => {
+        const o = amCtx.createOscillator(), g = amCtx.createGain();
+        o.type = 'sine'; o.frequency.value = hz;
+        const b = t0 + i * 0.11;
+        g.gain.setValueAtTime(0.0001, b);
+        g.gain.exponentialRampToValueAtTime(to, b + 0.012);
+        g.gain.exponentialRampToValueAtTime(0.0001, b + 0.10);
+        o.connect(g); g.connect(amCtx.destination);
+        o.start(b); o.stop(b + 0.12);
+      });
+    } catch { /* máy chặn âm thanh — không phải lỗi, bỏ qua êm */ }
+  }
+
+  function rung() {
+    // iOS Safari không có navigator.vibrate. Đó là lý do âm thanh phải có mặt.
+    try { navigator.vibrate?.([80, 40, 80]); } catch { /* bỏ qua */ }
+  }
+
+  /* ---- ② Thông báo hệ thống khi ERP đang mở nhưng ở tab nền ------------- */
+
+  async function hienTaiCho(tieuDe, than) {
+    if (!daChoQuyen()) return false;
+    try {
+      /* Phải đi qua service worker: Chrome trên Android KHÔNG cho dùng
+         `new Notification()` thẳng trong trang — ném TypeError. */
+      const reg = await navigator.serviceWorker?.ready;
+      if (!reg) return false;
+      await reg.showNotification(tieuDe, {
+        body: than,
+        icon: '/assets/img/pwa-192.png',
+        badge: '/assets/img/pwa-192.png',
+        tag: 'chat',            // gộp ở tầng hệ điều hành: tin sau thay tin trước
+        renotify: false,
+        data: { duong_dan: '/app.html#chat' }
+      });
+      return true;
+    } catch { return false; }
+  }
+
+  /* ---- ③ Đăng ký Web Push ----------------------------------------------- */
+
+  function b64urlSangByte(s) {
+    const t = String(s).replace(/-/g, '+').replace(/_/g, '/');
+    const bu = atob(t + '='.repeat((4 - (t.length % 4)) % 4));
+    const u8 = new Uint8Array(bu.length);
+    for (let i = 0; i < bu.length; i++) u8[i] = bu.charCodeAt(i);
+    return u8;
+  }
+
+  function moTaMay() {
+    const ua = navigator.userAgent;
+    const he = laIOS ? 'iPhone/iPad' : /Android/.test(ua) ? 'Android'
+      : /Windows/.test(ua) ? 'Windows' : /Mac/.test(ua) ? 'Mac' : 'Máy khác';
+    const tr = /Edg\//.test(ua) ? 'Edge' : /Chrome\//.test(ua) ? 'Chrome'
+      : /Firefox\//.test(ua) ? 'Firefox' : /Safari\//.test(ua) ? 'Safari' : 'Trình duyệt';
+    return `${he} · ${tr}`;
+  }
+
+  async function dangKyDay() {
+    if (!batTrenMayChu || !khoaCongKhai) return false;
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return false;
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      let sub = await reg.pushManager.getSubscription();
+      /* Khoá máy chủ đổi (sinh lại VAPID) thì đăng ký cũ vĩnh viễn không nhận
+         được gì — phải huỷ rồi đăng ký lại, không thì hỏng IM LẶNG. */
+      if (sub) {
+        const cu = sub.options?.applicationServerKey;
+        const khop = cu && byteBang(new Uint8Array(cu), b64urlSangByte(khoaCongKhai));
+        if (!khop) { try { await sub.unsubscribe(); } catch { /* kệ */ } sub = null; }
+      }
+      if (!sub) {
+        sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: b64urlSangByte(khoaCongKhai)
+        });
+      }
+      const j = sub.toJSON();
+      if (!j?.keys?.p256dh || !j?.keys?.auth) return false;
+      await API.pushDangKy({
+        endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth, may: moTaMay()
+      });
+      return true;
+    } catch { return false; }
+  }
+
+  function byteBang(a, b) {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+    return true;
+  }
+
+  async function huyDayMayNay() {
+    try {
+      const reg = await navigator.serviceWorker?.ready;
+      const sub = await reg?.pushManager?.getSubscription();
+      const ep = sub?.endpoint;
+      if (sub) await sub.unsubscribe();
+      await API.pushHuy(ep || '');
+      return true;
+    } catch { return false; }
+  }
+
+  /* ---- Nạp trạng thái từ máy chủ --------------------------------------- */
+
+  async function nap() {
+    try {
+      const k = await API.pushKhoa();
+      batTrenMayChu = !!k.bat;
+      khoaCongKhai = k.khoa_cong_khai;
+      chatTat = k.chat_tat ? 1 : 0;
+      return k;
+    } catch { return null; }
+  }
+
+  function nenMoiBat() {
+    if (!batTrenMayChu) return false;         // két chưa có khoá — đừng mời vô ích
+    if (chatTat) return false;                // người ta đã chủ động tắt
+    if (daChoQuyen()) return false;           // đã bật rồi
+    if (typeof Notification !== 'undefined' && Notification.permission === 'denied') return false;
+    const hoan = Number(localStorage.getItem(KHOA_HOAN) || 0);
+    return !(hoan && Date.now() < hoan);      // bấm "Để sau" thì im 7 ngày
+  }
+  function hoanLai(ngay = 7) {
+    try { localStorage.setItem(KHOA_HOAN, String(Date.now() + ngay * 86400000)); } catch { /* chế độ riêng tư */ }
+  }
+
+  return {
+    am, rung, hienTaiCho, nap, dangKyDay, huyDayMayNay, nenMoiBat, hoanLai,
+    hoiQuyenDuoc, daChoQuyen, laIOS, daCaiManHinhChinh,
+    get batTrenMayChu() { return batTrenMayChu; },
+    get chatTat() { return chatTat; },
+    set chatTat(v) { chatTat = v ? 1 : 0; }
+  };
+})();
+
+/* ==========================================================================
    CHAT NỘI BỘ — bong bóng nổi góc phải dưới (kiểu Messenger). Kênh chung +
    chat riêng (DM) từng người — bấm "Chat ngay" ở Danh bạ (window.moChatVoi)
    để mở đúng luồng riêng với người đó. Tự hỏi lại (poll) mỗi vài giây.
@@ -3048,6 +3244,9 @@ async function khoiDongChat() {
   let dangMo = false;
   let chuaDoc = 0;
   let chuaDocTruoc = 0;   // số chưa đọc lần kiểm tra trước (để biết có THÊM tin mới không)
+  /* Lượt đo ĐẦU TIÊN chỉ để lấy mốc, không được coi là "có tin mới" — không có
+     cờ này thì vừa nạp trang là máy kêu vì mấy tin cũ từ hôm qua. */
+  let daLayMocDau = false;
 
   // Đổi giờ VN "YYYY-MM-DD HH:MM:SS" -> "HH:MM" (hôm nay) hoặc "dd/mm HH:MM"
   function gioChat(chuoi) {
@@ -3130,7 +3329,7 @@ async function khoiDongChat() {
     khung.querySelectorAll('.chat-tin').forEach(el => el.remove());   // giữ lại #chat-trong (nằm trong khung)
     idCuoi = 0;
     nguoiGuiTruoc = null; taoLucTruoc = null;
-    const { tin_nhan } = await API.chatDanhSach(null, nguoiNhanHienTai?.id);
+    const { tin_nhan } = await API.chatDanhSach(null, nguoiNhanHienTai?.id, dangMo);
     $('#chat-trong').hidden = tin_nhan.length > 0;
     tin_nhan.forEach(t => themTin(t));
     cuoiTrang();
@@ -3138,12 +3337,22 @@ async function khoiDongChat() {
 
   async function hoiTinMoi() {
     try {
-      const { tin_nhan } = await API.chatDanhSach(idCuoi, nguoiNhanHienTai?.id);
+      /* Cờ thứ ba = "cửa sổ chat đang THẬT SỰ mở". Máy chủ đóng dấu mốc này để
+         không đẩy thông báo lên điện thoại của người đang ngồi đọc đúng đoạn
+         chat đó (CTL-0014). Vòng hỏi lại vẫn chạy khi popup đã đóng — truyền
+         cờ ở mọi lượt là chốt chặn luôn bật và không ai nhận được gì. */
+      const { tin_nhan } = await API.chatDanhSach(idCuoi, nguoiNhanHienTai?.id, dangMo);
       if (tin_nhan.length) {
         const oDay = khung.scrollHeight - khung.scrollTop - khung.clientHeight < 80;
         tin_nhan.forEach(t => themTin(t));
         $('#chat-trong').hidden = true;
         if (oDay) cuoiTrang();   // chỉ tự cuộn nếu đang xem gần cuối, khỏi giật khi đọc tin cũ
+
+        /* Tin của NGƯỜI KHÁC rơi vào đúng cửa sổ đang mở: chỉ TIẾNG KHẼ, không
+           thông báo hệ thống. Người ta đang nhìn thẳng vào nó rồi.
+           Tin của CHÍNH MÌNH thì im hoàn toàn — không ai muốn máy kêu vì chính
+           mình vừa bấm Gửi. */
+        if (dangMo && tin_nhan.some(t => t.nguoi_gui_id !== TOI.id)) TBDay.am(false);
       }
     } catch { /* mất mạng tạm thời — bỏ qua, đợt hỏi sau tự thử lại */ }
   }
@@ -3155,7 +3364,23 @@ async function khoiDongChat() {
   async function hoiChuaDocToanCuc() {
     try {
       const { so_luong } = await API.chatChuaDoc();   // tổng chưa đọc THẬT (mốc máy chủ)
-      if (so_luong > chuaDocTruoc) veGanDay();          // có thêm tin mới -> làm mới danh sách gần đây
+      if (so_luong > chuaDocTruoc) {
+        veGanDay();          // có thêm tin mới -> làm mới danh sách gần đây
+        /* CTL-0014 — số đỏ này vốn nhảy lên HOÀN TOÀN IM LẶNG; đó chính là
+           điều chị Lan báo thiếu. Chỉ kêu khi cửa sổ chat ĐANG ĐÓNG (mở thì
+           `hoiTinMoi` đã kêu khẽ rồi — không kêu hai lần cho một tin), và chỉ
+           khi đã qua lượt đo đầu tiên (`chuaDocTruoc > 0` hoặc đã có mốc), để
+           lịch sử cũ lúc vừa nạp trang không bị coi là tin mới. */
+        if (!dangMo && daLayMocDau) {
+          TBDay.am(true);
+          TBDay.rung();
+          // Tab đang ẩn (người dùng đang ở app khác) → dựng cả thông báo hệ thống.
+          if (document.visibilityState === 'hidden') {
+            TBDay.hienTaiCho('💬 Tin nhắn mới', 'Bạn có tin nhắn nội bộ chưa đọc');
+          }
+        }
+      }
+      daLayMocDau = true;
       chuaDocTruoc = so_luong;
       // Đang mở popup = đang đọc hết -> badge 0. Đóng thì hiện đúng số chưa đọc.
       chuaDoc = dangMo ? 0 : so_luong;
@@ -3184,6 +3409,125 @@ async function khoiDongChat() {
   await veGanDay();
   setInterval(hoiTinMoi, 6000);
   setInterval(hoiChuaDocToanCuc, 6000);
+
+  /* ==== CTL-0014 · Thông báo tin nhắn — giao diện ========================
+     Ba việc: (1) nút 🔔 mở bảng cài đặt, (2) dải mời bật quyền xuất hiện
+     ĐÚNG LÚC, (3) bấm vào thông báo thì mở đúng cửa sổ chat. */
+  const nutChuong = $('#cnbChuong'), bangCaiDat = $('#tbdCaiDat'),
+        oChatBat = $('#tbdChatBat'), chuTrangThai = $('#tbdTrangThai'),
+        nutTatMay = $('#tbdTatMay'),
+        daiMoi = $('#tbdMoi'), chuMoi = $('#tbdMoiChu'),
+        nutBat = $('#tbdBat'), nutDeSau = $('#tbdDeSau');
+
+  function veTrangThaiTB() {
+    if (!nutChuong) return;
+    nutChuong.hidden = false;
+    nutChuong.classList.toggle('tbd-dang-tat', !!TBDay.chatTat);
+    if (oChatBat) oChatBat.checked = !TBDay.chatTat;
+
+    let chu;
+    if (TBDay.chatTat) {
+      chu = 'Đang TẮT báo tin nhắn. Cảnh báo đơn hoàn của Kho vận KHÔNG bị tắt theo.';
+    } else if (!TBDay.batTrenMayChu) {
+      // Két Cloudflare chưa có khoá VAPID → chỉ chạy được lớp âm thanh.
+      chu = 'Máy chủ chưa bật đẩy thông báo. Hiện chỉ có tiếng kêu khi ERP đang mở.';
+    } else if (TBDay.daChoQuyen()) {
+      chu = 'Đang bật. Đóng ERP rồi vẫn nhận được tin nhắn trên điện thoại.';
+    } else if (TBDay.laIOS && !TBDay.daCaiManHinhChinh) {
+      /* Đây là NỬA CÔNG TY có thể không nhận được gì mà không ai biết — phải
+         nói thẳng ra màn hình, kèm đúng thao tác, chứ không im lặng bỏ qua. */
+      chu = 'Trên iPhone cần mở bằng Safari → nút Chia sẻ → "Thêm vào MH chính", ' +
+            'rồi mở ERP từ biểu tượng đó thì mới nhận được thông báo khi đóng app. ' +
+            'Chưa làm thì vẫn có tiếng kêu lúc đang mở ERP.';
+    } else if (typeof Notification !== 'undefined' && Notification.permission === 'denied') {
+      chu = 'Trình duyệt đang CHẶN thông báo của ERP. Mở phần cài đặt trang trong ' +
+            'trình duyệt để cho phép lại — ERP không tự hỏi lại được.';
+    } else {
+      chu = 'Chưa bật thông báo khi đóng app.';
+    }
+    if (chuTrangThai) chuTrangThai.textContent = chu;
+    if (nutTatMay) nutTatMay.hidden = !(TBDay.batTrenMayChu && TBDay.daChoQuyen());
+  }
+
+  /* Mời bật — chỉ gọi SAU khi người dùng vừa gửi hoặc vừa mở một tin nhắn.
+     KHÔNG bao giờ gọi lúc vừa mở ERP: hỏi sai lúc là bị bấm Chặn, và trình
+     duyệt KHÔNG cho hỏi lại lần thứ hai — mất vĩnh viễn, không sửa được. */
+  function moiBatNeuNen() {
+    if (!daiMoi || !TBDay.nenMoiBat()) return;
+    if (!TBDay.hoiQuyenDuoc()) {
+      // iPhone chưa cài PWA: mời cũng vô ích, chỉ hướng dẫn trong bảng cài đặt.
+      return;
+    }
+    chuMoi.textContent =
+      'Bật thông báo để biết có tin nhắn kể cả khi đã đóng ERP? ' +
+      'Chỉ hiện TÊN người gửi, không hiện nội dung tin — điện thoại để trên bàn ' +
+      'người khác cũng không đọc được.';
+    daiMoi.hidden = false;
+  }
+
+  nutChuong?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    bangCaiDat.hidden = !bangCaiDat.hidden;
+    if (!bangCaiDat.hidden) veTrangThaiTB();
+  });
+
+  nutDeSau?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    TBDay.hoanLai(7);        // im 7 ngày, không hỏi lại mỗi lần gửi tin
+    daiMoi.hidden = true;
+  });
+
+  nutBat?.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    nutBat.disabled = true;
+    try {
+      // Gọi requestPermission TRONG cú bấm — ngoài cú bấm là Safari từ chối.
+      const cho = await Notification.requestPermission();
+      if (cho === 'granted') {
+        await TBDay.dangKyDay();
+        TBDay.am(false);      // vừa xin quyền vừa mở khoá âm thanh trên iOS
+      } else {
+        TBDay.hoanLai(30);
+      }
+    } catch { /* trình duyệt cũ */ }
+    finally {
+      nutBat.disabled = false;
+      daiMoi.hidden = true;
+      veTrangThaiTB();
+    }
+  });
+
+  oChatBat?.addEventListener('change', async () => {
+    const tat = oChatBat.checked ? 0 : 1;
+    try {
+      await API.pushTuyChon(tat);
+      TBDay.chatTat = tat;
+      if (!tat && TBDay.daChoQuyen()) await TBDay.dangKyDay();
+    } catch { oChatBat.checked = !TBDay.chatTat; }
+    veTrangThaiTB();
+  });
+
+  nutTatMay?.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    await TBDay.huyDayMayNay();
+    veTrangThaiTB();
+  });
+
+  bangCaiDat?.addEventListener('click', (e) => e.stopPropagation());
+  daiMoi?.addEventListener('click', (e) => e.stopPropagation());
+
+  /* Bấm vào thông báo trên màn hình khoá khi ERP đang mở sẵn: service worker
+     nhắn về đây để bật đúng cửa sổ chat, thay vì đổ về trang chủ. */
+  navigator.serviceWorker?.addEventListener?.('message', (ev) => {
+    if (ev.data?.kieu === 'mo-thong-bao') moPopup();
+  });
+
+  // Nạp trạng thái + tự đăng ký lại nếu người dùng đã cho quyền từ trước.
+  TBDay.nap().then((k) => {
+    if (!k) return;
+    veTrangThaiTB();
+    if (k.bat && !k.chat_tat && TBDay.daChoQuyen()) TBDay.dangKyDay();
+  });
 
   /* ---- Mở / đóng popup (giống hệt cách chuông thông báo làm) ----
      boQuaClickKeTiep: nút "Chat ngay" ở Danh bạ (hay bất kỳ nút nào bên
@@ -3228,6 +3572,7 @@ async function khoiDongChat() {
     moPopup();
     await taiLanDau();
     veGanDay();   // đối tác mới lần đầu chat thì cũng cần hiện luôn bong bóng
+    moiBatNeuNen();   // vừa MỞ một cuộc chat riêng — thời điểm hợp lý thứ hai để hỏi quyền
   };
 
   /* ---- Đính kèm: DÁN (Ctrl+V) · KÉO–THẢ · CHỌN TỆP  ·  CTL-0011 ----------
@@ -3364,6 +3709,10 @@ async function khoiDongChat() {
       // Hiện luôn tin vừa gửi (khỏi đợi vòng hỏi lại tiếp theo)
       if (id > idCuoi) await hoiTinMoi();
       cuoiTrang();
+      /* CTL-0014 — ĐÂY là chỗ hỏi quyền thông báo. Người vừa gõ xong một tin
+         nhắn thì đang hiểu rất rõ vì sao cần được báo khi có tin trả lời; hỏi
+         lúc vừa mở ERP thì họ chưa hiểu gì và bấm Chặn — mà Chặn là vĩnh viễn. */
+      moiBatNeuNen();
     } catch (err) {
       $('#chat-loi').textContent = err.message || 'Không gửi được, thử lại nhé.';
     } finally {

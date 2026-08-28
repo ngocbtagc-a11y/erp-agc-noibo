@@ -675,8 +675,34 @@
             <span id="cnbDauTen">💬 Kênh chung</span>
             <span class="sm" id="cnbDauPhu"></span>
           </div>
+          <button type="button" class="cnb-chuong" id="cnbChuong" hidden
+                  aria-label="Cài đặt thông báo tin nhắn" title="Thông báo tin nhắn">🔔</button>
           <button type="button" class="cnb-dong" id="cnbDong" aria-label="Đóng chat">✕</button>
         </div>
+
+        <!-- CTL-0014 — DẢI MỜI BẬT THÔNG BÁO.
+             CỐ Ý không hỏi quyền lúc vừa mở ERP: hỏi sai lúc là bị từ chối, mà
+             trình duyệt KHÔNG cho hỏi lại lần thứ hai — mất vĩnh viễn. Dải này
+             chỉ hiện SAU KHI người dùng vừa gửi hoặc vừa mở một tin nhắn, tức
+             là đúng lúc họ hiểu vì sao cần. Bấm "Bật" mới gọi requestPermission. -->
+        <div class="tbd-moi" id="tbdMoi" hidden>
+          <div class="tbd-moi-chu" id="tbdMoiChu"></div>
+          <div class="tbd-moi-nut">
+            <button type="button" class="tbd-nut tbd-nut-chinh" id="tbdBat">Bật thông báo</button>
+            <button type="button" class="tbd-nut" id="tbdDeSau">Để sau</button>
+          </div>
+        </div>
+
+        <!-- Bảng cài đặt nhỏ, mở bằng nút 🔔 trên đầu cửa sổ chat -->
+        <div class="tbd-caidat" id="tbdCaiDat" hidden>
+          <label class="tbd-dong">
+            <input type="checkbox" id="tbdChatBat">
+            <span>Báo khi có tin nhắn riêng</span>
+          </label>
+          <p class="tbd-ghichu" id="tbdTrangThai"></p>
+          <button type="button" class="tbd-nut" id="tbdTatMay" hidden>Tắt đẩy trên máy này</button>
+        </div>
+
         <div class="chat-khung" id="chat-khung">
           <div class="empty" id="chat-trong" hidden>Chưa có tin nhắn nào — gõ dòng đầu tiên nhé.</div>
         </div>
