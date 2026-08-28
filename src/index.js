@@ -3086,14 +3086,30 @@ const GOPY_GUI_LAI_LEN_SEP  = 3;   // gửi lại lần thứ 3 trở đi thì l
    sự thật, một nguồn). Cần bí danh bảng `n` là nhan_su của NGƯỜI GỬI.
 
    ADR-0006 B1: nhan_su.quan_ly_id THẮNG; phong_ban.truong_phong_id chỉ là
-   đường lui khi quan_ly_id trống. Lưu ý: nhan_su KHÔNG có cột phong_ban_id
-   (đã kiểm schema 28/08) — cầu nối duy nhất giữa nhân sự và phòng ban là
-   nhan_su.bo_phan khớp phong_ban.ten, nên đường lui nối theo tên. */
+   đường lui khi quan_ly_id trống.
+
+   ĐƯỜNG LUI NỐI BẰNG KHOÁ, KHÔNG NỐI BẰNG TÊN (REV-0016 mục 1 · BH-32):
+   nhan_su CÓ cột phong_ban_id (migrations/them-danhmuc-nen.sql:34; chính file
+   này đã dùng ở :493 và :554). Bản trước khai nhầm là "không có" vì chỉ đọc
+   schema.sql — phải grep migrations/ mới thấy đủ.
+
+   Vì sao nối theo TÊN là hỏng: dulieunen.js đổi tên phòng ban chỉ chạy
+   UPDATE phong_ban SET ten = ?, KHÔNG cập nhật lại nhan_su.bo_phan. Đổi tên
+   một phòng là cả phòng đó mất quản lý cấp 1 → rơi hết lên Sếp duyệt, đúng
+   thứ cổng này sinh ra để tránh.
+
+   Lớp 3 là ĐƯỜNG LUI CÓ KHAI BÁO cho người còn phong_ban_id NULL (bản thật
+   28/08: 2/24 người, ví dụ Vũ Lan Hương). Nó CHỈ chạy khi phong_ban_id NULL,
+   nên người đã có id thì tên phòng lệch cũng không kéo nhầm ai. */
 const GOPY_SQL_QL1 = `COALESCE(
     (SELECT q.id FROM nhan_su q
       WHERE q.id = n.quan_ly_id AND q.dang_lam = 1 AND q.id <> n.id),
     (SELECT pb.truong_phong_id FROM phong_ban pb
       WHERE pb.hoat_dong = 1 AND pb.truong_phong_id IS NOT NULL AND pb.truong_phong_id <> n.id
+        AND n.phong_ban_id IS NOT NULL AND pb.id = n.phong_ban_id LIMIT 1),
+    (SELECT pb.truong_phong_id FROM phong_ban pb
+      WHERE pb.hoat_dong = 1 AND pb.truong_phong_id IS NOT NULL AND pb.truong_phong_id <> n.id
+        AND n.phong_ban_id IS NULL
         AND LOWER(TRIM(pb.ten)) = LOWER(TRIM(n.bo_phan)) LIMIT 1)
   )`;
 const GOPY_LOAI_HOP_LE = ['loi', 'cai_tien_trai_nghiem', 'cai_tien_quy_trinh', 'tinh_nang_moi', 'du_lieu_sai', 'loi_phan_quyen', 'loi_ket_noi'];
@@ -3250,15 +3266,24 @@ async function gopYGui(req, env) {
 
 /* Người duyệt cấp 1 của một nhân sự (ADR-0006 B1). Trả kèm `nguon` để ĐÓNG
    BĂNG vào gop_y.duyet_cap1_nguon lúc duyệt — sau này HCNS đổi quan_ly_id
-   thì hồ sơ duyệt cũ vẫn đọc đúng ai duyệt, với tư cách gì (Rule 10). */
+   thì hồ sơ duyệt cũ vẫn đọc đúng ai duyệt, với tư cách gì (Rule 10).
+
+   Không tìm được ai thì PHẢI NÓI RÕ VÌ SAO, không im lặng gộp làm một
+   (REV-0016 mục 1). Hai lý do khác hẳn nhau, việc phải làm cũng khác:
+     KHONG_CO_QUAN_LY    — đã xếp phòng ban rồi mà phòng chưa có trưởng phòng,
+                           hoặc chính người này là trưởng phòng. Việc của Sếp.
+     CHUA_XEP_PHONG_BAN  — hồ sơ nhân sự còn thiếu phong_ban_id (bản thật
+                           28/08: 2/24 người). Việc của HCNS, sửa hồ sơ là hết. */
 async function nguoiDuyetCap1(env, nhanSuId) {
   const r = await env.DB.prepare(`
     SELECT ${GOPY_SQL_QL1} AS ql_id,
            (n.quan_ly_id IS NOT NULL AND EXISTS
-              (SELECT 1 FROM nhan_su q WHERE q.id = n.quan_ly_id AND q.dang_lam = 1 AND q.id <> n.id)) AS theo_quan_ly
+              (SELECT 1 FROM nhan_su q WHERE q.id = n.quan_ly_id AND q.dang_lam = 1 AND q.id <> n.id)) AS theo_quan_ly,
+           (n.phong_ban_id IS NULL) AS chua_xep_phong
       FROM nhan_su n WHERE n.id = ?
   `).bind(nhanSuId).first();
-  if (!r || !r.ql_id) return { id: null, nguon: 'KHONG_CO_QUAN_LY' };
+  if (!r || !r.ql_id)
+    return { id: null, nguon: (r && r.chua_xep_phong) ? 'CHUA_XEP_PHONG_BAN' : 'KHONG_CO_QUAN_LY' };
   return { id: r.ql_id, nguon: r.theo_quan_ly ? 'QUAN_LY_ID' : 'TRUONG_PHONG_ID' };
 }
 
@@ -3409,7 +3434,9 @@ async function gopYDuyet(req, env) {
       // người không phải quản lý trực tiếp — đó là làm hồ sơ duyệt nói dối.
       if (laQL1)                                            nguonCap1 = ql1.nguon;
       else if (g.nguoi_gui_id === phien.nhan_su_id && laOwner) nguonCap1 = 'TU_DUYET_OWNER';
-      else if (!ql1.id)                                     nguonCap1 = 'KHONG_CO_QUAN_LY';
+      // ql1.nguon đã phân biệt sẵn KHONG_CO_QUAN_LY / CHUA_XEP_PHONG_BAN —
+      // dùng lại, đừng ghi đè bằng một lý do chung chung (REV-0016 mục 1).
+      else if (!ql1.id)                                     nguonCap1 = ql1.nguon;
       else if (vuotCap)                                     nguonCap1 = 'OWNER_VUOT_CAP';
       // Việc đã tự lên Sếp vì quá hạn (SLA) hoặc vì gửi lại lần thứ 3 —
       // không ai vượt mặt ai, đừng gắn nhãn vượt cấp cho Sếp.

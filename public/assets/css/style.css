@@ -2198,6 +2198,50 @@ tr.kd-chiadoi td {
 .gy-tick { font-size: 11px; opacity: .75; margin-left: 4px; white-space: nowrap; }
 .gy-risk-mo { opacity: .6; }
 
+/* ---- Đường tiến độ cho NGƯỜI GỬI --------------------------------------
+   Người gửi nhìn nhãn "Chờ duyệt" thì không biết mình đang ở đâu trên đường
+   đi, còn bao xa, ai đang giữ. Khối này trả lời đúng ba câu đó.
+
+   ĐIỆN THOẠI TRƯỚC: mỗi chặng là một flex item `flex:1 1 0; min-width:0`.
+   Nhờ min-width:0 nên nhãn dài KHÔNG đẩy rộng hộp — chữ tự xuống dòng, 6
+   chặng luôn nằm gọn trong bề ngang màn, không bao giờ cuộn ngang. */
+.gy-td { display: flex; align-items: flex-start; gap: 0; margin: 4px 0 8px; }
+.gy-td-chang {
+  flex: 1 1 0; min-width: 0; display: flex; flex-direction: column;
+  align-items: center; position: relative; text-align: center;
+}
+/* Vạch nối vẽ bằng ::before, đặt tuyệt đối — không chiếm chỗ, không giãn hộp */
+.gy-td-chang::before {
+  content: ''; position: absolute; top: 6px; height: 2px;
+  left: -50%; right: 50%; background: var(--vien, #e3e3e0);
+}
+.gy-td-chang:first-child::before { display: none; }
+.gy-td-chang.qua::before, .gy-td-chang.day::before { background: var(--ok, #3f8f5f); }
+.gy-td-cham {
+  width: 14px; height: 14px; border-radius: 50%; position: relative; z-index: 1;
+  background: var(--nen-2, #fff); border: 2px solid var(--vien, #e3e3e0); box-sizing: border-box;
+}
+.gy-td-chang.qua .gy-td-cham { background: var(--ok, #3f8f5f); border-color: var(--ok, #3f8f5f); }
+.gy-td-chang.day .gy-td-cham {
+  border-color: var(--ok, #3f8f5f); border-width: 4px;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok, #3f8f5f) 22%, transparent);
+}
+.gy-td-chang.hong .gy-td-cham { background: var(--danger, #c0392b); border-color: var(--danger, #c0392b); }
+.gy-td-chang.hong::before { background: var(--danger, #c0392b); }
+.gy-td-ten {
+  font-size: 11px; line-height: 1.25; margin-top: 5px;
+  color: var(--chu-mo, #6b6b66); overflow-wrap: anywhere;
+}
+.gy-td-chang.day .gy-td-ten { font-weight: 700; color: var(--chu, #26261f); }
+.gy-td-chang.hong .gy-td-ten { font-weight: 700; color: var(--danger, #c0392b); }
+/* Câu trả lời "ai đang giữ · bao lâu rồi", ngay dưới đường tiến độ */
+.gy-td-chu { font-size: 13px; line-height: 1.45; }
+.gy-td-canh {
+  border-left: 3px solid var(--danger, #c0392b); padding: 6px 10px; margin-top: 8px;
+  background: color-mix(in srgb, var(--danger, #c0392b) 7%, transparent);
+  border-radius: 0 var(--r-md, 10px) var(--r-md, 10px) 0;
+}
+
 .gy-chi-dienthoai { display: none; }
 @media (max-width: 720px) {
   .gy-chi-may { display: none; }

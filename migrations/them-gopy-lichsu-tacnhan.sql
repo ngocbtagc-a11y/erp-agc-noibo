@@ -45,9 +45,18 @@ CREATE TABLE gop_y_lich_su_v2 (
   job_id                TEXT,          -- nối sang agent_run (SPEC-0003), nay để trống
   ghi_chu               TEXT,
   luc                   TEXT NOT NULL,
+  -- REV-0016 mục 5: bản trước để lọt 2 ca. Chú thích ở cột trên KHÔNG phải
+  -- ràng buộc — DB nhận bất kỳ chuỗi nào, mà MỌI chuỗi khác 'nguoi' đều rơi
+  -- vào nhánh máy. Nên phải kẹp tập giá trị ở TẦNG NGOÀI, áp cho cả hai
+  -- nhánh. Kẹp bên trong nhánh 'nguoi' là vô nghĩa (ở đó nó luôn đúng) —
+  -- đã đo: bản kẹp-bên-trong vẫn cho 'sep_gia_mao' đi lọt.
+  --   (iv) dòng của NGƯỜI mang nhãn máy → nay bị chặn nhờ tac_nhan IS NULL.
+  --        Không dòng nào của người còn in được "SLA" cạnh tên thật.
   CHECK (
-    (nguoi_thuc_hien_loai =  'nguoi' AND nguoi_doi_id IS NOT NULL) OR
-    (nguoi_thuc_hien_loai <> 'nguoi' AND nguoi_doi_id IS NULL AND tac_nhan IS NOT NULL)
+    nguoi_thuc_hien_loai IN ('nguoi', 'he_thong', 'ho_ly', 'khi_dot') AND (
+      (nguoi_thuc_hien_loai =  'nguoi' AND nguoi_doi_id IS NOT NULL AND tac_nhan IS NULL) OR
+      (nguoi_thuc_hien_loai <> 'nguoi' AND nguoi_doi_id IS NULL AND tac_nhan IS NOT NULL)
+    )
   )
 );
 
@@ -66,7 +75,11 @@ SELECT id, gop_y_id, tu_trang_thai, den_trang_thai, nguoi_doi_id, 'nguoi', ghi_c
 ALTER TABLE gop_y_lich_su    RENAME TO gop_y_lich_su_luu_20260827;
 ALTER TABLE gop_y_lich_su_v2 RENAME TO gop_y_lich_su;
 
-CREATE INDEX IF NOT EXISTS idx_gopylichsu_gopy ON gop_y_lich_su (gop_y_id, luc);
+-- TÊN CHỈ MỤC PHẢI KHÁC idx_gopylichsu_gopy: tên đó đã theo bảng cũ sang
+-- gop_y_lich_su_luu_20260827 sau lệnh đổi tên trên (chỉ mục đi cùng bảng của
+-- nó). Dùng lại đúng tên đó kèm IF NOT EXISTS thì SQLite lặng lẽ BỎ QUA —
+-- bảng nhật ký mới sẽ chạy không có chỉ mục nào mà không ai biết.
+CREATE INDEX IF NOT EXISTS idx_gopylichsu_v2_gopy ON gop_y_lich_su (gop_y_id, luc);
 
 -- ---- Tự đối chiếu --------------------------------------------------------
 -- Chạy tay sau migration, hai số PHẢI bằng nhau:
