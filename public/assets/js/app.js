@@ -587,7 +587,10 @@ const THOI_HAN_MAC_DINH_HD = { meeting: '1h', away: '30p', dnd: '1h' };
    uuTien=true → xuất hiện trong khối "Cần xử lý" (Exception First) của
    Admin — khớp đúng set GOPY_MOC_THONG_BAO ở backend + NEW/UAT thêm vào. */
 const GOPY_TRANG_THAI = {
-  moi:                  { chu: 'Mới gửi',              mau: 'mute',   uuTien: true  },
+  moi:                  { chu: 'Chờ duyệt',            mau: 'mute',   uuTien: true  },
+  bi_tu_choi:           { chu: 'Chưa được duyệt',      mau: 'danger', uuTien: true  },
+  da_huy:               { chu: 'Đã huỷ',               mau: 'mute',   uuTien: false },
+  cho_phan_tich:        { chu: 'Đã duyệt — chờ phân tích', mau: 'sage', uuTien: false },
   dang_phan_tich:       { chu: 'Đang phân tích',        mau: 'warn',   uuTien: false },
   cho_quyet_dinh:       { chu: 'Chờ quyết định',        mau: 'danger', uuTien: true  },
   da_duyet:             { chu: 'Đã duyệt làm',          mau: 'sage',   uuTien: false },
@@ -600,6 +603,51 @@ const GOPY_TRANG_THAI = {
   hoan_thanh:           { chu: 'Hoàn thành',            mau: 'ok',     uuTien: false },
   bi_chan:              { chu: 'Đang bị chặn',          mau: 'danger', uuTien: true  }
 };
+
+/* ---- ĐƯỜNG TIẾN ĐỘ cho NGƯỜI GỬI ---------------------------------------
+   15 mốc trên là ngôn ngữ của thợ. Người gửi chỉ cần biết ĐƯỜNG CÒN BAO XA,
+   nên gộp thành 6 chặng. Đây KHÔNG phải bảng nhãn thứ hai: bảng này chỉ
+   XẾP NHÓM các mã đã khai ở GOPY_TRANG_THAI, không đặt lại tên cho mã nào.
+
+   Cách gộp (nêu trong Handoff):
+     1 Bạn gửi      — luôn xong, vì góp ý đã tồn tại thì đã gửi rồi
+     2 Đang xem xét — đang ở cổng duyệt: moi, cho_quyet_dinh
+     3 Đã duyệt     — qua cổng, đang định hình việc: cho_phan_tich,
+                      dang_phan_tich, da_duyet
+     4 Đang làm     — dang_lam, can_chinh_sua (sửa vẫn là đang làm)
+     5 Kiểm tra     — dang_kiem_tra, cho_nghiem_thu, nghiem_thu_chua_dat,
+                      san_sang_phat_hanh
+     6 Xong         — hoan_thanh
+   Ba mã KHÔNG nằm trên đường đi (chặng dừng), phải hiện rõ chứ không giấu:
+   bi_tu_choi, bi_chan, da_huy. */
+const GOPY_CHANG = [
+  { ten: 'Bạn gửi',      ma: [] },
+  { ten: 'Đang xem xét', ma: ['moi', 'cho_quyet_dinh'] },
+  { ten: 'Đã duyệt',     ma: ['cho_phan_tich', 'dang_phan_tich', 'da_duyet'] },
+  { ten: 'Đang làm',     ma: ['dang_lam', 'can_chinh_sua'] },
+  { ten: 'Kiểm tra',     ma: ['dang_kiem_tra', 'cho_nghiem_thu', 'nghiem_thu_chua_dat', 'san_sang_phat_hanh'] },
+  { ten: 'Xong',         ma: ['hoan_thanh'] }
+];
+/* Chặng DỪNG — không đi tiếp được nếu người gửi không làm gì. `chang` = đứng
+   ở chỗ nào trên đường thì dừng lại (để vẽ đúng đoạn đã đi). */
+const GOPY_CHANG_DUNG = {
+  bi_tu_choi: { chang: 1, ten: 'Chưa duyệt' },
+  bi_chan:    { chang: 3, ten: 'Đang vướng' },
+  da_huy:     { chang: 1, ten: 'Đã huỷ' }
+};
+
+/* CHỐT CHỐNG LỆCH: thêm một trạng thái vào GOPY_TRANG_THAI mà quên xếp chặng
+   thì báo ngay ở console lúc tải trang, không đợi người gửi nhìn thấy một
+   đường tiến độ trống. Rule 5 — hai bảng chỉ được phép lệch khi có người
+   biết là nó đang lệch. */
+(function kiemChangPhuKin() {
+  const daXep = new Set([...GOPY_CHANG.flatMap(c => c.ma), ...Object.keys(GOPY_CHANG_DUNG)]);
+  const sot = Object.keys(GOPY_TRANG_THAI).filter(m => !daXep.has(m));
+  const thua = [...daXep].filter(m => !GOPY_TRANG_THAI[m]);
+  if (sot.length)  console.warn('[gop-y] trạng thái chưa xếp chặng nào:', sot);
+  if (thua.length) console.warn('[gop-y] chặng trỏ tới trạng thái không tồn tại:', thua);
+})();
+
 const GOPY_LOAI = {
   loi: 'Lỗi (Bug)', cai_tien_trai_nghiem: 'Cải tiến trải nghiệm', cai_tien_quy_trinh: 'Cải tiến quy trình',
   tinh_nang_moi: 'Tính năng mới', du_lieu_sai: 'Dữ liệu sai', loi_phan_quyen: 'Lỗi phân quyền', loi_ket_noi: 'Lỗi kết nối'
@@ -1895,8 +1943,17 @@ function thoiGianTruoc(chuoi) {
   // dưới, không thì Date.parse tự đoán theo múi giờ HỆ ĐIỀU HÀNH trình duyệt,
   // sai lệch tuỳ máy (bắt được lỗi này khi tự test: hiện "7 giờ trước" cho
   // tin vừa gửi xong, trên máy có múi giờ hệ thống UTC+7).
-  const luc = Date.parse(chuoi.replace(' ', 'T') + 'Z');
-  const gioNay = Date.now() + 7 * 3600 * 1000;
+  //
+  // REV-0016 mục 4: chuỗi ĐÃ mang múi giờ sẵn (dạng ISO '...T09:00:00Z' hoặc
+  // '+07:00') thì nối thêm 'Z' nữa là thành '...ZZ' → Date.parse trả NaN →
+  // màn hình hiện "NaN ngày trước". Dữ liệu đi qua API thì luôn đúng dạng
+  // trần trụi, nhưng nhập từ nguồn khác (đối soát, chép tay, sàn TMĐT) là lộ.
+  // Nên: có múi giờ thì tin nó, so với giờ THẬT; trần trụi thì mới ép +7h.
+  const s = String(chuoi).trim();
+  const coMuiGio = /([Zz]|[+-]\d{2}:?\d{2})$/.test(s);
+  const luc = Date.parse(coMuiGio ? s : s.replace(' ', 'T') + 'Z');
+  if (!Number.isFinite(luc)) return '';   // thà không hiện gì còn hơn hiện "NaN"
+  const gioNay = coMuiGio ? Date.now() : Date.now() + 7 * 3600 * 1000;
   const phut = Math.max(0, Math.round((gioNay - luc) / 60000));
   if (phut < 1) return 'vừa xong';
   if (phut < 60) return `${phut} phút trước`;
@@ -4216,7 +4273,7 @@ if (TOI.quyen.includes('kinhdoanh')) {
    "Cần xử lý" lên đầu, xem hết mọi góp ý, triage đổi trạng thái/loại).
    ========================================================================== */
 async function khoiDongGopY() {
-  let dsGopY = [], laAd = false;
+  let dsGopY = [], laAd = false, toiLa = null;
 
   // Khu vực/module — dùng lại đúng danh sách TAB đã có (Rule 5), khỏi tự
   // chế 1 danh mục song song rồi lệch tên với sidebar thật.
@@ -4358,16 +4415,171 @@ async function khoiDongGopY() {
 
   $('#gy-anh-xoa').addEventListener('click', xoaAnhDinhKem);
 
-  function veDongGopY(g) {
+  const GOPY_RISK_MAU  = { LOW: 'ok', MEDIUM: 'warn', HIGH: 'danger' };
+  const GOPY_RISK_CHU  = { LOW: 'Thấp', MEDIUM: 'Trung bình', HIGH: 'Cao' };
+
+  function gyMa(g)  { return 'GY-' + String(g.id).padStart(4, '0'); }
+  function gyKhuVuc(g) { return g.khu_vuc ? ((TAB.find(t => t.id === g.khu_vuc) || {}).ten || g.khu_vuc) : ''; }
+
+  /* Chip rủi ro. `risk` là mức ĐÃ CHỐT; chưa ai chốt thì hiện đề xuất của Hồ
+     Ly ở dạng MỜ kèm 🦊 — người dùng phải phân biệt được "máy đoán" với "người
+     đã quyết" (Rule 9). Đây là lần đầu de_xuat_risk hiện ra màn hình.
+
+     KHÔNG lọc quyền ở đây: từ bản vá REV-0018, MÁY CHỦ đã ngừng gửi
+     `risk`/`de_xuat_risk` cho người chỉ xem với tư cách người gửi
+     (src/index.js — GOPY_RUOT_NOI_BO). Hai trường đó thành `undefined` →
+     hàm trả CHUỖI RỖNG và để chỗ gọi tự quyết vẽ gì: ô bảng vẽ gạch ngang
+     cho thẳng cột, thẻ thì để trắng. Không chip rỗng, không lỗi JS. Đây chỉ
+     là lớp phòng thân — ranh giới quyền thật nằm ở máy chủ (BH-44). */
+  function gyChipRisk(g) {
+    if (g.risk) return `<span class="tag ${GOPY_RISK_MAU[g.risk] || 'mute'}">${GOPY_RISK_CHU[g.risk] || g.risk}</span>`;
+    if (g.de_xuat_risk) return `<span class="tag mute gy-risk-mo" title="Hồ Ly đề xuất, chưa ai chốt">🦊 ${GOPY_RISK_CHU[g.de_xuat_risk] || g.de_xuat_risk}</span>`;
+    return '';
+  }
+
+  /* "Đang chờ ai" — dịch mã kỹ thuật sang TÊN NGƯỜI THẬT. Người dùng không
+     bao giờ nhìn thấy QL_CAP1/HOLY/KHIDOT (Rule 7). */
+  function gyChoAi(g) {
+    switch (g.next_owner) {
+      case 'QL_CAP1':   return g.quan_ly_cap1_ten || 'Quản lý trực tiếp';
+      case 'OWNER':     return 'Sếp (ERP Owner)';
+      case 'NGUOI_GUI': return g.nguoi_gui_ten || 'Người gửi';
+      case 'NONE':      return '—';
+      default:          return 'Máy đang xử lý';
+    }
+  }
+
+  /* ---- ĐƯỜNG TIẾN ĐỘ cho người gửi -------------------------------------
+     Ba câu người gửi cần trả lời, không cần đọc chữ đoán:
+       1. đang đứng ở chặng nào   2. ai đang giữ   3. bao lâu rồi
+     Chỉ hiện TIẾN ĐỘ. Không nhánh code, không mức rủi ro nội bộ, không ghi
+     chú riêng giữa quản lý với Sếp. */
+
+  // "2 ngày trước" → "2 ngày", để ghép được câu "đã 2 ngày".
+  function gyDaBaoLau(luc) {
+    const s = thoiGianTruoc(luc);
+    return s ? s.replace(/ trước$/, '') : '';
+  }
+
+  /* Vào chặng hiện tại từ lúc nào — lấy dòng nhật ký GẦN NHẤT chuyển ĐẾN
+     trạng thái đang đứng. Không có nhật ký (góp ý chưa đổi trạng thái lần
+     nào, ví dụ GY-0002 của chị Lan còn "moi") thì mốc là lúc gửi. */
+  function gyMocChang(g, lichSu) {
+    const d = (lichSu || []).filter(x => x.den_trang_thai === g.trang_thai && x.tu_trang_thai !== x.den_trang_thai);
+    return d.length ? d[d.length - 1].luc : g.tao_luc;
+  }
+
+  function gyChiSoChang(trangThai) {
+    const i = GOPY_CHANG.findIndex(c => c.ma.includes(trangThai));
+    return i < 0 ? 1 : i;   // mã lạ thì coi như còn ở "Đang xem xét", không vẽ trống
+  }
+
+  function veTienDo(g, lichSu) {
+    const khoi = $('#gyCtTienDoKhoi');
+    khoi.hidden = false;
+
+    const dung = GOPY_CHANG_DUNG[g.trang_thai];
+    const iDay = dung ? dung.chang : gyChiSoChang(g.trang_thai);
+    const xong = g.trang_thai === 'hoan_thanh';
+
+    $('#gyCtTienDo').innerHTML = GOPY_CHANG.map((c, i) => {
+      const lop = dung && i === iDay ? 'hong'
+        : (i < iDay || (xong && i <= iDay)) ? 'qua'
+        : i === iDay ? 'day' : '';
+      const ten = dung && i === iDay ? dung.ten : c.ten;
+      return `<div class="gy-td-chang ${lop}"><span class="gy-td-cham"></span>` +
+             `<span class="gy-td-ten">${esc(ten)}</span></div>`;
+    }).join('');
+
+    const daLau = gyDaBaoLau(gyMocChang(g, lichSu));
+    const canh = $('#gyCtTienDoCanh');
+    canh.hidden = true;
+    let chu;
+
+    if (g.trang_thai === 'hoan_thanh') {
+      chu = g.can_xac_minh_lai
+        ? `Đã đánh dấu xong ${esc(daLau)} trước, nhưng <b>chưa có bằng chứng kèm theo</b> nên Sếp còn phải xác minh lại.`
+        : `<b>Xong rồi.</b> Hoàn thành ${esc(daLau)} trước.`;
+    } else if (g.trang_thai === 'bi_tu_choi') {
+      chu = `Yêu cầu này <b>chưa được duyệt</b> (${esc(daLau)} trước).`;
+      // Bị từ chối mà không biết vì sao thì lần sau người ta không gửi nữa.
+      canh.hidden = false;
+      canh.innerHTML = `<div><b>Vì sao chưa duyệt:</b> ${esc(g.ly_do_tu_choi || 'Người duyệt chưa ghi lý do — bạn hỏi lại giúp.')}</div>` +
+        `<div class="sm" style="margin-top:4px">Bạn <b>sửa lại rồi gửi lại được</b> — mở góp ý này, bổ sung cho rõ rồi bấm “Gửi lại”.</div>`;
+    } else if (g.trang_thai === 'bi_chan') {
+      chu = `Yêu cầu này <b>đang vướng</b>, tạm dừng ${esc(daLau)} nay.`;
+      canh.hidden = false;
+      canh.innerHTML = `<div><b>Đang vướng gì:</b> ${esc(g.ly_do_tu_choi || 'Chưa ghi rõ — bạn hỏi lại người phụ trách giúp.')}</div>`;
+    } else if (g.trang_thai === 'da_huy') {
+      chu = `Yêu cầu này <b>đã huỷ</b> ${esc(daLau)} trước.`;
+    } else if (g.next_owner === 'NGUOI_GUI' && g.nguoi_gui_id === toiLa) {
+      // Đừng nói "Đang chờ Nguyễn Văn A" với chính Nguyễn Văn A.
+      chu = `<b>Đang chờ bạn</b> — bóng đang ở sân bạn · đã ${esc(daLau)}`;
+    } else if (['HOLY', 'KHIDOT', 'GAO', 'RUNNER'].includes(g.next_owner)) {
+      // Máy đang cầm việc: nói đúng là máy, nhưng đừng ghép thành câu cụt
+      // "Đang chờ Máy đang xử lý". Không nêu tên Agent nội bộ (Rule 7).
+      chu = `<b>Đang được xử lý tự động</b> · đã ${esc(daLau)}`;
+    } else {
+      chu = `Đang chờ <b>${esc(gyChoAi(g))}</b> · đã ${esc(daLau)}`;
+    }
+    $('#gyCtTienDoChu').innerHTML = chu;
+  }
+
+  function gyTickCong(g) {
+    const t1 = g.duyet_cap1_luc ? '<span class="gy-tick" title="Quản lý đã duyệt">✓QL</span>' : '';
+    const t2 = g.duyet_owner_luc ? '<span class="gy-tick" title="Sếp đã duyệt">✓Sếp</span>' : '';
+    return t1 + t2;
+  }
+
+  function gyNhanTrangThai(g) {
     const tt = GOPY_TRANG_THAI[g.trang_thai] || GOPY_TRANG_THAI.moi;
+    // Hoàn thành mà không có bằng chứng thì KHÔNG được hiện màu xanh — nói
+    // đúng sự thật ngay cả trước khi Sếp soát xong (bằng chứng: góp ý #1).
+    if (g.trang_thai === 'hoan_thanh' && g.can_xac_minh_lai)
+      return '<span class="tag mute" title="Chưa có link PR/commit nào chứng minh">Hoàn thành (cần xác minh lại)</span>';
+    return `<span class="tag ${tt.mau}">${esc(tt.chu)}</span>`;
+  }
+
+  function veDongGopY(g) {
     return `<tr data-id="${g.id}">` +
-      `<td><div class="nm">${esc(g.tieu_de)}</div>${g.khu_vuc ? `<div class="sm">${esc((TAB.find(t => t.id === g.khu_vuc) || {}).ten || g.khu_vuc)}</div>` : ''}</td>` +
-      (laAd ? `<td class="sm">${esc(g.nguoi_gui_ten)}</td>` : '') +
-      `<td><span class="tag ${tt.mau}">${esc(tt.chu)}</span>` +
-        (laAd && g.trang_thai === 'moi' && g.de_xuat_trang_thai ? ' <span title="Hồ Ly đã có đề xuất">🦊</span>' : '') +
-      `</td>` +
-      `<td class="sm">${thoiGianTruoc(g.cap_nhat_luc || g.tao_luc)}</td>` +
+      `<td class="sm">${gyMa(g)}</td>` +
+      `<td><div class="nm">${esc(g.tieu_de)}</div>${g.khu_vuc ? `<div class="sm">${esc(gyKhuVuc(g))}</div>` : ''}</td>` +
+      (laAd ? `<td class="sm">${esc(g.nguoi_gui_ten)}<div class="sm">${esc(g.nguoi_gui_bo_phan || '')}</div></td>` : '') +
+      `<td class="sm">${thoiGianTruoc(g.tao_luc)}</td>` +
+      `<td>${gyChipRisk(g) || '<span class="sm">—</span>'}</td>` +
+      `<td>${gyNhanTrangThai(g)} ${gyTickCong(g)}</td>` +
+      `<td class="sm">${esc(gyChoAi(g))}</td>` +
       `<td><button type="button" class="btn-nho" data-gyxem="${g.id}">Xem</button></td></tr>`;
+  }
+
+  /* Thẻ — dùng cho panel "Chờ tôi duyệt" (mọi kích thước) và cho danh sách
+     trên điện thoại. `coNut` bật 2 nút to chạm được bằng ngón cái: việc rủi
+     ro thấp không bắt mở modal mới duyệt được. */
+  function veTheGopY(g, coNut) {
+    return `<div class="gy-the" data-id="${g.id}">` +
+      `<div class="gy-the-dau">` +
+        (coNut ? `<label class="gy-the-chon"><input type="checkbox" class="gy-chon" value="${g.id}"></label>` : '') +
+        `<span class="sm">${gyMa(g)}</span>${gyChipRisk(g)}</div>` +
+      `<div class="nm gy-the-ten" data-gyxem="${g.id}">${esc(g.tieu_de)}</div>` +
+      `<div class="sm">${gyNhanTrangThai(g)} · Chờ: ${esc(gyChoAi(g))} · ${thoiGianTruoc(g.tao_luc)}</div>` +
+      (laAd || coNut ? `<div class="sm">${esc(g.nguoi_gui_ten)}${g.nguoi_gui_bo_phan ? ' — ' + esc(g.nguoi_gui_bo_phan) : ''}</div>` : '') +
+      (coNut
+        ? `<div class="gy-the-nut">` +
+            `<button type="button" class="btn-primary btn-nho" data-gyduyet="${g.id}">Duyệt</button>` +
+            `<button type="button" class="btn-phu btn-nho" data-gyxem="${g.id}">Xem / Chưa duyệt</button></div>`
+        : '') +
+      `</div>`;
+  }
+
+  function veDs(sel, ds, coNut) { $(sel).innerHTML = ds.map(g => veTheGopY(g, coNut)).join(''); }
+
+  /* Ai đang được CHỜ ở bản ghi này — dùng để bật panel "Chờ tôi duyệt".
+     Chỉ là gợi ý giao diện; luật thật nằm ở backend (gopYDuyet). */
+  function gyDangChoToi(g) {
+    if (!['moi', 'cho_quyet_dinh'].includes(g.trang_thai)) return false;
+    if (g.next_owner === 'OWNER') return laAd;
+    if (g.next_owner === 'QL_CAP1') return g.quan_ly_cap1_id === toiLa || laAd;
+    return false;
   }
 
   async function taiLai() {
@@ -4375,17 +4587,62 @@ async function khoiDongGopY() {
     try { kq = await API.gopYDanhSach(); } catch { return; }
     dsGopY = kq.gop_y || [];
     laAd = !!kq.la_admin;
+    toiLa = kq.toi_la || null;
 
     $('#gy-cot-nguoigui').hidden = !laAd;
     $('#gy-danhsach-tieude').textContent = laAd ? 'Tất cả góp ý' : 'Yêu cầu của tôi';
 
-    const canXuLy = laAd ? dsGopY.filter(g => (GOPY_TRANG_THAI[g.trang_thai] || {}).uuTien) : [];
-    $('#gy-canxuly-panel').hidden = canXuLy.length === 0;
-    $('#gy-canxuly-bang').innerHTML = canXuLy.map(veDongGopY).join('');
+    // Panel rỗng thì ẨN HẲN, không để khoảng trống vô nghĩa (Exception First).
+    const choDuyet = dsGopY.filter(gyDangChoToi);
+    $('#gy-choduyet-panel').hidden = choDuyet.length === 0;
+    $('#gy-choduyet-tieude').textContent = `Chờ tôi duyệt (${choDuyet.length})`;
+    $('#gy-duyetlo').hidden = choDuyet.length < 2;
+    veDs('#gy-choduyet-ds', choDuyet, true);
+
+    const quaHan = choDuyet.filter(g => (g.so_ngay_cho || 0) >= 3);
+    $('#gy-quahan-panel').hidden = quaHan.length === 0;
+    $('#gy-quahan-tieude').textContent = `Quá hạn duyệt (${quaHan.length})`;
+    veDs('#gy-quahan-ds', quaHan, false);
+
+    const xacMinh = laAd ? dsGopY.filter(g => g.can_xac_minh_lai) : [];
+    $('#gy-xacminh-panel').hidden = xacMinh.length === 0;
+    $('#gy-xacminh-tieude').textContent = `Cần xác minh lại (${xacMinh.length})`;
+    veDs('#gy-xacminh-ds', xacMinh, false);
 
     $('#gy-bang').innerHTML = dsGopY.map(veDongGopY).join('');
+    veDs('#gy-the-ds', dsGopY, false);
     $('#gy-trong').hidden = dsGopY.length > 0;
   }
+
+  // Duyệt thẳng từ thẻ — 1 thao tác cho việc rủi ro thấp.
+  document.addEventListener('click', async (e) => {
+    const nut = e.target.closest('[data-gyduyet]');
+    if (!nut || $('#v-gopy').hidden) return;
+    nut.disabled = true;
+    $('#gy-duyet-loi').textContent = '';
+    try {
+      await API.gopYDuyet({ id: parseInt(nut.getAttribute('data-gyduyet'), 10), quyet_dinh: 'duyet' });
+      await taiLai();
+    } catch (err) {
+      $('#gy-duyet-loi').textContent = err.message || 'Không duyệt được, thử lại nhé.';
+      nut.disabled = false;
+    }
+  });
+
+  // Duyệt hàng loạt — 3 thao tác cho cả lô thay vì 45 thao tác cho 15 việc.
+  // Backend vẫn kiểm từng cái một, gồm cả luật cấm hạ mức rủi ro.
+  $('#gy-duyetlo').addEventListener('click', async () => {
+    const ids = [...document.querySelectorAll('#gy-choduyet-ds .gy-chon:checked')].map(o => parseInt(o.value, 10));
+    if (!ids.length) { $('#gy-duyet-loi').textContent = 'Chọn ít nhất 1 mục trước đã.'; return; }
+    const nut = $('#gy-duyetlo'); nut.disabled = true;
+    $('#gy-duyet-loi').textContent = '';
+    try {
+      await API.gopYDuyet({ ids, quyet_dinh: 'duyet' });
+      await taiLai();
+    } catch (err) {
+      $('#gy-duyet-loi').textContent = err.message || 'Không duyệt được, thử lại nhé.';
+    } finally { nut.disabled = false; }
+  });
 
   $('#gy-form').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -4443,6 +4700,49 @@ async function khoiDongGopY() {
     anh.hidden = !g.co_dinh_kem;
     if (g.co_dinh_kem) anh.src = '/api/gop-y/anh?id=' + encodeURIComponent(g.id) + '&v=' + Date.now();
 
+    // ---- Đường duyệt: ai đã gật, đang chờ ai --------------------------
+    const buoc = [];
+    if (g.duyet_cap1_luc) {
+      const NGUON = {
+        QUAN_LY_ID: 'quản lý trực tiếp', TRUONG_PHONG_ID: 'trưởng phòng',
+        KHONG_CO_QUAN_LY: 'không có quản lý trực tiếp — bỏ qua cổng 1',
+        // Hai lý do khác nhau, việc phải làm khác nhau: cái trên là việc của
+        // Sếp, cái dưới là hồ sơ nhân sự còn thiếu — HCNS bổ sung là hết.
+        CHUA_XEP_PHONG_BAN: 'hồ sơ chưa xếp phòng ban — HCNS bổ sung giúp',
+        OWNER_VUOT_CAP: 'Sếp duyệt VƯỢT CẤP', TU_DUYET_OWNER: 'Sếp tự gửi, tự duyệt',
+        QUA_HAN_LEN_OWNER: 'quá hạn ở cấp quản lý — Sếp duyệt thay'
+      };
+      buoc.push(`✓ Cấp 1: ${esc(g.duyet_cap1_ten || '—')} (${NGUON[g.duyet_cap1_nguon] || g.duyet_cap1_nguon})`);
+    }
+    if (g.duyet_owner_luc) buoc.push(`✓ Sếp: ${esc(g.duyet_owner_ten || '—')}`);
+    buoc.push(`Đang chờ: <b>${esc(gyChoAi(g))}</b>`);
+    // RUỘT — chỉ người đang cầm việc mới cần: mức rủi ro nội bộ và link
+    // PR/commit (lộ nhánh code). Người gửi xem tiến độ, không xem ruột.
+    const xemRuot = laAd || gyDangChoToi(g);
+    if (xemRuot && g.risk) buoc.push(`Rủi ro đã chốt: ${GOPY_RISK_CHU[g.risk] || g.risk}`);
+    if (g.so_lan_gui_lai) buoc.push(`Đã gửi lại ${g.so_lan_gui_lai} lần`);
+    if (xemRuot && g.bang_chung_url) buoc.push(`Bằng chứng: ${esc(g.bang_chung_url)}`);
+    $('#gyCtDuongDuyet').innerHTML = buoc.join(' · ');
+    $('#gyCtLyDoTuChoi').hidden = !(g.trang_thai === 'bi_tu_choi' && g.ly_do_tu_choi);
+    $('#gyCtLyDoTuChoi').textContent = g.ly_do_tu_choi ? 'Chưa duyệt vì: ' + g.ly_do_tu_choi : '';
+
+    // ---- Cổng duyệt — chỉ hiện với đúng người đang được chờ ------------
+    const duyetKhoi = $('#gyCtDuyetKhoi');
+    duyetKhoi.hidden = !gyDangChoToi(g);
+    if (!duyetKhoi.hidden) {
+      $('#gyCtRisk').value = g.risk || g.de_xuat_risk || 'MEDIUM';
+      $('#gyCtGhiChuDuyet').value = '';
+      $('#gyCtDuyetLoi').textContent = '';
+      // Câu nhắc "chỉ được nâng" chỉ đúng với quản lý — Sếp hạ được, đừng
+      // dặn Sếp một luật không áp cho Sếp.
+      $('#gyCtRiskGoiY').textContent = !g.de_xuat_risk ? ''
+        : (laAd ? `🦊 Hồ Ly chấm ${GOPY_RISK_CHU[g.de_xuat_risk]}.`
+                : `🦊 Hồ Ly chấm ${GOPY_RISK_CHU[g.de_xuat_risk]}. Bạn chỉ NÂNG lên được — muốn hạ phải Sếp.`);
+      $('#gyCtDuyetTieuDe').textContent = g.trang_thai === 'cho_quyet_dinh'
+        ? 'Ghi quyết định rồi cho làm (rủi ro CAO)'
+        : (g.next_owner === 'OWNER' ? 'Duyệt (ERP Owner)' : 'Duyệt (quản lý trực tiếp)');
+    }
+
     const triageKhoi = $('#gyCtTriageKhoi');
     triageKhoi.hidden = !laAd;
     if (laAd) {
@@ -4450,6 +4750,8 @@ async function khoiDongGopY() {
       $('#gyCtLoai').value = g.loai || '';
       $('#gyCtGhiChu').value = '';
       $('#gyCtTriageLoi').textContent = '';
+      $('#gyCtBangChung').value = g.bang_chung_url || '';
+      $('#gyCtBangChungO').hidden = false;
     }
 
     // Đề xuất Hồ Ly (AI, chế độ nháp) — chỉ Admin thấy, chỉ có ý nghĩa khi
@@ -4471,15 +4773,30 @@ async function khoiDongGopY() {
     }
 
     $('#gyCtLichSu').innerHTML = '<div class="sm">Đang tải…</div>';
+    // Vẽ ngay đường tiến độ với mốc "lúc gửi" — người gửi thấy mình đang ở
+    // đâu trước cả khi nhật ký tải xong; có nhật ký rồi thì vẽ lại cho đúng
+    // mốc vào chặng. Nhật ký hỏng cũng không mất đường tiến độ.
+    veTienDo(g, null);
     modal.hidden = false;
 
     try {
       const { lich_su } = await API.gopYLichSu(id);
+      veTienDo(g, lich_su);
+      // Dòng do MÁY ghi KHÔNG có tên người — hiện biểu tượng máy + tác nhân
+      // + "(uỷ quyền: ...)". Người dùng không bao giờ thấy tên một người cho
+      // hành động người đó không làm (Rule 7, Rule 9).
+      const aiLam = ls => ls.nguoi_thuc_hien_loai === 'nguoi'
+        ? esc(ls.nguoi_doi_ten || 'Người dùng cũ')
+        : `⚙️ ${esc(ls.tac_nhan || 'Hệ thống')}${ls.uy_quyen_ten ? ` (uỷ quyền: ${esc(ls.uy_quyen_ten)})` : ''}`;
       $('#gyCtLichSu').innerHTML = (lich_su || []).length
         ? lich_su.map(ls => `<div class="sm" style="margin-bottom:4px">` +
-            `${esc(ls.nguoi_doi_ten)} đổi ` +
-            `${ls.tu_trang_thai ? `<b>${esc((GOPY_TRANG_THAI[ls.tu_trang_thai] || {}).chu || ls.tu_trang_thai)}</b> → ` : ''}` +
-            `<b>${esc((GOPY_TRANG_THAI[ls.den_trang_thai] || {}).chu || ls.den_trang_thai)}</b>` +
+            // tu === den: dòng ghi việc DUYỆT / SLA đẩy cấp — không phải đổi
+            // trạng thái, đừng vẽ "Chờ duyệt → Chờ duyệt" cho rối mắt.
+            (ls.tu_trang_thai === ls.den_trang_thai
+              ? `${aiLam(ls)}`
+              : `${aiLam(ls)} đổi ` +
+                `${ls.tu_trang_thai ? `<b>${esc((GOPY_TRANG_THAI[ls.tu_trang_thai] || {}).chu || ls.tu_trang_thai)}</b> → ` : ''}` +
+                `<b>${esc((GOPY_TRANG_THAI[ls.den_trang_thai] || {}).chu || ls.den_trang_thai)}</b>`) +
             `${ls.ghi_chu ? ` — ${esc(ls.ghi_chu)}` : ''} · ${thoiGianTruoc(ls.luc)}</div>`).join('')
         : '<div class="sm">Chưa có thay đổi trạng thái nào.</div>';
     } catch {
@@ -4502,11 +4819,44 @@ async function khoiDongGopY() {
     const id = parseInt(modal.dataset.id, 10);
     const g = dsGopY.find(x => x.id === id);
     if (!g) return;
-    $('#gyCtTrangThai').value = g.de_xuat_trang_thai;
+    // Từ SPEC-0002 đề xuất của Hồ Ly rót vào CỔNG DUYỆT (mức rủi ro + ghi
+    // chú), không rót thẳng vào ô trạng thái nữa — trạng thái nay chỉ đi qua
+    // cổng duyệt, không ai nhảy cóc được.
+    if (!$('#gyCtDuyetKhoi').hidden) {
+      if (g.de_xuat_risk) $('#gyCtRisk').value = g.de_xuat_risk;
+      $('#gyCtGhiChuDuyet').value = '🦊 Hồ Ly (AI) đề xuất: ' + (g.de_xuat_ly_do || '');
+      $('#gyCtGhiChuDuyet').focus();
+    }
     $('#gyCtLoai').value = g.de_xuat_loai || '';
-    $('#gyCtGhiChu').value = '🦊 Hồ Ly (AI) đề xuất: ' + (g.de_xuat_ly_do || '');
-    $('#gyCtGhiChu').focus();
   });
+
+  /* Duyệt / Chưa duyệt trong modal. Giao diện chỉ gom dữ liệu — mọi luật
+     (ai được bấm, cấm hạ rủi ro, vượt cấp phải ghi lý do) enforce ở backend. */
+  async function gyGuiDuyet(quyetDinh) {
+    const id = parseInt(modal.dataset.id, 10);
+    const oLoi = $('#gyCtDuyetLoi');
+    oLoi.textContent = '';
+    const ghiChu = $('#gyCtGhiChuDuyet').value.trim();
+    if (quyetDinh === 'tu_choi' && !ghiChu) {
+      oLoi.textContent = 'Hãy ghi rõ lý do chưa duyệt để người gửi biết đường sửa.';
+      return;
+    }
+    const nut = $('#gyCtNutDuyet'), nut2 = $('#gyCtNutTuChoi');
+    nut.disabled = nut2.disabled = true;
+    try {
+      await API.gopYDuyet({
+        id, quyet_dinh: quyetDinh, risk: $('#gyCtRisk').value,
+        ghi_chu: ghiChu || null, ly_do: quyetDinh === 'tu_choi' ? ghiChu : null,
+        loi_nhan: quyetDinh === 'duyet' ? ghiChu : null
+      });
+      await taiLai();
+      await moChiTiet(id);
+    } catch (err) {
+      oLoi.textContent = err.message || 'Không lưu được, thử lại nhé.';
+    } finally { nut.disabled = nut2.disabled = false; }
+  }
+  $('#gyCtNutDuyet').addEventListener('click', () => gyGuiDuyet('duyet'));
+  $('#gyCtNutTuChoi').addEventListener('click', () => gyGuiDuyet('tu_choi'));
 
   $('#gyCtTriageForm').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -4518,7 +4868,8 @@ async function khoiDongGopY() {
       await API.gopYDoiTrangThai(id, {
         trang_thai: $('#gyCtTrangThai').value,
         loai: $('#gyCtLoai').value || null,
-        ghi_chu: $('#gyCtGhiChu').value.trim() || null
+        ghi_chu: $('#gyCtGhiChu').value.trim() || null,
+        bang_chung_url: $('#gyCtBangChung').value.trim() || null
       });
       await taiLai();
       await moChiTiet(id);   // vẽ lại lịch sử + meta mới ngay trong modal, không cần đóng/mở lại

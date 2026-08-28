@@ -473,24 +473,43 @@
         </div>
       </div>
 
-      <div class="panel" id="gy-canxuly-panel" hidden>
-        <div class="panel-head"><h4>Cần xử lý</h4></div>
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>Tiêu đề</th><th>Người gửi</th><th>Trạng thái</th><th>Cập nhật</th><th></th></tr></thead>
-            <tbody id="gy-canxuly-bang"></tbody>
-          </table>
+      <!-- CHỜ TÔI DUYỆT — Exception First: mở màn là việc đang chờ chính
+           người xem, không phải toàn bộ danh sách. Dạng THẺ (không phải bảng)
+           vì người duyệt chính duyệt trên điện thoại. -->
+      <div class="panel" id="gy-choduyet-panel" hidden>
+        <div class="panel-head">
+          <h4 id="gy-choduyet-tieude">Chờ tôi duyệt</h4>
+          <button type="button" class="btn-nho" id="gy-duyetlo" hidden style="width:auto">Duyệt các mục đã chọn</button>
         </div>
+        <div class="gy-the-ds" id="gy-choduyet-ds"></div>
+        <div class="form-loi" id="gy-duyet-loi"></div>
+      </div>
+
+      <div class="panel" id="gy-quahan-panel" hidden>
+        <div class="panel-head"><h4 id="gy-quahan-tieude">Quá hạn duyệt</h4></div>
+        <div class="gy-the-ds" id="gy-quahan-ds"></div>
+      </div>
+
+      <div class="panel" id="gy-xacminh-panel" hidden>
+        <div class="panel-head"><h4 id="gy-xacminh-tieude">Cần xác minh lại</h4></div>
+        <div class="sm" style="margin:0 0 8px">Mang nhãn “Hoàn thành” nhưng chưa có link Pull Request/commit nào chứng minh. Mở từng cái ra để dán bằng chứng, hoặc mở lại cho làm tiếp.</div>
+        <div class="gy-the-ds" id="gy-xacminh-ds"></div>
       </div>
 
       <div class="panel">
         <div class="panel-head"><h4 id="gy-danhsach-tieude">Yêu cầu của tôi</h4></div>
-        <div class="table-wrap">
+        <!-- Desktop: bảng 7 cột. Mobile (<720px): CSS ẩn bảng, hiện thẻ —
+             7 cột không vừa 430px, bảng sẽ tràn ngang. -->
+        <div class="table-wrap gy-chi-may">
           <table>
-            <thead><tr><th>Tiêu đề</th><th id="gy-cot-nguoigui" hidden>Người gửi</th><th>Trạng thái</th><th>Cập nhật</th><th></th></tr></thead>
+            <thead><tr>
+              <th>Mã</th><th>Tiêu đề</th><th id="gy-cot-nguoigui" hidden>Người gửi</th>
+              <th>Ngày gửi</th><th>Rủi ro</th><th>Trạng thái</th><th>Đang chờ ai</th><th></th>
+            </tr></thead>
             <tbody id="gy-bang"></tbody>
           </table>
         </div>
+        <div class="gy-the-ds gy-chi-dienthoai" id="gy-the-ds"></div>
         <div class="empty" id="gy-trong" hidden>Chưa có góp ý nào — thử gửi 1 vướng mắc thật đang gặp nhé.</div>
       </div>
     </section>
@@ -524,12 +543,59 @@
         </div>
         <div class="sm" id="gyCtDeXuatChoXuLy" hidden style="margin:8px 0">🦊 Hồ Ly đang phân tích góp ý này, quay lại sau ít phút…</div>
 
+        <!-- ĐƯỜNG TIẾN ĐỘ — cho NGƯỜI GỬI. Gộp 15 trạng thái kỹ thuật thành
+             6 chặng người thường hiểu, đánh dấu đang đứng ở đâu, ai đang
+             giữ, đã bao lâu. Hiện TIẾN ĐỘ, không hiện RUỘT: không nhánh
+             code, không mức rủi ro nội bộ, không ghi chú riêng. -->
+        <div id="gyCtTienDoKhoi" hidden>
+          <div class="kv-md-muc">Yêu cầu của bạn đang ở đâu</div>
+          <div class="gy-td" id="gyCtTienDo"></div>
+          <div class="gy-td-chu" id="gyCtTienDoChu"></div>
+          <div class="gy-td-canh" id="gyCtTienDoCanh" hidden></div>
+        </div>
+
+        <!-- Đường đi của yêu cầu: ai đã gật, đang chờ ai. Không có mã kỹ
+             thuật nào lọt ra màn hình (Rule 7). -->
+        <div class="kv-md-muc">Đường duyệt</div>
+        <div class="sm" id="gyCtDuongDuyet"></div>
+        <div class="sm" id="gyCtLyDoTuChoi" hidden style="color:var(--danger); margin-top:6px"></div>
+
+        <!-- CỔNG DUYỆT — chỉ hiện với đúng người đang được chờ -->
+        <div id="gyCtDuyetKhoi" hidden>
+          <div class="kv-md-muc" id="gyCtDuyetTieuDe">Duyệt yêu cầu này</div>
+          <div class="form-luoi">
+            <div class="field">
+              <label>Mức rủi ro (chốt)</label>
+              <select id="gyCtRisk">
+                <option value="LOW">Thấp — sửa 1 màn hình, dễ lùi</option>
+                <option value="MEDIUM">Trung bình — ảnh hưởng nhiều phòng ban</option>
+                <option value="HIGH">Cao — đụng phân quyền/tài chính/dữ liệu chung</option>
+              </select>
+              <div class="sm" id="gyCtRiskGoiY"></div>
+            </div>
+            <div class="field field-rong">
+              <label id="gyCtGhiChuDuyetNhan">Ghi chú / lời nhắn cho người gửi</label>
+              <input type="text" id="gyCtGhiChuDuyet" maxlength="500" placeholder="Tuỳ chọn — cảm ơn hoặc dặn thêm">
+            </div>
+            <div class="field field-nut">
+              <button type="button" class="btn-primary" id="gyCtNutDuyet" style="width:auto">Duyệt</button>
+              <button type="button" class="btn-phu" id="gyCtNutTuChoi" style="width:auto">Chưa duyệt</button>
+            </div>
+          </div>
+          <div class="form-loi" id="gyCtDuyetLoi"></div>
+        </div>
+
         <div id="gyCtTriageKhoi" hidden>
           <div class="kv-md-muc">Xử lý (Admin)</div>
           <form id="gyCtTriageForm" class="form-luoi">
             <div class="field">
               <label>Trạng thái</label>
               <select id="gyCtTrangThai"></select>
+            </div>
+            <div class="field field-rong" id="gyCtBangChungO" hidden>
+              <label>Link bằng chứng (Pull Request hoặc commit đã merge)</label>
+              <input type="text" id="gyCtBangChung" maxlength="500" placeholder="https://github.com/.../pull/12">
+              <div class="sm">Bắt buộc khi đánh dấu Hoàn thành. Không có link thì không bấm được — đây là chỗ trạng thái từng nói dối.</div>
             </div>
             <div class="field">
               <label>Phân loại</label>

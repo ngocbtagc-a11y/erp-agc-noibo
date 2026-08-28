@@ -686,8 +686,27 @@ lùi bằng cách deploy lại code cũ (cột thừa nằm im, code cũ không 
 đúng nguyên tắc "migration phải lùi được, không phá dữ liệu".
 File `lui-` chỉ chứa lệnh reset cờ `can_xac_minh_lai = 0` và ghi chú hướng dẫn.
 
-Chạy bằng `node scripts/chay-migration.mjs them-gopy-congduyet.sql` (local trước),
-rồi `--remote` **ngay sau khi deploy code** — đây là bước từng gây sự cố thật.
+### Thứ tự triển khai — **DB TRƯỚC, CODE SAU** (đã ĐO, REV-0018 mục 6)
+
+Bản trước của mục này khai "nạp `--remote` **ngay sau khi deploy code**".
+**Khai ngược.** Hồ Ly dựng cả hai chiều trên SQLite thật và đo được:
+
+| chiều làm | kết quả đo |
+|---|---|
+| **Nạp DB trước, deploy code sau** | Code CŨ vẫn ghi nhật ký bình thường trong khoảng giữa — không khai `nguoi_thuc_hien_loai` thì `DEFAULT 'nguoi'` + có `nguoi_doi_id` → vẫn qua `CHECK`. **Không có cửa sổ hỏng.** |
+| Deploy code trước, nạp DB sau | Code mới `SELECT g.risk, g.bang_chung_url, …` trên bảng chưa có cột → `no such column: risk` → **màn hình Góp ý lỗi 500** suốt từ lúc deploy tới lúc nạp xong DB. |
+
+**Chiều TIẾN (bắt buộc theo đúng thứ tự này):**
+
+1. `node scripts/chay-migration.mjs them-gopy-lichsu-tacnhan.sql` — local trước, rồi `--remote`.
+2. `node scripts/chay-migration.mjs them-gopy-congduyet.sql` — local trước, rồi `--remote`.
+3. Xác nhận cả hai file đã có dòng trong `schema_migrations`.
+4. **Rồi mới** `npm run dua-len` (deploy code).
+
+**Chiều LÙI thì ngược lại** — code cũ trước, DB sau: deploy lại bản code cũ
+(bản mới đã tắt, không còn ai đọc cột mới), **sau đó** mới chạy `lui-…`.
+Deploy code cũ mà DB đã lùi trước thì mất khoảng giữa an toàn. Hai file `lui-`
+đã ghi đúng chiều này — giữ nguyên.
 
 ---
 
