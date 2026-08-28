@@ -324,9 +324,32 @@ export async function donTepTrungTen(env, { ten, thuMucId }) {
     return 0;
   }
   const ds = (await res.json().catch(() => ({}))).files || [];
-  for (const f of ds) await xoaFile(env, { nha: 'drive', khoa: f.id });
-  if (ds.length) console.log(`Sao lưu: dọn ${ds.length} bản sót cùng tên "${ten}".`);
-  return ds.length;
+  // ⛔ M1 (REV-0012): trước đây gọi thẳng `xoaFile`, mà `xoaFile` NÉM LỖI khi
+  // Drive từ chối. Lỗi đó bay ngược lên `hoanTat` → `chayMotLuot` → cả đêm sao
+  // lưu chết. Mà việc đang làm chỉ là DỌN DẸP. Một lần Drive trả 403 vì quá
+  // nhịp, hay 500 vì máy nó trục trặc, là mất trắng bản sao lưu của ngày hôm
+  // đó — đổi một đêm dữ liệu lấy một phép dọn rác, quá đắt.
+  // Nay: dọn được thì tốt, không dọn được thì đi tiếp, y như lệnh HỎI ở trên
+  // (dòng 321). Bản sót còn lại chỉ làm `kiemTraKeKhai` kêu `thua_tep` — khó
+  // chịu, nhưng khó chịu vẫn hơn KHÔNG CÓ BẢN SAO LƯU.
+  let daDon = 0;
+  for (const f of ds) if (await xoaFileEm(env, { nha: 'drive', khoa: f.id })) daDon++;
+  if (ds.length) {
+    console.log(`Sao lưu: dọn ${daDon}/${ds.length} bản sót cùng tên "${ten}".`);
+  }
+  return daDon;
+}
+
+/** Xoá file nhưng KHÔNG BAO GIỜ NÉM LỖI — trả true/false.
+    Dùng cho mọi phép DỌN DẸP: dọn bản sót cùng tên, dọn bản quá hạn giữ. Dọn
+    dẹp mà làm chết việc sao lưu là đổi hỏng lấy hỏng nặng hơn. */
+export async function xoaFileEm(env, { nha, khoa }) {
+  try {
+    return await xoaFile(env, { nha, khoa });
+  } catch (e) {
+    console.error(`Xoá "${khoa}" không được — bỏ qua, không chặn việc sao lưu: ${e.message}`);
+    return false;
+  }
 }
 
 /** Xoá file. CHỈ dùng cho bản sao lưu quá hạn giữ — SPEC-0005 Mục 7.5 cấm

@@ -37,6 +37,7 @@
     "lay-khoa-google": "node scripts/lay-khoa-google.mjs",
     "sao-luu-thu": "node scripts/thu-sao-luu.mjs",
     "sao-luu-kiemtra": "node scripts/kiem-tra-ban-sao-luu.mjs",
+    "khoi-phuc-thu": "node scripts/thu-khoi-phuc.mjs",
     "chay": "wrangler dev",
     "dua-len": "wrangler deploy"
   },

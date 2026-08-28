@@ -11,9 +11,16 @@
 
      ① HẰNG NGÀY  — máy tự chạy 0h–8h sáng, để trên Drive công ty, giữ 30 bản.
                     Cứu khi hỏng dữ liệu.
-     ② HẰNG THÁNG — mùng 1, một file .zip đưa tận tay Sếp qua Telegram.
-                    Sếp tự cất. Vì bản ngày nằm trên Drive công ty — MẤT TÀI
-                    KHOẢN GOOGLE LÀ MẤT LUÔN CẢ KHO LẪN BẢN SAO LƯU.
+     ② HẰNG THÁNG — NGÀY 15, gói dữ liệu của THÁNG TRƯỚC thành một file .zip
+                    đưa tận tay Sếp qua Telegram. Sếp tự cất. Vì bản ngày nằm
+                    trên Drive công ty — MẤT TÀI KHOẢN GOOGLE LÀ MẤT LUÔN CẢ
+                    KHO LẪN BẢN SAO LƯU.
+
+   VÀ MỖI BẢN SAO LƯU TỰ MANG THEO CÁCH KHÔI PHỤC CHÍNH NÓ (Sếp Ngọc 27/08:
+   "phải lưu cả cách tao khôi phục bộ nhớ và chuyển bộ nhớ đấy nhé"). Ba thứ đi
+   kèm: DOC-CACH-DOC.txt đủ 3 phần · KHOI-PHUC.mjs chạy được thật ·
+   SO-DO-DU-LIEU.txt. Lý do đầy đủ ở đầu src/khoi-phuc-kem.js — tóm tắt: lúc
+   cần khôi phục là lúc ERP đã hỏng, không vào được repo, không có ai trực.
 
    BA RÀNG BUỘC KỸ THUẬT ĐỊNH HÌNH TOÀN BỘ FILE NÀY:
 
@@ -27,6 +34,7 @@
 
 import * as khoFile from './kho-file.js';
 import { crc32, dauTep, cuoiTep, mucLuc } from './zip.js';
+import { KHOI_PHUC_MJS, soDoDuLieu } from './khoi-phuc-kem.js';
 
 /* ==========================================================================
    0. Các con số điều chỉnh được
@@ -91,9 +99,27 @@ export const GIO_KET_THUC = 8;
 /** Giữ bao nhiêu bản ngày (SPEC-0005 Mục 9.3). */
 export const GIU_BAN_NGAY = 30;
 
-/** Bản tháng chạy bằng số lượt CÒN THỪA sau khi bản ngày xong, nên phải cho
-    nó nhiều đêm. Mùng 1 → mùng 10. Chưa xong tới mùng 10 thì báo động. */
-export const NGAY_CUOI_CHO_BAN_THANG = 10;
+/* --------------------------------------------------------------------------
+   BẢN THÁNG CHẠY NGÀY 15, GÓI DỮ LIỆU CỦA THÁNG TRƯỚC (Sếp Ngọc chốt 27/08:
+   "cứ ngày 15 hàng tháng thì sao lưu của tháng trước cho tao").
+
+   VÌ SAO NGÀY 15 CHỨ KHÔNG PHẢI MÙNG 1 — ghi lại cho người sau khỏi "tối ưu"
+   ngược: mùng 1 thì tháng vừa đóng cửa xong, kế toán chưa chốt sổ, chứng từ nhà
+   cung cấp còn về muộn, đơn hoàn Shopee còn chạy. Gói ra là gói một con số còn
+   động đậy. Tới ngày 15 thì tháng trước ĐÃ ỔN ĐỊNH THẬT — gói ra là số cuối
+   cùng, không phải sửa lại.
+
+   ⚠️ TÊN FILE THEO THÁNG DỮ LIỆU, KHÔNG THEO NGÀY CHẠY.
+     15/09/2026 → gói tháng 08 → sao-luu-AGC-2026-08.zip
+     15/10/2026 → gói tháng 09 → sao-luu-AGC-2026-09.zip
+     15/01/2027 → gói tháng 12/2026 → sao-luu-AGC-2026-12.zip  ← ĐỔI CẢ NĂM,
+                  đây là ca dễ sai nhất, có ca thử riêng trong npm run sao-luu-thu.
+
+   Bản tháng chạy bằng số lượt CÒN THỪA sau khi bản ngày xong nên phải cho nó
+   nhiều đêm: mở ngày 15, chưa xong tới hết ngày 24 thì báo động.
+   -------------------------------------------------------------------------- */
+export const NGAY_CHAY_BAN_THANG = 15;
+export const NGAY_CUOI_CHO_BAN_THANG = 24;
 
 /* ==========================================================================
    1. Chọn bảng nào để sao lưu — dùng DANH SÁCH LOẠI TRỪ, không phải liệt kê
@@ -351,7 +377,7 @@ export function kiemTraKeKhai(keKhai, thucTe) {
   }
 
   for (const [ten] of co) {
-    if (ten === 'KIEM-TRA.csv' || ten === 'DOC-CACH-DOC.txt') continue;
+    if (TEP_DI_KEM.has(ten)) continue;
     loi.push(`thua_tep: có "${ten}" nhưng không nằm trong bản kê khai`);
   }
 
@@ -372,8 +398,19 @@ export function demDongCsv(vanBan) {
 }
 
 /* ==========================================================================
-   4. Hai file chữ đi kèm mỗi bản sao lưu
+   4. BỐN FILE ĐI KÈM MỖI BẢN SAO LƯU
+   ---------------------------------------------------------------------------
+   Chúng KHÔNG nằm trong bản kê khai (kê khai chỉ kê các bảng dữ liệu), nên
+   `kiemTraKeKhai` phải biết mà bỏ qua — không thì phép kiểm sẽ hô `thua_tep`,
+   tức BÁO ĐỘNG GIẢ đúng lúc người ta đang hoảng nhất, lúc đang phục hồi.
+
+   KHOI-PHUC.sql cũng nằm trong danh sách này: chính KHOI-PHUC.mjs đẻ ra nó
+   ngay trong thư mục bản sao lưu ở Bước 5, rồi người ta chạy lại phép kiểm.
    ========================================================================== */
+export const TEP_DI_KEM = new Set([
+  'KIEM-TRA.csv', 'DOC-CACH-DOC.txt', 'SO-DO-DU-LIEU.txt',
+  'KHOI-PHUC.mjs', 'KHOI-PHUC.sql'
+]);
 
 /** ⛔ B1: cột `crc32` là mã kiểm từng byte. Để trống khi không có — để phép
     kiểm KÊU LÊN (`thieu_ma_kiem`) thay vì âm thầm chấm ĐẠT. */
@@ -394,6 +431,25 @@ export function docCachDoc({ moc, loai, keKhai }) {
 
   return `BẢN SAO DỮ LIỆU ERP — CÔNG TY TNHH ALPHA GREEN COMMERCE
 Bản của ${nhan}. Tổng ${keKhai.length} bảng, ${tongDong.toLocaleString('vi-VN')} dòng, khoảng ${tongMb} MB.
+
+TRONG FILE NÀY CÓ BA PHẦN — NHẢY THẲNG TỚI PHẦN CẦN ĐỌC
+-------------------------------------------------------
+  PHẦN 1  File nào là gì, mở bằng gì            ← đọc khi chỉ muốn XEM dữ liệu
+  PHẦN 2  Khôi phục: đưa bản này trở lại ERP    ← đọc khi ERP HỎNG, MẤT DỮ LIỆU
+  PHẦN 3  Chuyển sang phần mềm khác             ← đọc khi công ty BỎ ERP này
+
+Cùng thư mục còn hai file nữa, cũng là của bản sao lưu này:
+  KHOI-PHUC.mjs     công cụ khôi phục, chạy được thật, không cần Internet
+  SO-DO-DU-LIEU.txt bảng nào nối bảng nào, dành cho người nhận dữ liệu
+
+Ba thứ đó nằm NGAY TRONG bản sao lưu là cố ý: lúc cần khôi phục thì ERP đã
+hỏng, có khi không vào được mạng nội bộ, không có ai trực. Thứ duy nhất còn
+trong tay là chính thư mục này — nên mọi thứ cần biết phải nằm ở đây.
+
+
+${'='.repeat(78)}
+  PHẦN 1 — FILE NÀO LÀ GÌ
+${'='.repeat(78)}
 
 ĐÂY LÀ CÁI GÌ
 -------------
@@ -442,11 +498,14 @@ Người kỹ thuật chấm cả thư mục bằng một lệnh:
 CẤT Ở ĐÂU
 ---------
 ${loai === 'thang'
-  ? `Bản này là bản của RIÊNG SẾP. Tải về máy, chép ra một ổ cứng rời hoặc một
-chỗ khác Google Drive. Lý do: bản chạy hằng ngày nằm trên Drive của công ty —
-nếu mất tài khoản Google thì mất luôn cả bản sao lưu. Bản này phải nằm ngoài.`
+  ? `Bản này là bản của RIÊNG SẾP, máy gói vào NGÀY 15 hằng tháng và gói dữ
+liệu của THÁNG TRƯỚC (tới ngày 15 thì tháng trước đã chốt sổ xong, số liệu
+không còn nhúc nhích nữa). Tải về máy, chép ra một ổ cứng rời hoặc một chỗ
+khác Google Drive. Lý do: bản chạy hằng ngày nằm trên Drive của công ty — nếu
+mất tài khoản Google thì mất luôn cả bản sao lưu. Bản này phải nằm ngoài.`
   : `Bản này máy tự tạo mỗi đêm và giữ ${GIU_BAN_NGAY} bản gần nhất. Quá ${GIU_BAN_NGAY} ngày thì tự
-xoá bản cũ nhất. Bản của mùng 1 hằng tháng được gửi riêng cho Sếp qua Telegram.`}
+xoá bản cũ nhất. Ngày 15 hằng tháng máy gói riêng dữ liệu của THÁNG TRƯỚC
+thành một file .zip và gửi cho Sếp qua Telegram để Sếp tự cất ra ngoài.`}
 
 DỮ LIỆU NHẠY CẢM — ĐỌC KỸ
 -------------------------
@@ -457,13 +516,217 @@ Mật khẩu đăng nhập ERP thì KHÔNG có trong đây (phần mềm không 
 thật, chỉ lưu dấu vân của nó). Khoá kết nối Shopee và TikTok cũng KHÔNG có
 trong đây — cố ý bỏ ra, vì khoá lọt ra ngoài là người lạ đọc được đơn hàng.
 
+
+${'='.repeat(78)}
+  PHẦN 2 — KHÔI PHỤC: ĐƯA BẢN NÀY TRỞ LẠI VÀO ERP
+${'='.repeat(78)}
+
+Đọc phần này khi ERP hỏng, mất dữ liệu, hoặc ai đó lỡ tay xoá mất thứ gì.
+
+⚠️⚠️ ĐỌC HẾT KHUNG NÀY TRƯỚC KHI GÕ BẤT KỲ LỆNH NÀO ⚠️⚠️
+
+  KHÔI PHỤC LÀ XOÁ TRẮNG RỒI GHI ĐÈ, KHÔNG PHẢI "GỘP THÊM VÀO".
+
+  Mọi dòng dữ liệu phát sinh SAU thời điểm ${nhan} sẽ MẤT VĨNH VIỄN. Đơn hàng
+  mới, phiếu kho mới, chấm công mới — mất hết, không có nút hoàn tác.
+
+  Cho nên VIỆC ĐẦU TIÊN, TRƯỚC KHI KHÔI PHỤC, là SAO LƯU CÁI ĐANG CÓ. Kể cả
+  khi cái đang có trông như đã hỏng — hỏng vẫn hơn không có. Cách làm ở Bước 2.
+
+BƯỚC 1 — CHUẨN BỊ BỐN THỨ
+--------------------------
+  a) Chính thư mục này (đã giải nén ra khỏi file .zip nếu là bản tháng).
+  b) Node.js phiên bản 22 trở lên. Chưa có thì tải ở nodejs.org, bản "LTS",
+     bấm Next tới hết. Kiểm bằng cách mở PowerShell gõ:  node --version
+  c) Tài khoản Cloudflare của công ty (nơi đang chứa dữ liệu ERP).
+  d) Mã nguồn ERP trên máy. Không có cũng khôi phục được — xem Bước 5b.
+
+  Máy Sếp dùng PowerShell. Mở bằng cách: bấm nút Start, gõ chữ powershell,
+  bấm Enter. Cửa sổ nền xanh hoặc đen hiện ra là đúng.
+
+BƯỚC 2 — SAO LƯU CÁI ĐANG CÓ (KHÔNG ĐƯỢC BỎ QUA)
+-------------------------------------------------
+  Trong PowerShell, ở thư mục mã nguồn ERP, gõ:
+
+      npx wrangler d1 export crm-agc --remote --output=truoc-khi-khoi-phuc.sql
+
+  Chạy xong sẽ có một file truoc-khi-khoi-phuc.sql. Chép nó ra chỗ khác, ngoài
+  máy này. Đó là đường lùi duy nhất nếu khôi phục xong mới phát hiện chọn nhầm
+  bản. ERP hỏng nặng tới mức lệnh này cũng không chạy được thì ghi lại đúng
+  dòng báo lỗi rồi mới đi tiếp.
+
+BƯỚC 3 — SOI BẢN SAO LƯU XEM CÒN NGUYÊN KHÔNG
+----------------------------------------------
+  Trong PowerShell, gõ (nhớ dấu nháy kép quanh đường dẫn):
+
+      cd "đường-dẫn-tới-thư-mục-này"
+      node KHOI-PHUC.mjs
+
+  File KHOI-PHUC.mjs nằm sẵn ngay trong thư mục này. Nó tự chạy được, không cần
+  Internet, không cần mã nguồn ERP.
+
+  Nó sẽ soi từng file: đủ file chưa, đủ dòng chưa, đủ byte chưa, và MÃ KIỂM
+  CRC32 có khớp không.
+
+  ✔ Thấy dòng "ĐẠT — đủ … bảng, … mã kiểm khớp từng file"  → đi tiếp Bước 4.
+  ✘ Thấy khung "TỪ CHỐI KHÔI PHỤC"                          → DỪNG. Bản này đã
+    hỏng. Nó KHÔNG ghi gì cả, dữ liệu hiện tại vẫn nguyên. Lấy bản sao lưu của
+    NGÀY KHÁC, hoặc file .zip tháng Sếp cất ở ổ cứng rời, rồi làm lại Bước 3.
+    Đừng cố ép bản hỏng vào — ép vào là hỏng thêm cái đang có.
+
+BƯỚC 4 — XÁC NHẬN
+------------------
+  Soi xong nó in ra một khung cảnh báo và dừng lại hỏi. Đọc kỹ dòng "Sẽ ghi:
+  … bảng, … dòng" xem có đúng bản mình định dùng không, rồi gõ đúng hai chữ
+
+      GHI ĐÈ
+
+  và bấm Enter. Gõ sai chữ, hay bấm Enter suông, là nó huỷ và không ghi gì.
+
+BƯỚC 5 — GHI VÀO ERP
+---------------------
+  5a) Bước 4 xong, nó tạo ra file KHOI-PHUC.sql ngay trong thư mục này và in
+      ra màn hình đúng dòng lệnh cần chạy. Chép nguyên dòng đó, dán vào
+      PowerShell ĐANG MỞ TẠI THƯ MỤC MÃ NGUỒN ERP, bấm Enter. Dạng của nó:
+
+          npx wrangler d1 execute crm-agc --remote --file="…\\KHOI-PHUC.sql"
+
+      Muốn chắc ăn thì chạy thử trên máy trước: đổi --remote thành --local.
+      Chạy thử không đụng gì tới dữ liệu thật.
+
+  5b) KHÔNG CÓ MÃ NGUỒN ERP, hoặc chỉ muốn lấy dữ liệu ra dùng chỗ khác:
+
+          node KHOI-PHUC.mjs --vao-sqlite=du-lieu-erp.db
+
+      Nó đổ thẳng toàn bộ vào một file du-lieu-erp.db. Mở file đó bằng
+      DB Browser for SQLite (miễn phí, tải ở sqlitebrowser.org) là xem được
+      hết. Xem thêm PHẦN 3 bên dưới.
+
+BƯỚC 6 — LÀM SAO BIẾT ĐÃ KHÔI PHỤC ĐÚNG
+----------------------------------------
+  Ba phép kiểm, làm đủ cả ba thì mới yên tâm:
+
+  ① Đếm dòng. Trong PowerShell ở thư mục mã nguồn ERP:
+
+        npx wrangler d1 execute crm-agc --remote --command="SELECT COUNT(*) FROM nhan_su"
+
+     Con số hiện ra phải BẰNG ĐÚNG số ở cột so_dong, dòng nhan_su, trong file
+     KIEM-TRA.csv. Làm lại phép này với thêm hai ba bảng nữa cho chắc —
+     giao_dich_kho và lich_lam_viec là hai bảng đáng kiểm nhất.
+
+  ② Mở ERP lên, đăng nhập, vào xem danh sách nhân sự và sổ kho. Thấy dữ liệu
+     hiện ra bình thường, tiếng Việt đúng dấu, là đúng.
+
+  ③ Xem mốc thời gian. Bản ghi mới nhất trong ERP phải rơi vào khoảng ${nhan},
+     không được mới hơn. Nếu thấy mới hơn thì lệnh chưa chạy hết — chạy lại
+     Bước 5 từ đầu.
+
+  Xong cả ba thì báo cho bộ phận kỹ thuật biết đã khôi phục bản nào, lúc nào.
+
+CÓ TRỤC TRẶC
+-------------
+  · "node : The term 'node' is not recognized"
+      → Chưa cài Node.js, hoặc cài xong chưa mở lại PowerShell. Đóng cửa sổ,
+        mở cửa sổ PowerShell mới rồi gõ lại.
+  · "Không thấy file KIEM-TRA.csv trong thư mục này"
+      → Đang đứng nhầm chỗ, hoặc chưa giải nén file .zip. Giải nén rồi cd vào
+        đúng thư mục vừa giải nén ra.
+  · "FOREIGN KEY constraint failed" lúc chạy Bước 5
+      → Chạy lại đúng lệnh đó thêm một lần. File .sql đã có sẵn dòng
+        PRAGMA defer_foreign_keys = ON để tránh chuyện này.
+  · Chạy nửa chừng thì mất điện / mất mạng
+      → Chạy lại Bước 5 từ đầu. Lệnh đó xoá trắng rồi ghi lại nên chạy mấy lần
+        cũng ra cùng một kết quả, không bị nhân đôi dữ liệu.
+
+
+${'='.repeat(78)}
+  PHẦN 3 — CHUYỂN SANG PHẦN MỀM KHÁC
+${'='.repeat(78)}
+
+Đọc phần này khi công ty bỏ ERP này. Nguyên tắc Sếp Ngọc đặt ra từ đầu:
+ĐỔI CÔNG CỤ LÀ DÙNG ĐƯỢC NGAY — dữ liệu không được nhốt trong phần mềm nào.
+
+Người tiếp nhận KHÔNG CẦN biết gì về ERP cũ, không cần hỏi ai. Đủ ba thứ:
+mấy file .csv trong đây, file SO-DO-DU-LIEU.txt, và phần chữ này.
+
+BƯỚC ĐẦU TIÊN — DỰNG LẠI THÀNH MỘT CƠ SỞ DỮ LIỆU
+-------------------------------------------------
+Đưa cả đống .csv về một file duy nhất, phần mềm nào cũng đọc được:
+
+    node KHOI-PHUC.mjs --vao-sqlite=du-lieu-erp.db
+
+Ra file du-lieu-erp.db, định dạng SQLite — định dạng cơ sở dữ liệu phổ biến
+nhất thế giới, mọi ngôn ngữ lập trình và mọi công cụ nhập liệu đều đọc được.
+Mở bằng mắt thì dùng DB Browser for SQLite (miễn phí, sqlitebrowser.org).
+
+Không muốn dùng SQLite thì cứ nhập thẳng từng file .csv — chúng là CSV chuẩn,
+mã UTF-8, có BOM, ngăn bằng dấu phẩy, xuống dòng kiểu CRLF, ô có dấu phẩy hoặc
+xuống dòng thì được bọc trong nháy kép và nháy kép trong ô được viết thành hai.
+
+BẢNG NÀO NỐI VỚI BẢNG NÀO
+--------------------------
+Nằm đủ trong file SO-DO-DU-LIEU.txt cùng thư mục. Mở nó ra đọc trước khi nhập.
+
+Quy tắc đọc, chỉ có một câu: cột nào tên kiểu <tên-bảng>_id thì con số trong đó
+là số ở cột id của file <tên-bảng>.csv. Ví dụ giao_dich_kho.csv có cột
+nhan_su_id — muốn biết lần xuất kho đó ai làm thì lấy số ấy, sang nhan_su.csv
+tìm dòng có id đúng bằng số ấy.
+
+MẤY CÁI TÊN CỘT LẶP ĐI LẶP LẠI — NGHĨA LÀ GÌ
+---------------------------------------------
+  id             Số thứ tự riêng của dòng đó, do máy tự đánh. Không trùng nhau
+                 trong cùng một bảng. Đây là thứ mọi cột …_id trỏ tới.
+  ten            Tên gọi, dạng chữ.
+  tao_luc        Lúc dòng này được TẠO RA. Dạng "2026-08-27 14:30:00", giờ Việt
+                 Nam (không phải giờ quốc tế — đã cộng sẵn 7 tiếng).
+  cap_nhat_luc   Lúc dòng này được SỬA LẦN GẦN NHẤT. Cùng dạng như trên.
+  luc            Mốc thời gian của chính sự việc (không phải lúc nhập máy).
+  trang_thai     Tình trạng, ghi bằng chữ không dấu: cho_duyet, da_duyet,
+                 tu_choi, dang_chay, xong, huy… Đọc là chờ duyệt / đã duyệt /
+                 từ chối / đang chạy / xong / huỷ.
+  hoat_dong      1 là còn dùng, 0 là đã ngưng. KHÔNG PHẢI ĐÃ XOÁ — ERP này gần
+                 như không xoá gì, chỉ tắt đi. Nhập liệu nhớ giữ đúng ý đó.
+  loai           Phân loại, ghi bằng chữ không dấu.
+  ghi_chu        Chữ do người dùng tự gõ. Có thể có xuống dòng bên trong ô.
+  nhan_su_id     → nhan_su.id — người liên quan tới dòng này.
+  phong_ban_id   → phong_ban.id
+  san_pham_id    → san_pham.id
+  gia_tri_cu     Ở các bảng tên …_lich_su: giá trị TRƯỚC khi sửa.
+  gia_tri_moi    Ở các bảng tên …_lich_su: giá trị SAU khi sửa.
+  truong         Ở các bảng tên …_lich_su: tên cột nào vừa bị sửa.
+
+Bảng nào tên kết thúc bằng _lich_su là NHẬT KÝ THAY ĐỔI của bảng cùng tên —
+ai sửa gì, lúc nào, từ giá trị nào sang giá trị nào. Không nhập cũng chạy được
+phần mềm mới, nhưng mất dấu vết thì mất luôn khả năng đối chất về sau.
+
+BA CHỖ DỄ MẤT DỮ LIỆU KHI NHẬP — CẨN THẬN
+------------------------------------------
+1. Bỏ nốt hai dấu rào. Ô bắt đầu bằng một dấu ' thì bỏ ĐÚNG MỘT dấu đó. Ô dạng
+   ="0987654321" thì lấy phần trong nháy. Không bỏ thì số điện thoại của cả
+   công ty thừa một ký tự lạ. (Vì sao có hai dấu này: xem PHẦN 1 bên trên.)
+
+2. Số 0 đứng đầu. Số điện thoại, mã nhân viên, số căn cước, mã vận đơn — nhập
+   vào cột kiểu SỐ là mất số 0 đầu ngay. Phải để kiểu CHỮ.
+
+3. Ô trống. File CSV không phân biệt được "không có gì" với "chuỗi rỗng". Chọn
+   một cách hiểu rồi giữ nguyên cách đó cho toàn bộ, đừng lúc này lúc khác.
+
+THỨ KHÔNG CÓ TRONG BẢN NÀY
+---------------------------
+  · Mật khẩu đăng nhập — ERP không lưu mật khẩu thật. Sang phần mềm mới thì
+    phải đặt mật khẩu mới cho từng người.
+  · Khoá kết nối Shopee / TikTok — cố ý bỏ ra vì lý do an toàn. Sang phần mềm
+    mới thì bấm kết nối lại, mất 2 phút.
+  · Ảnh và tệp đính kèm — ô nào ghi [nhi_phan] là chỗ đó vốn là dữ liệu nhị
+    phân. File thật nằm ở kho tài liệu trên Google Drive, tải riêng.
+
 Tạo tự động lúc ${new Date(Date.now() + 7 * 3600 * 1000).toISOString().replace('T', ' ').slice(0, 16)} (giờ Việt Nam).
 `;
 }
 
 /* Vài dòng mô tả bảng bằng tiếng người. Bảng nào chưa có mô tả thì bỏ qua —
    thà im lặng còn hơn mô tả sai. */
-const MO_TA_BANG = {
+export const MO_TA_BANG = {
   nhan_su: 'danh sách nhân sự (họ tên, phòng ban, chức danh, ngày vào)',
   tai_khoan: 'tài khoản đăng nhập ERP (KHÔNG có mật khẩu thật)',
   san_pham: 'danh mục sản phẩm',
@@ -499,6 +762,19 @@ function motTaBang(keKhai) {
 export function gioVN(luc = Date.now()) { return new Date(luc + 7 * 3600 * 1000); }
 export function ngayVN(d = gioVN()) { return d.toISOString().slice(0, 10); }
 export function thangVN(d = gioVN()) { return d.toISOString().slice(0, 7); }
+
+/** THÁNG TRƯỚC của một mốc, dạng YYYY-MM. Bản tháng chạy ngày 15 gói tháng này.
+
+    ⚠️ Ca dễ sai nhất là THÁNG 1: ngày 15/01/2027 phải ra "2026-12" — lùi tháng
+    thì phải lùi CẢ NĂM. Viết bằng phép tính tay trên số năm/tháng chứ không
+    bằng `setUTCMonth(-1)` cho khỏi dính mấy trò nhảy múi giờ của Date. */
+export function thangTruoc(d = gioVN()) {
+  const nam = d.getUTCFullYear();
+  const thang0 = d.getUTCMonth();                 // 0–11
+  const t = thang0 === 0 ? 12 : thang0;           // tháng trước, 1–12
+  const n = thang0 === 0 ? nam - 1 : nam;
+  return `${n}-${String(t).padStart(2, '0')}`;
+}
 
 /* ==========================================================================
    6. VÒNG CHẠY CHÍNH — gọi từ scheduled() mỗi 5 phút
@@ -575,14 +851,21 @@ async function layPhien(env) {
 
 async function moPhienMoi(env, bao) {
   const vn = gioVN();
-  const ngay = ngayVN(vn), thang = thangVN(vn);
+  const ngay = ngayVN(vn);
 
   // 1) Bản ngày hôm nay chưa có → làm ngay.
   if (!(await coBan(env, `ngay-${ngay}`))) return taoPhien(env, 'ngay', ngay);
 
-  // 2) Bản tháng: chỉ mở trong 3 ngày đầu tháng, và chỉ khi bản ngày đã xong.
-  if (vn.getUTCDate() <= NGAY_CUOI_CHO_BAN_THANG && !(await coBan(env, `thang-${thang}`))) {
-    return taoPhien(env, 'thang', thang);
+  // 2) Bản tháng: mở từ ngày 15 tới hết ngày 24, và chỉ khi bản ngày đã xong.
+  //    Gói THÁNG TRƯỚC, không phải tháng đang chạy.
+  //    CHỐNG TRÙNG: `coBan('thang-<tháng trước>')` là chốt duy nhất — cron quét
+  //    12 lượt/giờ suốt 10 ngày, cả 1.000+ lượt đó chỉ mở được ĐÚNG MỘT phiên
+  //    cho mỗi tháng dữ liệu, vì `taoPhien` ghi ngay dòng `sao_luu_ban` và mọi
+  //    lượt sau nhìn thấy nó. Không phụ thuộc "hôm nay là ngày mấy".
+  const ngayTrongThang = vn.getUTCDate();
+  if (ngayTrongThang >= NGAY_CHAY_BAN_THANG && ngayTrongThang <= NGAY_CUOI_CHO_BAN_THANG) {
+    const thangGoi = thangTruoc(vn);
+    if (!(await coBan(env, `thang-${thangGoi}`))) return taoPhien(env, 'thang', thangGoi);
   }
 
   // 3) Rảnh → tranh thủ dọn bản quá hạn giữ.
@@ -665,7 +948,11 @@ async function boPhienQuaHan(env, bao) {
   for (const r of results) {
     const laNgay = r.ban_id.startsWith('ngay-');
     const moc = r.ban_id.slice(laNgay ? 5 : 6);
-    const qua = laNgay ? moc < homNay : (moc < thangVN(vn) || vn.getUTCDate() > NGAY_CUOI_CHO_BAN_THANG);
+    // Bản THÁNG quá hạn khi: (a) nó là tháng CŨ HƠN tháng đáng lẽ đang gói —
+    // tức đã trôi sang tháng sau mà vẫn chưa xong; hoặc (b) đã qua ngày 24.
+    const qua = laNgay
+      ? moc < homNay
+      : (moc < thangTruoc(vn) || vn.getUTCDate() > NGAY_CUOI_CHO_BAN_THANG);
     if (!qua) continue;
 
     await env.DB.prepare('DELETE FROM sao_luu_phien WHERE ban_id=?').bind(r.ban_id).run();
@@ -683,8 +970,9 @@ async function boPhienQuaHan(env, bao) {
         `Việc cần làm: báo bộ phận kỹ thuật. Hai đường đi — nâng Cloudflare lên gói ` +
         `trả phí (mỗi lượt được 30 giây thay vì 10 phần nghìn giây), hoặc đổi sang ` +
         `cách chỉ sao lưu phần thay đổi trong ngày.`
-      : `⚠️ Bản sao lưu THÁNG ${moc} không gói xong trước mùng ${NGAY_CUOI_CHO_BAN_THANG}. ` +
-        `Bản ngày vẫn chạy bình thường, nhưng tháng này Sếp chưa có bản để tự cất.`;
+      : `⚠️ Bản sao lưu THÁNG ${moc} không gói xong trong hạn (mở ngày ` +
+        `${NGAY_CHAY_BAN_THANG}, hạn chót hết ngày ${NGAY_CUOI_CHO_BAN_THANG}). ` +
+        `Bản ngày vẫn chạy bình thường, nhưng tháng ${moc} Sếp chưa có bản để tự cất.`;
     await bao.guiTelegram(env, tin).catch(() => {});
     await bao.guiThongBao(env, 'admin', tin.split('\n')[0], 'sao_luu_hong').catch(() => {});
   }
@@ -847,12 +1135,26 @@ async function hoanTat(env, p, bao) {
 
   const vanDoc = docCachDoc({ moc, loai: ban.loai, keKhai });
   const vanKe = keKhaiCsv(keKhai);
+  const vanSoDo = soDoDuLieu({
+    moc, loai: ban.loai, keKhai, moTa: MO_TA_BANG, quanHe: await docQuanHe(env)
+  });
+
+  /* BỐN FILE ĐI KÈM — thứ tự này là thứ tự chúng nằm trong zip. DOC-CACH-DOC
+     đứng đầu để ai giải nén ra cũng thấy nó trước tiên. Tổng cộng ~40 KB, tức
+     0,2% của bản 18 MB — không làm phình bản sao lưu. */
+  const kem = [
+    ['DOC-CACH-DOC.txt', vanDoc, 'text/plain; charset=utf-8'],
+    ['SO-DO-DU-LIEU.txt', vanSoDo, 'text/plain; charset=utf-8'],
+    ['KHOI-PHUC.mjs', KHOI_PHUC_MJS, 'text/plain; charset=utf-8'],
+    ['KIEM-TRA.csv', vanKe, 'text/csv; charset=utf-8']
+  ];
+
   let tepId = null, duongDan = null, tongByte = 0;
 
   if (laThang) {
-    // Nhét nốt hai file chữ vào zip rồi đóng mục lục.
+    // Nhét nốt mấy file chữ vào zip rồi đóng mục lục.
     const zm = JSON.parse(p.zip_muc);
-    for (const [ten, noi] of [['DOC-CACH-DOC.txt', vanDoc], ['KIEM-TRA.csv', vanKe]]) {
+    for (const [ten, noi] of kem) {
       const b = MA_HOA.encode(noi);
       const viTriDau = viTriHienTai(p);
       themByte(p, dauTep(ten));
@@ -872,10 +1174,7 @@ async function hoanTat(env, p, bao) {
   } else {
     // M2 ca (c): `hoanTat` có thể bị cắt giữa hai lần ghi này, lượt sau ghi
     // lại → hai `DOC-CACH-DOC.txt` trong cùng thư mục. Dọn trước.
-    for (const [ten, noi, kieu] of [
-      ['DOC-CACH-DOC.txt', vanDoc, 'text/plain; charset=utf-8'],
-      ['KIEM-TRA.csv', vanKe, 'text/csv; charset=utf-8']
-    ]) {
+    for (const [ten, noi, kieu] of kem) {
       await khoFile.donTepTrungTen(env, { ten, thuMucId: ban.thu_muc_id });
       await khoFile.luuFile(env, { duLieu: noi, tenFile: ten, kieu, thuMucId: ban.thu_muc_id });
     }
@@ -923,6 +1222,35 @@ async function hoanTat(env, p, bao) {
     await bao.guiThongBao(env, 'admin', `Bản sao lưu tháng ${moc} đã xong (${mb} MB) — Sếp tải về và cất ra ngoài Google Drive.`, 'sao_luu', duongDan);
   } else {
     await donBanQuaHan(env);
+  }
+}
+
+/* --------------------------------------------------------------------------
+   SƠ ĐỒ QUAN HỆ BẢNG — đọc THẬT ra khỏi database, không gõ tay.
+
+   Vì sao không gõ tay một bảng tra như MO_TA_BANG: schema có ~50 khoá ngoại và
+   bảng mới còn thêm nữa. Danh sách gõ tay sẽ mốc meo sau vài tháng, và mốc meo
+   ở đây nghĩa là người tiếp nhận dữ liệu nối sai bảng — hỏng âm thầm.
+
+   ĐÚNG MỘT CÂU TRUY VẤN cho cả ~50 bảng, nhờ hàm bảng `pragma_foreign_key_list`
+   của SQLite. Không lặp 50 lượt gọi D1 (Workers chỉ cho 50 subrequest mỗi lượt,
+   mà `hoanTat` còn phải gọi Drive).
+
+   Tra không được thì TRẢ MẢNG RỖNG chứ không ném lỗi: sơ đồ là thứ đi kèm cho
+   dễ đọc, không đáng để làm chết cả một đêm sao lưu.
+   -------------------------------------------------------------------------- */
+async function docQuanHe(env) {
+  try {
+    const { results } = await env.DB.prepare(
+      `SELECT m.name AS bang, f."table" AS den, f."from" AS cot, f."to" AS cot_den
+         FROM sqlite_master m JOIN pragma_foreign_key_list(m.name) f
+        WHERE m.type = 'table' AND m.name NOT LIKE 'sqlite_%'
+        ORDER BY m.name`).all();
+    return (results || []).filter(q =>
+      q.bang && q.den && TEN_BANG_HOP_LE.test(q.bang) && TEN_BANG_HOP_LE.test(q.den));
+  } catch (e) {
+    console.error('Sao lưu: không đọc được sơ đồ quan hệ bảng —', e.message);
+    return [];
   }
 }
 

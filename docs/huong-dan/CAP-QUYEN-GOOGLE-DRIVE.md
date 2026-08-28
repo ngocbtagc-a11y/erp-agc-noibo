@@ -191,14 +191,34 @@ Ba việc, làm đủ cả ba:
 
 1. **Xoá file Notepad** đã dán ở Bước 7 (xoá luôn trong Thùng rác).
 2. **Xoá chữ trên màn hình PowerShell** — refresh token ở Bước 9 vừa được *in
-   ra màn hình*, nó còn nằm nguyên đó cuộn lên là đọc được:
+   ra màn hình*, nó còn nằm nguyên đó cuộn lên là đọc được.
+
+   > ⚠️ **ĐỪNG dùng `Clear-Host` (hay `cls`) rồi tưởng là xong.** `Clear-Host`
+   > chỉ đẩy chữ lên khỏi tầm mắt, **KHÔNG xoá phần cuộn**. Trong Windows
+   > Terminal — cửa sổ mặc định của Windows 11 — cuộn chuột lên là refresh
+   > token vẫn nằm đó, nguyên vẹn. Đây đúng là kiểu nguy hiểm nhất: *tưởng đã
+   > dọn mà chưa dọn*, nên không ai quay lại kiểm.
+
+   Làm **một** trong hai cách dưới đây, cách nào cũng dọn thật:
+
+   **Cách 1 (chắc nhất, không cần nhớ lệnh) — đóng hẳn cửa sổ đi.**
+   Bấm dấu **✕** ở góc trên bên phải cửa sổ PowerShell. Đóng là mất sạch cả
+   phần cuộn lẫn hai biến `$env:` vừa đặt. Cần dùng PowerShell tiếp thì mở
+   cửa sổ mới.
+
+   **Cách 2 — nếu muốn giữ cửa sổ đang mở**, gõ đúng dòng này:
 
    ```powershell
-   Clear-Host
+   [Console]::Write("$([char]27)[2J$([char]27)[3J$([char]27)[H"); Clear-Host
    ```
 
-   Chắc nhất: **đóng hẳn cửa sổ PowerShell đó đi**. Đóng là mất sạch cả phần
-   cuộn lẫn hai biến `$env:` vừa đặt.
+   Dòng đó xoá cả màn hình **lẫn toàn bộ phần cuộn** (`[3J` là phần
+   `Clear-Host` không làm). Gõ xong **cuộn chuột lên kiểm lại**: phải trống
+   trơn, không còn dòng nào. Còn thấy chữ thì quay về Cách 1.
+
+   > Dù chọn cách nào, **kiểm bằng mắt**: cuộn lên tới đỉnh, tìm chuỗi bắt đầu
+   > bằng `1//` (dạng của refresh token). Còn thấy là chưa dọn xong.
+
 3. Nếu có lỡ dán chuỗi nào vào Zalo/chat để "lưu tạm" — **thu hồi ngay**: vào
    lại Google Cloud → **Credentials**, xoá chìa khoá cũ và làm lại Bước 6–10.
 
@@ -213,11 +233,23 @@ Xong.
 | **Đêm nay, 0h–8h sáng** | Xuất toàn bộ dữ liệu ra file Excel, đẩy lên Drive, thư mục `ERP-AGC/SAO-LUU/<ngày>/` |
 | **9h sáng mỗi ngày** | Tự hỏi *"hôm qua có bản sao lưu không?"* — không có thì **nhắn Telegram báo động đỏ** |
 | **Mỗi ngày** | Giữ 30 bản gần nhất, tự xoá bản cũ hơn |
-| **Mùng 1 hằng tháng** | Gói cả tháng thành một file `.zip`, **nhắn Telegram cho Sếp kèm đường dẫn tải** |
+| **Ngày 15 hằng tháng** | Gói dữ liệu của **tháng trước** thành một file `.zip`, **nhắn Telegram cho Sếp kèm đường dẫn tải** |
 | **Thứ Hai hằng tuần** | Nếu Drive còn dưới 3 GB thì nhắn nhắc dọn |
+
+> **Vì sao ngày 15 chứ không phải mùng 1** (Sếp Ngọc chốt 27/08): mùng 1 thì
+> tháng vừa đóng, kế toán chưa chốt sổ, chứng từ nhà cung cấp còn về muộn. Tới
+> ngày 15 thì tháng trước đã ổn định thật — gói ra là con số cuối cùng.
+> Tên file vẫn theo **tháng dữ liệu**, không theo ngày chạy: ngày 15/09 ra
+> `sao-luu-AGC-2026-08.zip`.
 
 **Sếp không phải làm gì thêm.** Trừ đúng một việc mỗi tháng: khi Telegram báo
 có bản `.zip`, **tải về và chép ra ổ cứng rời**.
+
+Trong mỗi bản sao lưu — cả bản ngày lẫn bản `.zip` tháng — có sẵn ba file chỉ
+đường: `DOC-CACH-DOC.txt` (đủ 3 phần: đọc dữ liệu · khôi phục về ERP · chuyển
+sang phần mềm khác), `KHOI-PHUC.mjs` (công cụ khôi phục chạy được thật, không
+cần mạng, không cần mã nguồn), và `SO-DO-DU-LIEU.txt` (bảng nào nối bảng nào).
+Cố ý để **bên trong** bản sao lưu, vì lúc cần khôi phục là lúc ERP đã hỏng.
 
 > Vì sao phải chép ra ngoài: bản chạy hằng đêm nằm trên Drive công ty. Mất tài
 > khoản Google là mất luôn cả kho tài liệu lẫn bản sao lưu. Bản `.zip` Sếp tự

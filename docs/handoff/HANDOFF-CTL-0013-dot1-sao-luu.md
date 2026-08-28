@@ -172,7 +172,10 @@ ra màn hình dòng lệnh, Sếp dán thẳng vào két Cloudflare.
 2. **Mở bằng Excel thật** — việc duy nhất chưa kiểm được ở đây.
 3. **Xem nhật ký Cloudflare** đêm đầu: có lượt nào bị cắt vì CPU không.
 4. **Thử ca đối chứng trên bản THẬT** (không phải bản giả của harness).
-5. Mùng 1 tháng sau: kiểm Telegram có tin nhắn kèm file `.zip` không.
+5. **Ngày 15 tháng sau**: kiểm Telegram có tin nhắn kèm `.zip` không, và kiểm
+   tên file là `sao-luu-AGC-<THÁNG TRƯỚC>.zip` chứ không phải tháng đang chạy.
+6. Giải nén bản `.zip` đó, chạy `node KHOI-PHUC.mjs` trong thư mục vừa giải nén
+   — phải hiện dòng "ĐẠT". Đây là lần thử khôi phục trên dữ liệu THẬT.
 
 ## 10. Còn nợ của Đợt 1 (Phần A — chưa làm, đúng phạm vi được giao)
 
