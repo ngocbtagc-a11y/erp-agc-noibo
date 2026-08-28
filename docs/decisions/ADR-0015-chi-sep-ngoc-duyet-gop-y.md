@@ -79,6 +79,16 @@ trực tiếp gật là đủ (~60% số góp ý — ADR-0006 A1); (b) **SLA nh�
   nguyên mốc cũ. Migration `them-gopy-cho-duyet-tu-luc.sql` (lùi:
   `lui-gopy-cho-duyet-tu-luc.sql`); thiếu cột thì code tự lùi về đo bằng
   `cap_nhat_luc` kèm `console.warn`, không 500.
+- **Hoàn tác trả lại CẢ đồng hồ** (REV-0032 L1 — cửa thứ **17**). Cửa 14 bịt
+  đường "lưu tại chỗ", nhưng còn một cần cẩu khác: **duyệt** (đóng dấu đồng hồ:
+  đúng) rồi **hoàn tác** ngay (trả lại việc — nhưng đồng hồ ở lại). Đo được:
+  việc chờ cổng 1 từ 23/08, cấp 1 bấm duyệt→hoàn tác → về `QL_CAP1` mà đồng hồ
+  nhảy sang 28/08 → cron **0 tin**, lặp 3 vòng vẫn thế. **Tuổi hàng chờ 5 ngày
+  tụt về 0 bằng một cặp bấm**, nổ cả khi không ai cố ý — đúng bằng cửa 14. Nay
+  `cho_duyet_tu_luc` nằm trong `GOPY_COT_HOAN_TAC`, đọc bằng **một câu SELECT
+  riêng** (không đụng câu SELECT nóng của `gopYDuyet`) bọc `try/catch` nuốt
+  `no such column`; thiếu cột thì bỏ khoá khỏi ảnh chụp, **không ghi NULL đè
+  lên mốc**. Đo cả ca thiếu cột: gửi/duyệt/hoàn tác/cron đều chạy như cũ.
 - **Hỏng an toàn nhưng KHÔNG im lặng nữa** (REV-0030 lỗi 5): thiếu cột
   `duyet_gopy` nay ghi một dòng `console.warn` (đọc được trên Workers Logs vì
   `[observability]` đang bật) **và** bắn **một** tin Telegram/ngày, chống lặp
@@ -159,9 +169,21 @@ Nguyên văn của Sếp, sau khi nghe REV-0027 khoá cửa `dat-lai-mat-khau` b
 | c | bảng `thong_bao` — **nằm trong bản sao lưu CSV đẩy lên Drive** | tin báo cho Sếp không kèm mật khẩu |
 | d | Telegram **nhóm chung** | tin "[Bảo mật]" là tin khác, không kèm mật khẩu |
 | e | `tai_khoan` trong bản sao lưu | vốn chỉ có hash — giữ nguyên |
+| f | **đặt nhầm chìa** — `TELEGRAM_CHAT_ID_SEP` bị dán bằng chat id **nhóm chung** (REV-0032 M1) | hai chat id trùng nhau → **409**, không đụng mật khẩu. Kiểm **lúc dùng**, không phải lúc cài: secret đổi lúc nào mã không hay biết. Hiểm ở **người** — người đi đặt secret chính là người đang bị giữ bí mật |
+
+**Chốt nhịp — 1 lần / 5 phút cho mỗi tài khoản** (REV-0032 M2). Mỗi cú bấm sinh
+mật khẩu mới **và** `DELETE FROM phien`, nên bấm liên tục là **khoá Sếp ra khỏi
+ERP** không giới hạn, kèm spam chat riêng. Vượt nhịp → **429**, Sếp nhận **một**
+tin báo mỗi cửa sổ. Mốc nhịp đọc từ chính dòng `nhan_su_lich_su` của lần trước —
+0 bảng mới, 0 migration.
+
+**Gửi xong mà ghi CSDL hỏng** (REV-0032 L5): mọi dấu vết cũ đều ghi **sau** câu
+`UPDATE`, nên ca này từng **vô hình** với công ty. Nay: `console.error` + tin cho
+chủ tài khoản (*"mật khẩu tạm vừa gửi KHÔNG dùng được"*) + tin nhóm chung + **500**.
 
 **Cài đặt một lần:** Sếp nhắn `/start` cho bot → lấy chat id →
-`npx wrangler secret put TELEGRAM_CHAT_ID_SEP`.
+`npx wrangler secret put TELEGRAM_CHAT_ID_SEP`. Chat id này phải **khác**
+`TELEGRAM_CHAT_ID` của nhóm chung (chat riêng thường là số dương, nhóm là số âm).
 
 ## Đường cứu tầng DB — mất điện thoại, quên mật khẩu, mất luôn Telegram
 

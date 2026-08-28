@@ -97,6 +97,16 @@ khẩu), nên không ai làm lén được.
 > chat id, rồi chạy `npx wrangler secret put TELEGRAM_CHAT_ID_SEP`.
 > Chưa cài thì nút này trả **403** — cố ý: không có đường giao an toàn thì
 > không mở cửa.
+>
+> ⚠️ Chat id này phải là **chat RIÊNG của Sếp với bot**, **KHÁC** hẳn
+> `TELEGRAM_CHAT_ID` của nhóm chung. Dán nhầm chat id nhóm vào đây là **phát
+> mật khẩu của Sếp cho cả công ty**. ERP tự chặn ca này (trả **409** kèm lời
+> nhắc, không đụng mật khẩu), nhưng vẫn nên đối chiếu bằng mắt trước khi dán —
+> chat riêng thường là số **dương**, chat nhóm là số **âm**.
+>
+> Bấm dồn không giải quyết được gì: mỗi lần bấm là **đá hết phiên** của Sếp,
+> nên trong **5 phút** ERP chỉ cho khôi phục **một lần** (lần sau trả **429**
+> và báo cho Sếp). Mật khẩu tạm vừa gửi vẫn còn dùng được — cứ dùng nó.
 
 **Nấc 2 — mất luôn Telegram: đặt lại mật khẩu ở tầng dữ liệu.**
 
@@ -106,6 +116,14 @@ node scripts/dat-lai-mat-khau.mjs <số điện thoại của Sếp> --remote
 
 Script in rõ đang đổi cho ai rồi **bắt gõ lại số điện thoại** mới ghi. Nó chỉ
 đổi **đúng một tài khoản**, **không xoá gì**, **không đụng bảng nào khác**.
+
+> Màn hình có dòng `Đang hoạt động:`. Nếu là **KHÔNG (tài khoản đang bị khoá)**
+> thì script **tự bật lại** (`kich_hoat = 1`) trong đúng câu lệnh đó và nói rõ
+> trước khi hỏi xác nhận — vì đặt xong mật khẩu mà tài khoản vẫn khoá thì vẫn
+> **không đăng nhập được**. Tài khoản đang hoạt động thì không đụng cột này.
+>
+> Script **hỏi bằng bàn phím**. Chạy trong CI/cron (không có bàn phím) thì nó
+> **dừng ngay với mã thoát khác 0**, không ghi gì — không treo.
 
 > ⚠️ **TUYỆT ĐỐI KHÔNG** dùng `scripts/tao-tai-khoan.mjs` thay cho việc này.
 > File đó ghi `seed.sql` **xoá sạch dữ liệu cũ** — chạy trên bản thật là **mất

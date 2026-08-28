@@ -25,7 +25,18 @@
         đụng bảng nào khác.
      ③ IN RÕ ĐANG ĐỔI CHO AI RỒI MỚI HỎI. Không gõ đúng số điện thoại để xác
         nhận thì DỪNG, không ghi gì. Chạy trong môi trường không có bàn phím
-        (CI, cron) thì đọc phải EOF → cũng DỪNG. Hỏng theo chiều an toàn.
+        (CI, cron) thì đọc phải EOF → cũng DỪNG với mã thoát KHÁC 0.
+        REV-0032 L2: `rl.question()` gặp EOF thì TREO chứ không ném, nên câu
+        `try/catch` không đủ — phải bắt sự kiện 'close' của readline (xem
+        `hoiMotLan`). Đo được: trước bản vá, 3 giây không trả về. Chú thích
+        cũ nói "EOF → cũng DỪNG" trong khi thật ra là treo — nói sai còn tệ
+        hơn không nói (Rule 10).
+
+     TÀI KHOẢN ĐANG BỊ KHOÁ (REV-0032 L3): đặt xong mật khẩu mà `kich_hoat = 0`
+     thì vẫn không đăng nhập được — đường cứu cuối cùng mà cứu hụt. Nay nếu
+     tra ra tài khoản đang khoá thì CÙNG câu UPDATE đó bật lại `kich_hoat = 1`,
+     và màn hình nói rõ điều đó TRƯỚC khi hỏi xác nhận. Tài khoản đang hoạt
+     động bình thường thì câu lệnh vẫn đúng hai cột như cũ.
 
    Chạy:
      node scripts/dat-lai-mat-khau.mjs 0911994696              (bản máy)
@@ -94,16 +105,33 @@ export function cauTraCuu(ten) {
          `WHERE t.ten_dang_nhap = '${ten}'`;
 }
 
-/** Câu GHI duy nhất. Đúng một bảng, đúng một dòng, đúng hai cột. */
-export function cauDatLai(ten, hash) {
+/** Câu GHI duy nhất. Đúng một bảng, đúng một dòng, đúng hai cột — ba cột khi
+    `moKhoa` bật (tài khoản đang bị khoá, xem L3 ở đầu file). */
+export function cauDatLai(ten, hash, moKhoa = false) {
   if (!tenDangNhapHopLe(ten)) throw new Error('Tên đăng nhập không hợp lệ');
   if (!/^pbkdf2\$\d+\$[A-Za-z0-9+/=]+\$[A-Za-z0-9+/=]+$/.test(String(hash)))
     throw new Error('Hash không đúng định dạng pbkdf2$vòng$salt$hash');
-  return `UPDATE tai_khoan SET mat_khau_hash = '${hash}', phai_doi_mk = 1 ` +
-         `WHERE ten_dang_nhap = '${ten}'`;
+  return `UPDATE tai_khoan SET mat_khau_hash = '${hash}', phai_doi_mk = 1` +
+         (moKhoa ? ', kich_hoat = 1' : '') +
+         ` WHERE ten_dang_nhap = '${ten}'`;
 }
 
 /* ---- Chạy --------------------------------------------------------------- */
+
+/* HỎI MỘT LẦN, KHÔNG BAO GIỜ TREO (REV-0032 L2).
+   `rl.question()` của node:readline/promises KHÔNG ném khi luồng vào hết —
+   nó im lặng chờ mãi. Chạy trong CI/cron (stdin đóng) là treo cả tiến trình,
+   đúng cái mà chú thích cũ khai là "DỪNG". readline có phát sự kiện 'close'
+   khi gặp EOF — bắt chính sự kiện đó rồi ném, để nhánh huỷ chạy như thường. */
+export function hoiMotLan(rl, cauHoi) {
+  return new Promise((giai, tuChoi) => {
+    const khiDong = () => tuChoi(new Error('EOF — không có bàn phím để trả lời'));
+    rl.once('close', khiDong);
+    rl.question(cauHoi).then(
+      v => { rl.off('close', khiDong); giai(v); },
+      e => { rl.off('close', khiDong); tuChoi(e); });
+  });
+}
 
 function wrangler(moiTruong, sql, json = false) {
   const args = ['wrangler', 'd1', 'execute', 'crm-agc', moiTruong, '--command', sql];
@@ -149,13 +177,18 @@ async function chinh() {
   console.log(`     Chức vụ       : ${t.chuc_vu || '—'}`);
   console.log(`     Tên đăng nhập : ${t.ten_dang_nhap}`);
   console.log(`     Vai trò       : ${t.vai_tro}${Number(t.duyet_gopy) === 1 ? '  ·  ĐANG GIỮ QUYỀN DUYỆT GÓP Ý' : ''}`);
-  console.log(`     Đang hoạt động: ${Number(t.kich_hoat) === 1 ? 'có' : 'KHÔNG (tài khoản đang bị khoá)'}`);
-  console.log('\n   KHÔNG đụng bảng nào khác, KHÔNG xoá dòng nào, KHÔNG đá phiên đang đăng nhập.\n');
+  const moKhoa = Number(t.kich_hoat) !== 1;
+  console.log(`     Đang hoạt động: ${moKhoa ? 'KHÔNG (tài khoản đang bị khoá)' : 'có'}`);
+  console.log('\n   KHÔNG đụng bảng nào khác, KHÔNG xoá dòng nào, KHÔNG đá phiên đang đăng nhập.');
+  if (moKhoa)
+    console.log('   TÀI KHOẢN ĐANG BỊ KHOÁ — cùng câu lệnh này sẽ BẬT LẠI (kich_hoat = 1),\n' +
+                '   vì đặt mật khẩu mà vẫn khoá thì vẫn không đăng nhập được.');
+  console.log('');
 
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   let traLoi = '';
-  try { traLoi = (await rl.question(`   Gõ lại số điện thoại "${ten}" để xác nhận (Enter trống = huỷ): `)).trim(); }
-  catch { traLoi = ''; }       // không có bàn phím (CI/cron) → coi như huỷ
+  try { traLoi = (await hoiMotLan(rl, `   Gõ lại số điện thoại "${ten}" để xác nhận (Enter trống = huỷ): `)).trim(); }
+  catch { traLoi = ''; }       // EOF: không có bàn phím (CI/cron) → coi như huỷ
   finally { rl.close(); }
 
   if (traLoi !== ten) {
@@ -167,7 +200,7 @@ async function chinh() {
   const hash = await bamMatKhau(matKhauTam);
 
   console.log(`\n>> [2/3] Ghi ĐÚNG MỘT câu UPDATE...\n`);
-  try { wrangler(moiTruong, cauDatLai(ten, hash)); }
+  try { wrangler(moiTruong, cauDatLai(ten, hash, moKhoa)); }
   catch (e) { console.error('Ghi hỏng:', e.message); process.exit(1); }
 
   console.log(`\n>> [3/3] Xong.\n`);
@@ -176,7 +209,9 @@ async function chinh() {
   console.log(`   Mật khẩu tạm  : ${matKhauTam}`);
   console.log('   ==========================================================');
   console.log('   MẬT KHẨU NÀY CHỈ HIỆN RA MỘT LẦN. Máy chủ chỉ lưu hash.');
-  console.log('   Đăng nhập xong hệ thống sẽ bắt đổi mật khẩu ngay.\n');
+  console.log('   Đăng nhập xong hệ thống sẽ bắt đổi mật khẩu ngay.');
+  if (moKhoa) console.log('   Tài khoản đang khoá đã được BẬT LẠI (kich_hoat = 1).');
+  console.log('');
 }
 
 // Chỉ chạy khi được gọi thẳng — bàn đo import file này để soi hai câu SQL.

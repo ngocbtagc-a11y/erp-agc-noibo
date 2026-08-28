@@ -1021,6 +1021,11 @@ async function dangGiuCoDuyetGopY(env, tkId) {
   }
 }
 
+/* Trong bao nhiêu phút chỉ cho khôi phục đăng nhập hộ MỘT lần (REV-0032 M2).
+   5 phút: đủ để Sếp mở Telegram, chép mật khẩu, đăng nhập xong; và đủ ngắn để
+   một lần bấm nhầm thật sự không phải chờ lâu. */
+const KHOI_PHUC_NHIP_PHUT = 5;
+
 const LOI_MAT_NGUOI_DUYET =
   'Không thể — đây là người DUY NHẤT còn duyệt được góp ý ERP. Bật cờ duyệt cho người thay trước (tab Quản trị), rồi hãy làm việc này.';
 
@@ -1082,14 +1087,79 @@ async function qtDatLaiMatKhau(req, env) {
   // đường cũ, giữ nguyên.
   const khoiPhucHo = tkId !== phien.tai_khoan_id && await dangGiuCoDuyetGopY(env, tkId);
 
+  const nguoiBam = phien.ho_ten || phien.ten_dang_nhap;
+  const luc = new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 16).replace('T', ' ');
+
   if (khoiPhucHo && !env.TELEGRAM_CHAT_ID_SEP)
     return loi('Chưa cấu hình kênh riêng để gửi mật khẩu tạm cho người giữ quyền duyệt góp ý ' +
                '(secret TELEGRAM_CHAT_ID_SEP). Không có đường giao an toàn thì không mở cửa này — ' +
                'xem ADR-0015, mục "Đường khôi phục đăng nhập cho ERP Owner".', 403);
 
+  /* ĐƯỜNG RÒ THỨ SÁU (REV-0032 M1) — ĐẶT NHẦM CHÌA LÀ PHÁT MẬT KHẨU CHO CẢ
+     CÔNG TY. Toàn bộ cách chặn ở trên đứng trên đúng một giả định: cái chat
+     id trong `TELEGRAM_CHAT_ID_SEP` là chat RIÊNG của Sếp. Dán nhầm chat id
+     NHÓM CHUNG vào đó thì mật khẩu tạm của Sếp bay vào nhóm — mà API vẫn trả
+     200 êm ru, không một dòng cảnh báo.
+
+     Hiểm ở NGƯỜI chứ không ở máy: người đi đặt secret chính là người đang bị
+     giữ bí mật. Đặt nhầm là chuyện sẽ xảy ra, không phải chuyện có thể.
+
+     KIỂM LÚC DÙNG, không phải lúc cài — secret đổi được bất cứ lúc nào mà mã
+     không hay biết, nên chốt phải nằm ngay trên đường đi của mật khẩu. */
+  if (khoiPhucHo && env.TELEGRAM_CHAT_ID &&
+      String(env.TELEGRAM_CHAT_ID_SEP).trim() === String(env.TELEGRAM_CHAT_ID).trim()) {
+    console.error('[ERP] TELEGRAM_CHAT_ID_SEP TRÙNG TELEGRAM_CHAT_ID (nhóm chung) — ' +
+                  'từ chối khôi phục đăng nhập để mật khẩu tạm không phát cho cả công ty.');
+    return loi('TELEGRAM_CHAT_ID_SEP đang trùng đúng TELEGRAM_CHAT_ID của nhóm chung — gửi mật khẩu ' +
+               'tạm vào đó là phát cho cả công ty. Đã TỪ CHỐI, mật khẩu hiện tại không bị đụng. ' +
+               'Sếp nhắn /start cho bot rồi lấy chat id RIÊNG (số khác, thường là số dương) và ' +
+               'đặt lại secret TELEGRAM_CHAT_ID_SEP.', 409);
+  }
+
+  /* CHỐT NHỊP (REV-0032 M2) — BẤM LIÊN TỤC LÀ KHOÁ SẾP RA KHỎI ERP.
+     Mỗi cú bấm sinh mật khẩu mới VÀ `DELETE FROM phien` của người đó. Không
+     có chốt nhịp thì anh Phong bấm liên tục là Sếp không bao giờ đăng nhập
+     xong, kèm spam chat riêng của Sếp. Bản 403 cũ (REV-0027) không có mặt
+     hỏng này — bản vá đẻ ra lỗi mới thì bản vá phải tự dọn.
+
+     Mốc nhịp đọc từ `nhan_su_lich_su` (dòng sự kiện của chính lần trước) —
+     không thêm bảng, không thêm migration, và mốc đó nằm trong sổ nên người
+     sau đọc được. Kiểm TRƯỚC KHI GỬI: chặn cả mật khẩu mới lẫn tin nhắn. */
+  if (khoiPhucHo && tk.nhan_su_id) {
+    let ganDay = null;
+    try {
+      ganDay = await env.DB.prepare(`
+        SELECT luc FROM nhan_su_lich_su
+         WHERE nhan_su_id = ? AND loai_su_kien = 'khoi_phuc_dang_nhap'
+           AND luc > datetime('now', '+7 hours', '-${KHOI_PHUC_NHIP_PHUT} minutes')
+         ORDER BY luc DESC LIMIT 1`).bind(tk.nhan_su_id).first();
+    } catch (e) { console.error('Đọc mốc nhịp khôi phục đăng nhập:', e.message); }
+    if (ganDay) {
+      console.warn(`[ERP] Chặn bấm dồn: khôi phục đăng nhập cho ${tk.ten_dang_nhap} vừa chạy lúc ` +
+                   `${ganDay.luc}, trong ${KHOI_PHUC_NHIP_PHUT} phút chỉ cho một lần.`);
+      // BÁO SẾP — nhưng đúng MỘT tin mỗi cửa sổ, kẻo chính cái báo lại thành
+      // spam mới. `lien_ket` làm khoá chống lặp, không phải đường dẫn.
+      let daBao = null;
+      try {
+        daBao = await env.DB.prepare(`
+          SELECT id FROM thong_bao
+           WHERE nguoi_nhan_id = ? AND lien_ket = 'chan_khoi_phuc'
+             AND tao_luc > datetime('now', '+7 hours', '-${KHOI_PHUC_NHIP_PHUT} minutes')
+           LIMIT 1`).bind(tk.nhan_su_id).first();
+      } catch (e) { console.error('Đọc tin chặn khôi phục:', e.message); }
+      if (!daBao)
+        await guiThongBao(env, null,
+          `[Bảo mật] ${nguoiBam} vừa bấm khôi phục đăng nhập cho tài khoản của bạn thêm một lần nữa ` +
+          `trong vòng ${KHOI_PHUC_NHIP_PHUT} phút. Hệ thống đã CHẶN — mật khẩu tạm cũ vẫn dùng được. ` +
+          `Nếu không phải bạn nhờ, hãy hỏi lại ${nguoiBam} ngay.`,
+          'bao_mat', 'chan_khoi_phuc', tk.nhan_su_id);
+      return loi(`Vừa khôi phục đăng nhập cho tài khoản này lúc ${ganDay.luc}. Trong ` +
+                 `${KHOI_PHUC_NHIP_PHUT} phút chỉ làm được một lần — mật khẩu tạm vừa gửi vẫn còn ` +
+                 `dùng được, bấm lại chỉ làm chủ tài khoản đăng nhập không xong. Đợi rồi thử lại.`, 429);
+    }
+  }
+
   const matKhauTam = sinhMatKhauTam(10);
-  const nguoiBam = phien.ho_ten || phien.ten_dang_nhap;
-  const luc = new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 16).replace('T', ' ');
 
   if (khoiPhucHo) {
     // GỬI TRƯỚC KHI GHI. Không gửi được thì tài khoản không bị đụng tới.
@@ -1107,11 +1177,32 @@ async function qtDatLaiMatKhau(req, env) {
                  'KHÔNG bị thay đổi. Kiểm tra TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID_SEP rồi thử lại.', 502);
   }
 
-  await env.DB.prepare('UPDATE tai_khoan SET mat_khau_hash = ?, phai_doi_mk = 1 WHERE id = ?')
-              .bind(await bamMatKhau(matKhauTam), tkId).run();
+  /* CA NGƯỢC CỦA "GỬI TRƯỚC GHI SAU" (REV-0032 L5): Telegram ĐÃ GỬI XONG mà
+     câu UPDATE hỏng → Sếp cầm một mật khẩu không dùng được, còn mọi dấu vết
+     trong ERP thì đều nằm SAU câu UPDATE này, tức là KHÔNG CÓ DẤU VẾT NÀO.
+     Lần thử hỏng đó vô hình với cả công ty. Không im lặng nữa: ghi log, báo
+     nhóm chung, báo chủ tài khoản, rồi trả lỗi nói đúng chuyện gì đã xảy ra. */
+  try {
+    await env.DB.prepare('UPDATE tai_khoan SET mat_khau_hash = ?, phai_doi_mk = 1 WHERE id = ?')
+                .bind(await bamMatKhau(matKhauTam), tkId).run();
 
-  // Đá hết phiên cũ của người đó ra — buộc đăng nhập lại bằng mật khẩu mới
-  await env.DB.prepare('DELETE FROM phien WHERE tai_khoan_id = ?').bind(tkId).run();
+    // Đá hết phiên cũ của người đó ra — buộc đăng nhập lại bằng mật khẩu mới
+    await env.DB.prepare('DELETE FROM phien WHERE tai_khoan_id = ?').bind(tkId).run();
+  } catch (e) {
+    if (!khoiPhucHo) throw e;
+    console.error('[ERP] KHÔI PHỤC ĐĂNG NHẬP HỎNG NỬA CHỪNG — mật khẩu tạm ĐÃ gửi vào chat riêng ' +
+                  `nhưng ghi CSDL hỏng cho tài khoản ${tk.ten_dang_nhap}: ${e.message}`);
+    await guiThongBao(env, null,
+      `[Bảo mật] ${nguoiBam} bấm khôi phục đăng nhập cho tài khoản của bạn lúc ${luc} nhưng ERP GHI ` +
+      `HỎNG: mật khẩu tạm vừa gửi cho bạn KHÔNG dùng được, mật khẩu cũ vẫn còn hiệu lực. ` +
+      `Đừng dùng mật khẩu trong tin đó — báo người phụ trách kỹ thuật rồi thử lại.`,
+      'bao_mat', null, tk.nhan_su_id).catch(() => {});
+    guiTelegram(env,
+      `⚠️ [Bảo mật] ERP ghi hỏng khi ${nguoiBam} khôi phục đăng nhập cho ${tk.ten_dang_nhap} lúc ${luc}. ` +
+      `Mật khẩu tạm đã gửi đi nhưng KHÔNG có hiệu lực — cần người kỹ thuật xem lại ngay.`).catch(() => {});
+    return loi('Đã gửi mật khẩu tạm nhưng GHI CSDL HỎNG — mật khẩu tạm đó KHÔNG dùng được, mật khẩu cũ ' +
+               'vẫn còn hiệu lực. Đã báo chủ tài khoản và nhóm chung. Xem Workers Logs rồi thử lại.', 500);
+  }
 
   if (khoiPhucHo) {
     const ten = tk.ho_ten || tk.ten_dang_nhap;
@@ -4016,6 +4107,33 @@ async function gopYDongDauChoDuyet(env, id) {
   }
 }
 
+/* CỬA THỨ 17 (REV-0032 L1) — HOÀN TÁC PHẢI TRẢ LẠI CẢ ĐỒNG HỒ.
+
+   Cửa 14 bịt đường "đẩy lùi đồng hồ bằng một cú lưu tại chỗ". Nhưng còn một
+   cần cẩu khác: DUYỆT (đóng dấu đồng hồ — đúng) rồi HOÀN TÁC ngay (trả lại
+   việc — nhưng KHÔNG trả lại đồng hồ). Đo được: góp ý chờ cổng 1 từ 23/08
+   (5 ngày) → anh Duy bấm "duyệt" rồi "hoàn tác" → next_owner về QL_CAP1 mà
+   `cho_duyet_tu_luc` ở lại 28/08 → cron KHÔNG đẩy lên Sếp nữa, 0 tin, lặp
+   được. Tuổi hàng chờ 5 ngày tụt về 0 ngày bằng ĐÚNG MỘT CẶP BẤM, nổ cả khi
+   không ai cố ý — y hệt cửa 14.
+
+   VÁ bằng đúng khuôn phòng thủ của gopYDongDauChoDuyet(): một câu SELECT
+   RIÊNG lúc chụp ảnh hoàn tác, KHÔNG nhét cột mới vào câu SELECT nóng của
+   gopYDuyet() (đụng vào đó là mở đúng mặt hỏng L4 — chưa nạp migration thì
+   sập cả cổng duyệt). Thiếu cột → trả `undefined` → gopYAnhChup() BỎ HẲN
+   khoá đó khỏi ảnh chụp, gopYHoanTac() không ghi gì vào cột không tồn tại. */
+async function gopYDocChoDuyetTuLuc(env, id) {
+  if (!id) return undefined;
+  try {
+    const r = await env.DB.prepare(
+      'SELECT cho_duyet_tu_luc FROM gop_y WHERE id = ?').bind(id).first();
+    return r ? r.cho_duyet_tu_luc : undefined;
+  } catch (e) {
+    if (!/no such column/i.test(String(e && e.message))) throw e;
+    return undefined;
+  }
+}
+
 /* Danh sách — người gửi thấy của mình; QUẢN LÝ CẤP 1 thấy thêm của cấp dưới
    (SPEC-0002: mở quyền xem cho quản lý trực tiếp); Admin thấy tất cả.
    Exception First: việc đang chờ chính người xem duyệt lên đầu. */
@@ -4132,11 +4250,17 @@ const GOPY_HOAN_TAC_PHUT = 15;
 const GOPY_COT_HOAN_TAC = ['trang_thai', 'current_owner', 'next_owner',
   'risk', 'risk_chot_boi_id', 'risk_chot_luc',
   'duyet_cap1_boi_id', 'duyet_cap1_luc', 'duyet_cap1_nguon',
-  'duyet_owner_boi_id', 'duyet_owner_luc', 'ly_do_tu_choi'];
+  'duyet_owner_boi_id', 'duyet_owner_luc', 'ly_do_tu_choi',
+  // Cửa 17 — ĐỒNG HỒ hàng chờ. Trả lại việc mà không trả lại đồng hồ thì
+  // hoàn tác chính là một cách xoá tuổi hàng chờ của Sếp.
+  'cho_duyet_tu_luc'];
 
+/* CHÚ Ý cửa 17: khoá nào KHÔNG có trong `g` thì BỎ HẲN khỏi ảnh chụp, không
+   ghi `null`. Ghi null là tự tay xoá mốc khi máy chủ chưa nạp migration —
+   COALESCE hai bậc ở gopYNhacSla() lo phần lùi, đừng lùi hộ nó bằng NULL. */
 function gopYAnhChup(g, sauTrangThai, sauNextOwner) {
   const truoc = {};
-  for (const k of GOPY_COT_HOAN_TAC) truoc[k] = g[k] === undefined ? null : g[k];
+  for (const k of GOPY_COT_HOAN_TAC) if (g[k] !== undefined) truoc[k] = g[k];
   return JSON.stringify({ truoc, sau_trang_thai: sauTrangThai, sau_next_owner: sauNextOwner });
 }
 
@@ -4188,8 +4312,12 @@ async function gopYHoanTac(req, env) {
   }
 
   const { truoc } = JSON.parse(g.hoan_tac_json);
-  const gan = GOPY_COT_HOAN_TAC.map(k => `${k} = ?`);
-  const gia = GOPY_COT_HOAN_TAC.map(k => (truoc[k] === undefined ? null : truoc[k]));
+  // Chỉ trả lại đúng những cột CÓ TRONG ảnh chụp. Ảnh cũ (chụp trước cửa 17)
+  // không có `cho_duyet_tu_luc`, và máy chủ chưa nạp migration cũng không có
+  // cột đó — cả hai trường hợp đều BỎ QUA cột, không ghi NULL đè lên mốc.
+  const cot = GOPY_COT_HOAN_TAC.filter(k => truoc[k] !== undefined);
+  const gan = cot.map(k => `${k} = ?`);
+  const gia = cot.map(k => truoc[k]);
   gan.push('hoan_tac_json = NULL', 'hoan_tac_boi_id = NULL', 'hoan_tac_luc = NULL',
            "cap_nhat_luc = datetime('now', '+7 hours')");
   gia.push(id);
@@ -4256,6 +4384,10 @@ async function gopYDuyet(req, env) {
     if (!g) return loi('Không tìm thấy góp ý này', 404);
     if (!['moi', 'cho_quyet_dinh'].includes(g.trang_thai))
       return loi(`Góp ý "${g.tieu_de}" không còn ở bước chờ duyệt`, 400);
+    // Cửa 17 — đọc ĐỒNG HỒ bằng một câu RIÊNG (không đụng câu SELECT nóng ở
+    // trên), để ảnh chụp hoàn tác trả lại được cả mốc hàng chờ. Thiếu cột →
+    // undefined → ảnh chụp bỏ khoá, mọi thứ chạy y như trước.
+    g.cho_duyet_tu_luc = await gopYDocChoDuyetTuLuc(env, id);
 
     const ql1 = await nguoiDuyetCap1(env, g.nguoi_gui_id);
     const laQL1 = !!ql1.id && ql1.id === phien.nhan_su_id;
