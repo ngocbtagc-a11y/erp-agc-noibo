@@ -144,29 +144,61 @@ for (const g of changHero) { nenHero.push(g); for (const p of phuHero) nenHero.p
 /*  ① khớp CHỮ: luật nào có nền đặc và selector của nó là tiền tố tổ tiên  */
 const KHUNG = LUAT.map(r => ({ sel: r.sel, nen: mauTrong(khai(r.than, 'background') || khai(r.than, 'background-color') || '').filter(c => c[3] >= 1) }))
   .filter(k => k.nen.length).sort((a, b) => b.sel.length - a.sel.length);
-/*  ② vùng nền RIÊNG mà CSS không nói ra bằng selector lồng nhau            */
-/*  `.thd-panel*` KHÔNG nằm trong danh sách này: popover đó có nền `--card`
-    trắng riêng — nhét nhầm vào đây là đo ra một cặp giả.
+/*  ② NỀN CHA THẬT — ĐỌC TỪ DOM ĐÃ DỰNG, KHÔNG ĐOÁN BẰNG REGEX
+    ---------------------------------------------------------------------
+    REV-0026/H3: bản trước ở đây có một bảng regex dán MỘT nền cho CẢ HỌ
+    `/^\.sb-|^\.thd-(nut|cham|ok|sage|warn|danger|mute)/ → nền thanh bên`.
+    Sai, và sai theo kiểu tệ nhất — im lặng. `.thd-danger` KHÔNG ngồi trên
+    thanh bên: nó nằm trong `.thd-nut{background:var(--surface-2)}`. Bàn đo
+    mù chỗ đó nên khai "0 cặp rớt ngưỡng" trong khi `.thd-danger` thật ra
+    4.67 → 4.23. Bàn đo dối một lần thì MỌI con số nó nói đều không dùng được.
+    Đổi hằng số này lấy hằng số khác không sửa được lỗi ấy: cha–con là quan
+    hệ trong DOM, đọc CSS không bao giờ suy ra được.
+    → `scripts/do-nen-cha.mjs` dựng trang thật bằng Chrome headless, LEO CÂY
+      TỔ TIÊN bằng `getComputedStyle`, pha alpha, tách từng chặng gradient,
+      rồi ghi ra `scripts/nen-cha.json`. Ở đây chỉ tra bảng đó.
+    Đổi cấu trúc HTML → chạy lại `do-nen-cha.mjs`. Thiếu bảng thì bàn đo
+    NÓI THẲNG là không biết, chứ không đoán bừa rồi khai "đạt".              */
+const chuanSel = s => s.replace(/\s*([>+~])\s*/g, ' $1 ').replace(/\s+/g, ' ').trim().toLowerCase();
+/*  Bảng lưu theo CẶP [nền cha, màu chữ cuối cùng] của TỪNG phần tử — nhờ thế
+    mới ghép đúng màu với đúng nền, và mới biết luật nào bị đè.            */
+let CAP_DOM = {}, coBangNenCha = false;
+try {
+  const tho = JSON.parse(readFileSync(new URL('./nen-cha.json', import.meta.url), 'utf8'));
+  for (const [k, v] of Object.entries(tho)) CAP_DOM[chuanSel(k)] = v;
+  coBangNenCha = Object.keys(CAP_DOM).length > 0;
+} catch { /* không có bảng → khai không biết, xem dưới */ }
+const capCua = sel => sel.split(',').map(chuanSel).filter(Boolean)
+  .flatMap(v => CAP_DOM[v] || CAP_DOM[v.replace(/::?[a-z-]+(\([^)]*\))?/g, '').trim()] || []);
 
-    ⚠️ ĐỢT 2 — THANH BÊN ĐÃ ĐỔI TỪ NỀN TỐI SANG NỀN SÁNG. Dòng dưới trước
-    đây dán cứng `T('ink')`. Nếu KHÔNG sửa, bàn đo nói dối THEO CẢ HAI
-    CHIỀU: chữ tối MỚI bị chấm trên nền gần đen → báo "tàng hình" hàng loạt
-    (báo động giả), còn chữ sáng CŨ (#8fc47a, trắng .55…) lại được khen
-    ĐẠT dù trên nền kem thật nó chỉ còn ~2:1 và thực sự tàng hình.
-    → Đọc thẳng token `--sidebar-bg`, đừng dán cứng màu: lần sau đổi nền
-      thanh bên thì bàn đo tự đúng theo. (BH-17: số vô lý thì nghi PHÉP ĐO
-      trước khi kết tội code — ở đây phép đo mới là thứ sắp sai.) */
-/*  Dự phòng `--ink` để bàn đo CHẠY ĐƯỢC TRÊN CẢ BẢN CŨ (bản chưa có
-    `--sidebar-bg` thì nền thanh bên đúng là `--ink`) — cần thế mới so được
-    trước/sau. Thiếu dự phòng thì `T()` ném lỗi và mất luôn phép so. */
-const nenThanhBen = () => [giaiMau('var(--sidebar-bg, var(--ink))')];
-const VUNG_TOI = [[/^\.sb-|^\.sidebar|^\.av-wrap|^\.thd-(nut|cham|wrap|ok|sage|warn|danger|mute)/, nenThanhBen, '.sidebar'],
-                  [/^\.hero-|^\.login-hero/, () => nenHero, '.login-hero']];
-function nenCha(sel) {
+/*  Luật này có THẬT SỰ hiện ra không, hay bị luật đặc hiệu hơn đè?
+    Bàn đo tĩnh xét từng luật rời nhau nên không tự biết. Ví dụ có thật:
+    `.panel-head .hint` (đặc hiệu 20) bị `.mt-panel .panel-head .hint` (30)
+    đè — đo luật yếu trên nền dải cam ra 1.91:1 rồi báo TRƯỢT là TỐ OAN: chỗ
+    đó không bao giờ hiện màu ấy. Hỏi DOM: màu luật này khai có phần tử nào
+    thật sự mang không. Không chỗ nào → bị đè.
+    Chỉ dám kết luận khi CÓ bảng đo; thiếu bảng thì cứ báo, thà tố oan còn
+    hơn im lặng bỏ sót.                                                    */
+function biDe(sel, mauKhai) {
+  if (!coBangNenCha || !mauKhai) return false;
+  const c = capCua(sel);
+  return c.length > 0 && !c.some(x => x[1] === hex(mauKhai));
+}
+
+/*  Selector trong CSS có thể là một danh sách ngăn bởi dấu phẩy; bảng nền
+    cha lưu theo TỪNG vế. Trả về cả nền lẫn ĐỘ TIN CẬY để bảng in ra nói rõ
+    chỗ nào là đo thật, chỗ nào là suy đoán.                                */
+function nenCha(sel, mauKhai) {
+  const c = capCua(sel);
+  /* Chỉ lấy nền của những phần tử THẬT SỰ đang mang màu luật này khai. Lấy
+     hết là ghép nhầm nền của phần tử khác — đúng lỗi tố oan nói ở `biDe`. */
+  let gom = (mauKhai ? c.filter(x => x[1] === hex(mauKhai)) : c).map(x => giaiMau(x[0])).filter(Boolean);
+  if (!gom.length) gom = c.map(x => giaiMau(x[0])).filter(Boolean);
+  if (gom.length) return [gom, 'nền cha ĐO THẬT'];
   const k = KHUNG.find(x => sel.startsWith(x.sel + ' '));
   if (k) return [k.nen, k.sel];
-  for (const [re, lay, ten] of VUNG_TOI) if (re.test(sel)) return [lay(), ten];
-  return [TANG.map(t => t[1]), '4 tầng nền'];       // trôi nổi → thử cả bốn
+  if (/^\.hero-|^\.login-hero/.test(sel)) return [nenHero, '.login-hero'];
+  return [TANG.map(t => t[1]), coBangNenCha ? 'KHÔNG có trong DOM → thử 4 tầng' : 'CHƯA ĐO nền cha → thử 4 tầng'];
 }
 
 /* ── 6. TỰ QUÉT MỌI LUẬT CÓ `color` ──────────────────────────────────────── */
@@ -178,11 +210,13 @@ const themCap = (ten, chu, nen, ng, ghi) => {
   daCo.add(k);
   CAP.push({ ten, r: ti(chu, nen), ng, ghi, chu: hex(chu), nen: hex(nen) });
 };
+let soBiDe = 0;
 for (const r of LUAT) {
   const cChu = giaiMau(khai(r.than, 'color') || '');
   if (!cChu || cChu[3] === 0) continue;
+  if (cChu[3] >= 1 && biDe(r.sel, cChu)) { soBiDe++; continue; }
   const ng = nguong(r.than), ghi = 'd.' + dong(r.vt);
-  const [dsCha, tenCha] = nenCha(r.sel);
+  const [dsCha, tenCha] = nenCha(r.sel, cChu[3] >= 1 ? cChu : null);
   const dsNen = mauTrong(khai(r.than, 'background') || khai(r.than, 'background-color') || '').filter(c => c[3] > 0);
   if (dsNen.length) {
     /* luật TỰ CHỨA cả chữ lẫn nền — cặp chắc chắn nhất, đo từng chặng */
@@ -206,7 +240,9 @@ CAP.sort((a, b) => a.r - b.r);
 let dat = 0, truot = 0;
 console.log('\n═══ ĐO TƯƠNG PHẢN — WCAG 2.1 ═══');
 console.log(`  Nguồn: ${String(duongDan).replace(/^file:\/\/\//, '')}`);
-console.log(`  ${soKhoiRoot} khối :root · ${Object.keys(M).length} biến · ${LUAT.length} luật lá · ${CAP.length} cặp chữ–nền\n`);
+console.log(`  ${soKhoiRoot} khối :root · ${Object.keys(M).length} biến · ${LUAT.length} luật lá · ${CAP.length} cặp chữ–nền`);
+console.log(`  Nền cha: ${coBangNenCha ? 'ĐO THẬT từ DOM (scripts/nen-cha.json)' : '⚠️ CHƯA ĐO — chạy `node scripts/do-nen-cha.mjs`'}` +
+            `${soBiDe ? ` · bỏ ${soBiDe} luật bị luật đặc hiệu hơn ĐÈ (không hiện ra)` : ''}\n`);
 for (const c of CAP) {
   const ok = c.r >= c.ng;
   ok ? dat++ : truot++;
@@ -285,6 +321,24 @@ const doiChung = [
   ['ĐỢT2: chữ .thd-ok cũ #8fc47a trên nền thanh bên sáng #fbf9f5', ti(giaiMau('#8fc47a'), giaiMau('#fbf9f5')), 4.5],
   ['ĐỢT2: chữ .sb-item cũ trắng .76 trên nền thanh bên sáng #fbf9f5', ti(pha(giaiMau('rgba(255,255,255,.76)'), giaiMau('#fbf9f5')), giaiMau('#fbf9f5')), 4.5],
   ['ĐỢT2 hoàn nguyên: nền thanh bên = --ink → L* phải bị bắt là quá tối', Lsao(T('ink')), 90],
+  /* ── ĐỢT 2c — mỗi chỗ vá vòng này một ca đối chứng (BH-16). Vì sao từng ca
+     BẮT BUỘC phải hỏng, nói trước khi chạy (BH-26):                        */
+  /*  ① Nền thanh bên đậm thêm 9,5 bậc L*. Giữ `--text-mute` CŨ #6e675e thì
+         dòng chức danh dưới tên Sếp tụt dưới 4.5 — lệch cơ học, không phụ
+         thuộc dữ liệu nào.                                                 */
+  ['2c: --text-mute CŨ #6e675e trên nền thanh bên beige #ebdcca', ti(giaiMau('#6e675e'), giaiMau('#ebdcca')), 4.5],
+  /*  ② `--line` cũ #e5dccd L* 88.09 cạnh nền thanh bên L* 88.50 → đường kẻ
+         nhóm chênh 0.41 bậc, mắt không thấy. Đo bằng ΔL*, ngưỡng 2.         */
+  ['2c: --line CŨ #e5dccd cạnh nền thanh bên beige (ΔL*)', Math.abs(Lsao(giaiMau('#e5dccd')) - Lsao(giaiMau('#ebdcca'))), 2],
+  /*  ③ Chữ kem trên dải cam CŨ của `.mt-panel` — đúng chỗ bàn đo DOM bắt
+         được (2.92:1, ngưỡng chữ lớn 3).                                   */
+  ['2c: chữ kem --white trên dải cam CŨ #e2792e (chữ lớn)', ti(T('white'), giaiMau('#e2792e')), 3],
+  /*  ④ Nút "+ Khen ai đó" bản cũ: kem .22 pha lên đầu SÁNG của dải vinh danh. */
+  ['2c: #vd-nut-mo CŨ — kem .22 trên #d9a441', ti(giaiMau('#fff'), pha(giaiMau('rgba(255,255,255,.22)'), giaiMau('#d9a441'))), 4.5],
+  /*  ⑤ `var(--ok)` trong app.js d.4711 trên nền `.form-loi` — lỗi H2.       */
+  ['2c: app.js var(--ok) CŨ trên --danger-wash ("Đã đồng bộ xong…")', ti(T('ok'), T('danger-wash')), 4.5],
+  /*  ⑥ `--danger` làm CHỮ trên `--surface-2` — 11 chỗ Kho đọc hằng ngày.    */
+  ['2c: --danger làm CHỮ trên --surface-2 (chưa có --danger-dark)', ti(T('danger'), T('surface-2')), 4.5],
   /* (Không thêm ca "nền thanh bên hiện tại phải sáng" vào đây: mục đối chứng
      kiểm PHÉP ĐO có bắt được lỗi cố ý hay không, không phải nơi khẳng định
      thiết kế. Nhét vào thì chạy bàn đo trên bản CŨ sẽ tự báo "phép đo hỏng"
