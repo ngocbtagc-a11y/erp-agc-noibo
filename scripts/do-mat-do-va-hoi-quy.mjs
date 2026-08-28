@@ -40,9 +40,16 @@ const CHIEM_CHO = [
   'border-width', 'border-top-width', 'border-bottom-width',
   'grid-template-columns', 'grid-template-rows', 'flex-basis',
 ];
-/* `border`/`border-top`/… viết gộp có thể chứa độ dày → tính là chiếm chỗ.
-   `border-color` thì không. */
+/* `border`/`border-top`/… viết gộp CÓ THỂ chứa độ dày → phải xét. Nhưng chỉ
+   phần ĐỘ DÀY mới chiếm chỗ; kiểu nét và MÀU thì không.
+   Nếu so cả chuỗi thì đổi mỗi màu viền (`1px solid rgba(…)` → `1px solid
+   var(--line)`) cũng bị báo là "lấn mật độ" — BÁO ĐỘNG GIẢ, và báo động giả
+   thì lần sau người ta bỏ qua cả cảnh báo thật. Nên rút riêng độ dày ra. */
 const RE_BORDER_GOP = /^border(-(top|right|bottom|left))?$/;
+const doDayVien = gt => {
+  const m = gt.match(/(^|\s)(0|[\d.]+(px|em|rem|pt))(\s|$)/) || gt.match(/(^|\s)(thin|medium|thick)(\s|$)/);
+  return m ? m[2] : (/(^|\s)none(\s|$)/.test(gt) ? '0' : 'medium');
+};
 
 const doc = p => readFileSync(p, 'utf8').replace(/\/\*[\s\S]*?\*\//g, m => m.replace(/[^\n]/g, ' '));
 
@@ -74,7 +81,8 @@ function dauVanLayout(css) {
     for (const m of r.than.matchAll(/([a-z-]+)\s*:\s*([^;}]+)/g)) {
       const ten = m[1].trim();
       if (!CHIEM_CHO.includes(ten) && !RE_BORDER_GOP.test(ten)) continue;
-      const gt = m[2].replace(/\s+/g, ' ').trim();
+      let gt = m[2].replace(/\s+/g, ' ').trim();
+      if (RE_BORDER_GOP.test(ten)) gt = doDayVien(gt);   /* chỉ giữ ĐỘ DÀY */
       const k = r.sel + ' | ' + ten;
       map.set(k, (map.get(k) || []).concat(gt));
     }
@@ -172,6 +180,15 @@ thu('Cố ý tăng font-size 13.5px→15px → bàn mật độ phải kêu',
 const cssMau = doc(pMoi).replace('background: var(--cam);', 'background: #123456;');
 thu('Đổi RIÊNG màu nền → bàn mật độ phải IM (không báo động giả)',
     ![...dauVanLayout(cssMau)].some(([k, v]) => { const w = B.get(k); return !w || w.join('|') !== v.join('|'); }));
+
+/* c2) Viền: ĐỘ DÀY đổi phải kêu, MÀU đổi phải im. Hai ca đi cặp — thiếu ca
+       thứ hai thì cách rút độ dày có thể "im" vì hỏng chứ không vì đúng. */
+const cssVien = doc(pMoi).replace('border-top: 1px solid var(--line);', 'border-top: 3px solid var(--line);');
+thu('Cố ý dày viền 1px→3px → bàn mật độ phải kêu',
+    [...dauVanLayout(cssVien)].some(([k, v]) => { const w = B.get(k); return !w || w.join('|') !== v.join('|'); }));
+const cssVienMau = doc(pMoi).replace('border-top: 1px solid var(--line);', 'border-top: 1px solid #abcdef;');
+thu('Đổi RIÊNG màu viền (vẫn 1px) → bàn mật độ phải IM',
+    ![...dauVanLayout(cssVienMau)].some(([k, v]) => { const w = B.get(k); return !w || w.join('|') !== v.join('|'); }));
 
 /* d) Lỗi THẬT tôi đã mắc và bàn ② đã bắt: chữ tối trên nền tối.
       `--ink` #1e2417 trên `--cam-dark` #b45606 = 3.24:1. */

@@ -10,7 +10,7 @@
    DƯỚI ĐÈN KHO. Nền sáng mà chữ nhạt là không đọc được — đẹp mà vô dụng.
    "Nhìn ổn" không phải là phép đo.
 
-   BH-43 (REV-0024) — HAI LỖ HỔNG CỦA BẢN TRƯỚC, ĐÃ VÁ:
+   BH-45 (REV-0024) — HAI LỖ HỔNG CỦA BẢN TRƯỚC, ĐÃ VÁ:
      ① Bản trước chỉ đọc khối `:root` ĐẦU TIÊN → mù hoàn toàn khối `:root`
         thứ hai (`--tim`, `--tim-wash`). Nay gom TẤT CẢ khối `:root`.
      ② Bản trước dùng danh sách 28 cặp CHỌN TAY → đo 0/81 chỗ dán cứng màu
@@ -144,11 +144,23 @@ for (const g of changHero) { nenHero.push(g); for (const p of phuHero) nenHero.p
 /*  ① khớp CHỮ: luật nào có nền đặc và selector của nó là tiền tố tổ tiên  */
 const KHUNG = LUAT.map(r => ({ sel: r.sel, nen: mauTrong(khai(r.than, 'background') || khai(r.than, 'background-color') || '').filter(c => c[3] >= 1) }))
   .filter(k => k.nen.length).sort((a, b) => b.sel.length - a.sel.length);
-/*  ② vùng nền TỐI đã biết mà CSS không nói ra bằng selector lồng nhau      */
+/*  ② vùng nền RIÊNG mà CSS không nói ra bằng selector lồng nhau            */
 /*  `.thd-panel*` KHÔNG nằm trong danh sách này: popover đó có nền `--card`
-    trắng dù nút mở nó nằm trên thanh bên tối — nhét nhầm vào đây là đo ra
-    "chữ đen trên nền đen" giả. */
-const VUNG_TOI = [[/^\.sb-|^\.sidebar|^\.av-wrap|^\.thd-(nut|cham|wrap|ok|sage|warn|danger|mute)/, () => [T('ink')], '.sidebar'],
+    trắng riêng — nhét nhầm vào đây là đo ra một cặp giả.
+
+    ⚠️ ĐỢT 2 — THANH BÊN ĐÃ ĐỔI TỪ NỀN TỐI SANG NỀN SÁNG. Dòng dưới trước
+    đây dán cứng `T('ink')`. Nếu KHÔNG sửa, bàn đo nói dối THEO CẢ HAI
+    CHIỀU: chữ tối MỚI bị chấm trên nền gần đen → báo "tàng hình" hàng loạt
+    (báo động giả), còn chữ sáng CŨ (#8fc47a, trắng .55…) lại được khen
+    ĐẠT dù trên nền kem thật nó chỉ còn ~2:1 và thực sự tàng hình.
+    → Đọc thẳng token `--sidebar-bg`, đừng dán cứng màu: lần sau đổi nền
+      thanh bên thì bàn đo tự đúng theo. (BH-17: số vô lý thì nghi PHÉP ĐO
+      trước khi kết tội code — ở đây phép đo mới là thứ sắp sai.) */
+/*  Dự phòng `--ink` để bàn đo CHẠY ĐƯỢC TRÊN CẢ BẢN CŨ (bản chưa có
+    `--sidebar-bg` thì nền thanh bên đúng là `--ink`) — cần thế mới so được
+    trước/sau. Thiếu dự phòng thì `T()` ném lỗi và mất luôn phép so. */
+const nenThanhBen = () => [giaiMau('var(--sidebar-bg, var(--ink))')];
+const VUNG_TOI = [[/^\.sb-|^\.sidebar|^\.av-wrap|^\.thd-(nut|cham|wrap|ok|sage|warn|danger|mute)/, nenThanhBen, '.sidebar'],
                   [/^\.hero-|^\.login-hero/, () => nenHero, '.login-hero']];
 function nenCha(sel) {
   const k = KHUNG.find(x => sel.startsWith(x.sel + ' '));
@@ -263,6 +275,20 @@ const doiChung = [
   ['F5b hoàn nguyên: .mt-the-pct.warn --warn trên --surface', ti(T('warn'), T('surface')), 4.5],
   ['F5c hoàn nguyên: .xc-ngay-tt.du_thua #8a6d00 trên đầu bảng', ti(giaiMau('#8a6d00'), nenXc), 4.5],
   ['F6 hoàn nguyên: .sb-item.active --ink trên --sage', ti(T('ink'), T('sage')), 4.5],
+  /* ĐỢT 2 — thanh bên đổi nền TỐI→SÁNG. Dựng lại bộ màu chữ SÁNG của bản cũ
+     đặt lên nền thanh bên sáng #fbf9f5.
+     ⚠️ DÙNG HẰNG SỐ #fbf9f5, KHÔNG đọc token của file đang đo. Bản nháp đầu
+     đọc token và hỏng ngay: chạy trên file CŨ (thanh bên còn tối) thì hai ca
+     này hoá ra "không bắt được" → bàn đo tự tuyên bố mình hỏng và mất luôn
+     khả năng so trước/sau, đúng lúc cần nó nhất. Ca đối chứng phải là một tổ
+     hợp CỐ ĐỊNH đã biết là sai, không phụ thuộc file đem ra đo. */
+  ['ĐỢT2: chữ .thd-ok cũ #8fc47a trên nền thanh bên sáng #fbf9f5', ti(giaiMau('#8fc47a'), giaiMau('#fbf9f5')), 4.5],
+  ['ĐỢT2: chữ .sb-item cũ trắng .76 trên nền thanh bên sáng #fbf9f5', ti(pha(giaiMau('rgba(255,255,255,.76)'), giaiMau('#fbf9f5')), giaiMau('#fbf9f5')), 4.5],
+  ['ĐỢT2 hoàn nguyên: nền thanh bên = --ink → L* phải bị bắt là quá tối', Lsao(T('ink')), 90],
+  /* (Không thêm ca "nền thanh bên hiện tại phải sáng" vào đây: mục đối chứng
+     kiểm PHÉP ĐO có bắt được lỗi cố ý hay không, không phải nơi khẳng định
+     thiết kế. Nhét vào thì chạy bàn đo trên bản CŨ sẽ tự báo "phép đo hỏng"
+     và mất luôn khả năng so trước/sau.) */
 ];
 let batDuoc = 0;
 for (const [ten, r, ng] of doiChung) {

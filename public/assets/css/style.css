@@ -59,6 +59,28 @@
      bên (`.sidebar` d.348, chữ trắng đè lên). Gần đen thì tốt cho cả hai. */
   --ink:         #1e2417;
   --ink-soft:    #3c5a2a;
+
+  /* --- THANH BÊN — token RIÊNG, đây là chỗ Đợt 2 sửa LỖI GỐC -------------
+     Sếp Ngọc xem bản Đợt 2a và chê: "đéo mẹ ĐEN THÙI LÙI".
+     Nguyên nhân KHÔNG phải chọn sai sắc độ mà là LỖI THIẾT KẾ TOKEN:
+     `--ink` gánh HAI vai ngược nhau — vừa là màu CHỮ, vừa là NỀN thanh bên.
+     Đợt 1 hạ `--ink` #3f4d33 → #1e2417 để chữ dễ đọc; phép đo tương phản
+     khen, nhưng cùng lúc nó kéo thanh bên xuống L* 13.23 — một khối gần đen
+     rộng 244px chắn suốt chiều cao màn hình, nuốt sạch cảm giác "sáng sủa"
+     mà cả Đợt 1 đánh đổi để có. Một token, hai vai, sửa vai này hỏng vai kia.
+     → Tách hẳn. `--ink` từ nay CHỈ là màu chữ. Nền thanh bên có token riêng.
+
+     Chọn #fbf9f5: kem trắng ấm, L* 97.97.
+       · so với `.main` (--bg #f3ece1, L* 93.66) chênh ΔL* 4.32 → thanh bên
+         tách rõ khỏi vùng nội dung mà KHÔNG cần mảng màu, đúng tinh thần
+         "đường kẻ mảnh thay mảng màu".
+       · cùng hệ kem với nền trang nên cả màn là MỘT dải sáng liền, không còn
+         chỗ nào "đen thùi lùi".
+       · chữ trên nó: --ink 15.13:1 · --text 11.42:1 · --text-mute 5.30:1 —
+         mọi cấp chữ đều thừa ngưỡng, không phải đánh đổi gì để lấy độ sáng.
+     NỀN THANH BÊN: L* 13.23 → 97.97. Đây là con số trả lời "đen thùi lùi". */
+  --sidebar-bg:   #fbf9f5;
+  --sidebar-hover:#f2ece2;   /* nền mục menu lúc di chuột — 1 bậc dưới nền thanh bên */
   --text:        #3a362f;
   --text-mute:   #6e675e;   /* cũ #8a8a81 chỉ đạt 3.48:1 trên thẻ — không đọc được ngoài nắng */
   --line:        #e5dccd;
@@ -131,6 +153,12 @@
   --warn-wash:   #f7efe1;
   --danger:      #a85641;
   --danger-wash: #f7e8e4;
+  /* ⚠️ Sau Đợt 2, `--ok` KHÔNG còn selector nào dùng — cả 5 chỗ cũ đều là
+     chữ và đã chuyển sang `--ok-dark`. ĐỮNG XOÁ, và đừng tưởng là biến chết:
+     nó là một chân của bộ ba màu MANG NGHĨA `--warn`/`--danger`/`--ok` mà
+     CTL-0023 §4 cấm đụng, và là giá trị TÔ dành cho nền/thanh/chấm "đã xong"
+     — vai mà `--ok-dark` (đủ tối để làm chữ) không thay được. Xoá đi thì
+     lần sau ai cần một mảng xanh "xong" sẽ tự bịa một sắc khác, bộ ba lệch nhau. */
   --ok:          #6f8f5f;
   /* REV-0025/G2 — `--ok` làm CHỮ chỉ 3.15:1 trên `--ok-wash` (chữ "Đã lưu" ở
      Kho nhập/Kho xuất — kho đọc MỖI LẦN nhập/xuất hàng) và 3.64:1 trên thẻ
@@ -154,14 +182,15 @@
      nhờ VIỀN + BÓNG mới nổi. Đổi tông bóng theo `--ink` mới và tăng nhẹ độ
      đậm — đây là phần bù cho việc làm nền sáng, không phải trang trí.
 
-     ĐỢT 2 — bóng MỀM hơn, không đậm hơn. Trang mẫu dùng `0 4px 14px
-     rgba(20,18,16,.06)` và `0 8px 30px rgba(20,18,16,.08)`: độ mờ THẤP nhưng
-     bán kính LỚN. Bản cũ ngược lại — `0 2px 6px .05` là bóng cứng, sát mép,
-     nhìn ra "khung" chứ không ra "nổi lên". Giữ nguyên tổng độ mờ, kéo bán
-     kính ra. Bóng không chiếm chỗ trong dòng chảy → tốn 0 dòng hiển thị. */
-  --shadow-sm: 0 1px 2px rgba(30, 36, 23, .04), 0 4px 14px rgba(30, 36, 23, .06);
-  --shadow-md: 0 8px 30px rgba(30, 36, 23, .10);
-  --shadow-lg: 0 18px 50px rgba(30, 36, 23, .15);
+     ĐỢT 2 — bóng RẤT NHẸ, TÁN RỘNG. Bóng đậm và sát mép nhìn rẻ tiền; bóng
+     mờ thấp mà bán kính lớn mới ra cảm giác vật thể nổi lên. Trang mẫu dùng
+     `0 4px 14px rgba(20,18,16,.06)` và `0 8px 30px rgba(20,18,16,.08)` —
+     độ mờ THẤP, bán kính LỚN. Bản cũ ngược lại: `0 2px 6px .05` là bóng
+     cứng, đọc ra "cái khung" chứ không ra "nổi lên".
+     Hạ độ mờ, kéo bán kính. Bóng không chiếm chỗ → 0 dòng hiển thị bị mất. */
+  --shadow-sm: 0 1px 2px rgba(30, 36, 23, .04), 0 8px 24px rgba(30, 36, 23, .05);
+  --shadow-md: 0 2px 4px rgba(30, 36, 23, .04), 0 12px 32px rgba(30, 36, 23, .08);
+  --shadow-lg: 0 4px 8px rgba(30, 36, 23, .04), 0 24px 60px rgba(30, 36, 23, .12);
   /* Đây là mẹo "năng lượng" thật sự của trang mẫu, không phải khoảng trắng:
      nút chính đổ bóng CÙNG MÀU với chính nó (`0 6px 18px rgba(255,122,24,
      .34)`) — nút trông như đang phát sáng. Bóng màu không đụng tương phản
@@ -483,10 +512,16 @@ button { cursor: pointer; border: none; background: none; }
 
 .app { display: flex; min-height: 100vh; }
 
+/* THANH BÊN SÁNG — xem chú thích `--sidebar-bg` trong `:root`.
+   Phân cách với vùng nội dung bằng MỘT ĐƯỜNG KẺ MẢNH, không bằng mảng màu.
+   Kẻ vẽ bằng `inset box-shadow` chứ KHÔNG bằng `border-right`: `box-sizing:
+   border-box` toàn cục nên border sẽ ăn 1px vào bề rộng trong, có thể làm
+   nhãn menu xuống dòng; inset shadow vẽ đè, chiếm 0px. */
 .sidebar {
   width: var(--sidebar-w);
-  background: var(--ink);
-  color: rgba(255,255,255,.78);
+  background: var(--sidebar-bg);
+  box-shadow: inset -1px 0 0 var(--line);
+  color: var(--text);
   padding: 22px 14px;
   display: flex;
   flex-direction: column;
@@ -497,31 +532,37 @@ button { cursor: pointer; border: none; background: none; }
 
 .sb-brand {
   padding: 0 4px 20px;
-  border-bottom: 1px solid rgba(255,255,255,.11);
+  border-bottom: 1px solid var(--line);
   margin-bottom: 16px;
 }
 
-/* Logo màu xanh đặt thẳng lên thanh bên xanh đậm sẽ chìm (đo được 2.53,
-   dưới ngưỡng 3.0). Lót nền trắng bo góc để logo đọc rõ và giữ nguyên màu
-   thương hiệu. */
+/* Tấm lót trắng dưới logo có từ thời thanh bên nền TỐI: logo xanh đặt thẳng
+   lên nền xanh đậm bị chìm (2.53, dưới ngưỡng 3.0). Thanh bên nay đã sáng
+   nên tấm lót thành thừa — để lại thì thành một hình chữ nhật trắng lợt
+   nổi lên trên nền kem, đúng kiểu chi tiết vô nghĩa làm giao diện rẻ đi.
+   Bỏ nền, GIỮ NGUYÊN padding (padding là thứ chiếm chỗ; đụng vào là đổi
+   mật độ). */
 .sb-brand .sb-logo {
   display: block;
   width: 100%;
   height: auto;
-  background: #fff;
+  background: transparent;
   border-radius: var(--r-sm);
   padding: 11px 14px;
 }
 
-/* ĐỢT 2 / REV-0025§7 — nhãn nhóm trên thanh bên TỐI. Trắng .40 chỉ 3.74:1,
-   trắng .42 chỉ 3.96:1 — cả hai trượt, và đây là chữ ĐIỀU HƯỚNG hiện trên
-   MỌI màn. Nâng cả hai lên .55 = 5.74:1. Chỉ đổi độ mờ, không đổi cỡ chữ
-   hay khoảng cách → 0 dòng hiển thị bị mất. */
+/* NHÃN NHÓM (KINH DOANH & MKT · KHO VẬN · SUPPORT · QUẢN TRỊ).
+   Đây là chi tiết tạo cảm giác cao cấp rõ nhất mà rẻ nhất: chữ NHỎ, GIÃN
+   rộng, CHỮ HOA, màu NHẠT — nó lùi hẳn ra sau để tên màn hình nổi lên, tạo
+   phân cấp thay vì mọi chữ cùng một cỡ.
+   Ba thuộc tính đó (10px · .13em · uppercase) đã có sẵn và là thứ CHIẾM CHỖ
+   — không đụng. Chỉ đổi MÀU cho hợp nền sáng: `--text-mute` #6e675e trên
+   `--sidebar-bg` = 5.30:1, thừa ngưỡng mà vẫn đủ nhạt để lùi lại. */
 .sb-label {
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: .13em;
-  color: rgba(255,255,255,.55);
+  color: var(--text-mute);
   padding: 12px 10px 7px;
   font-weight: 600;
 }
@@ -571,7 +612,7 @@ button { cursor: pointer; border: none; background: none; }
   font-weight: 600;
   letter-spacing: .04em;
   text-transform: uppercase;
-  color: rgba(255,255,255,.55);   /* 3.96:1 → 5.74:1 — xem chú thích .sb-label */
+  color: var(--text-mute);   /* 5.30:1 trên thanh bên sáng — xem chú thích .sb-label */
   padding: 16px 11px 4px;
 }
 .sb-nhom:first-child { padding-top: 4px; }
@@ -584,24 +625,27 @@ button { cursor: pointer; border: none; background: none; }
   border-radius: var(--r-sm);
   font-size: 14px;
   font-weight: 500;
-  color: rgba(255,255,255,.76);
+  color: var(--text);          /* 11.42:1 trên thanh bên sáng */
   transition: background .14s, color .14s;
   text-align: left;
   width: 100%;
 }
 
-.sb-item:hover { background: rgba(255,255,255,.08); color: var(--white); }
+.sb-item:hover { background: var(--sidebar-hover); color: var(--ink); }
 
 /* ĐỢT 2 — MỤC MENU ĐANG CHỌN LÀ CAM (Sếp Ngọc chỉ thẳng vào chỗ này).
-   Vì sao xanh nhạt ở đây SAI: nền thanh bên là `--ink` #1e2417 — một sắc
-   xanh-đen. Đặt `--sage-logo` #6ca839 lên nó là XANH TRÊN XANH, cùng họ màu
-   nên mắt không tách ra được: chỗ đáng nổi nhất thanh bên lại là chỗ mờ
-   nhất. Cam #eb7c17 lệch hẳn họ màu → "bạn đang ở đây" bật ngay.
+   Cam ở đây SỐNG SÓT QUA CẢ HAI đợt sửa nền, và đó là điểm mạnh của nó:
+     · hồi thanh bên còn TỐI: `--sage-logo` #6ca839 đặt trên `--ink` #1e2417
+       là XANH TRÊN XANH, cùng họ màu nên chỗ đáng nổi nhất lại mờ nhất.
+     · nay thanh bên SÁNG: một viên cam đặc là mảng màu DUY NHẤT trên cả dải
+       kem — đúng nguyên tắc "một màu nhấn, dùng đúng một chỗ". Nếu chỗ này
+       cũng là xanh thì thanh bên có hai màu tranh nhau mà không màu nào
+       thắng; ít màu hơn mới là thứ làm giao diện sang lên.
 
    ĐO TRƯỚC KHI ĐẶT — cả ba trạng thái, không sửa mỗi trạng thái đang chọn:
      · đang chọn  `--ink` trên `--cam`  = 5.63:1  (mốc phải vượt: 5.53 của
        Đợt 1; trước Đợt 1 là 3.40 — vẫn đi LÊN, không đi lùi)
-     · di chuột   trắng .08 trên `--ink`, giữ nguyên — không đụng
+     · di chuột   `--ink` trên `--sidebar-hover` #f2ece2 = 13.54:1
      · đang chọn + di chuột: `--cam` → #f18627, `--ink` trên nó = 6.20:1
 
    ⚠️ BẢN NHÁP ĐẦU CỦA CHỖ NÀY SAI, BÀN ĐO BẮT ĐƯỢC: tôi cho hover TỐI đi
@@ -621,19 +665,18 @@ button { cursor: pointer; border: none; background: none; }
   color: var(--ink);
   font-weight: 600;
 }
-/* Cần luật riêng: `.sb-item:hover` đặt chữ TRẮNG, mà trắng trên cam là
-   2.83–2.88:1. Không chặn lại thì mục đang chọn hoá trắng-trên-cam ngay khi
-   rê chuột. Giữ chữ `--ink` để hover chỉ ĐẬM MÀU thêm, không đổi sắc chữ. */
+/* Cần luật riêng: nếu không chặn, `.sb-item:hover` sẽ thay nền cam bằng nền
+   kem `--sidebar-hover` và mục đang chọn MẤT màu cam ngay khi rê chuột. */
 .sb-item.active:hover { background: #f18627; color: var(--ink); }
 
 .sb-item .ico { width: 17px; height: 17px; flex-shrink: 0; }
 .sb-item.locked { opacity: .32; cursor: not-allowed; }
-.sb-item.locked:hover { background: none; color: rgba(255,255,255,.76); }
+.sb-item.locked:hover { background: none; color: var(--text); }
 
 .sb-foot {
   margin-top: auto;
   padding-top: 16px;
-  border-top: 1px solid rgba(255,255,255,.11);
+  border-top: 1px solid var(--line);
 }
 
 .sb-user {
@@ -797,16 +840,20 @@ img.av { object-fit: cover; display: block; cursor: default; }
 .vd-item .sm { font-size: 12px; }
 
 .sb-user .meta { min-width: 0; flex: 1; }
+/* REV-0025/G3 đã cảnh báo cái bẫy ở đây: `.sb-user .meta b` đặt chữ TRẮNG,
+   mà popover `.thd-panel` nền TRẮNG lại nằm bên trong `.meta` — thẻ <b> nào
+   thêm vào popover sau này là chữ trắng trên nền trắng. Thanh bên sáng lên
+   thì chữ phải là `--ink` (15.13:1), và cái bẫy đó biến mất luôn. */
 .sb-user .meta b {
   display: block;
-  color: var(--white);
+  color: var(--ink);
   font-size: 13px;
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.sb-user .meta span { font-size: 11px; color: rgba(255,255,255,.5); }
+.sb-user .meta span { font-size: 11px; color: var(--text-mute); }   /* chức danh — 5.30:1 */
 
 /* Trạng thái hiện diện (Presence) tự đặt — pill nhỏ dưới tên, bấm mở
    popover nhỏ để đổi trạng thái/ghi chú/thời hạn NGAY TẠI ĐÓ, không modal
@@ -814,19 +861,24 @@ img.av { object-fit: cover; display: block; cursor: default; }
 .thd-wrap { position: relative; margin-top: 5px; }
 .thd-nut {
   display: flex; align-items: center; gap: 5px;
-  background: rgba(255,255,255,.08);
+  background: var(--surface-2);
   border: none; border-radius: var(--r-pill);
   padding: 3px 9px 3px 7px;
-  font-size: 11px; color: rgba(255,255,255,.75);
+  font-size: 11px; color: var(--text);
   cursor: pointer; transition: background .14s;
 }
-.thd-nut:hover { background: rgba(255,255,255,.15); }
+.thd-nut:hover { background: var(--line); }
 .thd-cham { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; background: currentColor; }
-.thd-ok     { color: #8fc47a; }
-.thd-sage   { color: #a9c98f; }
-.thd-warn   { color: #e0b15e; }
-.thd-danger { color: #d98a72; }
-.thd-mute   { color: rgba(255,255,255,.55); }
+/* Bốn màu trạng thái hiện diện ("Đang làm việc"/"Bận"/…) vốn là bản SÁNG,
+   pha cho nền thanh bên tối: #8fc47a #a9c98f #e0b15e #d98a72 — đặt lên nền
+   kem thì chỉ còn 1.9–2.4:1, gần như tàng hình. Thanh bên sáng nên phải
+   dùng bản TỐI. Sắc giữ nguyên: xanh vẫn xanh, vàng vẫn vàng, đỏ vẫn đỏ —
+   không cái nào đổi nghĩa trạng thái. */
+.thd-ok     { color: var(--ok-dark); }
+.thd-sage   { color: var(--sage-dark); }   /* `--sage` ở đây 4.45:1 — hụt 0.05, phải xuống thêm một bậc */
+.thd-warn   { color: var(--warn-dark); }
+.thd-danger { color: var(--danger); }
+.thd-mute   { color: var(--text-mute); }
 
 .thd-panel {
   position: absolute; left: 0; bottom: calc(100% + 6px); z-index: 40;
@@ -870,10 +922,10 @@ img.av { object-fit: cover; display: block; cursor: default; }
   border-radius: var(--r-sm);
   font-size: 12.5px;
   font-weight: 500;
-  color: rgba(255,255,255,.6);
+  color: var(--text-mute);
   transition: background .14s, color .14s;
 }
-.sb-logout:hover { background: rgba(255,255,255,.08); color: var(--white); }
+.sb-logout:hover { background: var(--sidebar-hover); color: var(--ink); }
 
 /* ==========================================================================
    VÙNG NỘI DUNG
