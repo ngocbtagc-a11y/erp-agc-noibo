@@ -1912,7 +1912,13 @@ async function veHomNay() {
 
   if ((t.qua_han || []).length) {
     khoi.push(`<div class="cv-nhom"><div class="cv-nhom-dau danger">🔴 ${t.qua_han.length} việc quá hạn</div>` +
-      t.qua_han.map(v => dong('qua-han', v.tieu_de, v.id, `trễ ${v.tre} ngày`)).join('') + '</div>');
+      /* REV-0019 L2 — việc trễ từ TRƯỚC khi chuyển sang tay mình thì phải nói
+         rõ, kẻo người vừa nhận bàn giao mở ERP ra chỉ thấy chữ đỏ "trễ 9 ngày"
+         và tưởng mình đang bị chê. Q3/2026 đang chuyển nhân sự HKĐ lên công ty
+         nên việc bị chuyền tay nhiều nhất đúng lúc này. */
+      t.qua_han.map(v => dong('qua-han', v.tieu_de, v.id,
+        `trễ ${v.tre} ngày` + (v.nhan_cach_day != null ? ` · bạn nhận việc ${v.nhan_cach_day} ngày trước` : '')
+      )).join('') + '</div>');
   }
   if ((t.den_han_hom_nay || []).length) {
     khoi.push(`<div class="cv-nhom"><div class="cv-nhom-dau warn">🟡 ${t.den_han_hom_nay.length} việc đến hạn hôm nay</div>` +

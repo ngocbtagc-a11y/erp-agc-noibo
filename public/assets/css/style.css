@@ -2396,8 +2396,17 @@ tr.kd-chiadoi td {
 .cv-dong-the .nm { font-weight: 600; color: var(--ink); font-size: 14px; }
 .cv-dong-the .sm { font-size: 12.5px; color: var(--text-mute); margin-top: 3px; line-height: 1.7; }
 /* Nút ⭐ chiếm hết chiều ngang thẻ, bấm được bằng ngón cái — Sếp hay bấm lúc
-   đang di chuyển, không phải lúc ngồi trước máy tính. */
-.cv-nut-ghinhan { width: 100%; min-height: 40px; margin-top: 8px; }
+   đang di chuyển, không phải lúc ngồi trước máy tính.
+   REV-0019 L7: trước ghi 40px trong khi commit khai "mọi dòng ≥44px" — đo ở
+   375px ra đúng 40px. 44px là ngưỡng ngón tay, không phải con số cho đẹp;
+   thiếu 4px là trượt thật, không phải làm tròn. */
+.cv-nut-ghinhan { width: 100%; min-height: 44px; margin-top: 8px; }
+
+/* Nút 🔔 bật/tắt nhắc nằm ở đầu khối "Việc của tôi hôm nay". `.btn-nho` chung
+   chỉ có padding 6px + chữ 12.5px → cao 28px, dưới ngưỡng ngón tay. Nâng
+   RIÊNG nút này (không đụng `.btn-nho` toàn hệ, kẻo xô lệch mọi bảng đang
+   chạy) — REV-0019 L7. */
+.cv-homnay .panel-head .btn-nho { min-height: 44px; display: inline-flex; align-items: center; }
 
 @media (max-width: 780px) {
   /* Xếp dọc, cuộn dọc — KHÔNG cuộn ngang ở bất kỳ đâu. */

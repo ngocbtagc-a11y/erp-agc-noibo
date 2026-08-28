@@ -1,23 +1,28 @@
-/* ==========================================================================
+﻿/* ==========================================================================
    BÀN THỬ NGOẠI TUYẾN — SPEC-0004 (Trạm Mục Tiêu chủ động nhắc việc)
    ---------------------------------------------------------------------------
    Chạy:  node scripts/tu-kiem-nhac-cong-viec.mjs
-   0 phút GitHub Actions, 0 token, không chạm D1, không chạm mạng (BH-25).
+   0 phút GitHub Actions, 0 token, không chạm mạng, không chạm D1 thật (BH-25).
 
    Kiểm HAI tầng:
    ① Hàm THUẦN (đồng hồ giả) — lịch nhắc 1-3-7, leo cấp, cửa giờ, gộp tin.
-   ② Luồng quét THẬT trên D1 GIẢ — bắt được cả phần WHERE và phần chống trùng
-     mà đọc code không thấy (BH-34).
+   ② Luồng quét THẬT trên **D1 THẬT** (SQLite trong bộ nhớ, nạp `schema.sql` +
+     toàn bộ `migrations/`), gọi qua `worker.scheduled()` thật.
+
+   ⚠️ TẦNG ② TRƯỚC ĐÂY CHẠY TRÊN "D1 GIẢ" KHỚP CHUỖI SQL BẰNG TAY — và cả 8
+   lỗi của REV-0019 đều lọt qua 67 phép kiểm ở đây. Đó là BH-34 bằng xương
+   bằng thịt: bàn thử không chạy câu SQL nào thì không bao giờ bắt được lỗi
+   nằm trong `WHERE`. Đã thay bằng DB thật (`scripts/ban-thu-d1.mjs`).
+   Ca đo TRƯỚC/SAU của 8 lỗi REV-0019 nằm ở `scripts/do-va-rev0019.mjs`;
+   ngưỡng chạm tay 44px ở `scripts/do-nut-44px.mjs`.
 
    MỖI tính chất đều có CA ĐỐI CHỨNG CỐ Ý SAI (BH-16/BH-26): ca mà ta biết
-   TRƯỚC là nó PHẢI hỏng, và nói được vì sao kết quả BẮT BUỘC phải khác. Bàn
-   thử TỰ BÁO HỎNG khi gặp câu SQL lạ — im lặng trả rỗng thì mọi phép kiểm đều
-   ra "0 tin" và đều ✅ giả (BH-17).
+   TRƯỚC là nó PHẢI hỏng, và nói được vì sao kết quả BẮT BUỘC phải khác.
    ========================================================================== */
 
 import {
   soNgayGiua, congNgay, canNhacQuaHan, canLeoCap, canNhacDongMoi,
-  canNhacDongChoDuyet, chonDuyetCap1, soanBanTin, quetNhacCongViec,
+  canNhacDongChoDuyet, chonDuyetCap1, soanBanTin, laTatKhan,
   TRAN_TIN_MOI_LUOT
 } from '../src/nhac-cong-viec.js';
 
@@ -135,78 +140,29 @@ kiem('congNgay lùi 7', congNgay('2026-09-01', -7), '2026-08-25');
 }
 
 /* ==========================================================================
-   ② LUỒNG QUÉT THẬT trên D1 GIẢ
+   ② LUỒNG QUÉT THẬT — trên D1 THẬT (node:sqlite), qua worker.scheduled() THẬT
+   ---------------------------------------------------------------------------
+   TRƯỚC ĐÂY tầng này chạy trên "D1 giả": một đối tượng khớp CHUỖI SQL bằng
+   tay rồi trả về mảng dựng sẵn. Hồ Ly chỉ ra trong REV-0019 rằng bàn thử kiểu
+   đó KHÔNG bắt được lỗi nằm trong mệnh đề `WHERE` (BH-34) — nó chỉ kiểm tra
+   câu SQL có đúng hình dạng mình đoán không, chứ chưa từng chạy câu nào. Bằng
+   chứng sống: cả 8 lỗi REV-0019 đều lọt qua 67 phép kiểm ở đây.
+   GIỜ: `schema.sql` + toàn bộ `migrations/` nạp vào SQLite thật, mọi câu SQL
+   của mã sản phẩm chạy thật, và lượt quét đi qua `worker.scheduled()` thật.
    ========================================================================== */
 
-console.log('\n=== ② LUỒNG QUÉT THẬT (D1 giả) ===\n');
+/* --- REV-0019 L4: nút cứu hoả nhận nhiều cách viết --------------------- */
+for (const v of ['1', 'true', 'TRUE', ' yes ', 'on', 'bat', 'tắt', 'taat'])
+  kiem(`nút tắt khẩn "${v}" → TẮT`, laTatKhan(v).tat, true);
+for (const v of ['', '0', 'false', 'no', 'off', 'khong', undefined])
+  kiem(`"${v}" → KHÔNG tắt (không được tắt nhầm)`, laTatKhan(v).tat, false);
+kiem('gõ lạ thì vẫn tắt NHƯNG có cảnh báo ra log', laTatKhan('taat').la, 'taat');
 
-function dungDB({ viec = [], nhanSu = [], taiKhoan = [], phongBan = [], thongBaoCu = [] }) {
-  const thongBao = [...thongBaoCu];
-  const cauLa = [];
-  const ghiBangKhac = [];
-  let NGAY_GIA = '';
+console.log('\n=== ② LUỒNG QUÉT THẬT (D1 thật trên node:sqlite) ===\n');
 
-  const db = {
-    prepare(sql) {
-      const s = sql.replace(/\s+/g, ' ').trim();
-      if (/^(INSERT|UPDATE|DELETE)/i.test(s) && !/thong_bao/i.test(s)) ghiBangKhac.push(s);
-      let tham = [];
-      const api = {
-        bind(...a) { tham = a; return api; },
-        async first() { cauLa.push(s); return null; },
-        async all() {
-          if (s.includes('FROM cong_viec c') && s.includes("trang_thai IN ('moi','dang_lam','cho_duyet')")) {
-            return { results: viec.filter(v => ['moi', 'dang_lam', 'cho_duyet'].includes(v.trang_thai)) };
-          }
-          if (s.startsWith('SELECT id, ho_ten, bo_phan, quan_ly_id, dang_lam FROM nhan_su')) {
-            return { results: nhanSu };
-          }
-          if (s.includes('FROM phong_ban')) return { results: phongBan };
-          if (s.includes('FROM tai_khoan WHERE nhac_viec_tat = 1')) {
-            return { results: taiKhoan.filter(t => t.nhac_viec_tat === 1) };
-          }
-          if (s.includes('FROM tai_khoan t JOIN nhan_su n')) {
-            return { results: taiKhoan.filter(t => t.kich_hoat !== 0
-              && ['admin', 'admin_backup'].includes(t.vai_tro)
-              && nhanSu.some(n => n.id === t.nhan_su_id && n.dang_lam === 1)) };
-          }
-          if (s.includes('FROM thong_bao') && s.includes("loai IN ('cv_ban_tin'")) {
-            const [ngay] = tham;
-            return { results: thongBao.filter(t => t.tao_luc.slice(0, 10) === ngay
-              && ['cv_ban_tin', 'cv_leo_cap', 'cv_ban_tin_tuan'].includes(t.loai)) };
-          }
-          // Bản tin tuần ① — việc hoàn thành ĐÚNG HẠN, chấm bằng `nop_luc`.
-          if (s.includes("trang_thai = 'hoan_thanh'") && s.includes('nop_luc IS NOT NULL')) {
-            const [tuNgay] = tham;
-            return { results: viec.filter(v => v.trang_thai === 'hoan_thanh' && v.nop_luc
-              && String(v.cap_nhat_luc || '').slice(0, 10) >= tuNgay
-              && String(v.nop_luc).slice(0, 10) <= v.han_chot) };
-          }
-          // Bản tin tuần ② — việc đang đọng.
-          if (s.includes("trang_thai IN ('moi','dang_lam','cho_duyet')") && s.includes('han_chot <')) {
-            const [homNay] = tham;
-            return { results: viec.filter(v => ['moi', 'dang_lam', 'cho_duyet'].includes(v.trang_thai)
-              && ((v.han_chot && v.han_chot < homNay) || v.trang_thai === 'cho_duyet')) };
-          }
-          cauLa.push(s); return { results: [] };
-        }
-      };
-      return api;
-    }
-  };
-  const gui = async (_env, nhom, noi_dung, loai, _lk, nguoi_nhan_id) => {
-    thongBao.push({ nhom, noi_dung, loai, nguoi_nhan_id, tao_luc: NGAY_GIA });
-  };
-  const telegram = [];
-  const guiTelegram = async (_env, text) => { telegram.push(text); return true; };
-  return { db, gui, guiTelegram, thongBao, telegram, cauLa, ghiBangKhac, datNgay: (v) => { NGAY_GIA = v; } };
-}
-
-/* Đồng hồ giả đi qua THAM SỐ `luc`, KHÔNG qua việc ghi đè `Date.now`:
-   `new Date()` đọc thẳng đồng hồ máy chứ không gọi `Date.now` (BH-17). */
-function mocUTC(y, m, d, gio) {
-  return new Date(Date.UTC(y, m - 1, d, gio, 0, 0) - 7 * 3600 * 1000);
-}
+const { dungDB, dungEnv, datDongHo, goiCron, TELEGRAM } =
+  await import('./ban-thu-d1.mjs');
+const worker = (await import('../src/index.js')).default;
 
 const NHAN_SU = [
   { id: 'huyen', ho_ten: 'Nguyễn Thị Huyền', bo_phan: 'Vận hành', quan_ly_id: 'ngoc', dang_lam: 1 },
@@ -218,40 +174,68 @@ const NHAN_SU = [
 ];
 const TAI_KHOAN = [
   { nhan_su_id: 'ngoc', vai_tro: 'admin', kich_hoat: 1, nhac_viec_tat: 0 },
-  { nhan_su_id: 'duy', vai_tro: 'quan_ly', kich_hoat: 1, nhac_viec_tat: 0 },
-  { nhan_su_id: 'huyen', vai_tro: 'nhan_vien', kich_hoat: 1, nhac_viec_tat: 0 }
+  { nhan_su_id: 'duy', vai_tro: 'quan_ly_kho', kich_hoat: 1, nhac_viec_tat: 0 },
+  { nhan_su_id: 'huyen', vai_tro: 'van_hanh_san', kich_hoat: 1, nhac_viec_tat: 0 }
 ];
 
 let idViec = 0;
 function viec(o) {
-  return { id: ++idViec, tieu_de: o.tieu_de || 'Việc ' + idViec, trang_thai: 'dang_lam',
+  return { tieu_de: o.tieu_de || 'Việc ' + (++idViec), trang_thai: 'dang_lam',
     han_chot: null, tao_luc: '2026-08-01 09:00:00', nop_luc: null, cap_nhat_luc: null,
     nguoi_giao_id: 'ngoc', nguoi_giao_ten: 'Bùi Thị Ngọc',
     nguoi_nhan_id: 'huyen', nguoi_nhan_ten: 'Nguyễn Thị Huyền', ...o };
 }
 
-async function chay(y, m, d, gio, boDl, env = {}) {
-  const bo = dungDB(boDl);
-  bo.datNgay(`${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')} ${String(gio).padStart(2, '0')}:00:00`);
-  const soCu = bo.thongBao.length;
-  const e = { DB: bo.db, NHAC_VIEC_BAT_DAU_TU: '2026-08-01', ...env };
-  const kq = await quetNhacCongViec(e, bo.gui, bo.guiTelegram, mocUTC(y, m, d, gio));
-  return { kq, tb: bo.thongBao.slice(soCu), bo };
+/** Mốc UTC ứng với `gio` giờ VIỆT NAM ngày y-m-d. */
+function mocUTC(y, m, d, gio) {
+  return new Date(Date.UTC(y, m - 1, d, gio, 0, 0) - 7 * 3600 * 1000);
+}
+
+/** Dựng DB thật + nạp dữ liệu + chạy MỘT lượt cron thật.
+ *  `giuDB` để chạy nhiều lượt liên tiếp trên CÙNG một DB (ca chống trùng). */
+async function chay(y, m, d, gio, boDl, env = {}, giuDB = null) {
+  let db, d1;
+  if (giuDB) ({ db, d1 } = giuDB);
+  else {
+    ({ db, d1 } = dungDB());
+    for (const n of boDl.nhanSu || []) {
+      db.prepare(`INSERT INTO nhan_su (id, ho_ten, viet_tat, chuc_vu, bo_phan, quan_ly_id, dang_lam)
+                  VALUES (?, ?, ?, 'NV', ?, ?, ?)`)
+        .run(n.id, n.ho_ten, n.id, n.bo_phan, n.quan_ly_id, n.dang_lam);
+    }
+    for (const t of boDl.taiKhoan || []) {
+      db.prepare(`INSERT INTO tai_khoan (nhan_su_id, ten_dang_nhap, mat_khau_hash, vai_tro, kich_hoat, nhac_viec_tat)
+                  VALUES (?, ?, 'x', ?, ?, ?)`)
+        .run(t.nhan_su_id, t.nhan_su_id, t.vai_tro, t.kich_hoat, t.nhac_viec_tat || 0);
+    }
+    for (const v of boDl.viec || []) {
+      db.prepare(`INSERT INTO cong_viec (tieu_de, dau_ra, nguoi_giao_id, nguoi_giao_ten,
+                    nguoi_nhan_id, nguoi_nhan_ten, han_chot, trang_thai, tao_luc, cap_nhat_luc, nop_luc)
+                  VALUES (?, 'đầu ra', ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .run(v.tieu_de, v.nguoi_giao_id, v.nguoi_giao_ten, v.nguoi_nhan_id, v.nguoi_nhan_ten,
+             v.han_chot, v.trang_thai, v.tao_luc, v.cap_nhat_luc, v.nop_luc);
+    }
+  }
+  const soCu = db.prepare("SELECT COUNT(*) AS n FROM thong_bao").get().n;
+  const tgCu = TELEGRAM.length;
+  datDongHo(mocUTC(y, m, d, gio).toISOString());
+  await goiCron(worker, dungEnv(d1, { NHAC_VIEC_BAT_DAU_TU: '2026-08-01', ...env }));
+  const tb = db.prepare('SELECT nhom, noi_dung, loai, nguoi_nhan_id, tao_luc FROM thong_bao ORDER BY id')
+    .all().slice(soCu);
+  return { tb, telegram: TELEGRAM.slice(tgCu), db, d1 };
 }
 
 /* --- AC #2: 5 việc trễ của MỘT người → ĐÚNG 1 tin ----------------------- */
 {
   // 31/08/2026 là thứ HAI. Cả 5 việc đều trễ đúng 1 ngày (mốc nhắc hợp lệ).
   const ds = [1, 2, 3, 4, 5].map(i => viec({ tieu_de: 'Việc trễ ' + i, han_chot: '2026-08-30' }));
-  const { tb, bo } = await chay(2026, 8, 31, 10, { viec: ds, nhanSu: NHAN_SU, taiKhoan: TAI_KHOAN });
-  kiem('bàn thử không gặp câu SQL lạ', bo.cauLa, []);
+  const { tb } = await chay(2026, 8, 31, 10, { viec: ds, nhanSu: NHAN_SU, taiKhoan: TAI_KHOAN });
   const cuaHuyen = tb.filter(t => t.loai === 'cv_ban_tin' && t.nguoi_nhan_id === 'huyen');
   kiem('AC#2 · 5 việc trễ → ĐÚNG 1 tin cho người nhận', cuaHuyen.length, 1);
   kiem('AC#2 · và tin đó liệt kê đủ cả 5 việc',
     ds.every(v => cuaHuyen[0].noi_dung.includes(v.tieu_de)), true);
   kiem('AC#2 đối chứng · nếu bắn mỗi việc một tin thì phải là 5 — bàn thử đủ nhạy để phân biệt',
     [cuaHuyen.length, ds.length], [1, 5]);
-  // Người GIAO (Sếp Ngọc) cũng được nhắc — cũng gộp thành đúng 1 tin.
   kiem('AC#2 · người giao nhận đúng 1 tin, không phải 5',
     tb.filter(t => t.loai === 'cv_ban_tin' && t.nguoi_nhan_id === 'ngoc').length, 1);
 }
@@ -259,11 +243,10 @@ async function chay(y, m, d, gio, boDl, env = {}) {
 /* --- AC #1: cron chạy 12 lượt/giờ → vẫn ĐÚNG 1 tin --------------------- */
 {
   const ds = [viec({ han_chot: '2026-08-30' })];
-  const cu = [];
-  const so = [];
+  let giu = null; const so = [];
   for (let i = 0; i < 12; i++) {
-    const { tb } = await chay(2026, 8, 31, 10, { viec: ds, nhanSu: NHAN_SU, taiKhoan: TAI_KHOAN, thongBaoCu: cu });
-    cu.push(...tb); so.push(tb.length);
+    const r = await chay(2026, 8, 31, 10, { viec: ds, nhanSu: NHAN_SU, taiKhoan: TAI_KHOAN }, {}, giu);
+    giu = { db: r.db, d1: r.d1 }; so.push(r.tb.length);
   }
   kiem('AC#1 · lượt 1 gửi 2 tin (người nhận + người giao), 11 lượt sau IM LẶNG',
     so, [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
@@ -284,17 +267,17 @@ async function chay(y, m, d, gio, boDl, env = {}) {
 
 /* --- AC #6: Chủ nhật / ngoài giờ · ĐỐI CHỨNG thứ Bảy VẪN gửi ----------- */
 {
-  const ds = [viec({ han_chot: '2026-08-29' })];   // trễ 1 ngày tính từ 30/08
-  const cn = await chay(2026, 8, 30, 10, { viec: ds, nhanSu: NHAN_SU, taiKhoan: TAI_KHOAN });
-  kiem('AC#6 · Chủ nhật 30/08 → 0 tin', [cn.kq.bo_qua, cn.tb.length], ['chu_nhat', 0]);
-  const toi = await chay(2026, 8, 31, 19, { viec: ds, nhanSu: NHAN_SU, taiKhoan: TAI_KHOAN });
-  kiem('AC#6 · 19h → 0 tin', [toi.kq.bo_qua, toi.tb.length], ['ngoai_khung_gio', 0]);
+  const ds = [viec({ han_chot: '2026-08-29' })];
+  kiem('AC#6 · Chủ nhật 30/08 → 0 tin',
+    (await chay(2026, 8, 30, 10, { viec: ds, nhanSu: NHAN_SU, taiKhoan: TAI_KHOAN })).tb.length, 0);
+  kiem('AC#6 · 19h → 0 tin',
+    (await chay(2026, 8, 31, 19, { viec: ds, nhanSu: NHAN_SU, taiKhoan: TAI_KHOAN })).tb.length, 0);
   /* ĐỐI CHỨNG BẮT BUỘC (BH-26): thứ Bảy PHẢI gửi. Không có ca này thì phép
      kiểm Chủ nhật ở trên không chứng minh gì — nó chỉ chứng minh hàm chưa bao
      giờ gửi được tin nào. ADR-0013: thứ Bảy kho vận VẪN làm. */
   const bay = await chay(2026, 8, 29, 10, { viec: [viec({ han_chot: '2026-08-28' })], nhanSu: NHAN_SU, taiKhoan: TAI_KHOAN });
   kiem('AC#6 ĐỐI CHỨNG · thứ Bảy 29/08 CÓ gửi (ADR-0013)',
-    [bay.kq.bo_qua, bay.tb.filter(t => t.nguoi_nhan_id === 'huyen').length], [null, 1]);
+    bay.tb.filter(t => t.nguoi_nhan_id === 'huyen').length, 1);
 }
 
 /* --- AC #5: việc "Chờ duyệt" nhắc NGƯỜI GIAO, KHÔNG nhắc nhân viên ----- */
@@ -303,16 +286,11 @@ async function chay(y, m, d, gio, boDl, env = {}) {
   const { tb } = await chay(2026, 8, 31, 10, { viec: ds, nhanSu: NHAN_SU, taiKhoan: TAI_KHOAN });
   kiem('AC#5 · người GIAO (Sếp Ngọc) nhận tin "chờ BẠN duyệt"',
     tb.filter(t => t.nguoi_nhan_id === 'ngoc' && /chờ BẠN duyệt/.test(t.noi_dung)).length, 1);
-  /* Nhân viên đã làm xong phần của mình và KHÔNG có nút nào để bấm — nhắc họ
-     về việc ngoài tầm tay vừa vô ích vừa gây ức chế. */
   kiem('AC#5 · nhân viên KHÔNG nhận tin nào về việc đó',
     tb.filter(t => t.nguoi_nhan_id === 'huyen').length, 0);
 }
 
-/* --- Việc ĐÃ NỘP mà quá hạn: KHÔNG được đổ lỗi lên người nộp ----------
-   Lỗi này KHÔNG bắt được bằng đọc code — chỉ lộ ra khi đăng nhập bằng đúng
-   vai trò yếu nhất rồi nhìn màn hình thật (BH-39): nhân viên đã nộp bài từ
-   4 ngày trước vẫn thấy dòng đỏ "trễ 2 ngày" của chính mình. */
+/* --- Việc ĐÃ NỘP mà quá hạn: KHÔNG được đổ lỗi lên người nộp ----------- */
 {
   const ds = [viec({ trang_thai: 'cho_duyet', nop_luc: '2026-08-27 16:00:00', han_chot: '2026-08-30' })];
   const { tb } = await chay(2026, 8, 31, 10, { viec: ds, nhanSu: NHAN_SU, taiKhoan: TAI_KHOAN });
@@ -320,15 +298,10 @@ async function chay(y, m, d, gio, boDl, env = {}) {
     tb.filter(t => t.nguoi_nhan_id === 'huyen').length, 0);
   kiem('…và tin của người GIAO nói "chờ BẠN duyệt", KHÔNG nói người nhận trễ',
     tb.filter(t => t.nguoi_nhan_id === 'ngoc').every(t => /chờ BẠN duyệt/.test(t.noi_dung) && !/bạn giao đang quá hạn/.test(t.noi_dung)), true);
-  // Việc đã nộp cũng không leo cấp lên quản lý dù trễ 20 ngày — người nhận
-  // không còn gì để làm, réo quản lý về họ là réo nhầm hướng.
   const cu = [viec({ trang_thai: 'cho_duyet', nop_luc: '2026-08-20 16:00:00', han_chot: '2026-08-23' })];
   kiem('việc đã nộp, quá hạn 8 ngày → 0 tin leo cấp về người nộp',
     (await chay(2026, 8, 31, 10, { viec: cu, nhanSu: NHAN_SU, taiKhoan: TAI_KHOAN }))
       .tb.filter(t => t.loai === 'cv_leo_cap').length, 0);
-  /* ĐỐI CHỨNG · cùng hạn chót đó nhưng CHƯA nộp (`dang_lam`) → người nhận PHẢI
-     nhận tin. Không có ca này thì ba phép kiểm trên chỉ chứng minh hàm chưa
-     bao giờ gửi được gì cho ai. */
   kiem('ĐỐI CHỨNG · cùng hạn chót nhưng CHƯA nộp thì người nhận CÓ nhận tin',
     (await chay(2026, 8, 31, 10, { viec: [viec({ trang_thai: 'dang_lam', han_chot: '2026-08-30' })], nhanSu: NHAN_SU, taiKhoan: TAI_KHOAN }))
       .tb.filter(t => t.nguoi_nhan_id === 'huyen').length, 1);
@@ -337,18 +310,12 @@ async function chay(y, m, d, gio, boDl, env = {}) {
 /* --- AC #17: người TỰ TẮT nhắc — nhưng quản lý VẪN nhận leo cấp -------- */
 {
   const tkTat = TAI_KHOAN.map(t => t.nhan_su_id === 'huyen' ? { ...t, nhac_viec_tat: 1 } : t);
-  /* HAI việc, cố ý: một việc trễ 1 ngày (đáng ra sinh tin cá nhân) và một việc
-     trễ 8 ngày (đáng ra sinh leo cấp). Chỉ một việc thì phép kiểm không phân
-     biệt được "bị tắt" với "vốn dĩ chẳng có tin nào" (BH-26). */
   const ds = [viec({ han_chot: '2026-08-30' }), viec({ han_chot: '2026-08-23' })];
   const { tb } = await chay(2026, 8, 31, 10, { viec: ds, nhanSu: NHAN_SU, taiKhoan: tkTat });
   kiem('AC#17 · người đã tắt nhận 0 tin cá nhân',
     tb.filter(t => t.loai === 'cv_ban_tin' && t.nguoi_nhan_id === 'huyen').length, 0);
-  /* TẮT NHẮC KHÔNG TẮT TRÁCH NHIỆM — đây là nửa quan trọng của chốt #7. */
   kiem('AC#17 · nhưng quản lý (Sếp Ngọc) VẪN nhận leo cấp về việc đó',
     tb.filter(t => t.loai === 'cv_leo_cap' && t.nguoi_nhan_id === 'ngoc').length, 1);
-  /* ĐỐI CHỨNG BẮT BUỘC: cùng bộ dữ liệu đó, người CHƯA tắt PHẢI nhận 1 tin.
-     Không có ca này thì phép kiểm trên chỉ chứng minh hàm chưa từng gửi gì. */
   kiem('AC#17 ĐỐI CHỨNG · cùng dữ liệu, người CHƯA tắt nhận đúng 1 tin cá nhân',
     (await chay(2026, 8, 31, 10, { viec: ds, nhanSu: NHAN_SU, taiKhoan: TAI_KHOAN }))
       .tb.filter(t => t.loai === 'cv_ban_tin' && t.nguoi_nhan_id === 'huyen').length, 1);
@@ -375,15 +342,13 @@ async function chay(y, m, d, gio, boDl, env = {}) {
 
 /* --- AC #18: NGÀY ĐẦU BẬT với dữ liệu cũ → KHÔNG bắn loạt -------------- */
 {
-  // 12 việc quá hạn sẵn của một người, hạn từ tháng 7 — tức trước ngày bật.
-  const ds = new Array(12).fill(0).map((_, i) => viec({ tieu_de: 'Nợ cũ ' + i, han_chot: '2026-07-2' + (i % 9) }));
+  // 12 việc nợ cũ THẬT: giao từ 15/07, hạn cuối tháng 7 — tức trước ngày bật.
+  const ds = new Array(12).fill(0).map((_, i) => viec({
+    tieu_de: 'Nợ cũ ' + i, han_chot: '2026-07-2' + (i % 9), tao_luc: '2026-07-15 09:00:00' }));
   const { tb } = await chay(2026, 8, 31, 10, { viec: ds, nhanSu: NHAN_SU, taiKhoan: TAI_KHOAN },
     { NHAC_VIEC_BAT_DAU_TU: '2026-08-31' });     // hôm nay là NGÀY BẬT
   kiem('AC#18 · 12 việc quá hạn sẵn → tối đa 1 tin/người, không phải 12',
     tb.filter(t => t.nguoi_nhan_id === 'huyen').length <= 1, true);
-  /* Nợ cũ là nợ của CẢ HỆ THỐNG. Bắn hết lên quản lý ngay ngày đầu tạo ra một
-     buổi sáng thứ Hai đầy tra hỏi về việc chính người quản lý cũng đã quên —
-     cách nhanh nhất để cả công ty ghét tính năng này ngay ngày đầu tiên. */
   kiem('AC#18 · 0 tin leo cấp trong 7 ngày ân xá',
     tb.filter(t => t.loai === 'cv_leo_cap').length, 0);
   const het = await chay(2026, 9, 8, 10, { viec: ds, nhanSu: NHAN_SU, taiKhoan: TAI_KHOAN },
@@ -394,25 +359,32 @@ async function chay(y, m, d, gio, boDl, env = {}) {
 
 /* --- AC #14: TRẦN CỨNG 40 tin/lượt ------------------------------------ */
 {
-  const nhieuNguoi = [];
-  const dsNhieu = [];
+  const nhieuNguoi = [], dsNhieu = [];
   for (let i = 0; i < 60; i++) {
     nhieuNguoi.push({ id: 'n' + i, ho_ten: 'Người ' + i, bo_phan: 'Kho', quan_ly_id: null, dang_lam: 1 });
     dsNhieu.push(viec({ nguoi_nhan_id: 'n' + i, nguoi_nhan_ten: 'Người ' + i, nguoi_giao_id: 'n' + i, nguoi_giao_ten: 'Người ' + i, han_chot: '2026-08-30' }));
   }
-  const { tb, bo } = await chay(2026, 8, 31, 10, { viec: dsNhieu, nhanSu: nhieuNguoi, taiKhoan: [] });
+  const { tb, telegram } = await chay(2026, 8, 31, 10, { viec: dsNhieu, nhanSu: nhieuNguoi, taiKhoan: [] });
   kiem('AC#14 · 60 người cần nhắc → DỪNG đúng ở trần 40, không gửi tin thứ 41', tb.length, TRAN_TIN_MOI_LUOT);
   kiem('AC#14 · và có tin Telegram báo Gạo là NGHI CÓ BUG',
-    bo.telegram.some(t => /chạm trần/.test(t)), true);
+    telegram.some(t => /chạm trần/.test(t)), true);
+  // REV-0019 L5 — tin đó phải NÊU TÊN ai bị bỏ, không bỏ im lặng.
+  kiem('AC#14 · tin Telegram NÊU TÊN người bị bỏ (REV-0019 L5)',
+    telegram.some(t => /chạm trần/.test(t) && /Người \d+/.test(t)), true);
 }
 
 /* --- AC #13: vòng quét KHÔNG GHI vào `cong_viec` ----------------------- */
 {
+  /* Đọc THẲNG bảng `cong_viec` trước/sau — bản cũ đếm câu SQL có chữ
+     INSERT/UPDATE hay không, tức lại là khớp chuỗi (BH-34). */
   const ds = [viec({ han_chot: '2026-08-30' }), viec({ trang_thai: 'cho_duyet', nop_luc: '2026-08-20 10:00:00' })];
-  const truoc = JSON.stringify(ds);
-  const { bo } = await chay(2026, 8, 31, 10, { viec: ds, nhanSu: NHAN_SU, taiKhoan: TAI_KHOAN });
-  kiem('AC#13 · KHÔNG một câu INSERT/UPDATE/DELETE nào ngoài `thong_bao`', bo.ghiBangKhac, []);
-  kiem('AC#13 · trạng thái công việc trước/sau một lượt cron giống hệt nhau', JSON.stringify(ds), truoc);
+  const { db, d1 } = await chay(2026, 8, 31, 10, { viec: ds, nhanSu: NHAN_SU, taiKhoan: TAI_KHOAN });
+  const doc = () => JSON.stringify(db.prepare('SELECT * FROM cong_viec ORDER BY id').all());
+  const truoc = doc();
+  await chay(2026, 9, 1, 10, {}, {}, { db, d1 });     // thêm một lượt cron nữa
+  kiem('AC#13 · trạng thái công việc trước/sau một lượt cron giống hệt nhau', doc(), truoc);
+  kiem('AC#13 ĐỐI CHỨNG · lượt cron thứ hai CÓ ghi thêm vào `thong_bao` — bảng khác thì đổi được, riêng cong_viec thì không',
+    db.prepare("SELECT COUNT(*) AS n FROM thong_bao").get().n > 0, true);
 }
 
 /* --- AC #7: việc hoàn thành / huỷ KHÔNG BAO GIỜ bị nhắc ---------------- */
@@ -428,22 +400,17 @@ async function chay(y, m, d, gio, boDl, env = {}) {
 /* --- AC #9: CA CHỨNG MINH CỘT `nop_luc` ĐÁNG CÓ ----------------------- */
 {
   /* Chị Hằng nộp ĐÚNG HẠN ngày 29/08. Sếp bận, 03/09 mới bấm duyệt.
-     Chấm bằng `nop_luc` → ĐÚNG HẠN. Chấm bằng `cap_nhat_luc` → "trễ 5 ngày".
-     Đây là lỗi RẤT DỄ MẮC vì `cap_nhat_luc` có sẵn và trông có vẻ dùng được. */
+     Chấm bằng `nop_luc` → ĐÚNG HẠN. Chấm bằng `cap_nhat_luc` → "trễ 5 ngày". */
   const v = viec({
     tieu_de: 'Chốt sổ quỹ tháng 8', trang_thai: 'hoan_thanh',
     nguoi_nhan_id: 'hang', nguoi_nhan_ten: 'Phan Thị Hằng',
     han_chot: '2026-08-29', nop_luc: '2026-08-29 16:02:00', cap_nhat_luc: '2026-09-03 11:00:00'
   });
-  // Thứ Hai 07/09/2026, 8h → bản tin tuần.
-  const { bo } = await chay(2026, 9, 7, 8, { viec: [v], nhanSu: NHAN_SU, taiKhoan: TAI_KHOAN });
-  const bt = bo.telegram.find(t => /TRẠM MỤC TIÊU/.test(t)) || '';
+  const { telegram } = await chay(2026, 9, 7, 8, { viec: [v], nhanSu: NHAN_SU, taiKhoan: TAI_KHOAN });
+  const bt = telegram.find(t => /TRẠM MỤC TIÊU/.test(t)) || '';
   kiem('AC#9 · nộp đúng hạn 29/08, duyệt muộn 03/09 → VẪN tính ĐÚNG HẠN cho người nộp',
     /Làm xong đúng hạn: 1 việc/.test(bt), true);
   kiem('AC#9 · và tên chị Hằng nằm ở phần KHEN', /Nổi bật: Phan Thị Hằng/.test(bt), true);
-  /* ĐỐI CHỨNG · bản chấm bằng `cap_nhat_luc`. Vì sao BẮT BUỘC khác: cùng bản
-     ghi đó, `cap_nhat_luc` (03/09) > `han_chot` (29/08) → bị xếp là TRỄ 5
-     NGÀY. Ghi nhận sai người, đổ lỗi sai người. */
   kiem('ĐỐI CHỨNG · chấm bằng cap_nhat_luc thì chính việc này thành "trễ 5 ngày"',
     [String(v.cap_nhat_luc).slice(0, 10) <= v.han_chot, String(v.nop_luc).slice(0, 10) <= v.han_chot],
     [false, true]);
@@ -454,8 +421,8 @@ async function chay(y, m, d, gio, boDl, env = {}) {
 /* --- AC #10: việc cũ `nop_luc IS NULL` — không khen, cũng KHÔNG chê ---- */
 {
   const v = viec({ trang_thai: 'hoan_thanh', han_chot: '2026-08-29', nop_luc: null, cap_nhat_luc: '2026-09-03 11:00:00' });
-  const { bo } = await chay(2026, 9, 7, 8, { viec: [v], nhanSu: NHAN_SU, taiKhoan: TAI_KHOAN });
-  const bt = bo.telegram.find(t => /TRẠM MỤC TIÊU/.test(t)) || '';
+  const { telegram } = await chay(2026, 9, 7, 8, { viec: [v], nhanSu: NHAN_SU, taiKhoan: TAI_KHOAN });
+  const bt = telegram.find(t => /TRẠM MỤC TIÊU/.test(t)) || '';
   kiem('AC#10 · việc cũ không có nop_luc → KHÔNG vào bảng ghi nhận (không có dữ liệu thì không phán)',
     /Làm xong đúng hạn: 0 việc/.test(bt), true);
   kiem('AC#10 · và cũng KHÔNG bị đánh dấu trễ', /trễ/.test(bt), false);
@@ -464,8 +431,11 @@ async function chay(y, m, d, gio, boDl, env = {}) {
 /* --- Rollback tức thì: cờ tắt ----------------------------------------- */
 {
   const ds = [viec({ han_chot: '2026-08-30' })];
-  const { kq, tb } = await chay(2026, 8, 31, 10, { viec: ds, nhanSu: NHAN_SU, taiKhoan: TAI_KHOAN }, { NHAC_VIEC_TAT: '1' });
-  kiem('ROLLBACK · NHAC_VIEC_TAT=1 → câm ngay, 0 tin, không cần deploy', [kq.bo_qua, tb.length], ['tat_bang_co', 0]);
+  kiem('ROLLBACK · NHAC_VIEC_TAT=1 → câm ngay, 0 tin, không cần deploy',
+    (await chay(2026, 8, 31, 10, { viec: ds, nhanSu: NHAN_SU, taiKhoan: TAI_KHOAN }, { NHAC_VIEC_TAT: '1' })).tb.length, 0);
+  // REV-0019 L4 — nút cứu hoả gõ kiểu khác cũng phải nổ.
+  kiem('ROLLBACK · gõ "true" cũng TẮT THẬT (REV-0019 L4)',
+    (await chay(2026, 8, 31, 10, { viec: ds, nhanSu: NHAN_SU, taiKhoan: TAI_KHOAN }, { NHAC_VIEC_TAT: 'true' })).tb.length, 0);
 }
 
 /* --- PILOT theo phòng ban (Rollout Đợt 2) ----------------------------- */
@@ -475,8 +445,15 @@ async function chay(y, m, d, gio, boDl, env = {}) {
     viec({ nguoi_nhan_id: 'nvkho', nguoi_nhan_ten: 'NV Kho A', han_chot: '2026-08-30' })  // Kho
   ];
   const { tb } = await chay(2026, 8, 31, 10, { viec: ds, nhanSu: NHAN_SU, taiKhoan: TAI_KHOAN }, { NHAC_VIEC_BO_PHAN: 'Kho' });
-  kiem('PILOT · chỉ phòng Kho được nhắc, phòng khác im',
-    tb.filter(t => t.loai === 'cv_ban_tin').map(t => t.nguoi_nhan_id).sort(), ['ngoc', 'nvkho']);
+  /* REV-0019 L1 — kỳ vọng ĐÃ ĐỔI, và đổi là đúng: trước đây Sếp Ngọc (phòng
+     BGĐ) vẫn nhận tin vì bà là NGƯỜI GIAO việc kho, tức tin vẫn lọt ra ngoài
+     phòng đang chạy thử. Giờ chỉ người TRONG phòng thử nhận tin. Muốn Sếp
+     nhận thì liệt kê thêm phòng của Sếp. */
+  kiem('PILOT · chỉ phòng Kho được nhắc, mọi phòng khác im — kể cả người GIAO việc',
+    tb.filter(t => t.loai === 'cv_ban_tin').map(t => t.nguoi_nhan_id).sort(), ['nvkho']);
+  const rong = await chay(2026, 8, 31, 10, { viec: ds, nhanSu: NHAN_SU, taiKhoan: TAI_KHOAN }, { NHAC_VIEC_BO_PHAN: 'Kho,BGĐ' });
+  kiem('PILOT ĐỐI CHỨNG · liệt kê thêm "BGĐ" thì Sếp nhận lại — bộ lọc thật sự đang lọc',
+    rong.tb.filter(t => t.loai === 'cv_ban_tin').map(t => t.nguoi_nhan_id).sort(), ['ngoc', 'nvkho']);
 }
 
 console.log(loi.join('\n'));

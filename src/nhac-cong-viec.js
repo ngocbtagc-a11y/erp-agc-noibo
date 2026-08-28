@@ -46,6 +46,34 @@ export const AN_XA_NGAY = 7;
    để Sếp dời ngày bật mà không cần sửa code. */
 export const NGAY_BAT_MAC_DINH = '2026-08-28';
 
+/* REV-0019 L3 — TRẦN VÔ LÝ. Hạn chót gõ nhầm năm (1999 thay vì 2026) làm
+   quản lý bị réo "trễ 9 734 ngày" MỖI 7 NGÀY VĨNH VIỄN. Quá mốc này thì đó
+   không còn là việc trễ nữa, đó là DỮ LIỆU SAI: báo đúng MỘT LẦN cho người
+   giao để họ sửa hạn, rồi thôi. 365 ngày vì hạn chót thật xa nhất trong ERP
+   này là mục tiêu năm. */
+export const TRAN_TRE_NGAY = 365;
+
+/* REV-0019 L2 — ÂN XÁ CHO NGƯỜI VỪA NHẬN VIỆC. Cùng tinh thần `AN_XA_NGAY`:
+   nợ cũ không phải lỗi của người đang cầm việc lúc này. Lịch nhắc 1-3-7 đếm
+   từ ngày NGƯỜI NÀY cầm việc, không đếm từ hạn chót — người nhận bàn giao
+   hôm nay không bị báo "trễ 9 ngày" ngay sáng mai. */
+
+/** REV-0019 L4 — NÚT CỨU HOẢ PHẢI NỔ KỂ CẢ KHI GÕ SAI.
+ *  `NHAC_VIEC_TAT` trước đây chỉ nhận đúng chuỗi `"1"`: gõ `true`/`TRUE`/`bat`
+ *  là **không nổ mà im lặng** — Sếp tưởng đã tắt, máy vẫn bắn. Đây là thứ
+ *  nguy hiểm nhất trong nhóm lỗi nhẹ, nên đổi luật:
+ *    · rỗng / `0` / `false` / `no` / `off` / `khong` → KHÔNG tắt
+ *    · mọi giá trị khác (kể cả gõ nhầm `taat`, `yes`, `TRUE`) → TẮT, kèm cảnh
+ *      báo ra log. HỎNG VỀ PHÍA AN TOÀN: gõ sai một nút cứu hoả thì phải câm,
+ *      không phải vẫn bắn. */
+const KHONG_TAT = new Set(['', '0', 'false', 'no', 'off', 'khong', 'không', 'tat_khong', 'n']);
+export function laTatKhan(giaTri) {
+  const s = String(giaTri ?? '').trim().toLowerCase();
+  if (KHONG_TAT.has(s)) return { tat: false, la: null };
+  const quenThuoc = new Set(['1', 'true', 'yes', 'y', 'on', 'bat', 'bật', 'tat', 'tắt', 'co', 'có']);
+  return { tat: true, la: quenThuoc.has(s) ? null : s };
+}
+
 /* ---- Phần THUẦN: không chạm DB, không chạm mạng ------------------------
    Toàn bộ logic dễ sai nằm ở đây, tách riêng để kiểm ngoại tuyến bằng đồng hồ
    giả (BH-25) và để mỗi tính chất có ca đối chứng cố ý sai (BH-16). */
@@ -139,8 +167,12 @@ export function soanBanTin(gio) {
   const d = [];
   const ten = (v) => `"${v.tieu_de}"`;
   if (gio.qua_han?.length) {
+    /* "bạn nhận việc N ngày trước" (REV-0019 L2): việc trễ từ trước khi
+       chuyển tay thì phải nói rõ, kẻo người vừa nhận tưởng mình bị chê. */
     d.push(`🔴 Quá hạn ${gio.qua_han.length}: ` +
-      gio.qua_han.map(v => `${ten(v)} (trễ ${v.tre} ngày)`).join(' · '));
+      gio.qua_han.map(v => `${ten(v)} (trễ ${v.tre} ngày` +
+        (v.nhan_cach_day != null ? `, bạn nhận việc ${v.nhan_cach_day} ngày trước` : '') + ')'
+      ).join(' · '));
   }
   if (gio.den_han_hom_nay?.length) {
     d.push(`🟡 Đến hạn hôm nay ${gio.den_han_hom_nay.length}: ` +
@@ -200,7 +232,11 @@ export async function quetNhacCongViec(env, guiThongBao, guiTelegram, luc = new 
   /* ROLLBACK TỨC THÌ (giây): đặt biến môi trường `NHAC_VIEC_TAT=1` là cả tính
      năng câm ngay, hệ thống về ĐÚNG hiện trạng trước khi có nó. Không cần
      deploy, không cần gỡ cột. */
-  if (String(env.NHAC_VIEC_TAT || '') === '1') return { bo_qua: 'tat_bang_co', da_gui: 0 };
+  const nutTat = laTatKhan(env.NHAC_VIEC_TAT);
+  if (nutTat.tat) {
+    if (nutTat.la) console.warn(`Nhắc việc: NHAC_VIEC_TAT="${nutTat.la}" không phải cách viết quen thuộc — HIỂU LÀ TẮT (hỏng về phía an toàn).`);
+    return { bo_qua: 'tat_bang_co', da_gui: 0 };
+  }
 
   const vn = gioVN(luc);
   /* CHỐNG LÀM PHIỀN #4 — không gửi ngoài 8h–18h, không gửi Chủ nhật.
@@ -218,7 +254,7 @@ export async function quetNhacCongViec(env, guiThongBao, guiTelegram, luc = new 
      Để trống = toàn công ty. */
   const loc = String(env.NHAC_VIEC_BO_PHAN || '').split(',').map(s => s.trim()).filter(Boolean);
 
-  const kq = { bo_qua: null, da_gui: 0, cham_tran: false };
+  const kq = { bo_qua: null, da_gui: 0, cham_tran: false, bo_lo: [] };
   try {
     Object.assign(kq, await chayMotLuot(env, guiThongBao, guiTelegram, {
       vn, homNay, batDau, conAnXa, loc
@@ -238,26 +274,49 @@ async function chayMotLuot(env, guiThongBao, guiTelegram, ctx) {
      migration — thiếu thì chạy tiếp ở mức suy giảm, không làm chết cả lượt. */
 
   // ① Mọi việc còn đang mở. `hoan_thanh`/`huy` KHÔNG BAO GIỜ vào đây.
-  const { results: viecs } = await env.DB.prepare(`
-    SELECT c.id, c.tieu_de, c.trang_thai, c.han_chot, c.tao_luc, c.nop_luc,
-           c.nguoi_nhan_id, c.nguoi_nhan_ten, c.nguoi_giao_id, c.nguoi_giao_ten
-      FROM cong_viec c
-     WHERE c.trang_thai IN ('moi','dang_lam','cho_duyet')
-  `).all();
+  //   `nhan_viec_luc` (REV-0019 L2) — mốc NGƯỜI ĐANG CẦM nhận việc. NULL với
+  //   việc chưa từng chuyển tay → rơi về `tao_luc`. Bọc try/catch: chưa nạp
+  //   `va-nhacviec-rev0019.sql` thì chạy ở mức suy giảm, KHÔNG chết cả lượt.
+  let viecs;
+  try {
+    ({ results: viecs } = await env.DB.prepare(`
+      SELECT c.id, c.tieu_de, c.trang_thai, c.han_chot, c.tao_luc, c.nop_luc,
+             c.nhan_viec_luc,
+             c.nguoi_nhan_id, c.nguoi_nhan_ten, c.nguoi_giao_id, c.nguoi_giao_ten
+        FROM cong_viec c
+       WHERE c.trang_thai IN ('moi','dang_lam','cho_duyet')
+    `).all());
+  } catch {
+    ({ results: viecs } = await env.DB.prepare(`
+      SELECT c.id, c.tieu_de, c.trang_thai, c.han_chot, c.tao_luc, c.nop_luc,
+             c.nguoi_nhan_id, c.nguoi_nhan_ten, c.nguoi_giao_id, c.nguoi_giao_ten
+        FROM cong_viec c
+       WHERE c.trang_thai IN ('moi','dang_lam','cho_duyet')
+    `).all());
+  }
 
-  // ② Danh bạ — để biết ai đã nghỉ và ai là quản lý của ai.
-  const { results: nhanSus } = await env.DB.prepare(
-    'SELECT id, ho_ten, bo_phan, quan_ly_id, dang_lam FROM nhan_su'
-  ).all();
+  // ② Danh bạ — để biết ai đã nghỉ, ai là quản lý của ai, và ai thuộc phòng
+  //    nào (nút PILOT của REV-0019 L1 lọc theo NGƯỜI NHẬN TIN, xem dưới).
+  let nhanSus;
+  try {
+    ({ results: nhanSus } = await env.DB.prepare(
+      'SELECT id, ho_ten, bo_phan, phong_ban_id, quan_ly_id, dang_lam FROM nhan_su'
+    ).all());
+  } catch {
+    ({ results: nhanSus } = await env.DB.prepare(
+      'SELECT id, ho_ten, bo_phan, quan_ly_id, dang_lam FROM nhan_su'
+    ).all());
+  }
   const banDo = new Map((nhanSus || []).map(n => [n.id, n]));
 
-  // ③ Trưởng phòng (bước 2 của nguoiDuyetCap1).
+  // ③ Trưởng phòng (bước 2 của nguoiDuyetCap1) + danh mục phòng ban để nút
+  //    PILOT nhận CẢ tên phòng lẫn `phong_ban_id` (REV-0019 L1).
   let truongPhong = new Map();
+  let tenPhongTheoId = new Map();
   try {
-    const r = await env.DB.prepare(
-      'SELECT ten, truong_phong_id FROM phong_ban WHERE truong_phong_id IS NOT NULL'
-    ).all();
-    truongPhong = new Map((r.results || []).map(p => [p.ten, p.truong_phong_id]));
+    const r = await env.DB.prepare('SELECT id, ten, truong_phong_id FROM phong_ban').all();
+    truongPhong = new Map((r.results || []).filter(p => p.truong_phong_id).map(p => [p.ten, p.truong_phong_id]));
+    tenPhongTheoId = new Map((r.results || []).map(p => [p.id, String(p.ten || '').trim().toLowerCase()]));
   } catch { /* chưa nạp danh mục nền → rơi về Sếp, không im lặng nuốt việc */ }
 
   /* ④ CHỐNG LÀM PHIỀN #7 — ai đã tự tắt nhắc.
@@ -288,16 +347,47 @@ async function chayMotLuot(env, guiThongBao, guiTelegram, ctx) {
   /* ---- Gom việc theo NGƯỜI NHẬN TIN (không theo việc) -------------------- */
   const gio = new Map();          // nguoi_nhan_tin -> bó việc
   const gioLeoCap = new Map();    // quản lý        -> bó việc quá hạn > 7 ngày
+  const duLieuSai = [];           // hạn chót vô lý (REV-0019 L3)
+
+  /* ---- NÚT PILOT — REV-0019 L1 -------------------------------------------
+     LỖI CŨ: bộ lọc chỉ xét phòng của NGƯỜI NHẬN VIỆC, trong khi tin còn đi
+     tới NGƯỜI GIAO và QUẢN LÝ — hai người này không bị lọc. Bật thử riêng
+     "Kho vận" mà chị Huyền (Vận hành sàn) vẫn nhận tin thì buổi chạy thử mất
+     sạch ý nghĩa: không còn biết phản ứng đo được là của phòng nào.
+     LUẬT MỚI, một câu: **chỉ NGƯỜI TRONG PHÒNG ĐANG THỬ mới nhận tin**, bất
+     kể họ đứng ở vai nào (nhận việc, giao việc, quản lý, Sếp). Muốn Sếp vẫn
+     nhận leo cấp trong lúc chạy thử thì liệt kê thêm phòng của Sếp:
+       NHAC_VIEC_BO_PHAN="Kho vận,Ban giám đốc"
+     Nhận CẢ tên phòng (`nhan_su.bo_phan`) lẫn `phong_ban_id` (spec ghi theo
+     id, nhưng `nhan_su.phong_ban_id` phần lớn còn NULL nên lọc riêng theo id
+     sẽ ra IM LẶNG TOÀN TẬP — nguy hiểm hơn cả rò). */
+  const locThuong = loc.map(s => s.toLowerCase());
+  const locIdPhong = new Set([...tenPhongTheoId]
+    .filter(([, ten]) => locThuong.includes(ten)).map(([id]) => id));
+  const nhanTinDuoc = (id) => {
+    if (!locThuong.length) return true;
+    const ns = banDo.get(id);
+    if (!ns) return false;
+    if (locThuong.includes(String(ns.bo_phan || '').trim().toLowerCase())) return true;
+    return ns.phong_ban_id != null && locIdPhong.has(ns.phong_ban_id);
+  };
+
+  /* CHỐT DUY NHẤT: mọi tin nhắc việc đều phải đi qua `bo()` để vào bó gửi.
+     Đặt bộ lọc pilot ở ĐÂY nghĩa là không có nhánh nào (người giao, quản lý,
+     Sếp) đi vòng qua được — khác hẳn cách cũ lọc ở đầu vòng lặp theo việc. */
   const bo = (m, id) => {
     if (!id) return null;
+    if (!nhanTinDuoc(id)) return null;
     if (!m.has(id)) m.set(id, { qua_han: [], den_han_hom_nay: [], den_han_ngay_mai: [], chua_bat_dau: [], cho_toi_duyet: [], toi_giao_qua_han: [], nguoi_da_nghi: [] });
     return m.get(id);
   };
 
+  /* Việc CỦA phòng đang thử — giữ nguyên ý cũ: chạy thử Kho vận thì chỉ soi
+     việc của người Kho vận, không soi việc phòng khác. Hai lớp lọc này khác
+     nhau và CẦN CẢ HAI: lớp này chọn VIỆC, `bo()` chọn NGƯỜI NHẬN TIN. */
   const trongPilot = (v) => {
-    if (!loc.length) return true;
-    const ns = banDo.get(v.nguoi_nhan_id);
-    return !!ns && loc.includes(ns.bo_phan);
+    if (!locThuong.length) return true;
+    return nhanTinDuoc(v.nguoi_nhan_id);
   };
 
   for (const v of viecs || []) {
@@ -316,6 +406,32 @@ async function chayMotLuot(env, guiThongBao, guiTelegram, ctx) {
       continue;
     }
 
+    /* --- REV-0019 L3: HẠN CHÓT VÔ LÝ THÌ BÁO DỮ LIỆU SAI, KHÔNG RÉO MÃI ---
+       `1999-12-31` (gõ nhầm năm) cho ra "trễ 9 734 ngày" và leo cấp lên anh
+       Duy MỖI 7 NGÀY VĨNH VIỄN. Ra khỏi mọi lịch nhắc, đổi thành MỘT tin
+       "kiểm lại hạn chót" gửi NGƯỜI GIAO (người duy nhất sửa được hạn),
+       đúng một lần trong đời việc đó. */
+    const hanVoLy = tre !== null && tre > TRAN_TRE_NGAY;
+    if (hanVoLy) duLieuSai.push(v);
+
+    /* --- REV-0019 L2: NGƯỜI VỪA NHẬN VIỆC KHÔNG BỊ ĐỔ LỖI CHO QUÁ KHỨ ---
+       `nhan_viec_luc` là mốc NGƯỜI ĐANG CẦM nhận việc (trigger DB đóng dấu
+       khi `nguoi_nhan_id` đổi); chưa từng chuyển tay thì rơi về `tao_luc`.
+       Lịch nhắc 1-3-7 và mốc leo cấp đếm theo `treNhac` = số ngày việc này
+       là chuyện của NGƯỜI NÀY, chứ không đếm từ hạn chót. Nhận bàn giao hôm
+       nay → treNhac = 0 → im lặng, đúng như ngày đầu bật tính năng.
+       CHỮ HIỂN THỊ VẪN LÀ `tre` THẬT — không giấu việc trễ 9 ngày, chỉ nói
+       thêm "bạn nhận việc N ngày trước" để không ai bị hiểu nhầm là chê. */
+    const mocCam = String(v.nhan_viec_luc || v.tao_luc || '').slice(0, 10);
+    const ngayCam = soNgayGiua(mocCam, homNay);
+    const treNhac = tre === null ? null
+      : (ngayCam === null ? tre : Math.min(tre, Math.max(ngayCam, 0)));
+    // Chỉ ghi chú khi việc ĐÃ trễ từ trước lúc chuyển tay — việc trễ sau khi
+    // nhận thì đó đúng là chuyện của người đang cầm, không cần bào chữa.
+    const nhanCachDay = (soNgayGiua(v.han_chot, mocCam) ?? 0) > 0 && ngayCam !== null
+      ? ngayCam : null;
+    const kem = { tre, nhan_cach_day: nhanCachDay };
+
     /* --- Việc của NGƯỜI NHẬN ---
        Việc đã NỘP (`cho_duyet`) thì KHÔNG nhắc người nhận nữa, kể cả khi nó
        quá hạn: họ đã làm xong phần của mình và không có nút nào để bấm
@@ -323,9 +439,9 @@ async function chayMotLuot(env, guiThongBao, guiTelegram, ctx) {
        đứng chờ người khác duyệt là đổ lỗi sai người — đúng cái lỗi mà cột
        `nop_luc` sinh ra để tránh. Việc đó đi sang bó của NGƯỜI GIAO ở dưới. */
     const daNop = v.trang_thai === 'cho_duyet';
-    if (daNop) { /* bỏ qua toàn bộ phần nhắc người nhận */ }
+    if (daNop || hanVoLy) { /* bỏ qua toàn bộ phần nhắc người nhận */ }
     else if (tre !== null && tre > 0) {
-      if (canNhacQuaHan(tre)) bo(gio, v.nguoi_nhan_id)?.qua_han.push({ ...v, tre });
+      if (canNhacQuaHan(treNhac)) bo(gio, v.nguoi_nhan_id)?.qua_han.push({ ...v, ...kem });
     } else if (tre === 0) {
       bo(gio, v.nguoi_nhan_id)?.den_han_hom_nay.push(v);
     } else if (v.han_chot === ngayMai) {
@@ -338,8 +454,8 @@ async function chayMotLuot(env, guiThongBao, guiTelegram, ctx) {
 
     /* --- Việc của NGƯỜI GIAO --- (todo cá nhân thì bỏ, đã nhắc ở trên) */
     if (!laTodoCaNhan) {
-      if (!daNop && tre !== null && tre > 0 && canNhacQuaHan(tre)) {
-        bo(gio, v.nguoi_giao_id)?.toi_giao_qua_han.push({ ...v, tre });
+      if (!daNop && !hanVoLy && tre !== null && tre > 0 && canNhacQuaHan(treNhac)) {
+        bo(gio, v.nguoi_giao_id)?.toi_giao_qua_han.push({ ...v, ...kem });
       }
       /* LỖ HỔNG ĐAU NHẤT — việc đọng ở "Chờ duyệt".
          CHỈ nhắc NGƯỜI GIAO. Nhân viên đã làm xong phần của mình và không có
@@ -358,7 +474,7 @@ async function chayMotLuot(env, guiThongBao, guiTelegram, ctx) {
     }
 
     /* --- LEO CẤP: quá hạn > 7 ngày --- */
-    if (!daNop && tre !== null && canLeoCap(tre) && !laTodoCaNhan) {
+    if (!daNop && !hanVoLy && tre !== null && canLeoCap(treNhac) && !laTodoCaNhan) {
       /* Todo cá nhân KHÔNG BAO GIỜ leo cấp — việc tự nhắc mình thì không có
          ai để mách. Ân xá: nợ cũ không leo cấp trong 7 ngày đầu. */
       const cuHonNgayBat = (soNgayGiua(v.han_chot, batDau) ?? 0) > 0;
@@ -367,44 +483,87 @@ async function chayMotLuot(env, guiThongBao, guiTelegram, ctx) {
         // Quản lý cấp 1 chính là người nhận việc → đã bị chonDuyetCap1 loại,
         // rơi về KHONG_CO_QUAN_LY. Không có quản lý thì lên thẳng Sếp, KÈM
         // ghi chú — KHÔNG nuốt im lặng (BH-21).
-        const ghiChu = ql.nguon === 'KHONG_CO_QUAN_LY' ? ' (chưa có quản lý trực tiếp)' : '';
+        const ghiChu = (ql.nguon === 'KHONG_CO_QUAN_LY' ? ' (chưa có quản lý trực tiếp)' : '')
+          + (nhanCachDay != null ? ` (người này mới nhận việc ${nhanCachDay} ngày trước)` : '');
         const nhanIds = ql.id ? [ql.id] : admins;
         for (const id of nhanIds) {
           if (id === v.nguoi_nhan_id) continue;
-          bo(gioLeoCap, id)?.qua_han.push({ ...v, tre, ghi_chu: ghiChu });
+          bo(gioLeoCap, id)?.qua_han.push({ ...v, ...kem, ghi_chu: ghiChu });
         }
       }
     }
   }
 
   /* ---- GỬI ---------------------------------------------------------------
-     Từ đây trở xuống KHÔNG còn truy vấn nào ngoài `guiThongBao` (một INSERT
-     vào `thong_bao`). SLA: ≤2 giây với 500 việc. */
+     Từ đây trở xuống KHÔNG còn truy vấn nào trong vòng lặp: chỉ `guiThongBao`
+     (một INSERT vào `thong_bao`), cộng ĐÚNG MỘT câu SELECT đứng ngoài vòng
+     lặp và chỉ chạy khi có việc hạn chót vô lý (REV-0019 L3). SLA: ≤2 giây
+     với 500 việc — đo lại ở `scripts/do-va-rev0019.mjs` (2016 lượt cron trên
+     240 việc hết 1,2 giây). */
   let daGuiSo = 0, chamTran = false;
+  /* REV-0019 L5 — CHẠM TRẦN THÌ PHẢI NÊU TÊN AI BỊ BỎ.
+     Trước: người thứ 41 trở đi bị bỏ IM LẶNG, tin Telegram chỉ nói "đã dừng".
+     Gạo nhận tin đó xong vẫn không biết ai không được nhắc, mà đúng những
+     người đó mới là người đang trễ việc. Giờ đi hết danh sách, quá trần thì
+     GHI TÊN thay vì gửi. */
+  const boLo = [];
+  const tenCua = (id) => banDo.get(id)?.ho_ten || id;
   const conCho = () => {
     if (daGuiSo >= TRAN_TIN_MOI_LUOT) { chamTran = true; return false; }
     return true;
   };
+  /* `guiThongBao` trả `false` khi INSERT trượt — REV-0019 L6: chỉ mục DUY
+     NHẤT (loại, người, ngày) chặn lượt cron thứ hai chạy chồng lên. Đếm theo
+     kết quả thật, không đếm theo ý định. */
+  const gui = async (noiDung, loai, nguoiId, lienKet = null) => {
+    const xong = await guiThongBao(env, null, noiDung, loai, lienKet, nguoiId);
+    if (xong !== false) daGuiSo++;
+    return xong !== false;
+  };
 
   for (const [nguoiId, b] of gio) {
-    if (!conCho()) break;
     if (daTat.has(nguoiId)) continue;                 // tự tắt → im tin cá nhân
     if (daGui.has(`cv_ban_tin|${nguoiId}`)) continue; // hôm nay đã nhắc rồi
     const noiDung = soanBanTin(b);
     if (!noiDung) continue;                           // im lặng khi không có gì
-    await guiThongBao(env, null, noiDung, 'cv_ban_tin', null, nguoiId);
-    daGuiSo++;
+    if (!conCho()) { boLo.push(tenCua(nguoiId)); continue; }
+    await gui(noiDung, 'cv_ban_tin', nguoiId);
   }
 
   for (const [qlId, b] of gioLeoCap) {
-    if (!conCho()) break;
     if (daGui.has(`cv_leo_cap|${qlId}`)) continue;    // leo cấp KHÔNG chịu `nhac_viec_tat`
+    if (!conCho()) { boLo.push(`${tenCua(qlId)} (leo cấp)`); continue; }
     const dong = b.qua_han.map(v => `"${v.tieu_de}" — ${v.nguoi_nhan_ten}, trễ ${v.tre} ngày${v.ghi_chu || ''}`);
-    await guiThongBao(env, null,
+    await gui(
       `⚠️ ${dong.length} việc trong nhóm bạn quản lý đã quá hạn hơn 7 ngày — máy đã hết cách nhắc, cần bạn hỏi trực tiếp:\n` +
       dong.join('\n'),
-      'cv_leo_cap', null, qlId);
-    daGuiSo++;
+      'cv_leo_cap', qlId);
+  }
+
+  /* REV-0019 L3 — "hạn chót có vẻ gõ nhầm": MỘT TIN, MỘT LẦN, MÃI MÃI.
+     Chống trùng ở đây KHÔNG theo ngày như tin nhắc (nếu theo ngày thì mai
+     lại réo tiếp) mà theo CHÍNH VIỆC ĐÓ: đã báo rồi thì thôi, kể cả năm sau.
+     Gửi NGƯỜI GIAO — người duy nhất sửa được hạn chót. */
+  if (duLieuSai.length) {
+    let daBao = new Set();
+    try {
+      const r = await env.DB.prepare(
+        "SELECT lien_ket FROM thong_bao WHERE loai = 'cv_han_chot_sai'"
+      ).all();
+      daBao = new Set((r.results || []).map(x => String(x.lien_ket)));
+    } catch { /* bảng thiếu → coi như chưa báo, thà báo lại còn hơn nuốt */ }
+    for (const v of duLieuSai) {
+      if (daBao.has(String(v.id))) continue;
+      const nhanIds = nhanTinDuoc(v.nguoi_giao_id) ? [v.nguoi_giao_id] : admins.filter(nhanTinDuoc);
+      for (const id of nhanIds) {
+        if (!conCho()) { boLo.push(`${tenCua(id)} (hạn chót sai)`); continue; }
+        await gui(
+          `🛠️ Hạn chót có vẻ gõ nhầm — máy KHÔNG nhắc việc này nữa cho tới khi được sửa:\n` +
+          `"${v.tieu_de}" — ${v.nguoi_nhan_ten}, hạn ${v.han_chot} (quá ${soNgayGiua(v.han_chot, homNay)} ngày). ` +
+          `Mở Trạm Mục Tiêu sửa lại hạn giúp nhé.`,
+          'cv_han_chot_sai', id, String(v.id));
+      }
+    }
   }
 
   /* Bản tin tuần — 8h thứ Hai, Telegram nhóm chung + chuông cho Admin.
@@ -412,18 +571,25 @@ async function chayMotLuot(env, guiThongBao, guiTelegram, ctx) {
      nhắn riêng từng người được → chỉ dùng cho bản tin tuần. Nhắc cá nhân đi
      hoàn toàn qua chuông ERP. */
   if (vn.getUTCDay() === 1 && vn.getUTCHours() === 8) {
-    try { daGuiSo += await banTinTuan(env, guiThongBao, guiTelegram, { homNay, batDau, conAnXa, daGui, admins }); }
-    catch (e) { console.error('Bản tin tuần nhắc việc:', e.message); }
+    try {
+      daGuiSo += await banTinTuan(env, guiThongBao, guiTelegram,
+        { homNay, batDau, conAnXa, daGui, admins, nhanTinDuoc, dangChayThu: locThuong.length > 0 });
+    } catch (e) { console.error('Bản tin tuần nhắc việc:', e.message); }
   }
 
-  /* Chạm trần = NGHI CÓ BUG, không phải "công ty bận". Dừng ngay, báo Gạo. */
+  /* Chạm trần = NGHI CÓ BUG, không phải "công ty bận". Dừng ngay, báo Gạo —
+     KÈM TÊN người bị bỏ (REV-0019 L5): tin báo "đã dừng" mà không nói bỏ ai
+     thì Gạo vẫn phải mò, còn những người đang trễ việc thì im lặng không được
+     nhắc. Cắt 12 tên đầu để tin Telegram không thành bức tường chữ. */
   if (chamTran) {
-    console.error(`Nhắc việc CHẠM TRẦN ${TRAN_TIN_MOI_LUOT} tin/lượt — dừng gửi, nghi có bug.`);
+    const ten = boLo.slice(0, 12).join(', ') + (boLo.length > 12 ? `, …và ${boLo.length - 12} người nữa` : '');
+    console.error(`Nhắc việc CHẠM TRẦN ${TRAN_TIN_MOI_LUOT} tin/lượt — dừng gửi, nghi có bug. Bỏ ${boLo.length} người: ${ten}`);
     try {
-      await guiTelegram(env, `🚨 [ERP] Nhắc việc chạm trần ${TRAN_TIN_MOI_LUOT} tin trong một lượt cron và đã DỪNG. Công ty ~20 người thì không bao giờ chạm — nghi có bug, Gạo kiểm tra giúp.`);
+      await guiTelegram(env, `🚨 [ERP] Nhắc việc chạm trần ${TRAN_TIN_MOI_LUOT} tin trong một lượt cron và đã DỪNG. Công ty ~20 người thì không bao giờ chạm — nghi có bug, Gạo kiểm tra giúp.\n` +
+        `KHÔNG được nhắc (${boLo.length} người): ${ten || '—'}`);
     } catch { /* Telegram lỗi không được làm chết lượt quét */ }
   }
-  return { bo_qua: null, da_gui: daGuiSo, cham_tran: chamTran };
+  return { bo_qua: null, da_gui: daGuiSo, cham_tran: chamTran, bo_lo: boLo };
 }
 
 /** Admin (Sếp) — nơi leo cấp rơi về khi không tìm được quản lý nào.
@@ -447,7 +613,7 @@ async function dsAdmin(env) {
    Sếp ngán đọc sau tháng thứ hai. Và nó nêu thẳng tên SẾP khi Sếp là người
    đang giữ việc: bản tin chỉ soi nhân viên thì mất uy tín ngay lần đầu tiên
    Sếp là người chậm. */
-async function banTinTuan(env, guiThongBao, guiTelegram, { homNay, batDau, conAnXa, daGui, admins }) {
+async function banTinTuan(env, guiThongBao, guiTelegram, { homNay, batDau, conAnXa, daGui, admins, nhanTinDuoc, dangChayThu }) {
   if (admins.length && admins.every(id => daGui.has(`cv_ban_tin_tuan|${id}`))) return 0;
 
   const tuNgay = congNgay(homNay, -7);
@@ -469,7 +635,11 @@ async function banTinTuan(env, guiThongBao, guiTelegram, { homNay, batDau, conAn
        AND ((han_chot IS NOT NULL AND han_chot < ?) OR trang_thai = 'cho_duyet')
   `).bind(homNay).all();
 
+  /* Trần vô lý (REV-0019 L3) áp cả ở đây: một việc hạn 1999 mà lọt vào bản
+     tin tuần sẽ đội số "đang đọng" lên mãi mãi và biến bản tin thành thứ
+     không ai tin nữa. */
   const quaHan = (dong || []).filter(v => v.han_chot && v.han_chot < homNay
+    && (soNgayGiua(v.han_chot, homNay) ?? 0) <= TRAN_TRE_NGAY
     && !(conAnXa && v.han_chot < batDau));
   const qua7 = quaHan.filter(v => (soNgayGiua(v.han_chot, homNay) ?? 0) > 7);
   const choDuyet = (dong || []).filter(v => v.trang_thai === 'cho_duyet'
@@ -492,11 +662,17 @@ async function banTinTuan(env, guiThongBao, guiTelegram, { homNay, batDau, conAn
     (choDuyet.length ? `   Chờ: ${demTheoNguoi(choDuyet, 'nguoi_giao_ten')}\n` : '');
 
   let so = 0;
-  try { await guiTelegram(env, text); } catch { /* nhóm chưa cấu hình → bỏ qua êm */ }
+  /* REV-0019 L1 — ĐANG CHẠY THỬ MỘT PHÒNG THÌ KHÔNG BẮN NHÓM CHUNG.
+     `guiTelegram` bắn vào nhóm chat của CẢ CÔNG TY, còn bản tin này thống kê
+     toàn công ty. Trong lúc chỉ bật thử Kho vận mà nhóm chung vẫn nhận bản
+     tin thì buổi chạy thử lại chạm tới người phòng khác — đúng thứ L1 cấm. */
+  if (!dangChayThu) {
+    try { await guiTelegram(env, text); } catch { /* nhóm chưa cấu hình → bỏ qua êm */ }
+  }
   for (const id of admins) {
     if (daGui.has(`cv_ban_tin_tuan|${id}`)) continue;
-    await guiThongBao(env, null, text, 'cv_ban_tin_tuan', null, id);
-    so++;
+    if (nhanTinDuoc && !nhanTinDuoc(id)) continue;   // Sếp ngoài phòng đang thử → im
+    if (await guiThongBao(env, null, text, 'cv_ban_tin_tuan', null, id) !== false) so++;
   }
   return so;
 }

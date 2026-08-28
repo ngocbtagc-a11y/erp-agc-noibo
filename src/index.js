@@ -1663,13 +1663,19 @@ function nhomCua(vaiTro) {
    ban cần biết). Truyền nhom=null khi dùng kiểu này — cột nhom vẫn NOT NULL
    nên ghi tạm 'ca_nhan' (không khớp bất kỳ nhóm thật nào, chỉ để ràng buộc
    DB vui lòng; layThongBao lọc bằng nguoi_nhan_id chứ không phải nhom này). */
+/* TRẢ VỀ true/false (REV-0019 L6): có chỉ mục DUY NHẤT chặn tin nhắc việc
+   trùng (loại, người, ngày) nên INSERT thứ hai của hai lượt cron chồng nhau
+   sẽ TRƯỢT — và đó là đúng ý. Người gọi cần biết để đếm số tin ĐÃ GỬI THẬT
+   chứ không đếm số lần định gửi. Mọi lời gọi cũ bỏ qua giá trị trả về nên
+   không có gì đổi hành vi. */
 async function guiThongBao(env, nhom, noiDung, loai, lienKet, nguoiNhanId) {
   try {
     await env.DB.prepare(
       `INSERT INTO thong_bao (nhom, noi_dung, loai, lien_ket, nguoi_nhan_id, tao_luc)
        VALUES (?, ?, ?, ?, ?, datetime('now','+7 hours'))`
     ).bind(nhom || 'ca_nhan', noiDung, loai || null, lienKet || null, nguoiNhanId || null).run();
-  } catch (e) { console.error('Gửi thông báo:', e.message); }
+    return true;
+  } catch (e) { console.error('Gửi thông báo:', e.message); return false; }
 }
 
 /* LUẬT CỨNG (Sếp Ngọc chốt 19/08/2026): đơn hoàn chỉ giữ trong THÁNG LÀM VIỆC
@@ -1983,16 +1989,27 @@ async function cvDanhSach(req, env) {
 async function cvHomNay(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
+  /* REV-0019 L8 — CỔNG QUYỀN, đừng dựa vào "hôm nay vai nào cũng có tab".
+     Khối ① nằm trong tab Trạm Mục Tiêu → cần `congviec`. Khối ② và ③ trả dữ
+     liệu TOÀN CÔNG TY, và lý do chúng được phép trả là vì người đó vốn đã
+     xem được tab `lichsuviec` — nên phải hỏi ĐÚNG cái quyền đó, chứ không
+     phải tin rằng cả 10 vai đều đang có nó (BH-43: hỏi ràng buộc áp cho
+     NHÁNH NÀO, không chỉ hỏi nó có mặt chưa). Ngày nào Sếp gỡ `lichsuviec`
+     của một vai, chỗ này tự khoá theo. */
+  if (!duocXemTab(phien.vai_tro, 'congviec')) return loi('Bạn không có quyền', 403);
+  const xemToanCty = duocXemTab(phien.vai_tro, 'lichsuviec');
   const toiId = phien.nhan_su_id;
 
-  const [moDs, nsDs] = await Promise.all([
-    env.DB.prepare(`
-      SELECT id, tieu_de, trang_thai, han_chot, tao_luc, nop_luc,
+  // `nhan_viec_luc` chỉ có sau `va-nhacviec-rev0019.sql`; chưa nạp thì chạy ở
+  // mức suy giảm (không có ghi chú "vừa nhận việc"), KHÔNG trả 500.
+  const cauMo = (cot) => env.DB.prepare(`
+      SELECT id, tieu_de, trang_thai, han_chot, tao_luc, nop_luc${cot},
              nguoi_nhan_id, nguoi_nhan_ten, nguoi_giao_id, nguoi_giao_ten
         FROM cong_viec WHERE trang_thai IN ('moi','dang_lam','cho_duyet')
-    `).all(),
-    env.DB.prepare('SELECT id, ho_ten, bo_phan, quan_ly_id, dang_lam FROM nhan_su').all()
-  ]);
+    `).all();
+  let moDs;
+  try { moDs = await cauMo(', nhan_viec_luc'); } catch { moDs = await cauMo(''); }
+  const nsDs = await env.DB.prepare('SELECT id, ho_ten, bo_phan, quan_ly_id, dang_lam FROM nhan_su').all();
   const mo = moDs.results || [];
   const banDo = new Map((nsDs.results || []).map(n => [n.id, n]));
 
@@ -2009,7 +2026,13 @@ async function cvHomNay(req, env) {
        lỗi sai người — đúng cái lỗi mà cột `nop_luc` sinh ra để tránh. Việc đó
        chỉ hiện ở khối 🟣 "đang chờ BẠN duyệt" của NGƯỜI GIAO. */
     if (v.nguoi_nhan_id === toiId && v.trang_thai !== 'cho_duyet') {
-      if (tre !== null && tre > 0) toi.qua_han.push({ ...v, tre });
+      /* REV-0019 L2 — người vừa nhận bàn giao một việc ĐÃ trễ từ trước không
+         được để màn hình gằn "trễ 9 ngày" vào mặt mà không nói gì thêm.
+         `nhan_cach_day` để giao diện ghi rõ "bạn nhận việc N ngày trước". */
+      const mocCam = String(v.nhan_viec_luc || v.tao_luc || '').slice(0, 10);
+      const ngayCam = soNgayGiua(mocCam, homNay);
+      const nhanCachDay = (soNgayGiua(v.han_chot, mocCam) ?? 0) > 0 && ngayCam !== null ? ngayCam : null;
+      if (tre !== null && tre > 0) toi.qua_han.push({ ...v, tre, nhan_cach_day: nhanCachDay });
       else if (tre === 0) toi.den_han_hom_nay.push(v);
       else if (v.trang_thai === 'moi') {
         const dong = soNgayGiua(String(v.tao_luc || '').slice(0, 10), homNay);
@@ -2037,7 +2060,9 @@ async function cvHomNay(req, env) {
   const duoiQuyen = new Set((nsDs.results || []).filter(n => n.quan_ly_id === toiId && n.id !== toiId).map(n => n.id));
   const laOwner = laAdmin(phien.vai_tro);
   let quanLy = null;
-  if (laOwner || duoiQuyen.size) {
+  // `xemToanCty` = có tab `lichsuviec`. Đây là NGUỒN quyền của khối này, xem
+  // ghi chú ở đầu hàm (REV-0019 L8).
+  if (xemToanCty && (laOwner || duoiQuyen.size)) {
     const trongPhamVi = (id) => laOwner || duoiQuyen.has(id);
     const theoNguoi = new Map();
     const lay = (id, ten) => {
@@ -2083,7 +2108,9 @@ async function cvHomNay(req, env) {
      nhất, không theo số lượng — sắp theo số lượng là lách điều cấm 20 bằng
      cửa sau. */
   let ghiNhan = [];
-  try {
+  // Cổng quyền đứng NGOÀI try/catch: hết quyền là trả rỗng có chủ đích, không
+  // lẫn với "chưa nạp migration" (REV-0019 L8).
+  if (xemToanCty) try {
     const { results } = await env.DB.prepare(`
       SELECT id, tieu_de, nguoi_nhan_id, nguoi_nhan_ten, han_chot, nop_luc
         FROM cong_viec
@@ -2120,6 +2147,7 @@ async function cvHomNay(req, env) {
 async function cvNhacTat(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
+  if (!duocXemTab(phien.vai_tro, 'congviec')) return loi('Bạn không có quyền', 403);  // REV-0019 L8
   let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
   const tat = b.tat ? 1 : 0;
   // Chỉ đổi được cờ CỦA CHÍNH MÌNH — không có tham số nhận id người khác.
