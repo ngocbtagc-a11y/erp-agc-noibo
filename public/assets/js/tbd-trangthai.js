@@ -16,9 +16,22 @@
      · bàn thử (`scripts/do-trangthai-thongbao.mjs`) đo được ĐÚNG hàm đang
        chạy thật, không phải một bản chép lại rồi tự khen nhau.
 
+   ĐÍNH CHÍNH (REV-0031 · Việc 3). Vòng trước file này khai "KHÔNG cần bấm gì"
+   — SAI, và bàn thử cũ cũng đo theo lời khai sai đó. Nút 🔔 (`#cnbChuong`) và
+   dải chữ (`#tbdMoi`) đều nằm TRONG `#cnbPopup`, mà popup `hidden` cho tới khi
+   người ta bấm bong bóng chat `#cnbNut`. Đúng ra chỉ là "không cần bấm nút 🔔
+   nữa, nhưng vẫn phải MỞ cửa sổ chat". Chị Lan không mở cửa sổ chat thì vẫn
+   không biết mình điếc — lỗi H2 mới vá được một nửa.
+
+   VÌ THẾ có thêm DẤU TRÊN BONG BÓNG (`#cnbDauTB`, gắn ngay trên `#cnbNut`,
+   nằm NGOÀI `#cnbPopup`): phần tử duy nhất luôn nhìn thấy ở mọi màn hình của
+   ERP. Mọi trạng thái KHÔNG nhận được tin đều bật dấu này, kèm `title` /
+   `aria-label` nói rõ cần làm gì.
+
    LUẬT BẤT BIẾN: mọi trạng thái mà người dùng KHÔNG thật sự nhận được thông
-   báo đều phải (1) đổi hình nút 🔔 và (2) có một dòng chữ ngắn hiện sẵn — cả
-   hai KHÔNG cần bấm gì. Trạng thái duy nhất được im là "đang bật thật".
+   báo đều phải (1) đổi hình nút 🔔, (2) có một dòng chữ ngắn hiện sẵn, và
+   (3) hiện DẤU trên bong bóng chat — riêng (3) thấy được mà KHÔNG BẤM GÌ.
+   Trạng thái duy nhất được im là "đang bật thật".
    ========================================================================== */
 
 /** Nút khi mọi thứ chạy đúng. Mọi trạng thái điếc phải KHÁC ký tự này. */
@@ -34,6 +47,9 @@ export const NUT_DANG_TAT = '🔕';
  *   laIOS             — iPhone/iPad
  *   daCaiManHinhChinh — đã "Thêm vào màn hình chính" (chạy dạng PWA)
  *   dangKyHong        — đã cho quyền nhưng đăng ký đẩy KHÔNG thành (điếc âm thầm)
+ *   soMayTrenMayChu   — MÁY CHỦ đang giữ bao nhiêu đăng ký của tôi (`so_may`
+ *                       của `/api/push/khoa`). `null` = chưa hỏi được, đừng
+ *                       kết luận gì; `0` = máy chủ KHÔNG còn giữ đăng ký nào.
  * @returns {{ma:string, nut:string, canhBao:boolean, nhanDuoc:boolean,
  *            chu:string, chuNgan:string, hienDai:boolean, coNutBat:boolean,
  *            coNutTatMay:boolean}}
@@ -41,7 +57,8 @@ export const NUT_DANG_TAT = '🔕';
 export function tinhTrangThaiTB(mt = {}) {
   const {
     batTrenMayChu = false, chatTat = 0, coNotification = false, quyen = null,
-    laIOS = false, daCaiManHinhChinh = false, dangKyHong = false
+    laIOS = false, daCaiManHinhChinh = false, dangKyHong = false,
+    soMayTrenMayChu = null
   } = mt;
 
   const dat = (o) => ({
@@ -76,6 +93,28 @@ export function tinhTrangThaiTB(mt = {}) {
       chu: 'Đã cho quyền nhưng máy này chưa đăng ký được với máy chủ đẩy. ' +
            'Thử tải lại trang; còn nữa thì báo người quản trị ERP.',
       chuNgan: 'Máy này chưa đăng ký được nhận tin — hãy tải lại trang.'
+    });
+  }
+
+  /* ⑨ MÁY CHỦ KHÔNG CÒN GIỮ ĐĂNG KÝ NÀO CỦA TÔI (REV-0031 · Việc 4 · L4).
+     Trước bản vá, trạng thái "Đang bật" chỉ tính từ quyền của TRÌNH DUYỆT và
+     KHÔNG hỏi máy chủ còn giữ đăng ký không — dù `/api/push/khoa` đã trả sẵn
+     `so_may` mà không ai dùng. Hai đường rơi vào đây, cả hai đều là điếc âm
+     thầm trong khi màn hình nói "Đang bật. Đóng ERP rồi vẫn nhận được":
+       · Máy dùng chung ở kho: `push_dangky.endpoint` là UNIQUE và
+         `DO UPDATE SET nhan_su_id = excluded.nhan_su_id` — B đăng nhập trên
+         máy đó là đăng ký của A âm thầm chuyển sang B (so_may của A về 0).
+       · Người dùng vừa bấm "Tắt đẩy trên máy này" nhưng quyền trình duyệt
+         vẫn `granted` — máy vẫn khoe "Đang bật", đúng nghĩa nói dối.
+     `soMayTrenMayChu === null` là "chưa hỏi được" -> KHÔNG kết luận, giữ
+     nguyên hành vi cũ; chỉ con số 0 THẬT mới đổi trạng thái. */
+  if (quyen === 'granted' && soMayTrenMayChu === 0) {
+    return dat({
+      ma: 'may_mat_dangky', coNutBat: true,
+      chu: 'Máy chủ KHÔNG còn giữ đăng ký nhận tin của máy này (bị tắt, hoặc ' +
+           'người khác vừa đăng nhập trên chính máy này). Đóng ERP là không nhận ' +
+           'được tin — bấm "Bật lại" để đăng ký lại.',
+      chuNgan: 'Máy này đã MẤT đăng ký nhận tin — đóng ERP là không nhận được gì. Bấm "Bật lại".'
     });
   }
 
@@ -143,6 +182,22 @@ export function hoanDuoc(ma) { return ma === 'chua_bat'; }
 export function veGiaoDienTB(els, tt, { daHoan = false } = {}) {
   const hienDai = tt.hienDai && !(hoanDuoc(tt.ma) && daHoan);
 
+  /* DẤU TRÊN BONG BÓNG CHAT — phần tử DUY NHẤT nằm ngoài `#cnbPopup`, tức
+     thứ duy nhất thấy được mà KHÔNG bấm gì (REV-0031 Việc 3). Không chịu ảnh
+     hưởng của "Để sau": "Để sau" chỉ được giấu LỜI MỜI, không được giấu việc
+     một người đang điếc. `nutNoi` mang câu chữ cho chuột rê + máy đọc màn hình
+     — kể cả ca "đang bật thật", để 8/8 trạng thái đều đọc được không cần bấm. */
+  if (els.dauTB) {
+    els.dauTB.hidden = !!tt.nhanDuoc;
+    els.dauTB.textContent = tt.nhanDuoc ? '' : tt.nut;
+    els.dauTB.classList?.toggle('tbd-dau-canhbao', !!tt.canhBao);
+    els.dauTB.title = tt.chuNgan;
+  }
+  if (els.nutNoi) {
+    els.nutNoi.title = 'Chat nội bộ — ' + tt.chuNgan;
+    els.nutNoi.setAttribute?.('aria-label', 'Chat nội bộ. ' + tt.chuNgan);
+  }
+
   if (els.nutChuong) {
     els.nutChuong.hidden = false;
     els.nutChuong.textContent = tt.nut;
@@ -164,5 +219,5 @@ export function veGiaoDienTB(els, tt, { daHoan = false } = {}) {
     if (els.nutBat) els.nutBat.hidden = !tt.coNutBat;
     if (els.nutDeSau) els.nutDeSau.hidden = !tt.coNutBat;
   }
-  return { ma: tt.ma, hienDai };
+  return { ma: tt.ma, hienDai, hienDauTB: !tt.nhanDuoc };
 }

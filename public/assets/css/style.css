@@ -1396,6 +1396,23 @@ tr.canh-bao:hover > td { background: #fbdbd6; }
 .cnb-nut:hover { background: var(--sage-dark); transform: translateY(-1px); }
 .cnb-nut .tb-badge { top: -2px; right: -2px; }
 
+/* DẤU ĐIẾC trên bong bóng chat (REV-0031 Việc 3) — góc DƯỚI-TRÁI để không
+   tranh chỗ với số đỏ chưa đọc ở góc trên-phải. Đây là dấu hiệu duy nhất
+   người đang không nhận được thông báo nhìn thấy mà KHÔNG phải bấm gì.
+   Nền trắng viền cam: đọc được cả trên nền xanh của nút lẫn nền tối. */
+.cnb-dau-tb {
+  position: absolute; left: -4px; bottom: -4px;
+  width: 22px; height: 22px; border-radius: 999px;
+  background: var(--white); border: 2px solid var(--line);
+  font-size: 11px; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 1px 4px rgba(0,0,0,.18);
+}
+.cnb-dau-tb.tbd-dau-canhbao { border-color: #e67e22; background: #fff3e0; }
+/* Cùng lỗi ADR-0008 với .tb-badge: thiếu dòng này thì `hidden = true` chạy mà
+   dấu vẫn nằm đó, người đang bật thật vẫn thấy 🔕 — báo oan. */
+.cnb-dau-tb[hidden] { display: none; }
+
 /* Bong bóng truy cập nhanh các chat riêng gần đây — xếp dọc ngay trên nút chính */
 .cnb-ganday {
   position: fixed; right: 28px; bottom: 92px; z-index: 301;

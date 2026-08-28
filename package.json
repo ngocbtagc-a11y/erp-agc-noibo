@@ -47,6 +47,10 @@
     "tu-kiem-thongbao": "node scripts/tu-kiem-thongbao-tinnhan.mjs",
     "do-nut-thongbao": "node scripts/do-nut-thongbao-44px.mjs",
     "do-trangthai-thongbao": "node scripts/do-trangthai-thongbao.mjs",
+    "nap-canhbaoghi-may": "node scripts/chay-migration.mjs them-canhbao-ghi-d1.sql",
+    "nap-canhbaoghi": "node scripts/chay-migration.mjs them-canhbao-ghi-d1.sql --remote",
+    "do-ghi-dongbo": "node scripts/do-ghi-dongbo.mjs",
+    "do-nhiptim": "node scripts/do-nhiptim-chat.mjs",
     "chay": "wrangler dev",
     "dua-len": "wrangler deploy"
   },

@@ -8,11 +8,20 @@
    cho tới khi người dùng tự bấm nút 🔔 — mà nút 🔔 lại KHÔNG đổi hình khi chưa
    thật sự nhận được gì. Chị Lan gửi góp ý chính vì không biết mình đang bỏ lỡ.
 
-   ĐO CÁI GÌ: liệt kê MỌI trạng thái một người có thể rơi vào, rồi với từng
-   trạng thái đòi hỏi CẢ HAI dấu hiệu phải xuất hiện mà KHÔNG cần bấm gì:
+   ĐÍNH CHÍNH (REV-0031 · Việc 3): vòng trước bàn thử này khai ① và ② hiện ra
+   "KHÔNG cần bấm gì" — SAI, và nó khai vậy vì chỉ đo hàm vẽ chứ không đo CHỖ
+   ĐẶT phần tử trong `app.html`. Cả `#cnbChuong` lẫn `#tbdMoi` đều nằm trong
+   `#cnbPopup`, mà popup `hidden` cho tới khi bấm bong bóng chat. Đúng ra ①②
+   chỉ là "không cần bấm nút 🔔 nữa, nhưng vẫn phải MỞ cửa sổ chat".
+
+   ĐO CÁI GÌ: liệt kê MỌI trạng thái một người có thể rơi vào (9 nhánh), rồi
+   với từng trạng thái đòi hỏi:
      ① nút 🔔 đổi ký tự (🔔 → 🔕) — tín hiệu chính, không phụ thuộc màu;
-     ② một dòng chữ ngắn nói cần làm gì, đổ vào dải `#tbdMoi` — dải này nằm
-        NGOÀI bảng cài đặt (kiểm ngay trong `public/app.html` ở dưới).
+     ② một dòng chữ ngắn nói cần làm gì, đổ vào dải `#tbdMoi`;
+        (①② nằm trong cửa sổ chat — mục A ở dưới ĐO và NÓI RÕ điều đó)
+     ⑤ DẤU trên bong bóng `#cnbNut` và ⑥ chữ trên `title`/`aria-label` của
+        chính bong bóng đó — hai thứ này nằm NGOÀI popup, tức là phần DUY NHẤT
+        thấy được mà KHÔNG BẤM GÌ CẢ. Đây mới là thứ trả lời đúng yêu cầu gốc.
 
    ĐO THẬT, KHÔNG KHỚP CHUỖI (BH-34): nạp CHÍNH `public/assets/js/tbd-trangthai.js`
    mà giao diện đang dùng, gọi ĐÚNG hàm `veGiaoDienTB()` mà `app.js` gọi, rồi
@@ -52,7 +61,11 @@ function phanTu() {
 function banGiaoDien() {
   const e = {
     nutChuong: phanTu(), chuTrangThai: phanTu(), nutTatMay: phanTu(),
-    daiMoi: phanTu(), chuMoi: phanTu(), nutBat: phanTu(), nutDeSau: phanTu()
+    daiMoi: phanTu(), chuMoi: phanTu(), nutBat: phanTu(), nutDeSau: phanTu(),
+    /* REV-0031 Việc 3 — hai phần tử NGOÀI `#cnbPopup`: thứ DUY NHẤT thấy được
+       mà KHÔNG BẤM GÌ. Bảy phần tử ở trên đều nằm trong popup, tức vẫn phải
+       mở cửa sổ chat mới thấy — đúng chỗ vòng trước khai nhầm. */
+    dauTB: phanTu(), nutNoi: phanTu()
   };
   return e;
 }
@@ -93,7 +106,16 @@ const CA = [
 
   ['Người dùng TỰ tắt báo tin nhắn', {
     batTrenMayChu: true, quyen: 'granted', coNotification: true, chatTat: 1
-  }, { nhanDuoc: false, coNutBat: false, tuTat: true }]
+  }, { nhanDuoc: false, coNutBat: false, tuTat: true }],
+
+  /* REV-0031 Việc 4 (L4) — quyền trình duyệt vẫn `granted` NHƯNG máy chủ
+     không còn giữ đăng ký nào của người này (`so_may = 0`): máy dùng chung ở
+     kho bị người đăng nhập sau chiếm mất endpoint, hoặc vừa bấm "Tắt đẩy trên
+     máy này". Trước bản vá cả hai đều rơi vào ④ "Đang bật. Đóng ERP rồi vẫn
+     nhận được tin nhắn" — điếc âm thầm mà màn hình nói dối. */
+  ['Máy chủ đã MẤT đăng ký của máy này (máy dùng chung / vừa tắt)', {
+    batTrenMayChu: true, quyen: 'granted', coNotification: true, soMayTrenMayChu: 0
+  }, { nhanDuoc: false, coNutBat: true }]
 ];
 
 async function chay() {
@@ -112,6 +134,30 @@ async function chay() {
   ok('dải #tbdMoi nằm NGOÀI bảng #tbdCaiDat (không cần bấm 🔔 mới thấy)',
     viTriMoi > 0 && moCaiDat > 0 && !(viTriMoi > moCaiDat && viTriMoi < dongCaiDat),
     `#tbdMoi ở ${viTriMoi}, #tbdCaiDat ở ${moCaiDat}`);
+
+  /* --- ①b REV-0031 Việc 3 — ĐÍNH CHÍNH LỜI KHAI "KHÔNG CẦN BẤM GÌ" ------
+     Vòng trước khai dải #tbdMoi hiện ra mà không cần bấm gì. SAI: nó nằm
+     TRONG `#cnbPopup`, mà popup `hidden` cho tới khi bấm bong bóng `#cnbNut`.
+     Đo lại cho đúng sự thật, rồi đòi phải có một dấu hiệu NGOÀI popup. */
+  {
+    const moPopup = html.indexOf('id="cnbPopup"');
+    const dongPopup = html.indexOf('id="cnbGanDay"');   // phần tử đầu tiên SAU khi popup đóng thẻ
+    const trongPopup = (id) => {
+      const v = html.indexOf(`id="${id}"`);
+      return v > moPopup && v < dongPopup;
+    };
+    if (moPopup < 0 || dongPopup < 0) { console.error('HỎNG: không tìm được mốc #cnbPopup/#cnbGanDay'); process.exit(2); }
+    ok('SỰ THẬT: #tbdMoi và #cnbChuong ĐỀU nằm trong #cnbPopup → vẫn phải MỞ cửa sổ chat mới thấy',
+      trongPopup('tbdMoi') && trongPopup('cnbChuong'), 'đúng như REV-0031 chỉ ra');
+    ok('#cnbPopup có thuộc tính hidden (popup đóng khi vừa vào ERP)',
+      /id="cnbPopup"[^>]*\shidden/.test(html));
+    ok('DẤU ĐIẾC #cnbDauTB nằm NGOÀI #cnbPopup, gắn trên bong bóng #cnbNut luôn hiện',
+      html.includes('id="cnbDauTB"') && !trongPopup('cnbDauTB') &&
+      html.indexOf('id="cnbDauTB"') > html.indexOf('id="cnbNut"'));
+    const css = readFileSync(path.join(GOC, 'public', 'assets', 'css', 'style.css'), 'utf8');
+    ok('CSS có chốt `.cnb-dau-tb[hidden] { display: none }` (lỗi ADR-0008: thiếu là báo oan mãi)',
+      /\.cnb-dau-tb\[hidden\]\s*\{\s*display:\s*none/.test(css));
+  }
 
   /* --- ② Từng trạng thái ------------------------------------------------ */
   console.log('\nB · Mọi trạng thái người dùng có thể rơi vào');
@@ -148,10 +194,27 @@ async function chay() {
     }
     ok('  chữ dài trong bảng cài đặt vẫn có, không mất đi',
       els.chuTrangThai.textContent.length >= 20);
+
+    /* REV-0031 Việc 3 — ĐÒI HỎI MỚI: thấy được mà KHÔNG BẤM GÌ CẢ, tức phải
+       nằm trên phần tử ngoài `#cnbPopup`. Đây là thứ vòng trước khai có mà
+       thực ra không có. */
+    ok('  ⑤ KHÔNG BẤM GÌ: dấu trên bong bóng chat nói đúng tình trạng',
+      els.dauTB.hidden === !!mong.nhanDuoc &&
+      (mong.nhanDuoc ? true : els.dauTB.textContent === M.NUT_DANG_TAT),
+      mong.nhanDuoc ? 'đang nhận được thật → không có dấu, không doạ người dùng'
+                    : `hiện dấu "${els.dauTB.textContent}"`);
+    ok('  ⑥ KHÔNG BẤM GÌ: rê chuột / máy đọc màn hình trên bong bóng đọc được tình trạng',
+      String(els.nutNoi.thuocTinh['aria-label'] || '').includes(tt.chuNgan) &&
+      els.nutNoi.title.includes(tt.chuNgan));
   }
 
-  ok(`${CA.length} ca đo ra ${maDaGap.size} trạng thái KHÁC NHAU (không có ca nào trùng nhầm)`,
-    maDaGap.size >= 8, [...maDaGap].join(', '));
+  /* 9 nhánh của `tinhTrangThaiTB()` phải được đi qua HẾT. (10 ca > 9 trạng
+     thái là cố ý: iPhone-đã-cài-PWA-chưa-cho-quyền và Android-chưa-hỏi-quyền
+     là hai đường vào KHÁC NHAU cùng dẫn tới `chua_bat` — phải đo cả hai.) */
+  ok(`${CA.length} ca đi qua ĐỦ ${maDaGap.size}/9 nhánh trạng thái, không sót nhánh nào`,
+    maDaGap.size === 9, [...maDaGap].join(', '));
+  ok('trạng thái "máy chủ mất đăng ký" KHÔNG bị "Để sau" giấu đi được',
+    M.hoanDuoc('may_mat_dangky') === false);
 
   /* --- ③ "Để sau" chỉ được giấu LỜI MỜI, không được giấu cảnh báo -------- */
   console.log('\nC · Bấm "Để sau" rồi thì ai còn được nhìn thấy');
@@ -180,13 +243,15 @@ async function chay() {
   const goc = readFileSync(NGUON, 'utf8');
   const tim1 = /els\.nutChuong\.textContent = tt\.nut;/;
   const tim2 = /els\.daiMoi\.hidden = !hienDai;/;
-  if (!tim1.test(goc) || !tim2.test(goc)) {
+  const tim3 = /els\.dauTB\.hidden = !!tt\.nhanDuoc;/;
+  if (!tim1.test(goc) || !tim2.test(goc) || !tim3.test(goc)) {
     console.error('HỎNG: regex ca đối chứng đã lạc hậu so với code — sửa rồi chạy lại.');
     process.exit(2);
   }
   const khongVa = goc
     .replace(tim1, '/* GỠ CỐ Ý: nút không đổi hình, đúng như bản trước khi vá */')
-    .replace(tim2, 'els.daiMoi.hidden = true;   /* GỠ CỐ Ý: dải không bao giờ hiện */');
+    .replace(tim2, 'els.daiMoi.hidden = true;   /* GỠ CỐ Ý: dải không bao giờ hiện */')
+    .replace(tim3, 'els.dauTB.hidden = true;    /* GỠ CỐ Ý: bong bóng không có dấu điếc */');
   const duongTam = path.join(path.dirname(NGUON), '_doichung_trangthai.js');
   writeFileSync(duongTam, khongVa, 'utf8');
   try {
@@ -197,10 +262,11 @@ async function chay() {
       const els = banGiaoDien();
       els.nutChuong.textContent = KV.NUT_DANG_BAT;   // như HTML gốc: nút luôn là 🔔
       KV.veGiaoDienTB(els, KV.tinhTrangThaiTB(mt), { daHoan: false });
-      const nhinThay = els.nutChuong.textContent !== KV.NUT_DANG_BAT || els.daiMoi.hidden === false;
+      const nhinThay = els.nutChuong.textContent !== KV.NUT_DANG_BAT ||
+        els.daiMoi.hidden === false || els.dauTB.hidden === false;
       if (!nhinThay) batDuoc++;
     }
-    ok('ĐỐI CHỨNG · bản KHÔNG VÁ để LỌT cả 8 ca điếc (phép đo nhạy thật)',
+    ok(`ĐỐI CHỨNG · bản KHÔNG VÁ để LỌT cả ${CA.length - 1} ca điếc (phép đo nhạy thật)`,
       batDuoc === CA.length - 1, `${batDuoc}/${CA.length - 1} ca không có dấu hiệu nào`);
   } finally {
     try { unlinkSync(duongTam); } catch { /* đã xoá */ }

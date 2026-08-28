@@ -12,6 +12,7 @@
 
 import { API } from './api.js';
 import { tinhTrangThaiTB, veGiaoDienTB, hoanDuoc } from './tbd-trangthai.js';
+import { nenChayVongLap, nenDongDau } from './nhip-tim-chat.js';
 
 /* ---- Danh mục tab -------------------------------------------------------
    "nhom" = nhóm cha hiện trên sidebar, bám theo 4 phòng ban thật của công ty
@@ -3058,6 +3059,12 @@ const TBDay = (() => {
   let khoaCongKhai = null;
   let chatTat = 0;             // người dùng tự tắt loại "tin nhắn"
   let dangKyHong = false;      // đã cho quyền nhưng máy KHÔNG đăng ký được (điếc âm thầm)
+  /* MÁY CHỦ đang giữ mấy đăng ký của tôi (REV-0031 Việc 4 · L4). `null` =
+     chưa hỏi được -> KHÔNG kết luận gì. `pushKhoa` trả sẵn `so_may` từ Đợt 1
+     mà chưa ai dùng: thiếu nó thì "Đang bật" chỉ là lời của TRÌNH DUYỆT, còn
+     máy chủ đã mất đăng ký (máy dùng chung bị người sau chiếm, hoặc vừa bấm
+     "Tắt đẩy trên máy này") thì màn hình vẫn khoe đang bật — nói dối. */
+  let soMayTrenMayChu = null;
   let amCtx = null;
 
   const laIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
@@ -3176,6 +3183,9 @@ const TBDay = (() => {
         endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth, may: moTaMay()
       });
       dangKyHong = false;
+      // Vừa đăng ký xong -> máy chủ chắc chắn đang giữ ít nhất máy này. Không
+      // cập nhật ở đây thì `so_may` cũ (đọc TRƯỚC lúc đăng ký) sẽ báo oan.
+      soMayTrenMayChu = Math.max(soMayTrenMayChu || 0, 1);
       return true;
     } catch { dangKyHong = true; return false; }   // đã cho quyền mà vẫn điếc — phải hiện ra
   }
@@ -3193,6 +3203,9 @@ const TBDay = (() => {
       const ep = sub?.endpoint;
       if (sub) await sub.unsubscribe();
       await API.pushHuy(ep || '');
+      // Đã tự tắt trên máy này -> máy chủ không còn giữ đăng ký của nó nữa.
+      // Không hạ số này thì màn hình vẫn báo "Đang bật" ngay sau khi vừa tắt.
+      soMayTrenMayChu = Math.max((soMayTrenMayChu || 1) - 1, 0);
       return true;
     } catch { return false; }
   }
@@ -3205,6 +3218,7 @@ const TBDay = (() => {
       batTrenMayChu = !!k.bat;
       khoaCongKhai = k.khoa_cong_khai;
       chatTat = k.chat_tat ? 1 : 0;
+      soMayTrenMayChu = typeof k.so_may === 'number' ? k.so_may : null;
       return k;
     } catch { return null; }
   }
@@ -3214,8 +3228,7 @@ const TBDay = (() => {
     if (chatTat) return false;                // người ta đã chủ động tắt
     if (daChoQuyen()) return false;           // đã bật rồi
     if (typeof Notification !== 'undefined' && Notification.permission === 'denied') return false;
-    const hoan = Number(localStorage.getItem(KHOA_HOAN) || 0);
-    return !(hoan && Date.now() < hoan);      // bấm "Để sau" thì im 7 ngày
+    return !dangHoan();                       // bấm "Để sau" thì im 7 ngày
   }
   function hoanLai(ngay = 7) {
     try { localStorage.setItem(KHOA_HOAN, String(Date.now() + ngay * 86400000)); } catch { /* chế độ riêng tư */ }
@@ -3228,14 +3241,23 @@ const TBDay = (() => {
       batTrenMayChu, chatTat,
       coNotification: typeof Notification !== 'undefined',
       quyen: typeof Notification !== 'undefined' ? Notification.permission : null,
-      laIOS, daCaiManHinhChinh, dangKyHong
+      laIOS, daCaiManHinhChinh, dangKyHong, soMayTrenMayChu
     };
   }
 
-  /** Còn hoãn "Để sau" tới lúc nào — chỉ áp cho lời mời, xem `hoanDuoc()`. */
+  /** Còn hoãn "Để sau" tới lúc nào — chỉ áp cho lời mời, xem `hoanDuoc()`.
+   *  CÓ try/catch (REV-0031): `setItem` ở `hoanLai()` đã phòng chế độ riêng
+   *  tư từ trước, còn `getItem` thì không — mà Safari riêng tư/Firefox chặn
+   *  cookie NÉM ngay ở `getItem`. Lỗi đó nổ trong `veTrangThaiTB()` nên
+   *  `veGiaoDienTB()` không chạy, chuông giữ `hidden`, dải trạng thái không
+   *  hiện: đúng lỗi H2 gốc quay lại nguyên vẹn, mà lại IM LẶNG TUYỆT ĐỐI vì
+   *  chỗ gọi dùng `.then(...)` không có `.catch`. Hỏng thì coi như KHÔNG hoãn:
+   *  thà hiện thừa một lời mời còn hơn giấu mất một người đang điếc. */
   function dangHoan() {
-    const hoan = Number(localStorage.getItem(KHOA_HOAN) || 0);
-    return !!(hoan && Date.now() < hoan);
+    try {
+      const hoan = Number(localStorage.getItem(KHOA_HOAN) || 0);
+      return !!(hoan && Date.now() < hoan);
+    } catch { return false; }
   }
 
   return {
@@ -3352,11 +3374,64 @@ async function khoiDongChat() {
     khung.querySelectorAll('.chat-tin').forEach(el => el.remove());   // giữ lại #chat-trong (nằm trong khung)
     idCuoi = 0;
     nguoiGuiTruoc = null; taoLucTruoc = null;
-    const { tin_nhan } = await API.chatDanhSach(null, nguoiNhanHienTai?.id, dangMo);
+    const { tin_nhan } = await API.chatDanhSach(null, nguoiNhanHienTai?.id, dongDauDuoc());
     $('#chat-trong').hidden = tin_nhan.length > 0;
     tin_nhan.forEach(t => themTin(t));
     cuoiTrang();
   }
+
+  /* ---- REV-0031 Việc 2 — TẮT NHỊP TIM KHI KHÔNG CÓ AI NGỒI ĐÓ -----------
+     Ba chốt nằm ở `nhip-tim-chat.js` (hàm thuần, bàn thử đo thẳng vào đó):
+     tab ẩn / ngồi không quá 5 phút → dừng hẳn vòng lặp; ngoài giờ làm → vẫn
+     hỏi tin nhưng KHÔNG đóng dấu (không ghi D1). Trước bản này không có
+     `clearInterval` nào: một máy bàn ở kho bỏ quên qua 3 ngày nghỉ ghi 43.200
+     dòng, trong khi cả hệ thống chỉ được 100.000 dòng/ngày. */
+  let hoatDongLuc = Date.now();          // lần cuối có người thật chạm vào máy
+  let nhipTin = null;
+  let daKhoiDongNhip = false;            // chưa tải xong lần đầu thì đừng hỏi chen ngang
+
+  const doHoatDong = () => {
+    const nghi = !nhipTin;               // đang ngủ mà có người chạm → dậy ngay
+    hoatDongLuc = Date.now();
+    if (nghi && daKhoiDongNhip) batNhipTin();
+  };
+  ['pointerdown', 'keydown', 'wheel', 'touchstart', 'focus'].forEach(
+    (sk) => window.addEventListener(sk, doHoatDong, { passive: true }));
+
+  function trangThaiNhip() {
+    return {
+      dangMo,
+      tabHien: document.visibilityState !== 'hidden',
+      hoatDongCachDay: Date.now() - hoatDongLuc
+    };
+  }
+  /** Cờ `dang_mo` gửi lên máy chủ — chỉ bật khi THẬT SỰ có người đang xem. */
+  function dongDauDuoc() { return nenDongDau(trangThaiNhip()); }
+
+  function batNhipTin() {
+    if (nhipTin) return;
+    nhipTin = setInterval(nhipMotLuot, 6000);
+    hoiTinMoi();                          // dậy là hỏi ngay, không đợi 6 giây
+  }
+  function tatNhipTin() { clearInterval(nhipTin); nhipTin = null; }
+
+  /** Mỗi nhịp tự hỏi lại xem còn được chạy không — hết điều kiện thì tự tắt. */
+  function nhipMotLuot() {
+    if (!nenChayVongLap(trangThaiNhip())) { tatNhipTin(); return; }
+    hoiTinMoi();
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') tatNhipTin();
+    else doHoatDong();
+  });
+
+  /* CỐ Ý CHỈ TẮT `hoiTinMoi`, KHÔNG tắt `hoiChuaDocToanCuc`:
+     · `hoiTinMoi` là hàm DUY NHẤT mang cờ `dang_mo` — tức là hàm duy nhất
+       làm máy chủ GHI. Tắt nó là tắt trọn vẹn nguồn tốn hạn mức.
+     · `hoiChuaDocToanCuc` là SELECT thuần (Hồ Ly đo: `SEARCH … USING INTEGER
+       PRIMARY KEY (rowid>?)`, ~0 dòng đọc mỗi lượt) VÀ nó chính là chỗ dựng
+       thông báo hệ thống khi tab đang ẩn. Tắt theo cho "gọn" là giết mất lớp
+       ② của CTL-0014 — đúng nỗi đau gốc của chị Lan. */
 
   async function hoiTinMoi() {
     try {
@@ -3364,7 +3439,7 @@ async function khoiDongChat() {
          không đẩy thông báo lên điện thoại của người đang ngồi đọc đúng đoạn
          chat đó (CTL-0014). Vòng hỏi lại vẫn chạy khi popup đã đóng — truyền
          cờ ở mọi lượt là chốt chặn luôn bật và không ai nhận được gì. */
-      const { tin_nhan } = await API.chatDanhSach(idCuoi, nguoiNhanHienTai?.id, dangMo);
+      const { tin_nhan } = await API.chatDanhSach(idCuoi, nguoiNhanHienTai?.id, dongDauDuoc());
       if (tin_nhan.length) {
         const oDay = khung.scrollHeight - khung.scrollTop - khung.clientHeight < 80;
         tin_nhan.forEach(t => themTin(t));
@@ -3430,8 +3505,9 @@ async function khoiDongChat() {
   await taiLanDau();
   await hoiChuaDocToanCuc();   // lấy mốc ban đầu, KHÔNG tính lịch sử cũ là "mới" ngay lúc vừa mở trang
   await veGanDay();
-  setInterval(hoiTinMoi, 6000);
-  setInterval(hoiChuaDocToanCuc, 6000);
+  daKhoiDongNhip = true;
+  batNhipTin();                          // tự tắt/bật theo tab ẩn + ngồi không (REV-0031 Việc 2)
+  setInterval(hoiChuaDocToanCuc, 6000);  // SELECT thuần — giữ chạy để tab ẩn vẫn báo được
 
   /* ==== CTL-0014 · Thông báo tin nhắn — giao diện ========================
      Ba việc: (1) nút 🔔 mở bảng cài đặt, (2) dải mời bật quyền xuất hiện
@@ -3451,7 +3527,10 @@ async function khoiDongChat() {
     if (oChatBat) oChatBat.checked = !TBDay.chatTat;
     const tt = tinhTrangThaiTB(TBDay.doTrangThai());
     veGiaoDienTB(
-      { nutChuong, chuTrangThai, nutTatMay, daiMoi, chuMoi, nutBat, nutDeSau },
+      { nutChuong, chuTrangThai, nutTatMay, daiMoi, chuMoi, nutBat, nutDeSau,
+        /* REV-0031 Việc 3 — hai phần tử NGOÀI `#cnbPopup`: đây là thứ duy
+           nhất người đang điếc thấy được mà không bấm gì. */
+        dauTB: $('#cnbDauTB'), nutNoi: $('#cnbNut') },
       tt,
       { daHoan: TBDay.dangHoan() }
     );
@@ -3568,8 +3647,14 @@ async function khoiDongChat() {
     if (!k) return;
     if (k.bat && !k.chat_tat && TBDay.daChoQuyen()) await TBDay.dangKyDay();
     /* Vẽ SAU khi thử đăng ký: có thế mới biết ca "đã cho quyền mà vẫn điếc".
-       Vẽ ở đây nghĩa là trạng thái hiện ra ngay khi mở ERP, KHÔNG cần bấm 🔔. */
+       Vẽ ở đây nghĩa là trạng thái hiện ra ngay khi mở ERP, KHÔNG cần bấm 🔔
+       và cũng không cần mở cửa sổ chat — dấu trên bong bóng nằm ngoài popup. */
     veTrangThaiTB();
+  }).catch((e) => {
+    /* `.then(...)` KHÔNG có `.catch` là cách lỗi H2 quay lại mà không ai hay:
+       một ngoại lệ ở đây nuốt trọn việc vẽ trạng thái, chuông giữ `hidden`,
+       người dùng điếc trong im lặng tuyệt đối. Ghi ra console để còn lần được. */
+    console.error('Vẽ trạng thái thông báo:', e?.message || e);
   });
 
   /* ---- Mở / đóng popup (giống hệt cách chuông thông báo làm) ----

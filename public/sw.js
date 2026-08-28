@@ -51,8 +51,18 @@ self.addEventListener('push', (e) => {
        nên tin anh Duy THAY THẾ tin chị Hằng và (vì `renotify:false`) không kêu
        lại lần nào: chị Lan nhìn thấy một dòng và tưởng chỉ một người nhắn. Nhãn
        phải theo TỪNG NGƯỜI GỬI; `renotify:true` để lượt sau của cùng người vẫn
-       kêu chứ không âm thầm tráo chữ. Trần 12 thông báo/ngày ở máy chủ vẫn là
-       thứ giữ cho nó không thành ồn. */
+       kêu chứ không âm thầm tráo chữ.
+
+       ĐÍNH CHÍNH (REV-0031 · Việc 3). Vòng trước khai rằng 5 tin liên tiếp của
+       CÙNG một người chỉ kêu MỘT lần nhờ `tag` — đúng kết quả, SAI nguyên nhân.
+       `renotify: true` đúng nghĩa của nó là KÊU LẠI mỗi lần thay thế cùng nhãn;
+       `tag` chỉ gộp phần HIỂN THỊ (một dòng), không dập tiếng. Thứ giữ cho nó
+       kêu một lần là LỚP GỘP 60 GIÂY Ở MÁY CHỦ (`GOP_GIAY`,
+       src/day-thong-bao.js): gói tin thứ 2..5 KHÔNG BAO GIỜ được gửi đi.
+       Ghi đúng chỗ này mới là quan trọng: ai đọc nhầm rồi đi sửa `renotify` sẽ
+       không đổi được gì, còn ai đụng vào `GOP_GIAY` thì làm điện thoại kêu liên
+       hồi mà không hiểu vì sao. Trần 12 thông báo/ngày (`TRAN_NGAY`) là lớp
+       chặn thứ ba, tính theo NGÀY chứ không theo phút. */
     tag: d.loai === 'chat' ? ('chat:' + (d.nguoi_gui_id || 'khong-ro')) : (d.loai || 'chung'),
     renotify: true,
     // Rung nhẹ hai nhịp. Android nghe theo; iOS bỏ qua trường này, không lỗi.

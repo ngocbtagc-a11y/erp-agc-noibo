@@ -35,6 +35,7 @@ import { sinhMa } from './dinh-danh.js';
    trong `day-thong-bao.js`, KHÔNG rải ra đây. */
 import { dayTinNhanChat, donNhatKyCu, kiemTraCaiDatDay, TRAN_NGAY } from './day-thong-bao.js';
 import { khoaVAPID } from './webpush.js';
+import { chotVaCanhBao, demGhi } from './canh-bao-ghi.js';
 
 /* ---- Trả lời dạng JSON -------------------------------------------------- */
 
@@ -348,10 +349,23 @@ async function chatDanhSach(req, env) {
      chặn này luôn bật và không ai nhận được thông báo nào. */
   if (url.searchParams.get('dang_mo') === '1') {
     try {
-      await env.DB.prepare(
+      /* REV-0031 Việc 2 — ĐÓNG DẤU TỐI ĐA 30 GIÂY MỘT LẦN, chặn ở SQL.
+         Đo trên bản thật: 100 lượt hỏi = 100 dòng ghi, tức 1 người mở cửa sổ
+         chat 10 tiếng = 6.000 dòng/ngày; 20 người = 120.000 — một mình nó
+         vượt hạn mức 100.000 dòng/ngày của gói miễn phí. Chặn ở MÁY CHỦ chứ
+         không ở trình duyệt: client sửa được, máy chủ thì không.
+         `CON_DANG_XEM_GIAY = 45` (day-thong-bao.js) nên đóng dấu mỗi 30 giây
+         vẫn còn dư 15 giây an toàn — không ai bị đẩy thông báo oan.
+         Vế `xem_chat_voi IS NOT ?` giữ cho việc ĐỔI NGƯỜI ĐANG CHAT được đóng
+         dấu NGAY, không phải đợi hết 30 giây: đây là ca duy nhất mà chậm một
+         nhịp là đẩy nhầm thông báo. `IS NOT` so an toàn với NULL (kênh chung). */
+      demGhi(await env.DB.prepare(
         `UPDATE tai_khoan SET xem_chat_voi = ?, xem_chat_luc = datetime('now')
-          WHERE nhan_su_id = ?`
-      ).bind(voi, phien.nhan_su_id).run();
+          WHERE nhan_su_id = ?
+            AND (xem_chat_luc IS NULL
+                 OR xem_chat_voi IS NOT ?
+                 OR xem_chat_luc < datetime('now','-30 seconds'))`
+      ).bind(voi, phien.nhan_su_id, voi).run());
     } catch (e) { console.error('Nhịp tim chat:', e.message); }
   }
 
@@ -1666,7 +1680,12 @@ async function hoanDanhSach(req, env) {
    donDepDuLieuNgoaiThang) nên màn này cũng chỉ tra được trong tháng hiện tại.
    Cột tinh_trang_hang chỉ lấy khi DB thật đã có (xem coCotTinhTrangHang
    trong shopee.js) — tự nâng cấp khi Sếp Ngọc nạp migration, không lỗi nếu
-   chưa nạp. */
+   chưa nạp.
+   XẾP THEO `tao_luc_shopee` chứ KHÔNG theo `dong_bo_luc` (REV-0031 §Việc 1):
+   từ khi cron chỉ ghi đơn nào ĐỔI THẬT, `dong_bo_luc` là "lần cuối đơn này
+   đổi" — xếp theo nó thì đơn cũ không đổi gì sẽ rơi khỏi LIMIT 500 (bảng
+   đang có 523 dòng). Trước đây mọi dòng cùng một giá trị nên thứ tự chỉ là
+   ngẫu nhiên; xếp theo lúc SÀN TẠO đơn vừa ổn định vừa đúng nghĩa "lịch sử". */
 async function hoanLichSu(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
@@ -1682,7 +1701,7 @@ async function hoanLichSu(req, env) {
            ${coTT ? ', d.tinh_trang_hang, d.tinh_trang_luc, d.tinh_trang_boi' : ''}
       FROM don_hoan d
       LEFT JOIN sku_map m ON m.ten_san_pham = d.san_pham_ten
-     ORDER BY d.dong_bo_luc DESC LIMIT 500
+     ORDER BY CAST(d.tao_luc_shopee AS INTEGER) DESC, d.return_sn DESC LIMIT 500
   `).all();
   return json({ don_hoan: results });
 }
@@ -4757,6 +4776,13 @@ export default {
         try { await donDepDuLieuNgoaiThang(env); } catch (e) { console.error('Cron dọn dữ liệu ngoài tháng:', e.message); }
       try { await donDepJsonDonHangCu(env); } catch (e) { console.error('Cron dọn payload đơn hàng cũ:', e.message); }
       }
+
+      /* REV-0031 Việc 1 — CANH HẠN MỨC GHI. Phải là việc CUỐI CÙNG: nó chốt
+         số dòng mà mọi việc ở trên vừa ghi (D1 trả sẵn `meta.rows_written`)
+         và kêu Telegram khi chạm 80% hạn mức gói miễn phí. Dùng lại đúng cron
+         5 phút này, KHÔNG thêm lịch vào `wrangler.toml`. Trước bản này ERP đã
+         ghi vượt hạn mức 3,47 lần suốt nhiều tuần mà không ai được báo. */
+      try { await chotVaCanhBao(env, guiTelegram); } catch (e) { console.error('Cron canh hạn mức ghi:', e.message); }
     })());
   },
 

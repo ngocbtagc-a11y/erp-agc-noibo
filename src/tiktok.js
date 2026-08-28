@@ -24,6 +24,8 @@
    ========================================================================== */
 
 import { duocXemDonHoan, duocQuanLyShopee, duocXemTab } from './quyen.js';
+import { locDoi, COT_DON_HOAN, COT_DON_HANG } from './chi-ghi-khi-doi.js';
+import { demGhi } from './canh-bao-ghi.js';
 
 function json(d, status = 200) {
   return new Response(JSON.stringify(d), {
@@ -246,7 +248,7 @@ export async function dongBoNen(env) {
     const spTen = [...new Set(tenArr)].join(' | ') || null;
     const spSku = [...new Set(skuArr)].join(' | ') || null;
     const soLuong = tongSl || null;
-    await env.DB.prepare(`
+    demGhi(await env.DB.prepare(`
       INSERT INTO don_hoan (return_sn, order_sn, trang_thai, ly_do, so_tien, tien_te, nguoi_mua, san_pham, san_pham_ten, san_pham_sku, so_luong, ma_van_don, tao_luc_shopee, cap_nhat_shopee, du_lieu_json, nguon, dang_cho, dong_bo_luc)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'tiktok', 'van_hanh', datetime('now','+7 hours'))
       ON CONFLICT(return_sn) DO UPDATE SET
@@ -256,6 +258,7 @@ export async function dongBoNen(env) {
         ma_van_don=excluded.ma_van_don,
         cap_nhat_shopee=excluded.cap_nhat_shopee, du_lieu_json=excluded.du_lieu_json,
         nguon='tiktok', dong_bo_luc=datetime('now','+7 hours')
+      ${locDoi('don_hoan', COT_DON_HOAN, ["don_hoan.nguon IS NOT 'tiktok'"])}
     `).bind(
       String(returnId), r.order_id || r.order_sn || null,
       r.return_status || r.status || null, r.return_reason || r.reason || null,
@@ -267,16 +270,17 @@ export async function dongBoNen(env) {
       r.create_time ? String(r.create_time) : null,
       r.update_time ? String(r.update_time) : null,
       JSON.stringify(r)
-    ).run();
+    ).run());
     them++;
   }
   // Đặt mốc đếm 12h: đơn nào sàn báo "khách đã gửi hàng về" (BUYER_SHIPPED_ITEM)
   // mà chưa có mốc và kho chưa nhận → ghi mốc = bây giờ (giờ VN). Chỉ ghi 1 lần.
-  await env.DB.prepare(`
+  // (Đã có sẵn `WHERE cho_kho_nhan_tu IS NULL` nên lượt sau ghi 0 dòng.)
+  demGhi(await env.DB.prepare(`
     UPDATE don_hoan SET cho_kho_nhan_tu = datetime('now','+7 hours')
      WHERE nguon='tiktok' AND cho_kho_nhan_tu IS NULL AND kho_nhan_luc IS NULL
        AND trang_thai='BUYER_SHIPPED_ITEM'
-  `).run();
+  `).run());
   return them;
 }
 
@@ -385,6 +389,7 @@ export async function dongBoDonHangNen(env) {
           nguoi_mua=excluded.nguoi_mua, so_sp=excluded.so_sp,
           cap_nhat_san=excluded.cap_nhat_san, du_lieu_json=excluded.du_lieu_json,
           dong_bo_luc=datetime('now','+7 hours')
+        ${locDoi('don_hang', COT_DON_HANG)}
       `).bind(
         String(orderId), o.status || null,
         tong != null ? Math.round(Number(tong) * 100000) || null : null,
@@ -400,7 +405,7 @@ export async function dongBoDonHangNen(env) {
       them++;
     }
     if (cauLenh.length) {
-      await env.DB.batch(cauLenh);
+      demGhi(await env.DB.batch(cauLenh));
       subReq++;
     }
 
@@ -411,8 +416,8 @@ export async function dongBoDonHangNen(env) {
 
   const mocLuu = con ? mocMoi : denGoc;
   if (mocLuu) {
-    await env.DB.prepare('UPDATE tiktok_ket_noi SET dh_dong_bo_den = ? WHERE shop_id = ?')
-                .bind(String(mocLuu), kn.shop_id).run();
+    demGhi(await env.DB.prepare('UPDATE tiktok_ket_noi SET dh_dong_bo_den = ? WHERE shop_id = ?')
+                .bind(String(mocLuu), kn.shop_id).run());
   }
   return them;
 }
