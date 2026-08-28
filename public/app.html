@@ -680,11 +680,15 @@
           <button type="button" class="cnb-dong" id="cnbDong" aria-label="Đóng chat">✕</button>
         </div>
 
-        <!-- CTL-0014 — DẢI MỜI BẬT THÔNG BÁO.
-             CỐ Ý không hỏi quyền lúc vừa mở ERP: hỏi sai lúc là bị từ chối, mà
-             trình duyệt KHÔNG cho hỏi lại lần thứ hai — mất vĩnh viễn. Dải này
-             chỉ hiện SAU KHI người dùng vừa gửi hoặc vừa mở một tin nhắn, tức
-             là đúng lúc họ hiểu vì sao cần. Bấm "Bật" mới gọi requestPermission. -->
+        <!-- CTL-0014 — DẢI TRẠNG THÁI + MỜI BẬT THÔNG BÁO.
+             Nằm NGOÀI bảng #tbdCaiDat là cố ý: người đang KHÔNG nhận được tin
+             (iPhone chưa cài PWA, lỡ bấm Chặn, máy chủ chưa bật khoá) phải thấy
+             ngay khi mở cửa sổ chat, KHÔNG phải bấm nút 🔔 mới biết — đó đúng là
+             lỗi REV-0028 H2: chị Lan không biết mình đang bỏ lỡ tin.
+             Riêng LỜI MỜI xin quyền vẫn CỐ Ý không hiện lúc vừa mở ERP: hỏi sai
+             lúc là bị từ chối, mà trình duyệt KHÔNG cho hỏi lại lần thứ hai —
+             mất vĩnh viễn. Nó chỉ hiện SAU KHI người dùng vừa gửi hoặc vừa mở
+             một tin nhắn. Bấm "Bật" mới gọi requestPermission. -->
         <div class="tbd-moi" id="tbdMoi" hidden>
           <div class="tbd-moi-chu" id="tbdMoiChu"></div>
           <div class="tbd-moi-nut">

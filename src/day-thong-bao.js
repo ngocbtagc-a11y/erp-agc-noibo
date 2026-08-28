@@ -33,7 +33,7 @@
    ========================================================================== */
 
 import { gioVN, ngayVN, duocGuiNhac } from './nhac-nhan-su.js';
-import { guiMotDangKy, khoaVAPID } from './webpush.js';
+import { guiMotDangKy, khoaVAPID, chuKyVAPID, LOAI_HONG, duocXoaDangKy } from './webpush.js';
 
 /** Gộp: một người gửi chỉ làm kêu MỘT lần trong ngần này giây.
  *  60s = "5 tin trong một phút thì chỉ 1 thông báo" của yêu cầu. */
@@ -131,19 +131,68 @@ export async function xetDayChat(env, tin, luc = new Date()) {
 /** Nội dung hiện trên màn hình KHOÁ. CỐ Ý KHÔNG kèm lời tin nhắn: điện thoại
  *  để trên bàn kho là người khác đọc được, mà chat nội bộ có cả chuyện lương
  *  và kỷ luật (CTL-0014 §5.3). Chỉ nói AI nhắn; muốn đọc thì mở ERP ra. */
-export function loiThongBao(nguoiGuiTen, soTin = 1) {
+export function loiThongBao(nguoiGuiTen, soTin = 1, nguoiGuiId = null) {
   return {
     tieu_de: `💬 ${nguoiGuiTen}`,
     than: soTin > 1 ? `Gửi bạn ${soTin} tin nhắn mới` : 'Gửi bạn một tin nhắn mới',
     loai: 'chat',
-    // Bấm vào thì mở ĐÚNG đoạn chat đó, không đổ về trang chủ bắt tự tìm.
-    duong_dan: '/app.html#chat'
+    /* REV-0028 M1 — nhãn gộp PHẢI theo TỪNG NGƯỜI GỬI. Trước bản vá `sw.js`
+       dùng chung nhãn `'chat'`, nên tin của anh Duy THAY THẾ tin của chị Hằng
+       trên màn hình khoá và không kêu lại: chị Lan thấy một dòng, tưởng chỉ
+       một người nhắn. Cùng một người thì vẫn gộp — đó mới là ý ban đầu. */
+    nguoi_gui_id: nguoiGuiId,
+    nguoi_gui_ten: nguoiGuiTen,
+    /* REV-0028 M3 — bấm vào thì mở ĐÚNG đoạn chat đó, không đổ về kênh chung
+       bắt tự đi tìm. Đã cố ý giấu nội dung thì cú bấm bắt buộc phải tới nơi. */
+    duong_dan: nguoiGuiId ? `/app.html#chat=${encodeURIComponent(nguoiGuiId)}` : '/app.html#chat'
   };
 }
 
-/** Đẩy tới MỌI máy người đó đã bật. Tự dọn đăng ký chết (đổi máy, gỡ app).
- *  Trả về { gui, hong, xoa }. */
-export async function dayToiNguoi(env, nhanSuId, noiDung, luc = new Date()) {
+/* ---- Kêu to khi hỏng ở PHÍA MÌNH (REV-0028 H1 · H3) ----------------------
+   Log LUÔN LUÔN (mỗi lượt), Telegram MỘT LẦN MỖI NGÀY cho mỗi loại — không
+   thì một sự cố khoá lệch bắn hàng trăm tin nhắn Telegram cho Gạo.
+   Chỗ đánh dấu "đã báo hôm nay" mượn luôn bảng `push_nhat_ky` sẵn có (không
+   thêm bảng, không thêm migration): dòng hệ thống mang `nhan_su_id` riêng và
+   `khoa` không khớp `'chat:%'` nên KHÔNG lọt vào phép đếm trần ngày. */
+export const NGUOI_HE_THONG = '_he_thong';
+
+async function baoMotLanMoiNgay(env, maCanhBao, ngay, luc) {
+  try {
+    const co = await env.DB.prepare(
+      `SELECT id FROM push_nhat_ky WHERE nhan_su_id = ? AND khoa = ? AND ngay = ? LIMIT 1`
+    ).bind(NGUOI_HE_THONG, maCanhBao, ngay).first();
+    if (co) return false;
+    await env.DB.prepare(
+      `INSERT INTO push_nhat_ky (nhan_su_id, khoa, ngay, tao_luc) VALUES (?, ?, ?, ?)`
+    ).bind(NGUOI_HE_THONG, maCanhBao, ngay, mocSQL(luc)).run();
+    return true;
+  } catch {
+    /* Bảng chưa có (chưa nạp migration) — đó CHÍNH LÀ ca phải kêu, nên cho kêu. */
+    return true;
+  }
+}
+
+/** Kêu to: log mọi lượt + Telegram tối đa 1 lần/ngày/loại. */
+export async function baoDong(env, maCanhBao, loiNhan, { guiTelegram, luc = new Date() } = {}) {
+  console.error(`[CTL-0014] ${maCanhBao}: ${loiNhan}`);
+  if (typeof guiTelegram !== 'function') return false;
+  const ngay = ngayVN(gioVN(luc));
+  if (!(await baoMotLanMoiNgay(env, `canhbao:${maCanhBao}`, ngay, luc))) return false;
+  try { return await guiTelegram(env, `⚠️ ERP · Thông báo tin nhắn (CTL-0014)\n\n${loiNhan}`); }
+  catch { return false; }
+}
+
+/** Ngần này lượt hỏng TẠM THỜI liên tiếp thì kêu lên — nhưng KHÔNG xoá.
+ *  Đăng ký rác thật (đổi máy, gỡ app) được máy chủ đẩy trả 404/410 và bị dọn ở
+ *  nhánh `thue_bao_chet`; không cần đoán mò bằng cách đếm lỗi mạng. Google 5xx
+ *  một tiếng là MỌI đăng ký cùng hỏng — đếm rồi xoá thì mất sạch cả công ty,
+ *  đúng thảm hoạ mà H1 mô tả, chỉ chậm hơn 10 nhịp. */
+export const NGUONG_KEU_HONG = 10;
+
+/** Đẩy tới MỌI máy người đó đã bật. Chỉ dọn đăng ký THẬT SỰ chết.
+ *  Trả về { gui, hong, xoa, dung_lai } — `dung_lai` là mã lý do dừng nửa chừng
+ *  (khoá sai / bị chặn tốc độ), để nơi gọi và bàn thử soi thẳng vào. */
+export async function dayToiNguoi(env, nhanSuId, noiDung, luc = new Date(), { guiTelegram } = {}) {
   const khoa = khoaVAPID(env);
   if (!khoa) return { gui: 0, hong: 0, xoa: 0, ly_do: 'chua_dat_khoa_vapid' };
 
@@ -151,34 +200,68 @@ export async function dayToiNguoi(env, nhanSuId, noiDung, luc = new Date()) {
     `SELECT id, endpoint, p256dh, auth FROM push_dangky WHERE nhan_su_id = ?`
   ).bind(nhanSuId).all();
 
-  let gui = 0, hong = 0, xoa = 0;
+  let gui = 0, hong = 0, xoa = 0, dungLai = null;
   for (const dk of results || []) {
     const kq = await guiMotDangKy(dk, noiDung, khoa, { hienTai: luc.getTime() });
+
     if (kq.ok) {
       gui++;
       await env.DB.prepare(
         `UPDATE push_dangky SET dung_luc = ?, hong_lien_tiep = 0 WHERE id = ?`
       ).bind(mocSQL(luc), dk.id).run();
-    } else if (kq.chet) {
-      // Máy chủ đẩy nói thẳng đăng ký không còn — xoá ngay, thử lại vô ích.
+      continue;
+    }
+
+    hong++;
+
+    /* ① ĐĂNG KÝ THẬT SỰ CHẾT — và CHỈ hai loại này. Máy chủ đẩy nói thẳng
+       "không còn nữa" (404/410), hoặc dữ liệu khoá của máy đó méo hẳn. */
+    if (duocXoaDangKy(kq.loai)) {
       await env.DB.prepare(`DELETE FROM push_dangky WHERE id = ?`).bind(dk.id).run();
       xoa++;
-    } else {
-      hong++;
-      /* Lỗi mạng tạm thời thì còn cứu được, nhưng hỏng 10 lượt LIÊN TIẾP là
-         đăng ký rác thật — không dọn thì nó ăn một lượt fetch mỗi tin nhắn,
-         mãi mãi. Đây là câu trả lời cho "đổi điện thoại thì rác dọn thế nào". */
-      const r = await env.DB.prepare(
-        `UPDATE push_dangky SET hong_lien_tiep = hong_lien_tiep + 1 WHERE id = ?
-         RETURNING hong_lien_tiep`
-      ).bind(dk.id).first();
-      if ((r?.hong_lien_tiep || 0) >= 10) {
-        await env.DB.prepare(`DELETE FROM push_dangky WHERE id = ?`).bind(dk.id).run();
-        xoa++;
-      }
+      continue;
+    }
+
+    /* ② LỖI CẤU HÌNH CỦA CHÍNH TA (khoá VAPID sai, 401, 403). Dán nhầm một ký
+       tự vào két là mọi đăng ký cùng trả lỗi này — xoá ở đây là xoá sạch cả
+       công ty. DỪNG ĐẨY, KÊU TO, KHÔNG ĐỘNG VÀO DỮ LIỆU NGƯỜI TA. */
+    if (kq.loai === LOAI_HONG.CAU_HINH_SAI) {
+      dungLai = LOAI_HONG.CAU_HINH_SAI;
+      await baoDong(env,
+        'khoa_vapid_sai',
+        `Máy chủ đẩy TỪ CHỐI chữ ký của ERP (mã ${kq.ma || 'khoá hỏng'}${kq.loi ? ' · ' + kq.loi : ''}).\n` +
+        'Nhân viên KHÔNG nhận được thông báo tin nhắn nào cho tới khi sửa.\n' +
+        'Việc cần làm: kiểm tra lại VAPID_KHOA_CONG_KHAI và VAPID_KHOA_BI_MAT trong két Cloudflare ' +
+        '(npm run khoa-vapid để sinh lại cặp khoá khớp nhau).\n' +
+        'ĐĂNG KÝ CỦA NHÂN VIÊN ĐƯỢC GIỮ NGUYÊN — không ai phải bật lại.',
+        { guiTelegram, luc });
+      break;
+    }
+
+    /* ③ BỊ CHẶN TỐC ĐỘ — lỗi của nhịp gửi, không phải của đăng ký. Lùi lại. */
+    if (kq.loai === LOAI_HONG.CHAN_TOC_DO) {
+      dungLai = LOAI_HONG.CHAN_TOC_DO;
+      await baoDong(env, 'bi_chan_toc_do',
+        `Máy chủ đẩy trả 429 (chặn tốc độ)${kq.doi_giay ? `, bảo đợi ${kq.doi_giay}s` : ''}. ` +
+        'Đã ngừng đẩy lượt này và GIỮ NGUYÊN mọi đăng ký; tin nhắn sau sẽ tự thử lại.',
+        { guiTelegram, luc });
+      break;
+    }
+
+    /* ④ 5xx / lỗi mạng — tạm thời. Đếm RIÊNG TỪNG ĐĂNG KÝ để biết cái nào dai
+       dẳng, nhưng KHÔNG xoá: chỉ 404/410 mới chắc chắn là thuê bao chết. */
+    const r = await env.DB.prepare(
+      `UPDATE push_dangky SET hong_lien_tiep = hong_lien_tiep + 1 WHERE id = ?
+       RETURNING hong_lien_tiep`
+    ).bind(dk.id).first();
+    if ((r?.hong_lien_tiep || 0) >= NGUONG_KEU_HONG) {
+      await baoDong(env, 'dangky_hong_dai_dang',
+        `Một đăng ký đã hỏng ${r.hong_lien_tiep} lượt liên tiếp (mã ${kq.ma || 'mạng'}). ` +
+        'KHÔNG xoá — chỉ 404/410 mới chắc là máy đã bỏ. Kiểm tra xem máy chủ đẩy có đang sự cố không.',
+        { guiTelegram, luc });
     }
   }
-  return { gui, hong, xoa };
+  return { gui, hong, xoa, dung_lai: dungLai };
 }
 
 function mocSQL(luc) {
@@ -188,7 +271,7 @@ function mocSQL(luc) {
 /** Đường vào duy nhất cho luồng chat: xét chính sách → ghi nhật ký → đẩy.
  *  Gọi trong `ctx.waitUntil` nên KHÔNG làm chậm nút Gửi của người nhắn, và
  *  KHÔNG bao giờ ném lỗi ra ngoài — thông báo hỏng thì tin nhắn vẫn phải gửi. */
-export async function dayTinNhanChat(env, tin, luc = new Date()) {
+export async function dayTinNhanChat(env, tin, luc = new Date(), { guiTelegram } = {}) {
   try {
     const xet = await xetDayChat(env, tin, luc);
     if (!xet.day) return xet;
@@ -201,12 +284,75 @@ export async function dayTinNhanChat(env, tin, luc = new Date()) {
        VALUES (?, ?, ?, ?)`
     ).bind(tin.nguoi_nhan_id, xet.khoa, xet.ngay, mocSQL(luc)).run();
 
-    const kq = await dayToiNguoi(env, tin.nguoi_nhan_id, loiThongBao(tin.nguoi_gui_ten), luc);
+    const kq = await dayToiNguoi(
+      env, tin.nguoi_nhan_id,
+      loiThongBao(tin.nguoi_gui_ten, 1, tin.nguoi_gui_id),
+      luc, { guiTelegram }
+    );
     return { day: true, ly_do: null, ...kq };
   } catch (e) {
     console.error('Đẩy tin nhắn:', e.message);
     return { day: false, ly_do: 'loi_' + e.message };
   }
+}
+
+/* ---- H3 · Tự phát hiện thiếu bước cài đặt -------------------------------
+   Trước bản vá, thiếu bất kỳ bước nào trong ba bước triển khai là IM LẶNG
+   TUYỆT ĐỐI: `xetDayChat` ném "no such column" rồi bị `try/catch` nuốt, hoặc
+   `khoaVAPID()` trả null rồi thoát êm, còn giao diện thì tự ẩn phần thông báo
+   đi. Không log, không Telegram, không ai biết. Đúng kiểu hỏng đã xảy ra thật
+   với Sếp hôm nay: sổ ghi "đã nạp" mà dữ liệu chưa đổi.
+
+   RẺ NHẤT: bám vào `scheduled()` sẵn có (ADR-0013), KHÔNG thêm cron nào vào
+   `wrangler.toml`. Cửa 9h VN + 5 phút đầu giờ = đúng MỘT lượt cron mỗi ngày,
+   đúng được cả khi bảng `push_nhat_ky` chưa tồn tại (không cần chỗ đánh dấu). */
+
+export async function kiemTraCaiDatDay(env, guiTelegram, luc = new Date()) {
+  const vn = gioVN(luc);
+  if (vn.getUTCHours() !== 9 || vn.getUTCMinutes() >= 5) {
+    return { chay: false, ly_do: 'ngoai_cua_kiem_9h' };
+  }
+
+  const thieu = [];
+
+  // Bước 1 — migration. Hỏi thẳng cả hai bảng và cả cột mới của `tai_khoan`.
+  try {
+    await env.DB.prepare(`SELECT 1 FROM push_dangky LIMIT 1`).first();
+    await env.DB.prepare(`SELECT 1 FROM push_nhat_ky LIMIT 1`).first();
+    await env.DB.prepare(`SELECT push_chat_tat FROM tai_khoan LIMIT 1`).first();
+  } catch (e) {
+    thieu.push(`Bước 1 — chưa nạp migration (${e.message}). Chạy: npm run nap-daythongbao`);
+  }
+
+  // Bước 2 & 3 — hai khoá trong két Cloudflare.
+  if (!env.VAPID_KHOA_CONG_KHAI) {
+    thieu.push('Bước 2 — thiếu VAPID_KHOA_CONG_KHAI. Chạy: npm run khoa-vapid rồi npx wrangler secret put VAPID_KHOA_CONG_KHAI');
+  }
+  if (!env.VAPID_KHOA_BI_MAT) {
+    thieu.push('Bước 3 — thiếu VAPID_KHOA_BI_MAT. Chạy: npx wrangler secret put VAPID_KHOA_BI_MAT');
+  }
+
+  /* Có đủ hai khoá vẫn chưa chắc đúng: dán nhầm/lệch cặp thì ký là hỏng ngay.
+     Ký thử một chữ ký thật — bắt được đúng cái đã gây ra H1, TRƯỚC khi nó chạm
+     vào đăng ký của ai. Không gọi ra Internet, chỉ tính toán tại chỗ. */
+  const khoa = khoaVAPID(env);
+  if (khoa) {
+    try { await chuKyVAPID('https://kiem-tra-khoa.test/ep', khoa, luc.getTime()); }
+    catch (e) {
+      thieu.push(`Khoá VAPID có trong két nhưng KÝ KHÔNG ĐƯỢC (${e.message}). ` +
+        'Nhiều khả năng dán nhầm hoặc hai khoá không cùng một cặp — sinh lại bằng npm run khoa-vapid.');
+    }
+  }
+
+  if (!thieu.length) return { chay: true, thieu: [], da_bao: false };
+
+  const daBao = await baoDong(env, 'thieu_buoc_cai_dat',
+    'Thông báo tin nhắn lên điện thoại ĐANG KHÔNG CHẠY — không ai nhận được gì khi đóng app.\n\n' +
+    thieu.map((t, i) => `${i + 1}. ${t}`).join('\n') +
+    '\n\nXem HUONG-DAN-DEPLOY.md mục "Bật thông báo tin nhắn lên điện thoại".',
+    { guiTelegram, luc });
+
+  return { chay: true, thieu, da_bao: daBao };
 }
 
 /** Dọn nhật ký cũ — chỉ cần giữ đủ để tính gộp 60s và trần theo ngày.

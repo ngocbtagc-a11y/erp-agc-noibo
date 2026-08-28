@@ -29,16 +29,30 @@ const NGUON_CHINH_SACH = path.join(GOC, 'src', 'day-thong-bao.js');
 /* ---- Bắt gói tin đẩy: KHÔNG cho ra Internet, giữ lại để mổ --------------- */
 
 const DAY = [];   // { endpoint, than(Uint8Array), ky(chuỗi Authorization) }
+
+/* Máy chủ đẩy giả lập trả gì. `null` = 201 như bình thường; đặt số để dựng lại
+   đúng các ca REV-0028 H1 (401/403/429/5xx/404/410); 'mang' = fetch ném lỗi. */
+let MA_TRA_VE = null;
+
+const TELEGRAM = [];   // mọi lời kêu cứu bắn ra — H1 và H3 soi thẳng vào đây
+const guiTelegramThu = async (_env, text) => { TELEGRAM.push(text); return true; };
+
 const fetchTruoc = globalThis.fetch;
 globalThis.fetch = async (url, init) => {
   const u = String(url);
   if (u.startsWith('https://day-thu.test/')) {
+    if (MA_TRA_VE === 'mang') throw new Error('fetch failed');
     DAY.push({
       endpoint: u,
       than: new Uint8Array(init.body),
       ky: init.headers.Authorization,
       maHoa: init.headers['Content-Encoding']
     });
+    if (MA_TRA_VE) {
+      // 429 kèm Retry-After như máy chủ đẩy thật.
+      const h = MA_TRA_VE === 429 ? { 'Retry-After': '120' } : undefined;
+      return new Response('', { status: MA_TRA_VE, headers: h });
+    }
     return new Response('', { status: 201 });
   }
   if (u.startsWith('https://day-chet.test/')) return new Response('', { status: 410 });
@@ -179,6 +193,62 @@ async function napBanKhongVa(tenChot) {
   writeFileSync(duong, khongVa, 'utf8');
   tamDaTao.push(duong);
   return import('file://' + duong.replace(/\\/g, '/') + '?v=' + Date.now());
+}
+
+/** Ca đối chứng kiểu THAY: có chốt không gỡ trống được mà phải trả về đúng
+ *  hành vi của bản TRƯỚC KHI VÁ. Ví dụ H1: bản cũ xoá đăng ký với MỌI lỗi, bản
+ *  vá chỉ xoá khi `duocXoaDangKy(...)`. Đây vẫn là lệch CƠ HỌC (đổi đúng một
+ *  biểu thức), hỏng với mọi đầu vào. */
+let demNap = 0;
+async function napBanThay(ten, duongNguon, tim, thay, { napLuon = true } = {}) {
+  const goc = readFileSync(duongNguon, 'utf8');
+  if (!tim.test(goc)) throw new Error(`Ca đối chứng "${ten}": regex trượt — đã lạc hậu so với code`);
+  const duong = path.join(path.dirname(duongNguon), `_doichung_${ten}${path.extname(duongNguon)}`);
+  writeFileSync(duong, goc.replace(tim, thay), 'utf8');
+  tamDaTao.push(duong);
+  // `service worker` phải được nạp SAU khi dựng `self` giả — nên có đường lùi
+  // chỉ ghi file rồi trả đường dẫn, không nạp ngay.
+  if (!napLuon) return { duong };
+  return import('file://' + duong.replace(/\\/g, '/') + `?v=${Date.now()}-${++demNap}`);
+}
+
+/* ---- Nạp `public/sw.js` THẬT để đo hành vi trên màn hình khoá (M1 · M3) ----
+   Không chép lại logic: dựng một `self` giả đúng bề mặt mà service worker dùng
+   rồi nạp CHÍNH file đang phục vụ người dùng. */
+async function napServiceWorker(duong = path.join(GOC, 'public', 'sw.js')) {
+  const bo = { hien: [], nhan: [], mo: [], tay: {} };
+  const tabs = [];
+  bo.themTab = (url) => {
+    const t = { url, focus: async () => { t.daFocus = true; }, postMessage: (m) => bo.nhan.push(m) };
+    tabs.push(t); return t;
+  };
+  globalThis.self = {
+    addEventListener: (ten, fn) => { bo.tay[ten] = fn; },
+    registration: {
+      showNotification: async (tieuDe, tuyChon) => { bo.hien.push({ tieuDe, ...tuyChon }); }
+    },
+    clients: {
+      matchAll: async () => tabs,
+      claim: async () => {},
+      openWindow: async (u) => { bo.mo.push(u); }
+    },
+    skipWaiting: () => {}
+  };
+  await import('file://' + duong.replace(/\\/g, '/') + `?v=${Date.now()}-${++demNap}`);
+  bo.day = async (dulieu) => {
+    const cho = [];
+    await bo.tay.push({ data: { json: () => dulieu }, waitUntil: (p) => cho.push(p) });
+    await Promise.all(cho);
+  };
+  bo.bam = async (dulieu) => {
+    const cho = [];
+    await bo.tay.notificationclick({
+      notification: { close: () => {}, data: dulieu },
+      waitUntil: (p) => cho.push(p)
+    });
+    await Promise.all(cho);
+  };
+  return bo;
 }
 function donFileTam() {
   for (const d of tamDaTao) { try { unlinkSync(d); } catch { /* đã xoá */ } }
@@ -520,6 +590,259 @@ async function chay() {
     `SELECT push_chat_tat FROM tai_khoan WHERE nhan_su_id = ?`).get(lan.nhanSuId).push_chat_tat;
   ok('tắt tin nhắn là cột RIÊNG, không phải công tắc tổng', conNhanCanhBao === 1,
     'người tắt chat trong ERP vẫn giữ nguyên cảnh báo đơn hoàn');
+
+  /* ======================================================================
+     L12 · REV-0028 H1 — LỖI PHÍA MÌNH KHÔNG ĐƯỢC XOÁ DỮ LIỆU CỦA NGƯỜI TA
+     Dựng lại đúng ca của Hồ Ly: chị Lan có 3 máy, đẩy một lượt với từng mã lỗi,
+     đếm SỐ ĐĂNG KÝ CÒN LẠI trước/sau. 404/410 phải xoá; mọi mã còn lại phải
+     giữ nguyên 3/3.
+     ====================================================================== */
+  console.log('\nL12 · Khoá sai / 401 / 403 / 429 / 5xx — đăng ký của nhân viên còn hay mất');
+  const { dayToiNguoi, loiThongBao } = await import('../src/day-thong-bao.js');
+  db.prepare(`UPDATE tai_khoan SET push_chat_tat = 0 WHERE nhan_su_id = ?`).run(lan.nhanSuId);
+
+  const BA_MAY = [];
+  async function dungLai3May() {
+    db.prepare(`DELETE FROM push_dangky WHERE nhan_su_id = ?`).run(lan.nhanSuId);
+    BA_MAY.length = 0;
+    for (const hau of ['-dt', '-may-tinh', '-may-bau']) {
+      const dt = await taoDienThoai(lan.nhanSuId + hau);
+      db.prepare(`INSERT INTO push_dangky (nhan_su_id, endpoint, p256dh, auth, tao_luc)
+                  VALUES (?, ?, ?, ?, datetime('now'))`)
+        .run(lan.nhanSuId, dt.endpoint, dt.p256dh, dt.auth);
+      BA_MAY.push(dt);
+    }
+    return db.prepare(`SELECT COUNT(*) n FROM push_dangky WHERE nhan_su_id = ?`).get(lan.nhanSuId).n;
+  }
+  const demMay = () => db.prepare(`SELECT COUNT(*) n FROM push_dangky WHERE nhan_su_id = ?`)
+    .get(lan.nhanSuId).n;
+
+  /* Két Cloudflare bị dán nhầm chuỗi vào VAPID_KHOA_BI_MAT — ca nguy hiểm nhất:
+     đo cũ ra {"gui":0,"hong":0,"xoa":3}, 3/3 máy của chị Lan bay sạch, im lặng. */
+  const envKhoaSai = dungEnv(d1, {
+    VAPID_KHOA_CONG_KHAI: VAPID.congKhai,
+    VAPID_KHOA_BI_MAT: 'day-la-chuoi-dan-nham-khong-phai-khoa'
+  });
+  await datGio('2026-09-04T06:00:00Z');
+  const truocKhoaSai = await dungLai3May();
+  TELEGRAM.length = 0;
+  const kqKhoaSai = await dayToiNguoi(envKhoaSai, lan.nhanSuId, loiThongBao('Duy', 1, duy.nhanSuId),
+    new Date(), { guiTelegram: guiTelegramThu });
+  ok('DÁN NHẦM KHOÁ VAPID → giữ nguyên 3/3 đăng ký, KHÔNG xoá ai',
+    truocKhoaSai === 3 && demMay() === 3 && kqKhoaSai.xoa === 0,
+    `trước ${truocKhoaSai} · sau ${demMay()} · dừng vì ${kqKhoaSai.dung_lai}`);
+  ok('dán nhầm khoá thì KÊU TO (Telegram cho Gạo), không im lặng',
+    TELEGRAM.length === 1 && /VAPID/.test(TELEGRAM[0]), TELEGRAM[0]?.slice(0, 80) || 'không có tin nào');
+  ok('lời kêu KHÔNG mang theo chuỗi khoá bí mật',
+    !TELEGRAM.join('\n').includes(VAPID.biMat) &&
+    !TELEGRAM.join('\n').includes('day-la-chuoi-dan-nham-khong-phai-khoa'));
+
+  // Từng mã lỗi một, mỗi ca dựng lại đủ 3 máy.
+  const CA_MA = [
+    [401, 3, 'chữ ký bị từ chối — lỗi CỦA TA'],
+    [403, 3, 'bị cấm — lỗi CỦA TA'],
+    [429, 3, 'bị chặn tốc độ — lùi lại, không xoá'],
+    [500, 3, 'máy chủ đẩy hỏng — thử lại'],
+    [503, 3, 'máy chủ đẩy bận — thử lại'],
+    ['mang', 3, 'đứt mạng — thử lại'],
+    [404, 0, 'đăng ký không còn — xoá đúng'],
+    [410, 0, 'đăng ký đã huỷ — xoá đúng']
+  ];
+  for (const [ma, conLai, vi] of CA_MA) {
+    const truoc = await dungLai3May();
+    TELEGRAM.length = 0;
+    MA_TRA_VE = ma;
+    const kq = await dayToiNguoi(env, lan.nhanSuId, loiThongBao('Duy', 1, duy.nhanSuId),
+      new Date(), { guiTelegram: guiTelegramThu });
+    MA_TRA_VE = null;
+    const sau = demMay();
+    ok(`mã ${ma} (${vi}) → còn ${conLai}/3 đăng ký`, truoc === 3 && sau === conLai,
+      `trước ${truoc} · sau ${sau} · xoá ${kq.xoa} · hỏng ${kq.hong}`);
+  }
+
+  /* 12 lượt 500 LIÊN TIẾP: bản trước dọn sau 10 lượt. Google hỏng một tiếng là
+     MỌI đăng ký cùng dính — dọn kiểu đó là mất sạch cả công ty, chỉ chậm hơn
+     10 nhịp. Giờ chỉ kêu, không xoá. */
+  const truoc12 = await dungLai3May();
+  TELEGRAM.length = 0;
+  MA_TRA_VE = 500;
+  for (let i = 0; i < 12; i++) {
+    await dayToiNguoi(env, lan.nhanSuId, loiThongBao('Duy', 1, duy.nhanSuId),
+      new Date(), { guiTelegram: guiTelegramThu });
+  }
+  MA_TRA_VE = null;
+  ok('12 lượt 5xx liên tiếp → VẪN còn 3/3 đăng ký (chỉ kêu, không dọn)',
+    truoc12 === 3 && demMay() === 3, `trước ${truoc12} · sau ${demMay()}`);
+  ok('hỏng dai dẳng thì có kêu lên Telegram', TELEGRAM.some(t => /liên tiếp/.test(t)),
+    `${TELEGRAM.length} tin`);
+
+  {
+    // ĐỐI CHỨNG (BH-16): đưa luật xoá về đúng bản trước — "hỏng là xoá".
+    const kv = await napBanThay('h1_xoa_moi_loi', NGUON_CHINH_SACH,
+      /if \(duocXoaDangKy\(kq\.loai\)\) \{/, 'if (!kq.ok) {');
+    const truoc = await dungLai3May();
+    MA_TRA_VE = 401;
+    await kv.dayToiNguoi(env, lan.nhanSuId, loiThongBao('Duy', 1, duy.nhanSuId), new Date(), {});
+    MA_TRA_VE = null;
+    ok('ĐỐI CHỨNG · bản "hỏng là xoá" thì 401 quét sạch 3/3',
+      truoc === 3 && demMay() === 0, `trước ${truoc} · sau ${demMay()} — phép đo có nhạy thật`);
+  }
+  await dungLai3May();
+
+  /* ======================================================================
+     L13 · REV-0028 H3 — thiếu bước cài đặt thì PHẢI kêu, đủ thì PHẢI im
+     ====================================================================== */
+  console.log('\nL13 · Thiếu 1 trong 3 bước triển khai — có tự phát hiện không');
+  const { kiemTraCaiDatDay, NGUOI_HE_THONG } = await import('../src/day-thong-bao.js');
+  const xoaDauCanhBao = () => db.prepare(`DELETE FROM push_nhat_ky WHERE nhan_su_id = ?`)
+    .run(NGUOI_HE_THONG);
+  const LUC_9H = new Date('2026-09-07T02:00:00Z');    // 9h00 giờ VN, thứ Hai
+
+  async function thuThieu(ten, envThu, monKhac) {
+    xoaDauCanhBao();
+    TELEGRAM.length = 0;
+    if (monKhac) monKhac();
+    let kq;
+    try { kq = await kiemTraCaiDatDay(envThu, guiTelegramThu, LUC_9H); }
+    finally { if (monKhac) monKhac(true); }
+    return { kq, tin: TELEGRAM.slice() };
+  }
+
+  {
+    const { kq, tin } = await thuThieu('đủ cả 3 bước', env);
+    ok('ĐỦ cả 3 bước → KHÔNG cảnh báo giả', kq.chay === true && kq.thieu.length === 0 && tin.length === 0,
+      JSON.stringify(kq.thieu));
+  }
+  {
+    const envThieuCK = dungEnv(d1, { VAPID_KHOA_BI_MAT: VAPID.biMat });
+    const { kq, tin } = await thuThieu('thiếu khoá công khai', envThieuCK);
+    ok('thiếu Bước 2 (VAPID_KHOA_CONG_KHAI) → có cảnh báo',
+      kq.thieu.length >= 1 && tin.length === 1 && /Bước 2/.test(tin[0]), kq.thieu.join(' | '));
+  }
+  {
+    const envThieuBM = dungEnv(d1, { VAPID_KHOA_CONG_KHAI: VAPID.congKhai });
+    const { kq, tin } = await thuThieu('thiếu khoá bí mật', envThieuBM);
+    ok('thiếu Bước 3 (VAPID_KHOA_BI_MAT) → có cảnh báo',
+      kq.thieu.length >= 1 && tin.length === 1 && /Bước 3/.test(tin[0]), kq.thieu.join(' | '));
+  }
+  {
+    /* Bước 1 thiếu THẬT: đổi tên bảng trên D1 thật rồi trả lại — không phải
+       giả lập bằng cách bắt chuỗi SQL. */
+    const { kq, tin } = await thuThieu('thiếu migration', env, (traLai) => {
+      db.exec(traLai ? `ALTER TABLE push_dangky_tam RENAME TO push_dangky`
+                     : `ALTER TABLE push_dangky RENAME TO push_dangky_tam`);
+    });
+    ok('thiếu Bước 1 (migration) → có cảnh báo',
+      kq.thieu.some(t => /Bước 1/.test(t)) && tin.length === 1, kq.thieu.join(' | '));
+  }
+  {
+    // Có đủ hai khoá nhưng dán nhầm → KÝ KHÔNG ĐƯỢC. Đây là ca đã gây ra H1.
+    const { kq, tin } = await thuThieu('khoá lệch cặp', envKhoaSai);
+    ok('có khoá nhưng KÝ KHÔNG ĐƯỢC → vẫn bắt được trước khi hỏng thật',
+      kq.thieu.some(t => /KÝ KHÔNG ĐƯỢC/.test(t)) && tin.length === 1, kq.thieu.join(' | '));
+  }
+  {
+    xoaDauCanhBao(); TELEGRAM.length = 0;
+    const a = await kiemTraCaiDatDay(dungEnv(d1, {}), guiTelegramThu, LUC_9H);
+    const b = await kiemTraCaiDatDay(dungEnv(d1, {}), guiTelegramThu, LUC_9H);
+    ok('kêu MỘT lần/ngày, không bắn Telegram mỗi 5 phút',
+      a.da_bao === true && b.da_bao === false && TELEGRAM.length === 1, `${TELEGRAM.length} tin`);
+    const ngoai = await kiemTraCaiDatDay(dungEnv(d1, {}), guiTelegramThu, new Date('2026-09-07T07:00:00Z'));
+    ok('ngoài cửa 9h VN thì không chạy (dùng chung cron 5 phút sẵn có)',
+      ngoai.chay === false, ngoai.ly_do);
+    xoaDauCanhBao();
+  }
+  {
+    const truocTB2 = db.prepare(`SELECT COUNT(*) n FROM thong_bao`).get().n;
+    await kiemTraCaiDatDay(dungEnv(d1, {}), guiTelegramThu, LUC_9H);
+    const sauTB2 = db.prepare(`SELECT COUNT(*) n FROM thong_bao`).get().n;
+    ok('cảnh báo cài đặt KHÔNG đụng bảng thong_bao (chuông đơn hoàn)',
+      truocTB2 === sauTB2, `${truocTB2}→${sauTB2}`);
+    xoaDauCanhBao();
+  }
+
+  /* ======================================================================
+     L14 · REV-0028 M1 · M3 — trên MÀN HÌNH KHOÁ: mỗi người gửi một thông báo
+     Nạp CHÍNH `public/sw.js` đang phục vụ, đẩy vào đó đúng gói tin đã GIẢI MÃ
+     từ máy chủ — không tự bịa dữ liệu.
+     ====================================================================== */
+  console.log('\nL14 · Ba người khác nhau nhắn liên tiếp — màn hình khoá hiện mấy dòng');
+  const hang = await themNguoi('Phan Thị Hằng', 'NS-HANG', 'Kế toán');
+  db.exec("DELETE FROM push_nhat_ky");
+  db.exec("UPDATE tai_khoan SET xem_chat_voi = NULL, xem_chat_luc = NULL");
+  await datGio('2026-09-07T03:00:00Z');
+  DAY.length = 0;
+  await guiTin(duy, lan.nhanSuId, 'lô hạt điều về rồi');
+  await guiTin(huyen, lan.nhanSuId, 'đơn Shopee cần xác nhận');
+  await guiTin(hang, lan.nhanSuId, 'chị ký giúp em uỷ nhiệm chi');
+  const goiBaNguoi = DAY.filter(d => d.endpoint === BA_MAY[0].endpoint);
+  ok('3 người khác nhau → máy chủ đẩy 3 gói tới cùng một máy', goiBaNguoi.length === 3,
+    `đo được ${goiBaNguoi.length}`);
+
+  const noiDungBa = [];
+  for (const g of goiBaNguoi) noiDungBa.push(JSON.parse(await giaiMa(BA_MAY[0], g.than)));
+
+  const sw = await napServiceWorker();
+  for (const nd of noiDungBa) await sw.day(nd);
+  const nhan = new Set(sw.hien.map(h => h.tag));
+  ok('màn hình khoá hiện ĐỦ 3 thông báo, KHÔNG cái nào tráo cái nào',
+    sw.hien.length === 3 && nhan.size === 3, `${sw.hien.length} thông báo · ${nhan.size} nhãn: ${[...nhan].join(', ')}`);
+  ok('cả 3 đều KÊU LẠI (renotify), không âm thầm đổi chữ',
+    sw.hien.every(h => h.renotify === true));
+  ok('nhãn gộp mang đúng id NGƯỜI GỬI', [...nhan].every(t => /^chat:NS-/.test(t)),
+    [...nhan].join(', '));
+
+  {
+    // Cùng MỘT người nhắn 5 tin trong một phút → đúng 1 thông báo (gộp 60s).
+    db.exec("DELETE FROM push_nhat_ky");
+    await datGio('2026-09-07T04:00:00Z');
+    DAY.length = 0;
+    for (let i = 0; i < 5; i++) await guiTin(duy, lan.nhanSuId, `tin dồn ${i}`);
+    const goiMot = DAY.filter(d => d.endpoint === BA_MAY[0].endpoint);
+    const sw2 = await napServiceWorker();
+    for (const g of goiMot) await sw2.day(JSON.parse(await giaiMa(BA_MAY[0], g.than)));
+    ok('CÙNG một người nhắn 5 tin → đúng 1 thông báo', sw2.hien.length === 1,
+      `${goiMot.length} gói · ${sw2.hien.length} thông báo`);
+  }
+
+  {
+    // ĐỐI CHỨNG (BH-16): trả `sw.js` về nhãn chung 'chat' như bản trước.
+    const { duong } = await napBanThay('m1_nhan_chung', path.join(GOC, 'public', 'sw.js'),
+      /tag: d\.loai === 'chat' \? \('chat:' \+ \(d\.nguoi_gui_id \|\| 'khong-ro'\)\) :/,
+      "tag: d.loai === 'chat' ? 'chat' :", { napLuon: false });
+    const swCu = await napServiceWorker(duong);
+    for (const nd of noiDungBa) await swCu.day(nd);
+    const nhanCu = new Set(swCu.hien.map(h => h.tag));
+    ok('ĐỐI CHỨNG · bản nhãn chung gộp 3 người vào 1 nhãn', nhanCu.size === 1,
+      `${nhanCu.size} nhãn: ${[...nhanCu].join(', ')} — phép đo có nhạy thật`);
+  }
+
+  {
+    // M3 — bấm vào thông báo phải tới ĐÚNG đoạn chat của người gửi.
+    const cuaDuy = noiDungBa.find(n => n.tieu_de.includes('Phạm Khương Duy'));
+    ok('gói tin mang đường dẫn tới ĐÚNG đoạn chat người gửi',
+      cuaDuy.duong_dan === `/app.html#chat=${duy.nhanSuId}`, cuaDuy.duong_dan);
+    ok('gói tin VẪN không mang một chữ nào của nội dung tin nhắn',
+      !JSON.stringify(noiDungBa).includes('hạt điều') &&
+      !JSON.stringify(noiDungBa).includes('uỷ nhiệm chi'));
+
+    const swBam = await napServiceWorker();
+    await swBam.day(cuaDuy);
+    const dl = swBam.hien[0].data;
+    swBam.themTab('https://erp.test/app.html');
+    await swBam.bam(dl);
+    ok('ERP đang mở → nhắn về tab đúng id người gửi',
+      swBam.nhan.length === 1 && swBam.nhan[0].nguoi_gui_id === duy.nhanSuId,
+      JSON.stringify(swBam.nhan[0]));
+
+    const swNguoi = await napServiceWorker();       // chưa mở tab nào
+    await swNguoi.day(cuaDuy);
+    await swNguoi.bam(swNguoi.hien[0].data);
+    ok('ERP đang đóng → mở thẳng cửa sổ chat của người gửi',
+      swNguoi.mo.length === 1 && swNguoi.mo[0] === `/app.html#chat=${duy.nhanSuId}`,
+      swNguoi.mo.join(','));
+  }
+  delete globalThis.self;
 
   console.log(`\nThông số chốt: gộp ${GOP_GIAY}s · trần ${TRAN_NGAY} thông báo/người/ngày`);
   return tongKet();

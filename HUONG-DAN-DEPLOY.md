@@ -83,9 +83,7 @@ Dùng khi Cách 1 chưa thiết lập, hoặc cần deploy gấp từ máy đã 
 
 ## Bật thông báo tin nhắn lên điện thoại (CTL-0014) — làm 3 bước, MỘT LẦN
 
-Thiếu bước nào thì tính năng **im lặng không báo lỗi**: ERP chạy bình thường,
-chỉ là không ai nhận được thông báo khi đã đóng app. Chi phí 0 đồng, không
-đăng ký dịch vụ nào.
+Chi phí 0 đồng, không đăng ký dịch vụ nào.
 
 ```
 1) npm run nap-daythongbao      # tạo bảng push_dangky + push_nhat_ky trên bản thật
@@ -94,15 +92,35 @@ chỉ là không ai nhận được thông báo khi đã đóng app. Chi phí 0 
    npx wrangler secret put VAPID_KHOA_BI_MAT
 ```
 
+Bước 1 đi qua `scripts/chay-migration.mjs` nên **tự ghi vào `schema_migrations`**.
+Đừng gọi thẳng `wrangler d1 execute --file`: nạp thì vẫn nạp, nhưng sổ không ghi
+và `npm run migration-kiemtra` sẽ báo *"them-day-thongbao.sql chưa chạy"* mãi mãi
+— đúng kiểu "sổ ghi lệch thực tế" (REV-0028 M4).
+
+**Thiếu bước nào cũng KHÔNG còn im lặng nữa** (REV-0028 H3): 9h sáng giờ VN mỗi
+ngày, cron sẵn có tự hỏi lại đủ ba bước — thiếu bảng, thiếu khoá, hay có khoá mà
+**ký không được** (dán nhầm / hai khoá không cùng một cặp) — rồi bắn **Telegram**
+nói rõ thiếu bước nào, chạy lệnh gì. Trước bản vá thì hỏng hoàn toàn im: giao
+diện tự ẩn phần thông báo và không ai biết.
+
+**Dán nhầm khoá KHÔNG làm mất đăng ký của nhân viên** (REV-0028 H1): máy chủ đẩy
+trả 401/403/429 hoặc 5xx thì ERP **giữ nguyên** mọi đăng ký, chỉ dừng đẩy và kêu
+lên Telegram. Chỉ 404/410 (đã gỡ app / xoá dữ liệu trang) mới bị dọn. Sửa khoá
+xong là chạy lại ngay, **không ai phải bật lại trên máy mình**.
+
 - Khoá **bí mật** chỉ dán vào lệnh `secret put`, **không lưu vào file nào**.
 - Nhân viên phải tự bấm **"Bật thông báo"** trong cửa sổ chat. ERP cố ý KHÔNG
   hỏi quyền lúc vừa đăng nhập: hỏi sai lúc là bị bấm Chặn, mà **trình duyệt
   không cho hỏi lại lần thứ hai**.
 - **iPhone**: chỉ nhận được khi đã mở bằng Safari → Chia sẻ → *Thêm vào màn hình
   chính*, rồi mở ERP từ biểu tượng đó. Chưa làm thì vẫn nghe tiếng kêu lúc đang
-  mở ERP. Cửa sổ chat tự hiện đúng hướng dẫn này khi phát hiện máy iPhone.
+  mở ERP. Cửa sổ chat **tự hiện dải hướng dẫn này ngay khi mở**, và nút chuông
+  đổi thành 🔕 kèm chấm cam — không phải bấm vào đâu mới thấy (REV-0028 H2).
 
-Kiểm lại bất cứ lúc nào: `npm run tu-kiem-thongbao` (42 phép kiểm, có ca đối chứng).
+Kiểm lại bất cứ lúc nào:
+- `npm run tu-kiem-thongbao` — chính sách + mã hoá + xử lý hỏng, có ca đối chứng.
+- `npm run do-trangthai-thongbao` — mọi trạng thái người dùng có nhìn thấy được không.
+- `npm run do-nut-thongbao` — ngưỡng ngón tay 44px (mở trình duyệt để đọc số).
 
 ---
 

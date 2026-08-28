@@ -160,17 +160,58 @@ export async function maHoaNoiDung(noiDung, p256dh, auth, { muoiThu, capTamThu }
 
 /* ---- Gửi ---------------------------------------------------------------- */
 
+/* ---- Phân loại hỏng — chỗ REV-0028 H1 suýt xoá sạch đăng ký cả công ty ----
+   Trước bản vá, MỌI lỗi đều gộp vào một `catch` rồi trả `chet: true`, nên dán
+   nhầm một ký tự vào `VAPID_KHOA_BI_MAT` là xoá sạch đăng ký của toàn công ty
+   ngay tin nhắn đầu tiên (đo được: 3/3 máy của chị Lan bay sạch, im lặng).
+
+   LUẬT: lỗi ở PHÍA MÌNH thì KHÔNG được xoá dữ liệu của người ta. Chỉ hai loại
+   dưới đây mới là "đăng ký thật sự chết" và mới được xoá. */
+export const LOAI_HONG = {
+  DANG_KY_MEO:   'dang_ky_meo',     // p256dh/auth sai độ dài → dữ liệu này vĩnh viễn vô dụng → XOÁ
+  THUE_BAO_CHET: 'thue_bao_chet',   // 404/410 — máy chủ đẩy nói thẳng "không còn nữa" → XOÁ
+  CAU_HINH_SAI:  'cau_hinh_sai',    // 401/403 hoặc khoá VAPID hỏng — LỖI CỦA TA → KHÔNG xoá, kêu to
+  CHAN_TOC_DO:   'chan_toc_do',     // 429 — bị chặn tốc độ → KHÔNG xoá, lùi lại
+  MAY_CHU_LOI:   'may_chu_loi',     // 5xx và 4xx khác → KHÔNG xoá, thử lại
+  MANG_LOI:      'mang_loi'         // fetch ném → KHÔNG xoá, thử lại
+};
+
+/** Chỉ hai loại này mới được phép XOÁ dòng trong `push_dangky`. */
+export function duocXoaDangKy(loai) {
+  return loai === LOAI_HONG.DANG_KY_MEO || loai === LOAI_HONG.THUE_BAO_CHET;
+}
+
+/** Bỏ mọi mảnh khoá ra khỏi lời báo lỗi trước khi nó đi vào log/Telegram.
+ *  Lời báo lỗi của WebCrypto không kèm khoá, nhưng đây là chỗ duy nhất chuỗi
+ *  khoá và chuỗi lỗi gặp nhau — chốt ở đây rẻ hơn tin vào lời hứa. */
+function chePhanBiMat(thongDiep, khoa) {
+  let s = String(thongDiep || '');
+  for (const bi of [khoa?.biMat, khoa?.congKhai]) {
+    if (bi && bi.length > 8) s = s.split(bi).join('«đã che»');
+  }
+  return s;
+}
+
 /** Gửi một thông báo tới một đăng ký.
- *  Trả { ok, ma, chet } — `chet: true` nghĩa là đăng ký đã hỏng vĩnh viễn
- *  (đổi máy / gỡ app / xoá dữ liệu trang), phải xoá khỏi bảng, không thử lại. */
+ *  Trả { ok, ma, loai, chet } — `chet: true` CHỈ khi đăng ký thật sự không còn
+ *  dùng được nữa (đổi máy / gỡ app / dữ liệu méo). Lỗi cấu hình của chính ta,
+ *  bị chặn tốc độ, lỗi mạng hay 5xx đều là `chet: false`. */
 export async function guiMotDangKy(dangKy, noiDung, khoa, { hienTai = Date.now() } = {}) {
-  let than, ky;
+  /* Hai bước tách RIÊNG hai `try`: mã hoá chỉ dùng khoá CỦA MÁY NGƯỜI NHẬN,
+     ký chỉ dùng khoá VAPID CỦA TA. Gộp chung là không phân biệt nổi ai sai. */
+  let than;
   try {
     than = await maHoaNoiDung(JSON.stringify(noiDung), dangKy.p256dh, dangKy.auth);
+  } catch (e) {
+    // Đăng ký méo (p256dh/auth sai độ dài…) — thử lại bao nhiêu lần cũng thế.
+    return { ok: false, ma: 0, chet: true, loai: LOAI_HONG.DANG_KY_MEO, loi: chePhanBiMat(e.message, khoa) };
+  }
+  let ky;
+  try {
     ky = await chuKyVAPID(dangKy.endpoint, khoa, hienTai);
   } catch (e) {
-    // Đăng ký méo (khoá sai độ dài…) — thử lại bao nhiêu lần cũng thế.
-    return { ok: false, ma: 0, chet: true, loi: e.message };
+    // Khoá VAPID của TA hỏng — không phải lỗi của đăng ký. TUYỆT ĐỐI không xoá.
+    return { ok: false, ma: 0, chet: false, loai: LOAI_HONG.CAU_HINH_SAI, loi: chePhanBiMat(e.message, khoa) };
   }
   try {
     const res = await fetch(dangKy.endpoint, {
@@ -184,10 +225,20 @@ export async function guiMotDangKy(dangKy, noiDung, khoa, { hienTai = Date.now()
       },
       body: than
     });
+    const ma = res.status;
+    if (ma >= 200 && ma < 300) return { ok: true, ma, chet: false, loai: null };
     // 404/410 = máy chủ đẩy nói thẳng "đăng ký này không còn nữa".
-    return { ok: res.status >= 200 && res.status < 300, ma: res.status, chet: res.status === 404 || res.status === 410 };
+    if (ma === 404 || ma === 410) return { ok: false, ma, chet: true, loai: LOAI_HONG.THUE_BAO_CHET };
+    // 401/403 = chữ ký của TA không được chấp nhận (khoá lệch, sai `aud`, hết hạn).
+    if (ma === 401 || ma === 403) return { ok: false, ma, chet: false, loai: LOAI_HONG.CAU_HINH_SAI };
+    if (ma === 429) {
+      const doi = Number(res.headers?.get?.('Retry-After')) || 0;
+      return { ok: false, ma, chet: false, loai: LOAI_HONG.CHAN_TOC_DO, doi_giay: doi };
+    }
+    return { ok: false, ma, chet: false, loai: LOAI_HONG.MAY_CHU_LOI };
   } catch (e) {
-    return { ok: false, ma: 0, chet: false, loi: e.message };   // lỗi mạng — còn thử lại được
+    // Lỗi mạng — còn thử lại được, không được coi là đăng ký chết.
+    return { ok: false, ma: 0, chet: false, loai: LOAI_HONG.MANG_LOI, loi: chePhanBiMat(e.message, khoa) };
   }
 }
 

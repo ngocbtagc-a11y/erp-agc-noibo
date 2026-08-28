@@ -33,7 +33,7 @@ import { quetNhacCongViec, soNgayGiua } from './nhac-cong-viec.js';
 import { sinhMa } from './dinh-danh.js';
 /* CTL-0014 — đẩy thông báo lên điện thoại. Mọi chốt chặn chống làm phiền nằm
    trong `day-thong-bao.js`, KHÔNG rải ra đây. */
-import { dayTinNhanChat, donNhatKyCu, TRAN_NGAY } from './day-thong-bao.js';
+import { dayTinNhanChat, donNhatKyCu, kiemTraCaiDatDay, TRAN_NGAY } from './day-thong-bao.js';
 import { khoaVAPID } from './webpush.js';
 
 /* ---- Trả lời dạng JSON -------------------------------------------------- */
@@ -469,7 +469,10 @@ async function chatGui(req, env, ctx) {
     nguoi_gui_id: phien.nhan_su_id,
     nguoi_gui_ten: nguoi
   };
-  const day = dayTinNhanChat(env, tin);
+  /* `guiTelegram` truyền xuống để lỗi PHÍA MÌNH (khoá VAPID sai, 401/403, 429)
+     kêu tới Gạo thay vì âm thầm — REV-0028 H1. Không truyền thì vẫn chạy, chỉ
+     là mất tiếng kêu; nên bàn thử gọi trực tiếp cũng không vỡ. */
+  const day = dayTinNhanChat(env, tin, new Date(), { guiTelegram });
   if (ctx?.waitUntil) ctx.waitUntil(day); else await day;
 
   return json({ ok: true, id: r.meta.last_row_id });
@@ -4728,6 +4731,12 @@ export default {
          và trần theo ngày, giữ lâu hơn là phình bảng vô ích. Một dòng, chung
          cron sẵn có, KHÔNG thêm lịch thứ hai vào `wrangler.toml`. */
       try { await donNhatKyCu(env); } catch (e) { console.error('Cron dọn nhật ký đẩy:', e.message); }
+      /* CTL-0014 · REV-0028 H3 — mỗi ngày một lần (9h VN) hỏi lại: ba bước cài
+         đặt còn đủ không, khoá VAPID còn ký được không. Thiếu bước nào thì
+         Telegram cho Gạo NGAY, thay vì im lặng tuyệt đối như trước. Hàm tự đóng
+         cửa ngoài khung 9h nên gọi mỗi 5 phút vẫn đúng 1 tin/ngày; KHÔNG thêm
+         lịch nào vào `wrangler.toml`. */
+      try { await kiemTraCaiDatDay(env, guiTelegram); } catch (e) { console.error('Cron kiểm cài đặt đẩy:', e.message); }
 
       // SAO LƯU DỮ LIỆU (SPEC-0005 Phần B · ADR-0013). Hàm tự biết giờ nào thì
       // làm gì: 0h–8h sáng thì xuất dữ liệu theo lô, 9h sáng thì hỏi "hôm qua

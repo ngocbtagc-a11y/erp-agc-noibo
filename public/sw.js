@@ -43,14 +43,26 @@ self.addEventListener('push', (e) => {
     body: d.than || 'Bạn có thông báo mới',
     icon: '/assets/img/pwa-192.png',
     badge: '/assets/img/pwa-192.png',
-    /* `tag` gộp ở tầng HỆ ĐIỀU HÀNH: tin sau từ cùng một người THAY THẾ tin
+    /* `tag` gộp ở tầng HỆ ĐIỀU HÀNH: tin sau từ CÙNG MỘT NGƯỜI thay thế tin
        trước trên màn hình khoá thay vì xếp chồng thành một cột dài. Đây là lớp
-       gộp thứ hai, sau lớp gộp 60 giây ở máy chủ (`src/day-thong-bao.js`). */
-    tag: d.loai === 'chat' ? 'chat' : (d.loai || 'chung'),
-    renotify: false,
+       gộp thứ hai, sau lớp gộp 60 giây ở máy chủ (`src/day-thong-bao.js`).
+
+       REV-0028 M1 — trước bản vá nhãn là hằng số `'chat'` cho MỌI người gửi,
+       nên tin anh Duy THAY THẾ tin chị Hằng và (vì `renotify:false`) không kêu
+       lại lần nào: chị Lan nhìn thấy một dòng và tưởng chỉ một người nhắn. Nhãn
+       phải theo TỪNG NGƯỜI GỬI; `renotify:true` để lượt sau của cùng người vẫn
+       kêu chứ không âm thầm tráo chữ. Trần 12 thông báo/ngày ở máy chủ vẫn là
+       thứ giữ cho nó không thành ồn. */
+    tag: d.loai === 'chat' ? ('chat:' + (d.nguoi_gui_id || 'khong-ro')) : (d.loai || 'chung'),
+    renotify: true,
     // Rung nhẹ hai nhịp. Android nghe theo; iOS bỏ qua trường này, không lỗi.
     vibrate: [80, 40, 80],
-    data: { duong_dan: d.duong_dan || '/app.html' }
+    data: {
+      duong_dan: d.duong_dan || '/app.html',
+      // REV-0028 M3 — mang theo người gửi để cú bấm mở ĐÚNG đoạn chat đó.
+      nguoi_gui_id: d.nguoi_gui_id || null,
+      nguoi_gui_ten: d.nguoi_gui_ten || null
+    }
   };
 
   e.waitUntil(
@@ -65,17 +77,28 @@ self.addEventListener('push', (e) => {
    Mở trang chủ rồi bắt người ta tự đi tìm là vứt mất nửa giá trị thông báo. */
 self.addEventListener('notificationclick', (e) => {
   e.notification.close();
-  const duongDan = (e.notification.data && e.notification.data.duong_dan) || '/app.html';
+  const dl = (e.notification.data || {});
+  const duongDan = dl.duong_dan || '/app.html';
   e.waitUntil((async () => {
     const tabs = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     for (const t of tabs) {
       if (t.url.includes('/app.html')) {
         await t.focus();
-        // Báo cho trang đang mở biết phải bật cửa sổ chat lên.
-        try { t.postMessage({ kieu: 'mo-thong-bao', duong_dan: duongDan }); } catch { /* tab quá cũ */ }
+        /* Báo cho trang đang mở biết phải bật ĐÚNG đoạn chat của người gửi đó
+           (REV-0028 M3) — trước bản vá chỉ mở kênh chung, chị Lan biết "anh Duy
+           nhắn" rồi vẫn phải tự đi tìm. */
+        try {
+          t.postMessage({
+            kieu: 'mo-thong-bao',
+            duong_dan: duongDan,
+            nguoi_gui_id: dl.nguoi_gui_id || null,
+            nguoi_gui_ten: dl.nguoi_gui_ten || null
+          });
+        } catch { /* tab quá cũ */ }
         return;
       }
     }
+    // Chưa mở tab nào: `duong_dan` đã mang sẵn `#chat=<id người gửi>`.
     await self.clients.openWindow(duongDan);
   })());
 });

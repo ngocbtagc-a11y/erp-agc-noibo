@@ -1481,6 +1481,24 @@ tr.canh-bao:hover > td { background: #fbdbd6; }
 .cnb-chuong:hover { background: var(--surface-2); color: var(--ink); }
 .cnb-chuong.tbd-dang-tat { opacity: .45; }   /* đã tắt báo tin nhắn — nhìn là biết */
 
+/* REV-0028 H2 — "đang KHÔNG nhận được tin" phải nhìn thấy mà KHÔNG cần bấm.
+   Ký tự nút đã đổi 🔔 → 🔕 (`assets/js/tbd-trangthai.js`); chấm cam này chỉ là
+   lớp thứ hai. Cố ý KHÔNG lấy màu làm tín hiệu duy nhất — người phân biệt màu
+   kém vẫn phải nhận ra, nên ký tự mới là tín hiệu chính.
+   `position: relative` đặt ở đây để không phải sửa luật gốc đang được
+   `scripts/do-nut-thongbao-44px.mjs` đo bằng regex. */
+.cnb-chuong.tbd-canh-bao { position: relative; opacity: 1; }
+.cnb-chuong.tbd-canh-bao::after {
+  content: '';
+  position: absolute; top: 6px; right: 6px;
+  width: 9px; height: 9px; border-radius: 50%;
+  background: #e07b39;                 /* cam cảnh báo, không phải đỏ báo lỗi */
+  border: 2px solid var(--card);
+  box-sizing: content-box;
+}
+/* Dải trạng thái khi đang điếc: nền cảnh báo, khác hẳn nền mời xanh nhạt. */
+.tbd-moi.tbd-moi-canhbao { background: #fdf1e6; }
+
 .tbd-moi {
   flex-shrink: 0;
   padding: 12px 16px;
