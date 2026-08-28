@@ -31,6 +31,11 @@ import * as kynang from './ky-nang.js';
 import { quetNhacNhanSu, thangKeTiep, gioVN } from './nhac-nhan-su.js';
 import { quetNhacCongViec, soNgayGiua } from './nhac-cong-viec.js';
 import { sinhMa } from './dinh-danh.js';
+/* CTL-0014 — đẩy thông báo lên điện thoại. Mọi chốt chặn chống làm phiền nằm
+   trong `day-thong-bao.js`, KHÔNG rải ra đây. */
+import { dayTinNhanChat, donNhatKyCu, kiemTraCaiDatDay, TRAN_NGAY } from './day-thong-bao.js';
+import { khoaVAPID } from './webpush.js';
+import { chotVaCanhBao, demGhi } from './canh-bao-ghi.js';
 
 /* ---- Trả lời dạng JSON -------------------------------------------------- */
 
@@ -334,6 +339,36 @@ async function chatDanhSach(req, env) {
   const thamSo = sauId > 0 ? [...thamSoPhamVi, sauId] : thamSoPhamVi;
   const { results } = await env.DB.prepare(cauLenh).bind(...thamSo).all();
 
+  /* CTL-0014 — NHỊP TIM "tôi đang mở cửa sổ chat với ai".
+     Máy chủ cần biết điều này để KHÔNG đẩy thông báo lên điện thoại khi người
+     ta đang ngồi nhìn thẳng vào đúng đoạn chat đó. Đóng dấu GHÉP vào lệnh hỏi
+     lại 6 giây/lần vốn đã chạy sẵn — KHÔNG thêm lệnh gọi thứ hai, nên không
+     tốn thêm một lượt Worker nào.
+     `dang_mo=1` chỉ được gửi khi cửa sổ chat THẬT SỰ đang mở (xem app.js);
+     vòng hỏi lại nền vẫn chạy khi đã đóng, nếu đóng dấu cả lượt đó thì chốt
+     chặn này luôn bật và không ai nhận được thông báo nào. */
+  if (url.searchParams.get('dang_mo') === '1') {
+    try {
+      /* REV-0031 Việc 2 — ĐÓNG DẤU TỐI ĐA 30 GIÂY MỘT LẦN, chặn ở SQL.
+         Đo trên bản thật: 100 lượt hỏi = 100 dòng ghi, tức 1 người mở cửa sổ
+         chat 10 tiếng = 6.000 dòng/ngày; 20 người = 120.000 — một mình nó
+         vượt hạn mức 100.000 dòng/ngày của gói miễn phí. Chặn ở MÁY CHỦ chứ
+         không ở trình duyệt: client sửa được, máy chủ thì không.
+         `CON_DANG_XEM_GIAY = 45` (day-thong-bao.js) nên đóng dấu mỗi 30 giây
+         vẫn còn dư 15 giây an toàn — không ai bị đẩy thông báo oan.
+         Vế `xem_chat_voi IS NOT ?` giữ cho việc ĐỔI NGƯỜI ĐANG CHAT được đóng
+         dấu NGAY, không phải đợi hết 30 giây: đây là ca duy nhất mà chậm một
+         nhịp là đẩy nhầm thông báo. `IS NOT` so an toàn với NULL (kênh chung). */
+      demGhi(await env.DB.prepare(
+        `UPDATE tai_khoan SET xem_chat_voi = ?, xem_chat_luc = datetime('now')
+          WHERE nhan_su_id = ?
+            AND (xem_chat_luc IS NULL
+                 OR xem_chat_voi IS NOT ?
+                 OR xem_chat_luc < datetime('now','-30 seconds'))`
+      ).bind(voi, phien.nhan_su_id, voi).run());
+    } catch (e) { console.error('Nhịp tim chat:', e.message); }
+  }
+
   // Lấy 50 tin gần nhất theo id giảm dần thì phải đảo lại cho đúng thứ tự thời gian
   const tinNhan = sauId > 0 ? (results || []) : (results || []).reverse();
   return json({ tin_nhan: tinNhan, toi_id: phien.nhan_su_id });
@@ -394,7 +429,7 @@ async function chatDaDoc(req, env) {
 
 /* Gửi tin nhắn — có thể chỉ có chữ, chỉ có file, hoặc cả hai. Có nguoi_nhan_id
    trong form thì là tin nhắn RIÊNG, không thì vào kênh chung. */
-async function chatGui(req, env) {
+async function chatGui(req, env, ctx) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
 
@@ -439,7 +474,107 @@ async function chatGui(req, env) {
     tepTen, tepLoai, tepKichThuoc, tepB64
   ).run();
 
+  /* CTL-0014 — đẩy lên điện thoại người nhận. Chạy SAU khi đã trả lời, trong
+     `waitUntil`, nên nút Gửi không phải đợi ba lượt gọi mạng tới Google.
+     `dayTinNhanChat` tự nuốt mọi lỗi: thông báo hỏng thì tin nhắn VẪN gửi —
+     không bao giờ được để chuyện phụ làm hỏng chuyện chính. */
+  const tin = {
+    nguoi_nhan_id: nguoiNhanId,
+    nguoi_gui_id: phien.nhan_su_id,
+    nguoi_gui_ten: nguoi
+  };
+  /* `guiTelegram` truyền xuống để lỗi PHÍA MÌNH (khoá VAPID sai, 401/403, 429)
+     kêu tới Gạo thay vì âm thầm — REV-0028 H1. Không truyền thì vẫn chạy, chỉ
+     là mất tiếng kêu; nên bàn thử gọi trực tiếp cũng không vỡ. */
+  const day = dayTinNhanChat(env, tin, new Date(), { guiTelegram });
+  if (ctx?.waitUntil) ctx.waitUntil(day); else await day;
+
   return json({ ok: true, id: r.meta.last_row_id });
+}
+
+/* ==========================================================================
+   THÔNG BÁO ĐẨY LÊN ĐIỆN THOẠI (CTL-0014) — Web Push chuẩn W3C.
+   Chi phí 0: khoá VAPID tự sinh, máy chủ đẩy là của chính hãng trình duyệt.
+   Không Firebase, không dịch vụ thứ ba, không gói trả tiền nào.
+   ========================================================================== */
+
+/* Khoá công khai để trình duyệt đăng ký. `bat: false` = chưa đặt khoá trong
+   két Cloudflare → giao diện tự ẩn phần thông báo đẩy đi thay vì báo lỗi đỏ. */
+async function pushKhoa(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  const k = khoaVAPID(env);
+  const tk = await env.DB.prepare(
+    `SELECT push_chat_tat FROM tai_khoan WHERE nhan_su_id = ?`
+  ).bind(phien.nhan_su_id).first();
+  const may = await env.DB.prepare(
+    `SELECT COUNT(*) AS n FROM push_dangky WHERE nhan_su_id = ?`
+  ).bind(phien.nhan_su_id).first();
+  return json({
+    bat: !!k,
+    khoa_cong_khai: k ? k.congKhai : null,
+    chat_tat: tk?.push_chat_tat ? 1 : 0,
+    so_may: may?.n || 0,
+    tran_ngay: TRAN_NGAY
+  });
+}
+
+/* Máy vừa được cấp đăng ký thì gửi lên đây cất. `endpoint` là UNIQUE nên cùng
+   một máy đăng ký lại (đổi khoá sau khi xoá dữ liệu trang) chỉ ghi đè, không
+   sinh dòng thứ hai rồi bắn hai thông báo cho một tin nhắn. */
+async function pushDangKy(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  const endpoint = String(b.endpoint || '').trim();
+  const p256dh = String(b.p256dh || '').trim();
+  const auth = String(b.auth || '').trim();
+  if (!endpoint || !p256dh || !auth) return loi('Thiếu thông tin đăng ký');
+  if (!/^https:\/\//.test(endpoint)) return loi('Địa chỉ đăng ký không hợp lệ');
+
+  await env.DB.prepare(`
+    INSERT INTO push_dangky (nhan_su_id, endpoint, p256dh, auth, may, tao_luc)
+    VALUES (?, ?, ?, ?, ?, datetime('now','+7 hours'))
+    ON CONFLICT(endpoint) DO UPDATE SET
+      nhan_su_id = excluded.nhan_su_id,
+      p256dh = excluded.p256dh, auth = excluded.auth,
+      may = excluded.may, hong_lien_tiep = 0
+  `).bind(
+    phien.nhan_su_id, endpoint, p256dh, auth,
+    String(b.may || '').slice(0, 120) || null
+  ).run();
+
+  return json({ ok: true });
+}
+
+/* Tắt trên MÁY NÀY (khác với tắt loại tin nhắn trên mọi máy). */
+async function pushHuy(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { b = {}; }
+  const endpoint = String(b.endpoint || '').trim();
+  if (endpoint) {
+    await env.DB.prepare(`DELETE FROM push_dangky WHERE endpoint = ? AND nhan_su_id = ?`)
+      .bind(endpoint, phien.nhan_su_id).run();
+  } else {
+    await env.DB.prepare(`DELETE FROM push_dangky WHERE nhan_su_id = ?`)
+      .bind(phien.nhan_su_id).run();
+  }
+  return json({ ok: true });
+}
+
+/* Tắt/bật RIÊNG loại "tin nhắn". Cảnh báo đơn hoàn của Kho vận KHÔNG tắt theo
+   — cả điểm này là lý do phải tắt riêng từng loại thay vì một công tắc tổng:
+   người tắt sạch ở tầng hệ điều hành là mất luôn cảnh báo đơn hoàn. */
+async function pushTuyChon(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  const tat = b.chat_tat ? 1 : 0;
+  await env.DB.prepare(`UPDATE tai_khoan SET push_chat_tat = ? WHERE nhan_su_id = ?`)
+    .bind(tat, phien.nhan_su_id).run();
+  return json({ ok: true, chat_tat: tat });
 }
 
 /* Tải file đính kèm của 1 tin nhắn — GET /api/chat/tep?id=123 */
@@ -1545,7 +1680,12 @@ async function hoanDanhSach(req, env) {
    donDepDuLieuNgoaiThang) nên màn này cũng chỉ tra được trong tháng hiện tại.
    Cột tinh_trang_hang chỉ lấy khi DB thật đã có (xem coCotTinhTrangHang
    trong shopee.js) — tự nâng cấp khi Sếp Ngọc nạp migration, không lỗi nếu
-   chưa nạp. */
+   chưa nạp.
+   XẾP THEO `tao_luc_shopee` chứ KHÔNG theo `dong_bo_luc` (REV-0031 §Việc 1):
+   từ khi cron chỉ ghi đơn nào ĐỔI THẬT, `dong_bo_luc` là "lần cuối đơn này
+   đổi" — xếp theo nó thì đơn cũ không đổi gì sẽ rơi khỏi LIMIT 500 (bảng
+   đang có 523 dòng). Trước đây mọi dòng cùng một giá trị nên thứ tự chỉ là
+   ngẫu nhiên; xếp theo lúc SÀN TẠO đơn vừa ổn định vừa đúng nghĩa "lịch sử". */
 async function hoanLichSu(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
@@ -1561,7 +1701,7 @@ async function hoanLichSu(req, env) {
            ${coTT ? ', d.tinh_trang_hang, d.tinh_trang_luc, d.tinh_trang_boi' : ''}
       FROM don_hoan d
       LEFT JOIN sku_map m ON m.ten_san_pham = d.san_pham_ten
-     ORDER BY d.dong_bo_luc DESC LIMIT 500
+     ORDER BY CAST(d.tao_luc_shopee AS INTEGER) DESC, d.return_sn DESC LIMIT 500
   `).all();
   return json({ don_hoan: results });
 }
@@ -4443,6 +4583,10 @@ const DUONG_DAN = {
   'GET  /api/chat/gan-day':  chatGanDay,
   'POST /api/chat/gui':      chatGui,
   'GET  /api/chat/tep':      chatTepDinhKem,
+  'GET  /api/push/khoa':     pushKhoa,
+  'POST /api/push/dang-ky':  pushDangKy,
+  'POST /api/push/huy':      pushHuy,
+  'POST /api/push/tuy-chon': pushTuyChon,
   'GET  /api/quan-tri/danh-sach':      qtDanhSach,
   'POST /api/quan-tri/them-nhan-su':   qtThemNhanSu,
   'POST /api/quan-tri/sua-nhan-su':    qtSuaNhanSu,
@@ -4602,6 +4746,16 @@ export default {
          TẮT KHẨN CẤP: đặt biến môi trường NHAC_VIEC_TAT=1 → câm ngay, không
          cần deploy. Bật PILOT riêng một phòng: NHAC_VIEC_BO_PHAN="Kho vận". */
       try { await quetNhacCongViec(env, guiThongBao, guiTelegram); } catch (e) { console.error('Cron nhắc việc:', e.message); }
+      /* CTL-0014 — dọn nhật ký đẩy quá 3 ngày. Nhật ký chỉ để tính gộp 60 giây
+         và trần theo ngày, giữ lâu hơn là phình bảng vô ích. Một dòng, chung
+         cron sẵn có, KHÔNG thêm lịch thứ hai vào `wrangler.toml`. */
+      try { await donNhatKyCu(env); } catch (e) { console.error('Cron dọn nhật ký đẩy:', e.message); }
+      /* CTL-0014 · REV-0028 H3 — mỗi ngày một lần (9h VN) hỏi lại: ba bước cài
+         đặt còn đủ không, khoá VAPID còn ký được không. Thiếu bước nào thì
+         Telegram cho Gạo NGAY, thay vì im lặng tuyệt đối như trước. Hàm tự đóng
+         cửa ngoài khung 9h nên gọi mỗi 5 phút vẫn đúng 1 tin/ngày; KHÔNG thêm
+         lịch nào vào `wrangler.toml`. */
+      try { await kiemTraCaiDatDay(env, guiTelegram); } catch (e) { console.error('Cron kiểm cài đặt đẩy:', e.message); }
 
       // SAO LƯU DỮ LIỆU (SPEC-0005 Phần B · ADR-0013). Hàm tự biết giờ nào thì
       // làm gì: 0h–8h sáng thì xuất dữ liệu theo lô, 9h sáng thì hỏi "hôm qua
@@ -4622,10 +4776,20 @@ export default {
         try { await donDepDuLieuNgoaiThang(env); } catch (e) { console.error('Cron dọn dữ liệu ngoài tháng:', e.message); }
       try { await donDepJsonDonHangCu(env); } catch (e) { console.error('Cron dọn payload đơn hàng cũ:', e.message); }
       }
+
+      /* REV-0031 Việc 1 — CANH HẠN MỨC GHI. Phải là việc CUỐI CÙNG: nó chốt
+         số dòng mà mọi việc ở trên vừa ghi (D1 trả sẵn `meta.rows_written`)
+         và kêu Telegram khi chạm 80% hạn mức gói miễn phí. Dùng lại đúng cron
+         5 phút này, KHÔNG thêm lịch vào `wrangler.toml`. Trước bản này ERP đã
+         ghi vượt hạn mức 3,47 lần suốt nhiều tuần mà không ai được báo. */
+      try { await chotVaCanhBao(env, guiTelegram); } catch (e) { console.error('Cron canh hạn mức ghi:', e.message); }
     })());
   },
 
-  async fetch(req, env) {
+  /* `ctx` được truyền tiếp xuống hàm xử lý để việc phụ (đẩy thông báo lên
+     điện thoại) chạy trong `waitUntil` — người bấm Gửi không phải đợi. Hàm
+     nào không cần thì cứ bỏ qua tham số thứ ba, không ảnh hưởng gì. */
+  async fetch(req, env, ctx) {
     const url = new URL(req.url);
 
     if (!url.pathname.startsWith('/api/')) {
@@ -4639,7 +4803,7 @@ export default {
     if (!xuLy) return loi('Không có đầu việc này', 404);
 
     try {
-      return await xuLy(req, env);
+      return await xuLy(req, env, ctx);
     } catch (e) {
       // Không trả chi tiết lỗi ra ngoài — lộ cấu trúc hệ thống cho kẻ dò.
       console.error('Lỗi máy chủ:', e.stack || e.message);

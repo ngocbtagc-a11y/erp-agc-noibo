@@ -1685,6 +1685,23 @@ tr.canh-bao:hover > td { background: #fbdbd6; }
 .cnb-nut:hover { background: var(--sage-dark); transform: translateY(-1px); }
 .cnb-nut .tb-badge { top: -2px; right: -2px; }
 
+/* DẤU ĐIẾC trên bong bóng chat (REV-0031 Việc 3) — góc DƯỚI-TRÁI để không
+   tranh chỗ với số đỏ chưa đọc ở góc trên-phải. Đây là dấu hiệu duy nhất
+   người đang không nhận được thông báo nhìn thấy mà KHÔNG phải bấm gì.
+   Nền trắng viền cam: đọc được cả trên nền xanh của nút lẫn nền tối. */
+.cnb-dau-tb {
+  position: absolute; left: -4px; bottom: -4px;
+  width: 22px; height: 22px; border-radius: 999px;
+  background: var(--white); border: 2px solid var(--line);
+  font-size: 11px; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 1px 4px rgba(0,0,0,.18);
+}
+.cnb-dau-tb.tbd-dau-canhbao { border-color: #e67e22; background: #fff3e0; }
+/* Cùng lỗi ADR-0008 với .tb-badge: thiếu dòng này thì `hidden = true` chạy mà
+   dấu vẫn nằm đó, người đang bật thật vẫn thấy 🔕 — báo oan. */
+.cnb-dau-tb[hidden] { display: none; }
+
 /* Bong bóng truy cập nhanh các chat riêng gần đây — xếp dọc ngay trên nút chính */
 .cnb-ganday {
   position: fixed; right: 28px; bottom: 92px; z-index: 301;
@@ -1732,11 +1749,106 @@ tr.canh-bao:hover > td { background: #fbdbd6; }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .cnb-dau-ten .sm { font-size: 11px; color: var(--text-mute); }
+/* Nút "←" (về kênh chung) và "✕" (đóng chat) trên thanh tiêu đề cửa sổ chat.
+   ĐO ĐƯỢC ngày 2026-08-28 ở bề ngang 375px (iPhone SE): bản cũ chỉ 24 x 29.8px
+   và 24 x 29.1px — dưới ngưỡng ngón tay 44px (WCAG 2.5.5 / Apple HIG). Từ
+   CTL-0014 thanh này còn có thêm nút chuông 44px, nên nút 24px nằm sát nút 44px
+   càng dễ bấm trượt. Nhân viên kho bấm bằng ngón cái khi đang bê hàng.
+   `box-sizing: border-box` bắt buộc — thiếu nó thì padding cộng ra ngoài và số
+   đo thật lệch khỏi con số khai trong CSS. Kiểm lại bằng
+   `scripts/do-nut-thongbao-44px.mjs`.
+   `display: flex` ở đây KHÔNG làm hiện nút "←" khi nó mang `hidden` (app.html
+   để nút này `hidden` cho tới khi vào chat riêng): chốt toàn cục
+   `[hidden]{display:none!important}` đầu file thắng. Bàn đo có ca thử riêng
+   canh đúng chuyện này — đừng gỡ chốt đó. */
 .cnb-lui, .cnb-dong {
   background: none; border: none; cursor: pointer; color: var(--text-mute);
-  font-size: 16px; padding: 4px 8px; border-radius: 8px; flex-shrink: 0; line-height: 1;
+  font-size: 16px; border-radius: 8px; flex-shrink: 0; line-height: 1;
+  box-sizing: border-box;
+  min-width: 44px; min-height: 44px;
+  display: flex; align-items: center; justify-content: center;
 }
 .cnb-lui:hover, .cnb-dong:hover { background: var(--surface-2); color: var(--ink); }
+
+/* ---- CTL-0014 · Thông báo tin nhắn lên điện thoại -----------------------
+   MỌI nút dưới đây đặt min-height/min-width 44px CỨNG. Nhân viên kho bấm bằng
+   ngón cái khi đang bê hàng — dưới 44px là bấm trượt. Con số này ĐO ĐƯỢC bằng
+   `scripts/do-nut-thongbao-44px.mjs`, không phải lời khai suông: commit trước
+   trong chính repo này từng tự khai 44px mà đo tay ra 28px.
+   `box-sizing: border-box` là bắt buộc — thiếu nó thì padding cộng thêm ra
+   ngoài và số đo thật lệch khỏi con số khai trong CSS. */
+.cnb-chuong {
+  background: none; border: none; cursor: pointer; color: var(--text-mute);
+  font-size: 17px; border-radius: 10px; flex-shrink: 0; line-height: 1;
+  box-sizing: border-box;
+  min-width: 44px; min-height: 44px;
+  display: flex; align-items: center; justify-content: center;
+}
+.cnb-chuong:hover { background: var(--surface-2); color: var(--ink); }
+.cnb-chuong.tbd-dang-tat { opacity: .45; }   /* đã tắt báo tin nhắn — nhìn là biết */
+
+/* REV-0028 H2 — "đang KHÔNG nhận được tin" phải nhìn thấy mà KHÔNG cần bấm.
+   Ký tự nút đã đổi 🔔 → 🔕 (`assets/js/tbd-trangthai.js`); chấm cam này chỉ là
+   lớp thứ hai. Cố ý KHÔNG lấy màu làm tín hiệu duy nhất — người phân biệt màu
+   kém vẫn phải nhận ra, nên ký tự mới là tín hiệu chính.
+   `position: relative` đặt ở đây để không phải sửa luật gốc đang được
+   `scripts/do-nut-thongbao-44px.mjs` đo bằng regex. */
+.cnb-chuong.tbd-canh-bao { position: relative; opacity: 1; }
+.cnb-chuong.tbd-canh-bao::after {
+  content: '';
+  position: absolute; top: 6px; right: 6px;
+  width: 9px; height: 9px; border-radius: 50%;
+  background: #e07b39;                 /* cam cảnh báo, không phải đỏ báo lỗi */
+  border: 2px solid var(--card);
+  box-sizing: content-box;
+}
+/* Dải trạng thái khi đang điếc: nền cảnh báo, khác hẳn nền mời xanh nhạt. */
+.tbd-moi.tbd-moi-canhbao { background: #fdf1e6; }
+
+.tbd-moi {
+  flex-shrink: 0;
+  padding: 12px 16px;
+  background: var(--sage-wash);
+  border-bottom: 1px solid var(--line);
+}
+.tbd-moi[hidden] { display: none; }
+.tbd-moi-chu { font-size: 13px; color: var(--ink); line-height: 1.45; }
+.tbd-moi-nut { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+
+.tbd-nut {
+  box-sizing: border-box;
+  min-height: 44px;              /* ngưỡng ngón tay — xem chú thích ở trên */
+  padding: 0 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--ink);
+  font-size: 13px; font-weight: 600;
+  cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.tbd-nut:hover { background: var(--surface-2); }
+.tbd-nut-chinh { background: var(--sage); border-color: var(--sage); color: #fff; }
+.tbd-nut-chinh:hover { background: var(--sage-dark); }
+
+.tbd-caidat {
+  flex-shrink: 0;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-2);
+}
+.tbd-caidat[hidden] { display: none; }
+/* Cả DÒNG là vùng bấm, không phải mỗi ô vuông 18px của checkbox — bấm trúng ô
+   vuông đó bằng ngón cái trên điện thoại gần như bất khả thi. */
+.tbd-dong {
+  box-sizing: border-box;
+  display: flex; align-items: center; gap: 10px;
+  min-height: 44px;
+  font-size: 13px; color: var(--ink); cursor: pointer;
+}
+.tbd-dong input { width: 18px; height: 18px; flex-shrink: 0; cursor: pointer; }
+.tbd-ghichu { font-size: 12px; color: var(--text-mute); margin: 4px 0 10px; line-height: 1.45; }
+.tbd-ghichu:empty { display: none; }
 
 .chat-khung {
   flex: 1;

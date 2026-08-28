@@ -19,6 +19,8 @@
    ========================================================================== */
 
 import { duocQuanLyShopee, duocXemDonHoan, duocXemTab } from './quyen.js';
+import { locDoi, COT_DON_HOAN, COT_DON_HANG } from './chi-ghi-khi-doi.js';
+import { demGhi } from './canh-bao-ghi.js';
 
 /* ---- Trả lời JSON ------------------------------------------------------- */
 function json(d, status = 200) {
@@ -295,6 +297,7 @@ export async function dongBoNen(env) {
           ma_van_don=excluded.ma_van_don,
           cap_nhat_shopee=excluded.cap_nhat_shopee, du_lieu_json=excluded.du_lieu_json,
           dong_bo_luc=datetime('now','+7 hours')
+        ${locDoi('don_hoan', COT_DON_HOAN)}
       `).bind(
         String(r.return_sn), r.order_sn || null, r.status || null, r.reason || null,
         Math.round((Number(r.refund_amount) || 0) * 100000) || null, r.currency || null,
@@ -312,7 +315,7 @@ export async function dongBoNen(env) {
   }
   // Ghi hàng loạt theo lô 50 lệnh/batch — mỗi batch chỉ tính 1 subrequest
   for (let i = 0; i < cauLenh.length; i += 50) {
-    await env.DB.batch(cauLenh.slice(i, i + 50));
+    demGhi(await env.DB.batch(cauLenh.slice(i, i + 50)));
   }
   return them;
 }
@@ -351,6 +354,17 @@ export async function apiDanhSach(env, phien) {
   // trả về luôn có kho_nhan_luc IS NULL (lọc ở WHERE bên dưới) nên tình
   // trạng luôn null, không dùng tới; bỏ ra để không vỡ nếu server chạy
   // trước khi database thật kịp nạp migration them-tinhtrang-hang.sql.
+  //
+  // ❗KHÔNG ĐƯỢC ĐẶT LẠI `LIMIT` Ở ĐÂY (REV-0033 lỗi #1 — bỏ 28/08/2026).
+  // Từ khi cron chỉ ghi đơn nào ĐỔI THẬT (src/chi-ghi-khi-doi.js) thì
+  // `dong_bo_luc` mang nghĩa mới: "lần cuối đơn này ĐỔI". Trước đó mọi dòng
+  // cùng một giá trị nên `LIMIT 300` chỉ cắt NGẪU NHIÊN; sau đó, 300 dòng
+  // giữ lại là 300 đơn ĐỔI GẦN NHẤT, còn đơn bị cắt là đơn LÂU NHẤT KHÔNG
+  // ĐỔI — tức đúng những ĐƠN TỒN QUÁ HẠN mà kho cần thấy nhất. Cắt ngẫu
+  // nhiên hoá thành cắt thiên vị có hệ thống chống lại đường tiền.
+  // Bỏ trần là an toàn: WHERE bên dưới đã chặn cứng (chỉ đơn kho chưa nhận,
+  // đang ở sân kho) và don_hoan được dọn theo tháng nên không phình.
+  // Bàn đo: npm run do-hangdoi-khovan (scripts/do-hangdoi-khovan.mjs).
   const { results } = await env.DB.prepare(`
     SELECT d.return_sn, d.order_sn, d.trang_thai, d.ly_do, d.so_tien, d.tien_te, d.nguoi_mua,
            d.san_pham, d.san_pham_ten, COALESCE(d.san_pham_sku, m.ma_sku) AS san_pham_sku,
@@ -363,7 +377,7 @@ export async function apiDanhSach(env, phien) {
      WHERE (d.trang_thai NOT LIKE '%CANCEL%' OR d.ma_van_don IS NOT NULL)
        AND d.kho_nhan_luc IS NULL
        AND d.dang_cho = 'kho'
-     ORDER BY d.dong_bo_luc DESC LIMIT 300
+     ORDER BY d.dong_bo_luc DESC
   `).all();
   return json({ don_hoan: results });
 }
@@ -421,6 +435,13 @@ function cauLenhDonHang(env, o, coHuy, coVanDon) {
   const capNhatVanDon = coVanDon ? `, ma_van_don=excluded.ma_van_don` : '';
   const thamSoVanDon = coVanDon ? [maVanDon] : [];
 
+  /* Chỉ ghi khi có cột nào ĐỔI THẬT (xem src/chi-ghi-khi-doi.js). Danh sách
+     cột so PHẢI khớp đúng danh sách cột ghi ở trên — kể cả các cột tuỳ chọn
+     chỉ có mặt khi DB đã nạp migration; bỏ sót cột nào là mất cập nhật cột đó. */
+  const cotSo = COT_DON_HANG
+    .concat(coHuy ? ['san_pham_ten', 'san_pham_sku', 'huy_ly_do', 'huy_boi', 'huy_ly_do_khach'] : [])
+    .concat(coVanDon ? ['ma_van_don'] : []);
+
   return env.DB.prepare(`
     INSERT INTO don_hang (order_sn, nguon, trang_thai, tong_tien, tien_te, nguoi_mua, so_sp, tao_luc_san, cap_nhat_san, du_lieu_json, dong_bo_luc${cotHuy}${cotVanDon})
     VALUES (?, 'shopee', ?, ?, ?, ?, ?, ?, ?, ?, datetime('now','+7 hours')${gtHuy}${gtVanDon})
@@ -429,6 +450,7 @@ function cauLenhDonHang(env, o, coHuy, coVanDon) {
       nguoi_mua=excluded.nguoi_mua, so_sp=excluded.so_sp,
       cap_nhat_san=excluded.cap_nhat_san, du_lieu_json=excluded.du_lieu_json,
       dong_bo_luc=datetime('now','+7 hours')${capNhatHuy}${capNhatVanDon}
+    ${locDoi('don_hang', cotSo)}
   `).bind(
     String(o.order_sn), o.order_status || null,
     Math.round((Number(o.total_amount) || 0) * 100000) || null, o.currency || null,
@@ -492,7 +514,7 @@ export async function dongBoDonHangNen(env) {
       const dsCt = (kqCt.response && kqCt.response.order_list) || [];
       const cauLenh = dsCt.map(o => cauLenhDonHang(env, o, coHuy, coVanDon));
       if (cauLenh.length) {
-        await env.DB.batch(cauLenh);
+        demGhi(await env.DB.batch(cauLenh));
         subReq++;
       }
       for (const o of dsCt) {
@@ -513,8 +535,8 @@ export async function dongBoDonHangNen(env) {
   // thì coi như bắt kịp, tiến mốc tới hiện tại luôn.
   const mocLuu = con ? mocMoi : denGoc;
   if (mocLuu) {
-    await env.DB.prepare('UPDATE shopee_ket_noi SET dh_dong_bo_den = ? WHERE shop_id = ?')
-                .bind(String(mocLuu), kn.shop_id).run();
+    demGhi(await env.DB.prepare('UPDATE shopee_ket_noi SET dh_dong_bo_den = ? WHERE shop_id = ?')
+                .bind(String(mocLuu), kn.shop_id).run());
   }
   return them;
 }

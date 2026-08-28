@@ -1,4 +1,4 @@
-# BÀI HỌC — đọc trước mỗi lần bắt tay làm
+﻿# BÀI HỌC — đọc trước mỗi lần bắt tay làm
 
 > Sếp Ngọc 2026-08-27: *"tư duy logic theo hướng liên tục tối ưu, tốt hơn sau
 > mỗi lần làm việc."*
@@ -539,3 +539,40 @@ tiếp**. Đọc token, đừng dán cứng màu.
 Hướng hover phụ thuộc **màu chữ**, không phụ thuộc thói quen. Cùng vòng, 10 con số tôi viết vào
 chú thích CSS mà **chưa đo** đều lệch thật (98,42 vs 97,97 · 15,5 vs 15,13 · 5,41 vs 5,30…) —
 `getComputedStyle` trên DOM thật mới lòi ra. **Số chưa đo thì đừng viết ra như số đã đo.**
+**BH-44 · TRẦN LÝ THUYẾT KHÔNG PHẢI SỐ ĐO. Ghi lẫn hai thứ đó vào tài liệu còn tai hại
+hơn không ghi gì.**
+REV-0031, Khỉ Đột khai: *"ERP đang gọi ~240.000 request/ngày, vượt hạn mức 100.000 của
+Workers miễn phí"*. Con số 240.000 **không đo từ đâu cả** — nó là phép nhân "20 người ×
+mở tab liên tục 10 tiếng × 6 giây/lượt", tức **trần lý thuyết của trường hợp xấu nhất**.
+Hồ Ly bác bằng một ràng buộc có sẵn trong chính hệ thống: **mọi** API có đăng nhập đều đi
+qua `batBuocDangNhap` → `docPhien` → **ít nhất 1 lượt đọc D1**. Mà `read_queries_24h` đo
+thật chỉ **46.597**. Nếu thật có 240.000 request thì con số đó phải ≥ 240.000. **Lệch ~5
+lần. ERP CHƯA hề vượt hạn mức request** — thứ đang vỡ thật là **lượt GHI D1**
+(358.604 / 100.000 = 3,59 lần), và chỉ nó thôi.
+→ Cùng một báo cáo mà có **cả số đo lẫn số ước lượng** thì phải **dán nhãn từng con số**:
+`wrangler d1 info` là ĐO, phép nhân trong đầu là DỰ PHÓNG. Trộn lẫn thì người đọc sau sẽ
+**đi tối ưu cái chưa hỏng** và bỏ mặc cái đang hỏng — mất đúng thứ đắt nhất là thời gian
+của Sếp.
+→ Mẹo kiểm rẻ tiền, dùng được ngay: **tìm một con số ĐÃ ĐO mà con số đang khai BẮT BUỘC
+phải kéo theo.** Ở đây "request có đăng nhập" bắt buộc kéo theo "lượt đọc D1"; số đo nhỏ
+hơn nhiều lần là lời khai sai, không cần tranh luận thêm.
+
+**BH-45 · Đổi NGHĨA một cột là đổi nghĩa MỌI chỗ đọc cột đó — kể cả chỗ mình không sửa.**
+REV-0031 làm cron chỉ ghi khi dữ liệu thật sự đổi. Hệ quả kèm theo: `dong_bo_luc` từ
+"lần cuối cron chạy qua" **hoá thành** "lần cuối đơn này ĐỔI". Khỉ Đột thấy hệ quả đó, sửa
+`hoanLichSu` (`LIMIT 500`) — **rồi dừng lại**, bỏ sót `apiDanhSach` trong `src/shopee.js`
+(`ORDER BY dong_bo_luc DESC LIMIT 300`) — **màn Kho vận**. Trước khi đổi nghĩa, mọi dòng
+cùng một giá trị nên cắt 300 là cắt **ngẫu nhiên**, vô hại. Sau khi đổi nghĩa, 300 dòng
+giữ lại là 300 đơn **đổi gần nhất**, đơn bị cắt là đơn **lâu nhất không đổi** — tức đúng
+**đơn tồn quá hạn**, thứ kho cần thấy nhất. Cắt ngẫu nhiên hoá thành **cắt thiên vị có hệ
+thống chống lại đường tiền**, và chỉ nổ khi hàng đợi vượt 300 → **bẫy chờ**, không ai thấy
+ngay.
+→ Đổi nghĩa một cột thì việc bắt buộc là **grep tên cột trên TOÀN repo rồi trả lời từng
+chỗ một**, không phải sửa những chỗ mình nhớ ra. Nguy hiểm xếp theo thứ tự: **① `ORDER BY`
++ `LIMIT` (mất dòng, im lặng) → ② `WHERE` lọc theo cột → ③ `ORDER BY` trần (chỉ đổi thứ
+tự) → ④ hiển thị**. ① là chỗ giết người vì màn hình vẫn đầy dữ liệu, không lỗi, không cảnh
+báo — chỉ thiếu đúng dòng cần nhất.
+→ Và đừng chỉ sửa: **để lại máy quét**. `scripts/do-hangdoi-khovan.mjs` tự quét `src/`,
+bắt mọi chỗ "ORDER BY … dong_bo_luc … LIMIT" (bỏ chú thích, tự kiểm bằng mẫu vi phạm giả)
+— lần sau ai thêm `LIMIT` vào là bàn đo đỏ ngay, không trông vào trí nhớ ai cả.
+

@@ -681,8 +681,38 @@
             <span id="cnbDauTen">💬 Kênh chung</span>
             <span class="sm" id="cnbDauPhu"></span>
           </div>
+          <button type="button" class="cnb-chuong" id="cnbChuong" hidden
+                  aria-label="Cài đặt thông báo tin nhắn" title="Thông báo tin nhắn">🔔</button>
           <button type="button" class="cnb-dong" id="cnbDong" aria-label="Đóng chat">✕</button>
         </div>
+
+        <!-- CTL-0014 — DẢI TRẠNG THÁI + MỜI BẬT THÔNG BÁO.
+             Nằm NGOÀI bảng #tbdCaiDat là cố ý: người đang KHÔNG nhận được tin
+             (iPhone chưa cài PWA, lỡ bấm Chặn, máy chủ chưa bật khoá) phải thấy
+             ngay khi mở cửa sổ chat, KHÔNG phải bấm nút 🔔 mới biết — đó đúng là
+             lỗi REV-0028 H2: chị Lan không biết mình đang bỏ lỡ tin.
+             Riêng LỜI MỜI xin quyền vẫn CỐ Ý không hiện lúc vừa mở ERP: hỏi sai
+             lúc là bị từ chối, mà trình duyệt KHÔNG cho hỏi lại lần thứ hai —
+             mất vĩnh viễn. Nó chỉ hiện SAU KHI người dùng vừa gửi hoặc vừa mở
+             một tin nhắn. Bấm "Bật" mới gọi requestPermission. -->
+        <div class="tbd-moi" id="tbdMoi" hidden>
+          <div class="tbd-moi-chu" id="tbdMoiChu"></div>
+          <div class="tbd-moi-nut">
+            <button type="button" class="tbd-nut tbd-nut-chinh" id="tbdBat">Bật thông báo</button>
+            <button type="button" class="tbd-nut" id="tbdDeSau">Để sau</button>
+          </div>
+        </div>
+
+        <!-- Bảng cài đặt nhỏ, mở bằng nút 🔔 trên đầu cửa sổ chat -->
+        <div class="tbd-caidat" id="tbdCaiDat" hidden>
+          <label class="tbd-dong">
+            <input type="checkbox" id="tbdChatBat">
+            <span>Báo khi có tin nhắn riêng</span>
+          </label>
+          <p class="tbd-ghichu" id="tbdTrangThai"></p>
+          <button type="button" class="tbd-nut" id="tbdTatMay" hidden>Tắt đẩy trên máy này</button>
+        </div>
+
         <div class="chat-khung" id="chat-khung">
           <div class="empty" id="chat-trong" hidden>Chưa có tin nhắn nào — gõ dòng đầu tiên nhé.</div>
         </div>
@@ -713,6 +743,12 @@
           <path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/>
         </svg>
         <span class="tb-badge" id="cnbBadge" hidden>0</span>
+        <!-- REV-0031 Việc 3 — DẤU ĐIẾC. Phải nằm ở ĐÂY, trên chính bong bóng
+             chat, tức NGOÀI #cnbPopup: #cnbChuong và #tbdMoi đều nằm TRONG
+             popup nên vẫn phải MỞ CỬA SỔ CHAT mới thấy — đúng chỗ REV-0028 H2
+             khai nhầm là "không cần bấm gì". Đây là dấu hiệu DUY NHẤT mà người
+             đang điếc nhìn thấy mà không phải bấm gì cả. -->
+        <span class="cnb-dau-tb" id="cnbDauTB" hidden aria-hidden="true">🔕</span>
       </button>
     </div>
 

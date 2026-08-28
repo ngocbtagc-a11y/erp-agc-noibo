@@ -154,10 +154,15 @@ export const API = {
   mtViec: (id) => goi('/api/muc-tieu/viec?id=' + id),
 
   /* ---- Chat nội bộ (kênh chung + chat riêng từng người) ---- */
-  chatDanhSach: (sauId, voiId) => {
+  /* `dangMo` = cửa sổ chat ĐANG THẬT SỰ MỞ trên màn hình. Máy chủ đóng dấu mốc
+     đó để KHÔNG đẩy thông báo lên điện thoại khi người dùng đang ngồi nhìn
+     thẳng vào đúng đoạn chat này (CTL-0014). Ghép vào lệnh gọi 6 giây/lần vốn
+     đã chạy — KHÔNG thêm lệnh gọi thứ hai, không tốn thêm lượt Worker. */
+  chatDanhSach: (sauId, voiId, dangMo) => {
     const q = new URLSearchParams();
     if (sauId) q.set('sau_id', sauId);
     if (voiId) q.set('voi', voiId);
+    if (dangMo) q.set('dang_mo', '1');
     const qs = q.toString();
     return goi('/api/chat/tin-nhan' + (qs ? '?' + qs : ''));
   },
@@ -171,6 +176,14 @@ export const API = {
     if (voiId) fd.append('nguoi_nhan_id', voiId);
     return goi('/api/chat/gui', { method: 'POST', body: fd });
   },
+
+  /* ---- Thông báo đẩy lên điện thoại (CTL-0014) ---- */
+  pushKhoa: () => goi('/api/push/khoa'),
+  pushDangKy: (dk) => goi('/api/push/dang-ky', { method: 'POST', body: JSON.stringify(dk) }),
+  pushHuy: (endpoint) => goi('/api/push/huy', { method: 'POST', body: JSON.stringify({ endpoint }) }),
+  pushTuyChon: (chatTat) => goi('/api/push/tuy-chon', {
+    method: 'POST', body: JSON.stringify({ chat_tat: chatTat ? 1 : 0 })
+  }),
 
   /* ---- Quản trị (chỉ admin) ---- */
   qtDanhSach: () => goi('/api/quan-tri/danh-sach'),
