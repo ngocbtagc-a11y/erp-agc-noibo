@@ -1,6 +1,14 @@
 /* ==========================================================================
    ERP Alpha Green Commerce — Bảng màu & kiểu chữ
-   Phong cách: Sage — xanh ô liu, nền be, chữ serif lớn
+   Phong cách: nền kem sáng, thẻ trắng, xanh lá + cam LẤY TỪ LOGO CÔNG TY.
+
+   CTL-0023 Đợt 1 (28/08/2026) — CHỈ đổi giá trị trong khối `:root` bên dưới,
+   KHÔNG sửa một selector nào. 2.000 dòng CSS phía dưới đang chạy đúng trên
+   mọi màn; viết lại là chắc chắn vỡ ở màn ít ai mở và không ai phát hiện ra.
+
+   Mọi cặp chữ–nền dưới đây đã ĐO bằng `node scripts/do-tuong-phan-mau.mjs`
+   (WCAG 2.1, kèm ca đối chứng BH-16). Nhân viên kho đọc điện thoại ngoài nắng
+   và dưới đèn kho — ĐỔI MÀU XONG PHẢI CHẠY LẠI PHÉP ĐO, đừng nhìn bằng mắt.
    ========================================================================== */
 
 /* ĐỪNG XOÁ — CHỐT CHẶN TOÀN CỤC CHO THUỘC TÍNH [hidden]
@@ -23,22 +31,88 @@
 [hidden] { display: none !important; }
 
 :root {
-  --bg:          #ded9d3;
-  --surface:     #f2f1ee;
-  --surface-2:   #e9e7e2;
+  /* --- Nền & mặt ---------------------------------------------------------
+     Thủ phạm chính của "xấu và đục" là `--bg: #ded9d3` — xám nâu L*87, cả
+     màn phủ một lớp bụi. Nay là kem sáng L*93.7.
+     ⚠️ ĐỪNG đẩy `--bg` lên trắng hẳn: `--card` đã là #ffffff, nền trắng nữa
+     thì thẻ mất viền nhìn, cả trang thành một tấm giấy phẳng. Chênh L* giữa
+     nền và thẻ phải còn ≥2 — `do-tuong-phan-mau.mjs` kiểm số này.
+
+     BỐN TẦNG, THỨ TỰ KHÔNG ĐƯỢC ĐẢO:
+       --surface-2 (chìm nhất) < --bg < --surface < --card (trắng, nổi nhất)
+     `--surface` gánh HAI vai trái ngược nhau và đây là chỗ dễ vỡ nhất:
+       · mặt CHÌM bên trong thẻ trắng — ô nhập, dòng di chuột (15 chỗ)
+       · nhưng `.login-shell` lại là THẺ NỔI đặt thẳng trên `--bg`
+     Nên `--bg` PHẢI tối hơn `--surface` rõ rệt. Bản nháp đầu đặt
+     `--bg: #f7f2ea` cạnh `--surface: #f7f3ec` — lệch L* 0.3, cả khung đăng
+     nhập tan vào nền, đo bằng mắt không thấy. `do-tuong-phan-mau.mjs` kiểm
+     cả bốn khoảng cách này; đổi màu xong phải chạy lại.
+     Và ĐỪNG đẩy `--bg` lên sát trắng như trang mẫu (#FFF8F1): trang mẫu chỉ
+     có 2 tầng, ERP có 4 — sát trắng là ba tầng trên dính vào nhau. */
+  --bg:          #f3ece1;
+  --surface:     #faf7f1;
+  --surface-2:   #efe8dc;
   --card:        #ffffff;
-  --ink:         #3f4d33;
-  --ink-soft:    #5a6b4b;
-  --sage:        #9aab86;
-  --sage-dark:   #7d8f68;
-  --sage-pale:   #c9d3ba;
-  --sage-wash:   #eef1e8;
-  --text:        #55554e;
-  --text-mute:   #8a8a81;
-  --line:        #dcdad4;
+
+  /* --- Chữ ---------------------------------------------------------------
+     `--ink` gánh HAI vai: chữ tiêu đề trên thẻ trắng (42 chỗ) VÀ nền thanh
+     bên (`.sidebar` d.348, chữ trắng đè lên). Gần đen thì tốt cho cả hai. */
+  --ink:         #1e2417;
+  --ink-soft:    #3c5a2a;
+  --text:        #3a362f;
+  --text-mute:   #6e675e;   /* cũ #8a8a81 chỉ đạt 3.48:1 trên thẻ — không đọc được ngoài nắng */
+  --line:        #e5dccd;
   --white:       #ffffff;
 
+  /* --- Xanh lá thương hiệu -----------------------------------------------
+     Lấy từ logo công ty (public/assets/img/logo.png, đo bằng sharp): lá xanh
+     là #6ca839, hệ màu hsl(92°, 49%, 44%).
+     ⚠️ KHÔNG dùng thẳng #6ca839 làm `--sage`: `.btn-primary` (d.286) và bong
+     bóng chat (d.1402) đặt CHỮ TRẮNG lên nền này — trắng trên #6ca839 chỉ
+     2.88:1, không đọc nổi. Giữ nguyên SẮC 92° của logo, hạ độ sáng xuống
+     hsl(92°, 58%, 32%) = #4e8122 → chữ trắng đạt 4.68:1.
+     Nhận diện nằm ở sắc màu, không nằm ở độ sáng.
+
+     REV-0024 hỏi lại: font-weight có cứu được #6ca839 không? ĐO RA LÀ KHÔNG.
+     Trắng trên #6ca839 = 2.88:1. Ngưỡng chữ LỚN + ĐẬM đã là mức dễ nhất mà
+     WCAG cho phép và nó vẫn là 3:1 — 2.88 < 3.00, nên chữ có đậm tới đâu
+     nút vẫn trượt. font-weight đổi độ dày nét, KHÔNG đổi tỉ số tương phản.
+     → Nền có chữ TRẮNG buộc phải giữ `--sage` = #4e8122.
+
+     Nhưng có ĐÚNG MỘT chỗ đặt chữ ĐẬM MÀU TỐI (`--ink`) lên nền xanh:
+     `.sb-item.active` — mục menu đang mở, nằm ngay dưới logo trên thanh bên,
+     hiện trên MỌI màn. Ở đó #6ca839 đạt 5.53:1, tốt hơn hẳn #4e8122 (3.40:1,
+     vốn đã trượt từ bản cũ 3.68:1). Nên `--sage-logo` dùng ĐÚNG màu logo,
+     và dùng ĐÚNG chỗ đó: vừa vá lỗi tương phản, vừa đặt xanh lá thật của
+     thương hiệu ngay cạnh logo thật để hai màu không lệch nhau. */
+  --sage:        #4e8122;
+  --sage-logo:   #6ca839;   /* ĐÚNG màu logo — CHỈ cho nền có chữ tối */
+  --sage-dark:   #3c651a;
+  --sage-pale:   #bbd79b;
+  --sage-wash:   #eef6e3;
+
+  /* --- Cam thương hiệu (MỚI — trước đây ERP thiếu hẳn nửa bộ nhận diện) ---
+     `--cam` = #eb7c17, đo đúng từ chiếc lá cam trong logo.
+     DÙNG VÀO ĐÂU: nút hành động chính · số liệu cần chú ý · nhãn "đang chờ
+     bạn". KHÔNG dùng cam cho lỗi — lỗi đã có `--danger` đỏ riêng.
+     ⚠️ `--cam` là màu NỀN cho chữ đậm (trắng trên nó chỉ 2.83:1). Cần chữ
+     trắng thì dùng `--cam-dark` (4.91:1). Cam làm CHỮ trên nền sáng cũng
+     phải là `--cam-dark`.
+     Đợt 1 chỉ KHAI ba biến này; nối vào selector nào là việc của Đợt 2. */
+  --cam:         #eb7c17;
+  --cam-dark:    #b45606;
+  --cam-wash:    #fef5ec;
+
+  /* --- MÀU MANG NGHĨA — ĐỪNG ĐỔI ----------------------------------------
+     Vàng = sắp đến hạn, đỏ = quá hạn/lỗi, xanh = xong. Đổi sắc ở đây là
+     người dùng đọc sai trạng thái. (Nợ kỹ thuật đã biết: `--warn` trên nền
+     nhạt mới đạt 3.2–3.3:1 — sửa cần đổi cả sắc, để riêng một phiếu.) */
   --warn:        #b8863b;
+  /* REV-0024/F5: `--warn` là màu TÔ (viền, thanh, chấm) — đủ dùng. Nhưng khi
+     nó làm CHỮ trên mặt sáng thì chỉ 3.2–3.3:1, không đọc nổi ngoài nắng.
+     `--warn-dark` giữ nguyên sắc vàng-hổ-phách (39° so với 36°) nhưng đủ tối
+     để đạt ≥4.5:1. Đây KHÔNG phải đổi màu mang nghĩa — vàng vẫn là vàng. */
+  --warn-dark:   #7e5a15;
   --warn-wash:   #f7efe1;
   --danger:      #a85641;
   --danger-wash: #f7e8e4;
@@ -50,9 +124,12 @@
   --r-lg: 22px;
   --r-pill: 999px;
 
-  --shadow-sm: 0 1px 3px rgba(63, 77, 51, .06);
-  --shadow-md: 0 6px 22px rgba(63, 77, 51, .09);
-  --shadow-lg: 0 18px 50px rgba(63, 77, 51, .14);
+  /* Nền sáng lên thì chênh sáng nền↔thẻ hẹp lại (ΔL* 13.0 → 6.3), thẻ phải
+     nhờ VIỀN + BÓNG mới nổi. Đổi tông bóng theo `--ink` mới và tăng nhẹ độ
+     đậm — đây là phần bù cho việc làm nền sáng, không phải trang trí. */
+  --shadow-sm: 0 1px 2px rgba(30, 36, 23, .05), 0 2px 6px rgba(30, 36, 23, .05);
+  --shadow-md: 0 6px 22px rgba(30, 36, 23, .10);
+  --shadow-lg: 0 18px 50px rgba(30, 36, 23, .15);
 
   --sans: 'Be Vietnam Pro', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --serif: 'Playfair Display', Georgia, 'Times New Roman', serif;
@@ -102,7 +179,13 @@ button { cursor: pointer; border: none; background: none; }
 
 .login-hero {
   position: relative;
-  background: linear-gradient(150deg, #4a5a3c 0%, #6b7d55 45%, #9aab86 100%);
+  /* F2 (REV-0024) — chiếm 52,5% màn Sếp nhìn ĐẦU TIÊN, và là chỗ cuối cùng
+     còn dùng bảng màu ô liu cũ (#9aab86). Dựng lại từ token xanh mới.
+     ĐO TRƯỚC KHI CHỌN: chữ `.hero-foot` là trắng alpha, nên chặng SÁNG NHẤT
+     của gradient quyết định đọc được hay không. Trên #9aab86 cũ, trắng .82
+     chỉ 2.15:1 — chữ mô tả gần như tàng hình. Chặng sáng nhất giờ là
+     `--sage-dark` (#3c651a): trắng .90 đạt ≥4.5:1 kể cả sau lớp loé sáng. */
+  background: linear-gradient(150deg, var(--sage-dark) 0%, var(--ink) 100%);
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -115,8 +198,12 @@ button { cursor: pointer; border: none; background: none; }
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(circle at 78% 18%, rgba(255,255,255,.22), transparent 46%),
-    radial-gradient(circle at 12% 88%, rgba(63,77,51,.34), transparent 52%);
+    /* Lớp loé sáng nằm DƯỚI chữ (`.hero-word` z-1, `.hero-foot` z-2) nên nó
+       cộng thẳng vào nền của chữ. Ở .22 nó kéo tương phản trắng .82 xuống
+       ~3,1:1 dù gradient đã tối — hạ về .10 mới đủ chỗ cho chữ. */
+    radial-gradient(circle at 78% 18%, rgba(255,255,255,.10), transparent 46%),
+    /* Vệt tối lấy theo `--ink` MỚI (#1e2417); bản cũ còn dùng #3f4d33. */
+    radial-gradient(circle at 12% 88%, rgba(30,36,23,.42), transparent 52%);
   pointer-events: none;
 }
 
@@ -144,7 +231,9 @@ button { cursor: pointer; border: none; background: none; }
 .hero-foot {
   position: relative;
   z-index: 2;
-  color: rgba(255,255,255,.82);
+  /* .82 → .90: ở 13px chữ thường cần 4.5:1. Trên nền hero mới, .82 chỉ đạt
+     ~4,0:1 sau lớp loé sáng; .90 đưa lên ≥4,5:1. (Bản cũ: 2,15:1.) */
+  color: rgba(255,255,255,.90);
   font-size: 13px;
   max-width: 300px;
 }
@@ -224,7 +313,7 @@ button { cursor: pointer; border: none; background: none; }
 .field textarea:focus {
   outline: none;
   border-color: var(--sage);
-  box-shadow: 0 0 0 3px rgba(154,171,134,.22);
+  box-shadow: 0 0 0 3px rgba(108,168,57,.22);
 }
 
 .field input[type="file"] {
@@ -419,7 +508,8 @@ button { cursor: pointer; border: none; background: none; }
 .xc-ngay-tt { font-size: 11px; font-weight: 600; margin-top: 2px; }
 .xc-ngay-tt.du     { color: #256a25; }
 .xc-ngay-tt.thieu  { color: #a1291f; }
-.xc-ngay-tt.du_thua{ color: #8a6d00; }
+/* Xếp Ca — kho đọc hằng ngày. #8a6d00 trên nền đầu bảng chỉ 4.04:1. */
+.xc-ngay-tt.du_thua{ color: var(--warn-dark); }
 
 .sb-nhom {
   font-size: 11px;
@@ -448,7 +538,9 @@ button { cursor: pointer; border: none; background: none; }
 .sb-item:hover { background: rgba(255,255,255,.08); color: var(--white); }
 
 .sb-item.active {
-  background: var(--sage);
+  /* Chữ ở đây là `--ink` (tối), không phải trắng → dùng được ĐÚNG màu logo.
+     `--ink`/#6ca839 = 5.53:1 (trên `--sage` cũ chỉ 3.40:1 — trượt). */
+  background: var(--sage-logo);
   color: var(--ink);
   font-weight: 600;
 }
@@ -704,7 +796,13 @@ img.av { object-fit: cover; display: block; cursor: default; }
 .main {
   flex: 1;
   margin-left: var(--sidebar-w);
-  background: var(--surface);
+  /* F1 (REV-0024) — PHẢI là `--bg`, KHÔNG phải `--surface`.
+     `.app` phủ kín 100vh nên nền `body` không lộ ra ở đâu cả: `.main` mới LÀ
+     nền thật của mọi màn làm việc. Để `--surface` ở đây thì ① đổi `--bg`
+     không ai nhìn thấy, ② mặt CHÌM và mặt NỀN dùng chung một màu nên thẻ
+     trắng hết nổi (ΔL* nền↔thẻ tụt còn 2.69). Đặt `--bg`: đúng mô hình nền
+     kem + thẻ trắng, ΔL* về 6.34, `--surface` trả về đúng vai mặt chìm. */
+  background: var(--bg);
   min-width: 0;
 }
 
@@ -712,7 +810,10 @@ img.av { object-fit: cover; display: block; cursor: default; }
   position: sticky;
   top: 0;
   z-index: 30;
-  background: rgba(242,241,238,.88);
+  /* F3 (REV-0024): trước đây đóng băng `--surface` CŨ (#f2f1ee — xám lạnh).
+     Sau F1 vùng nội dung là kem #f3ece1 nên vệt xám này lộ hẳn ra. Dán cứng
+     vì cần alpha cho `backdrop-filter`; giá trị = `--surface` MỚI. */
+  background: rgba(250,247,241,.88);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--line);
@@ -884,7 +985,8 @@ img.av { object-fit: cover; display: block; cursor: default; }
   font-variant-numeric: tabular-nums;
 }
 .mt-the-pct span   { font-size: 10px; font-weight: 600; opacity: .65; margin-left: 1px; }
-.mt-the-pct.warn   { color: var(--warn); }
+/* Số % tiến độ — Trạm Mục Tiêu, đọc hằng ngày. `--warn` ở đây chỉ 3.23:1. */
+.mt-the-pct.warn   { color: var(--warn-dark); }
 .mt-the-pct.danger { color: var(--danger); }
 .mt-the-pct.cho    { color: var(--text-mute); }
 
@@ -1160,7 +1262,7 @@ td .sm { font-size: 12px; color: var(--text-mute); white-space: nowrap; }
   outline: none;
   background: var(--white);
   border-color: var(--sage);
-  box-shadow: 0 0 0 3px rgba(154,171,134,.22);
+  box-shadow: 0 0 0 3px rgba(108,168,57,.22);
 }
 
 .search input::placeholder { color: var(--text-mute); }
@@ -1195,16 +1297,22 @@ td .sm { font-size: 12px; color: var(--text-mute); white-space: nowrap; }
   font-family: inherit;
   cursor: pointer;
 }
-.chon-nho:focus { outline: none; border-color: var(--sage); box-shadow: 0 0 0 3px rgba(154,171,134,.22); }
+.chon-nho:focus { outline: none; border-color: var(--sage); box-shadow: 0 0 0 3px rgba(108,168,57,.22); }
 
 /* Hàng đơn hoàn quá 12h chưa nhận — tô đỏ để kho/vận hành thấy ngay */
 tr.canh-bao > td { background: #fdecea; }
 tr.canh-bao:hover > td { background: #fbdbd6; }
 .phu { font-size: 11px; color: var(--text-mute); margin-top: 3px; line-height: 1.3; }
-.canh-bao-chu { color: #c0392b; font-weight: 700; }
+/* Dòng "đơn hoàn quá 12h chưa nhận" — KHO đọc hằng ngày. #c0392b trên nền
+   hàng tô đỏ (#fbdbd6 khi di chuột) chỉ 4.20:1. REV-0024 §3 xếp chỗ này
+   cùng nhóm với .tag-new / .mt-the-pct.warn: trượt ở chỗ đọc hằng ngày thì
+   không hoãn được. Đậm lại, giữ nguyên sắc đỏ. */
+.canh-bao-chu { color: #92221a; font-weight: 700; }
 
-/* Tag "new" nhỏ cho đơn mới chưa xử lý */
-.tag-new { display: inline-block; margin-left: 6px; padding: 1px 6px; font-size: 10px; font-weight: 700; text-transform: uppercase; color: #fff; background: #e8590c; border-radius: 999px; vertical-align: middle; letter-spacing: .3px; }
+/* Tag "new" nhỏ cho đơn mới chưa xử lý — vận hành sàn đọc MỖI NGÀY.
+   Nền cũ #e8590c cho chữ trắng 3.58:1 ở cỡ 10px: trượt. Thay bằng `--cam-dark`
+   (#b45606 — chính là cam thương hiệu bản đậm) → 4.91:1. */
+.tag-new { display: inline-block; margin-left: 6px; padding: 1px 6px; font-size: 10px; font-weight: 700; text-transform: uppercase; color: #fff; background: var(--cam-dark); border-radius: 999px; vertical-align: middle; letter-spacing: .3px; }
 
 /* Ô chọn người phối hợp (nhiều người) trong Trạm Mục Tiêu */
 .cv-ph-search { margin-bottom: 8px; }
@@ -1227,7 +1335,7 @@ tr.canh-bao:hover > td { background: #fbdbd6; }
   background: var(--white); font-family: inherit; font-size: 14px; color: var(--text);
   cursor: pointer; text-align: left;
 }
-.combo1-hienthi:focus { outline: none; border-color: var(--sage); box-shadow: 0 0 0 3px rgba(154,171,134,.22); }
+.combo1-hienthi:focus { outline: none; border-color: var(--sage); box-shadow: 0 0 0 3px rgba(108,168,57,.22); }
 .combo1-hienthi.rong { color: var(--text-mute); }
 .combo1-hienthi .ico { flex: none; opacity: .55; transition: transform .12s; }
 .combo1.mo .combo1-hienthi .ico { transform: rotate(180deg); }
@@ -1488,7 +1596,7 @@ tr.canh-bao:hover > td { background: #fbdbd6; }
 }
 .chat-nhap input[type="text"]:focus {
   outline: none; background: var(--white); border-color: var(--sage);
-  box-shadow: 0 0 0 3px rgba(154,171,134,.22);
+  box-shadow: 0 0 0 3px rgba(108,168,57,.22);
 }
 .chat-nut-tep { flex-shrink: 0; padding: 10px; border-radius: 50%; width: auto; }
 
@@ -1789,7 +1897,7 @@ tr.kd-chiadoi td {
   display: none;
   position: fixed;
   inset: 0;
-  background: rgba(63,77,51,.42);
+  background: rgba(30,36,23,.45);
   z-index: 35;
   backdrop-filter: blur(2px);
 }
@@ -1919,7 +2027,7 @@ tr.kd-chiadoi td {
 .modal-nen {
   position: fixed;
   inset: 0;
-  background: rgba(63,77,51,.5);
+  background: rgba(30,36,23,.5);
   backdrop-filter: blur(3px);
   display: grid;
   place-items: center;
@@ -2412,4 +2520,74 @@ tr.kd-chiadoi td {
 @media (max-width: 720px) {
   .gy-chi-may { display: none; }
   .gy-chi-dienthoai { display: flex; }
+}
+
+/* ==========================================================================
+   SPEC-0004 — "Việc của tôi hôm nay" · "Ai đang đọng việc" · "Đáng ghi nhận"
+   ---------------------------------------------------------------------------
+   MÀU GIỮ NGUYÊN QUY ƯỚC ĐANG CHẠY: đỏ = quá hạn, vàng = đến hạn. Thêm ĐÚNG
+   MỘT màu tím cho "đang chờ BẠN duyệt" — đó là trạng thái mới được làm nổi,
+   không phải trễ, và không được lẫn với đỏ. Không đẻ bảng màu thứ hai.
+   ĐIỆN THOẠI MỘT TAY: mọi dòng chạm được ≥44px, xếp DỌC, không bảng ngang.
+   ========================================================================== */
+
+:root {
+  --tim:      #6b5b95;
+  --tim-wash: #efecf6;
+}
+.tag.tim { background: var(--tim-wash); color: var(--tim); }
+
+.cv-homnay { border-left: 4px solid var(--danger); }
+.cv-nhom { margin-bottom: 14px; }
+.cv-nhom:last-child { margin-bottom: 0; }
+.cv-nhom-dau { font-weight: 700; font-size: 13.5px; color: var(--ink); margin-bottom: 6px; }
+.cv-nhom-dau.danger { color: var(--danger); }
+.cv-nhom-dau.warn   { color: var(--warn); }
+.cv-nhom-dau.tim    { color: var(--tim); }
+
+/* Cả DÒNG là vùng chạm — không có link chữ nhỏ phải nhắm. 44px là ngưỡng
+   ngón tay, không phải con số cho đẹp. */
+.cv-dong {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  width: 100%; min-height: 44px; padding: 9px 12px; margin-bottom: 6px;
+  text-align: left; background: var(--surface); border: 1px solid var(--line);
+  border-left: 3px solid var(--line); border-radius: var(--r-sm);
+  font: inherit; font-size: 13.5px; color: var(--text); cursor: pointer;
+}
+.cv-dong:hover { background: var(--surface-2); }
+.cv-dong.qua-han   { border-left-color: var(--danger); }
+.cv-dong.den-han   { border-left-color: var(--warn); }
+.cv-dong.cho-duyet { border-left-color: var(--tim); }
+.cv-dong-ten { font-weight: 600; color: var(--ink); }
+.cv-dong-phu { flex: none; font-size: 12px; color: var(--text-mute); white-space: nowrap; }
+
+/* HAI BẢNG CÙNG KÍCH THƯỚC, NẰM CẠNH NHAU — bố cục là thông điệp: hệ thống
+   nhìn cả hai chiều, không phải chỉ đi bắt lỗi. `1fr 1fr` là cố ý; đừng đổi
+   thành `2fr 1fr` cho "bảng đọng việc to hơn". */
+.cv-hai-bang { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+.cv-hai-bang > .panel { margin: 0; }
+.cv-dong-the {
+  padding: 10px 0; border-bottom: 1px solid var(--line);
+}
+.cv-dong-the:last-child { border-bottom: 0; }
+.cv-dong-the .nm { font-weight: 600; color: var(--ink); font-size: 14px; }
+.cv-dong-the .sm { font-size: 12.5px; color: var(--text-mute); margin-top: 3px; line-height: 1.7; }
+/* Nút ⭐ chiếm hết chiều ngang thẻ, bấm được bằng ngón cái — Sếp hay bấm lúc
+   đang di chuyển, không phải lúc ngồi trước máy tính.
+   REV-0019 L7: trước ghi 40px trong khi commit khai "mọi dòng ≥44px" — đo ở
+   375px ra đúng 40px. 44px là ngưỡng ngón tay, không phải con số cho đẹp;
+   thiếu 4px là trượt thật, không phải làm tròn. */
+.cv-nut-ghinhan { width: 100%; min-height: 44px; margin-top: 8px; }
+
+/* Nút 🔔 bật/tắt nhắc nằm ở đầu khối "Việc của tôi hôm nay". `.btn-nho` chung
+   chỉ có padding 6px + chữ 12.5px → cao 28px, dưới ngưỡng ngón tay. Nâng
+   RIÊNG nút này (không đụng `.btn-nho` toàn hệ, kẻo xô lệch mọi bảng đang
+   chạy) — REV-0019 L7. */
+.cv-homnay .panel-head .btn-nho { min-height: 44px; display: inline-flex; align-items: center; }
+
+@media (max-width: 780px) {
+  /* Xếp dọc, cuộn dọc — KHÔNG cuộn ngang ở bất kỳ đâu. */
+  .cv-hai-bang { grid-template-columns: 1fr; }
+  .cv-dong { flex-direction: column; align-items: flex-start; gap: 2px; }
+  .cv-dong-phu { white-space: normal; }
 }

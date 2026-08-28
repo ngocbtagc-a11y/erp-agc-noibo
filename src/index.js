@@ -29,6 +29,7 @@ import * as hopdong from './hopdong.js';
 import * as motacv from './mota-cv.js';
 import * as kynang from './ky-nang.js';
 import { quetNhacNhanSu, thangKeTiep, gioVN } from './nhac-nhan-su.js';
+import { quetNhacCongViec, soNgayGiua } from './nhac-cong-viec.js';
 import { sinhMa } from './dinh-danh.js';
 
 /* ---- Trả lời dạng JSON -------------------------------------------------- */
@@ -1662,13 +1663,19 @@ function nhomCua(vaiTro) {
    ban cần biết). Truyền nhom=null khi dùng kiểu này — cột nhom vẫn NOT NULL
    nên ghi tạm 'ca_nhan' (không khớp bất kỳ nhóm thật nào, chỉ để ràng buộc
    DB vui lòng; layThongBao lọc bằng nguoi_nhan_id chứ không phải nhom này). */
+/* TRẢ VỀ true/false (REV-0019 L6): có chỉ mục DUY NHẤT chặn tin nhắc việc
+   trùng (loại, người, ngày) nên INSERT thứ hai của hai lượt cron chồng nhau
+   sẽ TRƯỢT — và đó là đúng ý. Người gọi cần biết để đếm số tin ĐÃ GỬI THẬT
+   chứ không đếm số lần định gửi. Mọi lời gọi cũ bỏ qua giá trị trả về nên
+   không có gì đổi hành vi. */
 async function guiThongBao(env, nhom, noiDung, loai, lienKet, nguoiNhanId) {
   try {
     await env.DB.prepare(
       `INSERT INTO thong_bao (nhom, noi_dung, loai, lien_ket, nguoi_nhan_id, tao_luc)
        VALUES (?, ?, ?, ?, ?, datetime('now','+7 hours'))`
     ).bind(nhom || 'ca_nhan', noiDung, loai || null, lienKet || null, nguoiNhanId || null).run();
-  } catch (e) { console.error('Gửi thông báo:', e.message); }
+    return true;
+  } catch (e) { console.error('Gửi thông báo:', e.message); return false; }
 }
 
 /* LUẬT CỨNG (Sếp Ngọc chốt 19/08/2026): đơn hoàn chỉ giữ trong THÁNG LÀM VIỆC
@@ -1966,6 +1973,189 @@ async function cvDanhSach(req, env) {
   return json({ nhan: nhan.results || [], giao: giao.results || [], phoi_hop: phoiHop.results || [] });
 }
 
+/* ==========================================================================
+   "VIỆC CỦA TÔI HÔM NAY" + màn quản lý + bảng ghi nhận  ·  SPEC-0004 câu 5–7
+   ---------------------------------------------------------------------------
+   MỘT endpoint trả cả ba khối, vì cả ba đọc CÙNG một bộ dữ liệu — tách ba
+   endpoint là kéo cùng bảng ba lần cho một lần mở màn hình.
+   EXCEPTION-FIRST: chỉ trả thứ BẤT THƯỜNG. Không có gì thì trả mảng rỗng và
+   giao diện giấu cả khối — KHÔNG hiện "Bạn không có việc quá hạn 🎉". Một
+   khối luôn có mặt là một khối mắt người học được cách bỏ qua trong đúng một
+   tuần.
+   KHÔNG mở rộng quyền xem: mọi thứ ở đây đều là dữ liệu người đó vốn đã xem
+   được trong tab "Lịch sử làm việc" (mở cho mọi vai trò, Sếp Ngọc chốt
+   21/08/2026 — minh bạch theo tinh thần MBOs). Đây là GOM LẠI, không phải MỞ
+   THÊM — cũng là lý do SPEC-0004 không phải CORE_CHANGE. */
+async function cvHomNay(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  /* REV-0019 L8 — CỔNG QUYỀN, đừng dựa vào "hôm nay vai nào cũng có tab".
+     Khối ① nằm trong tab Trạm Mục Tiêu → cần `congviec`. Khối ② và ③ trả dữ
+     liệu TOÀN CÔNG TY, và lý do chúng được phép trả là vì người đó vốn đã
+     xem được tab `lichsuviec` — nên phải hỏi ĐÚNG cái quyền đó, chứ không
+     phải tin rằng cả 10 vai đều đang có nó (BH-43: hỏi ràng buộc áp cho
+     NHÁNH NÀO, không chỉ hỏi nó có mặt chưa). Ngày nào Sếp gỡ `lichsuviec`
+     của một vai, chỗ này tự khoá theo. */
+  if (!duocXemTab(phien.vai_tro, 'congviec')) return loi('Bạn không có quyền', 403);
+  const xemToanCty = duocXemTab(phien.vai_tro, 'lichsuviec');
+  const toiId = phien.nhan_su_id;
+
+  // `nhan_viec_luc` chỉ có sau `va-nhacviec-rev0019.sql`; chưa nạp thì chạy ở
+  // mức suy giảm (không có ghi chú "vừa nhận việc"), KHÔNG trả 500.
+  const cauMo = (cot) => env.DB.prepare(`
+      SELECT id, tieu_de, trang_thai, han_chot, tao_luc, nop_luc${cot},
+             nguoi_nhan_id, nguoi_nhan_ten, nguoi_giao_id, nguoi_giao_ten
+        FROM cong_viec WHERE trang_thai IN ('moi','dang_lam','cho_duyet')
+    `).all();
+  let moDs;
+  try { moDs = await cauMo(', nhan_viec_luc'); } catch { moDs = await cauMo(''); }
+  const nsDs = await env.DB.prepare('SELECT id, ho_ten, bo_phan, quan_ly_id, dang_lam FROM nhan_su').all();
+  const mo = moDs.results || [];
+  const banDo = new Map((nsDs.results || []).map(n => [n.id, n]));
+
+  const vn = gioVN(new Date());
+  const homNay = `${vn.getUTCFullYear()}-${String(vn.getUTCMonth() + 1).padStart(2, '0')}-${String(vn.getUTCDate()).padStart(2, '0')}`;
+
+  /* ---- ① Việc của TÔI hôm nay ------------------------------------------ */
+  const toi = { qua_han: [], den_han_hom_nay: [], chua_bat_dau: [], cho_toi_duyet: [] };
+  for (const v of mo) {
+    const tre = v.han_chot ? soNgayGiua(v.han_chot, homNay) : null;
+    /* Việc đã NỘP (`cho_duyet`) KHÔNG hiện trong khối của người nhận, kể cả
+       khi quá hạn: họ đã làm xong phần của mình và không có nút nào để bấm.
+       Hiện chữ đỏ "trễ 3 ngày" cho người đang đứng chờ người khác duyệt là đổ
+       lỗi sai người — đúng cái lỗi mà cột `nop_luc` sinh ra để tránh. Việc đó
+       chỉ hiện ở khối 🟣 "đang chờ BẠN duyệt" của NGƯỜI GIAO. */
+    if (v.nguoi_nhan_id === toiId && v.trang_thai !== 'cho_duyet') {
+      /* REV-0019 L2 — người vừa nhận bàn giao một việc ĐÃ trễ từ trước không
+         được để màn hình gằn "trễ 9 ngày" vào mặt mà không nói gì thêm.
+         `nhan_cach_day` để giao diện ghi rõ "bạn nhận việc N ngày trước". */
+      const mocCam = String(v.nhan_viec_luc || v.tao_luc || '').slice(0, 10);
+      const ngayCam = soNgayGiua(mocCam, homNay);
+      const nhanCachDay = (soNgayGiua(v.han_chot, mocCam) ?? 0) > 0 && ngayCam !== null ? ngayCam : null;
+      if (tre !== null && tre > 0) toi.qua_han.push({ ...v, tre, nhan_cach_day: nhanCachDay });
+      else if (tre === 0) toi.den_han_hom_nay.push(v);
+      else if (v.trang_thai === 'moi') {
+        const dong = soNgayGiua(String(v.tao_luc || '').slice(0, 10), homNay);
+        if (dong !== null && dong >= 3) toi.chua_bat_dau.push({ ...v, dong });
+      }
+    }
+    /* 🟣 "Đang chờ BẠN duyệt" — thứ hôm nay CHƯA CÓ Ở ĐÂU CẢ, và là lời giải
+       trực tiếp cho lỗ hổng đau nhất: nhân viên nộp xong, người giao quên
+       duyệt, việc chết ở giữa và người chịu tiếng là nhân viên.
+       Chữ BẠN in đậm ở giao diện là cố ý — người giao việc thường không nghĩ
+       mình đang là người làm chậm. */
+    if (v.trang_thai === 'cho_duyet' && v.nguoi_giao_id === toiId && v.nguoi_nhan_id !== toiId) {
+      const dong = v.nop_luc ? soNgayGiua(String(v.nop_luc).slice(0, 10), homNay) : null;
+      toi.cho_toi_duyet.push({ ...v, dong });
+    }
+  }
+  toi.qua_han.sort((a, b) => b.tre - a.tre);
+
+  /* ---- ② "Ai đang đọng việc" — GỘP THEO NGƯỜI, không theo phòng ban -----
+     Công ty 20 người: gộp theo phòng ban cho ra 4–5 dòng vô danh ("Kho vận: 7
+     việc quá hạn"), Sếp nhìn xong vẫn phải bấm tiếp mới biết AI. Gộp theo
+     người cho ra ngay câu Sếp hỏi.
+     Anh Duy dùng CÙNG màn này, chỉ khác phạm vi — đúng kênh Kho → anh Duy →
+     Sếp, không đẻ định nghĩa "quản lý" thứ hai. */
+  const duoiQuyen = new Set((nsDs.results || []).filter(n => n.quan_ly_id === toiId && n.id !== toiId).map(n => n.id));
+  const laOwner = laAdmin(phien.vai_tro);
+  let quanLy = null;
+  // `xemToanCty` = có tab `lichsuviec`. Đây là NGUỒN quyền của khối này, xem
+  // ghi chú ở đầu hàm (REV-0019 L8).
+  if (xemToanCty && (laOwner || duoiQuyen.size)) {
+    const trongPhamVi = (id) => laOwner || duoiQuyen.has(id);
+    const theoNguoi = new Map();
+    const lay = (id, ten) => {
+      if (!theoNguoi.has(id)) theoNguoi.set(id, { nhan_su_id: id, ho_ten: ten, qua_han: 0, tre_nhat: 0, cho_duyet: 0, dong_nhat: 0 });
+      return theoNguoi.get(id);
+    };
+    for (const v of mo) {
+      const tre = v.han_chot ? soNgayGiua(v.han_chot, homNay) : null;
+      // Việc đã nộp không tính là "người này đang đọng" — nó đang đọng ở
+      // người DUYỆT, và được đếm riêng ở nhánh dưới.
+      if (v.trang_thai !== 'cho_duyet' && tre !== null && tre > 0 && trongPhamVi(v.nguoi_nhan_id)) {
+        const d = lay(v.nguoi_nhan_id, v.nguoi_nhan_ten);
+        d.qua_han++; d.tre_nhat = Math.max(d.tre_nhat, tre);
+      }
+      /* NGƯỜI QUẢN LÝ BỊ SOI NGANG HÀNG NGƯỜI LÀM: dòng của anh Duy không
+         phải việc anh trễ, mà là việc của team ĐANG CHỜ CHÍNH ANH duyệt. Bảng
+         này chỉ soi người làm thì nó là bảng đổ lỗi, không phải bảng quản
+         trị. Không có cột "tổng số việc đã làm", không xếp hạng ai giỏi hơn
+         ai (điều cấm 20). */
+      if (v.trang_thai === 'cho_duyet' && v.nguoi_nhan_id !== v.nguoi_giao_id
+          && (laOwner || v.nguoi_giao_id === toiId || duoiQuyen.has(v.nguoi_giao_id))) {
+        const dong = v.nop_luc ? (soNgayGiua(String(v.nop_luc).slice(0, 10), homNay) ?? 0) : 0;
+        const d = lay(v.nguoi_giao_id, v.nguoi_giao_ten);
+        d.cho_duyet++; d.dong_nhat = Math.max(d.dong_nhat, dong);
+      }
+    }
+    quanLy = {
+      pham_vi: laOwner ? 'cong_ty' : 'team',
+      // ⚠️ ở giao diện = quá 7 ngày: nhắc máy đã hết tác dụng, cần NGƯỜI vào cuộc.
+      dong_viec: [...theoNguoi.values()].sort((a, b) => (b.tre_nhat - a.tre_nhat) || (b.dong_nhat - a.dong_nhat))
+    };
+  }
+
+  /* ---- ③ "Đáng ghi nhận tuần này" --------------------------------------
+     Hôm nay hệ thống CHỈ làm nổi bật cái trễ. Một hệ chỉ biết réo người trễ
+     sẽ khiến nhân viên SỢ Trạm Mục Tiêu và tránh nhận việc có hạn chót rõ
+     ràng — phản tác dụng ngay trên chính mục tiêu MBOs.
+     Chấm đúng hạn bằng `nop_luc`, KHÔNG bằng `cap_nhat_luc`: người làm không
+     bị tính trễ vì quản lý duyệt muộn. Việc cũ `nop_luc IS NULL` đứng ngoài —
+     không vào bảng khen, cũng KHÔNG bị đánh dấu trễ.
+     KHÔNG xếp hạng, KHÔNG đếm số việc, KHÔNG có "quán quân tuần": đây là danh
+     sách NHỮNG LẦN LÀM TỐT, không phải bảng thi đua. Sắp theo thời gian gần
+     nhất, không theo số lượng — sắp theo số lượng là lách điều cấm 20 bằng
+     cửa sau. */
+  let ghiNhan = [];
+  // Cổng quyền đứng NGOÀI try/catch: hết quyền là trả rỗng có chủ đích, không
+  // lẫn với "chưa nạp migration" (REV-0019 L8).
+  if (xemToanCty) try {
+    const { results } = await env.DB.prepare(`
+      SELECT id, tieu_de, nguoi_nhan_id, nguoi_nhan_ten, han_chot, nop_luc
+        FROM cong_viec
+       WHERE trang_thai = 'hoan_thanh' AND nop_luc IS NOT NULL AND han_chot IS NOT NULL
+         AND date(nop_luc) <= han_chot
+         AND cap_nhat_luc >= datetime('now','-7 days','+7 hours')
+         AND nguoi_nhan_id <> ?
+       ORDER BY nop_luc DESC LIMIT 10
+    `).bind(toiId).all();
+    // Loại chính mình: bảng này để KHEN NGƯỜI KHÁC. Gợi ý một người tự bấm
+    // "⭐ Ghi nhận" cho chính họ là biến lời khen thành thứ tự phát — hỏng hết
+    // ý nghĩa của Vinh danh, vốn là lời khen từ MỘT NGƯỜI.
+    ghiNhan = (results || []).map(v => ({
+      ...v, som: soNgayGiua(String(v.nop_luc).slice(0, 10), v.han_chot) ?? 0
+    }));
+  } catch { /* chưa nạp migration → bảng ghi nhận rỗng, phần còn lại vẫn chạy */ }
+
+  let nhacTat = 0;
+  try {
+    const r = await env.DB.prepare('SELECT nhac_viec_tat FROM tai_khoan WHERE nhan_su_id = ?').bind(toiId).first();
+    nhacTat = r?.nhac_viec_tat ? 1 : 0;
+  } catch { /* chưa nạp migration → coi như đang bật */ }
+
+  return json({ toi, quan_ly: quanLy, ghi_nhan: ghiNhan, nhac_tat: nhacTat, hom_nay: homNay });
+}
+
+/* CHỐNG LÀM PHIỀN #6 — cho người dùng TỰ TẮT NGAY TRONG ỨNG DỤNG.
+   Nghe như tự phá hệ thống, nhưng ngược lại: không cho tắt trong app thì
+   người ta tắt chuông ở tầng điện thoại, và lúc đó MẤT SẠCH khả năng nhìn
+   thấy — kéo chết luôn cảnh báo đơn hoàn đang chạy tốt. Tắt trong ERP thì Sếp
+   còn thấy ai đã tắt và còn hỏi được vì sao.
+   TẮT NHẮC KHÔNG TẮT TRÁCH NHIỆM: leo cấp lên quản lý và bản tin tuần của Sếp
+   KHÔNG bị cột này chặn (xem `nhac-cong-viec.js`). */
+async function cvNhacTat(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  if (!duocXemTab(phien.vai_tro, 'congviec')) return loi('Bạn không có quyền', 403);  // REV-0019 L8
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  const tat = b.tat ? 1 : 0;
+  // Chỉ đổi được cờ CỦA CHÍNH MÌNH — không có tham số nhận id người khác.
+  await env.DB.prepare('UPDATE tai_khoan SET nhac_viec_tat = ? WHERE nhan_su_id = ?')
+    .bind(tat, phien.nhan_su_id).run();
+  return json({ ok: true, nhac_tat: tat });
+}
+
 async function cvTao(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
@@ -2073,8 +2263,21 @@ async function cvCapNhat(req, env) {
     if (luat.batBuocKetQua && !ketQua) return loi('Hãy điền kết quả thực tế trước khi nộp');
   }
 
+  /* `nop_luc` — MỐC NGƯỜI LÀM NỘP, ghi ở ĐÚNG MỘT CHỖ là đây (SPEC-0004).
+     `cap_nhat_luc` bên cạnh là mốc bản ghi bị sửa lần cuối; khi việc thành
+     'hoan_thanh' thì đó là lúc NGƯỜI GIAO bấm duyệt. Chấm "đúng hạn" bằng nó
+     sẽ ghi nhận SAI NGƯỜI: nhân viên nộp đúng hạn 29/08, quản lý bận tới
+     31/08 mới duyệt → hệ thống ghi "nhân viên trễ 2 ngày".
+     TRẢ LẠI LÀM TIẾP (cho_duyet -> dang_lam) thì XOÁ về NULL: việc chưa xong
+     thì lần nộp cũ không còn là sự thật nữa. Giữ lại "cho đẹp" nghĩa là nộp
+     một bản chưa đạt vẫn được tính đúng hạn — cả cơ chế ghi nhận thành trò
+     đùa. Nộp lại lần sau ghi `nop_luc` mới, và ĐÓ mới là mốc tính đúng hạn.
+     Mọi trạng thái khác KHÔNG đụng tới cột này. */
+  const nopLuc = trangThaiMoi === 'cho_duyet' ? 'MOI'
+    : (trangThaiMoi === 'dang_lam' && cv.trang_thai === 'cho_duyet') ? 'XOA' : null;
   await env.DB.prepare(`
     UPDATE cong_viec SET trang_thai = ?, ket_qua = COALESCE(?, ket_qua), cap_nhat_luc = datetime('now','+7 hours')
+    ${nopLuc === 'MOI' ? ", nop_luc = datetime('now','+7 hours')" : nopLuc === 'XOA' ? ', nop_luc = NULL' : ''}
      WHERE id = ?
   `).bind(trangThaiMoi, ketQua, id).run();
 
@@ -2386,7 +2589,7 @@ async function mtViec(req, env) {
    xem VÀ gửi — không riêng ban giám đốc, khen nhau qua lại càng tốt.
    ========================================================================== */
 async function vdDanhSach(req, env) {
-  const { loi: l } = await batBuocDangNhap(req, env);
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
 
   // Chỉ hiện lời khen trong 48h gần nhất (Sếp Ngọc chốt 20/08/2026) — dữ liệu
@@ -2401,19 +2604,31 @@ async function vdDanhSach(req, env) {
      ORDER BY v.id DESC LIMIT 20
   `).all();
 
-  // Gợi ý nhẹ (Sếp Ngọc yêu cầu): "thỉnh thoảng cũng lấy dữ liệu" từ Trạm
-  // Việc lên — ai hoàn thành nhiều việc nhất trong 7 ngày qua mà CHƯA được
-  // vinh danh vì việc đó (so lien_ket với id cong_viec, tránh gợi ý lặp lại
-  // đúng người vừa mới khen). Chỉ là gợi ý hiển thị, Sếp vẫn tự gõ lời khen.
-  const goiY = await env.DB.prepare(`
-    SELECT nguoi_nhan_id, nguoi_nhan_ten, COUNT(*) AS so_viec
-      FROM cong_viec
-     WHERE trang_thai = 'hoan_thanh'
-       AND cap_nhat_luc >= datetime('now', '-7 days', '+7 hours')
-     GROUP BY nguoi_nhan_id
-     ORDER BY so_viec DESC
-     LIMIT 1
-  `).first();
+  /* GỢI Ý NGƯỜI ĐÁNG KHEN — ĐÃ ĐỔI CÁCH TÍNH (SPEC-0004 câu 7).
+     Bản cũ gợi ý theo `COUNT(*)` việc hoàn thành trong 7 ngày, tức là ĐANG
+     XẾP HẠNG NĂNG SUẤT: ai làm nhiều việc nhất thì được khen. Đó là điều cấm
+     20 của Hiến pháp (không đo năng suất cá nhân), và nó dạy người ta chia
+     nhỏ việc + chọn việc dễ để lên đầu bảng.
+     Bản mới gợi ý theo MỘT LẦN LÀM TỐT CỤ THỂ: việc gần nhất nộp ĐÚNG HẠN.
+     Không đếm, không xếp hạng, không có "quán quân tuần".
+     Đúng hạn chấm bằng `nop_luc` (lúc NGƯỜI LÀM nộp) chứ KHÔNG phải
+     `cap_nhat_luc` (lúc NGƯỜI GIAO bấm duyệt) — nếu không, người nộp đúng hạn
+     mà quản lý duyệt muộn sẽ bị ghi nhận là trễ. Việc cũ chưa có `nop_luc`
+     thì đứng ngoài: không có dữ liệu thì không phán, cả khen lẫn chê. */
+  let goiY = null;
+  try {
+    goiY = await env.DB.prepare(`
+      SELECT nguoi_nhan_id, nguoi_nhan_ten, tieu_de, han_chot, nop_luc
+        FROM cong_viec
+       WHERE trang_thai = 'hoan_thanh'
+         AND nop_luc IS NOT NULL AND han_chot IS NOT NULL
+         AND date(nop_luc) <= han_chot
+         AND cap_nhat_luc >= datetime('now', '-7 days', '+7 hours')
+         AND nguoi_nhan_id <> ?
+       ORDER BY nop_luc DESC
+       LIMIT 1
+    `).bind(phien.nhan_su_id).first();   // không gợi ý người xem tự khen mình
+  } catch { /* chưa nạp them-congviec-nhacviec.sql → không gợi ý, không vỡ */ }
 
   return json({ vinh_danh: results || [], goi_y: goiY || null });
 }
@@ -4324,6 +4539,8 @@ const DUONG_DAN = {
   'GET  /api/vinh-danh': vdDanhSach,
   'POST /api/vinh-danh': vdGui,
   'GET  /api/cong-viec/danh-sach': cvDanhSach,
+  'GET  /api/cong-viec/hom-nay':   cvHomNay,
+  'POST /api/cong-viec/nhac-tat':  cvNhacTat,
   'POST /api/cong-viec/tao':       cvTao,
   'POST /api/cong-viec/cap-nhat':  cvCapNhat,
   'GET  /api/cong-viec/lich-su':   cvLichSu,
@@ -4377,6 +4594,14 @@ export default {
          tin/loại/người/ngày. Truyền thẳng `guiThongBao` đang chạy vào để
          không sinh ra bản sao thứ hai của cơ chế gửi. */
       try { await quetNhacNhanSu(env, guiThongBao); } catch (e) { console.error('Cron nhắc nhân sự:', e.message); }
+      /* Nhắc việc Trạm Mục Tiêu (SPEC-0004) — ĐÚNG MỘT DÒNG thêm vào cron đã
+         có, `wrangler.toml` KHÔNG đổi, không có lịch thứ hai. Hàm tự đóng cửa
+         ngoài 8h–18h và Chủ nhật (ADR-0013 — thứ Bảy vẫn nhắc), tự gộp một
+         người một tin một ngày, tự chống trùng bằng bảng `thong_bao`, nên gọi
+         mỗi 5 phút vẫn đúng ≤1 tin/người/ngày.
+         TẮT KHẨN CẤP: đặt biến môi trường NHAC_VIEC_TAT=1 → câm ngay, không
+         cần deploy. Bật PILOT riêng một phòng: NHAC_VIEC_BO_PHAN="Kho vận". */
+      try { await quetNhacCongViec(env, guiThongBao, guiTelegram); } catch (e) { console.error('Cron nhắc việc:', e.message); }
 
       // SAO LƯU DỮ LIỆU (SPEC-0005 Phần B · ADR-0013). Hàm tự biết giờ nào thì
       // làm gì: 0h–8h sáng thì xuất dữ liệu theo lô, 9h sáng thì hỏi "hôm qua

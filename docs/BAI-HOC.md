@@ -496,3 +496,20 @@ người soi phải **đo trên đúng nền tảng đích** trước khi phát 
 "chuẩn SQL" ≠ cái runtime thật cho phép. Và khi sai thì **đính chính công khai ngay trong
 bản review kế tiếp**, ghi rõ chỗ sai — không im lặng sửa.
 
+**BH-43 · Phép đo CHỌN TAY chỉ đo được cái mình đã nghĩ ra. Nó không đo được cái mình quên.**
+CTL-0023 Đợt 1 đổi bảng màu và tự viết `do-tuong-phan-mau.mjs` để chứng minh. Bộ 28 cặp
+chữ–nền **do người ngồi liệt kê**: mọi cặp đều ĐẠT, báo cáo nói "sạch". REV-0024 dựng phép
+đo riêng và lòi ra ba chỗ **kho đọc hằng ngày** vẫn trượt — `.tag-new` 3.58:1,
+`.mt-the-pct.warn` 3.23:1, `.xc-ngay-tt.du_thua` 4.04:1 — cộng một khối `:root` **thứ hai**
+mà phép đo **không hề biết là có**. Không phải đo sai: đo **đúng 28 thứ mình nhớ ra**, trên
+tổng số 81 chỗ dán cứng màu.
+→ Phép đo phải **TỰ QUÉT nguồn**, không nhận danh sách. Bản mới bổ CSS thành **589 luật lá**,
+tự dựng **204 cặp** (luật nào có `color` thì phải trả lời được "nền của mày là ai") và gom
+**mọi** khối `:root`. Nó bắt lại đủ cả ba chỗ trên mà không ai phải nhớ.
+→ Hệ quả thứ hai, đắt hơn: phép đo cũng **không đo cái nó không được giao đo**. `--bg` đổi
+màu rất đẹp trong khi `var(--bg)` chỉ được dùng **đúng một lần** trong 2.474 dòng, còn
+`.main` — nền thật của mọi màn làm việc — thì dùng `--surface`. Mọi cặp ĐẠT, mọi tầng ĐÚNG,
+**và Sếp mở lên vẫn thấy y hệt cũ.** Nên phép đo giờ **đọc thẳng nền `.main` từ CSS** rồi so
+ΔL\* với mặt thẻ: câu hỏi không phải "màu có đúng chuẩn không" mà **"đổi xong Sếp có NHÌN
+THẤY khác không"**. Đo chuẩn mà trượt mục đích thì vẫn là trượt.
+

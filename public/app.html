@@ -118,6 +118,42 @@
         <p>Mục tiêu MBOs (công ty → phòng ban → cá nhân), giao việc theo dõi tới khi xong, và bức tranh chung của Alpha Green Commerce.</p>
       </div>
 
+      <!-- ---------- VIỆC CỦA TÔI HÔM NAY (SPEC-0004 câu 5) ----------
+           Nằm TRÊN mọi thứ khác trong tab: mở ERP là thấy ngay phải làm gì,
+           0 lần bấm. EXCEPTION-FIRST — không có gì bất thường thì khối này
+           BIẾN MẤT HOÀN TOÀN, không hiện "Bạn không có việc quá hạn 🎉".
+           Một khối luôn có mặt là một khối mắt người học được cách bỏ qua
+           trong đúng một tuần. -->
+      <div class="panel cv-homnay" id="cv-homnay-panel" hidden>
+        <div class="panel-head">
+          <h4>📋 Việc của tôi hôm nay</h4>
+          <button type="button" class="btn-nho" id="cv-nhactat-nut" title="Tắt thì Sếp vẫn thấy bạn đã tắt, và việc quá hạn vẫn leo cấp lên quản lý"></button>
+        </div>
+        <div class="panel-body" id="cv-homnay-body"></div>
+      </div>
+
+      <!-- ---------- Hai bảng NẰM CẠNH NHAU, CÙNG KÍCH THƯỚC (SPEC-0004 câu 6+7).
+           BỐ CỤC LÀ THÔNG ĐIỆP: hệ thống nhìn cả hai chiều, không phải chỉ đi
+           bắt lỗi. Một hệ chỉ biết réo người trễ sẽ khiến nhân viên SỢ Trạm Mục
+           Tiêu và tránh nhận việc có hạn chót rõ ràng — phản tác dụng ngay trên
+           chính mục tiêu MBOs. ---------- -->
+      <div class="cv-hai-bang" id="cv-hai-bang" hidden>
+        <div class="panel" id="cv-dongviec-panel" hidden>
+          <div class="panel-head">
+            <h4>🧭 Ai đang đọng việc</h4>
+            <span class="hint" id="cv-dongviec-pv"></span>
+          </div>
+          <div class="panel-body" id="cv-dongviec-body"></div>
+        </div>
+        <div class="panel" id="cv-ghinhan-panel" hidden>
+          <div class="panel-head">
+            <h4>⭐ Đáng ghi nhận tuần này</h4>
+            <span class="hint">Máy chỉ chỗ — người mới khen</span>
+          </div>
+          <div class="panel-body" id="cv-ghinhan-body"></div>
+        </div>
+      </div>
+
       <!-- ---------- Tóm tắt theo vai trò (dữ liệu thật, không mock) — Employee
            thấy "Việc của tôi"; Manager/CEO thấy "Cần chú ý". Rỗng thì ẩn hẳn,
            không hiện khối trống. ---------- -->
