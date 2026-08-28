@@ -340,6 +340,48 @@ export async function donTepTrungTen(env, { ten, thuMucId }) {
   return daDon;
 }
 
+/* --------------------------------------------------------------------------
+   CTL-0022 — LIỆT KÊ TỆP TRONG MỘT THƯ MỤC
+   ---------------------------------------------------------------------------
+   Việc gộp tháng cần biết thư mục ngày có những tệp nào, id là gì, nặng bao
+   nhiêu byte — để đọc ngược từng tệp về mà nhét vào file gộp.
+
+   Chạy được với scope hẹp `drive.file` vì ta chỉ hỏi về tệp do chính ERP tạo.
+   Một lượt gọi lấy tối đa 100 tệp; thư mục ngày có ~25 tệp nên luôn đủ trong
+   một lượt — nhưng vẫn xử lý `nextPageToken` cho tử tế, kẻo ngày nào đó bảng
+   nhiều lên thì hỏng ÂM THẦM (thiếu tệp trong bản gộp mà không ai biết).
+   -------------------------------------------------------------------------- */
+export async function lietKeTep(env, { thuMucId }) {
+  if (nhaDangDung(env) !== 'drive' || !thuMucId) return [];
+  const ra = [];
+  let trang = null;
+  for (let vong = 0; vong < 10; vong++) {
+    const q = encodeURIComponent(`'${thuMucId}' in parents and trashed = false`);
+    const res = await goiDrive(env,
+      `${GOC_DRIVE}/files?q=${q}&fields=nextPageToken,files(id,name,size,mimeType)` +
+      `&pageSize=100&orderBy=name` + (trang ? `&pageToken=${trang}` : ''));
+    if (!res.ok) throw new Error(`Liệt kê thư mục ${thuMucId} hỏng (${res.status}): ${(await res.text()).slice(0, 200)}`);
+    const j = await res.json();
+    for (const f of (j.files || [])) {
+      ra.push({ id: f.id, ten: f.name, coByte: Number(f.size || 0), kieu: f.mimeType });
+    }
+    trang = j.nextPageToken;
+    if (!trang) return ra;
+  }
+  throw new Error(`Thư mục ${thuMucId} có quá nhiều tệp — liệt kê không hết sau 10 trang.`);
+}
+
+/** Đọc một khúc byte của tệp trên Drive. `tu`/`den` tính theo byte, `den` là
+    byte CUỐI CÙNG được lấy (kiểu HTTP Range, bao gồm cả hai đầu). */
+export async function docKhuc(env, { khoa, tu, den }) {
+  const res = await layFile(env, { khoa, pham: `bytes=${tu}-${den}` });
+  // 206 = trả đúng khúc. 200 = tệp nhỏ hơn khúc yêu cầu nên Drive trả cả tệp.
+  if (res.status !== 206 && res.status !== 200) {
+    throw new Error(`Đọc khúc ${tu}-${den} của tệp ${khoa} hỏng (${res.status})`);
+  }
+  return new Uint8Array(await res.arrayBuffer());
+}
+
 /** Xoá file nhưng KHÔNG BAO GIỜ NÉM LỖI — trả true/false.
     Dùng cho mọi phép DỌN DẸP: dọn bản sót cùng tên, dọn bản quá hạn giữ. Dọn
     dẹp mà làm chết việc sao lưu là đổi hỏng lấy hỏng nặng hơn. */

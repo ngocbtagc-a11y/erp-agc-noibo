@@ -94,9 +94,29 @@ không phải tiết kiệm chỗ. Vẫn nên làm vì dễ tải cả năm về
 - CPU mỗi lượt cron vẫn trong trần **10 ms** *(hiện 6,24 ms xấu nhất)*. Gộp tháng
   là việc nặng → **chia lô**, đừng làm một phát.
 
+## 6b. ⚠️ SỐ ĐO BÁC MỘT GIẢ ĐỊNH CỦA MỤC 4 (KHỈ ĐỘT, 2026-08-28)
+
+Mục 4 bắt *"phải ĐO tỉ lệ nén thật rồi báo số, đừng tin ước lượng 7 lần của Gạo"*.
+Đo rồi (`npm run gop-thang-thu`, bản ngày thật 17,93 MB / 102.985 dòng / 15 bảng):
+
+| Cách làm | Một tháng | Một năm | Drive 12 GB dùng được |
+|---|---|---|---|
+| **GỘP suông** (STORE — đúng chữ "gộp" ở Mục 5) | 537,9 MB | 6,30 GB | **1,9 năm** ⚠️ |
+| **GỘP CÓ NÉN** (đã làm) | **72,7 MB** | **0,85 GB** | **14,1 năm** ✅ |
+
+**Con số 7 lần của Gạo ĐÚNG, nhưng nó đến từ phép NÉN chứ không phải phép GỘP.**
+Gộp 30 file lại mà không nén thì lãi **0%** — chỉ tiết kiệm vài KB tiêu đề. Làm
+đúng chữ "gộp" mà bỏ chữ "nén" thì Drive đầy sau chưa đầy 2 năm: đổi một vấn đề
+(mất lịch sử) lấy một vấn đề khác (hết chỗ).
+
+Cách nén (mẩu 256 KiB nối thân gzip — vì bộ nén KHÔNG cất được trạng thái giữa
+hai lượt cron) và số CPU đo được:
+[ADR-0014](../decisions/ADR-0014-khung-luu-tru-sao-luu-nam-thang.md).
+
 ## 7. History
 
 | from | to | by | at | note |
 |---|---|---|---|---|
 | — | `NEW` | ERP Owner | 2026-08-27 | Khung lưu trữ theo năm/tháng, hết năm thì nén |
 | `NEW` | `READY_FOR_BUILD` | GẠO | 2026-08-27 | Thiết kế của Sếp **tốt hơn** bản đã lên: bỏ được luật xoá 30 bản cuộn vòng *(mất lịch sử, không đủ cho kế toán)* và dễ tra cứu. Một điều chỉnh: **nén theo tháng thay vì đợi hết năm** — đo được đợi hết năm thì Drive đầy sau ~1,8 năm, nén theo tháng thì ~13 năm |
+| `READY_FOR_BUILD` | `READY_FOR_REVIEW` | KHỈ ĐỘT | 2026-08-28 | Xong, xem Mục 6b + [ADR-0014](../decisions/ADR-0014-khung-luu-tru-sao-luu-nam-thang.md). Khung năm/tháng · bỏ luật cuộn vòng · đóng tháng (4 giai đoạn, **kiểm trước xoá sau**) · đóng năm · cảnh báo trước 6 tháng · hai file chữ trong mọi gói. Đo thật: tỉ lệ nén **7,40 lần** → Drive **14,1 năm**; CPU **6,60 ms** xấu nhất (trần 10 ms). Ca đối chứng BH-16 đủ 5 kiểu hỏng đều bị bắt |

@@ -33,6 +33,7 @@
    ========================================================================== */
 
 import * as khoFile from './kho-file.js';
+import * as gop from './gop-sao-luu.js';
 import { crc32, dauTep, cuoiTep, mucLuc } from './zip.js';
 import { KHOI_PHUC_MJS, soDoDuLieu } from './khoi-phuc-kem.js';
 
@@ -96,8 +97,21 @@ export const GIO_TANG_TOC = 6;
 export const GIO_BAT_DAU = 0;
 export const GIO_KET_THUC = 8;
 
-/** Giữ bao nhiêu bản ngày (SPEC-0005 Mục 9.3). */
-export const GIU_BAN_NGAY = 30;
+/* --------------------------------------------------------------------------
+   ⛔ CTL-0022 — ĐÃ BỎ HẲN LUẬT "GIỮ 30 BẢN NGÀY RỒI CUỘN VÒNG"
+
+   Luật cũ: bản thứ 31 ĐÈ LÊN bản cũ nhất. Hai chỗ hỏng, Sếp Ngọc chỉ ra đúng:
+     · Quá 30 ngày là KHÔNG TRUY ĐƯỢC nữa. Kế toán phải đối chiếu số liệu quý
+       trước, năm trước — luật kế toán bắt giữ chứng từ nhiều năm.
+     · Một đống file phẳng đặt tên theo ngày, muốn xem tháng 3 thì phải mò.
+
+   NAY: KHÔNG XOÁ GÌ CẢ. Khung lưu trữ theo NĂM/THÁNG, tháng đóng rồi thì gộp
+   lại thành một file (xem src/gop-sao-luu.js). Chỗ trên Drive vẫn đủ hơn 10 năm
+   nhờ nén — số đo ở đầu gop-sao-luu.js.
+
+   Hằng số `GIU_BAN_NGAY` và hàm `donBanQuaHan()` đã bị GỠ. Ai định thêm lại
+   một luật xoá tự động nào ở đây: đọc lại đoạn này trước.
+   -------------------------------------------------------------------------- */
 
 /* --------------------------------------------------------------------------
    BẢN THÁNG CHẠY NGÀY 15, GÓI DỮ LIỆU CỦA THÁNG TRƯỚC (Sếp Ngọc chốt 27/08:
@@ -503,9 +517,16 @@ liệu của THÁNG TRƯỚC (tới ngày 15 thì tháng trước đã chốt s�
 không còn nhúc nhích nữa). Tải về máy, chép ra một ổ cứng rời hoặc một chỗ
 khác Google Drive. Lý do: bản chạy hằng ngày nằm trên Drive của công ty — nếu
 mất tài khoản Google thì mất luôn cả bản sao lưu. Bản này phải nằm ngoài.`
-  : `Bản này máy tự tạo mỗi đêm và giữ ${GIU_BAN_NGAY} bản gần nhất. Quá ${GIU_BAN_NGAY} ngày thì tự
-xoá bản cũ nhất. Ngày 15 hằng tháng máy gói riêng dữ liệu của THÁNG TRƯỚC
-thành một file .zip và gửi cho Sếp qua Telegram để Sếp tự cất ra ngoài.`}
+  : `Bản này máy tự tạo mỗi đêm, cất trên Google Drive công ty theo khung
+NĂM / THÁNG:  Sao-luu-ERP-AGC / 2026 / 08 / 2026-08-27 /
+
+KHÔNG BẢN NÀO BỊ XOÁ. Hết một tháng thì cả thư mục tháng đó được gộp lại
+thành đúng một file (ví dụ 2026-08.zip) nằm trong thư mục năm — vẫn còn
+NGUYÊN từng ngày bên trong, chỉ gọn hơn và nhẹ hơn khoảng 7 lần. Hết năm
+thì 12 file tháng lại gom thành một file của cả năm.
+
+Ngày 15 hằng tháng máy còn gói riêng dữ liệu của THÁNG TRƯỚC thành một file
+.zip và gửi cho Sếp qua Telegram để Sếp tự cất ra ngoài Google Drive.`}
 
 DỮ LIỆU NHẠY CẢM — ĐỌC KỸ
 -------------------------
@@ -848,20 +869,33 @@ export async function chayMotLuot(env, bao) {
     try { await kiemTraDungLuong(env, bao); } catch (e) { console.error('Sao lưu dung lượng:', e.message); }
   }
 
-  // ---- Ngoài cửa sổ 0h–8h sáng thì thôi ----------------------------------
-  if (gio < GIO_BAT_DAU || gio >= GIO_KET_THUC) return { bo: 'ngoai_gio' };
-
   // Lượt đầu mỗi giờ (phút 0–4) là lượt NẶNG NHẤT của cron: đó là lúc
   // dongBoDonHangNen() kéo hàng nghìn đơn hàng về. Nhồi thêm việc sao lưu vào
   // đúng lượt đó là cách chắc chắn nhất để vượt 10 ms. Nhường.
   if (phut < 5) return { bo: 'nhuong_dong_bo_don_hang' };
+
+  /* ---- CTL-0022: VIỆC GỘP CHẠY CẢ NGÀY, BẢN NGÀY CHỈ CHẠY BAN ĐÊM ---------
+     Bản ngày phải nằm trong cửa sổ 0h–8h vì nó ĐỌC CẢ DATABASE — chạy ban ngày
+     là tranh D1 với người đang làm việc. Việc GỘP thì khác hẳn: nó đọc từ
+     Drive và ghi lên Drive, gần như không đụng D1. Nên nó được chạy 24/24.
+
+     Cần thế thật: một tháng là 2.160 mẩu phải nén. Nếu chỉ chạy 88 lượt/đêm
+     thì mất 12 đêm; chạy cả ngày thì ~4 ngày, thừa sức trong cửa sổ 15→28.
+
+     ⚠️ VÀ HAI VIỆC KHÔNG BAO GIỜ CHẠY CHUNG MỘT LƯỢT — đó là điều giữ cho CPU
+     không vượt trần: lượt nào có bản ngày thì `return` trước khi tới phần gộp.
+     Lượt bản ngày 6,24 ms; lượt gộp ~6,0 ms; cộng lại là 12 ms, vượt. */
+  const trongCuaSo = gio >= GIO_BAT_DAU && gio < GIO_KET_THUC;
+
+  if (!trongCuaSo) return await chayGop(env, bao, 'ngoai_gio');
 
   await boPhienQuaHan(env, bao);
 
   let p = await layPhien(env);
   if (!p) {
     p = await moPhienMoi(env, bao);
-    if (!p) return { bo: 'khong_co_viec' };
+    // Ban đêm mà không còn việc sao lưu → nhường lượt cho việc gộp.
+    if (!p) return await chayGop(env, bao, 'khong_co_viec');
   }
   napDem(p);
 
@@ -878,6 +912,18 @@ export async function chayMotLuot(env, bao) {
   } catch (e) {
     await baoHong(env, bao, p, e);
     throw e;
+  }
+}
+
+/** Một lượt của việc GỘP (đóng tháng / đóng năm). Lỗi ở đây KHÔNG được phép
+    kéo theo việc sao lưu hằng ngày: gộp là việc dọn dẹp, sao lưu là lưới an
+    toàn. `gop.chayMotLuot` đã tự báo động và tự đánh dấu 'hong' trước khi ném. */
+async function chayGop(env, bao, viSao) {
+  try {
+    return await gop.chayMotLuot(env, bao);
+  } catch (e) {
+    console.error('Gộp sao lưu:', e.message);
+    return { bo: viSao, gop_hong: e.message };
   }
 }
 
@@ -910,8 +956,9 @@ async function moPhienMoi(env, bao) {
     if (!(await coBan(env, `thang-${thangGoi}`))) return taoPhien(env, 'thang', thangGoi);
   }
 
-  // 3) Rảnh → tranh thủ dọn bản quá hạn giữ.
-  await donBanQuaHan(env);
+  // 3) Không còn việc sao lưu nào. CTL-0022 bỏ luật dọn bản quá hạn — chỗ này
+  //    trước đây gọi `donBanQuaHan()`. Nay lượt rảnh được nhường cho việc GỘP
+  //    (xem `chayMotLuot`), là việc duy nhất còn được phép xoá thứ gì.
   return null;
 }
 
@@ -938,9 +985,21 @@ async function taoPhien(env, loai, moc) {
 
   let thuMucId = null;
   if (loai === 'ngay') {
+    /* ---- CTL-0022: KHUNG NĂM / THÁNG, ĐÚNG SƠ ĐỒ SẾP VẼ -------------------
+         Sao-luu-ERP-AGC/ 2026 / 08 / 2026-08-27 /
+       Ba tầng thay vì một. Mở đúng thư mục tháng là thấy, không phải mò trong
+       một đống file phẳng. Và khi tháng đóng lại thì cả thư mục `08/` được
+       thay bằng đúng một file `2026-07.zip` nằm cạnh nó trong `2026/`.
+
+       `timHoacTaoThuMuc` nhớ id trong D1 theo khoá nên mỗi tầng chỉ tạo MỘT
+       lần trong đời; các đêm sau chỉ là hai lượt tra D1, không tốn subrequest. */
     const goc = await khoFile.timHoacTaoThuMuc(env, 'goc', 'ERP-AGC', null);
-    const chung = await khoFile.timHoacTaoThuMuc(env, 'SAO-LUU', 'SAO-LUU', goc);
-    thuMucId = await khoFile.timHoacTaoThuMuc(env, `SAO-LUU/${moc}`, moc, chung);
+    const chung = await khoFile.timHoacTaoThuMuc(env, 'SAO-LUU', 'Sao-luu-ERP-AGC', goc);
+    const nam = moc.slice(0, 4);          // '2026'
+    const thang = moc.slice(5, 7);        // '08'
+    const tNam = await khoFile.timHoacTaoThuMuc(env, `SAO-LUU/${nam}`, nam, chung);
+    const tThang = await khoFile.timHoacTaoThuMuc(env, `SAO-LUU/${nam}/${thang}`, thang, tNam);
+    thuMucId = await khoFile.timHoacTaoThuMuc(env, `SAO-LUU/${nam}/${thang}/${moc}`, moc, tThang);
   } else {
     const goc = await khoFile.timHoacTaoThuMuc(env, 'goc', 'ERP-AGC', null);
     thuMucId = await khoFile.timHoacTaoThuMuc(env, 'BAN-THANG', 'BAN-THANG-CUA-SEP', goc);
@@ -1262,9 +1321,8 @@ async function hoanTat(env, p, bao) {
       `Mở ra: giải nén, bấm đúp file .csv nào cũng mở bằng Excel. Đọc file DOC-CACH-DOC.txt trước.`;
     await bao.guiTelegram(env, tin);
     await bao.guiThongBao(env, 'admin', `Bản sao lưu tháng ${moc} đã xong (${mb} MB) — Sếp tải về và cất ra ngoài Google Drive.`, 'sao_luu', duongDan);
-  } else {
-    await donBanQuaHan(env);
   }
+  // CTL-0022: bản ngày xong thì KHÔNG dọn gì nữa (trước đây gọi donBanQuaHan).
 }
 
 /* --------------------------------------------------------------------------
@@ -1297,25 +1355,14 @@ async function docQuanHe(env) {
 }
 
 /* ==========================================================================
-   9. Dọn bản quá hạn giữ
+   9. (ĐÃ GỠ) Dọn bản quá hạn giữ
+   ---------------------------------------------------------------------------
+   CTL-0022 bỏ luật xoá cuộn vòng. Hàm `donBanQuaHan()` cũ xoá bản ngày thứ 31
+   trở đi — nay KHÔNG XOÁ GÌ NỮA. Việc dọn dẹp duy nhất còn lại là xoá thư mục
+   ngày SAU KHI đã gộp vào file tháng VÀ đã đọc ngược cả file gộp về đối chiếu
+   mã kiểm; việc đó nằm ở `gop-sao-luu.js`, giai đoạn ④ `xoa`, và chỉ tới được
+   sau khi giai đoạn ③ `kiem` ĐẠT.
    ========================================================================== */
-
-async function donBanQuaHan(env) {
-  const { results } = await env.DB.prepare(
-    `SELECT id, thu_muc_id FROM sao_luu_ban
-      WHERE loai='ngay' AND trang_thai='xong' ORDER BY moc DESC LIMIT 5 OFFSET ?`
-  ).bind(GIU_BAN_NGAY).all();
-
-  // Tối đa 2 bản mỗi lượt — mỗi ngày chỉ đẻ thêm 1 bản nên 2 là thừa sức đuổi
-  // kịp, mà không đốt subrequest của lượt cron.
-  for (const r of results.slice(0, 2)) {
-    try {
-      if (r.thu_muc_id) await khoFile.xoaFile(env, { nha: 'drive', khoa: r.thu_muc_id });
-      await env.DB.prepare('DELETE FROM sao_luu_ban WHERE id=?').bind(r.id).run();
-      await env.DB.prepare('DELETE FROM sao_luu_thu_muc WHERE drive_id=?').bind(r.thu_muc_id).run();
-    } catch (e) { console.error('Dọn bản cũ', r.id, e.message); }
-  }
-}
 
 /* ==========================================================================
    10. Báo động
@@ -1359,29 +1406,89 @@ async function kiemTraLopB(env, bao) {
   await bao.guiThongBao(env, 'admin', `KHÔNG có bản sao lưu ngày ${homQua} — kiểm tra ngay.`, 'sao_luu_hong').catch(() => {});
 }
 
-/** Cảnh báo dung lượng — ADR-0011 A1: còn dưới 3 GB là phải kêu, mỗi tuần
-    một lần cho tới khi dọn. */
+/* --------------------------------------------------------------------------
+   CẢNH BÁO DUNG LƯỢNG — HAI MỨC (CTL-0022 Mục 5)
+
+   ① CÒN DƯỚI 3 GB           — ADR-0011 A1, đã có từ trước, giữ nguyên.
+   ② SẮP ĐẦY TRONG 6 THÁNG   — MỚI. Vì sao cần: mức ① chỉ kêu khi đã sát nút.
+      Lúc đó Sếp còn đúng mấy tuần để quyết mua thêm chỗ hay dọn bớt — mà cả
+      hai việc đó đều cần thời gian và tiền. Báo trước nửa năm thì mới là báo.
+
+   Đà tăng đo bằng SỐ THẬT, không bằng ước lượng: mỗi thứ Hai ghi lại dung
+   lượng Drive vào `sao_luu_dung_luong`, rồi so mẫu hôm nay với mẫu cũ nhất
+   cách đây ít nhất 28 ngày. Dưới 28 ngày thì chưa nói được gì — im lặng còn
+   hơn dự báo bậy, vì dự báo bậy vài lần là không ai tin cảnh báo nữa.
+   -------------------------------------------------------------------------- */
+
+/** Bao nhiêu tháng nữa thì đầy, tính theo đà tăng thật. Hàm THUẦN để ca thử
+    lái thẳng được. Trả `null` khi chưa đủ dữ liệu để nói.
+    @param mau  [{ngay:'2026-08-27', da_dung:Number}] — cũ trước, mới sau */
+export function duBaoThangConLai(mau, conLai) {
+  if (!Array.isArray(mau) || mau.length < 2 || !(conLai > 0)) return null;
+  const cu = mau[0], moi = mau[mau.length - 1];
+  const soNgay = (Date.parse(moi.ngay) - Date.parse(cu.ngay)) / 86400000;
+  if (!(soNgay >= 28)) return null;                       // quá ngắn, chưa nói được
+  const tang = Number(moi.da_dung) - Number(cu.da_dung);
+  if (!(tang > 0)) return Infinity;                       // không tăng → chưa lo
+  return conLai / (tang / soNgay) / 30.44;                // tháng
+}
+
 async function kiemTraDungLuong(env, bao) {
   const vn = gioVN();
   if (vn.getUTCDay() !== 1) return; // thứ Hai
   const dl = await khoFile.dungLuong(env);
   if (!dl || dl.conLai === null) return;
-  if (dl.conLai >= khoFile.NGUONG_CANH_BAO_BYTE) return;
 
-  const khoa = `dung-luong-${ngayVN(vn)}`;
+  const homNay = ngayVN(vn);
+  const gb = (n) => (n / 1073741824).toFixed(2);
+
+  // Ghi mẫu tuần này rồi dọn mẫu cũ hơn 2 năm.
+  await env.DB.prepare(
+    `INSERT OR REPLACE INTO sao_luu_dung_luong (ngay, tong, da_dung, con_lai) VALUES (?,?,?,?)`
+  ).bind(homNay, dl.tong, dl.daDung, dl.conLai).run().catch(() => {});
+  await env.DB.prepare(
+    `DELETE FROM sao_luu_dung_luong WHERE ngay < date('now','+7 hours','-730 days')`).run().catch(() => {});
+
+  const cachDon =
+    `Cách xử lý, rẻ nhất trước: dọn thư rác và thùng rác Gmail · dọn Google Photos · ` +
+    `tải mấy gói sao lưu NĂM cũ nhất về ổ cứng rời rồi xoá khỏi Drive (mỗi gói năm ` +
+    `là một file, tải một lần là xong) · cuối cùng mới tính tới Google One.`;
+
+  /* ---- ① Còn dưới 3 GB — khẩn ------------------------------------------ */
+  if (dl.conLai < khoFile.NGUONG_CANH_BAO_BYTE) {
+    const khoa = `dung-luong-${homNay}`;
+    if (await daBao(env, khoa)) return;
+    await ghiDaBao(env, khoa);
+    const tin =
+      `⚠️ GOOGLE DRIVE SẮP ĐẦY\n\n` +
+      `Đã dùng ${gb(dl.daDung)} GB / ${gb(dl.tong)} GB. Còn ${gb(dl.conLai)} GB.\n\n` +
+      `Drive này dùng chung cho Gmail, Google Photos và bản sao lưu ERP. Đầy thì ` +
+      `KHÔNG sao lưu được nữa (và Drive báo lỗi chứ không tự trừ tiền).\n\n` + cachDon;
+    await bao.guiTelegram(env, tin).catch(() => {});
+    await bao.guiThongBao(env, 'admin', `Google Drive còn ${gb(dl.conLai)} GB — sắp đầy.`, 'sao_luu').catch(() => {});
+    return;
+  }
+
+  /* ---- ② Báo trước 6 tháng theo đà tăng thật ---------------------------- */
+  const { results } = await env.DB.prepare(
+    `SELECT ngay, da_dung FROM sao_luu_dung_luong ORDER BY ngay`).all();
+  const con = duBaoThangConLai(results || [], dl.conLai);
+  if (con === null || !(con <= gop.THANG_BAO_TRUOC)) return;
+
+  // Báo một lần mỗi tháng thôi — cảnh báo lặp hằng tuần thì người ta tắt não.
+  const khoa = `du-bao-day-${homNay.slice(0, 7)}`;
   if (await daBao(env, khoa)) return;
   await ghiDaBao(env, khoa);
 
-  const gb = (n) => (n / 1073741824).toFixed(2);
   const tin =
-    `⚠️ GOOGLE DRIVE SẮP ĐẦY\n\n` +
-    `Đã dùng ${gb(dl.daDung)} GB / ${gb(dl.tong)} GB. Còn ${gb(dl.conLai)} GB.\n\n` +
-    `Drive này dùng chung cho Gmail, Google Photos và bản sao lưu ERP. Đầy thì ` +
-    `KHÔNG sao lưu được nữa (và Drive báo lỗi chứ không tự trừ tiền).\n\n` +
-    `Cách dọn, rẻ nhất trước: xoá thư mục sao lưu cũ hơn 2 năm · dọn thư rác ` +
-    `và thùng rác Gmail · dọn Google Photos · cuối cùng mới tính tới Google One.`;
+    `📈 BÁO TRƯỚC: GOOGLE DRIVE SẼ ĐẦY TRONG KHOẢNG ${Math.max(1, Math.round(con))} THÁNG\n\n` +
+    `Chưa hết chỗ — còn ${gb(dl.conLai)} GB trên tổng ${gb(dl.tong)} GB. Nhưng theo đà ` +
+    `tăng đo được mấy tháng gần đây thì tới lúc đó là hết.\n\n` +
+    `Báo sớm để Sếp có thời gian quyết, chứ không phải báo gấp. Đầy Drive thì ` +
+    `KHÔNG sao lưu được nữa — mà lúc đó mới xoay thì đã muộn.\n\n` + cachDon;
   await bao.guiTelegram(env, tin).catch(() => {});
-  await bao.guiThongBao(env, 'admin', `Google Drive còn ${gb(dl.conLai)} GB — sắp đầy.`, 'sao_luu').catch(() => {});
+  await bao.guiThongBao(env, 'admin',
+    `Drive sẽ đầy trong ~${Math.round(con)} tháng — còn ${gb(dl.conLai)} GB.`, 'sao_luu').catch(() => {});
 }
 
 async function daBao(env, khoa) {
