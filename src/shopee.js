@@ -354,6 +354,17 @@ export async function apiDanhSach(env, phien) {
   // trả về luôn có kho_nhan_luc IS NULL (lọc ở WHERE bên dưới) nên tình
   // trạng luôn null, không dùng tới; bỏ ra để không vỡ nếu server chạy
   // trước khi database thật kịp nạp migration them-tinhtrang-hang.sql.
+  //
+  // ❗KHÔNG ĐƯỢC ĐẶT LẠI `LIMIT` Ở ĐÂY (REV-0033 lỗi #1 — bỏ 28/08/2026).
+  // Từ khi cron chỉ ghi đơn nào ĐỔI THẬT (src/chi-ghi-khi-doi.js) thì
+  // `dong_bo_luc` mang nghĩa mới: "lần cuối đơn này ĐỔI". Trước đó mọi dòng
+  // cùng một giá trị nên `LIMIT 300` chỉ cắt NGẪU NHIÊN; sau đó, 300 dòng
+  // giữ lại là 300 đơn ĐỔI GẦN NHẤT, còn đơn bị cắt là đơn LÂU NHẤT KHÔNG
+  // ĐỔI — tức đúng những ĐƠN TỒN QUÁ HẠN mà kho cần thấy nhất. Cắt ngẫu
+  // nhiên hoá thành cắt thiên vị có hệ thống chống lại đường tiền.
+  // Bỏ trần là an toàn: WHERE bên dưới đã chặn cứng (chỉ đơn kho chưa nhận,
+  // đang ở sân kho) và don_hoan được dọn theo tháng nên không phình.
+  // Bàn đo: npm run do-hangdoi-khovan (scripts/do-hangdoi-khovan.mjs).
   const { results } = await env.DB.prepare(`
     SELECT d.return_sn, d.order_sn, d.trang_thai, d.ly_do, d.so_tien, d.tien_te, d.nguoi_mua,
            d.san_pham, d.san_pham_ten, COALESCE(d.san_pham_sku, m.ma_sku) AS san_pham_sku,
@@ -366,7 +377,7 @@ export async function apiDanhSach(env, phien) {
      WHERE (d.trang_thai NOT LIKE '%CANCEL%' OR d.ma_van_don IS NOT NULL)
        AND d.kho_nhan_luc IS NULL
        AND d.dang_cho = 'kho'
-     ORDER BY d.dong_bo_luc DESC LIMIT 300
+     ORDER BY d.dong_bo_luc DESC
   `).all();
   return json({ don_hoan: results });
 }

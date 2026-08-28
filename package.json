@@ -51,6 +51,7 @@
     "nap-canhbaoghi": "node scripts/chay-migration.mjs them-canhbao-ghi-d1.sql --remote",
     "do-ghi-dongbo": "node scripts/do-ghi-dongbo.mjs",
     "do-nhiptim": "node scripts/do-nhiptim-chat.mjs",
+    "do-hangdoi-khovan": "node scripts/do-hangdoi-khovan.mjs",
     "chay": "wrangler dev",
     "dua-len": "wrangler deploy"
   },

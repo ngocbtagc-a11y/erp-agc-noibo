@@ -35,8 +35,18 @@
    HỆ QUẢ CÓ CHỦ Ý: `dong_bo_luc` từ nay là "lần cuối dữ liệu đơn này ĐỔI",
    không còn là "lần cuối cron chạy qua". Trước đây mọi dòng có cùng một giá
    trị nên `ORDER BY dong_bo_luc DESC` chỉ là thứ tự ngẫu nhiên; nay nó có
-   nghĩa thật. Riêng `hoanLichSu` (LIMIT 500 / 523 dòng) đã đổi sang xếp theo
-   `tao_luc_shopee` để không có đơn cũ nào bị rơi khỏi trang.
+   nghĩa thật.
+
+   ⚠️ HỆ QUẢ ĐÓ LAN RA MỌI CHỖ ĐỌC CỘT NÀY — chỗ nào vừa `ORDER BY dong_bo_luc`
+   vừa `LIMIT` là chỗ ÂM THẦM CẮT MẤT ĐƠN LÂU NHẤT KHÔNG ĐỔI, tức đơn tồn quá
+   hạn. Quét toàn `src/` ngày 28/08/2026 có 5 chỗ đọc, ĐÚNG HAI chỗ có `LIMIT`
+   và cả hai đã xử:
+     · `hoanLichSu` (index.js · LIMIT 500 / 523 dòng) -> xếp theo `tao_luc_shopee`.
+     · `apiDanhSach` (shopee.js · MÀN KHO VẬN · LIMIT 300) -> BỎ HẲN `LIMIT`
+       (REV-0033 lỗi #1 — sót ở vòng trước, suýt phát hành).
+   Ba chỗ còn lại (index.js: kdCanDoiSoat, kdDonHuy, ktCanTraSoat) không có
+   `LIMIT` nên chỉ đổi thứ tự hiển thị, không mất dòng.
+   Máy quét canh tái phát: `npm run do-hangdoi-khovan`.
    ========================================================================== */
 
 /** Cột của `don_hoan` mà cả shopee.js lẫn tiktok.js đều ghi trong DO UPDATE.
