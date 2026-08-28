@@ -14,7 +14,8 @@ import {
 
 import {
   quyenCua, duocXemTab, duocXemLuong, laAdmin, duocThemNhanSu, duocQuanLyChinhSachCa, duocTaoTaiKhoan, nhomVaiTro,
-  quyenKho, quyenShopee, duocThaoTacKho, duocQuanLyKho, duocXemDonHoan, duocThaoTacVanHanh, TEN_VAI_TRO, VAI_TRO_HOP_LE
+  quyenKho, quyenShopee, duocThaoTacKho, duocQuanLyKho, duocXemDonHoan, duocThaoTacVanHanh, TEN_VAI_TRO, VAI_TRO_HOP_LE,
+  duocDuyetGopY
 } from './quyen.js';
 import { kiemTraMatKhauDat, DAI_TOI_THIEU } from './mat-khau.js';
 import * as kho from './kho.js';
@@ -149,6 +150,9 @@ async function toiLaAi(req, env) {
     them_nhan_su: duocThemNhanSu(phien.vai_tro),
     quan_ly_chinh_sach_ca: duocQuanLyChinhSachCa(phien.vai_tro),
     duoc_tao_tai_khoan: duocTaoTaiKhoan(phien.vai_tro),
+    // Cờ duyệt góp ý ERP ở cấp cuối — KHÔNG đi theo vai trò (Sếp Ngọc chốt
+    // 28/08/2026). Giao diện dùng để vẽ nút; luật thật ở gopYDuyet().
+    duyet_gopy: duocDuyetGopY(phien),
     kho: quyenKho(phien.vai_tro),           // { thao_tac, quan_ly, gia_von } cho tab Kho
     shopee: quyenShopee(phien.vai_tro),     // { xem, quan_ly } cho tab Đơn hoàn
     thao_tac_van_hanh: duocThaoTacVanHanh(phien.vai_tro),   // được bấm nút ở bước Vận hành sàn (Cần đối soát) hay chỉ xem
@@ -515,7 +519,8 @@ async function qtDanhSach(req, env) {
     SELECT n.id, n.ma_nv, n.ho_ten, n.viet_tat, n.chuc_vu, n.bo_phan, n.phong_ban_id, n.chuc_danh_id,
            n.sdt, n.email, n.quan_ly_id, n.trang_thai_dl, n.loai_lao_dong,
            n.phap_nhan, n.trang_thai, n.dang_lam, (n.anh_chan_dung IS NOT NULL) AS co_anh,
-           t.id AS tai_khoan_id, t.ten_dang_nhap, t.vai_tro, t.kich_hoat, t.phai_doi_mk
+           t.id AS tai_khoan_id, t.ten_dang_nhap, t.vai_tro, t.kich_hoat, t.phai_doi_mk,
+           t.duyet_gopy
       FROM nhan_su n
       LEFT JOIN tai_khoan t ON t.nhan_su_id = n.id
      ORDER BY n.dang_lam DESC, n.bo_phan, n.ho_ten
@@ -967,6 +972,53 @@ async function qtSuaVaiTro(req, env) {
 
   await env.DB.prepare('UPDATE tai_khoan SET vai_tro = ? WHERE id = ?').bind(vaiTroMoi, tkId).run();
   return json({ ok: true });
+}
+
+/* BẬT/TẮT CỜ "DUYỆT GÓP Ý ERP Ở CẤP CUỐI" — POST /api/quan-tri/quyen-duyet-gopy
+   ---------------------------------------------------------------------------
+   Đây là cái làm cho quyết định 28/08/2026 của Sếp Ngọc KHÔNG bị đóng đinh
+   vào code: đổi người duyệt là bật/tắt một cái công tắc, không sửa file,
+   không deploy, không chờ ai. Đi vắng thì bật tạm cho người khác, về thì tắt.
+
+   AI ĐƯỢC BẤM: CHỈ người ĐANG GIỮ cờ — cố ý KHÔNG dùng batBuocAdmin.
+   Nếu để admin bật được thì anh Phong tự bật cho mình trong 5 giây và cả
+   thay đổi này thành vô nghĩa. Quyền chỉ đi ra từ tay người đang có nó.
+
+   CHẶN TỰ KHOÁ CHÍNH MÌNH RA NGOÀI: không tắt được cái cờ CUỐI CÙNG. Sếp là
+   người duy nhất duyệt — tắt nhầm cờ của chính mình là cả hàng góp ý đứng
+   và không còn ai bật lại được ngoài lệnh wrangler gõ tay. Muốn chuyển giao
+   thì BẬT cho người mới trước, rồi mới TẮT của mình. */
+async function qtQuyenDuyetGopY(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+
+  if (!duocDuyetGopY(phien))
+    return loi('Chỉ người đang giữ quyền duyệt góp ý mới cấp/thu được quyền này', 403);
+
+  let b;
+  try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+
+  const tkId = parseInt(b.tai_khoan_id, 10);
+  if (!tkId) return loi('Thiếu tài khoản');
+  const bat = b.bat === true || b.bat === 1 || b.bat === '1';
+
+  const tk = await env.DB.prepare(
+    'SELECT id, ten_dang_nhap, kich_hoat, duyet_gopy FROM tai_khoan WHERE id = ?').bind(tkId).first();
+  if (!tk) return loi('Không tìm thấy tài khoản', 404);
+  if (bat && !tk.kich_hoat)
+    return loi('Tài khoản này đang bị khoá — mở khoá trước đã', 400);
+
+  if (!bat && tk.duyet_gopy) {
+    const con = await env.DB.prepare(
+      'SELECT COUNT(*) AS n FROM tai_khoan WHERE duyet_gopy = 1 AND kich_hoat = 1 AND id <> ?')
+      .bind(tkId).first();
+    if (!con || !con.n)
+      return loi('Không thể tắt — đây là người DUY NHẤT còn duyệt được góp ý. Bật cho người thay trước, rồi hãy tắt.', 409);
+  }
+
+  await env.DB.prepare('UPDATE tai_khoan SET duyet_gopy = ? WHERE id = ?')
+    .bind(bat ? 1 : 0, tkId).run();
+  return json({ ok: true, duyet_gopy: bat ? 1 : 0 });
 }
 
 /* Xoá HẲN tài khoản đăng nhập (khác "Khoá" — Khoá chỉ chặn đăng nhập, giữ
@@ -3625,7 +3677,16 @@ async function gopYDanhSach(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
 
-  const laAd = laAdmin(phien.vai_tro);
+  /* XEM ≠ DUYỆT — đây là chỗ dễ cắt quá tay nhất của thay đổi 28/08/2026.
+     Sếp bảo "đừng để sếp Phong DUYỆT", KHÔNG bảo "đừng cho xem". Anh Phong
+     là admin nên `laAd` vẫn true: thấy hết mọi góp ý, mọi trạng thái, mọi
+     ghi chú nội bộ, mọi mức rủi ro, y như trước. Chỉ hàm gopYDuyet() và
+     đúng hai đường ở gopYDoiTrangThai() từ chối tay anh.
+
+     `|| duocDuyetGopY(phien)`: người được Sếp tạm uỷ quyền duyệt mà KHÔNG
+     phải admin thì cũng phải nhìn thấy thứ mình sắp duyệt — nếu không, cờ
+     uỷ quyền bật lên mà màn hình trống. */
+  const laAd = laAdmin(phien.vai_tro) || duocDuyetGopY(phien);
   const dieuKien = laAd ? '' : `WHERE g.nguoi_gui_id = ?1 OR ${GOPY_SQL_QL1} = ?1`;
 
   const stmt = env.DB.prepare(`
@@ -3637,6 +3698,7 @@ async function gopYDanhSach(req, env) {
            g.risk, g.duyet_cap1_luc, g.duyet_cap1_nguon, g.duyet_owner_luc,
            g.bang_chung_url, g.ly_do_tu_choi, g.so_lan_gui_lai, g.can_xac_minh_lai,
            g.current_owner, g.next_owner,
+           g.hoan_tac_json, g.hoan_tac_boi_id, g.hoan_tac_luc,
            n.ho_ten AS nguoi_gui_ten, n.viet_tat AS nguoi_gui_viet_tat, n.bo_phan AS nguoi_gui_bo_phan,
            ${GOPY_SQL_QL1} AS quan_ly_cap1_id,
            (SELECT ho_ten FROM nhan_su WHERE id = ${GOPY_SQL_QL1}) AS quan_ly_cap1_ten,
@@ -3674,7 +3736,7 @@ async function gopYDanhSach(req, env) {
      sách này và vẫn trả về đủ. */
   const GOPY_RUOT_NOI_BO = ['risk', 'bang_chung_url', 'de_xuat_loai', 'de_xuat_risk',
                             'de_xuat_trang_thai', 'de_xuat_ly_do', 'de_xuat_spec'];
-  const gopY = laAd ? results : results.map(g => {
+  const catRuot = laAd ? results : results.map(g => {
     if (g.quan_ly_cap1_id === phien.nhan_su_id || g.nguoi_phu_trach_id === phien.nhan_su_id)
       return g;
     const cat = { ...g };
@@ -3682,10 +3744,122 @@ async function gopYDanhSach(req, env) {
     return cat;
   });
 
+  /* ---- HOÀN TÁC: trả về BOOLEAN, tuyệt đối không trả ảnh chụp -----------
+     `hoan_tac_json` là trạng thái nội bộ trước cú bấm — không ai ngoài máy
+     chủ cần đọc nó. Máy chủ tự tính "cái nút Hoàn tác có sáng không" rồi
+     XOÁ HẲN ba cột thô khỏi JSON (không đặt null — đúng cách đã dùng cho
+     ruột nội bộ ở trên). Luật thật vẫn nằm ở gopYHoanTac(); đây chỉ là để
+     giao diện khỏi vẽ một cái nút bấm vào là 400. */
+  const gopY = catRuot.map(g => {
+    const duoc = gopYHoanTacDuoc(g, phien.nhan_su_id);
+    const r = { ...g, hoan_tac_duoc: duoc };
+    delete r.hoan_tac_json; delete r.hoan_tac_boi_id; delete r.hoan_tac_luc;
+    return r;
+  });
+
   return json({
     gop_y: gopY, la_admin: laAd, toi_la: phien.nhan_su_id,
-    cong_duyet_bat: CONG_DUYET_BAT
+    cong_duyet_bat: CONG_DUYET_BAT,
+    // Giao diện dùng cờ này để KHÔNG vẽ nút duyệt cho người không có quyền.
+    // Đây là phép lịch sự với người dùng, KHÔNG phải hàng rào: hàng rào thật
+    // nằm ở gopYDuyet() phía máy chủ, gọi thẳng API vẫn 403.
+    duyet_gopy: duocDuyetGopY(phien)
   });
+}
+
+/* ---- HOÀN TÁC MỘT CÚ DUYỆT/TỪ CHỐI LỠ TAY -------------------------------
+   Sếp Bùi Thị Ngọc là NGƯỜI DUY NHẤT duyệt ở cấp cuối, và duyệt trên điện
+   thoại. Bấm nhầm thì không có đồng nghiệp nào sửa hộ được — nên nút hoàn
+   tác không phải tiện nghi, nó là phần bắt buộc của việc "một mình duyệt".
+
+   BỐN ĐIỀU KIỆN, KIỂM CẢ Ở DANH SÁCH LẪN Ở CỬA HOÀN TÁC (cùng một hàm, một
+   sự thật — Rule 1):
+     ① có ảnh chụp        ② đúng người vừa bấm
+     ③ trong 15 phút      ④ việc CHƯA đi tiếp (trạng thái + người đang chờ
+                             còn y như lúc vừa bấm xong)
+   ④ là chốt chặn quan trọng nhất: Hồ Ly đã bắt đầu phân tích rồi mà hoàn
+   tác được thì hoàn tác chính là một kiểu nói dối mới. */
+const GOPY_HOAN_TAC_PHUT = 15;
+
+/* Các cột cổng duyệt được chụp lại. Đủ để trả về nguyên trạng, không thừa
+   một cột nghiệp vụ nào (nội dung góp ý, ảnh, người phụ trách... không đụng). */
+const GOPY_COT_HOAN_TAC = ['trang_thai', 'current_owner', 'next_owner',
+  'risk', 'risk_chot_boi_id', 'risk_chot_luc',
+  'duyet_cap1_boi_id', 'duyet_cap1_luc', 'duyet_cap1_nguon',
+  'duyet_owner_boi_id', 'duyet_owner_luc', 'ly_do_tu_choi'];
+
+function gopYAnhChup(g, sauTrangThai, sauNextOwner) {
+  const truoc = {};
+  for (const k of GOPY_COT_HOAN_TAC) truoc[k] = g[k] === undefined ? null : g[k];
+  return JSON.stringify({ truoc, sau_trang_thai: sauTrangThai, sau_next_owner: sauNextOwner });
+}
+
+/* Bao nhiêu phút đã trôi kể từ mốc `luc`. Mốc trong DB ghi theo giờ VN
+   (datetime('now','+7 hours')) nên phải cộng 7 tiếng vào "bây giờ" rồi mới
+   trừ — so thẳng với giờ UTC là lệch đúng 7 tiếng và cửa sổ 15 phút không
+   bao giờ mở. */
+function gopYPhutTruoc(luc) {
+  if (!luc) return Infinity;
+  const t = Date.parse(String(luc).replace(' ', 'T') + 'Z');
+  if (!Number.isFinite(t)) return Infinity;
+  return (Date.now() + 7 * 3600 * 1000 - t) / 60000;
+}
+
+function gopYHoanTacDuoc(g, nhanSuId) {
+  if (!g || !g.hoan_tac_json || !nhanSuId) return false;
+  if (g.hoan_tac_boi_id !== nhanSuId) return false;
+  const phut = gopYPhutTruoc(g.hoan_tac_luc);
+  if (!(phut >= 0) || phut > GOPY_HOAN_TAC_PHUT) return false;
+  let a; try { a = JSON.parse(g.hoan_tac_json); } catch { return false; }
+  return !!a && a.sau_trang_thai === g.trang_thai && a.sau_next_owner === g.next_owner;
+}
+
+/* POST /api/gop-y/hoan-tac — trả bản ghi về đúng trạng thái trước cú bấm.
+   KHÔNG xoá lịch sử: ghi THÊM một dòng "Hoàn tác" (append-only, Rule 10) —
+   người sau đọc sổ vẫn thấy cả cú bấm nhầm lẫn cú sửa. */
+async function gopYHoanTac(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  const id = parseInt(b.id, 10);
+  if (!id) return loi('Thiếu id');
+
+  const g = await env.DB.prepare(`
+    SELECT id, tieu_de, trang_thai, next_owner, nguoi_gui_id,
+           hoan_tac_json, hoan_tac_boi_id, hoan_tac_luc
+      FROM gop_y WHERE id = ?`).bind(id).first();
+  if (!g) return loi('Không tìm thấy góp ý này', 404);
+
+  // Không phải người vừa bấm → 403 (kể cả admin: hoàn tác là sửa QUYẾT ĐỊNH
+  // CỦA NGƯỜI KHÁC, không ai được làm thay).
+  if (!g.hoan_tac_json || g.hoan_tac_boi_id !== phien.nhan_su_id)
+    return loi('Chỉ người vừa bấm mới hoàn tác được, và chỉ với cú bấm gần nhất của mình', 403);
+  if (!gopYHoanTacDuoc(g, phien.nhan_su_id)) {
+    const phut = gopYPhutTruoc(g.hoan_tac_luc);
+    return loi(phut > GOPY_HOAN_TAC_PHUT
+      ? `Quá ${GOPY_HOAN_TAC_PHUT} phút rồi, không hoàn tác được nữa. Dùng đường "Mở lại"/"Gỡ chặn" nhé.`
+      : 'Góp ý này đã đi tiếp sau cú bấm đó — hoàn tác bây giờ sẽ xoá mất việc người khác vừa làm.', 409);
+  }
+
+  const { truoc } = JSON.parse(g.hoan_tac_json);
+  const gan = GOPY_COT_HOAN_TAC.map(k => `${k} = ?`);
+  const gia = GOPY_COT_HOAN_TAC.map(k => (truoc[k] === undefined ? null : truoc[k]));
+  gan.push('hoan_tac_json = NULL', 'hoan_tac_boi_id = NULL', 'hoan_tac_luc = NULL',
+           "cap_nhat_luc = datetime('now', '+7 hours')");
+  gia.push(id);
+  await env.DB.prepare(`UPDATE gop_y SET ${gan.join(', ')} WHERE id = ?`).bind(...gia).run();
+
+  await gopYGhiLichSu(env, id, g.trang_thai, truoc.trang_thai, {
+    nguoiDoiId: phien.nhan_su_id,
+    ghiChu: `Hoàn tác — bấm nhầm, trả về "${GOPY_TRANG_THAI_NHAN[truoc.trang_thai] || truoc.trang_thai}"`
+  });
+  // Người gửi đã nhận tin "đã duyệt"/"chưa duyệt" ở cú bấm nhầm — phải nói
+  // lại cho đúng, không để họ đọc một cái tin nay đã sai.
+  await guiThongBao(env, null,
+    `Góp ý "${g.tieu_de}": thao tác vừa rồi đã được hoàn tác, quay lại "${GOPY_TRANG_THAI_NHAN[truoc.trang_thai] || truoc.trang_thai}".`,
+    'gop_y_cap_nhat', String(id), g.nguoi_gui_id);
+
+  return json({ ok: true, trang_thai: truoc.trang_thai });
 }
 
 /* CỔNG DUYỆT — POST /api/gop-y/duyet.
@@ -3709,13 +3883,29 @@ async function gopYDuyet(req, env) {
   if (riskGui && !GOPY_RISK_BAC[riskGui]) return loi('Mức rủi ro không hợp lệ');
   if (tuChoi && !lyDo) return loi('Hãy ghi rõ lý do chưa duyệt để người gửi biết đường sửa');
 
-  const laOwner = laAdmin(phien.vai_tro);
+  /* ---- CẤP CUỐI = CỜ `duyet_gopy`, KHÔNG PHẢI VAI TRÒ `admin` -----------
+     Sếp Ngọc chốt 28/08/2026: "riêng cái góp ý ERP đừng để sếp Phong duyệt,
+     1 mình tao duyệt hết". Anh Phong là Giám đốc, tài khoản `admin`, biết
+     đường thì gọi thẳng POST /api/gop-y/duyet được — nên chặn phải nằm ở
+     ĐÂY, trên máy chủ, chứ ẩn nút trong app.js chỉ là hàng rào giấy (đúng
+     lỗi đã làm vòng 2 của tính năng này hỏng, REV-0018).
+
+     `laOwner` giữ nguyên tên vì nó vẫn có nghĩa cũ — "người cầm cổng ERP
+     Owner" — chỉ đổi CÁCH XÁC ĐỊNH: từ vai trò sang cờ trên tài khoản.
+     Mọi luật bám vào laOwner đi theo luôn, đúng ý Sếp:
+       · cổng 2 (next_owner='OWNER')            → chỉ người có cờ
+       · duyệt vượt cấp thay quản lý trực tiếp  → chỉ người có cờ
+       · hạ mức rủi ro (ADR-0006 B6)            → chỉ người có cờ
+     Cấp 1 KHÔNG đụng tới: `laQL1` bên dưới vẫn tính bằng GOPY_SQL_QL1. */
+  const laOwner = duocDuyetGopY(phien);
   const ketQua = [];
 
   for (const id of ids) {
     const g = await env.DB.prepare(`
-      SELECT id, trang_thai, nguoi_gui_id, tieu_de, risk, de_xuat_risk,
-             duyet_cap1_luc, duyet_cap1_nguon, next_owner, so_lan_gui_lai
+      SELECT id, trang_thai, nguoi_gui_id, tieu_de, risk, risk_chot_boi_id, risk_chot_luc,
+             de_xuat_risk, duyet_cap1_boi_id, duyet_cap1_luc, duyet_cap1_nguon,
+             duyet_owner_boi_id, duyet_owner_luc, ly_do_tu_choi,
+             current_owner, next_owner, so_lan_gui_lai
         FROM gop_y WHERE id = ?`).bind(id).first();
     if (!g) return loi('Không tìm thấy góp ý này', 404);
     if (!['moi', 'cho_quyet_dinh'].includes(g.trang_thai))
@@ -3726,8 +3916,9 @@ async function gopYDuyet(req, env) {
     const dangCho = g.next_owner === 'OWNER' || !ql1.id ? 'OWNER' : 'QL_CAP1';
 
     // ---- Ai được bấm — enforce ở BACKEND, không phải ẩn nút -------------
+    // Vai trò admin KHÔNG mở được cửa này nữa; chỉ cờ tai_khoan.duyet_gopy.
     if (dangCho === 'OWNER' && !laOwner)
-      return loi('Góp ý này đang chờ ERP Owner duyệt, bạn chưa có quyền', 403);
+      return loi('Góp ý ERP chỉ ERP Owner duyệt ở cấp cuối — tài khoản của bạn không có quyền này (xem/theo dõi thì vẫn đầy đủ)', 403);
     if (dangCho === 'QL_CAP1' && !laQL1 && !laOwner)
       return loi('Chỉ quản lý trực tiếp của người gửi (hoặc ERP Owner) mới duyệt được', 403);
     // ADR-0006 B4 — Sếp vượt cấp được, nhưng KHÔNG có đường duyệt im lặng.
@@ -3739,7 +3930,10 @@ async function gopYDuyet(req, env) {
       await env.DB.prepare(`
         UPDATE gop_y SET trang_thai = 'bi_tu_choi', ly_do_tu_choi = ?,
                current_owner = 'NGUOI_GUI', next_owner = 'NGUOI_GUI', nhac_duyet_luc = NULL,
-               cap_nhat_luc = datetime('now', '+7 hours') WHERE id = ?`).bind(lyDo, id).run();
+               hoan_tac_json = ?, hoan_tac_boi_id = ?,
+               hoan_tac_luc = datetime('now', '+7 hours'),
+               cap_nhat_luc = datetime('now', '+7 hours') WHERE id = ?`)
+        .bind(lyDo, gopYAnhChup(g, 'bi_tu_choi', 'NGUOI_GUI'), phien.nhan_su_id, id).run();
       await gopYGhiLichSu(env, id, g.trang_thai, 'bi_tu_choi',
         { nguoiDoiId: phien.nhan_su_id, ghiChu: 'Chưa duyệt — ' + lyDo });
       await guiThongBao(env, null,
@@ -3811,7 +4005,10 @@ async function gopYDuyet(req, env) {
 
     const [cur, nxt] = tt === 'moi' ? ['NGUOI_GUI', 'OWNER'] : GOPY_OWNER_THEO_TT[tt];
     gan.push('trang_thai = ?', 'current_owner = ?', 'next_owner = ?');
-    gia.push(tt, cur, nxt, id);
+    gia.push(tt, cur, nxt);
+    // Ảnh chụp để hoàn tác — chụp `g` (nguyên trạng TRƯỚC câu UPDATE này).
+    gan.push('hoan_tac_json = ?', 'hoan_tac_boi_id = ?', "hoan_tac_luc = datetime('now', '+7 hours')");
+    gia.push(gopYAnhChup(g, tt, nxt), phien.nhan_su_id, id);
     await env.DB.prepare(`UPDATE gop_y SET ${gan.join(', ')} WHERE id = ?`).bind(...gia).run();
 
     if (tt !== g.trang_thai) {
@@ -3873,7 +4070,24 @@ async function gopYDoiTrangThai(req, env) {
   const ghiChu = String(b.ghi_chu || '').trim().slice(0, 500) || null;
   const bangChung = String(b.bang_chung_url || '').trim().slice(0, 500);
 
+  /* laOwner ở HÀM NÀY vẫn là vai trò admin — cố ý. Sếp Ngọc chỉ lấy đi cái
+     nút DUYỆT/TỪ CHỐI CẤP CUỐI của anh Phong, không lấy quyền vận hành: anh
+     vẫn phân loại, giao người phụ trách, gỡ chặn, mở lại bản ghi sai, đẩy
+     việc qua các bước làm–kiểm–nghiệm thu như trước. Cắt rộng hơn thế là
+     cắt quá tay. */
   const laOwner = laAdmin(phien.vai_tro);
+
+  /* NHƯNG hàm này có HAI ĐƯỜNG VÒNG ra đúng cái cổng vừa khoá — phải bịt,
+     nếu không thì khoá cửa trước mà bỏ ngỏ cửa sau (REV-0018):
+       ① 'cho_quyet_dinh' → 'cho_phan_tich' CHÍNH LÀ quyết định cấp cuối
+          của Sếp cho việc rủi ro CAO, chỉ khác là đi qua API khác.
+       ② huỷ một góp ý ĐANG NẰM Ở CỔNG DUYỆT ('moi'/'cho_quyet_dinh') của
+          người khác chính là từ chối nó, chỉ khác cái tên.
+     Cả hai nay đòi cờ `duyet_gopy`. Huỷ góp ý ĐÃ QUA cổng ('cho_phan_tich')
+     hoặc đã bị từ chối thì vẫn là việc vận hành — admin làm được như cũ. */
+  const laDuyetCuoi = duocDuyetGopY(phien);
+  const dangOCongDuyet = ['moi', 'cho_quyet_dinh'].includes(g.trang_thai);
+
   // "Người gửi" = ĐÚNG người đã gửi góp ý NÀY, kiểm bằng gop_y.nguoi_gui_id,
   // không kiểm bằng vai trò (ADR-0006 A2). Người gửi đã nghỉ việc thì chỉ còn
   // Sếp bấm được — người không dùng thử thì không xác nhận thay được (Rule 9).
@@ -3937,8 +4151,15 @@ async function gopYDoiTrangThai(req, env) {
       'dang_lam', 'dang_kiem_tra', 'can_chinh_sua', 'cho_nghiem_thu', 'nghiem_thu_chua_dat',
       'san_sang_phat_hanh'];
     const CHUYEN_HOP_LE = {
-      da_huy:              { tu: ['moi', 'bi_tu_choi', 'cho_phan_tich', 'cho_quyet_dinh'], ai: laNguoiGui || laOwner },
-      cho_phan_tich:       { tu: ['cho_quyet_dinh'], ai: laOwner },
+      // Huỷ khi việc còn Ở CỔNG DUYỆT = từ chối bằng cửa sau → đòi cờ duyệt.
+      // Người gửi thì lúc nào cũng tự rút góp ý của mình được.
+      da_huy:              { tu: ['moi', 'bi_tu_choi', 'cho_phan_tich', 'cho_quyet_dinh'],
+                             ai: laNguoiGui || (dangOCongDuyet ? laDuyetCuoi : laOwner),
+                             loiRieng: 'Góp ý này đang chờ duyệt — chỉ ERP Owner (hoặc chính người gửi) mới huỷ được' },
+      // Đây LÀ quyết định cấp cuối của Sếp với việc rủi ro CAO, không phải
+      // một bước vận hành. Đi qua API nào cũng vậy, vẫn đòi cờ duyệt.
+      cho_phan_tich:       { tu: ['cho_quyet_dinh'], ai: laDuyetCuoi,
+                             loiRieng: 'Cho làm một góp ý rủi ro CAO là quyết định của ERP Owner — tài khoản của bạn không có quyền duyệt góp ý' },
       dang_phan_tich:      { tu: ['cho_phan_tich'], ai: laOwner },
       da_duyet:            { tu: ['cho_phan_tich', 'dang_phan_tich'], ai: laOwner, canRisk: true },
       dang_lam:            { tu: ['da_duyet', 'can_chinh_sua'], ai: laOwner },
@@ -3960,7 +4181,7 @@ async function gopYDoiTrangThai(req, env) {
       const tenMoi = GOPY_TRANG_THAI_NHAN[trangThaiMoi] || trangThaiMoi;
       return loi(`Không thể chuyển từ "${tenCu}" sang "${tenMoi}"`, 400);
     }
-    if (!luat.ai) return loi('Bạn không có quyền chuyển trạng thái này', 403);
+    if (!luat.ai) return loi(luat.loiRieng || 'Bạn không có quyền chuyển trạng thái này', 403);
     if (luat.canRisk && !g.risk) return loi('Chưa chốt mức rủi ro — phải qua cổng duyệt trước', 400);
     if (luat.batBuocGhiChu && !ghiChu) return loi('Hãy ghi rõ lý do trước khi đổi trạng thái này');
     if (luat.batBuocBangChung) {
@@ -4434,6 +4655,7 @@ const DUONG_DAN = {
   'POST /api/gop-y':               gopYGui,
   'GET  /api/gop-y':               gopYDanhSach,
   'POST /api/gop-y/duyet':         gopYDuyet,
+  'POST /api/gop-y/hoan-tac':      gopYHoanTac,
   'POST /api/gop-y/trang-thai':    gopYDoiTrangThai,
   'GET  /api/gop-y/lich-su':       gopYLichSu,
   'GET  /api/gop-y/anh':           gopYAnh,
@@ -4452,6 +4674,7 @@ const DUONG_DAN = {
   'POST /api/quan-tri/dat-lai-mat-khau': qtDatLaiMatKhau,
   'POST /api/quan-tri/khoa-tai-khoan': qtKhoaTaiKhoan,
   'POST /api/quan-tri/sua-vai-tro':    qtSuaVaiTro,
+  'POST /api/quan-tri/quyen-duyet-gopy': qtQuyenDuyetGopY,
   'POST /api/quan-tri/xoa-tai-khoan': qtXoaTaiKhoan,
   'GET  /api/kho/san-pham':      khoDanhSachSP,
   'POST /api/kho/them-san-pham': khoThemSP,

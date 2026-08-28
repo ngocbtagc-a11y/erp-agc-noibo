@@ -98,9 +98,16 @@ export async function docPhien(db, token) {
   // thẳng phien.phong_ban_id, khỏi phải gọi thêm API riêng chỉ để biết
   // phòng ban của người đang đăng nhập. Chỉ THÊM cột đọc ra, không đổi hành
   // vi/độ dài phiên/bảo mật — tương thích ngược hoàn toàn.
+  // duyet_gopy: cờ "được duyệt góp ý ERP ở cấp cuối" (Sếp Ngọc chốt
+  // 28/08/2026 — xem duocDuyetGopY() trong src/quyen.js). Đọc THẲNG vào
+  // phiên để cổng duyệt không phải hỏi DB thêm một câu mỗi lần bấm, và để
+  // quyền được kiểm ở MÁY CHỦ chứ không phải ẩn nút ở trình duyệt.
+  // THỨ TỰ TRIỂN KHAI: cột này phải có trong DB TRƯỚC khi deploy code —
+  // thiếu cột là câu này lỗi và MẤT ĐĂNG NHẬP TOÀN HỆ THỐNG, không riêng
+  // màn Góp ý (REV-0018 mục 6: DB trước, code sau).
   const d = await db.prepare(`
     SELECT p.tai_khoan_id, p.het_han,
-           t.ten_dang_nhap, t.vai_tro, t.kich_hoat, t.phai_doi_mk,
+           t.ten_dang_nhap, t.vai_tro, t.kich_hoat, t.phai_doi_mk, t.duyet_gopy,
            n.id AS nhan_su_id, n.ho_ten, n.viet_tat, n.chuc_vu, n.phong_ban_id
       FROM phien p
       JOIN tai_khoan t ON t.id = p.tai_khoan_id

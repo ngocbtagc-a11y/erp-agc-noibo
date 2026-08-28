@@ -391,8 +391,33 @@ Giữ đúng mức đã có tiền lệ: nhân viên gọi thẳng API bị ch�
 
 ### Ma trận chuyển trạng thái (Q3 — viết theo đúng khuôn `cong_viec`)
 
-Ký hiệu: `NG`=người gửi · `QL1`=quản lý cấp 1 · `OWN`=ERP Owner (`laAdmin`) ·
+Ký hiệu: `NG`=người gửi · `QL1`=quản lý cấp 1 · `OWN`=ERP Owner ·
 `RUN`=runner (SPEC-0003, Đợt B — chưa bật ở spec này).
+
+> **CẬP NHẬT 28/08/2026 (ADR-0015 — Sếp Ngọc chốt).** `OWN` **không còn là
+> `laAdmin(vai_tro)`**, mà là **cờ `tai_khoan.duyet_gopy`** (hàm
+> `duocDuyetGopY(phien)` trong `src/quyen.js`). Sau migration
+> `them-quyen-duyet-gopy.sql` chỉ tài khoản của **Sếp Bùi Thị Ngọc** mang cờ.
+>
+> Anh Nguyễn Duy Phong (Giám đốc, `admin`) **vẫn XEM đầy đủ** mọi góp ý, mọi
+> trạng thái, lịch sử, ghi chú nội bộ, mức rủi ro, link PR — và **vẫn làm
+> được mọi bước vận hành** (phân loại, giao người phụ trách, gỡ chặn, mở lại,
+> đẩy việc qua làm–kiểm–nghiệm thu). Anh **chỉ mất nút duyệt/từ chối ở cấp
+> cuối**. Cấp 1 của quản lý phòng **giữ nguyên**, không đổi một chữ.
+>
+> Hai đường vòng ra đúng cổng này ở `POST /api/gop-y/trang-thai` đã bịt cùng
+> lúc, vì bịt cửa trước mà bỏ ngỏ cửa sau thì không phải là chặn:
+> `cho_quyet_dinh → cho_phan_tich` (chính là quyết định cấp cuối cho việc rủi
+> ro CAO) và `da_huy` khi góp ý **còn đang ở cổng duyệt** (từ chối trá hình).
+>
+> Thêm **hoàn tác 15 phút** (`POST /api/gop-y/hoan-tac`): Sếp duyệt một mình
+> trên điện thoại, bấm nhầm thì không ai sửa hộ. Chỉ chính người vừa bấm,
+> chỉ khi việc **chưa đi tiếp**, và lịch sử **ghi thêm** dòng hoàn tác chứ
+> không xoá dòng nào.
+>
+> Đo: `node scripts/do-quyen-duyet-gopy.mjs` — 45 mốc, gồm 4 ca đối chứng
+> BH-16 (2 ca rò rỉ + 2 ca **cắt quá tay**). Ngưỡng ngón tay:
+> `node scripts/do-nut-gopy-44px.mjs`.
 
 | Đích | `tu:` (đi từ) | `ai:` | Điều kiện bắt buộc |
 |---|---|---|---|

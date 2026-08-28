@@ -429,7 +429,9 @@ function xoaLocQT() {
 function veCotTaiKhoan(n) {
   if (!n.tai_khoan_id) return '<span class="tag mute">Chưa có</span>';
   if (!n.kich_hoat) return `<span class="tag danger">Đã khoá</span> <span class="sm">${esc(n.ten_dang_nhap)}</span>`;
-  return `<span class="nm">${esc(n.ten_dang_nhap)}</span>` + (n.phai_doi_mk ? ' <span class="tag warn">chờ đổi MK</span>' : '');
+  return `<span class="nm">${esc(n.ten_dang_nhap)}</span>` + (n.phai_doi_mk ? ' <span class="tag warn">chờ đổi MK</span>' : '') +
+    // Ai đang cầm quyền duyệt góp ý — nhìn một cái là biết, không phải đoán.
+    (n.duyet_gopy ? ' <span class="tag ok" title="Được duyệt góp ý ERP ở cấp cuối">duyệt góp ý</span>' : '');
 }
 function veThaoTacTaiKhoan(n) {
   if (!n.tai_khoan_id) {
@@ -437,8 +439,16 @@ function veThaoTacTaiKhoan(n) {
       ? `<button class="btn-nho btn-primary" data-tao="${esc(n.id)}" data-ten-goi-y="${esc(String(n.sdt || '').replace(/\D/g, ''))}" data-ten="${esc(n.ho_ten)}">Tạo tài khoản</button>`
       : '<span class="sm">—</span>';
   }
-  if (!TOI.la_admin) return '<span class="sm">—</span>';
-  return `<button class="btn-nho btn-phu" data-doivaitro="${n.tai_khoan_id}" data-doivaitro-ten="${esc(n.ho_ten)}" data-doivaitro-hientai="${esc(n.vai_tro || '')}">Đổi vai trò</button> ` +
+  /* Công tắc "Duyệt góp ý ERP" — CHỈ người ĐANG GIỮ quyền mới thấy, vì chỉ
+     họ bấm được (máy chủ kiểm ở qtQuyenDuyetGopY, admin gọi thẳng vẫn 403).
+     Đây là đường để Sếp đổi ý hoặc tạm uỷ quyền lúc đi vắng mà không phải
+     nhờ ai sửa code: bật/tắt ngay trên điện thoại. */
+  const nutDuyetGopY = TOI.duyet_gopy
+    ? `<button class="btn-nho btn-phu" data-quyenduyetgopy="${n.tai_khoan_id}" data-qdg-bat="${n.duyet_gopy ? 0 : 1}" data-qdg-ten="${esc(n.ho_ten)}">${n.duyet_gopy ? 'Thu quyền duyệt góp ý' : 'Cho duyệt góp ý'}</button> `
+    : '';
+  if (!TOI.la_admin) return nutDuyetGopY || '<span class="sm">—</span>';
+  return nutDuyetGopY +
+    `<button class="btn-nho btn-phu" data-doivaitro="${n.tai_khoan_id}" data-doivaitro-ten="${esc(n.ho_ten)}" data-doivaitro-hientai="${esc(n.vai_tro || '')}">Đổi vai trò</button> ` +
     `<button class="btn-nho btn-phu" data-datlai="${n.tai_khoan_id}">Đặt lại MK</button> ` +
     (n.kich_hoat
       ? `<button class="btn-nho btn-phu" data-khoa="${n.tai_khoan_id}" data-kh="0">Khoá</button>`
@@ -4425,7 +4435,13 @@ if (TOI.quyen.includes('kinhdoanh')) {
    "Cần xử lý" lên đầu, xem hết mọi góp ý, triage đổi trạng thái/loại).
    ========================================================================== */
 async function khoiDongGopY() {
-  let dsGopY = [], laAd = false, toiLa = null;
+  /* laAd  = thấy MỌI góp ý (admin — anh Phong vẫn có, không đổi).
+     coCoDuyet = được bấm DUYỆT/TỪ CHỐI Ở CẤP CUỐI (cờ tai_khoan.duyet_gopy —
+     Sếp Ngọc chốt 28/08/2026 chỉ mình Sếp). Hai thứ TÁCH HẲN nhau: xem đủ
+     mà không duyệt là đúng ý Sếp, không phải thiếu sót.
+     Ẩn nút chỉ để khỏi mời người ta bấm vào một cái 403 — hàng rào thật nằm
+     ở máy chủ (src/index.js gopYDuyet), giao diện không giữ được luật nào. */
+  let dsGopY = [], laAd = false, coDuyet = false, toiLa = null;
 
   // Khu vực/module — dùng lại đúng danh sách TAB đã có (Rule 5), khỏi tự
   // chế 1 danh mục song song rồi lệch tên với sidebar thật.
@@ -4725,12 +4741,29 @@ async function khoiDongGopY() {
 
   function veDs(sel, ds, coNut) { $(sel).innerHTML = ds.map(g => veTheGopY(g, coNut)).join(''); }
 
+  /* Thẻ HOÀN TÁC — Sếp là người DUY NHẤT duyệt cấp cuối và duyệt trên điện
+     thoại, nên bấm nhầm phải sửa được ngay bằng chính ngón tay đó, không đi
+     tìm menu. Cửa sổ 15 phút và luật "việc chưa đi tiếp" do máy chủ quyết
+     (gop_y.hoan_tac_duoc), giao diện chỉ vẽ lại. */
+  function veTheHoanTac(g) {
+    return `<div class="gy-the" data-id="${g.id}">` +
+      `<div class="gy-the-dau"><span class="sm">${gyMa(g)}</span>${gyNhanTrangThai(g)}</div>` +
+      `<div class="nm gy-the-ten" data-gyxem="${g.id}">${esc(g.tieu_de)}</div>` +
+      `<div class="sm">Bạn vừa xử lý — bấm nhầm thì hoàn lại được trong 15 phút.</div>` +
+      `<div class="gy-the-nut">` +
+        `<button type="button" class="btn-phu btn-nho" data-gyhoantac="${g.id}">↩︎ Hoàn tác</button>` +
+      `</div></div>`;
+  }
+
   /* Ai đang được CHỜ ở bản ghi này — dùng để bật panel "Chờ tôi duyệt".
      Chỉ là gợi ý giao diện; luật thật nằm ở backend (gopYDuyet). */
   function gyDangChoToi(g) {
     if (!['moi', 'cho_quyet_dinh'].includes(g.trang_thai)) return false;
-    if (g.next_owner === 'OWNER') return laAd;
-    if (g.next_owner === 'QL_CAP1') return g.quan_ly_cap1_id === toiLa || laAd;
+    // Cấp cuối đi theo CỜ DUYỆT, không theo `laAd` nữa — nếu vẫn dùng laAd
+    // thì anh Phong thấy panel "Chờ tôi duyệt" đầy việc mà bấm cái nào cũng
+    // 403. Ẩn nút vì nó vô nghĩa với anh, KHÔNG phải vì nó là hàng rào.
+    if (g.next_owner === 'OWNER') return coDuyet;
+    if (g.next_owner === 'QL_CAP1') return g.quan_ly_cap1_id === toiLa || coDuyet;
     return false;
   }
 
@@ -4739,10 +4772,16 @@ async function khoiDongGopY() {
     try { kq = await API.gopYDanhSach(); } catch { return; }
     dsGopY = kq.gop_y || [];
     laAd = !!kq.la_admin;
+    coDuyet = !!kq.duyet_gopy;
     toiLa = kq.toi_la || null;
 
     $('#gy-cot-nguoigui').hidden = !laAd;
     $('#gy-danhsach-tieude').textContent = laAd ? 'Tất cả góp ý' : 'Yêu cầu của tôi';
+
+    // Vừa bấm nhầm? Panel hoàn tác nổi lên trên cùng, không phải đi tìm.
+    const hoanTac = dsGopY.filter(g => g.hoan_tac_duoc);
+    $('#gy-hoantac-panel').hidden = hoanTac.length === 0;
+    $('#gy-hoantac-ds').innerHTML = hoanTac.map(veTheHoanTac).join('');
 
     // Panel rỗng thì ẨN HẲN, không để khoảng trống vô nghĩa (Exception First).
     const choDuyet = dsGopY.filter(gyDangChoToi);
@@ -4751,7 +4790,13 @@ async function khoiDongGopY() {
     $('#gy-duyetlo').hidden = choDuyet.length < 2;
     veDs('#gy-choduyet-ds', choDuyet, true);
 
-    const quaHan = choDuyet.filter(g => (g.so_ngay_cho || 0) >= 3);
+    /* "Quá hạn duyệt" là panel ĐỂ BIẾT, không phải để bấm — nên người xem
+       được cả kho góp ý (admin) vẫn thấy đủ, kể cả việc mình không duyệt.
+       Anh Phong mất nút duyệt chứ không mất tầm nhìn: cắt luôn panel này
+       của anh mới là cắt quá tay. */
+    const dangChoDuyet = (g) => ['moi', 'cho_quyet_dinh'].includes(g.trang_thai);
+    const quaHan = (laAd ? dsGopY.filter(dangChoDuyet) : choDuyet)
+      .filter(g => (g.so_ngay_cho || 0) >= 3);
     $('#gy-quahan-panel').hidden = quaHan.length === 0;
     $('#gy-quahan-tieude').textContent = `Quá hạn duyệt (${quaHan.length})`;
     veDs('#gy-quahan-ds', quaHan, false);
@@ -4777,6 +4822,21 @@ async function khoiDongGopY() {
       await taiLai();
     } catch (err) {
       $('#gy-duyet-loi').textContent = err.message || 'Không duyệt được, thử lại nhé.';
+      nut.disabled = false;
+    }
+  });
+
+  // Hoàn tác — cũng 1 chạm, cũng tự tải lại danh sách, không reload trang.
+  document.addEventListener('click', async (e) => {
+    const nut = e.target.closest('[data-gyhoantac]');
+    if (!nut || $('#v-gopy').hidden) return;
+    nut.disabled = true;
+    $('#gy-duyet-loi').textContent = '';
+    try {
+      await API.gopYHoanTac(parseInt(nut.getAttribute('data-gyhoantac'), 10));
+      await taiLai();
+    } catch (err) {
+      $('#gy-duyet-loi').textContent = err.message || 'Không hoàn tác được.';
       nut.disabled = false;
     }
   });
@@ -7906,6 +7966,17 @@ if (TOI.quyen.includes('quantri')) {
       } catch (err) { alert(err.message); btn.disabled = false; }
     } else if (btn.dataset.doivaitro) {
       moHopDoiVaiTro(btn.dataset.doivaitro, btn.dataset.doivaitroTen, btn.dataset.doivaitroHientai);
+    } else if (btn.dataset.quyenduyetgopy) {
+      const bat = btn.dataset.qdgBat === '1';
+      const ten = btn.dataset.qdgTen;
+      if (!confirm(bat
+        ? `Cho "${ten}" duyệt góp ý ERP ở cấp cuối? Người này sẽ duyệt/từ chối được như bạn.`
+        : `Thu quyền duyệt góp ý ERP của "${ten}"? Sau đó họ vẫn xem đầy đủ, chỉ không duyệt được nữa.`)) return;
+      btn.disabled = true;
+      try {
+        await API.qtQuyenDuyetGopY(parseInt(btn.dataset.quyenduyetgopy, 10), bat);
+        await taiLaiNhanSuQuanTri();
+      } catch (err) { alert(err.message); btn.disabled = false; }
     }
   }
   $('#qtBang').addEventListener('click', xuLyThaoTacTaiKhoan);

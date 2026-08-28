@@ -195,6 +195,30 @@ export function duocThaoTacVanHanh(vaiTro) {
   return CO_THAO_TAC_VAN_HANH.has(vaiTro);
 }
 
+/* ---- DUYỆT GÓP Ý Ở CẤP CUỐI (cổng ERP Owner) ----------------------------
+   Sếp Bùi Thị Ngọc chốt 28/08/2026: "riêng cái góp ý ERP đừng để sếp Phong
+   duyệt, 1 mình tao duyệt hết".
+
+   ĐÂY LÀ QUYỀN DUY NHẤT KHÔNG ĐI THEO VAI TRÒ, và có lý do: anh Nguyễn Duy
+   Phong là Giám đốc, tài khoản `admin`, TOÀN QUYỀN MỌI THỨ KHÁC — không thể
+   tách bằng cách hạ vai trò của anh. Tách bằng một cờ riêng đặt trên chính
+   tài khoản (`tai_khoan.duyet_gopy`, migrations/them-quyen-duyet-gopy.sql).
+
+   KHÔNG viết cứng id hay tên người vào code — cờ nằm ở DỮ LIỆU:
+     · Sếp đổi ý muốn cho ai đó duyệt → bật cờ ở tab Quản trị, không deploy.
+     · Sếp đi vắng muốn tạm uỷ quyền → bật, xong tắt.
+   Cấp/thu cờ CHỈ người đang giữ cờ làm được (qtQuyenDuyetGopY trong
+   src/index.js) — admin không tự bật cho mình.
+
+   Cờ này KHÔNG đụng tới cấp 1: quản lý trực tiếp của người gửi vẫn duyệt
+   cấp 1 y như cũ (luật đó nằm ở gop_y.next_owner + GOPY_SQL_QL1).
+
+   Nhận cả PHIÊN (docPhien có trả t.duyet_gopy) lẫn một dòng tai_khoan.
+   Dùng Number(...) vì SQLite trả số còn JSON có thể trả về chuỗi. */
+export function duocDuyetGopY(phien) {
+  return phien != null && Number(phien.duyet_gopy) === 1;
+}
+
 /* Vai trò lạ (do gõ sai trong database) → không có quyền gì cả.
    Thà chặn nhầm còn hơn mở nhầm. */
 const KHONG_QUYEN = { tab: [], xem_luong: false };
