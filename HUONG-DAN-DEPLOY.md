@@ -1,4 +1,4 @@
-# Quy trình deploy ERP (dành cho nhân viên)
+﻿# Quy trình deploy ERP (dành cho nhân viên)
 
 > "Deploy" = đưa thay đổi code lên **bản thật** mà mọi người đang dùng
 > (`https://erp-agc.noiboagc.workers.dev`).
@@ -121,6 +121,75 @@ Kiểm lại bất cứ lúc nào:
 - `npm run tu-kiem-thongbao` — chính sách + mã hoá + xử lý hỏng, có ca đối chứng.
 - `npm run do-trangthai-thongbao` — mọi trạng thái người dùng có nhìn thấy được không.
 - `npm run do-nut-thongbao` — ngưỡng ngón tay 44px (mở trình duyệt để đọc số).
+## Sếp Ngọc không đăng nhập được — làm gì?
+
+Đây là **đường cứu**, không phải việc hằng ngày. Ba nấc, đi từ trên xuống.
+Chi tiết và lý do: `docs/decisions/ADR-0015-chi-sep-ngoc-duyet-gop-y.md`.
+
+**Nấc 1 — nhờ anh Phong khôi phục hộ (đường thường dùng).**
+Anh Phong vào tab **Quản trị** → tài khoản của Sếp → **Đặt lại mật khẩu**.
+Máy trả `200` nhưng **không hiện mật khẩu cho anh** — mật khẩu tạm được gửi
+thẳng vào **chat Telegram riêng giữa Sếp và bot ERP**. Cả nhóm Telegram chung
+sẽ thấy một dòng `[Bảo mật] ... vừa khôi phục tài khoản ...` (không kèm mật
+khẩu), nên không ai làm lén được.
+
+> Cài đặt **một lần** để nấc này chạy được: Sếp nhắn `/start` cho bot ERP, lấy
+> chat id, rồi chạy `npx wrangler secret put TELEGRAM_CHAT_ID_SEP`.
+> Chưa cài thì nút này trả **403** — cố ý: không có đường giao an toàn thì
+> không mở cửa.
+>
+> ⚠️ Chat id này phải là **chat RIÊNG của Sếp với bot**, **KHÁC** hẳn
+> `TELEGRAM_CHAT_ID` của nhóm chung. Dán nhầm chat id nhóm vào đây là **phát
+> mật khẩu của Sếp cho cả công ty**. ERP tự chặn ca này (trả **409** kèm lời
+> nhắc, không đụng mật khẩu), nhưng vẫn nên đối chiếu bằng mắt trước khi dán —
+> chat riêng thường là số **dương**, chat nhóm là số **âm**.
+>
+> Bấm dồn không giải quyết được gì: mỗi lần bấm là **đá hết phiên** của Sếp,
+> nên trong **5 phút** ERP chỉ cho khôi phục **một lần** (lần sau trả **429**
+> và báo cho Sếp). Mật khẩu tạm vừa gửi vẫn còn dùng được — cứ dùng nó.
+>
+> Gặp **503** *"không kiểm được chốt nhịp"*: ERP không đọc được sổ
+> `nhan_su_lich_su` nên **từ chối** thay vì phát mật khẩu mù. Mật khẩu hiện tại
+> **không bị đụng**. Đây là lỗi kỹ thuật của DB — báo người phụ trách, hoặc đi
+> thẳng **Nấc 2**.
+
+**Nấc 2 — mất luôn Telegram: đặt lại mật khẩu ở tầng dữ liệu.**
+
+```
+node scripts/dat-lai-mat-khau.mjs <số điện thoại của Sếp> --remote
+```
+
+Script in rõ đang đổi cho ai rồi **bắt gõ lại số điện thoại** mới ghi. Nó chỉ
+đổi **đúng một tài khoản**, **không xoá gì**, **không đụng bảng nào khác**.
+
+> Màn hình có dòng `Đang hoạt động:`. Nếu là **KHÔNG (tài khoản đang bị khoá)**
+> thì script **tự bật lại** (`kich_hoat = 1`) trong đúng câu lệnh đó và nói rõ
+> trước khi hỏi xác nhận — vì đặt xong mật khẩu mà tài khoản vẫn khoá thì vẫn
+> **không đăng nhập được**. Tài khoản đang hoạt động thì không đụng cột này.
+>
+> Script **hỏi bằng bàn phím**. Chạy trong CI/cron (không có bàn phím) thì nó
+> **dừng ngay với mã thoát khác 0**, không ghi gì — không treo. Trả lời sẵn
+> bằng **ống dẫn** cũng được: `echo <số> | node scripts/dat-lai-mat-khau.mjs <số> --remote`.
+>
+> Cần đã chạy **`npm install`** ở thư mục dự án (script gọi wrangler trong
+> `node_modules`). Nếu thấy `Unknown arguments: t.id,, t.ten_dang_nhap,, …` thì
+> đang chạy bản **trước REV-0035** — bản đó chưa bao giờ chạy được, cập nhật code
+> rồi làm lại.
+
+> ⚠️ **TUYỆT ĐỐI KHÔNG** dùng `scripts/tao-tai-khoan.mjs` thay cho việc này.
+> File đó ghi `seed.sql` **xoá sạch dữ liệu cũ** — chạy trên bản thật là **mất
+> công ty**. Nó chỉ dành cho lần dựng đầu tiên trên DB trắng.
+
+**Nấc 3 — vào được rồi mà không ai duyệt được góp ý** (hay gặp sau khi khôi
+phục một bản sao lưu chụp **trước** khi nạp `them-quyen-duyet-gopy.sql`):
+
+```
+npx wrangler d1 execute crm-agc --remote \
+  --command "UPDATE tai_khoan SET duyet_gopy = 1, kich_hoat = 1 WHERE ten_dang_nhap = '<số của Sếp>'"
+```
+
+ERP tự phát hiện ca này và bắn Telegram trong vòng 5 phút, nên thường Sếp sẽ
+được báo trước khi kịp thắc mắc.
 
 ---
 

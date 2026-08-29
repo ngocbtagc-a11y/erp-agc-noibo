@@ -121,6 +121,8 @@ export const API = {
   // Cổng duyệt (SPEC-0002) — `du` nhận { id } hoặc { ids: [...] } để duyệt
   // hàng loạt, kèm quyet_dinh ('duyet'|'tu_choi'), risk, ly_do, ghi_chu.
   gopYDuyet: (du) => goi('/api/gop-y/duyet', { method: 'POST', body: JSON.stringify(du) }),
+  // Hoàn tác cú duyệt/từ chối vừa bấm (15 phút, chỉ chính người bấm).
+  gopYHoanTac: (id) => goi('/api/gop-y/hoan-tac', { method: 'POST', body: JSON.stringify({ id }) }),
   gopYLichSu: (id) => goi('/api/gop-y/lich-su?id=' + encodeURIComponent(id)),
 
   /* ---- Vinh danh (Tổng quan) ---- */
@@ -214,6 +216,12 @@ export const API = {
 
   qtSuaVaiTro: (taiKhoanId, vaiTro) => goi('/api/quan-tri/sua-vai-tro', {
     method: 'POST', body: JSON.stringify({ tai_khoan_id: taiKhoanId, vai_tro: vaiTro })
+  }),
+
+  // Cờ "được duyệt góp ý ERP ở cấp cuối" — chỉ người ĐANG GIỮ quyền mới
+  // cấp/thu được (máy chủ kiểm, xem qtQuyenDuyetGopY trong src/index.js).
+  qtQuyenDuyetGopY: (taiKhoanId, bat) => goi('/api/quan-tri/quyen-duyet-gopy', {
+    method: 'POST', body: JSON.stringify({ tai_khoan_id: taiKhoanId, bat: !!bat })
   }),
 
   qtSuaNhanSu: (ns) => goi('/api/quan-tri/sua-nhan-su', {

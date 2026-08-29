@@ -2978,11 +2978,35 @@ tr.kd-chiadoi td {
   padding: 10px 12px; background: var(--nen-2, #fff);
 }
 .gy-the-dau { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; flex-wrap: wrap; }
-.gy-the-chon { display: flex; align-items: center; margin: 0; }
-.gy-the-chon input { width: 18px; height: 18px; }
+/* NGƯỠNG NGÓN TAY 44px — Sếp Ngọc là NGƯỜI DUY NHẤT duyệt góp ý ở cấp cuối
+   và duyệt trên điện thoại (chốt 28/08/2026). Bấm trượt ở đây không phải
+   phiền một người, nó là cả hàng góp ý của công ty đứng lại.
+   Đo bằng `node scripts/do-nut-gopy-44px.mjs` — bề ngang 375px, đọc
+   getBoundingClientRect() thật, không khai suông (bản trước ghi 40px). */
+.gy-the-chon { display: flex; align-items: center; justify-content: center;
+               margin: 0; min-width: 44px; min-height: 44px; margin-left: -12px; }
+.gy-the-chon input { width: 22px; height: 22px; }
 .gy-the-ten { cursor: pointer; margin-bottom: 4px; }
 .gy-the-nut { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
-.gy-the-nut > button { min-height: 40px; flex: 1 1 auto; }
+.gy-the-nut > button { min-height: 44px; flex: 1 1 auto; }
+/* Nút duyệt hàng loạt nằm ở panel-head, dùng .btn-nho (cao ~30px) — nâng
+   riêng lên ngưỡng ngón tay, giống cách đã làm cho .cv-homnay .panel-head. */
+#gy-duyetlo { min-height: 44px; display: inline-flex; align-items: center; }
+
+/* ---- ĐỌC ĐƯỢC NGOÀI NẮNG (đo bằng scripts/do-tuong-phan-mau.mjs) --------
+   Chip trạng thái/rủi ro dùng chung `--ok`/`--warn`/`--danger` chỉ đạt
+   3.15:1 · 2.82:1 · 4.33:1 trên nền wash — DƯỚI ngưỡng WCAG 4.5:1 cho chữ
+   thường, mà chữ chip lại chỉ 11.5px. Trong nhà thì đọc được; ngoài sân kho
+   giữa trưa thì không, và đây đúng là chỗ Sếp đọc để bấm Duyệt.
+
+   Chỉ đè MÀU CHỮ, chỉ TRONG thẻ góp ý và panel duyệt. KHÔNG sửa
+   `--ok`/`--warn`/`--danger` toàn cục: bảng màu nền sáng là việc của
+   CTL-0023, đổi token ở đây là đổi hơn trăm chỗ chưa ai đo.
+   Số đo sau khi đè: 5.46:1 · 5.93:1 · 6.44:1 — đều vượt 4.5:1. */
+.gy-the .tag.ok       { background: var(--ok-wash);     color: #3d6b2a; }
+.gy-the .tag.warn     { background: var(--warn-wash);   color: #7a5410; }
+.gy-the .tag.danger   { background: var(--danger-wash); color: #8a3b28; }
+#gy-duyet-loi.form-loi { background: var(--danger-wash); color: #8a3b28; }
 .gy-tick { font-size: 11px; opacity: .75; margin-left: 4px; white-space: nowrap; }
 .gy-risk-mo { opacity: .6; }
 

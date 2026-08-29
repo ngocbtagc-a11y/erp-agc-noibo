@@ -150,7 +150,28 @@ export function dungDB() {
 
   let hangDoi = chay(readFileSync(path.join(GOC, 'schema.sql'), 'utf8'), 'schema.sql');
   const thuMuc = path.join(GOC, 'migrations');
-  for (const f of readdirSync(thuMuc).filter(f => f.endsWith('.sql')).sort()) {
+  /* BỎ QUA `lui-*.sql` — ĐÂY LÀ MỘT LỖI THẬT, KHÔNG PHẢI DỌN DẸP.
+     Bản trước nạp MỌI file .sql theo thứ tự bảng chữ cái, mà 'lui-' đứng
+     TRƯỚC 'them-'. Các câu của file lùi vấp lỗi "no such table" lúc đầu →
+     rơi vào hàng đợi gỡ phụ thuộc → và được CHẠY LẠI SAU KHI file xuôi đã
+     tạo xong bảng. Kết quả: `ALTER TABLE gop_y DROP COLUMN risk` (và 14 cột
+     cổng duyệt khác) chạy thật. Đo được trên bản này: `gop_y` dựng ra THIẾU
+     risk, current_owner, duyet_cap1_luc, duyet_owner_luc; và bảng
+     `gop_y_lich_su` KHÔNG TỒN TẠI. Bàn đo nào dựng DB bằng hàm này đều đang đo trên một lược đồ
+     không giống bản thật.
+     File lùi là nút hoàn tác, chạy tay khi cần — không bao giờ thuộc đường
+     dựng xuôi. */
+  /* SẮP XẾP BỎ ĐUÔI `.sql` — cũng là một lỗi thật đã đo được.
+     Sắp cả tên file thì '.' (46) đứng SAU '-' (45), nên `them-gopy.sql` chạy
+     SAU `them-gopy-lichsu-tacnhan.sql` — tức là file dựng lại sổ nhật ký
+     chạy trước file tạo ra cái sổ. Hậu quả đo được trên bản chưa sửa: hai
+     lệnh RENAME chạy lệch nhau và bảng `gop_y_lich_su` BIẾN MẤT khỏi DB thử.
+     Bỏ đuôi rồi mới so thì tên ngắn (file gốc) luôn đứng trước tên dài
+     (file mở rộng nó) — đúng thứ tự phụ thuộc thật. */
+  const laFileLui = (f) => /^lui-/.test(f);
+  const khongDuoi = (f) => f.replace(/\.sql$/, '');
+  for (const f of readdirSync(thuMuc).filter(f => f.endsWith('.sql') && !laFileLui(f))
+                    .sort((a, b) => khongDuoi(a).localeCompare(khongDuoi(b), 'en'))) {
     hangDoi = hangDoi.concat(chay(readFileSync(path.join(thuMuc, f), 'utf8'), f));
   }
   // Vòng lặp gỡ phụ thuộc: ALTER TABLE của file A cần bảng do file B tạo.
@@ -173,11 +194,20 @@ export function dungDB() {
 /* ---- ③ Chặn mạng: Telegram không được ra Internet trong bàn thử ---------- */
 
 export const TELEGRAM = [];
+/* TELEGRAM_CT — cùng những tin ấy nhưng GIỮ CẢ `chat_id`. Từ REV-0030, một bí
+   mật (mật khẩu tạm của ERP Owner) đi Telegram tới CHAT RIÊNG của Sếp, còn
+   tin "[Bảo mật] ai vừa khôi phục cho ai" đi CHAT NHÓM chung. Bàn đo phải
+   phân biệt được hai cái đó, không thì phép đo "không rò ra nhóm chung" là
+   phép đo giả. `TELEGRAM` (chỉ text) giữ nguyên cho mọi bàn đo cũ. */
+export const TELEGRAM_CT = [];
 const fetchThat = globalThis.fetch;
 globalThis.fetch = async (url, init) => {
   const u = String(url);
   if (u.includes('api.telegram.org')) {
-    try { TELEGRAM.push(JSON.parse(init?.body || '{}').text || ''); } catch { TELEGRAM.push(''); }
+    let than = {};
+    try { than = JSON.parse(init?.body || '{}'); } catch { than = {}; }
+    TELEGRAM.push(than.text || '');
+    TELEGRAM_CT.push({ chatId: String(than.chat_id ?? ''), text: than.text || '' });
     return new Response('{"ok":true}', { status: 200 });
   }
   return fetchThat(url, init);

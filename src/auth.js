@@ -90,6 +90,17 @@ export async function taoPhien(db, taiKhoanId) {
   return { token, hetHan };
 }
 
+/* Cờ "vừa đọc phiên mà thiếu cột `duyet_gopy`". docPhien() chỉ nhận `db` nên
+   không tự bắn Telegram được; index.js lấy cờ này ra ngay sau mỗi lần đọc
+   phiên. LẤY LÀ XOÁ (đọc-rồi-đặt-lại) để không kẹt cờ sau khi migration đã
+   chạy — cột có lại là hết cảnh báo, không cần khởi động lại Worker. */
+let thieuCotDuyetGopY = false;
+export function layCoThieuCotDuyetGopY() {
+  const c = thieuCotDuyetGopY;
+  thieuCotDuyetGopY = false;
+  return c;
+}
+
 export async function docPhien(db, token) {
   if (!token) return null;
 
@@ -98,15 +109,52 @@ export async function docPhien(db, token) {
   // thẳng phien.phong_ban_id, khỏi phải gọi thêm API riêng chỉ để biết
   // phòng ban của người đang đăng nhập. Chỉ THÊM cột đọc ra, không đổi hành
   // vi/độ dài phiên/bảo mật — tương thích ngược hoàn toàn.
-  const d = await db.prepare(`
+  // duyet_gopy: cờ "được duyệt góp ý ERP ở cấp cuối" (Sếp Ngọc chốt
+  // 28/08/2026 — xem duocDuyetGopY() trong src/quyen.js). Đọc THẲNG vào
+  // phiên để cổng duyệt không phải hỏi DB thêm một câu mỗi lần bấm, và để
+  // quyền được kiểm ở MÁY CHỦ chứ không phải ẩn nút ở trình duyệt.
+  // THỨ TỰ TRIỂN KHAI: cột này NÊN có trong DB trước khi deploy code (REV-0018
+  // mục 6: DB trước, code sau) — nhưng thứ tự triển khai dựa vào TRÍ NHỚ CON
+  // NGƯỜI là thứ sẽ sai một ngày nào đó, và ngày 28/08/2026 nó đã sai một lần.
+  //
+  // ĐỌC PHÒNG THỦ (REV-0027 L4): trước bản vá này, thiếu cột `duyet_gopy` làm
+  // ĐÚNG CÂU NÀY lỗi → docPhien() ném → /toi-la-ai, /danh-ba, /thong-bao,
+  // /kho/san-pham đều 500 với MỌI phiên (đo được: nhân viên kho chẳng dính gì
+  // tới góp ý cũng mất đăng nhập). Nay bắt đúng lỗi "no such column" rồi chạy
+  // lại với `0 AS duyet_gopy`: thiếu cột thì cờ về false — hỏng theo chiều AN
+  // TOÀN (đúng khuôn KHONG_QUYEN của src/quyen.js), không sập cả công ty.
+  // CHỈ nuốt đúng lỗi thiếu cột đó; mọi lỗi DB khác vẫn ném ra như cũ.
+  const cauPhien = (cotDuyet) => `
     SELECT p.tai_khoan_id, p.het_han,
-           t.ten_dang_nhap, t.vai_tro, t.kich_hoat, t.phai_doi_mk,
+           t.ten_dang_nhap, t.vai_tro, t.kich_hoat, t.phai_doi_mk, ${cotDuyet},
            n.id AS nhan_su_id, n.ho_ten, n.viet_tat, n.chuc_vu, n.phong_ban_id
       FROM phien p
       JOIN tai_khoan t ON t.id = p.tai_khoan_id
       JOIN nhan_su  n ON n.id = t.nhan_su_id
      WHERE p.token_hash = ?
-  `).bind(await bamToken(token)).first();
+  `;
+  const bam = await bamToken(token);
+  let d;
+  try {
+    d = await db.prepare(cauPhien('t.duyet_gopy')).bind(bam).first();
+  } catch (e) {
+    if (!/no such column/i.test(String(e && e.message)) ||
+        !/duyet_gopy/i.test(String(e && e.message))) throw e;
+    /* IM LẶNG VĨNH VIỄN LÀ LỖI THỨ HAI (REV-0030 lỗi 5).
+       Hỏng theo chiều an toàn thì đúng — nhưng KHÔNG AI ĐƯỢC BÁO thì cả công
+       ty chạy tiếp ở mức không-quyền, cả hàng góp ý đứng, và không ai biết vì
+       sao. Đo được trước bản vá: thong_bao +0 · Telegram +0 · console 0 dòng.
+       Nay:
+         · console.warn NGAY TẠI ĐÂY — `[observability]` đang bật trong
+           wrangler.toml nên dòng này đọc được trên Workers Logs;
+         · dựng cờ cho batBuocDangNhap() bắn MỘT tin Telegram/ngày. Hàm này
+           chỉ nhận `db`, không có `env` để gọi guiTelegram, và cũng KHÔNG
+           được import ngược từ index.js (vòng tròn) — nên phải đi bằng cờ. */
+    thieuCotDuyetGopY = true;
+    console.warn('[ERP] Thiếu cột tai_khoan.duyet_gopy — phiên đang chạy ở mức không-quyền. ' +
+                 'Nạp migrations/them-quyen-duyet-gopy.sql rồi deploy lại.');
+    d = await db.prepare(cauPhien('0 AS duyet_gopy')).bind(bam).first();
+  }
 
   if (!d) return null;
   if (!d.kich_hoat) return null;

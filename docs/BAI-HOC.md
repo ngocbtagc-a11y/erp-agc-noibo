@@ -90,7 +90,9 @@ khác hẳn lúc bắt đầu. `checkout` ngược lại là phá ngang phiên r
 đọc được bản byte-đúng mà không chạm gì. Và **neo bản review vào SHA commit, không
 neo vào tên nhánh** — nhánh di chuyển, commit thì không.
 
-**BH-28 · Cắt code bằng số dòng thì phải KIỂM ĐOẠN CẮT trước khi tin kết quả.**
+**BH-50 · Cắt code bằng số dòng thì phải KIỂM ĐOẠN CẮT trước khi tin kết quả.**
+*(REV-0032 L6 — bài này từng đánh số BH-28, trùng với BH-28 "mutant" ở mục dưới.
+Mọi chỗ trong repo trích BH-28 đều trỏ vào bài mutant, nên bài này đổi số.)*
 Bàn thử lỗi HEIC (CTL-0011 vòng 2) cắt `coByteCuaDataUrl` theo số dòng nhưng lấy
 dư xuống dưới, **nuốt nửa một khối chú thích `/* … */` chưa đóng**. Dấu `/*` hở đó
 comment mất **toàn bộ** phần trang phía sau cho tới `*/` kế tiếp — `nenAnhChung`
@@ -100,8 +102,10 @@ ném một `ReferenceError` trông như lỗi lặt vặt. Suýt đi truy code s
 kiểm ngay sau khi cắt: đếm `{` = `}` VÀ đếm `/*` = `*/`.** Lệch thì dừng, báo
 "BÀN THỬ HỎNG", đừng chạy tiếp. Cùng họ BH-17: nghi bàn thử trước, nghi code sau.
 
-**BH-29 · Vá một khuôn code hỏng thì phải quét cả repo tìm anh em của nó — và
+**BH-51 · Vá một khuôn code hỏng thì phải quét cả repo tìm anh em của nó — và
 kết luận "an toàn" cũng phải có SỐ ĐO, không được suy đoán.**
+*(REV-0032 L6 — từng đánh số BH-29, trùng với BH-29 "phép kiểm khớp phải chú
+thích" ở mục dưới; các chỗ trích BH-29 trong repo đều trỏ vào bài đó.)*
 Vá `String.fromCharCode(...)` ở `chatGui()` xong, quét toàn bộ file `git ls-files`
 theo dõi thì tìm ra **chỗ thứ hai giống hệt**: `src/auth.js:20`. Nếu chỉ nhìn
 khuôn code mà kết luận thì phải xếp nó là lỗi. Nhưng đi ngược lên **từng chỗ gọi**
@@ -655,3 +659,158 @@ hình nhân viên kho cầm một tay. Trái đúng nguyên tắc chính chúng 
 dòng thấy được**, không phải bằng thiện chí.
 → Bàn đo `npm run do-nut-dai-cat` nay dựng luôn **khung "bản trước"** chép nguyên văn CSS
 cũ, nên "gọn đi bao nhiêu" là **số đo hai bên**, không phải lời khai một bên.
+**BH-44 · Che ở trình duyệt không phải phân quyền. Ẩn nút chỉ là hàng rào giấy.**
+Vòng 2 của cổng duyệt góp ý trả **đủ** ruột nội bộ (mức rủi ro, link PR, ghi chú riêng) cho
+mọi người xem được dòng đó, rồi nhờ một biến trong `app.js` che đi. Mở tab Network là đọc
+được. Cùng lỗi ấy lặp ở tầng nút bấm: giấu nút "Duyệt" của anh Phong mà `POST
+/api/gop-y/duyet` vẫn nhận — gọi thẳng API là qua.
+→ Máy chủ **ngừng gửi** (xoá hẳn khoá khỏi JSON, không đặt `null`) và **ngừng nhận** (403 ở
+handler). Giao diện chỉ đi theo cho đỡ vô nghĩa, không bao giờ là chỗ chặn.
+
+**BH-47 · Một cái cờ quyền, NĂM cửa tắt được nó. Bịt đúng cửa người ta chỉ cho là bịt hụt.**
+REV-0027 chỉ ra 3 cửa vòng qua cổng duyệt góp ý; đi tìm tiếp thì ra **6**. Guard "không tắt
+cái cờ cuối cùng" nằm chặt ở `quyen-duyet-gopy`, nhưng cờ sống trên một **dòng
+`tai_khoan`** — mà dòng đó thì `khoa-tai-khoan` khoá được, `xoa-tai-khoan` xoá được,
+`xoa-nhan-su` xoá kèm được, và `dat-lai-mat-khau` **trả thẳng mật khẩu tạm** cho người gọi
+(cửa nặng nhất: không vượt cổng mà **mượn danh tính** — hồ sơ duyệt ghi tên Sếp trong khi
+Sếp không hề bấm). Cùng khuôn ở tầng dữ liệu: hai cửa **ghi đè `next_owner`** kéo việc đã
+lên Sếp tụt về cổng 1 mà **không ai cố ý**.
+→ Hỏi "**cái quyền này SỐNG Ở ĐÂU, và có bao nhiêu đường chạm được vào chỗ đó?**" rồi liệt
+kê **hết** đường, gọi từng đường bằng tư cách kẻ bị tước quyền. Và bàn đo phải có ca cho
+từng đường: bản cũ chạy **45 ĐẠT / 0 TRƯỢT** mà không bắt được một lỗi nào trong sáu —
+bàn đo xanh mà lỗi vẫn còn thì **bàn đo là thứ đầu tiên phải sửa** (bản mới: **90 phép**, 10
+ca đối chứng, cây cũ chấm lại **65 ĐẠT / 25 TRƯỢT**).
+→ *Đính chính (REV-0030):* bản đầu của bài học này ghi "89 phép" và "64/25" — **lệch số đo
+thật**. Số trong lời khai phải đúng bằng số chạy ra, kể cả khi lệch 1 và "chỉ là chữ": người
+sau đọc lời khai để quyết định có tin bàn đo hay không.
+
+**BH-48 · Thứ tự triển khai dựa vào trí nhớ con người là thứ sẽ sai một ngày nào đó.**
+`docPhien()` đọc `t.duyet_gopy` không phòng thủ: quên nạp migration trước khi deploy code
+là **500 toàn hệ thống** — nhân viên kho chẳng dính gì tới góp ý cũng mất đăng nhập (đo:
+`/toi-la-ai`, `/danh-ba`, `/thong-bao`, `/kho/san-pham` — 4/4 đường 500). "DB trước, code
+sau" vẫn đúng, nhưng nó là **quy trình**, không được là **điều kiện sống còn**.
+→ ~12 dòng `try/catch` bắt đúng `no such column` rồi chạy lại với `0 AS duyet_gopy`: thiếu
+cột thì cờ về `false` — **hỏng theo chiều an toàn**, hệ thống chạy tiếp ở mức không-quyền.
+Cùng nguyên tắc cho migration: backfill bắt hụt phải **gãy to** (`CHECK constraint failed:
+backfill_duyet_gopy_phai_bat_dung_1_nguoi`), không được báo thành công rồi để cả hàng chờ
+đứng mà không ai biết.
+
+**BH-49 · Vá xong một cột thì đi hỏi tiếp: CÒN CỘT NÀO NỮA ĐANG GÁNH VIỆC NÀY? — và mọi
+nhánh "nuốt lỗi cho êm" đều phải có một đường kêu.**
+REV-0027 bịt cửa "lưu tại chỗ ghi đè `next_owner`" và tuyên bố hàng chờ của Sếp đã an toàn.
+REV-0030 tìm ra **cùng một lỗi ở cột bên cạnh**: SLA đo tuổi hàng chờ bằng `cap_nhat_luc`,
+mà **mọi** câu UPDATE — kể cả nhánh lưu tại chỗ vừa vá — đều ghi `cap_nhat_luc = now`. Đo
+được: việc chờ cổng 1 từ 23/08, admin bấm "giao người phụ trách" → `200` → cron **không**
+đẩy lên Sếp nữa; chặn-rồi-gỡ-chặn cho kết quả y hệt. **Lặp vô hạn, không một dòng cảnh báo,
+nổ cả khi không ai cố ý** — và nó phá đúng một trong ba chỗ đỡ mà ADR-0015 đã hứa với Sếp
+cho rủi ro "một người duyệt".
+→ Gốc bệnh là **một cột gánh hai nghĩa**: "sửa lần cuối lúc nào" và "vào hàng chờ từ lúc
+nào" không phải một thứ. Tách hẳn thành `cho_duyet_tu_luc`, chỉ đóng dấu khi việc THẬT SỰ
+sang hàng chờ mới. Sau khi vá một cơ chế, đếm lại **tất cả** các cột mà cơ chế ấy đọc và
+hỏi từng cột "ai ghi được vào mày?" — vá `next_owner` mà quên đồng hồ thì lời hứa với Sếp
+vẫn là lời hứa giả.
+
+→ **Cùng vòng, cùng họ — hỏng theo chiều an toàn mà IM LẶNG thì mới hỏng được một nửa.**
+`docPhien()` nuốt lỗi thiếu cột rất gọn (BH-48) — nhưng đo tiếp thì: `thong_bao` **+0**,
+Telegram **+0**, `console` **0 dòng**. Cả công ty chạy tiếp ở mức không-quyền, cả hàng góp ý
+đứng, **và không ai biết vì sao**. Cùng loại: khôi phục một bản sao lưu chụp **trước**
+migration làm cờ `duyet_gopy` về 0 toàn bộ — ERP không tự bật lại được, cũng không kêu một
+tiếng nào.
+→ Mỗi nhánh "nuốt lỗi cho êm" phải kèm **một đường kêu**: `console.warn` (Workers Logs đang
+bật `[observability]`) **+** một tin Telegram, chống lặp bằng đúng khuôn
+`INSERT OR IGNORE INTO sao_luu_canh_bao (khoa)` đã có sẵn — 1 tin/ngày, không phải mỗi
+request một tin. Và thêm chốt **tự phát hiện** cho trạng thái chết người ("không còn ai
+duyệt được") ngay trong cron 5 phút đã có: ba câu SQL, chi phí 0.
+
+→ **Và "đường cứu" chưa ai chạy thử thì chưa phải đường cứu.**
+ADR-0015 kê một lệnh `wrangler` làm đường cứu khi Sếp mất máy. Đọc kỹ và thử thì lệnh ấy
+**cứu được cái cờ, không cứu được lối vào**: `mat_khau_hash` là PBKDF2, không gõ tay ra
+được. Và `scripts/tao-tai-khoan.mjs` **không dùng thay được** — nó ghi `seed.sql` **xoá sạch
+dữ liệu cũ**, chạy trên bản thật là mất công ty. Tức là suốt thời gian đó, **quên mật khẩu +
+hỏng đường khôi phục = không còn cách nào vào**, mà không ai biết.
+→ Viết đường cứu thì phải **chạy thử đường cứu**, và bàn đo phải chứng minh nó **không phá
+gì**: chụp cả CSDL trước/sau, so từng bảng, kèm ca đối chứng cho chính phép so đó (cố tình
+xoá một bảng — phép đo có bắt được không?). Cùng tinh thần với đường khôi phục đăng nhập
+mới: **gửi bí mật đi trước, ghi CSDL sau** — gửi hỏng thì không đụng gì, chứ đổi mật khẩu
+rồi mới phát hiện không gửi được là khoá chết tài khoản bằng chính đường cứu.
+
+**BH-52 · Hoàn tác phải trả lại ĐỦ mọi thứ cú bấm đã đụng vào — thiếu một cột là mở lại
+đúng cái cửa vừa bịt. Và "khó vá" không phải lý do, trừ khi đã ĐO.**
+REV-0030 bịt cửa 14 (đồng hồ hàng chờ bị đẩy lùi bằng một cú lưu tại chỗ). REV-0032 tìm ra
+**cửa 17**: `gopYHoanTac()` trả lại 12 cột nhưng **không** trả lại `cho_duyet_tu_luc`. Đo
+được: góp ý chờ cổng 1 từ 23/08 → cấp 1 bấm **"duyệt"** rồi **"hoàn tác"** ngay → việc về
+`QL_CAP1` mà đồng hồ ở lại 28/08 → cron **0 tin**, lặp 3 vòng vẫn thế. Tuổi hàng chờ 5 ngày
+tụt về 0 bằng **một cặp bấm**, nổ cả khi không ai cố ý — đúng bằng cửa 14, chỉ khác cần cẩu.
+→ Ảnh chụp để hoàn tác phải phủ **mọi cột mà cú bấm ghi vào**, kể cả cột do một hàm phụ ghi
+(`gopYDongDauChoDuyet()` ghi ngoài câu UPDATE chính nên bị bỏ sót). Sau khi thêm một cột có
+"tác dụng phụ", đi hỏi ngay: **đường lùi có trả lại nó không?**
+→ Bài học đắt hơn nằm ở lời khai: Khỉ Đột khai lỗi này "mất tối đa 15 phút" (tưởng đồng hồ
+chỉ lùi trong cửa sổ hoàn tác) và từ chối vá vì *"phải đưa cột mới vào câu SELECT nóng của
+`gopYDuyet` = đúng rủi ro L4"*. **Cả hai đều sai, và cái sai thứ hai nghe hợp lý hơn cái
+sai thứ nhất** — vá thật chỉ cần **một câu SELECT riêng** bọc `try/catch` nuốt
+`no such column`, đúng khuôn vừa tự viết ở `gopYDongDauChoDuyet()`, **10 dòng, không đụng
+câu SELECT nóng một chữ**. Nói *"chưa làm được, đây là lý do"* thì được; kê **một lý do kỹ
+thuật nghe hợp lý mà chưa đo** thì đó là né, và nó tiêu đúng cái uy tín mà ba lần bác lại
+bằng số đo mới xây được.
+
+**BH-53 · Bản vá đẻ ra mặt hỏng mới thì bản vá phải tự dọn — và chốt an toàn phải canh cả
+người ĐI ĐẶT CHÌA, không chỉ người dùng chìa.**
+Đường khôi phục đăng nhập (REV-0030) thay bản 403 cứng, và mang theo hai lỗ mà bản 403
+**không có**: ① không kiểm `TELEGRAM_CHAT_ID_SEP !== TELEGRAM_CHAT_ID` — dán nhầm chat id
+**nhóm chung** là phát mật khẩu của Sếp cho cả công ty, API vẫn `200` êm ru; ② không có chốt
+nhịp — mỗi cú bấm sinh mật khẩu mới **và** `DELETE FROM phien`, nên bấm liên tục là khoá Sếp
+ra khỏi ERP không giới hạn.
+→ Khi thay một cái chặn cứng bằng một đường đi tinh vi hơn, liệt kê **cái gì bản cũ làm
+được mà bản mới không** — mặt hỏng mới luôn nằm ở đó.
+→ Lỗ ① hiểm ở **người**, không ở máy: người đi đặt secret chính là người đang bị giữ bí mật,
+nên đặt nhầm là chuyện **sẽ** xảy ra. Chốt phải kiểm **lúc dùng** (ngay trên đường đi của bí
+mật), không phải lúc cài — secret đổi được bất cứ lúc nào mà mã không hay biết.
+→ Lỗ ② dạy thêm: chốt nhịp không cần bảng mới. Mốc nhịp đọc thẳng từ **dòng sự kiện của lần
+trước** (`nhan_su_lich_su`) — 0 migration, và mốc nằm trong sổ nên người sau đọc được. Chặn
+thì phải **báo cho người bị ảnh hưởng**, nhưng đúng **một tin mỗi cửa sổ**, kẻo chính cái
+báo lại thành spam mới.
+
+**BH-54 · `rl.question()` gặp EOF thì TREO, không ném — `try/catch` quanh nó là chốt giả.**
+`scripts/dat-lai-mat-khau.mjs` bọc câu hỏi xác nhận trong `try/catch` và chú thích *"CI/cron
+→ EOF → cũng DỪNG"*. Đo riêng: stdin đóng thì **3 giây không trả về**, và sẽ treo mãi —
+`node:readline/promises` không ném khi luồng vào hết, nó im lặng chờ. Chú thích **nói sai**
+về hành vi thật còn tệ hơn không có chú thích (Rule 10).
+→ Bắt đúng tín hiệu EOF: `rl.once('close', …)` rồi ném — readline **có** phát sự kiện đó.
+→ Và mọi câu "hỏng theo chiều an toàn" phải **đo bằng cách gây ra ca hỏng đó**, kể cả khi
+nó nằm trong một script tay ai cũng nghĩ là chuyện vặt: script dừng phải **thoát khác 0**,
+không phải treo — treo trong cron là giữ chỗ mãi mãi mà không ai biết.
+
+**BH-55 · `shell: true` TẮT cơ chế bọc nháy của `execFile` — và bàn đo `import` hàm thì
+không bao giờ thấy điều đó.**
+`scripts/dat-lai-mat-khau.mjs` gọi `execFileSync('npx', args, { shell: true })`. Bật `shell`
+thì Node không bọc nháy từng đối số nữa mà nối tất cả bằng dấu cách rồi ném cho `cmd.exe`/`sh`
+— câu SQL có khoảng trắng bị cắt vụn, wrangler ném `Unknown arguments: t.id,, …`. Đường cứu
+cuối cùng cho tình huống Sếp không đăng nhập được **chưa từng chạy được lần nào**, mà bàn đo
+vẫn xanh vì nó chỉ `import` hai hàm sinh SQL.
+→ Đối số có khoảng trắng thì **đừng cho đi qua vỏ lệnh**. Không có cách bọc nháy nào đúng cho
+cả hai vỏ: `"` của `cmd` không chặn `%`, `"` của `sh` không chặn `$` (mà hash là
+`pbkdf2$100000$…`).
+→ Trên Windows, **bỏ `shell: true` không thôi là chưa đủ**: `npx` ở đó là `npx.cmd`, và Node
+từ 18.20.2 cấm chạy `.cmd` khi `shell` tắt — đo được: `npx.cmd` → `EINVAL`, `npx` → `ENOENT`.
+Cách chạy được ở mọi vỏ: gọi **thẳng file JS của công cụ bằng chính `node`**
+(`execFileSync(process.execPath, [duongDanCLI, …])`).
+→ Và bài học lớn hơn (nối BH-47): **`import` một hàm KHÔNG PHẢI là chạy script.** Script tay
+cũng phải được bàn đo **spawn thật, trong tiến trình riêng, trên dữ liệu thật**, đủ cả đường
+huỷ lẫn đường thành công — kèm ca đối chứng giữ nguyên lỗi cũ để biết phép đo có mắt.
+
+**BH-56 · Chốt an toàn HỎNG thì phải ĐÓNG, và so định danh phải so theo KIỂU của hệ thống
+sở hữu nó.**
+Hai lỗ cùng một họ, cùng nằm trên đường phát mật khẩu tạm: ① chốt nhịp đọc mốc trong
+`try/catch` rồi đi tiếp với `null` — mất bảng `nhan_su_lich_su` là chốt **tắt âm thầm**, chỉ
+còn một dòng log; ② so hai chat id **bằng chuỗi**, mà Telegram đọc `chat_id` thành số nguyên
+64-bit, nên `-01002222` và `-1002222` là **cùng một nhóm** lại lọt.
+→ Cái gì đang canh một việc nguy hiểm mà **không tự kiểm được** thì trả lời "không", không
+trả lời "chắc là được". Từ chối là hướng an toàn: mật khẩu cũ vẫn dùng được, chỉ chậm lại.
+→ Chiều không rút lại được (mật khẩu **đã** gửi, mốc ghi hụt) thì tối thiểu phải **kêu ra chỗ
+người khác nhìn thấy**, không nuốt bằng một dòng `console.error`.
+→ So định danh của hệ thống ngoài thì so theo kiểu dữ liệu **của hệ thống đó**, không theo
+kiểu mình đang cầm: `BigInt` cho chat id Telegram, và chỉ lùi về so chuỗi khi không phải số.
+
+*(BH-45 · BH-46 — số đã dùng ở nhánh `feature/ctl-0023-dot2-cam` cho hai bài học khác
+["Phép đo CHỌN TAY…", "Một token gánh HAI VAI…"]. Cố ý bỏ trống ở đây để hai nhánh gộp vào
+không đè nhau — xem REV-0030. Đây không phải chỗ trống để điền.)*
