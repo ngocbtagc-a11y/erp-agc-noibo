@@ -56,7 +56,7 @@
               <label class="thd-panel-nhan">Trạng thái</label>
               <select id="thdMa"></select>
               <label class="thd-panel-nhan">Ghi chú</label>
-              <input type="text" id="thdGhiChu" maxlength="120" placeholder="VD: Đang xử lý đối soát...">
+              <textarea id="thdGhiChu" class="o-nhieu-dong" rows="1" maxlength="120" placeholder="VD: Đang xử lý đối soát..."></textarea>
               <label class="thd-panel-nhan">Thời hạn</label>
               <select id="thdThoiHan">
                 <option value="30p">30 phút</option>
@@ -489,7 +489,7 @@
           <form id="gy-form" class="form-luoi" autocomplete="off">
             <div class="field field-rong">
               <label>Tiêu đề *</label>
-              <input type="text" id="gy-tieude" required maxlength="150" placeholder="Ví dụ: Không lọc được đơn hoàn theo ngày">
+              <textarea id="gy-tieude" class="o-nhieu-dong" rows="1" required maxlength="150" placeholder="Ví dụ: Không lọc được đơn hoàn theo ngày"></textarea>
             </div>
             <div class="field field-rong">
               <label>Đang làm việc gì? *</label>
@@ -663,7 +663,7 @@
             </div>
             <div class="field field-rong">
               <label id="gyCtGhiChuDuyetNhan">Ghi chú / lời nhắn cho người gửi</label>
-              <input type="text" id="gyCtGhiChuDuyet" maxlength="500" placeholder="Tuỳ chọn — cảm ơn hoặc dặn thêm">
+              <textarea id="gyCtGhiChuDuyet" class="o-nhieu-dong" rows="1" maxlength="500" placeholder="Tuỳ chọn — cảm ơn hoặc dặn thêm"></textarea>
             </div>
             <div class="field field-nut">
               <button type="button" class="btn-primary" id="gyCtNutDuyet" style="width:auto">Duyệt</button>
@@ -682,7 +682,7 @@
             </div>
             <div class="field field-rong" id="gyCtBangChungO" hidden>
               <label>Link bằng chứng (Pull Request hoặc commit đã merge)</label>
-              <input type="text" id="gyCtBangChung" maxlength="500" placeholder="https://github.com/.../pull/12">
+              <textarea id="gyCtBangChung" class="o-nhieu-dong" rows="1" maxlength="500" placeholder="https://github.com/.../pull/12"></textarea>
               <div class="sm">Bắt buộc khi đánh dấu Hoàn thành. Không có link thì không bấm được — đây là chỗ trạng thái từng nói dối.</div>
             </div>
             <div class="field">
@@ -700,7 +700,7 @@
             </div>
             <div class="field field-rong">
               <label>Ghi chú (lưu vào lịch sử)</label>
-              <input type="text" id="gyCtGhiChu" maxlength="500" placeholder="Tuỳ chọn — vì sao đổi trạng thái này">
+              <textarea id="gyCtGhiChu" class="o-nhieu-dong" rows="1" maxlength="500" placeholder="Tuỳ chọn — vì sao đổi trạng thái này"></textarea>
             </div>
             <div class="field field-nut">
               <button type="submit" class="btn-primary" id="gyCtNutLuu" style="width:auto">Lưu</button>
@@ -788,7 +788,15 @@
             </svg>
           </button>
           <input type="file" id="chat-tep" hidden>
-          <input type="text" id="chat-noidung" placeholder="Nhắn gì đó…" maxlength="2000">
+          <!-- THANH CHAT — `textarea` chứ KHÔNG phải `input`. Sếp Ngọc báo
+               29/08/2026: "tin nhắn dài quá thì xuống dòng, đừng để phải kéo
+               ngang". `<input>` MỘT DÒNG thì không có cách nào xuống dòng —
+               đo ở 375px: gõ 133 ký tự tiếng Việt là scrollWidth 1034px trên
+               ô rộng 232px, muốn đọc lại câu mình vừa gõ phải kéo ngang trong
+               chính cái ô. Ô này cho tới 2000 ký tự nên chuyện đó chắc chắn
+               xảy ra. `.o-nhieu-dong` lo phần tự cao dần + Enter vẫn gửi. -->
+          <textarea id="chat-noidung" class="o-nhieu-dong" rows="1"
+                    placeholder="Nhắn gì đó…" maxlength="2000"></textarea>
           <button type="submit" class="btn-primary" id="chat-nut-gui" style="width:auto">Gửi</button>
         </form>
         <div class="form-loi" id="chat-loi"></div>
@@ -1046,7 +1054,7 @@
               </div>
               <div class="field field-rong">
                 <label>Ghi chú <span class="goi-y">· để trống cũng được</span></label>
-                <input type="text" id="knChamGhiChu" maxlength="200" placeholder="VD: có chứng chỉ xe nâng, cấp 6/2026">
+                <textarea id="knChamGhiChu" class="o-nhieu-dong" rows="1" maxlength="200" placeholder="VD: có chứng chỉ xe nâng, cấp 6/2026"></textarea>
               </div>
               <div class="field field-rong kn-tieuchuan" id="knChamTieuChuan" hidden></div>
               <div class="field field-nut">
@@ -2645,14 +2653,14 @@
         <input type="hidden" id="jd-id">
         <div class="field field-rong">
           <label>Đầu ra * <span class="goi-y">· DANH TỪ — thứ bàn giao được, không phải việc phải làm</span></label>
-          <input type="text" id="jd-daura" required maxlength="200"
-                 placeholder="VD: Bảng công tháng đã chốt">
+          <textarea id="jd-daura" class="o-nhieu-dong" rows="1" required maxlength="200"
+                    placeholder="VD: Bảng công tháng đã chốt"></textarea>
           <div class="hd-nhac" id="jd-nhac" hidden></div>
         </div>
         <div class="field field-rong">
           <label>Đo bằng gì * <span class="goi-y">· một con số, một mốc thời gian, hoặc một điều kiện đúng/sai</span></label>
-          <input type="text" id="jd-dobang" required maxlength="300"
-                 placeholder="VD: Gửi kế toán trước ngày 3, không phải sửa lại sau khi đã gửi">
+          <textarea id="jd-dobang" class="o-nhieu-dong" rows="1" required maxlength="300"
+                    placeholder="VD: Gửi kế toán trước ngày 3, không phải sửa lại sau khi đã gửi"></textarea>
         </div>
         <div class="field">
           <label>Nhịp</label>
@@ -2732,7 +2740,7 @@
         </div>
         <div class="field field-rong">
           <label>Ghi chú <span class="goi-y">· để trống cũng được</span></label>
-          <input type="text" id="kn-ghichu" maxlength="200" placeholder="VD: có chứng chỉ xe nâng, cấp 6/2026">
+          <textarea id="kn-ghichu" class="o-nhieu-dong" rows="1" maxlength="200" placeholder="VD: có chứng chỉ xe nâng, cấp 6/2026"></textarea>
         </div>
         <div class="field field-rong kn-tieuchuan" id="kn-tieuchuan" hidden></div>
         <div class="field field-nut">
@@ -2907,7 +2915,7 @@
     <form id="cv-sua-form" class="form-luoi" autocomplete="off">
       <div class="field field-rong">
         <label>Tên việc *</label>
-        <input type="text" id="cv-sua-tieu-de" required maxlength="200">
+        <textarea id="cv-sua-tieu-de" class="o-nhieu-dong" rows="1" required maxlength="200"></textarea>
       </div>
       <div class="field field-rong" id="cv-sua-khoi-daura">
         <label>Đầu ra cụ thể cần đạt *</label>
@@ -2928,7 +2936,7 @@
       <div class="field field-rong cv-sua-canhbao" id="cv-sua-khoi-lydo" hidden>
         <label for="cv-sua-ly-do">Vì sao dời hạn chót? *</label>
         <p class="hint" style="margin:0 0 8px">Dời hạn là đổi cam kết. Hạn cũ, hạn mới, tên bạn và lý do này đều được ghi lại, và <b>người giao việc sẽ nhận được thông báo</b>.</p>
-        <input type="text" id="cv-sua-ly-do" maxlength="500" placeholder="VD: chờ NCC gửi báo giá">
+        <textarea id="cv-sua-ly-do" class="o-nhieu-dong" rows="1" maxlength="500" placeholder="VD: chờ NCC gửi báo giá"></textarea>
       </div>
 
       <div class="field field-nut" style="display:flex; gap:10px; flex-wrap:wrap">

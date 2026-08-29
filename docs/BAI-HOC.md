@@ -811,6 +811,26 @@ người khác nhìn thấy**, không nuốt bằng một dòng `console.error`.
 → So định danh của hệ thống ngoài thì so theo kiểu dữ liệu **của hệ thống đó**, không theo
 kiểu mình đang cầm: `BigInt` cho chat id Telegram, và chỉ lùi về so chuỗi khi không phải số.
 
+**BH-57 · Chỗ Sếp chỉ tay hiếm khi là chỗ hỏng duy nhất — và `break-word` KHÔNG cứu được ô
+flex.**
+Sếp Ngọc gửi ảnh thanh cuộn ngang **trong chat**. Đo ra bong bóng chat vốn đã đúng: nó có sẵn
+`word-break: break-word`, chuỗi 100 ký tự dính liền vẫn xuống dòng gọn. Thủ phạm thật là hai
+thứ Sếp **không** chỉ vào: ① *thanh chat* là `<input type="text">` — thẻ một dòng thì không
+CSS nào bắt nó xuống dòng được, gõ 133 ký tự ra `scrollWidth` 1034px trong ô rộng 232px; và
+cả ERP có **12** ô cùng kiểu nhận 120–2000 ký tự. ② không có chốt chặn từ-dài toàn cục: bơm
+một link Shopee vào bất kỳ khung chữ nào thì **cả 6 tab** phình từ 375px ra 654–991px.
+→ Sửa đúng chỗ được chỉ là sửa 1/13. **Đo cả lớp trước khi vá**: liệt kê mọi chỗ cùng cơ chế,
+rồi mới quyết vá ở đâu.
+→ `overflow-wrap: break-word` cho chữ xuống dòng nhưng **không hạ min-content**, mà bề rộng
+tối thiểu của một ô flex/grid lấy đúng min-content — nên từ dài vẫn banh rộng cả hàng flex,
+chữ bên trong xuống dòng cũng vô ích. Đã đo: đặt `break-word` toàn cục xong hai tab **vẫn**
+tràn 1071px và 971px. Phải `anywhere`, rồi trả riêng `table, table *` về `break-word` để cột
+bảng không vỡ — **kèm ca đối chứng "bảng nhiều cột vẫn cuộn ngang được"**, nếu không lần sau
+có người "sửa cho triệt để" và làm vỡ hết bảng mà không ai biết.
+→ Phép đo phải **nhìn thấy thứ nó khai**: 11/12 ô nằm trong hộp thoại đang đóng, mà phần tử
+ẩn thì cao 0px — đo thẳng là bàn đo XANH vì nó chẳng nhìn thấy gì. Phải gỡ tạm `hidden`, đo,
+rồi trả lại nguyên trạng, và **đếm đủ 12/12 mới cho xanh**.
+
 *(BH-45 · BH-46 — số đã dùng ở nhánh `feature/ctl-0023-dot2-cam` cho hai bài học khác
 ["Phép đo CHỌN TAY…", "Một token gánh HAI VAI…"]. Cố ý bỏ trống ở đây để hai nhánh gộp vào
 không đè nhau — xem REV-0030. Đây không phải chỗ trống để điền.)*

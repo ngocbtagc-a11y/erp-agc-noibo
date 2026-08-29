@@ -729,6 +729,63 @@ window.toggleDaiGon = function (btn) {
   btn.textContent = moRa ? 'Thu gọn' : 'Xem thêm';
 };
 
+/* ==========================================================================
+   Ô GÕ NHIỀU DÒNG — `.o-nhieu-dong`
+   ---------------------------------------------------------------------------
+   VÌ SAO CÓ. Sếp Ngọc 29/08/2026: "tin nhắn dài quá thì xuống dòng, đừng để
+   phải kéo ngang". Một `<input type="text">` KHÔNG BAO GIỜ xuống dòng được —
+   không phải chuyện CSS, đó là bản chất của thẻ. Đo ở 375px: gõ 133 ký tự
+   tiếng Việt vào thanh chat ra scrollWidth 1034px trên ô rộng 232px; muốn
+   đọc lại câu mình vừa gõ phải kéo ngang TRONG ô.
+
+   Cả ERP có 12 ô một dòng nhận 120–2000 ký tự, tất cả cùng một bệnh (xem
+   `scripts/do-chu-dai-xuong-dong.mjs`). Đây là thuốc chung, gắn MỘT LẦN bằng
+   uỷ quyền trên `document` nên ô nào thêm sau này cũng được che, kể cả ô do
+   JS dựng ra — không phải nhớ gọi hàm khởi tạo cho từng chỗ.
+
+   ENTER VẪN GỬI / VẪN LƯU NHƯ TRƯỚC. Trước bản này 12 ô đều là `<input>`
+   trong `<form>`, nên Enter = submit theo mặc định của trình duyệt. Đổi sang
+   `<textarea>` là mất mặc định đó — 20 người sẽ gõ Enter và không có gì xảy
+   ra. Dòng `keydown` dưới đây trả lại đúng thói quen cũ; Shift+Enter mới là
+   xuống dòng thủ công. Ca đối chứng "Enter vẫn gửi" nằm trong bàn đo.
+   ========================================================================== */
+function caoTheoChu(o) {
+  if (!o || o.offsetParent === null) return;     /* ô đang ẩn thì scrollHeight vô nghĩa — đo lúc nó hiện ra */
+  o.style.height = 'auto';                       /* phải hạ trước, không thì ô chỉ cao lên chứ không thấp xuống được */
+  const tran = parseFloat(getComputedStyle(o).maxHeight) || Infinity;
+  o.style.height = Math.min(o.scrollHeight, tran) + 'px';
+  o.classList.toggle('dang-cao', o.value.includes('\n') || o.scrollHeight > 48);
+}
+window.caoTheoChu = caoTheoChu;
+
+function noiDayONhieuDong() {
+  document.addEventListener('input', e => {
+    if (e.target.classList?.contains('o-nhieu-dong')) caoTheoChu(e.target);
+  });
+  document.addEventListener('keydown', e => {
+    const o = e.target;
+    if (!o.classList?.contains('o-nhieu-dong')) return;
+    /* `isComposing`: đang dựng dấu tiếng Việt thì Enter là của bộ gõ, không
+       phải của mình — cướp phím lúc đó là nuốt mất chữ người ta đang gõ. */
+    if (e.key !== 'Enter' || e.shiftKey || e.isComposing) return;
+    const form = o.closest('form');
+    if (!form) return;                           /* ngoài form thì Enter cứ xuống dòng như textarea thường */
+    e.preventDefault();
+    if (typeof form.requestSubmit === 'function') form.requestSubmit();
+    else form.querySelector('[type="submit"]')?.click();
+  });
+  /* Gán `.value` bằng JS (mở lại form sửa, xoá ô sau khi gửi) KHÔNG bắn sự
+     kiện `input`. Thiếu vòng quét này thì form sửa mở ra đã có 3 dòng chữ mà
+     ô vẫn cao 1 dòng, hoặc gửi xong ô rỗng rồi mà vẫn cao lù lù.
+     CHỈ nghe `childList` + thuộc tính `hidden`: `caoTheoChu` tự sửa `style`
+     và `class` của chính ô đó, nghe hai thứ ấy là quan sát viên tự gọi lại
+     chính mình vòng vô tận. */
+  const quet = () => document.querySelectorAll('.o-nhieu-dong').forEach(caoTheoChu);
+  new MutationObserver(quet).observe(document.body,
+    { childList: true, subtree: true, attributes: true, attributeFilter: ['hidden'] });
+  quet();
+}
+
 /* Khung tròn avatar — ảnh đại diện (co_anh=true) hoặc chữ viết tắt (mặc
    định). Dùng chung mọi nơi có khung .av (sidebar, Danh bạ, Nhân sự, Vinh
    danh…) — CSS .av lo kích thước/bo tròn, hàm này chỉ quyết định nội dung. */
@@ -2185,6 +2242,10 @@ const TBDay = (() => {
     set chatTat(v) { chatTat = v ? 1 : 0; }
   };
 })();
+
+/* Ô gõ nhiều dòng — nối MỘT LẦN, uỷ quyền trên `document` nên ăn cả những ô
+   mà các `khoiDong*` bên dưới dựng ra sau. Đặt TRƯỚC chúng, không phải sau. */
+noiDayONhieuDong();
 
 await khoiDongVinhDanh();
 await khoiDongMucTieu();
