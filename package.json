@@ -61,7 +61,9 @@
     "cong-khoi-dienthoai": "node scripts/cong-khoi.mjs --rong 375",
     "cong-khoi-tu-kiem": "node scripts/cong-khoi.mjs --tu-kiem",
     "do-moc-noi": "node scripts/do-moc-noi.mjs",
-    "do-chat-noibo": "node scripts/do-chat-noibo.mjs"
+    "do-chat-noibo": "node scripts/do-chat-noibo.mjs",
+    "do-gop-viec": "node scripts/do-gop-viec-lichsu.mjs",
+    "do-quyen-man-viec": "node scripts/do-quyen-man-viec-gop.mjs"
   },
   "devDependencies": {
     "wrangler": "^4.0.0"

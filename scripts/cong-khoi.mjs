@@ -84,7 +84,16 @@ const CUA_NGO = [
     doi: `!document.querySelector('#v-lichsuviec').hidden` },
   { ten: 'Mở tab Trạm Mục Tiêu', tab: null,
     bam: `document.querySelector('[data-tab="tongquan"]')`,
-    doi: `!document.querySelector('#v-tongquan').hidden` }
+    doi: `!document.querySelector('#v-tongquan').hidden` },
+  /* MÀN GỘP (29/08/2026) — ba tab Việc dọn về tab Lịch sử làm việc thành bộ
+     lọc phạm vi. Đây là nút người ta bấm nhiều nhất ở tab đó từ nay: bấm
+     thật, đòi tab đổi trạng thái thật. */
+  { ten: 'Bộ lọc "Toàn công ty" (Lịch sử làm việc)', tab: 'lichsuviec',
+    bam: `document.querySelector('#lsv-loc .seg-nut[data-lsv="congty"]')`,
+    doi: `document.querySelector('#lsv-loc .seg-nut[data-lsv="congty"]').classList.contains('active')` },
+  { ten: 'Bộ lọc "Việc của tôi" (Lịch sử làm việc)', tab: 'lichsuviec',
+    bam: `document.querySelector('#lsv-loc .seg-nut[data-lsv="toi"]')`,
+    doi: `document.querySelector('#lsv-loc .seg-nut[data-lsv="toi"]').classList.contains('active')` }
 ];
 
 const may = await dungMayGia({ commit: COMMIT, suaTep });

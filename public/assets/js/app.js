@@ -42,6 +42,23 @@ function goiMocNoi(ten, quyenCan, ...thamSo) {
   return undefined;
 }
 
+/* LẤY móc nối thay vì GỌI nó — cho chỗ cần cùng một hàm nhiều lần trong một
+   vòng lặp (vẽ nút cho từng dòng bảng). Dùng `goiMocNoi` ở đó thì mỗi dòng là
+   một lần tra `window` + một lần `console.error` khi vắng: 300 dòng thành 300
+   dòng lỗi giống hệt nhau, tức che mất mọi lỗi khác. Luật báo/không báo giữ
+   NGUYÊN của `goiMocNoi` — có quyền mà vắng thì HÉT, không quyền thì im. */
+function layMocNoi(ten, quyenCan) {
+  const f = window[ten];
+  if (typeof f === 'function') return f;
+  let coQuyen = true;
+  try { coQuyen = Array.isArray(TOI?.quyen) ? TOI.quyen.includes(quyenCan) : true; }
+  catch { coQuyen = true; }
+  if (quyenCan && !coQuyen) return null;
+  console.error(`Móc nối "window.${ten}" không tồn tại — mô-đun` +
+                (quyenCan ? ` "${quyenCan}"` : '') + ' nhiều khả năng đã chết lúc khởi động. Tải lại trang.');
+  return null;
+}
+
 /* ---- Danh mục tab -------------------------------------------------------
    "nhom" = nhóm cha hiện trên sidebar, bám theo 4 phòng ban thật của công ty
    (xem docs/ERP_V2_INFORMATION_ARCHITECTURE.md). null = không có nhóm cha,
@@ -2652,7 +2669,7 @@ async function veTongQuanTheoVaiTro() {
       .forEach(m => canhBao.push({ m: 'warn', b: `Mục tiêu công ty "${m.tieu_de}" chưa chốt`, s: 'Vào khối Trạm Mục Tiêu bên dưới để chốt', t: 'Mục tiêu' }));
     if (quaHanGiao > 0) canhBao.push({ m: 'danger', b: `${quaHanGiao} việc đã giao đang quá hạn`, s: 'Bấm để xem trong Lịch sử làm việc', t: 'Công việc',
       onClick: () => window.MO_DEN_LICHSU_TIM && window.MO_DEN_LICHSU_TIM('') });
-    if (choDuyetGiao > 0) canhBao.push({ m: 'warn', b: `${choDuyetGiao} việc đang chờ Sếp duyệt`, s: 'Bấm để xem trong Việc tôi giao', t: 'Công việc',
+    if (choDuyetGiao > 0) canhBao.push({ m: 'warn', b: `${choDuyetGiao} việc đang chờ Sếp duyệt`, s: 'Bấm để xem ở Lịch sử làm việc — phạm vi "Tôi giao"', t: 'Công việc',
       onClick: () => window.MO_DEN_VIEC_CUA_TOI && window.MO_DEN_VIEC_CUA_TOI('giao') });
 
     try {
@@ -2677,7 +2694,7 @@ async function veTongQuanTheoVaiTro() {
       });
     } catch { /* chưa có phòng ban quản lý hợp lệ hoặc lỗi mạng — im lặng, Home vẫn dùng được */ }
   } else {
-    the.push({ k: 'Việc đang mở', v: String(nhan.length), d: 'Việc cần làm của tôi',
+    the.push({ k: 'Việc đang mở', v: String(nhan.length), d: 'Việc tôi phải làm',
       onClick: () => window.MO_DEN_VIEC_CUA_TOI && window.MO_DEN_VIEC_CUA_TOI('nhan') });
     the.push({ k: 'Việc quá hạn', v: String(quaHanNhan.length), d: quaHanNhan.length ? 'Cần xử lý ngay' : 'Không có', dir: quaHanNhan.length ? 'down' : '',
       onClick: quaHanNhan.length ? () => window.MO_DEN_VIEC_CUA_TOI && window.MO_DEN_VIEC_CUA_TOI('nhan', quaHanNhan[0].id) : null });
@@ -2688,19 +2705,10 @@ async function veTongQuanTheoVaiTro() {
   if (the.length) { veThe('#tq-tomtat', the); $('#tq-tomtat').hidden = false; }
   if (canhBao.length) { veDanhSach('#tq-canhbao-that', canhBao); $('#tq-canhbao-panel').hidden = false; }
 
-  // Employee/Manager: đẩy "Việc cần làm" lên TRƯỚC khối Mục Tiêu (Action/
-  // Exception First). Admin giữ nguyên thứ tự mặc định trong HTML (Mục
-  // Tiêu trước — Decision First). Chỉ đổi VỊ TRÍ hiển thị, không đổi dữ
-  // liệu/logic — .mt-panel/#cvSeg là các khối DOM đã render sẵn.
-  if (!TOI.la_admin) {
-    const khoiMucTieu = document.querySelector('.mt-panel');
-    const segViec = $('#cvSeg');
-    if (khoiMucTieu && segViec) {
-      [segViec, $('#cv-pane-nhan'), $('#cv-pane-phoihop'), $('#cv-pane-giao')].forEach(el => {
-        if (el) khoiMucTieu.parentNode.insertBefore(el, khoiMucTieu);
-      });
-    }
-  }
+  /* Khối đảo thứ tự "#cvSeg lên trước .mt-panel" ĐÃ GỠ cùng ba tab (Sếp Ngọc
+     29/08/2026). Không còn ba bảng nằm trong tab này để mà đảo — Action First
+     cho nhân viên nay do khối "Việc của tôi hôm nay" gánh (nó vốn đã nằm TRÊN
+     CÙNG mọi vai trò), phần danh sách đầy đủ nằm ở tab Lịch sử làm việc. */
 }
 
 /* ==========================================================================
@@ -3125,45 +3133,69 @@ async function khoiDongCongViec() {
     apDungCheDoTodo();
   };
 
-  // Chuyển màn Việc tôi nhận / Việc tôi giao
-  function chuyenSegCv(seg) {
-    const nut = document.querySelector(`#cvSeg .seg-nut[data-cv="${seg}"]`);
-    if (!nut) return;
-    document.querySelectorAll('#cvSeg .seg-nut').forEach(b => b.classList.toggle('active', b === nut));
-    ['nhan', 'phoihop', 'giao'].forEach(k => {
-      const pane = document.getElementById('cv-pane-' + k);
-      if (pane) pane.hidden = (k !== seg);
-    });
-  }
-  $('#cvSeg').addEventListener('click', (e) => {
-    const nut = e.target.closest('.seg-nut');
-    if (nut) chuyenSegCv(nut.dataset.cv);
-  });
-
-  // Drill Down to Action (audit Home/Dashboard 23/08/2026): counter "Việc
-  // đang mở/quá hạn/chờ duyệt" ở khối tóm tắt (veTongQuanTheoVaiTro) bấm
-  // vào phải nhảy thẳng tới đúng bảng Việc của MÌNH, không phải ngõ cụt —
-  // chỉ dùng cho Việc CỦA NGƯỜI ĐANG XEM (cv-bang-nhan/giao vốn đã lọc
-  // theo đúng người). Việc của NGƯỜI KHÁC (Admin/Manager xem team) dùng
-  // window.MO_DEN_LICHSU_TIM ở khoiDongLichSuViec thay vì hàm này.
+  /* `chuyenSegCv` + trình nghe `#cvSeg` ĐÃ GỠ — ba tab không còn nằm ở tab
+     này nữa. `MO_DEN_VIEC_CUA_TOI` GIỮ NGUYÊN TÊN VÀ CHỮ KÝ (seg, rowId) vì
+     nó là ĐƯỜNG DẪN CŨ: khối "Việc của tôi hôm nay" và các thẻ đếm ở Tổng
+     quan gọi nó với 'nhan'/'giao'. Đổi tên hàm là làm vỡ đúng những chỗ đó,
+     nên chỉ đổi ĐÍCH ĐẾN: chuyển hướng êm sang màn gộp ở Lịch sử làm việc,
+     đúng bộ lọc, đúng dòng. Không có trang trắng, không có nút chết.
+     Móc nối thật nằm ở `khoiDongLichSuViec`; gọi qua `goiMocNoi` để nếu mô-đun
+     đó chết lúc khởi động thì HÉT LÊN chứ không im lặng nuốt cú bấm (BH REV-0038). */
+  const SEG_CU_SANG_LOC = { nhan: 'toi', phoihop: 'phoihop', giao: 'giao' };
   window.MO_DEN_VIEC_CUA_TOI = (seg, rowId) => {
-    moTab('tongquan');
-    chuyenSegCv(seg);
-    requestAnimationFrame(() => {
-      const box = $('#cvSeg');
-      if (box) box.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      if (rowId != null) {
-        const tr = document.querySelector(`#cv-bang-${seg} tr[data-id="${rowId}"]`);
-        if (tr) { tr.scrollIntoView({ behavior: 'smooth', block: 'center' }); tr.classList.add('canh-bao'); setTimeout(() => tr.classList.remove('canh-bao'), 2500); }
-      }
-    });
+    goiMocNoi('MO_MAN_VIEC', 'lichsuviec', SEG_CU_SANG_LOC[seg] || 'toi', rowId);
   };
 
-  function dongHan(hanChot) {
-    if (!hanChot) return '—';
-    const quaHan = hanChot < new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
-    const [nam, thang, ngay] = hanChot.split('-');
-    return `<span class="${quaHan ? 'canh-bao-chu' : ''}">${ngay}/${thang}/${nam}</span>`;
+  /* `dongHan` đã GỠ — bản sao thứ hai của `hanChotVN` trong khoiDongLichSuViec,
+     từng vẽ hạn chót cho ba bảng nay không còn. Giữ lại một hàm chết là giữ
+     lại đúng thứ sinh ra "ba màn hình nói ba con số khác nhau". */
+
+  /* ---- NÚT HÀNH ĐỘNG TRÊN MỘT DÒNG VIỆC ---------------------------------
+     Trước bản gộp, đoạn này nằm rải trong ba hàm `veBang` khác nhau — cùng
+     một luật, chép ba lần. Nay MỘT hàm, dùng cho cả bốn phạm vi của màn gộp.
+     `loai` = phạm vi đang xem:
+       'toi'     — việc TÔI nhận: Bắt đầu làm / Nộp kết quả; todo tự giao thì
+                   ✓ Xong · Sửa · Bỏ.
+       'giao'    — việc TÔI giao: Duyệt xong / Trả lại · Sửa · Huỷ.
+       'phoihop' — CHỈ THEO DÕI, không nút (Sếp Ngọc chốt 20/08/2026: giữ đúng
+                   1 đầu mối chịu trách nhiệm báo cáo cho mỗi việc).
+       'congty'  — sổ tra cứu việc của người khác: không nút.
+     Ẩn nút chỉ là phép lịch sự với mắt; CỬA THẬT nằm ở máy chủ
+     (`CV_MO_THEO_TRANG_THAI`, `cvSua`) — gọi thẳng API vẫn bị chặn 403/409. */
+  function htmlNutDongViec(r, loai) {
+    const chuaXong = ['moi', 'dang_lam', 'cho_duyet'].includes(r.trang_thai);
+    if (loai === 'toi') {
+      // Người nhận là tôi; nếu người giao cũng là tôi => TODO CÁ NHÂN: bấm 1
+      // phát là XONG, khỏi nộp + chờ duyệt. Tự giao cho mình thì tự sửa thoải
+      // mái, không phiền ai — trước bản CTL-0017 phải xoá đi ghi lại.
+      if (r.nguoi_giao_id === TOI.id) {
+        return chuaXong
+          ? `<button type="button" class="btn-nho btn-primary" data-cv-xongngay="${r.id}">✓ Xong</button>` +
+            ` <button type="button" class="btn-nho cv-nut-sua" data-cv-sua="${r.id}">Sửa</button>` +
+            ` <button type="button" class="btn-nho" data-cv-huy="${r.id}">Bỏ</button>`
+          : '';
+      }
+      if (r.trang_thai === 'moi') return `<button type="button" class="btn-nho btn-primary" data-cv-batdau="${r.id}">Bắt đầu làm</button>`;
+      if (r.trang_thai === 'dang_lam') return `<button type="button" class="btn-nho btn-primary" data-cv-nop="${r.id}">Nộp kết quả</button>`;
+      return '';
+    }
+    if (loai === 'giao') {
+      let nut = '';
+      if (r.trang_thai === 'cho_duyet') {
+        nut = `<button type="button" class="btn-nho btn-primary" data-cv-duyet="${r.id}">Duyệt xong</button> ` +
+              `<button type="button" class="btn-nho" data-cv-tralai="${r.id}">Trả lại</button>`;
+      }
+      /* CTL-0017 — nút SỬA. Trước bản đó ở đây CHỈ có "Huỷ": muốn sửa một chữ
+         trong đầu ra là phải huỷ rồi giao lại — mất lịch sử, người nhận ăn hai
+         thông báo. Cố ý ĐỂ NÂU (`.btn-nho` trần), không cam: một khung nhìn
+         chỉ MỘT thứ được cam đậm (luật ba màu ③), chỗ đó dành cho "Duyệt xong". */
+      if (chuaXong) {
+        nut += ` <button type="button" class="btn-nho cv-nut-sua" data-cv-sua="${r.id}">Sửa</button>`;
+        nut += ` <button type="button" class="btn-nho" data-cv-huy="${r.id}">Huỷ</button>`;
+      }
+      return nut;
+    }
+    return '';
   }
 
   async function taiLai() {
@@ -3174,85 +3206,10 @@ async function khoiDongCongViec() {
        có, KHÔNG thêm lượt gọi thứ hai. */
     CV_THEO_ID = {};
     for (const r of [...(kq.nhan || []), ...(kq.giao || [])]) CV_THEO_ID[r.id] = r;
-
-    veBang('#cv-bang-nhan', kq.nhan || [], r => {
-      const tt = CV_TRANG_THAI[r.trang_thai] || CV_TRANG_THAI.moi;
-      // Trong "Việc cần làm", người nhận luôn là tôi; nếu người giao cũng là
-      // tôi => TODO CÁ NHÂN: bấm 1 phát là XONG, khỏi nộp + chờ duyệt.
-      const laTodo = r.nguoi_giao_id === TOI.id;
-      const chuaXong = ['moi', 'dang_lam', 'cho_duyet'].includes(r.trang_thai);
-      let nut = '';
-      if (laTodo) {
-        /* TODO CÁ NHÂN — tự giao cho mình thì tự sửa thoải mái, không phiền
-           ai. Đây đúng là ca hay gặp nhất: ghi vội một todo rồi muốn viết lại
-           cho rõ. Trước bản này phải xoá đi ghi lại. */
-        if (chuaXong) nut = `<button type="button" class="btn-nho btn-primary" data-cv-xongngay="${r.id}">✓ Xong</button>` +
-          ` <button type="button" class="btn-nho cv-nut-sua" data-cv-sua="${r.id}">Sửa</button>` +
-          ` <button type="button" class="btn-nho" data-cv-huy="${r.id}">Bỏ</button>`;
-      } else if (r.trang_thai === 'moi') {
-        nut = `<button type="button" class="btn-nho btn-primary" data-cv-batdau="${r.id}">Bắt đầu làm</button>`;
-      } else if (r.trang_thai === 'dang_lam') {
-        nut = `<button type="button" class="btn-nho btn-primary" data-cv-nop="${r.id}">Nộp kết quả</button>`;
-      }
-      const nhanTodo = laTodo ? ` <span class="tag sage">🙋 Việc của tôi</span>` : '';
-      return `<td><div class="nm">${esc(r.tieu_de)}${nhanTodo}</div>${r.muc_tieu_ten ? `<div class="sm">🎯 Thuộc mục tiêu: ${esc(r.muc_tieu_ten)}</div>` : ''}${r.mo_ta ? `<div class="sm">${dg(r.mo_ta)}</div>` : ''}${r.phoi_hop_ten ? `<div class="sm">🤝 Phối hợp: ${esc(r.phoi_hop_ten)}</div>` : ''}${r.ket_qua ? `<div class="sm"><b>Kết quả:</b> ${dg(r.ket_qua)}</div>` : ''}</td>` +
-        `<td class="sm">${r.dau_ra ? dg(r.dau_ra) : '—'}</td>` +
-        `<td class="sm">${laTodo ? '— (của tôi)' : esc(r.nguoi_giao_ten)}</td>` +
-        `<td class="sm">${dongHan(r.han_chot)}</td>` +
-        `<td><span class="tag ${tt.mau}">${tt.chu}</span></td>` +
-        `<td style="white-space:nowrap">${nut}</td>`;
-    });
-    $('#cv-trong-nhan').hidden = (kq.nhan || []).length > 0;
-    veDaiCat('#cv-cat-nhan', kq.cat_nhan, {
-      don_vi: 'việc', nut: { chu: 'Xem đầy đủ ở Lịch sử làm việc', tab: 'lichsuviec' }
-    });
-
-    veBang('#cv-bang-giao', kq.giao || [], r => {
-      const tt = CV_TRANG_THAI[r.trang_thai] || CV_TRANG_THAI.moi;
-      let nut = '';
-      if (r.trang_thai === 'cho_duyet') {
-        nut = `<button type="button" class="btn-nho btn-primary" data-cv-duyet="${r.id}">Duyệt xong</button> ` +
-              `<button type="button" class="btn-nho" data-cv-tralai="${r.id}">Trả lại</button>`;
-      }
-      /* CTL-0017 — nút SỬA. Trước bản này ở đây CHỈ có "Huỷ": muốn sửa một
-         chữ trong đầu ra là phải huỷ rồi giao lại — mất lịch sử, người nhận
-         ăn hai thông báo. Cố ý ĐỂ NÂU (`.btn-nho` trần), không cam: một khung
-         nhìn chỉ MỘT thứ được cam đậm (luật ba màu ③), chỗ đó dành cho "Duyệt
-         xong". Bước `hoan_thanh`/`huy` không hiện nút — nhưng đó chỉ là phép
-         lịch sự với mắt người dùng, cửa THẬT nằm ở máy chủ
-         (`CV_MO_THEO_TRANG_THAI`): gọi thẳng API vẫn bị chặn 409. */
-      if (r.trang_thai === 'moi' || r.trang_thai === 'dang_lam' || r.trang_thai === 'cho_duyet') {
-        nut += ` <button type="button" class="btn-nho cv-nut-sua" data-cv-sua="${r.id}">Sửa</button>`;
-        nut += ` <button type="button" class="btn-nho" data-cv-huy="${r.id}">Huỷ</button>`;
-      }
-      return `<td><div class="nm">${esc(r.tieu_de)}</div>${r.muc_tieu_ten ? `<div class="sm">🎯 Thuộc mục tiêu: ${esc(r.muc_tieu_ten)}</div>` : ''}${r.mo_ta ? `<div class="sm">${dg(r.mo_ta)}</div>` : ''}${r.phoi_hop_ten ? `<div class="sm">🤝 Phối hợp: ${esc(r.phoi_hop_ten)}</div>` : ''}${r.ket_qua ? `<div class="sm"><b>Kết quả:</b> ${dg(r.ket_qua)}</div>` : ''}</td>` +
-        `<td class="sm">${dg(r.dau_ra)}</td>` +
-        `<td class="sm">${esc(r.nguoi_nhan_ten)}</td>` +
-        `<td class="sm">${dongHan(r.han_chot)}</td>` +
-        `<td><span class="tag ${tt.mau}">${tt.chu}</span></td>` +
-        `<td style="white-space:nowrap">${nut}</td>`;
-    });
-    $('#cv-trong-giao').hidden = (kq.giao || []).length > 0;
-    veDaiCat('#cv-cat-giao', kq.cat_giao, {
-      don_vi: 'việc', nut: { chu: 'Xem đầy đủ ở Lịch sử làm việc', tab: 'lichsuviec' }
-    });
-
-    // Việc mình được mời PHỐI HỢP — CHỈ THEO DÕI, không báo cáo/chuyển trạng
-    // thái thay người chính (Sếp Ngọc chốt 20/08/2026: giữ đúng 1 đầu mối
-    // chịu trách nhiệm báo cáo cho mỗi việc, phối hợp chỉ để biết & hỗ trợ).
-    veBang('#cv-bang-phoihop', kq.phoi_hop || [], r => {
-      const tt = CV_TRANG_THAI[r.trang_thai] || CV_TRANG_THAI.moi;
-      return `<td><div class="nm">${esc(r.tieu_de)}</div>${r.muc_tieu_ten ? `<div class="sm">🎯 Thuộc mục tiêu: ${esc(r.muc_tieu_ten)}</div>` : ''}${r.mo_ta ? `<div class="sm">${dg(r.mo_ta)}</div>` : ''}</td>` +
-        `<td class="sm">${dg(r.dau_ra)}</td>` +
-        `<td class="sm">${esc(r.nguoi_nhan_ten)}</td>` +
-        `<td class="sm">${esc(r.nguoi_giao_ten)}</td>` +
-        `<td class="sm">${dongHan(r.han_chot)}</td>` +
-        `<td><span class="tag ${tt.mau}">${tt.chu}</span></td>`;
-    });
-    $('#cv-trong-phoihop').hidden = (kq.phoi_hop || []).length > 0;
-    veDaiCat('#cv-cat-phoihop', kq.cat_phoi_hop, {
-      don_vi: 'việc', nut: { chu: 'Xem đầy đủ ở Lịch sử làm việc', tab: 'lichsuviec' }
-    });
+    /* Không còn ba bảng ở tab này để vẽ — dữ liệu (kèm NGUYÊN các nhãn cắt
+       `cat_nhan`/`cat_giao`/`cat_phoi_hop`) giao sang màn gộp ở Lịch sử làm
+       việc. Vẫn ĐÚNG MỘT lượt gọi `cvDanhSach` như trước, không thêm lượt nào. */
+    window.CV_DU_LIEU_CUA_TOI = kq;
   }
 
   // UI STATE CONSISTENCY (docs/ERP-CONSTITUTION.md): sau mọi mutation đổi
@@ -3264,9 +3221,15 @@ async function khoiDongCongViec() {
   // từng chỉ tải 1 lần lúc vào trang, không cập nhật khi có việc mới/đổi
   // trạng thái trong lúc đang dùng).
   async function lamMoiCacManLienQuanCv() {
-    await taiLai();
+    await taiLai();                 // nạp lại cvDanhSach -> window.CV_DU_LIEU_CUA_TOI
     await taiLaiTongQuanCongTy();
-    if (window.LAM_MOI_LICHSU_VIEC) window.LAM_MOI_LICHSU_VIEC();
+    // Thứ tự BẮT BUỘC: `taiLai()` trước, màn gộp vẽ sau — vẽ trước là vẽ lại
+    // đúng dữ liệu cũ vừa thao tác xong, tức nút bấm "không ăn" trước mắt người dùng.
+    if (window.LAM_MOI_LICHSU_VIEC) await window.LAM_MOI_LICHSU_VIEC();
+    /* Khối "Việc của tôi hôm nay" nay là thứ DUY NHẤT còn hiện việc ở Trạm
+       Mục Tiêu — nộp/duyệt xong mà nó vẫn kể việc cũ thì đúng bằng nói dối.
+       Trước bản gộp nó ăn theo ba bảng bên cạnh nên không lộ. */
+    try { await veHomNay(); } catch { /* chưa nạp migration nhắc việc — bỏ qua */ }
   }
 
   $('#cv-form').addEventListener('submit', async (e) => {
@@ -3472,8 +3435,11 @@ async function khoiDongCongViec() {
       btn.disabled = false;
     }
   }
-  $('#cv-bang-nhan').addEventListener('click', xuLyNut);
-  $('#cv-bang-giao').addEventListener('click', xuLyNut);
+  /* Hai bảng `#cv-bang-nhan` / `#cv-bang-giao` không còn tồn tại — bảng duy
+     nhất giờ là `#ls-cv-bang` ở màn gộp. Đưa hàm vẽ nút + hàm xử lý bấm ra
+     `window` để màn đó dùng lại NGUYÊN BẢN: một luật, một chỗ. */
+  window.CV_HTML_NUT_DONG = htmlNutDongViec;
+  window.CV_XU_LY_NUT = xuLyNut;
 
   // Tổng quan việc TOÀN CÔNG TY — chỉ Admin (Sếp Ngọc/Sếp Phong yêu cầu
   // 23/08/2026: "xem full toàn bộ công ty" ngay ở khu vực Việc, không chỉ
@@ -3521,11 +3487,51 @@ async function khoiDongCongViec() {
    LỊCH SỬ LÀM VIỆC — kho lưu trữ TOÀN CỤC mọi việc trong Trạm Mục Tiêu, của
    TẤT CẢ mọi người chứ không riêng người xem (Sếp Ngọc yêu cầu 21/08/2026:
    "lưu trữ lại quá trình làm việc của nhân sự, ai làm gì, xong task gì như
-   nào"). Chỉ đọc — không có nút thao tác nào ở đây, đúng vai trò 1 cuốn sổ
-   lưu trữ, không phải nơi làm việc (đó là Trạm Mục Tiêu).
+   nào").
+
+   GỘP 29/08/2026 — Sếp Ngọc nhắc HAI LẦN: "gộp vào lịch sử làm việc đi".
+   Ba tab bên Trạm Mục Tiêu (Việc cần làm · Việc phối hợp · Việc tôi giao) +
+   dải "Đây chỉ là việc của bạn" + nút "Xem việc toàn công ty →" đã chuyển hết
+   về đây, thành MỘT màn có bộ lọc bốn phạm vi:
+       Việc của tôi · Tôi phối hợp · Tôi giao · Toàn công ty
+   Nên màn này KHÔNG còn "chỉ đọc" nữa: ba phạm vi đầu là nơi LÀM VIỆC thật
+   (Bắt đầu làm · Nộp kết quả · Duyệt xong · Trả lại · Sửa · Huỷ · ✓ Xong).
+   Sau bản này toàn ERP còn HAI chỗ hiện việc: khối "Việc của tôi hôm nay"
+   (exception-first, mở ERP là thấy) và màn này (danh sách đầy đủ + tra cứu).
+
+   HAI NGUỒN, MỘT BẢNG — và đó là chủ ý, không phải bỏ dở:
+     · ba phạm vi CỦA TÔI đọc `cvDanhSach` (máy chủ lọc sẵn theo người gọi)
+     · 'Toàn công ty' đọc `cvLichSu` (có con trỏ trang `truoc=`)
+   Cả hai trả CÙNG bộ cột (`CV_COT` trong src/index.js) nên dùng chung đúng
+   một hàm vẽ dòng. QUYỀN KHÔNG ĐỔI MỘT DÒNG NÀO: cửa vẫn ở máy chủ y như
+   trước — `cvDanhSach` chỉ trả việc của chính người gọi, `cvLichSu` đòi tab
+   `lichsuviec`, `cvTongQuanCongTy` (khối tổng hợp bên Trạm Mục Tiêu) đòi
+   Admin. Đây là GỘP MÀN HÌNH, không phải mở quyền.
    ========================================================================== */
 async function khoiDongLichSuViec() {
   let DS_LSCV = [];
+  /* Phạm vi đang xem. Mặc định 'toi': người mở ERP mỗi sáng cần thấy việc của
+     mình trước, không phải sổ tra cứu toàn công ty. */
+  let LOC_LSV = 'toi';
+
+  const NHAN_LOC = {
+    toi:     { trong: 'Chưa ai giao việc gì cho Sếp/bạn cả.',   nut: 'toi' },
+    phoihop: { trong: 'Chưa được mời phối hợp việc nào.',        nut: null },
+    giao:    { trong: 'Sếp/bạn chưa giao việc nào.',             nut: 'giao' },
+    congty:  { trong: 'Không tìm thấy việc nào khớp.',           nut: null }
+  };
+
+  /* Nguồn dữ liệu + nhãn cắt của phạm vi đang xem. `cvDanhSach` đã được
+     `khoiDongCongViec` gọi và cất vào `window.CV_DU_LIEU_CUA_TOI` — KHÔNG gọi
+     lại lần hai ở đây. Vai nào không có quyền `congviec` thì không có mô-đun
+     đó, ba phạm vi kia rỗng và màn vẫn chạy ở mức suy giảm, không ném lỗi. */
+  function nguonLoc() {
+    if (LOC_LSV === 'congty') return { ds: DS_LSCV, cat: null };
+    const d = window.CV_DU_LIEU_CUA_TOI || {};
+    if (LOC_LSV === 'phoihop') return { ds: d.phoi_hop || [], cat: d.cat_phoi_hop };
+    if (LOC_LSV === 'giao')    return { ds: d.giao || [],      cat: d.cat_giao };
+    return { ds: d.nhan || [], cat: d.cat_nhan };
+  }
 
   function capNhatVN(s) {
     if (!s) return '—';
@@ -3543,20 +3549,40 @@ async function khoiDongLichSuViec() {
   function veBangLsCv() {
     const k = boDau(($('#ls-cv-tim').value || '').trim());
     const locTt = $('#ls-cv-loctt').value;
-    const ds = DS_LSCV.filter(r =>
+    const { ds: nguon } = nguonLoc();
+    const ds = nguon.filter(r =>
       (!locTt || r.trang_thai === locTt) &&
       (!k || boDau(`${r.tieu_de} ${r.nguoi_nhan_ten || ''} ${r.nguoi_giao_ten || ''} ${r.muc_tieu_ten || ''}`).includes(k)));
+    /* Nút hành động lấy từ mô-đun Trạm Mục Tiêu (`window.CV_HTML_NUT_DONG`) —
+       KHÔNG chép lại luật ở đây, vì chép lại đúng là thứ bản gộp này đi xoá.
+       Vai không có quyền `congviec` thì móc nối vắng và cột nút rỗng: màn vẫn
+       tra cứu được, chỉ không thao tác — đúng quyền họ vốn có. */
+    const kieuNut = NHAN_LOC[LOC_LSV].nut;
+    const veNut = kieuNut ? layMocNoi('CV_HTML_NUT_DONG', 'congviec') : null;
     veBang('#ls-cv-bang', ds, r => {
       const tt = CV_TRANG_THAI[r.trang_thai] || CV_TRANG_THAI.moi;
-      return `<td><div class="nm">${esc(r.tieu_de)}</div>${r.dau_ra ? `<div class="sm">${dg(r.dau_ra)}</div>` : ''}${r.ket_qua ? `<div class="sm"><b>Kết quả:</b> ${dg(r.ket_qua)}</div>` : ''}</td>` +
+      /* Todo cá nhân (tự giao cho mình) — giữ nguyên nhãn 🙋 và chữ
+         "— (của tôi)" ở cột Người giao như bảng "Việc cần làm" cũ. */
+      const laTodo = r.nguoi_giao_id === TOI.id && r.nguoi_nhan_id === TOI.id;
+      const nut = (kieuNut && typeof veNut === 'function') ? veNut(r, kieuNut) : '';
+      return `<td><div class="nm">${esc(r.tieu_de)}${laTodo ? ' <span class="tag sage">🙋 Việc của tôi</span>' : ''}</div>` +
+          `${r.dau_ra ? `<div class="sm">${dg(r.dau_ra)}</div>` : ''}` +
+          `${r.mo_ta ? `<div class="sm">${dg(r.mo_ta)}</div>` : ''}` +
+          `${r.phoi_hop_ten ? `<div class="sm">🤝 Phối hợp: ${esc(r.phoi_hop_ten)}</div>` : ''}` +
+          `${r.ket_qua ? `<div class="sm"><b>Kết quả:</b> ${dg(r.ket_qua)}</div>` : ''}</td>` +
         `<td class="sm">${esc(r.nguoi_nhan_ten)}</td>` +
-        `<td class="sm">${esc(r.nguoi_giao_ten)}</td>` +
+        `<td class="sm">${laTodo ? '— (của tôi)' : esc(r.nguoi_giao_ten)}</td>` +
         `<td class="sm">${esc(r.muc_tieu_ten || '—')}</td>` +
         `<td class="sm">${hanChotVN(r.han_chot)}</td>` +
         `<td><span class="tag ${tt.mau}">${tt.chu}</span></td>` +
-        `<td class="sm">${capNhatVN(r.cap_nhat_luc)}</td>`;
+        `<td class="sm">${capNhatVN(r.cap_nhat_luc)}</td>` +
+        `<td style="white-space:nowrap">${nut}</td>`;
     });
-    $('#ls-cv-trong').hidden = ds.length > 0;
+    const oTrong = $('#ls-cv-trong');
+    // Rỗng vì LỌC khác rỗng vì CHƯA CÓ GÌ — nói đúng cái nào, đừng nói chung.
+    oTrong.textContent = (k || locTt) ? 'Không tìm thấy việc nào khớp.' : NHAN_LOC[LOC_LSV].trong;
+    oTrong.hidden = ds.length > 0;
+    veDaiCatLsCv();
   }
 
   /* CON TRỎ trang — chuỗi `cap_nhat_luc|id` của dòng cuối đã tải. `null` =
@@ -3573,6 +3599,18 @@ async function khoiDongLichSuViec() {
      BẢN NÀY: nói đúng giới hạn của ô tìm + cho một đường đi CÓ THẬT (nút gọi
      lại API kèm `?truoc=`, tải tiếp 500 việc cũ hơn từ MÁY CHỦ). */
   function veDaiCatLsCv() {
+    /* BA PHẠM VI CỦA TÔI — dải cắt do `cvDanhSach` trả về (`cat_nhan` /
+       `cat_phoi_hop` / `cat_giao`, trần 300 mỗi loại). Trước bản gộp mỗi bảng
+       có dải riêng chỉ sang "Lịch sử làm việc"; giờ CHÍNH LÀ chỗ đó, nên đường
+       đi tiếp là đổi sang phạm vi 'Toàn công ty' — nơi có phân trang thật. */
+    if (LOC_LSV !== 'congty') {
+      const { cat } = nguonLoc();
+      return veDaiCat('#ls-cv-cat', cat, {
+        don_vi: 'việc',
+        goi_y: 'Ô tìm kiếm phía trên chỉ tìm trong phần ĐÃ TẢI về máy.',
+        nut: { chu: 'Xem đầy đủ ở phạm vi "Toàn công ty"', chay: () => doiLoc('congty') }
+      });
+    }
     if (TRUOC_LSCV === null && TONG_LSCV === null) return veDaiCat('#ls-cv-cat', null);
     const conLai = TONG_LSCV != null ? Math.max(0, TONG_LSCV - DS_LSCV.length) : null;
     veDaiCat('#ls-cv-cat', { gioi_han: DS_LSCV.length, tong: TONG_LSCV }, {
@@ -3596,35 +3634,84 @@ async function khoiDongLichSuViec() {
       if (kq.cat && Number.isFinite(kq.cat.tong)) TONG_LSCV = kq.cat.tong;
       else if (!them) TONG_LSCV = null;
       // Tải hết rồi thì dải biến mất — không còn gì để nói nữa.
-      if (!TRUOC_LSCV) { TONG_LSCV = null; veDaiCat('#ls-cv-cat', null); }
-      else veDaiCatLsCv();
+      if (!TRUOC_LSCV) TONG_LSCV = null;
     } catch {
-      // Mạng hỏng giữa chừng: vẽ lại dải để nút "Tải thêm" trở về bấm được,
-      // không để nó kẹt ở "Đang tải…" — kẹt im lặng cũng là một kiểu nói dối.
-      if (TRUOC_LSCV) veDaiCatLsCv();
+      // Mạng hỏng giữa chừng: `veBangLsCv` bên dưới vẽ lại dải nên nút "Tải
+      // thêm" trở về bấm được, không kẹt ở "Đang tải…" — kẹt im lặng cũng là
+      // một kiểu nói dối.
     }
     veBangLsCv();
   }
 
-  await taiLaiLichSuCv();
-  // UI STATE CONSISTENCY: mọi màn khác đổi cong_viec (khoiDongCongViec) gọi
-  // hàm này để tab Lịch sử làm việc luôn khớp dữ liệu mới nhất, không cần F5
-  // (bug thật 23/08/2026: hoàn thành/tạo việc xong, tab này vẫn hiện dữ liệu
-  // cũ vì chỉ tải 1 lần lúc vào trang).
-  window.LAM_MOI_LICHSU_VIEC = taiLaiLichSuCv;
+  /* Đổi phạm vi. Ba phạm vi CỦA TÔI dùng dữ liệu `khoiDongCongViec` đã nạp —
+     không gọi mạng. 'Toàn công ty' chỉ gọi `cvLichSu` LẦN ĐẦU vào phạm vi đó:
+     người chỉ làm việc của mình không phải tải 500 dòng việc người khác. */
+  async function doiLoc(loc) {
+    if (!NHAN_LOC[loc]) return;
+    LOC_LSV = loc;
+    document.querySelectorAll('#lsv-loc .seg-nut').forEach(b =>
+      b.classList.toggle('active', b.dataset.lsv === loc));
+    if (loc === 'congty' && DS_LSCV.length === 0 && TRUOC_LSCV === null) await taiLaiLichSuCv();
+    else veBangLsCv();
+  }
+  $('#lsv-loc').addEventListener('click', (e) => {
+    const nut = e.target.closest('.seg-nut');
+    if (nut) doiLoc(nut.dataset.lsv);
+  });
 
-  // Drill Down to Action: Admin/Manager bấm 1 dòng "quá hạn/chờ duyệt"
-  // của NGƯỜI KHÁC ở khối tóm tắt (veTongQuanTheoVaiTro) — bảng Việc
-  // cần làm/tôi giao của họ chỉ có việc CỦA CHÍNH họ nên không scroll-tới
-  // được; Lịch sử làm việc là nơi DUY NHẤT xem được việc của mọi người,
-  // tái dùng luôn ô tìm/lọc trạng thái đã có thay vì xây thêm view mới
-  // (audit Home/Dashboard 23/08/2026, Rule 5 reuse).
-  window.MO_DEN_LICHSU_TIM = (tuKhoa) => {
+  /* Nút trên từng dòng — uỷ quyền cho `xuLyNut` của mô-đun Trạm Mục Tiêu.
+     `goiMocNoi` chứ không `?.`: mô-đun đó chết lúc khởi động thì phải HÉT LÊN,
+     không được biến cú bấm thành "không làm gì cả" (bài học REV-0038 · L3 —
+     Sếp Ngọc bấm mãi vào một cái nút đã chết mà console thì im). */
+  $('#ls-cv-bang').addEventListener('click', (e) => {
+    if (!e.target.closest('button[data-cv-batdau],button[data-cv-nop],button[data-cv-xongngay],' +
+                          'button[data-cv-duyet],button[data-cv-tralai],button[data-cv-sua],button[data-cv-huy]')) return;
+    goiMocNoi('CV_XU_LY_NUT', 'congviec', e);
+  });
+
+  await veBangLsCv();
+  /* UI STATE CONSISTENCY: mọi màn khác đổi cong_viec gọi hàm này để màn gộp
+     khớp dữ liệu mới nhất, không bắt F5 (bug thật 23/08/2026). Chỉ tải lại
+     `cvLichSu` khi ĐANG xem 'Toàn công ty' hoặc đã từng tải nó — ba phạm vi
+     kia đọc `window.CV_DU_LIEU_CUA_TOI` mà `lamMoiCacManLienQuanCv` vừa làm
+     mới ngay trước đó, nên vẽ lại là đủ và không tốn thêm lượt gọi nào. */
+  window.LAM_MOI_LICHSU_VIEC = async (o) => {
+    if (LOC_LSV === 'congty' || DS_LSCV.length > 0) return taiLaiLichSuCv(o);
+    veBangLsCv();
+  };
+
+  /* ĐƯỜNG DẪN CŨ — GIỮ NGUYÊN TÊN. Hai móc nối này là chỗ phần còn lại của
+     ERP gọi sang; đổi tên là làm vỡ đúng những chỗ đó.
+     · MO_DEN_LICHSU_TIM(tuKhoa) — Admin/Manager bấm một dòng quá hạn của
+       NGƯỜI KHÁC ở khối tóm tắt: phải sang phạm vi 'Toàn công ty'.
+     · MO_MAN_VIEC(loc, rowId)   — thay đường cũ MO_DEN_VIEC_CUA_TOI: khối
+       "Việc của tôi hôm nay" và các thẻ đếm bấm vào phải rơi đúng phạm vi,
+       đúng dòng, và dòng đó phải SÁNG LÊN (`.canh-bao`) như trước. */
+  window.MO_DEN_LICHSU_TIM = async (tuKhoa) => {
     moTab('lichsuviec');
+    await doiLoc('congty');
     const oTim = $('#ls-cv-tim'), oLoc = $('#ls-cv-loctt');
     if (oLoc) oLoc.value = '';
     if (oTim) { oTim.value = tuKhoa || ''; oTim.dispatchEvent(new Event('input', { bubbles: true })); oTim.focus(); }
     requestAnimationFrame(() => { const b = $('#ls-cv-bang'); if (b) b.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+  };
+
+  window.MO_MAN_VIEC = async (loc, rowId) => {
+    moTab('lichsuviec');
+    const oTim = $('#ls-cv-tim'), oLoc = $('#ls-cv-loctt');
+    // Bộ lọc còn sót từ lần trước là lý do kinh điển khiến "bấm vào không
+    // thấy đâu cả" — xoá trước khi nhảy.
+    if (oTim) oTim.value = '';
+    if (oLoc) oLoc.value = '';
+    await doiLoc(loc || 'toi');
+    requestAnimationFrame(() => {
+      const box = $('#lsv-loc');
+      if (box) box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      if (rowId != null) {
+        const tr = document.querySelector(`#ls-cv-bang tr[data-id="${rowId}"]`);
+        if (tr) { tr.scrollIntoView({ behavior: 'smooth', block: 'center' }); tr.classList.add('canh-bao'); setTimeout(() => tr.classList.remove('canh-bao'), 2500); }
+      }
+    });
   };
 
   $('#ls-cv-tim').addEventListener('input', veBangLsCv);

@@ -5,12 +5,18 @@
           (hoặc để máy đọc: trang tự in `KET_QUA_JSON=` vào <pre>)
 
    ĐO CÁI GÌ
-     ① 44px — hai chỗ bấm khi xử góp ý chị Vũ Lan Hương:
-        · dải PHẠM VI, nay CẢ DẢI là nút   (`.cv-pham-vi`)
+     ① 44px — ba chỗ bấm:
         · nút trong dải cắt                (`.dai-cat .dai-cat-nut`)
-     ② CHIỀU CAO dải PHẠM VI — TRƯỚC (bản `ab92afc`) vs SAU (bản này).
-        Dải này LUÔN hiện nên mỗi pixel của nó là pixel lấy của bảng việc.
-        REV-0034 · L4 đo bản trước ra 137px ở 375px và 157px ở 320px.
+        · BỘ LỌC PHẠM VI của màn gộp       (`.seg-loc .seg-nut`) ← thêm 29/08
+        · dải PHẠM VI cũ                   (`.cv-pham-vi`) — xem ghi chú ②
+     ② CHIỀU CAO dải PHẠM VI — TRƯỚC (`ab92afc`) vs SAU (REV-0034 · L4).
+        ⚠️ ĐÂY LÀ PHÉP ĐO LỊCH SỬ. Từ 29/08/2026 dải `.cv-pham-vi` KHÔNG CÒN
+        TỒN TẠI trong bản chạy thật: ba tab + dải này đã gộp về tab Lịch sử
+        làm việc (Sếp Ngọc nhắc hai lần). Luật CSS của nó nằm ở
+        `CSS_DAI_PHAM_VI_DA_XOA` ngay trong file này, không còn trong
+        `style.css`. Giữ phép đo lại vì nó là bằng chứng của REV-0034 · L4;
+        số dòng bảng của MÀN GỘP mới đo ở bàn đo riêng
+        `scripts/do-gop-viec-lichsu.mjs` (chạy app THẬT trong Chrome).
      ③ SỐ DÒNG BẢNG còn thấy được trong màn hình điện thoại (375×667 và
         320×568) — con số cuối cùng người dùng thật quan tâm. Ràng buộc:
         **không được giảm**.
@@ -38,7 +44,26 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const GOC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const CSS = readFileSync(path.join(GOC, 'public/assets/css/style.css'), 'utf8');
+
+/* DẢI PHẠM VI đã bị XOÁ khỏi bản chạy thật ngày 29/08/2026 (gộp ba tab về tab
+   Lịch sử làm việc — Sếp Ngọc nhắc hai lần). Luật CSS của nó dọn về ĐÂY,
+   nguyên văn bản cuối cùng từng chạy, để phép đo lịch sử TRƯỚC(ab92afc)/SAU
+   không mất mà `style.css` cũng không phải cõng CSS không ai dùng. */
+const CSS_DAI_PHAM_VI_DA_XOA = `
+.cv-pham-vi {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; flex-wrap: nowrap; width: 100%;
+  margin: 0 0 8px; padding: 4px 12px; min-height: 44px;
+  border-radius: 12px; background: var(--warn-wash);
+  border: 0; border-left: 3px solid var(--warn);
+  color: var(--text); font-size: 13.5px; font-weight: 400; line-height: 1.4;
+  text-align: left; white-space: normal; cursor: pointer;
+}
+.cv-pham-vi:hover { background: var(--warn-wash); border-left-color: var(--warn-dark); }
+.cv-pham-vi-chu { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cv-pham-vi-di { color: var(--warn-dark); font-weight: 600; white-space: nowrap; flex-shrink: 0; }
+`;
+const CSS = readFileSync(path.join(GOC, 'public/assets/css/style.css'), 'utf8') + CSS_DAI_PHAM_VI_DA_XOA;
 
 function go(css, tim, thay, ten) {
   const sau = css.replace(tim, thay);
@@ -56,6 +81,8 @@ let CSS_CHUA_VA = go(CSS, /\.dai-cat-nut \{[^}]*\}/,
   '.dai-cat-nut');
 CSS_CHUA_VA = go(CSS_CHUA_VA, /(\.cv-pham-vi \{[^}]*?)min-height: 44px;/,
   '$1min-height: 0;', '.cv-pham-vi min-height');
+CSS_CHUA_VA = go(CSS_CHUA_VA, /\.seg-loc \.seg-nut \{ min-height: 44px; \}/,
+  '.seg-loc .seg-nut { min-height: 0; }', '.seg-loc .seg-nut min-height');
 
 /* ==========================================================================
    BẢN TRƯỚC (`ab92afc`) — chép nguyên văn để có số ĐỐI CHIẾU, không phải khai
@@ -92,7 +119,7 @@ const HTML_NAY = `
 /* Bảng việc thật bên dưới — để đếm CÒN THẤY ĐƯỢC MẤY DÒNG. Đánh dấu chép theo
    `public/app.html` (`.table-wrap > table`, 6 cột). */
 const BANG = `
-<div class="seg"><button class="seg-nut active">Việc cần làm</button><button class="seg-nut">Việc phối hợp</button><button class="seg-nut">Việc tôi giao</button></div>
+<div class="seg seg-loc" id="segLoc"><button class="seg-nut active" id="nutLoc">Việc của tôi</button><button class="seg-nut">Tôi phối hợp</button><button class="seg-nut">Tôi giao</button><button class="seg-nut">Toàn công ty</button></div>
 <div class="panel"><div class="table-wrap"><table>
 <thead><tr><th>Việc</th><th>Đầu ra cần đạt</th><th>Người giao</th><th>Hạn chót</th><th>Trạng thái</th><th></th></tr></thead>
 <tbody id="tb">${Array.from({ length: 30 }, (_, i) =>
@@ -144,6 +171,7 @@ function doKhung(id, be, cao) {
   return {
     nut_pham_vi: oPv ? Math.round(oPv.height * 10) / 10 : null,
     nut_xem_them: lay('#nutXemThem'),
+    nut_loc_pham_vi: lay('#nutLoc'),
     dai_chiem_doc: chiemDoc,
     dong_bang_thay_duoc: dong,
     an_dung_khi_hidden: !!csAn && csAn.display === 'none' && an.getBoundingClientRect().height === 0,
@@ -156,8 +184,9 @@ function ve() {
   const dc = doKhung('dc', 375, 667);
 
   const nut44 = n375.nut_pham_vi >= 44 && n320.nut_pham_vi >= 44 &&
-                n375.nut_xem_them >= 44 && n320.nut_xem_them >= 44;
-  const dcNhay = !(dc.nut_pham_vi >= 44 && dc.nut_xem_them >= 44);
+                n375.nut_xem_them >= 44 && n320.nut_xem_them >= 44 &&
+                n375.nut_loc_pham_vi >= 44 && n320.nut_loc_pham_vi >= 44;
+  const dcNhay = !(dc.nut_pham_vi >= 44 && dc.nut_xem_them >= 44 && dc.nut_loc_pham_vi >= 44);
   const gonHon = n375.dai_chiem_doc < t375.dai_chiem_doc && n320.dai_chiem_doc < t320.dai_chiem_doc;
   const dongKhongGiam = n375.dong_bang_thay_duoc >= t375.dong_bang_thay_duoc &&
                         n320.dong_bang_thay_duoc >= t320.dong_bang_thay_duoc;
@@ -177,6 +206,8 @@ function ve() {
       'px   doi chung (go luat): ' + d(dc.nut_pham_vi) + 'px\\n' +
     '  Nut "Tai them"   375px: ' + d(n375.nut_xem_them) + 'px   320px: ' + d(n320.nut_xem_them) +
       'px   doi chung (go luat): ' + d(dc.nut_xem_them) + 'px\\n' +
+    '  Nut BO LOC pham vi 375px: ' + d(n375.nut_loc_pham_vi) + 'px   320px: ' + d(n320.nut_loc_pham_vi) +
+      'px   doi chung (go luat): ' + d(dc.nut_loc_pham_vi) + 'px\\n' +
     '\\nCHIEU CAO DAI PHAM VI (ke ca margin) — TRUOC vs SAU\\n' +
     '  375px: TRUOC ' + d(t375.dai_chiem_doc) + 'px  ->  SAU ' + d(n375.dai_chiem_doc) +
       'px   (bot ' + Math.round(t375.dai_chiem_doc - n375.dai_chiem_doc) + 'px)\\n' +

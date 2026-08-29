@@ -35,10 +35,19 @@ const tam = join(tmpdir(), 'agc-chup-' + Date.now());
 mkdirSync(tam, { recursive: true });
 cpSync(join(GOC, 'public'), tam, { recursive: true });
 
+/* HOÀN NGUYÊN CẢ BỐN TỆP GIAO DIỆN, không riêng `style.css` (29/08/2026).
+   Bản trước chỉ thay CSS — đủ cho một lần đổi màu, nhưng bản "TRƯỚC" của một
+   lần ĐỔI BỐ CỤC (gộp ba tab về một màn) thì phải có cả `app.html` + `app.js`,
+   không thì "ảnh trước" chính là ảnh sau, và Sếp chấm bằng mắt trên hai tấm
+   giống hệt nhau. Tệp nào commit đó chưa có thì bỏ qua, không làm hỏng lượt chụp. */
 if (commitCss) {
-  writeFileSync(join(tam, 'assets/css/style.css'),
-    execFileSync('git', ['show', `${commitCss}:public/assets/css/style.css`],
-      { cwd: GOC, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 }), 'utf8');
+  for (const f of ['assets/css/style.css', 'app.html', 'assets/js/app.js', 'assets/js/api.js']) {
+    try {
+      writeFileSync(join(tam, f),
+        execFileSync('git', ['show', `${commitCss}:public/${f}`],
+          { cwd: GOC, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }), 'utf8');
+    } catch { /* commit cũ chưa có tệp đó */ }
+  }
 }
 
 /* ⚠️ REV-0029/K4 — MỘT TẤM ẢNH ĐÃ NÓI DỐI, VÀ ĐÂY LÀ CHỖ VÁ.
@@ -94,10 +103,57 @@ for (const f of ['index.html', 'reset.html']) {
 const TOI = {
   ten_dang_nhap: 'ngoc', ho_ten: 'Bùi Thị Ngọc', chuc_danh: 'Giám đốc Vận hành',
   phong_ban: 'Ban Giám đốc', vai_tro: 'admin', phai_doi_mk: 0, anh_dai_dien: null,
-  trang_thai: 'dang_lam', nhan_su_id: 1,
-  quyen: ['tongquan', 'lichsuviec', 'danhba', 'gopy', 'kinhdoanh', 'donhoan', 'khovan', 'nhansu', 'ketoan', 'taisan', 'xepca']
+  trang_thai: 'dang_lam', nhan_su_id: 'NS-NGOC', id: 'NS-NGOC', la_admin: true,
+  phong_ban_quan_ly: [],
+  quyen: ['tongquan', 'congviec', 'lichsuviec', 'danhba', 'gopy', 'kinhdoanh', 'donhoan', 'khovan', 'nhansu', 'ketoan', 'taisan', 'xepca']
 };
-const API_GIA = { '/api/toi-la-ai': TOI, '/api/danh-ba': { danh_ba: [] }, '/api/nhan-su': { nhan_su: [], xem_luong: 0 } };
+
+/* VIỆC GIẢ — bảng RỖNG thì tấm ảnh không nói được gì về bố cục, mà "Sếp chấm
+   bằng mắt" là chấm bố cục. Đủ mỗi trạng thái một dòng để thấy cả nút lẫn thẻ. */
+const cv = (id, td, giao, giaoTen, nhan, nhanTen, tt, dauRa) => ({
+  id, tieu_de: td, dau_ra: dauRa, mo_ta: null, phoi_hop_ids: null, phoi_hop_ten: null,
+  nguoi_giao_id: giao, nguoi_giao_ten: giaoTen, nguoi_nhan_id: nhan, nguoi_nhan_ten: nhanTen,
+  han_chot: '2026-09-0' + ((id % 8) + 1), trang_thai: tt, ket_qua: tt === 'cho_duyet' ? 'Đã nộp 28/08' : null,
+  tao_luc: '2026-08-20 09:00:00', cap_nhat_luc: '2026-08-2' + (id % 9) + ' 10:00:00',
+  muc_tieu_id: 1, muc_tieu_ten: 'Giảm sai sót đóng gói'
+});
+const CV_NHAN = [
+  cv(101, 'Đối soát đơn hoàn Shopee T8', 'NS-DUY', 'Phạm Khương Duy', 'NS-NGOC', 'Bùi Thị Ngọc', 'moi', 'Bảng khớp 100%'),
+  cv(102, 'Kiểm kê hạt điều nhập khẩu', 'NS-DUY', 'Phạm Khương Duy', 'NS-NGOC', 'Bùi Thị Ngọc', 'dang_lam', 'Biên bản kiểm kê có ký'),
+  cv(103, 'Nộp báo cáo thuế quý 3', 'NS-HANG', 'Phan Thị Hằng', 'NS-NGOC', 'Bùi Thị Ngọc', 'cho_duyet', 'Tờ khai đã nộp'),
+  cv(104, 'Gọi nhà cung cấp chè Thái Nguyên', 'NS-NGOC', 'Bùi Thị Ngọc', 'NS-NGOC', 'Bùi Thị Ngọc', 'moi', 'Chốt giá lô tháng 9'),
+  cv(105, 'Duyệt mẫu bao bì Tết', 'NS-DUY', 'Phạm Khương Duy', 'NS-NGOC', 'Bùi Thị Ngọc', 'hoan_thanh', 'Chốt 1 mẫu')
+];
+const CV_GIAO = [
+  cv(201, 'Dọn kho tầng 2', 'NS-NGOC', 'Bùi Thị Ngọc', 'NS-DUY', 'Phạm Khương Duy', 'cho_duyet', 'Kệ trống, có ảnh'),
+  cv(202, 'Lên lịch ca tuần 36', 'NS-NGOC', 'Bùi Thị Ngọc', 'NS-HUONG', 'Vũ Lan Hương', 'dang_lam', 'Bảng ca đã dán'),
+  cv(203, 'Chốt bảng lương T8', 'NS-NGOC', 'Bùi Thị Ngọc', 'NS-HANG', 'Phan Thị Hằng', 'moi', 'Bảng lương duyệt xong')
+];
+const CV_PHOIHOP = [
+  cv(301, 'Chuẩn bị hồ sơ chuyển đổi pháp nhân', 'NS-HANG', 'Phan Thị Hằng', 'NS-HUONG', 'Vũ Lan Hương', 'dang_lam', 'Bộ hồ sơ đầy đủ')
+];
+const CV_LICHSU = [
+  cv(401, 'Kiểm tra giấy tờ ATTP lô mới', 'NS-DUY', 'Phạm Khương Duy', 'NS-HUYEN', 'Nguyễn Thị Huyền', 'hoan_thanh', 'Đủ giấy tờ'),
+  ...CV_NHAN, ...CV_GIAO, ...CV_PHOIHOP
+];
+
+const API_GIA = {
+  '/api/toi-la-ai': TOI, '/api/danh-ba': { danh_ba: [] }, '/api/nhan-su': { nhan_su: [], xem_luong: 0 },
+  '/api/cong-viec/danh-sach': {
+    nhan: CV_NHAN, giao: CV_GIAO, phoi_hop: CV_PHOIHOP,
+    cat_nhan: { gioi_han: CV_NHAN.length, tong: 523, xem_them: 'Lịch sử làm việc' },
+    cat_giao: null, cat_phoi_hop: null
+  },
+  '/api/cong-viec/lich-su': { viec: CV_LICHSU, cat: { gioi_han: CV_LICHSU.length, tong: 700 },
+                              truoc_tiep: '2026-08-21 10:00:00|301' },
+  '/api/cong-viec/hom-nay': { nhac_tat: 0, toi: { qua_han: [], den_han_hom_nay: [], chua_bat_dau: [],
+    cho_toi_duyet: [{ id: 201, tieu_de: 'Dọn kho tầng 2', nguoi_nhan_ten: 'Phạm Khương Duy', dong: 2 }] },
+    dong_viec: [], ghi_nhan: [] },
+  '/api/cong-viec/tong-quan-congty': { dang_mo: 40, qua_han: 3, cho_duyet: 2,
+    theo_phong_ban: [{ bo_phan: 'Kho vận', dang_mo: 18, qua_han: 2, cho_duyet: 1 },
+                     { bo_phan: 'Kế toán', dang_mo: 12, qua_han: 1, cho_duyet: 1 }],
+    viec_qua_han: [] }
+};
 const KIEU = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8',
                '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8',
                '.png': 'image/png', '.svg': 'image/svg+xml', '.webmanifest': 'application/manifest+json',
@@ -121,7 +177,8 @@ await new Promise(ok => may.listen(0, '127.0.0.1', ok));
 const CONG = may.address().port;
 
 /* ---- Danh sách ảnh ------------------------------------------------------ */
-const MAN = [['dangnhap', 'index.html'], ['trammuctieu', 'app.html'], ['khovan', 'app.html?tab=khovan']];
+const MAN = [['dangnhap', 'index.html'], ['trammuctieu', 'app.html'],
+             ['lichsuviec', 'app.html?tab=lichsuviec'], ['khovan', 'app.html?tab=khovan']];
 const KHUNG = [['1440', 1440, 900], ['375', 375, 812]];
 
 mkdirSync(raDir, { recursive: true });
