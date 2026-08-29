@@ -681,7 +681,7 @@ button { cursor: pointer; border: none; background: none; }
 }
 .xc-matrix thead th {
   position: sticky; top: 0; z-index: 2;
-  background: var(--bg2, #f2eee6);
+  background: var(--surface-2);
 }
 .xc-matrix .xc-col-fixed {
   position: sticky; left: 0; z-index: 1;
@@ -1742,7 +1742,7 @@ tr.canh-bao:hover > td { background: #fbdbd6; }
   background: var(--white); border: 2px solid var(--line);
   font-size: 11px; line-height: 1;
   display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 1px 4px rgba(0,0,0,.18);
+  box-shadow: 0 1px 4px rgba(44,33,23,.22);
 }
 .cnb-dau-tb.tbd-dau-canhbao { border-color: #e67e22; background: #fff3e0; }
 /* Cùng lỗi ADR-0008 với .tb-badge: thiếu dòng này thì `hidden = true` chạy mà
@@ -1879,7 +1879,7 @@ tr.canh-bao:hover > td { background: #fbdbd6; }
   display: inline-flex; align-items: center; justify-content: center;
 }
 .tbd-nut:hover { background: var(--surface-2); }
-.tbd-nut-chinh { background: var(--sage); border-color: var(--sage); color: #fff; }
+.tbd-nut-chinh { background: var(--sage); border-color: var(--sage); color: var(--white); }
 .tbd-nut-chinh:hover { background: var(--sage-dark); }
 
 .tbd-caidat {
@@ -2389,47 +2389,15 @@ tr.kd-chiadoi td {
 .dai-cat-nut:hover { background: var(--warn-wash); border-color: var(--warn-dark); }
 
 /* ---------------------------------------------------------------------------
-   DẢI PHẠM VI — MỘT DÒNG, và CẢ DẢI LÀ CÁI NÚT (REV-0034 · L4).
-
-   Khác dải cắt ở một điểm quyết định: dải cắt CHỈ hiện khi thật sự có cắt,
-   còn dải này LUÔN hiện. Bản đầu là 4 dòng chữ + một nút riêng — đo được
-   137px ở 375px và 157px ở 320px, tức mỗi lần vào màn Công việc là mất ~2
-   dòng bảng, kể cả khi không có gì bị cắt, trên đúng màn hình nhân viên kho
-   cầm một tay. Trái đúng nguyên tắc chính chúng ta viết trong app.js: *"một
-   dải luôn hiện là một dải mắt người học được cách bỏ qua trong đúng một
-   tuần"*, và trái ràng buộc "không làm nhân viên kho cuộn thêm".
-
-   Nay: một dòng, không nút riêng, câu đầy đủ nằm ở `title=`. Vẫn ≥44px cho
-   ngón tay vì CẢ DẢI bấm được (đo: npm run do-nut-dai-cat).
-   Đặt SAU `.dai-cat-nut` vì phần tử mang cả hai lớp — thắng theo thứ tự.
+   DẢI PHẠM VI (`.cv-pham-vi`) ĐÃ XOÁ HẲN — 29/08/2026, Sếp Ngọc nhắc hai lần
+   "gộp vào lịch sử làm việc đi". Dải "Đây chỉ là việc của bạn" + nút "Xem việc
+   toàn công ty →" không còn phần tử nào mang lớp này nữa; giữ lại luật CSS là
+   giữ lại rác, và rác CSS chính là thứ khiến lần sau có người vẽ lại dải đó.
+   Bốn phạm vi nay là bộ lọc `.seg-loc` ở tab Lịch sử làm việc.
+   Bàn đo `scripts/do-nut-dai-cat-44px.mjs` vẫn so TRƯỚC/SAU của dải này —
+   luật CSS đã chuyển vào chính file bàn đo (`CSS_DAI_PHAM_VI_DA_XOA`), nên
+   phép đo lịch sử đó không mất, mà bản chạy thật cũng không cõng CSS chết.
    --------------------------------------------------------------------------- */
-.cv-pham-vi {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  flex-wrap: nowrap;
-  width: 100%;
-  margin: 0 0 8px;
-  padding: 4px 12px;
-  min-height: 44px;
-  border-radius: 12px;
-  background: var(--warn-wash);
-  border: 0;
-  border-left: 3px solid var(--warn);
-  color: var(--text);
-  font-size: 13.5px;
-  font-weight: 400;
-  line-height: 1.4;
-  text-align: left;
-  white-space: normal;
-  cursor: pointer;
-}
-
-.cv-pham-vi:hover { background: var(--warn-wash); border-left-color: var(--warn-dark); }
-
-.cv-pham-vi-chu { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cv-pham-vi-di { color: var(--warn-dark); font-weight: 600; white-space: nowrap; flex-shrink: 0; }
 
 /* Liên kết gọi / gửi thư trong danh bạ */
 .lnk {
@@ -2907,6 +2875,39 @@ tr.kd-chiadoi td {
 
 .kv-pane[hidden] { display: none; }
 
+/* BỘ LỌC PHẠM VI ở màn gộp "Lịch sử làm việc" (Việc của tôi · Tôi phối hợp ·
+   Tôi giao · Toàn công ty). Chỉ thêm ĐÚNG chiều cao ngón tay — không màu mới,
+   không viền mới: nền/chữ/tab-đang-mở dùng nguyên `.seg` + `.seg-nut.active`
+   ở trên (docs/BANG-MAU.md). `.seg-nut` gốc ở Kho vận đo ra ~37px; đây là bộ
+   lọc nhân viên kho bấm mỗi ngày bằng một tay nên phải ≥44px (WCAG 2.5.5).
+   Đo thật: npm run do-nut-dai-cat. */
+.seg-loc .seg-nut { min-height: 44px; }
+
+/* CỘT "ĐẦU RA CẦN ĐẠT" ở màn gộp — REV-0048 lỗi #2 (29/08/2026).
+   Bản gộp đầu chôn `dau_ra` thành dòng chữ nhỏ dưới tên việc. Công ty chạy
+   MBOs: "đầu ra cụ thể là gì?" là kỷ luật cốt lõi, Sếp phải rà được CẢ MỘT
+   CỘT bằng mắt. Nên nó đứng NGANG HÀNG với tên việc, không phải chú thích.
+
+   NGƯỠNG ĐỔI BỐ CỤC: 980px (dùng lại đúng ngưỡng đã có sẵn trong file này,
+   không đẻ thêm mốc thứ n).
+     · ≥ 980px  → cột riêng `.cot-daura` hiện · `.daura-hep` ẩn
+     · ≤ 979px  → cột riêng ẩn · `.daura-hep` (dòng phụ trong ô "Việc") hiện,
+                  ĐÚNG y bố cục 375px đang chạy. Màn hẹp bảng đã 8 cột phải
+                  cuộn ngang; cột thứ chín chỉ đẩy đầu ra ra xa tầm mắt hơn.
+   `display:none` ở đây KHÔNG dính bẫy `[hidden]` đầu file: nó nhằm ẨN, không
+   nhằm làm HIỆN một phần tử đang mang `hidden`. */
+.daura-hep { display: none; }
+/* `min-width` KHÔNG phải thẩm mỹ, nó giữ SỐ DÒNG. Để cột tự co, bố cục bảng
+   chỉ cấp cho nó 147px: câu đầu ra gãy làm 3 dòng, chiều cao mỗi dòng bảng
+   nhảy 66px → 88px, và màn 1440 tụt từ 11 dòng xuống 9. Với 220px câu đầu ra
+   vừa một dòng nên số dòng thấy được không giảm. Đo thật: npm run do-gop-viec
+   (ràng buộc "số dòng KHÔNG ĐƯỢC GIẢM" nằm ngay trong bàn đo đó). */
+#ls-cv-tbl .cot-daura { min-width: 220px; max-width: 320px; }
+@media (max-width: 979px) {
+  #ls-cv-tbl .cot-daura { display: none; }
+  .daura-hep { display: block; }
+}
+
 /* Ô form chiếm cả hàng trong lưới .form-luoi */
 .field-rong { grid-column: 1 / -1; }
 
@@ -3120,7 +3121,7 @@ tr.kd-chiadoi td {
   background: var(--danger-wash); border-left-color: var(--danger);
 }
 .ns-vieccanlam .vcl-dong.vcl-nhe {
-  background: var(--panel-2, var(--warn-wash)); border-left-color: var(--line, var(--warn));
+  background: var(--warn-wash); border-left-color: var(--line);
 }
 .ns-vieccanlam .vcl-ten { color: var(--text-mute); font-size: 12px; }
 .ns-vieccanlam .btn-nho { flex: none; }
@@ -3159,10 +3160,10 @@ tr.kd-chiadoi td {
 .jd-mau-ds { display: grid; gap: 8px; }
 .jd-mau-nut {
   text-align: left; width: 100%; cursor: pointer;
-  background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-sm);
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--r-sm);
   padding: 9px 11px; font: inherit; color: var(--ink); line-height: 1.45;
 }
-.jd-mau-nut:hover { border-color: var(--brand, var(--warn)); }
+.jd-mau-nut:hover { border-color: var(--warn); }
 .jd-mau-nut b { display: block; font-size: 13px; font-weight: 650; }
 .jd-mau-nut span { display: block; font-size: 12px; color: var(--text-mute); margin-top: 2px; }
 .jd-mau-nut i { display: block; font-size: 11px; color: var(--text-mute); margin-top: 3px; font-style: normal; }
@@ -3205,7 +3206,7 @@ tr.kd-chiadoi td {
 .kn-nguoi {
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
   padding: 9px 11px; border: 1px solid var(--line); border-radius: var(--r-sm);
-  background: var(--panel); font-size: 13px;
+  background: var(--card); font-size: 13px;
 }
 .kn-nguoi .kn-phu { color: var(--text-mute); font-size: 11.5px; flex-basis: 100%; }
 .kn-antoan { color: var(--danger-dark); font-weight: 600; }
@@ -3230,8 +3231,8 @@ tr.kd-chiadoi td {
    việc rủi ro thấp. */
 .gy-the-ds { display: flex; flex-direction: column; gap: 8px; }
 .gy-the {
-  border: 1px solid var(--vien, #e3e3e0); border-radius: var(--r-md, 10px);
-  padding: 10px 12px; background: var(--nen-2, #fff);
+  border: 1px solid var(--line); border-radius: var(--r-md);
+  padding: 10px 12px; background: var(--card);
 }
 .gy-the-dau { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; flex-wrap: wrap; }
 /* NGƯỠNG NGÓN TAY 44px — Sếp Ngọc là NGƯỜI DUY NHẤT duyệt góp ý ở cấp cuối
@@ -3288,33 +3289,33 @@ tr.kd-chiadoi td {
 /* Vạch nối vẽ bằng ::before, đặt tuyệt đối — không chiếm chỗ, không giãn hộp */
 .gy-td-chang::before {
   content: ''; position: absolute; top: 6px; height: 2px;
-  left: -50%; right: 50%; background: var(--vien, #e3e3e0);
+  left: -50%; right: 50%; background: var(--line);
 }
 .gy-td-chang:first-child::before { display: none; }
-.gy-td-chang.qua::before, .gy-td-chang.day::before { background: var(--ok, #3f8f5f); }
+.gy-td-chang.qua::before, .gy-td-chang.day::before { background: var(--ok); }
 .gy-td-cham {
   width: 14px; height: 14px; border-radius: 50%; position: relative; z-index: 1;
-  background: var(--nen-2, #fff); border: 2px solid var(--vien, #e3e3e0); box-sizing: border-box;
+  background: var(--card); border: 2px solid var(--line); box-sizing: border-box;
 }
-.gy-td-chang.qua .gy-td-cham { background: var(--ok, #3f8f5f); border-color: var(--ok, #3f8f5f); }
+.gy-td-chang.qua .gy-td-cham { background: var(--ok); border-color: var(--ok); }
 .gy-td-chang.day .gy-td-cham {
-  border-color: var(--ok, #3f8f5f); border-width: 4px;
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok, #3f8f5f) 22%, transparent);
+  border-color: var(--ok); border-width: 4px;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 22%, transparent);
 }
-.gy-td-chang.hong .gy-td-cham { background: var(--danger, #c0392b); border-color: var(--danger, #c0392b); }
-.gy-td-chang.hong::before { background: var(--danger, #c0392b); }
+.gy-td-chang.hong .gy-td-cham { background: var(--danger); border-color: var(--danger); }
+.gy-td-chang.hong::before { background: var(--danger); }
 .gy-td-ten {
   font-size: 11px; line-height: 1.25; margin-top: 5px;
-  color: var(--chu-mo, #6b6b66); overflow-wrap: anywhere;
+  color: var(--text-mute); overflow-wrap: anywhere;
 }
-.gy-td-chang.day .gy-td-ten { font-weight: 700; color: var(--chu, #26261f); }
-.gy-td-chang.hong .gy-td-ten { font-weight: 700; color: var(--danger, #c0392b); }
+.gy-td-chang.day .gy-td-ten { font-weight: 700; color: var(--ink); }
+.gy-td-chang.hong .gy-td-ten { font-weight: 700; color: var(--danger); }
 /* Câu trả lời "ai đang giữ · bao lâu rồi", ngay dưới đường tiến độ */
 .gy-td-chu { font-size: 13px; line-height: 1.45; }
 .gy-td-canh {
-  border-left: 3px solid var(--danger, #c0392b); padding: 6px 10px; margin-top: 8px;
-  background: color-mix(in srgb, var(--danger, #c0392b) 7%, transparent);
-  border-radius: 0 var(--r-md, 10px) var(--r-md, 10px) 0;
+  border-left: 3px solid var(--danger); padding: 6px 10px; margin-top: 8px;
+  background: color-mix(in srgb, var(--danger) 7%, transparent);
+  border-radius: 0 var(--r-md) var(--r-md) 0;
 }
 
 /* ---- BẢNG GÓP Ý vs THẺ GÓP Ý — mốc chuyển 1100px, KHÔNG phải 720px ------
@@ -3419,6 +3420,238 @@ tr.kd-chiadoi td {
   .cv-dong { flex-direction: column; align-items: flex-start; gap: 2px; }
   .cv-dong-phu { white-space: normal; }
 }
+
+/* ==========================================================================
+   KHO TÀI LIỆU QUẢN TRỊ  ·  CTL-0026 Đợt 1
+   ---------------------------------------------------------------------------
+   LUẬT BA MÀU (docs/BANG-MAU.md): khối dưới đây KHÔNG có một mã màu mới nào.
+   Mọi màu đều là biến đã có: nâu (--bg/--surface/--card/--line/--ink/--text),
+   xanh lá (--sage/--ok-*), cam (--cam/--cam-dark/--cam-wash/--cam-text),
+   vàng nâu --warn-* (trong họ nâu–cam, không tính là màu thứ tư) và --danger-*
+   — ngoại lệ DUY NHẤT, chỉ dùng cho giấy ĐÃ QUÁ HẠN, tức là thứ đã hỏng.
+
+   MỘT điểm nhấn cam đậm cho một khung nhìn (luật ③): trong tab này chỉ có
+   `.tl-nut-quet`; trong màn quét chỉ có `.tlq-nut-chinh`.
+
+   NGÓN TAY 44px: mọi nút bấm được ở đây đều min-height 44px. Đo bằng
+   `node scripts/do-kho-tai-lieu.mjs`, không khai bằng miệng.
+   ========================================================================== */
+
+/* ---- Câu cảnh báo pháp lý — bắt buộc, và phải ĐỌC ĐƯỢC ---------------- */
+.tl-luat {
+  background: var(--warn-wash);
+  border: 1px solid var(--warn);
+  border-left: 4px solid var(--warn-dark);
+  border-radius: var(--r-md);
+  padding: 12px 14px;
+  margin-bottom: 16px;
+}
+.tl-luat b { color: var(--warn-dark); display: block; margin-bottom: 4px; }
+.tl-luat p { margin: 0; font-size: 13px; color: var(--text-mute); line-height: 1.5; }
+
+/* ---- Thanh công cụ ---- */
+.tl-thanh { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+.tl-nut-quet { width: auto; min-height: 44px; padding: 0 18px; }
+.tl-tim {
+  flex: 1 1 220px; min-height: 44px; padding: 0 14px;
+  border: 1px solid var(--line); border-radius: var(--r-pill);
+  background: var(--card); color: var(--ink); font: inherit;
+}
+.tl-loc-han {
+  display: inline-flex; align-items: center; gap: 8px;
+  min-height: 44px; padding: 0 12px; cursor: pointer;
+  font-size: 14px; color: var(--text);
+}
+
+/* ---- Lọc theo nhóm giấy tờ ---- */
+.tl-nhom-loc { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+.tl-chip {
+  min-height: 44px; padding: 0 14px; cursor: pointer;
+  border: 1px solid var(--line); border-radius: var(--r-pill);
+  background: var(--surface); color: var(--text); font: inherit; font-size: 13px;
+}
+.tl-chip.chon { background: var(--cam-wash); border-color: var(--cam); color: var(--cam-text); font-weight: 600; }
+
+/* ---- Thẻ tài liệu ---- */
+.tl-the {
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: var(--r-md); padding: 14px; margin-bottom: 10px;
+}
+.tl-the-dau { display: flex; gap: 8px; flex-wrap: wrap; align-items: baseline; }
+.tl-ten { color: var(--ink); font-size: 15px; }
+.tl-the-phu { margin-top: 4px; font-size: 13px; color: var(--text-mute); }
+.tl-trich {
+  margin: 8px 0 0; font-size: 13px; color: var(--text-mute);
+  background: var(--surface-2); border-radius: var(--r-sm); padding: 8px 10px;
+  max-height: 4.5em; overflow: hidden;
+}
+.tl-the-nut { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.tl-nut-mo {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: 44px; padding: 0 14px; cursor: pointer;
+  border: 1px solid var(--sage); border-radius: var(--r-pill);
+  background: var(--sage-wash); color: var(--sage-dark);
+  font: inherit; font-size: 13px; font-weight: 600; text-decoration: none;
+}
+.tl-chu {
+  margin-top: 10px; padding: 10px 12px; white-space: pre-wrap;
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--r-sm); font-size: 13px; color: var(--text);
+  max-height: 340px; overflow: auto;
+}
+/* ⚠️ CON SỐ AI ĐỌC — "AI đọc — CHƯA KIỂM" (vá REV-0040 #3).
+   Phải khác HẲN về thị giác so với chữ thường, vì mô hình có dải giữ đúng danh
+   tính tờ giấy mà vẫn thay lặng lẽ vài chữ số. Dùng VÀNG NÂU (`--warn-*`) —
+   vẫn trong họ nâu–cam của docs/BANG-MAU.md, KHÔNG dùng đỏ: đỏ chỉ dành cho
+   thứ đã hỏng, còn đây là thứ CHƯA ĐƯỢC KIỂM. Gạch dưới nét đứt để người mù
+   màu vẫn phân biệt được — màu không bao giờ là tín hiệu duy nhất. */
+.so-ai {
+  background: var(--warn-wash); color: var(--warn-dark);
+  border-bottom: 2px dashed var(--warn-dark);
+  padding: 0 2px; border-radius: 3px; font-weight: 700;
+}
+.tl-so-ai-nhac {
+  margin: 0 0 8px; font-size: 12px; line-height: 1.5; color: var(--text-mute);
+  background: var(--warn-wash); border-radius: var(--r-sm); padding: 8px 10px;
+}
+.tl-chu-van { margin: 0; font: inherit; white-space: pre-wrap; word-break: break-word; }
+.tl-nk-ds { margin: 0; padding-left: 20px; }
+.tl-nk-ds li { margin-bottom: 4px; }
+.tl-dai {
+  display: inline-block; padding: 2px 10px; border-radius: var(--r-pill);
+  font-size: 12px; font-weight: 600;
+  background: var(--surface-2); color: var(--text-mute);
+}
+/* Sắp hết hạn = vàng nâu (còn trong họ nâu-cam). */
+.tl-dai-sap { background: var(--warn-wash); color: var(--warn-dark); }
+/* ĐỎ: ngoại lệ duy nhất, chỉ cho thứ ĐÃ hỏng — giấy đã quá hạn. Đỏ phải hiếm. */
+.tl-dai-qua { background: var(--danger-wash); color: var(--danger-dark); }
+.tl-dai-kin { background: var(--cam-wash); color: var(--cam-text); }
+/* "Đã đối chiếu" = xanh lá, vai NHẬN DIỆN/trạng thái tốt trong luật ba màu.
+   Cặp đôi của nó là `.tl-dai-sap` (vàng nâu) cho phần chữ CHƯA KIỂM — không
+   dùng đỏ: chưa kiểm không phải đã hỏng. */
+.tl-dai-neo { background: var(--sage-wash); color: var(--sage-dark); }
+.tl-trong { color: var(--text-mute); padding: 20px 0; }
+
+/* ==========================================================================
+   MÀN QUÉT — dùng chung cho cả kho chung (Đợt 1) lẫn hồ sơ nhân sự (Đợt 2)
+   ========================================================================== */
+.tlq-khoa-cuon { overflow: hidden; }
+.tlq-nen {
+  position: fixed; inset: 0; z-index: 1200;
+  background: rgba(44, 33, 23, .55);
+  display: flex; align-items: flex-end; justify-content: center;
+}
+.tlq-tam {
+  width: 100%; max-width: 560px; max-height: 92vh; overflow: auto;
+  background: var(--bg); border-radius: var(--r-lg) var(--r-lg) 0 0;
+  box-shadow: var(--shadow-lg);
+}
+@media (min-width: 640px) {
+  .tlq-nen { align-items: center; }
+  .tlq-tam { border-radius: var(--r-lg); }
+}
+.tlq-dau {
+  position: sticky; top: 0; z-index: 2;
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 14px 16px; background: var(--card); border-bottom: 1px solid var(--line);
+}
+.tlq-dau b { color: var(--ink); font-size: 16px; }
+.tlq-x {
+  min-width: 44px; min-height: 44px; cursor: pointer;
+  border: 1px solid var(--line); border-radius: var(--r-pill);
+  background: var(--surface); color: var(--text); font-size: 18px; line-height: 1;
+}
+.tlq-luat {
+  padding: 12px 16px; background: var(--warn-wash);
+  border-bottom: 1px solid var(--warn);
+}
+.tlq-luat > b { color: var(--warn-dark); display: block; font-size: 14px; }
+.tlq-luat-phu { margin-top: 4px; font-size: 12px; color: var(--text-mute); line-height: 1.5; }
+.tlq-than { padding: 16px; }
+.tlq-huong { font-size: 13px; color: var(--text-mute); margin: 0 0 12px; line-height: 1.5; }
+.tlq-canh {
+  font-size: 13px; color: var(--warn-dark); background: var(--warn-wash);
+  border-radius: var(--r-sm); padding: 8px 10px; margin: 0 0 12px;
+}
+.tlq-loi {
+  font-size: 13px; color: var(--danger-dark); background: var(--danger-wash);
+  border: 1px solid var(--danger); border-radius: var(--r-sm);
+  padding: 10px 12px; margin: 12px 0;
+}
+
+/* Chọn nhóm giấy tờ TRƯỚC KHI chụp — ô to, một tay bấm được, không bấm nhầm. */
+.tlq-nhom { display: grid; gap: 10px; }
+.tlq-o-nhom {
+  display: block; width: 100%; min-height: 64px; text-align: left; cursor: pointer;
+  padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--r-md);
+  background: var(--card); color: var(--ink); font: inherit;
+}
+.tlq-o-nhom b { display: block; font-size: 15px; }
+.tlq-o-nhom span { display: block; font-size: 12px; color: var(--text-mute); margin-top: 2px; }
+.tlq-o-nhom i { display: block; font-size: 11px; color: var(--cam-text); font-style: normal; margin-top: 4px; }
+
+/* Danh sách trang đã chụp — xem lại và CHỤP LẠI TỪNG TRANG trước khi lưu. */
+.tlq-dsdanh { display: grid; gap: 10px; margin-bottom: 12px; }
+.tlq-the {
+  display: grid; grid-template-columns: 64px 1fr auto; gap: 10px; align-items: center;
+  padding: 8px; background: var(--card); border: 1px solid var(--line); border-radius: var(--r-md);
+}
+.tlq-the img { width: 64px; height: 84px; object-fit: cover; border-radius: var(--r-sm); background: var(--surface-2); }
+.tlq-the-tin b { display: block; font-size: 14px; color: var(--ink); }
+.tlq-the-tin span { font-size: 12px; color: var(--text-mute); }
+.tlq-the-nut { display: grid; gap: 6px; }
+.tlq-do { font-size: 12px; color: var(--text-mute); margin: 0 0 12px; }
+
+.tlq-nut-chinh {
+  display: block; width: 100%; min-height: 52px; cursor: pointer; margin-bottom: 10px;
+  border: 0; border-radius: var(--r-pill); background: var(--cam); color: var(--white);
+  font: inherit; font-size: 16px; font-weight: 700; box-shadow: var(--shadow-cam);
+}
+.tlq-nut-chinh:disabled { background: var(--surface-2); color: var(--text-mute); box-shadow: none; }
+.tlq-nut-nhi {
+  display: block; width: 100%; min-height: 44px; cursor: pointer;
+  border: 1px solid var(--line); border-radius: var(--r-pill);
+  background: var(--surface); color: var(--text); font: inherit; font-size: 14px;
+}
+.tlq-nut-phu {
+  min-height: 44px; padding: 0 12px; cursor: pointer;
+  border: 1px solid var(--line); border-radius: var(--r-pill);
+  background: var(--surface); color: var(--text); font: inherit; font-size: 13px;
+}
+
+.tlq-form { display: block; }
+.tlq-nhan { display: block; font-size: 13px; font-weight: 600; color: var(--text); margin: 12px 0 4px; }
+.tlq-nhan i { color: var(--cam-text); font-style: normal; }
+.tlq-o {
+  width: 100%; min-height: 44px; padding: 0 12px;
+  border: 1px solid var(--line); border-radius: var(--r-sm);
+  background: var(--card); color: var(--ink); font: inherit;
+}
+/* 5 ô chữ dài của màn quét (tên tài liệu · loại · số hiệu · ai đồng ý · mục
+   đích) là `<textarea class="o-nhieu-dong">` chứ không phải `<input>` — cùng
+   luật REV-0047 mà `main` áp cho 111 ô, chỉ khác là 5 ô này SINH RA SAU lượt
+   vá đó nên phải vá tay.
+   `padding: 0 12px` của `.tlq-o` căn giữa được chữ trong `<input>` (input tự
+   căn giữa theo chiều dọc) nhưng `<textarea>` thì KHÔNG — chữ dính sát mép
+   trên. Trả lại đệm dọc, và giữ đúng sàn chạm 44px lúc ô còn rỗng. */
+textarea.tlq-o { padding: 10px 12px; }
+.tlq-chip { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+/* Chip loại giấy ĐANG CHỌN — nhạt cam, KHÔNG phải cam đậm: trong màn quét, cam
+   đậm đã thuộc về đúng một nút "Lưu" (luật ③ docs/BANG-MAU.md — một điểm nhấn
+   cho một khung nhìn). Thêm viền trong dày lên để người mù màu vẫn thấy cái
+   nào đang chọn: màu không bao giờ là tín hiệu duy nhất. */
+.tlq-nut-phu.chon {
+  background: var(--cam-wash); border-color: var(--cam);
+  color: var(--cam-text); font-weight: 700;
+  box-shadow: inset 0 0 0 1px var(--cam);
+}
+.tlq-dongy {
+  margin-top: 16px; padding: 12px; border: 1px solid var(--cam);
+  border-radius: var(--r-md); background: var(--cam-wash);
+}
+.tlq-dongy > b { color: var(--cam-text); font-size: 14px; }
+.tlq-dongy > p { margin: 4px 0 0; font-size: 12px; color: var(--text-mute); }
 
 /* ==========================================================================
    CTL-0017 — SỬA VIỆC ĐÃ GIAO

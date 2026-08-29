@@ -284,9 +284,11 @@
         </div>
       </div>
 
-      <!-- Tổng quan việc TOÀN CÔNG TY — chỉ Admin thấy (Sếp Ngọc/Sếp Phong xem
-           full công ty, khác bảng "Việc cần làm/tôi giao" bên dưới vốn chỉ
-           lọc theo đúng người đang xem). -->
+      <!-- Tổng quan việc TOÀN CÔNG TY — CON SỐ TỔNG HỢP, chỉ Admin thấy
+           (`cvTongQuanCongTy` cắt bằng `laAdmin` ở máy chủ). Ở LẠI ĐÂY sau khi
+           gộp ba tab: đây là thứ Sếp Ngọc/Sếp Phong nhìn để RA QUYẾT ĐỊNH,
+           không phải danh sách để làm việc — danh sách nằm ở tab Lịch sử làm
+           việc. Quyền của khối này KHÔNG đổi một dòng nào trong lần gộp. -->
       <div class="panel" id="cv-tqct-panel" hidden>
         <div class="panel-head">
           <h4>📊 Tổng quan công việc toàn công ty</h4>
@@ -300,100 +302,30 @@
         </div>
       </div>
 
-      <!-- PHẠM VI — góp ý chị Vũ Lan Hương (HCNS, 28/08/2026): "không hiển thị
-           hết công việc public ở mục Việc cần làm". Ba bảng dưới đây CHỈ lọc
-           theo đúng người đang xem (`WHERE nguoi_nhan_id = ?` — src/index.js
-           cvDanhSach); việc của người khác chưa bao giờ vào đây. Trước đây
-           màn hình KHÔNG NÓI điều đó ra, nên nhìn như hệ thống thiếu việc.
-           Nói rõ phạm vi + chỉ đúng đường sang chỗ xem việc toàn công ty.
-           KHÔNG mở thêm quyền: tab "Lịch sử làm việc" vốn đã mở cho MỌI vai
-           trò (src/quyen.js), đây chỉ là chỉ đường tới chỗ họ vẫn vào được.
+      <!-- ĐÃ GỘP ĐI — Sếp Ngọc nhắc HAI LẦN (29/08/2026): "đoạn này bị thừa,
+           tích hợp chung vào chỗ lịch sử làm việc là được" · "cái này, thấy
+           thừa, gộp vào lịch sử làm việc đi".
 
-           GỌN LẠI 29/08/2026 (REV-0034 · L4). Bản đầu là một dải 4 dòng chữ +
-           một nút riêng: đo được 137px ở 375px và 157px ở 320px — ăn mất ~2
-           dòng bảng MỖI LẦN vào màn, kể cả khi không có gì bị cắt, trên đúng
-           màn hình nhân viên kho dùng bằng một tay. Trái đúng nguyên tắc viết
-           trong app.js: *"một dải luôn hiện là một dải mắt người học được cách
-           bỏ qua trong đúng một tuần"*. Nay: MỘT dòng, và cả dải LÀ cái nút
-           (vẫn ≥44px cho ngón tay — đo bằng npm run do-nut-dai-cat). Dải BÁO
-           CẮT thì giữ nguyên vì nó chỉ hiện khi thật sự có cắt. -->
-      <button type="button" class="cv-pham-vi dai-cat-nut" data-dai-cat-tab="lichsuviec"
-              title="Ba bảng dưới đây chỉ hiện việc bạn nhận · bạn được mời phối hợp · bạn giao. Việc của người khác không nằm ở đây.">
-        <span class="cv-pham-vi-chu">Đây chỉ là việc của bạn</span>
-        <span class="cv-pham-vi-di">Xem việc toàn công ty →</span>
-      </button>
+           GỠ KHỎI ĐÂY: dải "Đây chỉ là việc của bạn" + nút "Xem việc toàn công
+           ty →" + ba tab "Việc cần làm / Việc phối hợp / Việc tôi giao" + ba
+           bảng của chúng. Tất cả đã chuyển sang tab "Lịch sử làm việc" thành
+           MỘT màn duy nhất có bộ lọc: Việc của tôi · Tôi phối hợp · Tôi giao ·
+           Toàn công ty.
 
-      <div class="seg" id="cvSeg">
-        <button class="seg-nut active" data-cv="nhan">Việc cần làm</button>
-        <button class="seg-nut" data-cv="phoihop">Việc phối hợp</button>
-        <button class="seg-nut" data-cv="giao">Việc tôi giao</button>
-      </div>
+           VÌ SAO. Ba chỗ cùng hiện một loại dữ liệu không phải ba tính năng —
+           là MỘT tính năng bị chép ra ba lần. Mỗi lần thêm cột hay đổi luật
+           hiển thị phải sửa ba nơi; sót một nơi là ba màn hình nói ba con số
+           khác nhau về cùng một việc. Sau bản này còn HAI chỗ: khối "Việc của
+           tôi hôm nay" ở trên (chỗ LÀM VIỆC hằng ngày, giữ nguyên) và tab Lịch
+           sử làm việc (chỗ TRA CỨU + thao tác đầy đủ).
 
-      <div class="kv-pane" id="cv-pane-nhan">
-        <div class="panel">
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Việc</th>
-                  <th>Đầu ra cần đạt</th>
-                  <th>Người giao</th>
-                  <th>Hạn chót</th>
-                  <th>Trạng thái</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody id="cv-bang-nhan"></tbody>
-            </table>
-          </div>
-          <div class="empty" id="cv-trong-nhan" hidden>Chưa ai giao việc gì cho Sếp/bạn cả.</div>
-          <div class="dai-cat" id="cv-cat-nhan" hidden></div>
-        </div>
-      </div>
-
-      <div class="kv-pane" id="cv-pane-phoihop" hidden>
-        <div class="panel">
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Việc</th>
-                  <th>Đầu ra cần đạt</th>
-                  <th>Người chính</th>
-                  <th>Người giao</th>
-                  <th>Hạn chót</th>
-                  <th>Trạng thái</th>
-                </tr>
-              </thead>
-              <tbody id="cv-bang-phoihop"></tbody>
-            </table>
-          </div>
-          <div class="empty" id="cv-trong-phoihop" hidden>Chưa được mời phối hợp việc nào.</div>
-          <div class="dai-cat" id="cv-cat-phoihop" hidden></div>
-        </div>
-      </div>
-
-      <div class="kv-pane" id="cv-pane-giao" hidden>
-        <div class="panel">
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Việc</th>
-                  <th>Đầu ra cần đạt</th>
-                  <th>Giao cho</th>
-                  <th>Hạn chót</th>
-                  <th>Trạng thái</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody id="cv-bang-giao"></tbody>
-            </table>
-          </div>
-          <div class="empty" id="cv-trong-giao" hidden>Sếp/bạn chưa giao việc nào.</div>
-          <div class="dai-cat" id="cv-cat-giao" hidden></div>
-        </div>
-      </div>
+           KHÔNG mất chức năng nào: mọi nút (Bắt đầu làm · Nộp kết quả · Duyệt
+           xong · Trả lại · Sửa · Huỷ · ✓ Xong cho todo cá nhân), dải cắt danh
+           sách, và đường drill-down `MO_DEN_VIEC_CUA_TOI` đều còn — xem
+           `khoiDongLichSuViec` trong app.js và bảng đối chiếu trong
+           docs/reviews/. Quyền KHÔNG đổi một dòng: máy chủ vẫn cắt như cũ
+           (`cvDanhSach` lọc theo người gọi, `cvLichSu` đòi tab `lichsuviec`,
+           `cvTongQuanCongTy` đòi Admin). -->
 
     </section>
 
@@ -403,7 +335,20 @@
     <section class="view" id="v-lichsuviec" hidden>
       <div class="view-head">
         <h3>Lịch sử làm việc</h3>
-        <p>Toàn bộ việc trong Trạm Mục Tiêu — của tất cả mọi người, không riêng của bạn. Ai làm gì, xong khi nào, kết quả ra sao đều lưu lại ở đây.</p>
+        <p>Một chỗ duy nhất cho mọi việc trong Trạm Mục Tiêu: việc của bạn, việc bạn phối hợp, việc bạn giao, và việc của toàn công ty. Đổi phạm vi bằng bộ lọc ngay dưới.</p>
+      </div>
+
+      <!-- BỘ LỌC PHẠM VI — thay cho ba tab cũ bên Trạm Mục Tiêu + dải "Đây chỉ
+           là việc của bạn" + nút "Xem việc toàn công ty →" (Sếp Ngọc nhắc hai
+           lần 29/08/2026). Bốn phạm vi, MỘT bảng, một bộ ô tìm/lọc trạng thái
+           dùng chung — đổi luật hiển thị từ nay chỉ sửa một chỗ.
+           `.seg-loc` chỉ thêm chiều cao 44px cho ngón tay, KHÔNG đổi màu:
+           dùng nguyên `.seg`/`.seg-nut.active` đã có (docs/BANG-MAU.md). -->
+      <div class="seg seg-loc" id="lsv-loc">
+        <button class="seg-nut active" data-lsv="toi">Việc của tôi</button>
+        <button class="seg-nut" data-lsv="phoihop">Tôi phối hợp</button>
+        <button class="seg-nut" data-lsv="giao">Tôi giao</button>
+        <button class="seg-nut" data-lsv="congty">Toàn công ty</button>
       </div>
 
       <div class="panel">
@@ -428,14 +373,23 @@
         <div class="table-wrap">
           <table id="ls-cv-tbl">
             <thead>
+              <!-- "Đầu ra cần đạt" là CỘT RIÊNG, không phải dòng phụ chữ nhỏ.
+                   Công ty chạy MBOs: câu hỏi kỷ luật là "đầu ra cụ thể là gì?",
+                   nên Sếp phải rà được CẢ MỘT CỘT bằng mắt, thay vì đọc từng ô
+                   "Việc" đi tìm. Ngang hàng với tên việc, không phải chú thích.
+                   Ở màn hẹp (≤979px) cột này tụt xuống dòng phụ trong ô "Việc"
+                   — chỉ khi đó, và bằng CSS thuần (`.cot-daura`/`.daura-hep`
+                   trong style.css), không phải bằng JS vẽ hai kiểu. -->
               <tr>
                 <th>Việc</th>
+                <th class="cot-daura">Đầu ra cần đạt</th>
                 <th>Người nhận</th>
                 <th>Người giao</th>
                 <th>Mục tiêu</th>
                 <th>Hạn chót</th>
                 <th>Trạng thái</th>
                 <th>Cập nhật</th>
+                <th></th>
               </tr>
             </thead>
             <tbody id="ls-cv-bang"></tbody>
@@ -2314,6 +2268,47 @@
       </div>
     </section>
 
+    <!-- ---------- Kho tài liệu quản trị (CTL-0026) ----------
+         Tab mở cho MỌI vai trò, nhưng NHÓM GIẤY TỜ bên trong thì cắt ở máy
+         chủ (src/quyen.js + src/tai-lieu.js). Kế toán không thấy hồ sơ nhân
+         sự, quản lý kho không thấy CCCD — kể cả khi gọi thẳng API. -->
+    <section class="view" id="v-khotailieu" hidden>
+      <div class="view-head">
+        <h3>Kho tài liệu</h3>
+        <p>Giấy tờ quản trị bản cứng quét bằng điện thoại, gộp nhiều trang thành một tài liệu, bóc chữ để tra cứu, lưu trên Google Drive. Có nhắc trước khi giấy hết hạn.</p>
+      </div>
+
+      <!-- ⚠️ CÂU BẮT BUỘC — CTL-0026 Mục 2. Không có nó là có ngày ai đó dọn
+           kho giấy. Đặt NGAY ĐẦU TAB, trước cả nút quét. -->
+      <div class="tl-luat" id="tl-luat">
+        <b>⚠️ Đây là bản dự phòng để tra cứu. KHÔNG thay bản giấy — đừng huỷ giấy gốc.</b>
+        <p>Luật Giao dịch điện tử 2023 (hiệu lực 01/7/2024) chỉ công nhận bản số hoá khi
+           có ký số và bảo đảm toàn vẹn; quét bằng điện thoại không đạt. Luật Kế toán vẫn
+           bắt giữ bản gốc có chữ ký và dấu đỏ, lưu 5 năm / 10 năm / vĩnh viễn tuỳ loại.</p>
+      </div>
+
+      <div class="tl-thanh">
+        <!-- Ẩn SẴN: chỉ hiện lại khi máy chủ xác nhận người này lưu được ít
+             nhất một nhóm (`nhom_luu_duoc`). Bày nút rồi mới ẩn là một cú nháy
+             hứa suông. Vá REV-0040 #8. -->
+        <button type="button" class="btn-primary tl-nut-quet" id="tl-nut-quet" hidden>📷 Quét tài liệu mới</button>
+        <!-- `maxlength` BẮT BUỘC — REV-0047/L1: ô một dòng không khai trần thì
+             `maxLength === -1`, nhận chữ VÔ HẠN rồi kéo ngang ở 375px. 80 là
+             trần chung của mọi ô tìm trong ERP (main `905791f` vá 80 ô cùng
+             luật). Ô này sinh ra ở nhánh CTL-0026 nên KHÔNG nằm trong 111 ô
+             đã vá — vá tay cho đồng bộ, không để lệch một ô. -->
+        <input type="search" id="tl-tim" class="tl-tim" maxlength="80" placeholder="Tìm: gõ có dấu hay không dấu đều được">
+        <label class="tl-loc-han"><input type="checkbox" id="tl-sap-het"> Chỉ giấy sắp hết hạn</label>
+      </div>
+
+      <div class="tl-nhom-loc" id="tl-nhom-loc"></div>
+
+      <div id="tl-danh-sach"></div>
+      <p class="tl-trong" id="tl-trong" hidden>Chưa có tài liệu nào trong kho.</p>
+      <!-- Danh sách bị cắt thì phải NÓI RA (LUAT-GOP-Y-LA-TRIEU-CHUNG Mục 2) -->
+      <div class="dai-cat" id="tl-cat" hidden></div>
+    </section>
+
     <!-- ---------- Quản trị (chỉ admin) ---------- -->
     <section class="view" id="v-quantri" hidden>
       <div class="view-head">
@@ -2855,6 +2850,39 @@
       </div>
     </form>
     <div class="form-loi" id="nsHd-loi"></div>
+
+    <!-- ==================================================================
+         GIẤY TỜ CỦA NGƯỜI NÀY  ·  CTL-0025 Đợt 2
+         ------------------------------------------------------------------
+         Sếp Ngọc 29/08/2026: "khi có các giấy tờ kiểu như quyết định, uỷ
+         quyền liên quan đến nhân sự đó tao sẽ lưu vào đây luôn THÀNH 1 BỘ
+         là đẹp". Mở hồ sơ là thấy TRỌN bộ giấy của người đó — không phải
+         sang tab Kho tài liệu mò.
+
+         Nhưng đây là một CỬA NHÌN, không phải kho thứ hai: cùng những tờ
+         giấy ấy vẫn nằm trong kho chung. Một kho, hai cửa nhìn.
+
+         Quyền cắt ở MÁY CHỦ (`src/quyen.js` — quản lý kho KHÔNG có nhóm
+         `nhan_su`). Khối này chỉ vẽ những gì máy chủ chịu trả. -->
+    <div class="kv-md-muc">Giấy tờ của người này</div>
+    <div class="tl-luat">
+      <b>⚠️ Đây là bản dự phòng để tra cứu. KHÔNG thay bản giấy — đừng huỷ giấy gốc.</b>
+      <p>
+        Chỉ lưu <b>BẢN SAO</b>. Quét xong <b>trả giấy lại cho nhân viên ngay</b> —
+        doanh nghiệp không được giữ giấy tờ gốc của người lao động (BLLĐ 2019 Đ.17).
+        Mỗi lượt mở giấy tờ ở đây đều <b>ghi nhật ký</b> theo Luật Bảo vệ dữ liệu
+        cá nhân 91/2025/QH15.
+      </p>
+    </div>
+    <div class="tl-thanh">
+      <button type="button" class="btn-primary tl-nut-quet" id="nsGt-quet" hidden>
+        📷 Quét thêm giấy tờ
+      </button>
+      <span class="sm" id="nsGt-dem"></span>
+    </div>
+    <div id="nsGt-ds"></div>
+    <div class="empty tl-trong" id="nsGt-trong" hidden></div>
+    <div id="nsGt-cat"></div>
 
     <div class="kv-md-muc">Lịch sử thay đổi</div>
     <div class="table-wrap">

@@ -10,7 +10,7 @@
    Chi phí 0: Chrome sẵn trên máy + WebSocket có sẵn của Node.
    ========================================================================== */
 
-import { cpSync, mkdirSync, readFileSync, writeFileSync, rmSync, existsSync, statSync } from 'node:fs';
+import { cpSync, mkdirSync, readFileSync, readdirSync, writeFileSync, rmSync, existsSync, statSync } from 'node:fs';
 import { execFileSync, spawn } from 'node:child_process';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
@@ -63,6 +63,51 @@ const KIEU = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=u
                '.png': 'image/png', '.svg': 'image/svg+xml', '.webmanifest': 'application/manifest+json',
                '.json': 'application/json', '.ico': 'image/x-icon' };
 
+/* ==========================================================================
+   HOÀN NGUYÊN `public/` VỀ MỘT COMMIT — ĐỦ TỆP, KHÔNG PHẢI DANH SÁCH TAY
+   ---------------------------------------------------------------------------
+   BÀI HỌC 29/08/2026 (REV-0048). Bản cũ chép tay bốn tên tệp
+   (`app.js`·`api.js`·`style.css`·`app.html`). Danh sách tay là một lời hứa
+   phải nhớ cập nhật, và không ai nhớ: bộ `anh-chat-noibo` (`239aba7`) chỉ
+   hoàn nguyên `style.css`, nên **cả ba** ảnh `1440-*-truoc` ra ĐÚNG MỘT tấm
+   — "ảnh trước" chính là ảnh sau, và Sếp chấm bằng mắt trên hai tấm y hệt.
+   Nay `main` còn thêm `assets/js/so-do-bieu-tuong.js` và `sw.js`: danh sách
+   tay đã sai TIẾP một lần nữa mà chưa ai kịp thấy.
+
+   → Hỏi thẳng git: `git ls-tree -r` lấy TOÀN BỘ tệp `public/` của commit đó,
+     ghi đè hết; tệp nào có trong cây hiện tại mà commit đó KHÔNG có thì XOÁ
+     (tệp mới sinh sau này không được lọt vào bản "trước").
+   → Trả về số tệp đã ghi/xoá để nơi gọi in ra — im lặng là cách hỏng cũ.
+   ========================================================================== */
+export function hoanNguyenPublic(tam, commit) {
+  const ds = execFileSync('git', ['ls-tree', '-r', '--name-only', '-z', commit, '--', 'public'],
+    { cwd: GOC, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
+    .split('\0').filter(Boolean).map(p => p.replace(/^public\//, ''));
+  const cua = new Set(ds);
+
+  let ghi = 0;
+  for (const f of ds) {
+    // `-p` cho nhị phân (png/ico) — `encoding:'utf8'` sẽ làm hỏng byte.
+    const noi = execFileSync('git', ['show', `${commit}:public/${f}`],
+      { cwd: GOC, maxBuffer: 256 * 1024 * 1024 });
+    const d = join(tam, f);
+    mkdirSync(join(d, '..'), { recursive: true });
+    writeFileSync(d, noi);
+    ghi++;
+  }
+
+  let xoa = 0;
+  const quet = (thu, tienTo = '') => {
+    for (const m of readdirSync(thu, { withFileTypes: true })) {
+      const t = tienTo ? `${tienTo}/${m.name}` : m.name;
+      if (m.isDirectory()) quet(join(thu, m.name), t);
+      else if (!cua.has(t)) { rmSync(join(thu, m.name), { force: true }); xoa++; }
+    }
+  };
+  quet(tam);
+  return { ghi, xoa, tep: ds };
+}
+
 /**
  * Dựng bản tạm của `public/` rồi phục vụ trên 127.0.0.1 kèm /api/* giả.
  * @param {object} o
@@ -78,15 +123,7 @@ export async function dungMayGia({ commit = null, tatHoatAnh = false, apiRieng =
   mkdirSync(tam, { recursive: true });
   cpSync(join(GOC, 'public'), tam, { recursive: true });
 
-  if (commit) {
-    for (const f of ['assets/js/app.js', 'assets/js/api.js', 'assets/css/style.css', 'app.html']) {
-      try {
-        writeFileSync(join(tam, f),
-          execFileSync('git', ['show', `${commit}:public/${f}`],
-            { cwd: GOC, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }), 'utf8');
-      } catch { /* commit cũ chưa có tệp đó — bỏ qua */ }
-    }
-  }
+  if (commit) hoanNguyenPublic(tam, commit);
 
   // Service worker giữ trang "sống"; gỡ trong bản tạm cho phép đo tất định.
   const boSW = s => s.replace(/'serviceWorker' in navigator/g, 'false');
@@ -116,7 +153,10 @@ export async function dungMayGia({ commit = null, tatHoatAnh = false, apiRieng =
       res.end(JSON.stringify(o));
     };
     if (duong.startsWith('/api/')) {
-      if (apiRieng && apiRieng(duong, u, traJson)) return;
+      /* `req` là đối số THỨ TƯ (thêm 29/08/2026, các bàn đo cũ bỏ qua được):
+         bàn chụp cần đọc `referer` để trả 401 cho `index.html` — không thì
+         màn đăng nhập tự đá sang `app.html` và ta chụp nhầm màn. */
+      if (apiRieng && apiRieng(duong, u, traJson, req)) return;
       if (duong === '/api/toi-la-ai') return traJson(TOI);
       if (duong === '/api/danh-ba') return traJson({ danh_ba: DANH_BA });
       if (duong === '/api/chat/tin-nhan') {
@@ -186,7 +226,11 @@ export async function moChrome({ url, rong = 1440, cao = 812, doiMs = 2500 } = {
   const chrome = spawn(CHROME, ['--headless=new', '--disable-gpu', '--no-sandbox', '--hide-scrollbars',
     '--no-first-run', '--no-default-browser-check', '--disable-extensions',
     '--remote-debugging-port=0', `--user-data-dir=${hoSo}`,
-    `--window-size=${rong},900`, url], { stdio: ['ignore', 'ignore', 'pipe'] });
+    /* Cờ này chỉ là gợi ý ban đầu — bề ngang THẬT do
+       `Emulation.setDeviceMetricsOverride` bên dưới đặt (Chrome ép cửa sổ
+       rộng tối thiểu ~500px, xem ghi chú ở đó). */
+    `--window-size=${Math.max(rong, 500)},${Math.max(cao, 600)}`, url],
+    { stdio: ['ignore', 'ignore', 'pipe'] });
 
   const wsUrl = await new Promise((ok, hong) => {
     let dem = '';
@@ -256,8 +300,26 @@ export async function moChrome({ url, rong = 1440, cao = 812, doiMs = 2500 } = {
     return r.result.value;
   }
 
+  /* CHỤP ẢNH QUA CDP, KHÔNG QUA CỜ `--screenshot` -------------------------
+     BÀI HỌC 29/08/2026 (REV-0048, lỗi ảnh THỨ HAI). `--window-size=375,812`
+     + `--screenshot` ra tệp PNG đúng 375×812 nhưng NỘI DUNG bị cắt cụt mép
+     phải: Chrome trên Windows có bề ngang cửa sổ tối thiểu (~500px), trang
+     dàn ở ~500 rồi cắt lấy 375 bên trái. Đúng cái bẫy đã ghi ở
+     `Emulation.setDeviceMetricsOverride` ngay phía trên — bàn chụp chưa
+     dùng tới. `Page.captureScreenshot` chụp ĐÚNG khung nhìn ĐÃ GIẢ LẬP, nên
+     ảnh 375px là 375px thật, đủ bề ngang.
+     `captureBeyondViewport: false` — muốn ảnh bằng đúng cái người dùng thấy
+     trên màn, không phải ảnh cuộn cả trang. */
+  async function chup(duongRa) {
+    const { data } = await goi('Page.captureScreenshot',
+      { format: 'png', captureBeyondViewport: false }, sessionId);
+    mkdirSync(join(duongRa, '..'), { recursive: true });
+    writeFileSync(duongRa, Buffer.from(data, 'base64'));
+    return duongRa;
+  }
+
   return {
-    chay, goi, sessionId, loiConsole, canhBao, ngoaiLe,
+    chay, goi, chup, sessionId, loiConsole, canhBao, ngoaiLe,
     doi: ms => new Promise(ok => setTimeout(ok, ms)),
     dong() {
       try { ws.close(); } catch {}

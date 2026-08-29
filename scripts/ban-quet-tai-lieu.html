@@ -1,0 +1,607 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bàn đo Kho tài liệu — CTL-0026</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+<style>
+  body { font: 14px/1.6 system-ui, sans-serif; margin: 0; padding: 16px; background: #f5ecdf; color: #2c2117; }
+  pre { background: #fffcf4; border: 1px solid #e2d0ba; border-radius: 8px; padding: 12px; white-space: pre-wrap; }
+  h3 { margin: 18px 0 6px; }
+  /* Khung 375px — ĐÚNG bề ngang điện thoại nhỏ nhất công ty đang dùng. */
+  #khung375 { width: 375px; height: 720px; border: 2px solid #b45606; border-radius: 10px; overflow: hidden; }
+  #anhThu { max-width: 260px; border: 1px solid #e2d0ba; border-radius: 8px; }
+</style>
+</head>
+<body>
+<h2>Bàn đo Kho tài liệu — CTL-0026 Đợt 1</h2>
+<p>Ba phép đo chạy trên <b>đúng mã đang phát hành</b> trong <code>public/</code>.</p>
+<pre id="kq">đang đo…</pre>
+<h3>Trang giấy dựng để thử (đã thu nhỏ để xem)</h3>
+<img id="anhThu" alt="trang thử">
+<h3>Màn quét thật, khung 375px</h3>
+<div id="khung375"></div>
+
+<script type="module">
+import { nenAnhChung, coByteCuaDataUrl } from '/assets/js/anh-chung.js';
+import { gopTrangThanhPDF, dataUrlThanhByte, byteThanhBase64 } from '/assets/js/gop-trang-pdf.js';
+import { moQuetTaiLieu } from '/assets/js/quet-tai-lieu.js';
+
+const dong = [];
+const ghi = (s) => { dong.push(s); document.getElementById('kq').textContent = dong.join('\n'); };
+const kb = (b) => (b / 1024).toFixed(0) + ' KB';
+const mb = (b) => (b / 1048576).toFixed(2) + ' MB';
+
+/* ==========================================================================
+   Dựng "ảnh chụp một trang giấy bằng điện thoại"
+   ---------------------------------------------------------------------------
+   Không lấy ảnh mẫu trên mạng: bàn đo phải chạy được ngoại tuyến và cho ra
+   CÙNG MỘT con số ở mọi máy. Trang dựng ra có đủ thứ làm ảnh nặng thật:
+   chữ tiếng Việt có dấu ở nhiều cỡ, bảng kẻ, DẤU ĐỎ tròn, và NHIỄU HẠT —
+   nhiễu là thứ làm JPEG phình to nhất, và ảnh chụp trong kho thiếu sáng thì
+   luôn có nhiễu. Thiếu nhiễu là ảnh thử nhẹ giả tạo, số đo vô nghĩa.
+   ========================================================================== */
+function dungTrangGiay(soTrang, { mo = false } = {}) {
+  const W = 3024, H = 4032;                 // đúng cỡ cảm biến 12MP dọc
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const x = c.getContext('2d');
+  x.fillStyle = '#f2efe6'; x.fillRect(0, 0, W, H);
+
+  x.fillStyle = '#1a1a1a';
+  x.font = 'bold 96px "Times New Roman", serif';
+  x.textAlign = 'center';
+  x.fillText('CỘNG HOÀ XÃ HỘI CHỦ NGHĨA VIỆT NAM', W / 2, 300);
+  x.font = 'bold 78px "Times New Roman", serif';
+  x.fillText('Độc lập — Tự do — Hạnh phúc', W / 2, 420);
+  x.font = 'bold 110px "Times New Roman", serif';
+  x.fillText('GIẤY CHỨNG NHẬN', W / 2, 700);
+  x.font = 'bold 88px "Times New Roman", serif';
+  x.fillText('CƠ SỞ ĐỦ ĐIỀU KIỆN AN TOÀN THỰC PHẨM', W / 2, 820);
+
+  x.textAlign = 'left';
+  x.font = '64px "Times New Roman", serif';
+  const CAU = [
+    `Số: ${123 + soTrang}/2026/GCN-ATTP`,
+    'Tên cơ sở: CÔNG TY TNHH ALPHA GREEN COMMERCE',
+    'Địa chỉ: Số 12, ngõ 45, phường Yên Hoà, quận Cầu Giấy, Hà Nội',
+    'Người đại diện: Bùi Thị Ngọc — Chức vụ: Giám đốc',
+    'Loại hình: Kinh doanh thực phẩm nhập khẩu và nông sản khô',
+    'Ngày cấp: 15/03/2026        Có giá trị đến: 15/03/2029',
+    '',
+    'Cơ sở nêu trên đủ điều kiện an toàn thực phẩm theo quy định',
+    'tại Nghị định số 15/2018/NĐ-CP ngày 02 tháng 02 năm 2018 của',
+    'Chính phủ quy định chi tiết thi hành một số điều của Luật An',
+    'toàn thực phẩm.',
+    '',
+    'Giấy chứng nhận này có giá trị trong thời hạn 03 (ba) năm kể',
+    'từ ngày ký. Cơ sở có trách nhiệm duy trì các điều kiện đã được',
+    'thẩm định trong suốt quá trình hoạt động.'
+  ];
+  CAU.forEach((t, i) => x.fillText(t, 260, 1050 + i * 100));
+
+  // Bảng kẻ — đường nét mảnh làm JPEG khó nén, giống bảng biểu giấy tờ thật.
+  x.strokeStyle = '#333'; x.lineWidth = 4;
+  for (let i = 0; i <= 5; i++) { x.beginPath(); x.moveTo(260, 2700 + i * 110); x.lineTo(2760, 2700 + i * 110); x.stroke(); }
+  for (let i = 0; i <= 3; i++) { x.beginPath(); x.moveTo(260 + i * 834, 2700); x.lineTo(260 + i * 834, 3250); x.stroke(); }
+  x.font = '52px "Times New Roman", serif';
+  for (let r = 0; r < 5; r++) for (let cc = 0; cc < 3; cc++) {
+    x.fillText(['Sản phẩm', 'Hạn dùng', 'Ghi chú'][cc] + ' ' + (r + 1), 300 + cc * 834, 2775 + r * 110);
+  }
+
+  // DẤU ĐỎ tròn — thứ CTL-0026 gọi đích danh phải thử.
+  x.save();
+  x.translate(2350, 3560); x.rotate(-0.18);
+  x.strokeStyle = 'rgba(190,20,30,.85)'; x.lineWidth = 14;
+  x.beginPath(); x.arc(0, 0, 260, 0, Math.PI * 2); x.stroke();
+  x.lineWidth = 6; x.beginPath(); x.arc(0, 0, 225, 0, Math.PI * 2); x.stroke();
+  x.fillStyle = 'rgba(190,20,30,.85)';
+  x.textAlign = 'center'; x.font = 'bold 46px "Times New Roman", serif';
+  x.fillText('ALPHA GREEN', 0, -20); x.fillText('COMMERCE', 0, 40);
+  x.restore();
+
+  x.textAlign = 'left'; x.fillStyle = '#1a1a1a';
+  x.font = 'italic 56px "Times New Roman", serif';
+  x.fillText(`Trang ${soTrang}/3`, 260, 3900);
+
+  // NHIỄU HẠT — chụp trong kho thiếu sáng. Đây là thứ làm ảnh phình nhất.
+  const anh = x.getImageData(0, 0, W, H);
+  const d = anh.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const n = (Math.random() - 0.5) * 26;
+    d[i] += n; d[i + 1] += n; d[i + 2] += n;
+  }
+  x.putImageData(anh, 0, 0);
+
+  // Trang "mờ" cho ca đối chứng: làm nhoè bằng vẽ lại qua bộ lọc blur.
+  if (mo) {
+    const c2 = document.createElement('canvas'); c2.width = W; c2.height = H;
+    const x2 = c2.getContext('2d');
+    x2.filter = 'blur(6px)'; x2.drawImage(c, 0, 0);
+    return c2;
+  }
+  return c;
+}
+
+function canvasThanhTep(c, ten) {
+  return new Promise(res => c.toBlob(b => res(new File([b], ten, { type: 'image/jpeg' })), 'image/jpeg', 0.95));
+}
+
+/* ==========================================================================
+   ① CỠ ẢNH TRƯỚC / SAU NÉN
+   ========================================================================== */
+ghi('─── ① CỠ ẢNH TRƯỚC / SAU NÉN (nenAnhChung, đúng thông số màn quét) ───');
+const THONG_SO = { cheDo: 'vua-khung', canhToiDa: 1700, chatLuong: 0.72, gioiHanByte: 450 * 1024 };
+const tepTrang = [];
+let tongGoc = 0, tongNen = 0, tongMs = 0;
+const TRANG_DA_DUNG = [];
+for (let i = 1; i <= 3; i++) {
+  const c = dungTrangGiay(i);
+  TRANG_DA_DUNG.push(c);
+  const f = await canvasThanhTep(c, `trang-${i}.jpg`);
+  const t0 = performance.now();
+  const nenXong = await nenAnhChung(f, THONG_SO);
+  const ms = performance.now() - t0;
+  const co = coByteCuaDataUrl(nenXong);
+  tongGoc += f.size; tongNen += co; tongMs += ms;
+  tepTrang.push(nenXong);
+  ghi(`  Trang ${i}: gốc ${mb(f.size)} (${f.size} B) → nén ${kb(co)} (${co} B) · ` +
+      `nhẹ đi ${(100 - co / f.size * 100).toFixed(1)}% · ${ms.toFixed(0)} ms`);
+  if (i === 1) document.getElementById('anhThu').src = nenXong;
+}
+ghi(`  TỔNG 3 trang: ${mb(tongGoc)} → ${kb(tongNen)} · nhẹ đi ${(100 - tongNen / tongGoc * 100).toFixed(1)}% · ` +
+    `nén hết ${tongMs.toFixed(0)} ms`);
+ghi(`  Mỗi trang đều dưới trần 450 KB: ${tepTrang.every(t => coByteCuaDataUrl(t) <= 450 * 1024) ? 'ĐẠT' : '✗ HỎNG'}`);
+
+/* Ca đối chứng: KHÔNG nén, gửi thẳng ảnh máy ảnh — phải nặng gấp nhiều lần. */
+ghi(`  ĐỐI CHỨNG (không nén): 3 trang = ${mb(tongGoc)} — nặng gấp ${(tongGoc / tongNen).toFixed(1)} lần bản đã nén.`);
+
+/* ---- Xuất ảnh thử ra đĩa cho bàn đo BÓC CHỮ dùng lại -------------------
+   Ba tấm: (a) ảnh bóc chữ đúng thông số sản phẩm · (b) bản MỜ, đúng cảnh
+   "chụp lệch/mờ" mà CTL-0025 nêu · (c) bản nén rất mạnh, để xem chữ tệ tới
+   đâu thì AI bắt đầu đọc sai. Cả ba đều đi qua ĐÚNG `nenAnhChung()` của sản
+   phẩm — dựng ảnh riêng cho phép đo OCR là đo một đường khác với đường chạy
+   thật, số ra đẹp mà vô giá trị. */
+const THONG_SO_OCR = { cheDo: 'vua-khung', canhToiDa: 1100, chatLuong: 0.65, gioiHanByte: 160 * 1024 };
+{
+  const net = await nenAnhChung(await canvasThanhTep(TRANG_DA_DUNG[0], 'a.jpg'), THONG_SO_OCR);
+  const mo = await nenAnhChung(await canvasThanhTep(dungTrangGiay(1, { mo: true }), 'b.jpg'), THONG_SO_OCR);
+  const te = await nenAnhChung(await canvasThanhTep(TRANG_DA_DUNG[0], 'c.jpg'),
+    { cheDo: 'vua-khung', canhToiDa: 700, chatLuong: 0.4 });
+  const r = await fetch('/luu-anh-thu', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ 'anh-thu-net': net, 'anh-thu-mo': mo, 'anh-thu-te': te })
+  });
+  const j = await r.json();
+  ghi(`  Đã ghi ${j.so_tep} ảnh thử vào .do-tam/ cho bàn đo bóc chữ ` +
+      `(nét ${kb(coByteCuaDataUrl(net))} · mờ ${kb(coByteCuaDataUrl(mo))} · nén tệ ${kb(coByteCuaDataUrl(te))})`);
+}
+
+/* ==========================================================================
+   ② GỘP THÀNH MỘT PDF + THỜI GIAN GỬI
+   ========================================================================== */
+ghi('\n─── ② GỘP 3 TRANG → MỘT PDF, VÀ THỜI GIAN GỬI ───');
+const t0pdf = performance.now();
+const pdf = gopTrangThanhPDF(tepTrang.map(dataUrlThanhByte), { tieuDe: 'Giấy chứng nhận ATTP' });
+const msPdf = performance.now() - t0pdf;
+ghi(`  PDF: ${kb(pdf.length)} (${pdf.length} B) · gộp hết ${msPdf.toFixed(0)} ms · ` +
+    `phình thêm ${pdf.length - tongNen} B so với tổng ảnh`);
+const b64 = byteThanhBase64(pdf);
+ghi(`  Base64 gửi lên: ${kb(b64.length)} (${b64.length} ký tự)`);
+
+const t0gui = performance.now();
+const rGui = await fetch('/api/tai-lieu/luu', {
+  method: 'POST', headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ ma_gui: 'ban-do', nhom: 'attp', tieu_de: 'Giấy ATTP', so_trang: 3, tep: b64 })
+});
+const jGui = await rGui.json();
+ghi(`  Gửi tới máy chủ nội bộ: ${(performance.now() - t0gui).toFixed(0)} ms · ` +
+    `máy chủ nhận ${kb(jGui.co_byte_than)} thân yêu cầu`);
+
+/* Mạng chậm — TÍNH RA từ số byte đo được, KHÔNG phải số đo. Nói rõ ra để
+   không ai tưởng đây là số bấm đồng hồ ngoài kho. */
+const CO_MANG = [['3G kho sóng yếu ~400 kbps', 400], ['4G yếu ~2 Mbps', 2000], ['4G tốt ~10 Mbps', 10000]];
+ghi('  Ước thời gian gửi ở mạng chậm (TÍNH từ số byte đo được, không phải bấm giờ):');
+for (const [ten, kbps] of CO_MANG) {
+  const giay = (b64.length * 8 / 1000) / kbps;
+  const giayGoc = (tongGoc * 1.37 * 8 / 1000) / kbps;
+  ghi(`    ${ten.padEnd(28)} đã nén ${giay.toFixed(1)} s   ·   nếu KHÔNG nén ${giayGoc.toFixed(1)} s`);
+}
+
+/* ==========================================================================
+   ③ SỐ CHẠM + CHIỀU CAO NÚT THẬT ở 375px
+   ========================================================================== */
+ghi('\n─── ③ SỐ CHẠM (từ mở kho tới lưu xong, bộ 3 trang) ───');
+
+/* Đếm chạm THẬT: bắt `click` ở tầng document, giai đoạn capture. Mọi lần
+   `.click()` bàn đo gọi ra chính là một lần ngón tay chạm.
+   ⚠️ `textarea` PHẢI có trong danh sách này. 29/08/2026, gộp REV-0047 từ
+   `main`: 5 ô chữ dài của màn quét đổi từ `<input>` sang `<textarea>`. Ngón
+   tay vẫn chạm đúng chừng ấy lần, nhưng bộ đếm chỉ nhận `input` nên tụt từ
+   7 xuống 5 chạm và mục ⑥ hoá đỏ. Đó là PHÉP ĐO sai, không phải sản phẩm
+   sai — và nó sai theo hướng NGUY HIỂM: khoe ít chạm hơn thực tế. Ai đổi
+   thẻ của một ô nhập thì sửa danh sách này cùng lúc. */
+let soCham = 0;
+const nhatKyCham = [];
+document.addEventListener('click', (e) => {
+  const t = e.target.closest('button, a, label, input, textarea, select, [data-viec]');
+  if (!t) return;
+  soCham++;
+  nhatKyCham.push(`${soCham}. ${(t.textContent || t.id || t.tagName).trim().slice(0, 42)}`);
+}, true);
+
+/* Máy ảnh giả: mỗi lần màn quét bấm vào ô file, ta nhét một tấm ảnh vào rồi
+   bắn sự kiện `change` — đúng như điện thoại làm sau khi người ta bấm nút
+   chụp rồi bấm "Dùng ảnh này". Hai cú chạm đó thuộc về ứng dụng máy ảnh của
+   hệ điều hành, KHÔNG phải của ERP, nên đếm riêng.
+   ⚠️ BH-17: `DataTransfer` bị RÚT CẠN sau lần gán `input.files` đầu tiên —
+   phải dựng MỚI mỗi lần, không thì lần thứ hai chạy với ô rỗng. */
+let soChamMayAnh = 0;
+let demTrang = 0;
+const clickGoc = HTMLInputElement.prototype.click;
+HTMLInputElement.prototype.click = function () {
+  if (this.type !== 'file') return clickGoc.call(this);
+  soChamMayAnh += 2;                       // bấm nút chụp + bấm "Dùng ảnh này"
+  demTrang++;
+  /* Dùng lại đúng ba trang đã dựng ở mục ① — dựng lại từ đầu cho mỗi lần
+     chụp thì bàn đo chạy mất hàng chục giây mà không thêm thông tin gì. */
+  /* Xoay vòng 3 trang đã dựng. Phải XOAY chứ không kẹp `Math.min(...,3)`:
+     kẹp thì từ lần chụp thứ 3 trở đi luôn ra CÙNG một tấm, và phép thử
+     "chụp lại thì ảnh có đổi không" báo HỎNG oan — code sản phẩm đúng, bàn
+     đo sai (BH-17). Lần chạy đầu đã dính đúng lỗi này. */
+  const c = TRANG_DA_DUNG[(demTrang - 1) % 3];
+  c.toBlob(b => {
+    const dt = new DataTransfer();
+    dt.items.add(new File([b], `chup-${demTrang}.jpg`, { type: 'image/jpeg' }));
+    this.files = dt.files;
+    this.dispatchEvent(new Event('change', { bubbles: true }));
+  }, 'image/jpeg', 0.95);
+};
+
+/* Màn quét tự gắn vào <body>; ta ép  về ĐÚNG 375px trước khi đo,
+   nên số đo là số của điện thoại nhỏ nhất công ty đang dùng. */
+
+const cho = (ms) => new Promise(r => setTimeout(r, ms));
+const doi = async (chon, hen = 4000) => {
+  const t = Date.now();
+  while (Date.now() - t < hen) {
+    const e = document.querySelector(chon);
+    if (e) return e;
+    await cho(40);
+  }
+  throw new Error('Không thấy ' + chon);
+};
+
+/* Nút "Quét tài liệu mới" thật của tab Kho tài liệu — dựng đúng cùng lớp CSS. */
+const nutKho = document.createElement('button');
+nutKho.className = 'btn-primary tl-nut-quet';
+nutKho.id = 'tl-nut-quet';
+nutKho.textContent = '📷 Quét tài liệu mới';
+document.body.appendChild(nutKho);
+nutKho.addEventListener('click', () => moQuetTaiLieu({
+  cuaVao: 'kho_chung',
+  nhom: [
+    { ma: 'attp', ten: 'An toàn thực phẩm', vi_du: 'Giấy ATTP, tự công bố', han_luu: 'theo hạn giấy + 5 năm', nhay_cam: 0 },
+    { ma: 'ke_toan', ten: 'Kế toán – thuế', vi_du: 'Hoá đơn, chứng từ', han_luu: '5 / 10 năm', nhay_cam: 0 }
+  ],
+  khiXong: () => { xongRoi = true; }
+}));
+
+let xongRoi = false;
+try {
+  localStorage.removeItem('tl_nhap_v1_kho_chung_chung');
+
+  /* Đo chiều cao THẬT phải bắt ĐÚNG LÚC phần tử đang hiện trên màn hình —
+     `.tlq-o-nhom` chỉ tồn tại ở bước chọn nhóm, đo sau khi đã bấm là đo vào
+     chỗ trống rồi báo "không thấy" (bàn đo lần chạy đầu đã sai đúng chỗ đó,
+     BH-17). Nên đo theo từng chặng, không đo dồn một lần cuối. */
+  const capCao = [];
+  const doCao = (ten, sel) => {
+    const e = document.querySelector(sel);
+    capCao.push([ten, e ? Math.round(e.getBoundingClientRect().height * 10) / 10 : null]);
+  };
+  const ep375 = () => { const o = document.querySelector('.tlq-tam'); if (o) o.style.width = '375px'; };
+
+  nutKho.click();                                   // chạm 1
+  const oNhom = await doi('[data-viec="chon-nhom"]');
+  ep375();
+  doCao('ô chọn nhóm giấy tờ', '.tlq-o-nhom');      // chỉ có ở bước này
+  doCao('nút đóng ✕', '.tlq-x');
+  oNhom.click();                                    // chạm 2 → máy ảnh mở LUÔN
+  await doi('.tlq-the');                            // trang 1 đã vào
+
+  (await doi('[data-viec="chup-tiep"]')).click();   // chạm 3
+  while (document.querySelectorAll('.tlq-the').length < 2) await cho(50);
+  (await doi('[data-viec="chup-tiep"]')).click();   // chạm 4
+  while (document.querySelectorAll('.tlq-the').length < 3) await cho(50);
+
+  ep375();
+  doCao('nút chính (Chụp trang tiếp)', '.tlq-nut-chinh');
+  doCao('nút phụ (Chụp lại)', '.tlq-nut-phu');
+  doCao('nút nhì (Xong … →)', '.tlq-nut-nhi');
+
+  (await doi('[data-viec="sang-thong-tin"]')).click();   // chạm 5
+  const oTen = await doi('#tlqTieuDe');
+  oTen.click();                                          // chạm 6 (đặt con trỏ)
+  oTen.value = 'Giấy chứng nhận ATTP nhà xưởng 2026';
+  (await doi('[data-viec="han"][data-nam="3"]')).click(); // chạm 7 (+3 năm)
+  document.querySelector('#tlqForm button[type="submit"]').click();  // chạm 8
+
+  const t = Date.now();
+  while (!xongRoi && Date.now() - t < 8000) await cho(60);
+
+  /* CHỐT SỐ NGAY TẠI ĐÂY. Mục ④⑤ bên dưới còn bấm tiếp, để bộ đếm chạy
+     thẳng tới cuối là con số "số chạm cho một bộ 3 trang" bị thổi lên. */
+  const chamErpBo3 = soCham, chamCamBo3 = soChamMayAnh;
+  ghi(`  Số chạm TRONG ERP: ${chamErpBo3}`);
+  nhatKyCham.forEach(d => ghi('    ' + d));
+  ghi(`  Số chạm trong ứng dụng máy ảnh của điện thoại: ${chamCamBo3} (3 trang × 2)`);
+  ghi(`  TỔNG NGÓN TAY: ${chamErpBo3 + chamCamBo3} chạm cho một bộ 3 trang.`);
+  ghi(`  Lưu xong: ${xongRoi ? 'CÓ' : '✗ KHÔNG'}`);
+
+  ghi('\n─── ③b CHIỀU CAO NÚT THẬT ở bề ngang 375px (getBoundingClientRect) ───');
+  let datHet = true;
+  for (const [ten, cao] of capCao) {
+    const ok = cao !== null && cao >= 44;
+    if (!ok) datHet = false;
+    ghi(`  ${ok ? 'ĐẠT ' : '✗ HỎNG'}  ${ten.padEnd(30)} ${cao === null ? 'không thấy' : cao + 'px'}`);
+  }
+
+  /* ĐỐI CHỨNG (BH-16/BH-26): hạ CƠ HỌC chiều cao nút chính xuống 40px rồi đo
+     lại. Phép đo phải bắt được — không bắt được thì mọi dòng ĐẠT ở trên là
+     vô nghĩa. Lệch cơ học nên hỏng với MỌI đầu vào. */
+  const st = document.createElement('style');
+  st.textContent = '.tlq-nut-chinh{min-height:40px !important;height:40px !important;padding:0 !important}';
+  document.head.appendChild(st);
+  const nutTest = document.createElement('button');
+  nutTest.className = 'tlq-nut-chinh'; nutTest.textContent = 'x';
+  document.body.appendChild(nutTest);
+  const caoHong = Math.round(nutTest.getBoundingClientRect().height * 10) / 10;
+  ghi(`  ĐỐI CHỨNG: ép .tlq-nut-chinh xuống 40px → đo ra ${caoHong}px · ` +
+      `${caoHong < 44 ? 'BẮT ĐƯỢC' : '✗ PHÉP ĐO HỎNG'}`);
+  nutTest.remove(); st.remove();
+
+  /* ======================================================================
+     ④ CHỤP LẠI MỘT TRANG  ·  ⑤ SÓNG YẾU GỬI HỤT RỒI GỬI LẠI
+     ---------------------------------------------------------------------
+     Hai ràng buộc cứng của CTL-0025 Mục 3–4. Không dựng lại được cảnh hỏng
+     thì không có gì chứng minh — nên máy chủ bàn đo có công tắc ÉP HỎNG.
+     ====================================================================== */
+  ghi('\n─── ④ CHỤP LẠI MỘT TRANG (chụp lệch/mờ thì sửa được trước khi lưu) ───');
+  localStorage.removeItem('tl_nhap_v1_kho_chung_chung');
+  xongRoi = false;
+  nutKho.click();
+  (await doi('[data-viec="chon-nhom"]')).click();
+  await doi('.tlq-the');
+  (await doi('[data-viec="chup-tiep"]')).click();
+  while (document.querySelectorAll('.tlq-the').length < 2) await cho(50);
+
+  const anhTruoc = document.querySelectorAll('.tlq-the img')[0].src;
+  ghi(`  [chi tiết] trước: dài ${anhTruoc.length}, đuôi …${anhTruoc.slice(-24)}, demTrang=${demTrang}`);
+  (await doi('[data-viec="chup-lai"][data-i="0"]')).click();     // chụp lại ĐÚNG trang 1
+  const t4 = Date.now();
+  while (document.querySelectorAll('.tlq-the img')[0].src === anhTruoc && Date.now() - t4 < 5000) await cho(60);
+  const anhSau = document.querySelectorAll('.tlq-the img')[0].src;
+  ghi(`  [chi tiết] sau:  dài ${anhSau.length}, đuôi …${anhSau.slice(-24)}, demTrang=${demTrang}`);
+  const soTheSauChupLai = document.querySelectorAll('.tlq-the').length;
+  ghi(`  ${anhSau !== anhTruoc ? 'ĐẠT ' : '✗ HỎNG'}  Ảnh trang 1 đã ĐỔI sau khi chụp lại`);
+  ghi(`  ${soTheSauChupLai === 2 ? 'ĐẠT ' : '✗ HỎNG'}  Vẫn đúng 2 trang (chụp lại KHÔNG đẻ thêm trang) → ${soTheSauChupLai}`);
+
+  ghi('\n─── ⑤ SÓNG YẾU: GỬI HỤT RỒI GỬI LẠI, KHÔNG MẤT ẢNH ───');
+  await fetch('/ep-hong?bat=1');
+  (await doi('[data-viec="sang-thong-tin"]')).click();
+  (await doi('#tlqTieuDe')).value = 'Tờ khai hải quan lô hàng tháng 8';
+  document.querySelector('#tlqForm button[type="submit"]').click();
+  await doi('.tlq-loi', 6000);
+  const nhapConLai = JSON.parse(localStorage.getItem('tl_nhap_v1_kho_chung_chung') || 'null');
+  ghi(`  ${document.querySelector('.tlq-loi') ? 'ĐẠT ' : '✗ HỎNG'}  Gửi hụt: màn hình BÁO LỖI, không im lặng`);
+  ghi(`  ${nhapConLai && nhapConLai.trang.length === 2 ? 'ĐẠT ' : '✗ HỎNG'}  ` +
+      `Ảnh đã chụp VẪN CÒN trong máy → ${nhapConLai ? nhapConLai.trang.length : 0} trang`);
+  const nutGuiLai = document.querySelector('#tlqForm button[type="submit"]');
+  ghi(`  ${/Gửi lại/.test(nutGuiLai.textContent) ? 'ĐẠT ' : '✗ HỎNG'}  ` +
+      `Có nút gửi lại ngay tại chỗ → "${nutGuiLai.textContent.trim()}"`);
+
+  await fetch('/ep-hong?bat=0');
+  nutGuiLai.click();
+  const t5 = Date.now();
+  while (!xongRoi && Date.now() - t5 < 12000) await cho(80);
+  ghi(`  ${xongRoi ? 'ĐẠT ' : '✗ HỎNG'}  Gửi lại thành công khi có sóng`);
+  ghi(`  ${!localStorage.getItem('tl_nhap_v1_kho_chung_chung') ? 'ĐẠT ' : '✗ HỎNG'}  Lưu xong thì dọn bản nháp`);
+
+  const lg = await (await fetch('/lan-gui-cuoi')).json();
+  const haiLan = lg.so_gui.slice(-2);
+  const cungMa = haiLan.length === 2 && haiLan[0].ma_gui && haiLan[0].ma_gui === haiLan[1].ma_gui;
+  ghi(`  ${cungMa ? 'ĐẠT ' : '✗ HỎNG'}  Lần gửi hụt và lần gửi lại mang CÙNG mã gửi ` +
+      `→ ${haiLan.map(x => x.ma_gui).join(' · ')}`);
+  ghi('     → Máy chủ nhận ra mã trùng nên KHÔNG tạo bản thứ hai trên Drive');
+  ghi(`  Thân yêu cầu một lượt quét thật (PDF + 3 ảnh bóc chữ): ${kb(lg.co_byte_than)}`);
+
+  /* ======================================================================
+     ⑥ CỬA HỒ SƠ NHÂN SỰ  ·  CTL-0025 Đợt 2 — ĐẾM CHẠM Ở 375px
+     ---------------------------------------------------------------------
+     Ca thật Sếp nêu: quét MỘT QUYẾT ĐỊNH 2 TRANG vào hồ sơ một người. Đếm từ
+     lúc bấm "Quét thêm giấy tờ" trong hồ sơ tới lúc lưu xong.
+     Cửa này chỉ có ĐÚNG MỘT nhóm nên bỏ hẳn màn chọn nhóm — tiết kiệm đúng
+     một cú chạm so với cửa kho chung.
+     ====================================================================== */
+  ghi('\n─── ⑥ CỬA HỒ SƠ NHÂN SỰ: quét một QUYẾT ĐỊNH 2 TRANG (375px) ───');
+  localStorage.removeItem('tl_nhap_v1_nhan_su_ns_huyen');
+  xongRoi = false;
+  const chamTruocHoSo = soCham, camTruocHoSo = soChamMayAnh;
+
+  /* Nút "Quét thêm giấy tờ" thật của khối trong hồ sơ — cùng lớp CSS. */
+  const nutHoSo = document.createElement('button');
+  nutHoSo.className = 'btn-primary tl-nut-quet';
+  nutHoSo.id = 'nsGt-quet';
+  nutHoSo.textContent = '📷 Quét thêm giấy tờ';
+  document.body.appendChild(nutHoSo);
+  const LOAI_GOI_Y = [
+    { ma: 'quyet_dinh', ten: 'Quyết định', goi_y_so: 'VD: 12/2026/QĐ-AGC' },
+    { ma: 'uy_quyen', ten: 'Uỷ quyền', goi_y_so: 'VD: 03/2026/GUQ' },
+    { ma: 'cccd', ten: 'CCCD', goi_y_so: '12 chữ số', cccd: true }
+  ];
+  nutHoSo.addEventListener('click', () => moQuetTaiLieu({
+    cuaVao: 'nhan_su', ganId: 'ns_huyen', boQuaChonNhom: true,
+    nhom: [{ ma: 'nhan_su', ten: 'Nhân sự', vi_du: 'Quyết định, uỷ quyền, HĐLĐ, CCCD',
+             han_luu: 'HĐLĐ 10 năm sau chấm dứt', nhay_cam: 1 }],
+    loaiGoiY: LOAI_GOI_Y,
+    tenGoiY: 'Nguyễn Thị Huyền — ',
+    dongYGoiY: 'Nguyễn Thị Huyền',
+    khiXong: () => { xongRoi = true; }
+  }));
+
+  nutHoSo.click();                                     // chạm 1 — máy ảnh mở LUÔN
+  await doi('.tlq-the');                               // trang 1 đã vào
+  ep375();
+  const caoNutQuetHoSo = Math.round(nutHoSo.getBoundingClientRect().height * 10) / 10;
+  (await doi('[data-viec="chup-tiep"]')).click();      // chạm 2
+  while (document.querySelectorAll('.tlq-the').length < 2) await cho(50);
+  (await doi('[data-viec="sang-thong-tin"]')).click(); // chạm 3
+  const oTenHs = await doi('#tlqTieuDe');
+  ep375();
+  /* Ô "ai đồng ý" phải ĐÃ ĐIỀN SẴN tên người — trống thì mất thêm một cú gõ,
+     và tệ hơn: dấu đồng ý dễ bị bỏ qua. */
+  const dongYDaDien = (document.querySelector('#tlqDongYBoi') || {}).value || '';
+  oTenHs.click();                                      // chạm 4 (đặt con trỏ)
+  oTenHs.value = 'Nguyễn Thị Huyền — Quyết định bổ nhiệm';
+  const chipLoai = document.querySelector('[data-viec="loai"][data-ten="Quyết định"]');
+  const caoChip = chipLoai ? Math.round(chipLoai.getBoundingClientRect().height * 10) / 10 : null;
+  chipLoai.click();                                    // chạm 5 (chip loại giấy)
+  await cho(120);
+  const loaiSauChip = (document.querySelector('#tlqLoai') || {}).value || '';
+  const tenConNguyen = (document.querySelector('#tlqTieuDe') || {}).value || '';
+  const oMd = await doi('#tlqMucDich');
+  oMd.click();                                         // chạm 6 (đặt con trỏ)
+  oMd.value = 'Quản lý hồ sơ lao động, đóng BHXH';
+  document.querySelector('#tlqForm button[type="submit"]').click();   // chạm 7
+  const t6 = Date.now();
+  while (!xongRoi && Date.now() - t6 < 10000) await cho(60);
+
+  const chamErpHoSo = soCham - chamTruocHoSo;
+  const camHoSo = soChamMayAnh - camTruocHoSo;
+  ghi(`  ${xongRoi ? 'ĐẠT ' : '✗ HỎNG'}  Lưu xong bộ 2 trang vào hồ sơ`);
+  ghi(`  Số chạm TRONG ERP (từ nút "Quét thêm" tới lưu xong): ${chamErpHoSo}`);
+  nhatKyCham.slice(chamTruocHoSo).forEach(d => ghi('    ' + d));
+  ghi(`  Số chạm trong ứng dụng máy ảnh: ${camHoSo} (2 trang × 2)`);
+  ghi(`  TỔNG NGÓN TAY: ${chamErpHoSo + camHoSo} chạm — cộng 1 chạm mở hồ sơ = ` +
+      `${chamErpHoSo + camHoSo + 1} từ danh sách nhân sự tới lưu xong.`);
+  ghi(`  ${dongYDaDien === 'Nguyễn Thị Huyền' ? 'ĐẠT ' : '✗ HỎNG'}  ` +
+      `Ô "ai đồng ý" điền sẵn tên người → "${dongYDaDien}"`);
+  ghi(`  ${loaiSauChip === 'Quyết định' ? 'ĐẠT ' : '✗ HỎNG'}  ` +
+      `Bấm chip điền đúng ô Loại giấy → "${loaiSauChip}"`);
+  ghi(`  ${/Quyết định bổ nhiệm/.test(tenConNguyen) ? 'ĐẠT ' : '✗ HỎNG'}  ` +
+      `Bấm chip KHÔNG làm bay tiêu đề đang gõ dở → "${tenConNguyen.slice(0, 40)}"`);
+  ghi(`  ${caoNutQuetHoSo >= 44 ? 'ĐẠT ' : '✗ HỎNG'}  Nút "Quét thêm giấy tờ" ${caoNutQuetHoSo}px`);
+  ghi(`  ${caoChip !== null && caoChip >= 44 ? 'ĐẠT ' : '✗ HỎNG'}  Chip loại giấy ${caoChip}px`);
+  /* Cửa hồ sơ KHÔNG được bày màn chọn nhóm — bày là bắt bấm thừa một cái cho
+     một lựa chọn chỉ có đúng một đáp án. */
+  ghi(`  ${chamErpHoSo === 7 ? 'ĐẠT ' : '✗ HỎNG'}  ` +
+      `Bỏ được màn chọn nhóm → 7 chạm ERP (cùng việc ở kho chung là 8)`);
+
+  const lgHoSo = await (await fetch('/lan-gui-cuoi')).json();
+  const xongHoSo = xongRoi;
+
+  /* ======================================================================
+     ⑦ CỬA KHO CHUNG + NHÓM NHÂN SỰ  ·  vá REV-0046 lỗi #2
+     ---------------------------------------------------------------------
+     Sếp Ngọc: "lưu vào đây luôn THÀNH 1 BỘ là đẹp".
+     TRƯỚC bản vá: HCNS đứng ở tab Kho tài liệu chọn nhóm "Nhân sự" thì máy
+     ảnh mở luôn, `gan_id` bị vứt, tờ giấy KHÔNG nằm trong bộ của ai.
+     NAY: phải hiện màn CHỌN NGƯỜI trước, và thân yêu cầu gửi đi phải mang
+     `gan_id` của đúng người đã chọn — đọc THÂN GỬI THẬT bằng cách bọc
+     `window.fetch`, không đọc mã nguồn rồi đoán.
+     ====================================================================== */
+  ghi('\n─── ⑦ KHO CHUNG + NHÓM NHÂN SỰ: bắt chọn người (REV-0046 #2) ───');
+  localStorage.removeItem('tl_nhap_v1_kho_chung_chung');
+  xongRoi = false;
+  let thanGui2 = null;
+  const fetchGoc = window.fetch.bind(window);
+  window.fetch = async (u, o) => {
+    if (String(u).includes('/api/tai-lieu/luu') && o && o.body) {
+      try { thanGui2 = JSON.parse(o.body); } catch { /* thân hỏng — kệ */ }
+    }
+    return fetchGoc(u, o);
+  };
+
+  const nutKC = document.createElement('button');
+  nutKC.className = 'btn-primary tl-nut-quet';
+  nutKC.textContent = '📷 Quét tài liệu mới';
+  document.body.appendChild(nutKC);
+  let goiTimNguoi = 0;
+  nutKC.addEventListener('click', () => moQuetTaiLieu({
+    cuaVao: 'kho_chung',
+    nhom: [
+      { ma: 'attp', ten: 'An toàn thực phẩm', vi_du: 'Giấy ATTP', han_luu: '5 năm', nhay_cam: 0 },
+      { ma: 'nhan_su', ten: 'Nhân sự', vi_du: 'HĐLĐ, quyết định, CCCD',
+        han_luu: 'HĐLĐ 10 năm sau chấm dứt', nhay_cam: 1 }
+    ],
+    timNguoi: async () => {
+      goiTimNguoi++;
+      return [{ id: 'ns_duy', ho_ten: 'Phạm Khương Duy', chuc_danh: 'Quản lý kho' },
+              { id: 'ns_huyen', ho_ten: 'Nguyễn Thị Huyền', chuc_danh: 'Vận hành sàn' }];
+    },
+    khiXong: () => { xongRoi = true; }
+  }));
+
+  nutKC.click();
+  (await doi('[data-viec="chon-nhom"][data-ma="nhan_su"]')).click();
+  let oChonNguoi = null;
+  try { oChonNguoi = await doi('[data-viec="chon-nguoi"]'); } catch { oChonNguoi = null; }
+  ghi(`  ${oChonNguoi ? 'ĐẠT ' : '✗ HỎNG'}  Chọn nhóm Nhân sự ở kho chung → HIỆN màn chọn người`);
+  ghi(`  ${goiTimNguoi === 1 ? 'ĐẠT ' : '✗ HỎNG'}  Danh sách người lấy từ máy chủ đúng 1 lượt` +
+      `   → ${goiTimNguoi} lượt`);
+  /* ĐỐI CHỨNG: máy ảnh KHÔNG được mở trước khi chọn người — mở trước là người
+     ta chụp xong cả xấp rồi mới biết còn phải chọn người. */
+  ghi(`  ${document.querySelectorAll('.tlq-the').length === 0 ? 'ĐẠT ' : '✗ HỎNG'}  ` +
+      `ĐỐI CHỨNG: chưa chọn người thì CHƯA mở máy ảnh`);
+  /* Ô lọc tên phải lọc được — không lọc thì 20 người còn xem được, 200 thì không. */
+  const oLoc = document.querySelector('#tlqTimNguoi');
+  if (oLoc) {
+    oLoc.value = 'duy';
+    oLoc.dispatchEvent(new Event('input', { bubbles: true }));
+    await cho(60);
+  }
+  const conLai = document.querySelectorAll('[data-viec="chon-nguoi"]').length;
+  ghi(`  ${conLai === 1 ? 'ĐẠT ' : '✗ HỎNG'}  Gõ "duy" (không dấu) lọc đúng 1 người   → ${conLai}`);
+
+  document.querySelector('[data-viec="chon-nguoi"][data-id="ns_duy"]').click();
+  await doi('.tlq-the');                     // chọn người xong máy ảnh mới mở
+  ep375();
+  (await doi('[data-viec="sang-thong-tin"]')).click();
+  const oTenKC = await doi('#tlqTieuDe');
+  const dongYSan = (document.querySelector('#tlqDongYBoi') || {}).value || '';
+  oTenKC.value = 'Phạm Khương Duy — Hợp đồng lao động';
+  const oMdKC = await doi('#tlqMucDich');
+  oMdKC.value = 'Quản lý hồ sơ lao động, đóng BHXH';
+  document.querySelector('#tlqForm button[type="submit"]').click();
+  const t7 = Date.now();
+  while (!xongRoi && Date.now() - t7 < 10000) await cho(60);
+  window.fetch = fetchGoc;
+
+  ghi(`  ${xongRoi ? 'ĐẠT ' : '✗ HỎNG'}  Lưu xong ở cửa kho chung`);
+  ghi(`  ${thanGui2 && thanGui2.gan_id === 'ns_duy' ? 'ĐẠT ' : '✗ HỎNG'}  ` +
+      `Thân gửi đi mang gan_id của ĐÚNG người đã chọn   → gan_id=${thanGui2 && thanGui2.gan_id}`);
+  ghi(`  ${thanGui2 && thanGui2.nhom === 'nhan_su' ? 'ĐẠT ' : '✗ HỎNG'}  ` +
+      `và nhóm vẫn là nhan_su   → nhom=${thanGui2 && thanGui2.nhom}`);
+  ghi(`  ${dongYSan === 'Phạm Khương Duy' ? 'ĐẠT ' : '✗ HỎNG'}  ` +
+      `Ô "ai đồng ý" điền sẵn tên người vừa chọn → "${dongYSan}"`);
+  ghi(`KET_LUAN_KHOCHUNG_NS man_chon_nguoi=${!!oChonNguoi} loc_ten=${conLai === 1} ` +
+      `gan_id=${thanGui2 && thanGui2.gan_id} nhom=${thanGui2 && thanGui2.nhom} ` +
+      `dong_y_dien_san=${dongYSan === 'Phạm Khương Duy'} luu_xong=${xongRoi}`);
+
+  ghi('\n───────────────────────────────────────────────────────────');
+  ghi(`KET_LUAN_HOSO cham_erp=${chamErpHoSo} cham_may_anh=${camHoSo} ` +
+      `tong_tu_ho_so=${chamErpHoSo + camHoSo + 1} luu_xong=${xongHoSo} ` +
+      `dong_y_dien_san=${dongYDaDien === 'Nguyễn Thị Huyền'} chip_loai=${loaiSauChip === 'Quyết định'} ` +
+      `nut_quet_px=${caoNutQuetHoSo} chip_px=${caoChip} than_gui=${lgHoSo.co_byte_than || 0}`);
+  ghi(`KET_LUAN cham_erp=${chamErpBo3} cham_may_anh=${chamCamBo3} tong=${chamErpBo3 + chamCamBo3} ` +
+      `goc=${tongGoc} nen=${tongNen} pdf=${pdf.length} than_gui=${lg.co_byte_than || 0} ` +
+      `nut_44=${datHet} doi_chung_bat_duoc=${caoHong < 44} luu_xong=${xongRoi} ` +
+      `chup_lai=${anhSau !== anhTruoc} gui_lai_cung_ma=${cungMa}`);
+} catch (e) {
+  ghi('✗ BÀN ĐO HỎNG: ' + e.message + '\n' + e.stack);
+}
+</script>
+</body>
+</html>

@@ -18,7 +18,7 @@
    (enforced ở src/index.js, không phải ở đây — tab mở nghĩa là "vào được
    trang", còn dữ liệu bên trong lọc theo laAdmin() để phân Employee/
    Reviewer, xem nsTrangThaiHD-style pattern). */
-export const TAB = ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'nhansu', 'kinhdoanh', 'khovan', 'donhoan', 'ketoan', 'dulieunen', 'quantri', 'taisan', 'xepca', 'gopy'];
+export const TAB = ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'nhansu', 'kinhdoanh', 'khovan', 'donhoan', 'ketoan', 'dulieunen', 'quantri', 'taisan', 'xepca', 'khotailieu', 'gopy'];
 
 /* Vai trò → được xem mảng nào và làm được gì.
    Danh bạ VÀ Chat nội bộ mở cho tất cả (Sếp Ngọc yêu cầu: ai cũng tra được
@@ -34,32 +34,32 @@ const QUYEN_THEO_VAI_TRO = {
   // Admin = toàn quyền (gộp Giám đốc + Phó Giám đốc + Admin hệ thống cũ
   // thành 1 vai trò hệ thống duy nhất — chức danh thật của người đó vẫn ở
   // hồ sơ nhân sự (chuc_vu), KHÔNG còn gắn cứng vào vai trò đăng nhập).
-  admin:           { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'nhansu', 'kinhdoanh', 'khovan', 'donhoan', 'ketoan', 'dulieunen', 'quantri', 'taisan', 'xepca', 'gopy'], xem_luong: true,  admin: true,  them_nhan_su: true  },
+  admin:           { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'nhansu', 'kinhdoanh', 'khovan', 'donhoan', 'ketoan', 'dulieunen', 'quantri', 'taisan', 'xepca', 'khotailieu', 'gopy'], xem_luong: true,  admin: true,  them_nhan_su: true  },
   // Admin backup = "quyền tạo tài khoản, phân quyền" — KHÔNG phải toàn
   // quyền Admin (không unlock dữ liệu khoá, không khoá/xoá tài khoản người
   // khác, không xem lương). Dùng khi Admin vắng mặt cần người tạo gấp tài
   // khoản cho nhân viên mới — xem duocTaoTaiKhoan()/qtSuaVaiTro bên dưới.
-  admin_backup:    { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'nhansu', 'dulieunen', 'quantri', 'taisan', 'xepca', 'gopy'],                                 xem_luong: false, admin: false, them_nhan_su: true  },
+  admin_backup:    { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'nhansu', 'dulieunen', 'quantri', 'taisan', 'xepca', 'khotailieu', 'gopy'],                                 xem_luong: false, admin: false, them_nhan_su: true  },
   // Người dùng = tài khoản thường, không quyền hệ thống gì thêm — mặc định
   // hợp lý cho ai chưa gán đúng vị trí công việc cụ thể.
-  nguoi_dung:      { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'taisan', 'xepca', 'gopy'],                                                                  xem_luong: false, admin: false, them_nhan_su: false },
+  nguoi_dung:      { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'taisan', 'xepca', 'khotailieu', 'gopy'],                                                                  xem_luong: false, admin: false, them_nhan_su: false },
   // ---- Vị trí công việc (nhomVaiTro='vi_tri') ----
-  ke_toan_truong:  { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'khovan', 'donhoan', 'ketoan', 'taisan', 'xepca', 'gopy'],                                   xem_luong: true,  admin: false, them_nhan_su: false },
-  quan_ly_kho:     { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'khovan', 'nhansu', 'dulieunen', 'taisan', 'xepca', 'gopy'],                                 xem_luong: false, admin: false, them_nhan_su: false },
-  nhan_vien_kho:   { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'khovan', 'taisan', 'xepca', 'gopy'],                                                        xem_luong: false, admin: false, them_nhan_su: false },
-  hcns:            { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'nhansu', 'dulieunen', 'quantri', 'taisan', 'xepca', 'gopy'],                                xem_luong: false, admin: false, them_nhan_su: true  },
-  van_hanh_san:    { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'kinhdoanh', 'donhoan', 'taisan', 'xepca', 'gopy'],                                          xem_luong: false, admin: false, them_nhan_su: false },
+  ke_toan_truong:  { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'khovan', 'donhoan', 'ketoan', 'taisan', 'xepca', 'khotailieu', 'gopy'],                                   xem_luong: true,  admin: false, them_nhan_su: false },
+  quan_ly_kho:     { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'khovan', 'nhansu', 'dulieunen', 'taisan', 'xepca', 'khotailieu', 'gopy'],                                 xem_luong: false, admin: false, them_nhan_su: false },
+  nhan_vien_kho:   { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'khovan', 'taisan', 'xepca', 'khotailieu', 'gopy'],                                                        xem_luong: false, admin: false, them_nhan_su: false },
+  hcns:            { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'nhansu', 'dulieunen', 'quantri', 'taisan', 'xepca', 'khotailieu', 'gopy'],                                xem_luong: false, admin: false, them_nhan_su: true  },
+  van_hanh_san:    { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'kinhdoanh', 'donhoan', 'taisan', 'xepca', 'khotailieu', 'gopy'],                                          xem_luong: false, admin: false, them_nhan_su: false },
   // NV Chăm sóc khách hàng (Sếp Ngọc yêu cầu 20/08/2026): xem tab Kinh doanh
   // (đặc biệt pill "Chăm sóc KH" — xếp hạng khách hoàn/hủy nhiều) + Đơn hoàn
   // để nắm tình trạng đơn khi trả lời khách, nhưng KHÔNG được thao tác luồng
   // 3 chặng (không nằm trong CO_THAO_TAC_VAN_HANH bên dưới) — chỉ xem, việc
   // xử lý vẫn của Vận hành sàn/Kho/Kế toán đúng ranh giới bộ phận đã chốt.
-  cskh:            { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'kinhdoanh', 'donhoan', 'taisan', 'xepca', 'gopy'],                                          xem_luong: false, admin: false, them_nhan_su: false },
+  cskh:            { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'kinhdoanh', 'donhoan', 'taisan', 'xepca', 'khotailieu', 'gopy'],                                          xem_luong: false, admin: false, them_nhan_su: false },
   // Vai trò TEST (Sếp Ngọc chốt 19/08/2026): cho nhân viên vào bấm thử để
   // hiểu luồng 3 chặng Kho -> Vận hành sàn -> Kế toán, KHÔNG dính quyền admin
   // (không cấp/khoá tài khoản, không xem lương, không thêm nhân sự). Xem
   // được đủ các tab liên quan tới luồng đơn hoàn để test trọn vẹn từ đầu tới cuối.
-  nv_test:         { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'kinhdoanh', 'khovan', 'donhoan', 'ketoan', 'taisan', 'xepca', 'gopy'],                      xem_luong: false, admin: false, them_nhan_su: false }
+  nv_test:         { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'kinhdoanh', 'khovan', 'donhoan', 'ketoan', 'taisan', 'xepca', 'khotailieu', 'gopy'],                      xem_luong: false, admin: false, them_nhan_su: false }
 };
 
 /* ---- Quyền trong module Kho --------------------------------------------
@@ -217,6 +217,100 @@ export function duocThaoTacVanHanh(vaiTro) {
    Dùng Number(...) vì SQLite trả số còn JSON có thể trả về chuỗi. */
 export function duocDuyetGopY(phien) {
   return phien != null && Number(phien.duyet_gopy) === 1;
+}
+
+/* ---- KHO TÀI LIỆU — quyền theo NHÓM GIẤY TỜ  ·  CTL-0026 / CTL-0025 ------
+   Sếp Ngọc chốt qua CTL-0026 Mục 6: "Phân quyền theo nhóm giấy tờ: kế toán
+   chỉ thấy chứng từ kế toán; quản lý kho KHÔNG thấy CCCD nhân viên. Cắt ở
+   MÁY CHỦ, không ẩn nút."
+
+   Vì sao KHÔNG dựa vào tab: tab `khotailieu` mở cho mọi vai trò — ai cũng
+   phải tra được quy trình, quy định nội bộ đã ban hành. Cái phải chặn là
+   NHÓM GIẤY TỜ bên trong, chặt hơn tab một bậc. Đúng khuôn `QUYEN_KHO` ở
+   trên: tab Kho vận mở cho cả nhân viên kho, nhưng giá vốn thì không.
+
+   HAI mức, tách riêng vì chúng không đi cùng nhau:
+   - xem : mở tài liệu nhóm đó ra đọc, tải bản PDF về.
+   - luu : quét thêm tài liệu MỚI vào nhóm đó.
+   Vận hành sàn được LƯU giấy ATTP (họ là người đi làm công bố sản phẩm)
+   nhưng KHÔNG được lưu vào Pháp lý doanh nghiệp. Kế toán trưởng XEM được
+   pháp lý (cần bản ĐKKD để kê khai) nhưng không được lưu vào đó.
+
+   `'*'` = mọi nhóm. Chỉ Admin có, vì Admin đã toàn quyền mọi thứ khác. */
+export const NHOM_TAI_LIEU = {
+  phap_ly:   { ten: 'Pháp lý doanh nghiệp', vi_du: 'ĐKKD, con dấu, điều lệ, quyết định bổ nhiệm', han_luu: 'vĩnh viễn',                  nhay_cam: 0 },
+  attp:      { ten: 'An toàn thực phẩm',    vi_du: 'Giấy ATTP, tự công bố sản phẩm, COA',         han_luu: 'theo hạn giấy + 5 năm',     nhay_cam: 0 },
+  nhap_khau: { ten: 'Nhập khẩu',            vi_du: 'Tờ khai, C/O, kiểm dịch, packing list',       han_luu: '10 năm',                    nhay_cam: 0 },
+  ke_toan:   { ten: 'Kế toán – thuế',       vi_du: 'Hoá đơn, chứng từ, tờ khai, BHXH',            han_luu: '5 / 10 năm theo loại',      nhay_cam: 0 },
+  /* NHẠY CẢM: hồ sơ nhân sự có CCCD, HĐLĐ, bằng cấp — dữ liệu cá nhân theo
+     Luật BVDLCN 91/2025/QH15 (hiệu lực 01/01/2026). Cờ này bật hai thứ:
+     bắt buộc GHI NHẬN ĐỒNG Ý lúc lưu, và GHI NHẬT KÝ mỗi lượt mở. */
+  nhan_su:   { ten: 'Nhân sự',              vi_du: 'HĐLĐ, phụ lục, quyết định, CCCD',             han_luu: 'HĐLĐ 10 năm sau chấm dứt',  nhay_cam: 1 },
+  ncc:       { ten: 'Nhà cung cấp',         vi_du: 'Hợp đồng, phụ lục, báo giá',                  han_luu: 'hết hạn + 5 năm',           nhay_cam: 0 },
+  noi_bo:    { ten: 'Quản trị nội bộ',      vi_du: 'Quy trình, quy định, thông báo đã ban hành',  han_luu: 'vĩnh viễn',                 nhay_cam: 0 }
+};
+
+export const MA_NHOM_TAI_LIEU = Object.keys(NHOM_TAI_LIEU);
+
+const QUYEN_NHOM_TAI_LIEU = {
+  admin:          { xem: ['*'],                                                    luu: ['*'] },
+  // Admin backup thay Admin lúc vắng mặt ở việc HÀNH CHÍNH — không phải chỗ
+  // để lách vào hồ sơ nhân sự. Không có `nhan_su`, y như không có xem_luong.
+  admin_backup:   { xem: ['phap_ly', 'noi_bo'],                                    luu: ['noi_bo'] },
+  hcns:           { xem: ['nhan_su', 'noi_bo', 'phap_ly'],                         luu: ['nhan_su', 'noi_bo'] },
+  ke_toan_truong: { xem: ['ke_toan', 'nhap_khau', 'ncc', 'phap_ly', 'noi_bo'],     luu: ['ke_toan', 'nhap_khau', 'ncc'] },
+  // ⚠️ Quản lý kho KHÔNG có 'nhan_su' — đây là ranh giới CTL-0025 Mục 4 gọi
+  // đích danh: "Không cho quản lý kho xem CCCD nhân viên."  Anh Duy quản 12
+  // người ở kho, nhưng quản người không phải là được xem giấy tờ tuỳ thân.
+  quan_ly_kho:    { xem: ['nhap_khau', 'attp', 'noi_bo'],                          luu: ['nhap_khau', 'attp'] },
+  nhan_vien_kho:  { xem: ['noi_bo'],                                               luu: [] },
+  van_hanh_san:   { xem: ['attp', 'ncc', 'noi_bo'],                                luu: ['attp'] },
+  cskh:           { xem: ['noi_bo'],                                               luu: [] },
+  nguoi_dung:     { xem: ['noi_bo'],                                               luu: [] },
+  nv_test:        { xem: ['noi_bo'],                                               luu: ['noi_bo'] }
+};
+
+const KHONG_QUYEN_TAI_LIEU = { xem: [], luu: [] };
+
+function quyenTaiLieu(vaiTro) {
+  return QUYEN_NHOM_TAI_LIEU[vaiTro] || KHONG_QUYEN_TAI_LIEU;
+}
+
+function coTrong(ds, nhom) {
+  return ds.includes('*') || ds.includes(nhom);
+}
+
+/** Được MỞ tài liệu thuộc nhóm này không. Kiểm ở máy chủ, mọi lối vào. */
+export function duocXemNhomTaiLieu(vaiTro, nhom) {
+  if (!NHOM_TAI_LIEU[nhom]) return false;      // nhóm lạ → chặn, đừng đoán
+  return coTrong(quyenTaiLieu(vaiTro).xem, nhom);
+}
+
+/** Được QUÉT THÊM tài liệu vào nhóm này không. */
+export function duocLuuNhomTaiLieu(vaiTro, nhom) {
+  if (!NHOM_TAI_LIEU[nhom]) return false;
+  return coTrong(quyenTaiLieu(vaiTro).luu, nhom);
+}
+
+/** Danh sách nhóm người này xem được — dùng để dựng câu SQL lọc NGAY TỪ ĐẦU,
+ *  chứ không lấy hết rồi lọc sau (lấy hết là dữ liệu đã rời máy chủ rồi). */
+export function nhomTaiLieuXemDuoc(vaiTro) {
+  const ds = quyenTaiLieu(vaiTro).xem;
+  return ds.includes('*') ? MA_NHOM_TAI_LIEU.slice() : ds.filter(n => !!NHOM_TAI_LIEU[n]);
+}
+
+/** Danh sách nhóm người này lưu được — giao diện dùng để chỉ hiện đúng các
+ *  ô chọn bấm được. ĐÂY KHÔNG PHẢI CHỖ CHẶN: chặn thật ở `duocLuuNhomTaiLieu`
+ *  trong `src/tai-lieu.js`, gọi API thẳng cũng không lách được. */
+export function nhomTaiLieuLuuDuoc(vaiTro) {
+  const ds = quyenTaiLieu(vaiTro).luu;
+  return ds.includes('*') ? MA_NHOM_TAI_LIEU.slice() : ds.filter(n => !!NHOM_TAI_LIEU[n]);
+}
+
+/** Nhóm này có phải giấy tờ nhạy cảm không (bắt buộc ghi nhận đồng ý + nhật
+ *  ký truy cập). Lấy từ đúng một chỗ để không có hai định nghĩa lệch nhau. */
+export function nhomTaiLieuNhayCam(nhom) {
+  return NHOM_TAI_LIEU[nhom]?.nhay_cam === 1;
 }
 
 /* Vai trò lạ (do gõ sai trong database) → không có quyền gì cả.

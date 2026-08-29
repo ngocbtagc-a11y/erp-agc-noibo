@@ -13,6 +13,10 @@
 import { API } from './api.js';
 import { tinhTrangThaiTB, veGiaoDienTB, hoanDuoc } from './tbd-trangthai.js';
 import { nenChayVongLap, nenDongDau } from './nhip-tim-chat.js';
+/* Nén ảnh dùng chung — CTL-0011 gộp 3 hàm về 1, CTL-0026 dời sang file riêng
+   để module Kho tài liệu dùng lại được. KHÔNG có hàm nén thứ hai trong ERP. */
+import { nenAnhChung, coByteCuaDataUrl } from './anh-chung.js';
+import { moQuetTaiLieu } from './quet-tai-lieu.js';
 import { soDoHienThi, chuHuyHieu, datSoDo, nenNhacCai, CHU_NHAC_CAI, KHOA_BO_QUA }
   from './so-do-bieu-tuong.js';
 
@@ -44,6 +48,23 @@ function goiMocNoi(ten, quyenCan, ...thamSo) {
   return undefined;
 }
 
+/* LẤY móc nối thay vì GỌI nó — cho chỗ cần cùng một hàm nhiều lần trong một
+   vòng lặp (vẽ nút cho từng dòng bảng). Dùng `goiMocNoi` ở đó thì mỗi dòng là
+   một lần tra `window` + một lần `console.error` khi vắng: 300 dòng thành 300
+   dòng lỗi giống hệt nhau, tức che mất mọi lỗi khác. Luật báo/không báo giữ
+   NGUYÊN của `goiMocNoi` — có quyền mà vắng thì HÉT, không quyền thì im. */
+function layMocNoi(ten, quyenCan) {
+  const f = window[ten];
+  if (typeof f === 'function') return f;
+  let coQuyen = true;
+  try { coQuyen = Array.isArray(TOI?.quyen) ? TOI.quyen.includes(quyenCan) : true; }
+  catch { coQuyen = true; }
+  if (quyenCan && !coQuyen) return null;
+  console.error(`Móc nối "window.${ten}" không tồn tại — mô-đun` +
+                (quyenCan ? ` "${quyenCan}"` : '') + ' nhiều khả năng đã chết lúc khởi động. Tải lại trang.');
+  return null;
+}
+
 /* ---- Danh mục tab -------------------------------------------------------
    "nhom" = nhóm cha hiện trên sidebar, bám theo 4 phòng ban thật của công ty
    (xem docs/ERP_V2_INFORMATION_ARCHITECTURE.md). null = không có nhóm cha,
@@ -60,6 +81,7 @@ const TAB = [
   { id: 'ketoan',    ten: 'Kế toán',    nhom: 'Support', icon: 'M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6' },
   { id: 'taisan',    ten: 'Tài sản',    nhom: 'Support', icon: 'M20 7h-3V6a3 3 0 00-3-3h-4a3 3 0 00-3 3v1H4a1 1 0 00-1 1v11a2 2 0 002 2h14a2 2 0 002-2V8a1 1 0 00-1-1zM9 6a1 1 0 011-1h4a1 1 0 011 1v1H9V6z' },
   { id: 'xepca',     ten: 'Xếp ca',     nhom: 'Support', icon: 'M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V6a2 2 0 012-2z' },
+  { id: 'khotailieu', ten: 'Kho tài liệu', nhom: 'Quản trị doanh nghiệp', icon: 'M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8zM14 2v6h6M16 13H8M16 17H8M10 9H8' },
   { id: 'quantri',   ten: 'Quản trị',   nhom: 'Quản trị doanh nghiệp', icon: 'M12 15a3 3 0 100-6 3 3 0 000 6zM19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-2.82 1.17V21a2 2 0 01-4 0v-.09A1.65 1.65 0 006 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.6 14a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 7.6a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z' }
 ];
 
@@ -1281,92 +1303,10 @@ if (TOI.phai_doi_mk) {
    ngày 27/08/2026 ("làm luôn đi, sau cái gì mà sau").
    ========================================================================== */
 
-/* Số byte THẬT của ảnh sau khi giải mã base64 — đúng cách backend đo
-   (`atob(raw).length` trong gopYGui), để frontend không đoán sai rồi bị
-   backend trả 413. */
-function coByteCuaDataUrl(dataUrl) {
-  const s = String(dataUrl || '');
-  const b64 = s.slice(s.indexOf(',') + 1);
-  const demDauBang = b64.endsWith('==') ? 2 : b64.endsWith('=') ? 1 : 0;
-  return Math.floor(b64.length * 3 / 4) - demDauBang;
-}
-
-/* Nén ảnh bằng canvas — MỘT hàm cho mọi chỗ trong ERP. Luôn trả về data URL
-   JPEG (máy chủ chỉ lưu base64/nhị phân thẳng vào D1, không tự nén được).
-
-   tuyChon:
-   - `cheDo`        'vua-khung' (mặc định) giữ nguyên tỉ lệ, CHỈ co lại chứ
-                    không phóng to · 'vuong' cắt giữa thành ảnh vuông đúng
-                    `canhToiDa`×`canhToiDa` (ảnh đại diện — phải đủ nét ở mọi
-                    kích thước hiển thị nên cho phép phóng to ảnh nhỏ).
-   - `canhToiDa`    cạnh dài nhất (px).
-   - `chatLuong`    chất lượng JPEG lượt vẽ đầu (0–1).
-   - `gioiHanByte`  > 0 thì nén cho tới khi LỌT giới hạn của backend: hạ chất
-                    lượng trước (chữ trong ảnh chụp màn hình còn đọc được),
-                    hết nấc mới thu nhỏ kích thước. Rule 12 (Human Cost) —
-                    người dùng dán ảnh to thì máy tự lo, không bắt họ mở phần
-                    mềm khác cắt/nén rồi quay lại.
-
-   Luôn tô NỀN TRẮNG trước khi vẽ: JPEG không có kênh trong suốt, không tô
-   thì ảnh PNG trong suốt ra nền ĐEN, người dùng tưởng ảnh hỏng. */
-function nenAnhChung(file, tuyChon = {}) {
-  const {
-    cheDo = 'vua-khung',
-    canhToiDa = 1600,
-    chatLuong = 0.8,
-    gioiHanByte = 0,
-    nacChatLuong = [0.7, 0.6, 0.5],
-    soLanThuNho = 6
-  } = tuyChon;
-
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      const canvas = document.createElement('canvas');
-
-      const ve = (tiLe, cl) => {
-        let sx = 0, sy = 0, sw = img.width, sh = img.height;
-        if (cheDo === 'vuong') {
-          const canh = Math.min(img.width, img.height);
-          sx = (img.width - canh) / 2; sy = (img.height - canh) / 2;
-          sw = canh; sh = canh;
-          canvas.width = canvas.height = Math.max(1, Math.round(canhToiDa * tiLe));
-        } else {
-          canvas.width = Math.max(1, Math.round(img.width * tiLe));
-          canvas.height = Math.max(1, Math.round(img.height * tiLe));
-        }
-        const ctx = canvas.getContext('2d');
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(img, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
-        return canvas.toDataURL('image/jpeg', cl);
-      };
-
-      let ti = cheDo === 'vuong'
-        ? 1
-        : Math.min(1, canhToiDa / Math.max(img.width, img.height));
-
-      let kq = ve(ti, chatLuong);
-      if (gioiHanByte > 0) {
-        for (const cl of nacChatLuong) {
-          if (coByteCuaDataUrl(kq) <= gioiHanByte) break;
-          kq = ve(ti, cl);
-        }
-        // Vẫn nặng (ảnh chụp màn hình 4K nhiều chi tiết) → thu nhỏ dần.
-        const clCuoi = nacChatLuong.length ? nacChatLuong[nacChatLuong.length - 1] : chatLuong;
-        for (let i = 0; i < soLanThuNho && coByteCuaDataUrl(kq) > gioiHanByte; i++) {
-          ti *= 0.8;
-          kq = ve(ti, clCuoi);
-        }
-      }
-      resolve(kq);
-    };
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Không đọc được ảnh này')); };
-    img.src = url;
-  });
-}
+/* `coByteCuaDataUrl` và `nenAnhChung` nay nằm ở `assets/js/anh-chung.js`
+   (import ở đầu file). CTL-0026 cần đúng hàm nén này cho module Kho tài
+   liệu, mà module riêng không import ngược vào `app.js` được — nên DỜI CHỖ,
+   nội dung giữ nguyên từng chữ. Vẫn là MỘT hàm nén cho cả ERP (Rule 5). */
 
 /* Lấy file ảnh đầu tiên trong một DataTransfer (clipboard hoặc kéo–thả).
    Windows/macOS chụp màn hình đều để ảnh ở dạng file trong `items`. */
@@ -2765,7 +2705,7 @@ async function veTongQuanTheoVaiTro() {
       .forEach(m => canhBao.push({ m: 'warn', b: `Mục tiêu công ty "${m.tieu_de}" chưa chốt`, s: 'Vào khối Trạm Mục Tiêu bên dưới để chốt', t: 'Mục tiêu' }));
     if (quaHanGiao > 0) canhBao.push({ m: 'danger', b: `${quaHanGiao} việc đã giao đang quá hạn`, s: 'Bấm để xem trong Lịch sử làm việc', t: 'Công việc',
       onClick: () => window.MO_DEN_LICHSU_TIM && window.MO_DEN_LICHSU_TIM('') });
-    if (choDuyetGiao > 0) canhBao.push({ m: 'warn', b: `${choDuyetGiao} việc đang chờ Sếp duyệt`, s: 'Bấm để xem trong Việc tôi giao', t: 'Công việc',
+    if (choDuyetGiao > 0) canhBao.push({ m: 'warn', b: `${choDuyetGiao} việc đang chờ Sếp duyệt`, s: 'Bấm để xem ở Lịch sử làm việc — phạm vi "Tôi giao"', t: 'Công việc',
       onClick: () => window.MO_DEN_VIEC_CUA_TOI && window.MO_DEN_VIEC_CUA_TOI('giao') });
 
     try {
@@ -2790,7 +2730,7 @@ async function veTongQuanTheoVaiTro() {
       });
     } catch { /* chưa có phòng ban quản lý hợp lệ hoặc lỗi mạng — im lặng, Home vẫn dùng được */ }
   } else {
-    the.push({ k: 'Việc đang mở', v: String(nhan.length), d: 'Việc cần làm của tôi',
+    the.push({ k: 'Việc đang mở', v: String(nhan.length), d: 'Việc tôi phải làm',
       onClick: () => window.MO_DEN_VIEC_CUA_TOI && window.MO_DEN_VIEC_CUA_TOI('nhan') });
     the.push({ k: 'Việc quá hạn', v: String(quaHanNhan.length), d: quaHanNhan.length ? 'Cần xử lý ngay' : 'Không có', dir: quaHanNhan.length ? 'down' : '',
       onClick: quaHanNhan.length ? () => window.MO_DEN_VIEC_CUA_TOI && window.MO_DEN_VIEC_CUA_TOI('nhan', quaHanNhan[0].id) : null });
@@ -2801,19 +2741,10 @@ async function veTongQuanTheoVaiTro() {
   if (the.length) { veThe('#tq-tomtat', the); $('#tq-tomtat').hidden = false; }
   if (canhBao.length) { veDanhSach('#tq-canhbao-that', canhBao); $('#tq-canhbao-panel').hidden = false; }
 
-  // Employee/Manager: đẩy "Việc cần làm" lên TRƯỚC khối Mục Tiêu (Action/
-  // Exception First). Admin giữ nguyên thứ tự mặc định trong HTML (Mục
-  // Tiêu trước — Decision First). Chỉ đổi VỊ TRÍ hiển thị, không đổi dữ
-  // liệu/logic — .mt-panel/#cvSeg là các khối DOM đã render sẵn.
-  if (!TOI.la_admin) {
-    const khoiMucTieu = document.querySelector('.mt-panel');
-    const segViec = $('#cvSeg');
-    if (khoiMucTieu && segViec) {
-      [segViec, $('#cv-pane-nhan'), $('#cv-pane-phoihop'), $('#cv-pane-giao')].forEach(el => {
-        if (el) khoiMucTieu.parentNode.insertBefore(el, khoiMucTieu);
-      });
-    }
-  }
+  /* Khối đảo thứ tự "#cvSeg lên trước .mt-panel" ĐÃ GỠ cùng ba tab (Sếp Ngọc
+     29/08/2026). Không còn ba bảng nằm trong tab này để mà đảo — Action First
+     cho nhân viên nay do khối "Việc của tôi hôm nay" gánh (nó vốn đã nằm TRÊN
+     CÙNG mọi vai trò), phần danh sách đầy đủ nằm ở tab Lịch sử làm việc. */
 }
 
 /* ==========================================================================
@@ -3238,45 +3169,69 @@ async function khoiDongCongViec() {
     apDungCheDoTodo();
   };
 
-  // Chuyển màn Việc tôi nhận / Việc tôi giao
-  function chuyenSegCv(seg) {
-    const nut = document.querySelector(`#cvSeg .seg-nut[data-cv="${seg}"]`);
-    if (!nut) return;
-    document.querySelectorAll('#cvSeg .seg-nut').forEach(b => b.classList.toggle('active', b === nut));
-    ['nhan', 'phoihop', 'giao'].forEach(k => {
-      const pane = document.getElementById('cv-pane-' + k);
-      if (pane) pane.hidden = (k !== seg);
-    });
-  }
-  $('#cvSeg').addEventListener('click', (e) => {
-    const nut = e.target.closest('.seg-nut');
-    if (nut) chuyenSegCv(nut.dataset.cv);
-  });
-
-  // Drill Down to Action (audit Home/Dashboard 23/08/2026): counter "Việc
-  // đang mở/quá hạn/chờ duyệt" ở khối tóm tắt (veTongQuanTheoVaiTro) bấm
-  // vào phải nhảy thẳng tới đúng bảng Việc của MÌNH, không phải ngõ cụt —
-  // chỉ dùng cho Việc CỦA NGƯỜI ĐANG XEM (cv-bang-nhan/giao vốn đã lọc
-  // theo đúng người). Việc của NGƯỜI KHÁC (Admin/Manager xem team) dùng
-  // window.MO_DEN_LICHSU_TIM ở khoiDongLichSuViec thay vì hàm này.
+  /* `chuyenSegCv` + trình nghe `#cvSeg` ĐÃ GỠ — ba tab không còn nằm ở tab
+     này nữa. `MO_DEN_VIEC_CUA_TOI` GIỮ NGUYÊN TÊN VÀ CHỮ KÝ (seg, rowId) vì
+     nó là ĐƯỜNG DẪN CŨ: khối "Việc của tôi hôm nay" và các thẻ đếm ở Tổng
+     quan gọi nó với 'nhan'/'giao'. Đổi tên hàm là làm vỡ đúng những chỗ đó,
+     nên chỉ đổi ĐÍCH ĐẾN: chuyển hướng êm sang màn gộp ở Lịch sử làm việc,
+     đúng bộ lọc, đúng dòng. Không có trang trắng, không có nút chết.
+     Móc nối thật nằm ở `khoiDongLichSuViec`; gọi qua `goiMocNoi` để nếu mô-đun
+     đó chết lúc khởi động thì HÉT LÊN chứ không im lặng nuốt cú bấm (BH REV-0038). */
+  const SEG_CU_SANG_LOC = { nhan: 'toi', phoihop: 'phoihop', giao: 'giao' };
   window.MO_DEN_VIEC_CUA_TOI = (seg, rowId) => {
-    moTab('tongquan');
-    chuyenSegCv(seg);
-    requestAnimationFrame(() => {
-      const box = $('#cvSeg');
-      if (box) box.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      if (rowId != null) {
-        const tr = document.querySelector(`#cv-bang-${seg} tr[data-id="${rowId}"]`);
-        if (tr) { tr.scrollIntoView({ behavior: 'smooth', block: 'center' }); tr.classList.add('canh-bao'); setTimeout(() => tr.classList.remove('canh-bao'), 2500); }
-      }
-    });
+    goiMocNoi('MO_MAN_VIEC', 'lichsuviec', SEG_CU_SANG_LOC[seg] || 'toi', rowId);
   };
 
-  function dongHan(hanChot) {
-    if (!hanChot) return '—';
-    const quaHan = hanChot < new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
-    const [nam, thang, ngay] = hanChot.split('-');
-    return `<span class="${quaHan ? 'canh-bao-chu' : ''}">${ngay}/${thang}/${nam}</span>`;
+  /* `dongHan` đã GỠ — bản sao thứ hai của `hanChotVN` trong khoiDongLichSuViec,
+     từng vẽ hạn chót cho ba bảng nay không còn. Giữ lại một hàm chết là giữ
+     lại đúng thứ sinh ra "ba màn hình nói ba con số khác nhau". */
+
+  /* ---- NÚT HÀNH ĐỘNG TRÊN MỘT DÒNG VIỆC ---------------------------------
+     Trước bản gộp, đoạn này nằm rải trong ba hàm `veBang` khác nhau — cùng
+     một luật, chép ba lần. Nay MỘT hàm, dùng cho cả bốn phạm vi của màn gộp.
+     `loai` = phạm vi đang xem:
+       'toi'     — việc TÔI nhận: Bắt đầu làm / Nộp kết quả; todo tự giao thì
+                   ✓ Xong · Sửa · Bỏ.
+       'giao'    — việc TÔI giao: Duyệt xong / Trả lại · Sửa · Huỷ.
+       'phoihop' — CHỈ THEO DÕI, không nút (Sếp Ngọc chốt 20/08/2026: giữ đúng
+                   1 đầu mối chịu trách nhiệm báo cáo cho mỗi việc).
+       'congty'  — sổ tra cứu việc của người khác: không nút.
+     Ẩn nút chỉ là phép lịch sự với mắt; CỬA THẬT nằm ở máy chủ
+     (`CV_MO_THEO_TRANG_THAI`, `cvSua`) — gọi thẳng API vẫn bị chặn 403/409. */
+  function htmlNutDongViec(r, loai) {
+    const chuaXong = ['moi', 'dang_lam', 'cho_duyet'].includes(r.trang_thai);
+    if (loai === 'toi') {
+      // Người nhận là tôi; nếu người giao cũng là tôi => TODO CÁ NHÂN: bấm 1
+      // phát là XONG, khỏi nộp + chờ duyệt. Tự giao cho mình thì tự sửa thoải
+      // mái, không phiền ai — trước bản CTL-0017 phải xoá đi ghi lại.
+      if (r.nguoi_giao_id === TOI.id) {
+        return chuaXong
+          ? `<button type="button" class="btn-nho btn-primary" data-cv-xongngay="${r.id}">✓ Xong</button>` +
+            ` <button type="button" class="btn-nho cv-nut-sua" data-cv-sua="${r.id}">Sửa</button>` +
+            ` <button type="button" class="btn-nho" data-cv-huy="${r.id}">Bỏ</button>`
+          : '';
+      }
+      if (r.trang_thai === 'moi') return `<button type="button" class="btn-nho btn-primary" data-cv-batdau="${r.id}">Bắt đầu làm</button>`;
+      if (r.trang_thai === 'dang_lam') return `<button type="button" class="btn-nho btn-primary" data-cv-nop="${r.id}">Nộp kết quả</button>`;
+      return '';
+    }
+    if (loai === 'giao') {
+      let nut = '';
+      if (r.trang_thai === 'cho_duyet') {
+        nut = `<button type="button" class="btn-nho btn-primary" data-cv-duyet="${r.id}">Duyệt xong</button> ` +
+              `<button type="button" class="btn-nho" data-cv-tralai="${r.id}">Trả lại</button>`;
+      }
+      /* CTL-0017 — nút SỬA. Trước bản đó ở đây CHỈ có "Huỷ": muốn sửa một chữ
+         trong đầu ra là phải huỷ rồi giao lại — mất lịch sử, người nhận ăn hai
+         thông báo. Cố ý ĐỂ NÂU (`.btn-nho` trần), không cam: một khung nhìn
+         chỉ MỘT thứ được cam đậm (luật ba màu ③), chỗ đó dành cho "Duyệt xong". */
+      if (chuaXong) {
+        nut += ` <button type="button" class="btn-nho cv-nut-sua" data-cv-sua="${r.id}">Sửa</button>`;
+        nut += ` <button type="button" class="btn-nho" data-cv-huy="${r.id}">Huỷ</button>`;
+      }
+      return nut;
+    }
+    return '';
   }
 
   async function taiLai() {
@@ -3287,85 +3242,10 @@ async function khoiDongCongViec() {
        có, KHÔNG thêm lượt gọi thứ hai. */
     CV_THEO_ID = {};
     for (const r of [...(kq.nhan || []), ...(kq.giao || [])]) CV_THEO_ID[r.id] = r;
-
-    veBang('#cv-bang-nhan', kq.nhan || [], r => {
-      const tt = CV_TRANG_THAI[r.trang_thai] || CV_TRANG_THAI.moi;
-      // Trong "Việc cần làm", người nhận luôn là tôi; nếu người giao cũng là
-      // tôi => TODO CÁ NHÂN: bấm 1 phát là XONG, khỏi nộp + chờ duyệt.
-      const laTodo = r.nguoi_giao_id === TOI.id;
-      const chuaXong = ['moi', 'dang_lam', 'cho_duyet'].includes(r.trang_thai);
-      let nut = '';
-      if (laTodo) {
-        /* TODO CÁ NHÂN — tự giao cho mình thì tự sửa thoải mái, không phiền
-           ai. Đây đúng là ca hay gặp nhất: ghi vội một todo rồi muốn viết lại
-           cho rõ. Trước bản này phải xoá đi ghi lại. */
-        if (chuaXong) nut = `<button type="button" class="btn-nho btn-primary" data-cv-xongngay="${r.id}">✓ Xong</button>` +
-          ` <button type="button" class="btn-nho cv-nut-sua" data-cv-sua="${r.id}">Sửa</button>` +
-          ` <button type="button" class="btn-nho" data-cv-huy="${r.id}">Bỏ</button>`;
-      } else if (r.trang_thai === 'moi') {
-        nut = `<button type="button" class="btn-nho btn-primary" data-cv-batdau="${r.id}">Bắt đầu làm</button>`;
-      } else if (r.trang_thai === 'dang_lam') {
-        nut = `<button type="button" class="btn-nho btn-primary" data-cv-nop="${r.id}">Nộp kết quả</button>`;
-      }
-      const nhanTodo = laTodo ? ` <span class="tag sage">🙋 Việc của tôi</span>` : '';
-      return `<td><div class="nm">${esc(r.tieu_de)}${nhanTodo}</div>${r.muc_tieu_ten ? `<div class="sm">🎯 Thuộc mục tiêu: ${esc(r.muc_tieu_ten)}</div>` : ''}${r.mo_ta ? `<div class="sm">${dg(r.mo_ta)}</div>` : ''}${r.phoi_hop_ten ? `<div class="sm">🤝 Phối hợp: ${esc(r.phoi_hop_ten)}</div>` : ''}${r.ket_qua ? `<div class="sm"><b>Kết quả:</b> ${dg(r.ket_qua)}</div>` : ''}</td>` +
-        `<td class="sm">${r.dau_ra ? dg(r.dau_ra) : '—'}</td>` +
-        `<td class="sm">${laTodo ? '— (của tôi)' : esc(r.nguoi_giao_ten)}</td>` +
-        `<td class="sm">${dongHan(r.han_chot)}</td>` +
-        `<td><span class="tag ${tt.mau}">${tt.chu}</span></td>` +
-        `<td style="white-space:nowrap">${nut}</td>`;
-    });
-    $('#cv-trong-nhan').hidden = (kq.nhan || []).length > 0;
-    veDaiCat('#cv-cat-nhan', kq.cat_nhan, {
-      don_vi: 'việc', nut: { chu: 'Xem đầy đủ ở Lịch sử làm việc', tab: 'lichsuviec' }
-    });
-
-    veBang('#cv-bang-giao', kq.giao || [], r => {
-      const tt = CV_TRANG_THAI[r.trang_thai] || CV_TRANG_THAI.moi;
-      let nut = '';
-      if (r.trang_thai === 'cho_duyet') {
-        nut = `<button type="button" class="btn-nho btn-primary" data-cv-duyet="${r.id}">Duyệt xong</button> ` +
-              `<button type="button" class="btn-nho" data-cv-tralai="${r.id}">Trả lại</button>`;
-      }
-      /* CTL-0017 — nút SỬA. Trước bản này ở đây CHỈ có "Huỷ": muốn sửa một
-         chữ trong đầu ra là phải huỷ rồi giao lại — mất lịch sử, người nhận
-         ăn hai thông báo. Cố ý ĐỂ NÂU (`.btn-nho` trần), không cam: một khung
-         nhìn chỉ MỘT thứ được cam đậm (luật ba màu ③), chỗ đó dành cho "Duyệt
-         xong". Bước `hoan_thanh`/`huy` không hiện nút — nhưng đó chỉ là phép
-         lịch sự với mắt người dùng, cửa THẬT nằm ở máy chủ
-         (`CV_MO_THEO_TRANG_THAI`): gọi thẳng API vẫn bị chặn 409. */
-      if (r.trang_thai === 'moi' || r.trang_thai === 'dang_lam' || r.trang_thai === 'cho_duyet') {
-        nut += ` <button type="button" class="btn-nho cv-nut-sua" data-cv-sua="${r.id}">Sửa</button>`;
-        nut += ` <button type="button" class="btn-nho" data-cv-huy="${r.id}">Huỷ</button>`;
-      }
-      return `<td><div class="nm">${esc(r.tieu_de)}</div>${r.muc_tieu_ten ? `<div class="sm">🎯 Thuộc mục tiêu: ${esc(r.muc_tieu_ten)}</div>` : ''}${r.mo_ta ? `<div class="sm">${dg(r.mo_ta)}</div>` : ''}${r.phoi_hop_ten ? `<div class="sm">🤝 Phối hợp: ${esc(r.phoi_hop_ten)}</div>` : ''}${r.ket_qua ? `<div class="sm"><b>Kết quả:</b> ${dg(r.ket_qua)}</div>` : ''}</td>` +
-        `<td class="sm">${dg(r.dau_ra)}</td>` +
-        `<td class="sm">${esc(r.nguoi_nhan_ten)}</td>` +
-        `<td class="sm">${dongHan(r.han_chot)}</td>` +
-        `<td><span class="tag ${tt.mau}">${tt.chu}</span></td>` +
-        `<td style="white-space:nowrap">${nut}</td>`;
-    });
-    $('#cv-trong-giao').hidden = (kq.giao || []).length > 0;
-    veDaiCat('#cv-cat-giao', kq.cat_giao, {
-      don_vi: 'việc', nut: { chu: 'Xem đầy đủ ở Lịch sử làm việc', tab: 'lichsuviec' }
-    });
-
-    // Việc mình được mời PHỐI HỢP — CHỈ THEO DÕI, không báo cáo/chuyển trạng
-    // thái thay người chính (Sếp Ngọc chốt 20/08/2026: giữ đúng 1 đầu mối
-    // chịu trách nhiệm báo cáo cho mỗi việc, phối hợp chỉ để biết & hỗ trợ).
-    veBang('#cv-bang-phoihop', kq.phoi_hop || [], r => {
-      const tt = CV_TRANG_THAI[r.trang_thai] || CV_TRANG_THAI.moi;
-      return `<td><div class="nm">${esc(r.tieu_de)}</div>${r.muc_tieu_ten ? `<div class="sm">🎯 Thuộc mục tiêu: ${esc(r.muc_tieu_ten)}</div>` : ''}${r.mo_ta ? `<div class="sm">${dg(r.mo_ta)}</div>` : ''}</td>` +
-        `<td class="sm">${dg(r.dau_ra)}</td>` +
-        `<td class="sm">${esc(r.nguoi_nhan_ten)}</td>` +
-        `<td class="sm">${esc(r.nguoi_giao_ten)}</td>` +
-        `<td class="sm">${dongHan(r.han_chot)}</td>` +
-        `<td><span class="tag ${tt.mau}">${tt.chu}</span></td>`;
-    });
-    $('#cv-trong-phoihop').hidden = (kq.phoi_hop || []).length > 0;
-    veDaiCat('#cv-cat-phoihop', kq.cat_phoi_hop, {
-      don_vi: 'việc', nut: { chu: 'Xem đầy đủ ở Lịch sử làm việc', tab: 'lichsuviec' }
-    });
+    /* Không còn ba bảng ở tab này để vẽ — dữ liệu (kèm NGUYÊN các nhãn cắt
+       `cat_nhan`/`cat_giao`/`cat_phoi_hop`) giao sang màn gộp ở Lịch sử làm
+       việc. Vẫn ĐÚNG MỘT lượt gọi `cvDanhSach` như trước, không thêm lượt nào. */
+    window.CV_DU_LIEU_CUA_TOI = kq;
   }
 
   // UI STATE CONSISTENCY (docs/ERP-CONSTITUTION.md): sau mọi mutation đổi
@@ -3377,9 +3257,15 @@ async function khoiDongCongViec() {
   // từng chỉ tải 1 lần lúc vào trang, không cập nhật khi có việc mới/đổi
   // trạng thái trong lúc đang dùng).
   async function lamMoiCacManLienQuanCv() {
-    await taiLai();
+    await taiLai();                 // nạp lại cvDanhSach -> window.CV_DU_LIEU_CUA_TOI
     await taiLaiTongQuanCongTy();
-    if (window.LAM_MOI_LICHSU_VIEC) window.LAM_MOI_LICHSU_VIEC();
+    // Thứ tự BẮT BUỘC: `taiLai()` trước, màn gộp vẽ sau — vẽ trước là vẽ lại
+    // đúng dữ liệu cũ vừa thao tác xong, tức nút bấm "không ăn" trước mắt người dùng.
+    if (window.LAM_MOI_LICHSU_VIEC) await window.LAM_MOI_LICHSU_VIEC();
+    /* Khối "Việc của tôi hôm nay" nay là thứ DUY NHẤT còn hiện việc ở Trạm
+       Mục Tiêu — nộp/duyệt xong mà nó vẫn kể việc cũ thì đúng bằng nói dối.
+       Trước bản gộp nó ăn theo ba bảng bên cạnh nên không lộ. */
+    try { await veHomNay(); } catch { /* chưa nạp migration nhắc việc — bỏ qua */ }
   }
 
   $('#cv-form').addEventListener('submit', async (e) => {
@@ -3585,8 +3471,11 @@ async function khoiDongCongViec() {
       btn.disabled = false;
     }
   }
-  $('#cv-bang-nhan').addEventListener('click', xuLyNut);
-  $('#cv-bang-giao').addEventListener('click', xuLyNut);
+  /* Hai bảng `#cv-bang-nhan` / `#cv-bang-giao` không còn tồn tại — bảng duy
+     nhất giờ là `#ls-cv-bang` ở màn gộp. Đưa hàm vẽ nút + hàm xử lý bấm ra
+     `window` để màn đó dùng lại NGUYÊN BẢN: một luật, một chỗ. */
+  window.CV_HTML_NUT_DONG = htmlNutDongViec;
+  window.CV_XU_LY_NUT = xuLyNut;
 
   // Tổng quan việc TOÀN CÔNG TY — chỉ Admin (Sếp Ngọc/Sếp Phong yêu cầu
   // 23/08/2026: "xem full toàn bộ công ty" ngay ở khu vực Việc, không chỉ
@@ -3634,11 +3523,51 @@ async function khoiDongCongViec() {
    LỊCH SỬ LÀM VIỆC — kho lưu trữ TOÀN CỤC mọi việc trong Trạm Mục Tiêu, của
    TẤT CẢ mọi người chứ không riêng người xem (Sếp Ngọc yêu cầu 21/08/2026:
    "lưu trữ lại quá trình làm việc của nhân sự, ai làm gì, xong task gì như
-   nào"). Chỉ đọc — không có nút thao tác nào ở đây, đúng vai trò 1 cuốn sổ
-   lưu trữ, không phải nơi làm việc (đó là Trạm Mục Tiêu).
+   nào").
+
+   GỘP 29/08/2026 — Sếp Ngọc nhắc HAI LẦN: "gộp vào lịch sử làm việc đi".
+   Ba tab bên Trạm Mục Tiêu (Việc cần làm · Việc phối hợp · Việc tôi giao) +
+   dải "Đây chỉ là việc của bạn" + nút "Xem việc toàn công ty →" đã chuyển hết
+   về đây, thành MỘT màn có bộ lọc bốn phạm vi:
+       Việc của tôi · Tôi phối hợp · Tôi giao · Toàn công ty
+   Nên màn này KHÔNG còn "chỉ đọc" nữa: ba phạm vi đầu là nơi LÀM VIỆC thật
+   (Bắt đầu làm · Nộp kết quả · Duyệt xong · Trả lại · Sửa · Huỷ · ✓ Xong).
+   Sau bản này toàn ERP còn HAI chỗ hiện việc: khối "Việc của tôi hôm nay"
+   (exception-first, mở ERP là thấy) và màn này (danh sách đầy đủ + tra cứu).
+
+   HAI NGUỒN, MỘT BẢNG — và đó là chủ ý, không phải bỏ dở:
+     · ba phạm vi CỦA TÔI đọc `cvDanhSach` (máy chủ lọc sẵn theo người gọi)
+     · 'Toàn công ty' đọc `cvLichSu` (có con trỏ trang `truoc=`)
+   Cả hai trả CÙNG bộ cột (`CV_COT` trong src/index.js) nên dùng chung đúng
+   một hàm vẽ dòng. QUYỀN KHÔNG ĐỔI MỘT DÒNG NÀO: cửa vẫn ở máy chủ y như
+   trước — `cvDanhSach` chỉ trả việc của chính người gọi, `cvLichSu` đòi tab
+   `lichsuviec`, `cvTongQuanCongTy` (khối tổng hợp bên Trạm Mục Tiêu) đòi
+   Admin. Đây là GỘP MÀN HÌNH, không phải mở quyền.
    ========================================================================== */
 async function khoiDongLichSuViec() {
   let DS_LSCV = [];
+  /* Phạm vi đang xem. Mặc định 'toi': người mở ERP mỗi sáng cần thấy việc của
+     mình trước, không phải sổ tra cứu toàn công ty. */
+  let LOC_LSV = 'toi';
+
+  const NHAN_LOC = {
+    toi:     { trong: 'Chưa ai giao việc gì cho Sếp/bạn cả.',   nut: 'toi' },
+    phoihop: { trong: 'Chưa được mời phối hợp việc nào.',        nut: null },
+    giao:    { trong: 'Sếp/bạn chưa giao việc nào.',             nut: 'giao' },
+    congty:  { trong: 'Không tìm thấy việc nào khớp.',           nut: null }
+  };
+
+  /* Nguồn dữ liệu + nhãn cắt của phạm vi đang xem. `cvDanhSach` đã được
+     `khoiDongCongViec` gọi và cất vào `window.CV_DU_LIEU_CUA_TOI` — KHÔNG gọi
+     lại lần hai ở đây. Vai nào không có quyền `congviec` thì không có mô-đun
+     đó, ba phạm vi kia rỗng và màn vẫn chạy ở mức suy giảm, không ném lỗi. */
+  function nguonLoc() {
+    if (LOC_LSV === 'congty') return { ds: DS_LSCV, cat: null };
+    const d = window.CV_DU_LIEU_CUA_TOI || {};
+    if (LOC_LSV === 'phoihop') return { ds: d.phoi_hop || [], cat: d.cat_phoi_hop };
+    if (LOC_LSV === 'giao')    return { ds: d.giao || [],      cat: d.cat_giao };
+    return { ds: d.nhan || [], cat: d.cat_nhan };
+  }
 
   function capNhatVN(s) {
     if (!s) return '—';
@@ -3656,21 +3585,87 @@ async function khoiDongLichSuViec() {
   function veBangLsCv() {
     const k = boDau(($('#ls-cv-tim').value || '').trim());
     const locTt = $('#ls-cv-loctt').value;
-    const ds = DS_LSCV.filter(r =>
+    const { ds: nguon } = nguonLoc();
+    const ds = nguon.filter(r =>
       (!locTt || r.trang_thai === locTt) &&
       (!k || boDau(`${r.tieu_de} ${r.nguoi_nhan_ten || ''} ${r.nguoi_giao_ten || ''} ${r.muc_tieu_ten || ''}`).includes(k)));
+    /* Nút hành động lấy từ mô-đun Trạm Mục Tiêu (`window.CV_HTML_NUT_DONG`) —
+       KHÔNG chép lại luật ở đây, vì chép lại đúng là thứ bản gộp này đi xoá.
+       Vai không có quyền `congviec` thì móc nối vắng và cột nút rỗng: màn vẫn
+       tra cứu được, chỉ không thao tác — đúng quyền họ vốn có. */
+    const kieuNut = NHAN_LOC[LOC_LSV].nut;
+    const veNut = kieuNut ? layMocNoi('CV_HTML_NUT_DONG', 'congviec') : null;
     veBang('#ls-cv-bang', ds, r => {
       const tt = CV_TRANG_THAI[r.trang_thai] || CV_TRANG_THAI.moi;
-      return `<td><div class="nm">${esc(r.tieu_de)}</div>${r.dau_ra ? `<div class="sm">${dg(r.dau_ra)}</div>` : ''}${r.ket_qua ? `<div class="sm"><b>Kết quả:</b> ${dg(r.ket_qua)}</div>` : ''}</td>` +
+      /* Todo cá nhân (tự giao cho mình) — giữ nguyên nhãn 🙋 và chữ
+         "— (của tôi)" ở cột Người giao như bảng "Việc cần làm" cũ. */
+      const laTodo = r.nguoi_giao_id === TOI.id && r.nguoi_nhan_id === TOI.id;
+      const nut = (kieuNut && typeof veNut === 'function') ? veNut(r, kieuNut) : '';
+      /* ĐẦU RA = CỘT RIÊNG (29/08/2026). Bản gộp đầu tiên chôn `dau_ra` thành
+         một dòng chữ nhỏ trong ô "Việc"; sai tinh thần MBOs — đầu ra là THƯỚC
+         ĐO, phải rà được cả cột bằng mắt chứ không phải đọc từng ô đi tìm.
+         Vẽ ĐÚNG MỘT LẦN ở hai chỗ, CSS chọn chỗ nào hiện theo bề ngang:
+           · ≥980px → `<td class="cot-daura">` hiện, `.daura-hep` ẩn
+           · ≤979px → ngược lại (màn hẹp không đủ chỗ cho 9 cột)
+         Không dùng JS đo bề ngang rồi vẽ hai kiểu: thế là hai đường mã cho một
+         sự thật, và là chỗ để chúng lệch nhau. */
+      const oDauRa = r.dau_ra ? dg(r.dau_ra) : '';
+      return `<td><div class="nm">${esc(r.tieu_de)}${laTodo ? ' <span class="tag sage">🙋 Việc của tôi</span>' : ''}</div>` +
+          `${oDauRa ? `<div class="sm daura-hep">${oDauRa}</div>` : ''}` +
+          `${r.mo_ta ? `<div class="sm">${dg(r.mo_ta)}</div>` : ''}` +
+          `${r.phoi_hop_ten ? `<div class="sm">🤝 Phối hợp: ${esc(r.phoi_hop_ten)}</div>` : ''}` +
+          `${r.ket_qua ? `<div class="sm"><b>Kết quả:</b> ${dg(r.ket_qua)}</div>` : ''}</td>` +
+        `<td class="sm cot-daura">${oDauRa || '—'}</td>` +
         `<td class="sm">${esc(r.nguoi_nhan_ten)}</td>` +
-        `<td class="sm">${esc(r.nguoi_giao_ten)}</td>` +
+        `<td class="sm">${laTodo ? '— (của tôi)' : esc(r.nguoi_giao_ten)}</td>` +
         `<td class="sm">${esc(r.muc_tieu_ten || '—')}</td>` +
         `<td class="sm">${hanChotVN(r.han_chot)}</td>` +
         `<td><span class="tag ${tt.mau}">${tt.chu}</span></td>` +
-        `<td class="sm">${capNhatVN(r.cap_nhat_luc)}</td>`;
+        `<td class="sm">${capNhatVN(r.cap_nhat_luc)}</td>` +
+        `<td style="white-space:nowrap">${nut}</td>`;
     });
-    $('#ls-cv-trong').hidden = ds.length > 0;
+    const oTrong = $('#ls-cv-trong');
+    /* BA LÝ DO KHÁC NHAU, BA CÂU KHÁC NHAU. Nói chung một câu là cách chắc
+       chắn để Sếp tưởng mất dữ liệu (REV-0048 lỗi #3) hoặc tưởng "chưa ai giao
+       việc gì" trong khi thật ra mô-đun Trạm Mục Tiêu vừa chết (lỗi #4 — đúng
+       kiểu im lặng REV-0038 đi vá).
+       ① MÔ-ĐUN HỎNG: có quyền `congviec` mà `khoiDongCongViec` ném lỗi thì
+          `window.CV_DU_LIEU_CUA_TOI` không bao giờ được đặt (nó chỉ gán ở cuối
+          `taiLai()` khi đã gọi API xong). Ba phạm vi CỦA TÔI khi đó rỗng vì
+          HỎNG, không phải vì trống. Vai KHÔNG có quyền `congviec` cũng rỗng —
+          nhưng đó là đúng quyền họ có, nên không báo lỗi cho họ.
+       ② CÒN BỘ LỌC: nói THẲNG bộ lọc nào đang bật + nút xoá ngay tại chỗ.
+          Đổi phạm vi KHÔNG tự xoá bộ lọc (bộ lọc do người dùng chủ động đặt,
+          tự xoá là cướp thao tác của họ) — nhưng phải nói ra, không để im.
+       ③ Trống thật. */
+    const moDunHong = LOC_LSV !== 'congty' &&
+                      TOI.quyen.includes('congviec') && !window.CV_DU_LIEU_CUA_TOI;
+    if (moDunHong) {
+      oTrong.innerHTML = '<b>Không tải được việc của bạn — đây là LỖI, không phải "chưa ai giao việc gì".</b>' +
+        ' Tải lại trang một lần; còn nữa thì báo bộ phận Công nghệ kèm giờ gặp lỗi.';
+    } else if (k || locTt) {
+      const dangDat = [];
+      if (locTt) dangDat.push('Trạng thái: ' + ((CV_TRANG_THAI[locTt] || {}).chu || locTt));
+      if (k) dangDat.push('Tìm: "' + ($('#ls-cv-tim').value || '').trim() + '"');
+      oTrong.innerHTML = 'Không có việc nào khớp <b>bộ lọc đang đặt</b> (' + esc(dangDat.join(' · ')) +
+        '). Dữ liệu vẫn còn nguyên. ' +
+        '<button type="button" class="dai-cat-nut" data-lscv-xoaloc>Xoá bộ lọc</button>';
+    } else {
+      oTrong.textContent = NHAN_LOC[LOC_LSV].trong;
+    }
+    oTrong.hidden = ds.length > 0;
+    veDaiCatLsCv();
   }
+
+  /* Nút "Xoá bộ lọc" của câu ② ở trên. Uỷ quyền trên vùng cha vì `oTrong` bị
+     vẽ lại mỗi lần lọc — gắn thẳng vào nút là gắn vào phần tử sắp bị thay. */
+  $('#ls-cv-trong').addEventListener('click', (e) => {
+    if (!e.target.closest('[data-lscv-xoaloc]')) return;
+    const oTim = $('#ls-cv-tim'), oLoc = $('#ls-cv-loctt');
+    if (oLoc) oLoc.value = '';
+    if (oTim) oTim.value = '';
+    veBangLsCv();
+  });
 
   /* CON TRỎ trang — chuỗi `cap_nhat_luc|id` của dòng cuối đã tải. `null` =
      không còn gì cũ hơn. Xem src/index.js cvLichSu. */
@@ -3686,6 +3681,18 @@ async function khoiDongLichSuViec() {
      BẢN NÀY: nói đúng giới hạn của ô tìm + cho một đường đi CÓ THẬT (nút gọi
      lại API kèm `?truoc=`, tải tiếp 500 việc cũ hơn từ MÁY CHỦ). */
   function veDaiCatLsCv() {
+    /* BA PHẠM VI CỦA TÔI — dải cắt do `cvDanhSach` trả về (`cat_nhan` /
+       `cat_phoi_hop` / `cat_giao`, trần 300 mỗi loại). Trước bản gộp mỗi bảng
+       có dải riêng chỉ sang "Lịch sử làm việc"; giờ CHÍNH LÀ chỗ đó, nên đường
+       đi tiếp là đổi sang phạm vi 'Toàn công ty' — nơi có phân trang thật. */
+    if (LOC_LSV !== 'congty') {
+      const { cat } = nguonLoc();
+      return veDaiCat('#ls-cv-cat', cat, {
+        don_vi: 'việc',
+        goi_y: 'Ô tìm kiếm phía trên chỉ tìm trong phần ĐÃ TẢI về máy.',
+        nut: { chu: 'Xem đầy đủ ở phạm vi "Toàn công ty"', chay: () => doiLoc('congty') }
+      });
+    }
     if (TRUOC_LSCV === null && TONG_LSCV === null) return veDaiCat('#ls-cv-cat', null);
     const conLai = TONG_LSCV != null ? Math.max(0, TONG_LSCV - DS_LSCV.length) : null;
     veDaiCat('#ls-cv-cat', { gioi_han: DS_LSCV.length, tong: TONG_LSCV }, {
@@ -3709,35 +3716,84 @@ async function khoiDongLichSuViec() {
       if (kq.cat && Number.isFinite(kq.cat.tong)) TONG_LSCV = kq.cat.tong;
       else if (!them) TONG_LSCV = null;
       // Tải hết rồi thì dải biến mất — không còn gì để nói nữa.
-      if (!TRUOC_LSCV) { TONG_LSCV = null; veDaiCat('#ls-cv-cat', null); }
-      else veDaiCatLsCv();
+      if (!TRUOC_LSCV) TONG_LSCV = null;
     } catch {
-      // Mạng hỏng giữa chừng: vẽ lại dải để nút "Tải thêm" trở về bấm được,
-      // không để nó kẹt ở "Đang tải…" — kẹt im lặng cũng là một kiểu nói dối.
-      if (TRUOC_LSCV) veDaiCatLsCv();
+      // Mạng hỏng giữa chừng: `veBangLsCv` bên dưới vẽ lại dải nên nút "Tải
+      // thêm" trở về bấm được, không kẹt ở "Đang tải…" — kẹt im lặng cũng là
+      // một kiểu nói dối.
     }
     veBangLsCv();
   }
 
-  await taiLaiLichSuCv();
-  // UI STATE CONSISTENCY: mọi màn khác đổi cong_viec (khoiDongCongViec) gọi
-  // hàm này để tab Lịch sử làm việc luôn khớp dữ liệu mới nhất, không cần F5
-  // (bug thật 23/08/2026: hoàn thành/tạo việc xong, tab này vẫn hiện dữ liệu
-  // cũ vì chỉ tải 1 lần lúc vào trang).
-  window.LAM_MOI_LICHSU_VIEC = taiLaiLichSuCv;
+  /* Đổi phạm vi. Ba phạm vi CỦA TÔI dùng dữ liệu `khoiDongCongViec` đã nạp —
+     không gọi mạng. 'Toàn công ty' chỉ gọi `cvLichSu` LẦN ĐẦU vào phạm vi đó:
+     người chỉ làm việc của mình không phải tải 500 dòng việc người khác. */
+  async function doiLoc(loc) {
+    if (!NHAN_LOC[loc]) return;
+    LOC_LSV = loc;
+    document.querySelectorAll('#lsv-loc .seg-nut').forEach(b =>
+      b.classList.toggle('active', b.dataset.lsv === loc));
+    if (loc === 'congty' && DS_LSCV.length === 0 && TRUOC_LSCV === null) await taiLaiLichSuCv();
+    else veBangLsCv();
+  }
+  $('#lsv-loc').addEventListener('click', (e) => {
+    const nut = e.target.closest('.seg-nut');
+    if (nut) doiLoc(nut.dataset.lsv);
+  });
 
-  // Drill Down to Action: Admin/Manager bấm 1 dòng "quá hạn/chờ duyệt"
-  // của NGƯỜI KHÁC ở khối tóm tắt (veTongQuanTheoVaiTro) — bảng Việc
-  // cần làm/tôi giao của họ chỉ có việc CỦA CHÍNH họ nên không scroll-tới
-  // được; Lịch sử làm việc là nơi DUY NHẤT xem được việc của mọi người,
-  // tái dùng luôn ô tìm/lọc trạng thái đã có thay vì xây thêm view mới
-  // (audit Home/Dashboard 23/08/2026, Rule 5 reuse).
-  window.MO_DEN_LICHSU_TIM = (tuKhoa) => {
+  /* Nút trên từng dòng — uỷ quyền cho `xuLyNut` của mô-đun Trạm Mục Tiêu.
+     `goiMocNoi` chứ không `?.`: mô-đun đó chết lúc khởi động thì phải HÉT LÊN,
+     không được biến cú bấm thành "không làm gì cả" (bài học REV-0038 · L3 —
+     Sếp Ngọc bấm mãi vào một cái nút đã chết mà console thì im). */
+  $('#ls-cv-bang').addEventListener('click', (e) => {
+    if (!e.target.closest('button[data-cv-batdau],button[data-cv-nop],button[data-cv-xongngay],' +
+                          'button[data-cv-duyet],button[data-cv-tralai],button[data-cv-sua],button[data-cv-huy]')) return;
+    goiMocNoi('CV_XU_LY_NUT', 'congviec', e);
+  });
+
+  await veBangLsCv();
+  /* UI STATE CONSISTENCY: mọi màn khác đổi cong_viec gọi hàm này để màn gộp
+     khớp dữ liệu mới nhất, không bắt F5 (bug thật 23/08/2026). Chỉ tải lại
+     `cvLichSu` khi ĐANG xem 'Toàn công ty' hoặc đã từng tải nó — ba phạm vi
+     kia đọc `window.CV_DU_LIEU_CUA_TOI` mà `lamMoiCacManLienQuanCv` vừa làm
+     mới ngay trước đó, nên vẽ lại là đủ và không tốn thêm lượt gọi nào. */
+  window.LAM_MOI_LICHSU_VIEC = async (o) => {
+    if (LOC_LSV === 'congty' || DS_LSCV.length > 0) return taiLaiLichSuCv(o);
+    veBangLsCv();
+  };
+
+  /* ĐƯỜNG DẪN CŨ — GIỮ NGUYÊN TÊN. Hai móc nối này là chỗ phần còn lại của
+     ERP gọi sang; đổi tên là làm vỡ đúng những chỗ đó.
+     · MO_DEN_LICHSU_TIM(tuKhoa) — Admin/Manager bấm một dòng quá hạn của
+       NGƯỜI KHÁC ở khối tóm tắt: phải sang phạm vi 'Toàn công ty'.
+     · MO_MAN_VIEC(loc, rowId)   — thay đường cũ MO_DEN_VIEC_CUA_TOI: khối
+       "Việc của tôi hôm nay" và các thẻ đếm bấm vào phải rơi đúng phạm vi,
+       đúng dòng, và dòng đó phải SÁNG LÊN (`.canh-bao`) như trước. */
+  window.MO_DEN_LICHSU_TIM = async (tuKhoa) => {
     moTab('lichsuviec');
+    await doiLoc('congty');
     const oTim = $('#ls-cv-tim'), oLoc = $('#ls-cv-loctt');
     if (oLoc) oLoc.value = '';
     if (oTim) { oTim.value = tuKhoa || ''; oTim.dispatchEvent(new Event('input', { bubbles: true })); oTim.focus(); }
     requestAnimationFrame(() => { const b = $('#ls-cv-bang'); if (b) b.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+  };
+
+  window.MO_MAN_VIEC = async (loc, rowId) => {
+    moTab('lichsuviec');
+    const oTim = $('#ls-cv-tim'), oLoc = $('#ls-cv-loctt');
+    // Bộ lọc còn sót từ lần trước là lý do kinh điển khiến "bấm vào không
+    // thấy đâu cả" — xoá trước khi nhảy.
+    if (oTim) oTim.value = '';
+    if (oLoc) oLoc.value = '';
+    await doiLoc(loc || 'toi');
+    requestAnimationFrame(() => {
+      const box = $('#lsv-loc');
+      if (box) box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      if (rowId != null) {
+        const tr = document.querySelector(`#ls-cv-bang tr[data-id="${rowId}"]`);
+        if (tr) { tr.scrollIntoView({ behavior: 'smooth', block: 'center' }); tr.classList.add('canh-bao'); setTimeout(() => tr.classList.remove('canh-bao'), 2500); }
+      }
+    });
   };
 
   $('#ls-cv-tim').addEventListener('input', veBangLsCv);
@@ -3863,7 +3919,7 @@ async function khoiDongChat() {
   /* Một dòng hội thoại = một mục bấm được cao TỐI THIỂU 56px (thẻ .cnb-ds-muc
      đặt min-height trong style.css). Kho vận bấm bằng ngón cái khi đang bê
      hàng — dưới 44px là bấm trượt, đây là chỗ bấm nhiều nhất của cả cửa sổ. */
-  function veDanhSach(kenhChung, ganDay) {
+  function veDanhSach(kenhChung, ganDay, cat) {
     const huy = n => (n > 0 ? `<span class="cnb-ds-dem">${n > 99 ? '99+' : n}</span>` : '');
     const dong = (id, vt, ten, phu, gio, chuaDocN) =>
       `<button type="button" class="cnb-ds-muc" data-mo="${esc(id)}" data-ten="${esc(ten)}" data-vt="${esc(vt)}">` +
@@ -3884,6 +3940,19 @@ async function khoiDongChat() {
       dong(p.id, p.viet_tat, p.ho_ten,
         (p.gui_cuoi === TOI.id ? 'Bạn: ' : '') + tomTat(p),
         gioChat(p.luc_cuoi), Number(p.chua_doc || 0))).join('');
+
+    /* Danh sách hội thoại bị cắt thì PHẢI NÓI RA — 23 nhân sự, trần 20, tức
+       vết cắt có thật ngay hôm nay. Không nói ra thì một người từng nhắn cho
+       Sếp biến mất khỏi cửa sổ mà Sếp không biết là mình đang thiếu ai.
+       Dùng đúng dải `.dai-cat` như mọi màn khác, và chỉ ra đường đi tiếp. */
+    if (cat) {
+      const con = Number.isFinite(cat.tong) ? Math.max(0, cat.tong - cat.gioi_han) : null;
+      html += `<p class="dai-cat cnb-ds-cat"><span class="dai-cat-chu">✂️ Đang hiện ` +
+        `<b>${cat.gioi_han}</b> cuộc trò chuyện gần nhất` +
+        (con != null ? ` trong tổng <b>${cat.tong}</b> — còn <b>${con}</b> người nữa chưa hiện` :
+                       ` — danh sách này <b>đã bị cắt bớt</b>, còn nữa`) +
+        `. Tìm người đó trong Danh bạ rồi bấm "Chat ngay".</span></p>`;
+    }
 
     dsEl.innerHTML = html;
   }
@@ -4101,8 +4170,8 @@ async function khoiDongChat() {
      nay chỉ còn một nơi tiêu thụ, tên hàm đổi theo cho khỏi nói dối. */
   async function taiDanhSachHoiThoai() {
     try {
-      const { gan_day, kenh_chung } = await API.chatGanDay();
-      veDanhSach(kenh_chung, gan_day);
+      const { gan_day, kenh_chung, cat } = await API.chatGanDay();
+      veDanhSach(kenh_chung, gan_day, cat);
     } catch { /* mất mạng tạm thời — bỏ qua, đợt hỏi sau tự thử lại */ }
   }
 
@@ -5269,6 +5338,157 @@ if (TOI.quyen.includes('nhansu')) {
       }
     });
 
+    /* ====================================================================
+       GIẤY TỜ CỦA NGƯỜI NÀY  ·  CTL-0025 Đợt 2 — cửa vào HỒ SƠ NHÂN SỰ
+       --------------------------------------------------------------------
+       Sếp Ngọc 29/08/2026: *"cho tao thêm chỗ để scan bộ thông tin nhân sự
+       lên nữa … lưu vào đây luôn THÀNH 1 BỘ là đẹp"*.
+
+       MỘT KHO, HAI CỬA NHÌN. Khối này gọi ĐÚNG API của kho tài liệu, chỉ
+       thêm `ganId` — không có bảng riêng, không có đường lưu riêng, không
+       có bản chép tay nào của luật phân quyền. Giấy quét ở đây vẫn hiện ở
+       tab Kho tài liệu và ngược lại.
+
+       Lõi quét (chụp → nén → gộp trang → gửi lại khi sóng yếu) dùng NGUYÊN
+       `quet-tai-lieu.js` của Đợt 1 — Đợt 2 không viết lại một dòng nào.
+
+       ⚠️ RANH GIỚI CỨNG: quyền cắt ở MÁY CHỦ. `admin_backup` mở được hộp
+       hồ sơ (có `them_nhan_su`) nhưng KHÔNG xem được nhóm `nhan_su` — máy
+       chủ trả 403 và khối này nói thẳng ra, không vẽ một danh sách rỗng.
+       ==================================================================== */
+    let NS_GT_DANG_MO = null;         // id người đang mở, để câu trả lời chậm không lạc chủ
+    let NS_GT_LOAI_GOI_Y = [];        // loại giấy tờ — MÁY CHỦ trả, không chép tay
+    let NS_GT_QUET_DUOC = false;
+
+    function nsGtNguoiQuet(idNguoi) {
+      if (!idNguoi) return 'không rõ';
+      const ng = DS_NHAN_SU_QT.find(x => x.id === idNguoi);
+      return ng ? ng.ho_ten : idNguoi;
+    }
+
+    function nsGtMotThe(t) {
+      const con = t.ngay_het_han ? conBaoNhieuNgay(t.ngay_het_han) : null;
+      /* Đỏ CHỈ cho thứ đã hỏng (giấy quá hạn) — ngoại lệ duy nhất của luật ba
+         màu. Sắp hết hạn dùng vàng nâu, vẫn trong họ nâu–cam. */
+      const dai = con === null ? ''
+        : con < 0 ? `<span class="tl-dai tl-dai-qua">Quá hạn ${-con} ngày</span>`
+        : con <= 30 ? `<span class="tl-dai tl-dai-sap">Còn ${con} ngày</span>`
+        : `<span class="tl-dai">Hết hạn ${esc(ngayIsoVN(t.ngay_het_han))}</span>`;
+      return `
+        <article class="tl-the">
+          <div class="tl-the-dau">
+            <b class="tl-ten">${esc(t.tieu_de)}</b>
+            ${t.nhay_cam ? '<span class="tl-dai tl-dai-kin">Nhạy cảm</span>' : ''}
+            ${dai}
+          </div>
+          <div class="tl-the-phu">
+            ${esc(t.loai || 'chưa ghi loại')}
+            ${t.so_hieu ? ' · ' + esc(t.so_hieu) : ''}
+            ${t.ngay_ban_hanh ? ' · ban hành ' + esc(ngayIsoVN(t.ngay_ban_hanh)) : ''}
+            · ${Number(t.so_trang) || 0} trang
+            ${Number(t.ocr_so_trang) > Number(t.ocr_so_trang_neo || 0)
+              ? `<span class="tl-dai tl-dai-sap">${Number(t.ocr_so_trang) - Number(t.ocr_so_trang_neo || 0)} trang chữ CHƯA KIỂM</span>`
+              : ''}
+          </div>
+          <div class="tl-the-phu">
+            Quét bởi <b>${esc(nsGtNguoiQuet(t.nguoi_tao))}</b>
+            ${t.tao_luc ? ' lúc ' + esc(String(t.tao_luc).slice(0, 16)) : ''}
+            ${t.han_luu ? ' · hạn lưu bản giấy: ' + esc(t.han_luu) : ''}
+          </div>
+          <div class="tl-the-nut">
+            <a class="tl-nut-mo" href="/api/tai-lieu/tep?id=${encodeURIComponent(t.id)}"
+               target="_blank" rel="noopener">Mở bản quét</a>
+            ${/* Vá REV-0046 #4. Nhãn "n trang chữ CHƯA KIỂM" ngay phía trên chỉ
+                  có nghĩa khi MỞ RA KIỂM ĐƯỢC — mà người vừa quét, đứng ngay ở
+                  màn này, là người DUY NHẤT còn cầm tờ giấy để đối chiếu.
+                  Dùng CHUNG hàm với tab Kho tài liệu, không chép bản hai. */''}
+            ${nutXemChuTaiLieu(t.id)}
+          </div>
+          ${oChuTaiLieu(t.id)}
+        </article>`;
+    }
+
+    async function veGiayToHoSo(n) {
+      const oDs = $('#nsGt-ds'), oTrong = $('#nsGt-trong'),
+            oDem = $('#nsGt-dem'), oNut = $('#nsGt-quet');
+      if (!oDs) return;
+      NS_GT_DANG_MO = n.id;
+      NS_GT_QUET_DUOC = false;
+      oNut.hidden = true;                 // ẩn TRƯỚC, hiện lại chỉ khi máy chủ cho
+      oDs.innerHTML = '';
+      oDem.textContent = 'Đang mở bộ giấy tờ…';
+      oTrong.hidden = true;
+      veDaiCat('#nsGt-cat', null, {});
+
+      let kq;
+      try {
+        kq = await API.tlDanhSach({ ganId: n.id });
+      } catch (e) {
+        if (NS_GT_DANG_MO !== n.id) return;
+        oDem.textContent = '';
+        oTrong.hidden = false;
+        /* Nói THẲNG là không có quyền. Danh sách rỗng làm người ta tưởng người
+           này chưa có giấy tờ nào rồi đi quét lại từ đầu. */
+        oTrong.textContent = e.message || 'Không mở được bộ giấy tờ của người này.';
+        return;
+      }
+      if (NS_GT_DANG_MO !== n.id) return;         // đã mở hồ sơ người khác
+
+      NS_GT_LOAI_GOI_Y = kq.loai_goi_y || [];
+      NS_GT_QUET_DUOC = kq.duoc_quet_nhan_su === true;
+      oNut.hidden = !NS_GT_QUET_DUOC;
+
+      const ds = kq.ds || [];
+      oDs.innerHTML = ds.map(nsGtMotThe).join('');
+      /* Cùng MỘT hàm bắt sự kiện với tab Kho tài liệu (vá REV-0046 #4) — hai
+         cửa nhìn, một cỗ máy. */
+      noiNutXemChu(oDs);
+      oDem.textContent = ds.length
+        ? `${ds.length} giấy tờ trong bộ${kq.bi_cat ? ' (đã cắt bớt)' : ''}`
+        : '';
+      oTrong.hidden = ds.length > 0;
+      oTrong.textContent = NS_GT_QUET_DUOC
+        ? 'Chưa có giấy tờ nào của người này. Bấm "Quét thêm giấy tờ" để lưu quyết định, uỷ quyền, HĐLĐ, CCCD…'
+        : 'Chưa có giấy tờ nào của người này.';
+      veDaiCat('#nsGt-cat', kq.cat, {
+        don_vi: 'giấy tờ',
+        goi_y: 'Bộ giấy của người này đã quá dài — tra tiếp ở tab Kho tài liệu.'
+      });
+    }
+
+    $('#nsGt-quet')?.addEventListener('click', () => {
+      const id = NS_GT_DANG_MO;
+      const n = id ? DS_NHAN_SU_QT.find(x => x.id === id) : null;
+      if (!n || !NS_GT_QUET_DUOC) return;
+      moQuetTaiLieu({
+        cuaVao: 'nhan_su',
+        ganId: n.id,
+        /* Cửa này CHỈ có một nhóm — máy chủ khoá cứng `nhom='nhan_su'` cho cửa
+           `nhan_su`, nên bày một màn chọn nhóm ở đây là bắt bấm thừa một cái.
+           Tên nhóm và hạn lưu vẫn lấy từ máy chủ, không gõ tay vào đây. */
+        nhom: (NS_GT_LOAI_GOI_Y.length ? [{
+          ma: 'nhan_su', ten: 'Nhân sự',
+          vi_du: NS_GT_LOAI_GOI_Y.map(l => l.ten).join(', '),
+          han_luu: 'HĐLĐ 10 năm sau chấm dứt', nhay_cam: 1
+        }] : []),
+        boQuaChonNhom: true,
+        loaiGoiY: NS_GT_LOAI_GOI_Y,
+        tenGoiY: n.ho_ten ? n.ho_ten + ' — ' : '',
+        /* Giấy tờ của ai thì người đó là người đồng ý. Điền sẵn TÊN thôi —
+           "đồng ý cho mục đích gì" vẫn phải gõ, vì đó là chuyện phải hỏi thật. */
+        dongYGoiY: n.ho_ten || '',
+        khiXong: (kq) => {
+          veGiayToHoSo(n);
+          /* Dùng CHUNG `cauSauKhiQuet` với cửa kho chung — đó là chỗ `ocr_ghi_chu`
+             được in ở CẢ HAI nhánh (vá REV-0044 · L1). Viết lại câu báo ở đây là
+             dựng thêm một cửa nữa để quên in nó. */
+          alert(`Vào bộ giấy tờ của ${n.ho_ten}.\n\n` + cauSauKhiQuet(kq) +
+            '\n\n⚠️ Đây là BẢN DỰ PHÒNG. Đừng huỷ bản giấy gốc.' +
+            '\n⚠️ TRẢ GIẤY lại cho nhân viên ngay — doanh nghiệp không được giữ bản gốc.');
+        }
+      });
+    });
+
     function moHopSuaNhanSu(id) {
       const n = DS_NHAN_SU_QT.find(x => x.id === id);
       if (!n) return;
@@ -5281,6 +5501,7 @@ if (TOI.quyen.includes('nhansu')) {
       veLichSuHoSo(id);
       veHopDongHoSo(id);
       veCongTacSinhNhat(n);
+      veGiayToHoSo(n);          // bộ giấy tờ của người này (CTL-0025 Đợt 2)
       veJdHoSo(n);
       veKnHoSo(n);
       $('#nsSua-id').value = n.id;
@@ -6623,6 +6844,11 @@ if (TOI.quyen.includes('taisan')) {
 /* -- Xếp ca (Đăng ký ca / Xếp ca tuần) -- */
 if (TOI.quyen.includes('xepca')) {
   try { await khoiDongXepCa(); } catch (e) { console.error('Xếp ca:', e); }
+}
+
+/* -- Kho tài liệu quản trị (CTL-0026 Đợt 1) -- */
+if (TOI.quyen.includes('khotailieu')) {
+  try { await khoiDongKhoTaiLieu(); } catch (e) { console.error('Kho tài liệu:', e); }
 }
 
 /* -- Đơn hoàn Shopee/TikTok — danh sách nằm trong tab Kho vận (kho xử lý),
@@ -9271,6 +9497,326 @@ if (TOI.quyen.includes('quantri')) {
     try { await navigator.clipboard.writeText(txt); $('#mkModalChep').textContent = 'Đã chép ✓'; }
     catch { $('#mkModalChep').textContent = 'Hãy chép thủ công'; }
   });
+}
+
+/* ==========================================================================
+   CÂU BÁO SAU MỖI LƯỢT QUÉT — DÙNG CHUNG CHO CẢ HAI CỬA
+   ---------------------------------------------------------------------------
+   ⛔ VÁ REV-0044 · L1 — CÂU "CHỐT KHÔNG CHẠY" BỊ GIAO DIỆN NUỐT.
+   Bản trước rẽ theo `kq.ocr_so_trang` và **nhánh CÓ chữ không in `ocr_ghi_chu`**.
+   Cả thiết kế "không giả vờ đã kiểm" nằm ở một dòng chữ KHÔNG BAO GIỜ được in:
+   người quét — người DUY NHẤT còn cầm tờ giấy trên tay để đối chiếu — thấy
+   "bóc chữ được 3 trang" rồi bấm OK; câu kia chỉ hiện về sau ở màn "Xem chữ đã
+   bóc", cho người KHÔNG cầm giấy.
+
+   Nên `ocr_ghi_chu` in ở CẢ HAI nhánh, và đặt ở ĐÚNG MỘT hàm để không có cửa
+   nào lỡ quên — cửa hồ sơ nhân sự (CTL-0025) gọi lại chính hàm này.
+   ========================================================================== */
+function cauSauKhiQuet(kq) {
+  const n = Number(kq.ocr_so_trang) || 0;
+  const neo = Number(kq.ocr_so_trang_neo) || 0;
+  const dong = [`Đã lưu ${kq.so_trang} trang.`];
+
+  if (!n) {
+    dong.push('Chưa bóc được chữ — vẫn tra được bằng tên.');
+  } else {
+    dong.push(`Bóc chữ được ${n} trang, trong đó ${neo} trang đối chiếu được với ` +
+              'thứ bạn vừa gõ.');
+    dong.push('⚠️ AI đọc — CHƯA KIỂM: mọi con số trong phần chữ đã bóc là do AI đọc ' +
+              'từ ảnh, có thể sai vài chữ số. Đối chiếu bản giấy trước khi dùng.');
+  }
+  /* Câu này in ở CẢ HAI nhánh — đó chính là bản vá. */
+  if (kq.ocr_ghi_chu) dong.push('⚠️ ' + kq.ocr_ghi_chu);
+  return dong.join('\n\n');
+}
+
+/* ==========================================================================
+   "XEM CHỮ ĐÃ BÓC" — MỘT HÀM, HAI CỬA  ·  vá REV-0046 lỗi #4
+   ---------------------------------------------------------------------------
+   Thẻ giấy tờ ở khối HỒ SƠ NHÂN SỰ trước đây không có nút này, nên người vừa
+   quét — người DUY NHẤT còn cầm tờ giấy trên tay — không xem lại được chữ AI
+   đọc. Cả cơ chế "CHƯA KIỂM" chỉ có nghĩa khi người ta MỞ RA KIỂM ĐƯỢC; nhãn
+   không kiểm được là nhãn trang trí.
+
+   Đặt ở ĐÚNG MỘT chỗ, đúng nếp `cauSauKhiQuet` ở trên: hai cửa gọi chung một
+   hàm vẽ và một hàm bắt sự kiện. Chép bản thứ hai là chỗ để lần sau một cửa
+   quên mất câu "AI đọc — CHƯA KIỂM".
+   ⚠️ Mỗi lượt bấm gọi `API.tlMo` — với giấy NHẠY CẢM đó là một lượt GHI nhật
+   ký (gộp theo ngày, xem `ghiNhatKy()`), đúng thứ Luật BVDLCN bắt phải có.
+   ========================================================================== */
+
+/** Bôi vàng đúng những cụm số do AI đọc. Vị trí cụm do MÁY CHỦ tính
+ *  (`so_ai`, src/so-ai.js) — trình duyệt KHÔNG giữ bản dò số thứ hai. */
+function veChuCoSo(chu, viTri) {
+  const s = String(chu || '');
+  if (!Array.isArray(viTri) || !viTri.length) return esc(s);
+  let ra = '', xong = 0;
+  for (const [i, dai] of viTri) {
+    if (!Number.isFinite(i) || !Number.isFinite(dai) || i < xong) continue;
+    ra += esc(s.slice(xong, i));
+    ra += `<mark class="so-ai" title="AI đọc — CHƯA KIỂM">${esc(s.slice(i, i + dai))}</mark>`;
+    xong = i + dai;
+  }
+  return ra + esc(s.slice(xong));
+}
+
+/** Ô chữ + nút, dán vào thẻ giấy tờ ở cả hai cửa. */
+function nutXemChuTaiLieu(id) {
+  return `<button type="button" class="tl-nut-mo tl-nut-chu" data-xem="${esc(id)}">Xem chữ đã bóc</button>`;
+}
+function oChuTaiLieu(id) {
+  return `<div class="tl-chu" id="tl-chu-${esc(id)}" hidden></div>`;
+}
+
+/** Nối nút "Xem chữ đã bóc" cho mọi thẻ nằm trong `goc`. */
+function noiNutXemChu(goc) {
+  if (!goc) return;
+  goc.querySelectorAll('[data-xem]').forEach(b => b.addEventListener('click', async () => {
+    const o = document.getElementById('tl-chu-' + b.dataset.xem);
+    if (!o) return;
+    if (!o.hidden) { o.hidden = true; return; }
+    o.textContent = 'Đang mở…'; o.hidden = false;
+    try {
+      const r = await API.tlMo(b.dataset.xem);
+      const tl = r.tai_lieu || {};
+      if (!tl.noi_dung) {
+        o.textContent = 'Chưa bóc được chữ từ tài liệu này' +
+          (tl.ocr_ghi_chu ? ' — ' + tl.ocr_ghi_chu : '') + '.';
+        return;
+      }
+      /* Câu nhắc đứng TRƯỚC đoạn chữ, không phải chú thích cuối trang: người
+         đọc phải biết đây là chữ máy đọc TRƯỚC khi đọc con số. */
+      o.innerHTML =
+        '<p class="tl-so-ai-nhac">⚠️ <b>AI đọc — CHƯA KIỂM.</b> Con số được bôi ' +
+        'là do AI đọc từ ảnh. AI có thể đọc đúng tờ giấy mà vẫn chép sai vài ' +
+        'chữ số — đối chiếu bản giấy trước khi dùng bất kỳ con số nào vào giấy ' +
+        'tờ, tờ khai hay hồ sơ.</p>' +
+        `<pre class="tl-chu-van">${veChuCoSo(tl.noi_dung, tl.so_ai)}</pre>` +
+        (tl.ocr_ghi_chu ? `<p class="tl-so-ai-nhac">${esc(tl.ocr_ghi_chu)}</p>` : '');
+    } catch (e) { o.textContent = e.message; }
+  }));
+}
+
+/* ==========================================================================
+   KHO TÀI LIỆU QUẢN TRỊ  ·  CTL-0026 Đợt 1 — cửa vào KHO CHUNG
+   ---------------------------------------------------------------------------
+   Màn này CHỈ làm ba việc: bày danh sách, tìm, và mở màn quét. Toàn bộ lõi
+   quét (chụp → nén → gộp trang → gửi lại khi hụt) nằm ở `quet-tai-lieu.js`
+   để Đợt 2 (CTL-0025 — quét vào hồ sơ một người) gọi lại y nguyên.
+
+   Danh sách nhóm và quyền lưu do MÁY CHỦ trả về (`nhom`, `nhom_luu_duoc`);
+   ở đây không có một dòng nào tự quyết ai xem được gì.
+   ========================================================================== */
+async function khoiDongKhoTaiLieu() {
+  const oDanhSach = $('#tl-danh-sach');
+  const oTrong = $('#tl-trong');
+  const oTim = $('#tl-tim');
+  const oSapHet = $('#tl-sap-het');
+  const oNhomLoc = $('#tl-nhom-loc');
+  if (!oDanhSach) return;
+
+  const nutQuet = $('#tl-nut-quet');
+  let dsNhom = [];            // nhóm XEM được
+  let nhomLuuDuoc = [];       // nhóm LƯU được (tập con)
+  let nhomDangLoc = '';
+  const laAdminTL = TOI.vai_tro === 'admin';
+
+  /* ⚠️ VÁ REV-0040 · LỖI #8 — ĐỪNG HỨA SUÔNG.
+     Ba vai trò (nhân viên kho · CSKH · người dùng) XEM được nhóm "Quản trị nội
+     bộ" nhưng KHÔNG lưu được nhóm nào. Bản trước vẫn bày nút "📷 Quét tài liệu
+     mới" cho họ: bấm vào là mở màn quét rỗng, không nhóm nào chọn được. Máy
+     chủ đã chặn đúng (`duocLuuNhomTaiLieu`) nên không mất dữ liệu — nhưng hứa
+     một việc rồi không cho làm là lỗi với người dùng.
+     BA CHỖ: ẩn sẵn lúc khởi động, hiện lại sau mỗi lần nạp, và cả khi nạp hỏng. */
+  function veNutQuet() { if (nutQuet) nutQuet.hidden = !nhomLuuDuoc.length; }
+  veNutQuet();
+
+  const tenNhom = (ma) => (dsNhom.find(n => n.ma === ma) || {}).ten || ma;
+
+  function veLoc() {
+    if (!oNhomLoc) return;
+    oNhomLoc.innerHTML =
+      `<button type="button" class="tl-chip${nhomDangLoc ? '' : ' chon'}" data-nhom="">Tất cả</button>` +
+      dsNhom.map(n => `<button type="button" class="tl-chip${nhomDangLoc === n.ma ? ' chon' : ''}" data-nhom="${esc(n.ma)}">${esc(n.ten)}</button>`).join('');
+    oNhomLoc.querySelectorAll('[data-nhom]').forEach(b => b.addEventListener('click', () => {
+      nhomDangLoc = b.dataset.nhom; veLoc(); nap();
+    }));
+  }
+
+  function ngayGon(s) { return s ? s.split('-').reverse().join('/') : ''; }
+
+  /** Còn mấy ngày tới hạn — số âm là đã quá hạn. */
+  function conNgay(hetHan) {
+    if (!hetHan) return null;
+    const homNay = new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
+    return Math.round((Date.parse(hetHan) - Date.parse(homNay)) / 86400000);
+  }
+
+  function veMot(t) {
+    const con = conNgay(t.ngay_het_han);
+    /* Đỏ là NGOẠI LỆ DUY NHẤT của luật ba màu (docs/BANG-MAU.md Mục 3) và chỉ
+       dùng cho thứ đã hỏng: giấy đã quá hạn. Sắp hết hạn thì dùng `--warn`
+       (vàng nâu, vẫn trong họ nâu–cam), không phải đỏ. */
+    const dai = con === null ? ''
+      : con < 0 ? `<span class="tl-dai tl-dai-qua">Quá hạn ${-con} ngày</span>`
+      : con <= 30 ? `<span class="tl-dai tl-dai-sap">Còn ${con} ngày</span>`
+      : `<span class="tl-dai">Hết hạn ${ngayGon(t.ngay_het_han)}</span>`;
+    return `
+      <article class="tl-the">
+        <div class="tl-the-dau">
+          <b class="tl-ten">${esc(t.tieu_de)}</b>
+          ${t.nhay_cam ? '<span class="tl-dai tl-dai-kin">Nhạy cảm</span>' : ''}
+          ${dai}
+        </div>
+        <div class="tl-the-phu">
+          ${esc(tenNhom(t.nhom))}${t.loai ? ' · ' + esc(t.loai) : ''}${t.so_hieu ? ' · ' + esc(t.so_hieu) : ''}
+          ${/* MỘT KHO, HAI CỬA NHÌN (CTL-0025 Đợt 2). Giấy quét ở cửa hồ sơ vẫn
+                nằm trong kho chung — nhưng phải NÓI RA nó thuộc hồ sơ của ai,
+                không thì kho chung hiện thêm một tờ "Quyết định" trôi nổi mà
+                người tra không biết của người nào. */''}
+          ${t.gan_ten ? '· <b>hồ sơ ' + esc(t.gan_ten) + '</b>' : ''}
+          · ${Number(t.so_trang)||0} trang
+          ${/* Bóc được mấy trang, và mấy trang trong số đó ĐỐI CHIẾU được. Nói
+                cả hai con số: "đã bóc chữ 3 trang" trơn làm người đọc tưởng cả
+                ba trang đều đã được kiểm (REV-0044 · L2 — chữ bịa được bảo
+                lãnh). Chưa đối chiếu được thì nói thẳng ra ngay ở danh sách. */''}
+          ${t.ocr_so_trang
+            ? `· bóc chữ ${Number(t.ocr_so_trang) || 0} trang` +
+              (Number(t.ocr_so_trang_neo) >= Number(t.ocr_so_trang)
+                ? ' <span class="tl-dai tl-dai-neo">đã đối chiếu</span>'
+                : ` <span class="tl-dai tl-dai-sap">${Number(t.ocr_so_trang) - (Number(t.ocr_so_trang_neo) || 0)} trang CHƯA KIỂM</span>`)
+            : '· <i>chưa bóc được chữ — tra bằng tên</i>'}
+        </div>
+        ${t.trich ? `<p class="tl-trich">${esc(t.trich)}…</p>`
+          /* Giấy tờ nhạy cảm KHÔNG có trích đoạn ở danh sách — máy chủ cắt sẵn,
+             vì đường danh sách không ghi nhật ký (REV-0036 #5). Phải NÓI RA chỗ
+             bị cắt, đừng để trống lặng lẽ: người ta sẽ tưởng tài liệu chưa bóc
+             được chữ rồi đi quét lại thêm một lần nữa. */
+          : (t.nhay_cam && t.ocr_so_trang
+              ? '<p class="tl-trich"><i>Giấy tờ nhạy cảm — nội dung chỉ hiện khi bấm ' +
+                '"Xem chữ đã bóc", và mỗi lượt xem đều được ghi nhật ký.</i></p>'
+              : '')}
+        <div class="tl-the-nut">
+          <a class="tl-nut-mo" href="/api/tai-lieu/tep?id=${encodeURIComponent(t.id)}" target="_blank" rel="noopener">Mở bản quét</a>
+          ${nutXemChuTaiLieu(t.id)}
+          ${/* ⚠️ VÁ REV-0040 · LỖI #7 — NHẬT KÝ GHI MÀ KHÔNG AI XEM ĐƯỢC.
+                `API.tlNhatKy` có sẵn từ đợt trước nhưng KHÔNG chỗ nào gọi. Nhật
+                ký tồn tại để trả lời "ai đã tiếp cận dữ liệu cá nhân này, ngày
+                nào" (Luật BVDLCN 91/2025/QH15) — ghi đủ mà không mở ra xem được
+                thì chưa chứng minh được gì, chỉ là ghi cho có.
+                CHỈ ADMIN: máy chủ đã chặn 403, đây chỉ là không bày nút vô ích.
+                Chỉ hiện ở giấy tờ NHẠY CẢM vì chỉ nhóm đó mới có nhật ký. */''}
+          ${laAdminTL && t.nhay_cam
+            ? `<button type="button" class="tl-nut-mo tl-nut-nk" data-nk="${t.id}">Nhật ký truy cập</button>` : ''}
+        </div>
+        ${oChuTaiLieu(t.id)}
+        <div class="tl-chu tl-nk" id="tl-nk-${t.id}" hidden></div>
+      </article>`;
+  }
+
+  /* ⚠️ VÁ REV-0040 · LỖI #3 — CON SỐ AI ĐỌC PHẢI HIỆN KHÁC HẲN.
+     Hồ Ly đo được một dải mà mô hình GIỮ ĐÚNG danh tính tờ giấy nhưng thay
+     lặng lẽ vài con số: MST `0110938472` → `0110934872`, bên mua bịa tên khác,
+     không một lời cảnh báo. Mỏ neo không cứu được dải này — danh tính đúng,
+     chỉ số sai. Nên mọi con số phải TỰ NÓI nó chưa được kiểm.
+     Vị trí cụm số do MÁY CHỦ tính (`so_ai`, src/so-ai.js) — trình duyệt không
+     giữ bản dò số thứ hai, vì hai bản chép tay của cùng một định nghĩa chính
+     là cách đường đọc CCCD chết âm thầm 11 ngày. */
+  async function nap() {
+    try {
+      const kq = await API.tlDanhSach({
+        q: oTim ? oTim.value.trim() : '',
+        nhom: nhomDangLoc,
+        sapHetHan: oSapHet && oSapHet.checked
+      });
+      if (kq.nhom && kq.nhom.length !== dsNhom.length) { dsNhom = kq.nhom; veLoc(); }
+      else if (!dsNhom.length) { dsNhom = kq.nhom || []; veLoc(); }
+      nhomLuuDuoc = kq.nhom_luu_duoc || [];
+      veNutQuet();
+
+      const ds = kq.ds || [];
+      oDanhSach.innerHTML = ds.map(veMot).join('');
+      oTrong.hidden = ds.length > 0;
+      /* Bị cắt thì nói ra bằng lời, kèm cách thu hẹp — không im lặng cắt. Dùng
+         CHUNG `veDaiCat` như mọi màn khác: bản tự viết cũ ở đây in "đang hiện
+         50" mà không có tổng thật, tức là vẫn giấu mất con số người ta cần. */
+      veDaiCat('#tl-cat', kq.cat, {
+        don_vi: 'tài liệu',
+        goi_y: 'Gõ vào ô tìm hoặc chọn một nhóm để thu hẹp lại.'
+      });
+
+      /* MỘT hàm cho cả hai cửa (kho chung + hồ sơ nhân sự) — xem
+         `noiNutXemChu` ở đầu mục. */
+      noiNutXemChu(oDanhSach);
+
+      /* Nhật ký truy cập — chỉ Admin, chỉ giấy tờ nhạy cảm (vá REV-0040 #7). */
+      oDanhSach.querySelectorAll('[data-nk]').forEach(b => b.addEventListener('click', async () => {
+        const o = document.getElementById('tl-nk-' + b.dataset.nk);
+        if (!o) return;
+        if (!o.hidden) { o.hidden = true; return; }
+        o.textContent = 'Đang mở…'; o.hidden = false;
+        try {
+          const r = await API.tlNhatKy(b.dataset.nk);
+          const d = r.ds || [];
+          if (!d.length) { o.textContent = 'Chưa ai mở tài liệu này.'; return; }
+          /* Nhãn nói ĐÚNG cái nhật ký đang đo: mốc NGÀY, giờ là lượt mở ĐẦU
+             TIÊN trong ngày. Ghi "lúc 9:05" trơn là để người ta hiểu nhầm đó là
+             lượt mở gần nhất (xem ghiNhatKy() trong src/tai-lieu.js). */
+          o.innerHTML =
+            '<p class="tl-so-ai-nhac">Nhật ký gộp theo NGÀY: mỗi người mỗi ngày một ' +
+            'dòng, giờ ghi là lượt mở <b>đầu tiên</b> trong ngày — không phải số lượt.</p>' +
+            '<ul class="tl-nk-ds">' + d.map(k =>
+              `<li><b>${esc(k.ho_ten || k.nhan_su_id || '—')}</b> — ` +
+              `${k.hanh_dong === 'tai' ? 'tải file' : 'mở xem'} ngày ` +
+              `${esc(String(k.ngay || '').split('-').reverse().join('/'))}` +
+              `${k.lan_dau_luc ? ', lần đầu lúc ' + esc(String(k.lan_dau_luc).slice(11, 16)) : ''}</li>`
+            ).join('') + '</ul>' +
+            (r.bi_cat
+              ? `<p class="tl-so-ai-nhac">✂️ Đã tải ${r.tran}` +
+                `${r.cat && Number.isFinite(r.cat.tong) ? ' trong tổng ' + r.cat.tong : ''} ` +
+                'dòng — nhật ký này <b>đã bị cắt bớt</b>. Cần bản đầy đủ thì lấy từ ' +
+                'bản sao lưu tháng.</p>'
+              : '');
+        } catch (e) { o.textContent = e.message; }
+      }));
+    } catch (e) {
+      oDanhSach.innerHTML = '';
+      oTrong.hidden = false;
+      oTrong.textContent = 'Không tải được kho tài liệu: ' + e.message;
+      nhomLuuDuoc = []; veNutQuet();
+    }
+  }
+
+  if (nutQuet) nutQuet.addEventListener('click', () => {
+    moQuetTaiLieu({
+      cuaVao: 'kho_chung',
+      nhom: dsNhom.filter(n => nhomLuuDuoc.includes(n.ma)),
+      /* REV-0046 #2 — Sếp Ngọc: "lưu vào đây luôn THÀNH 1 BỘ là đẹp".
+         Chọn nhóm "Nhân sự" ở cửa kho chung thì phải chọn NGƯỜI, không thì tờ
+         giấy mang `gan_id` NULL và không bao giờ nằm trong bộ của ai — mở hồ
+         sơ ra vẫn thiếu. Danh sách lấy từ MÁY CHỦ ngay lúc cần: không giữ bản
+         chép sẵn ở tab này, vì `DS_NHAN_SU_QT` chỉ có khi người dùng đã mở tab
+         Nhân sự, mà HCNS hoàn toàn có thể vào thẳng tab Kho tài liệu. */
+      timNguoi: async () => {
+        const kq = await API.nhanSu();
+        return (kq.nhan_su || [])
+          .filter(n => n && n.id && n.dang_lam !== 0)
+          .map(n => ({ id: n.id, ho_ten: n.ho_ten, chuc_danh: n.chuc_danh || n.vi_tri || '' }));
+      },
+      khiXong: (kq) => {
+        nap();
+        alert(cauSauKhiQuet(kq) + '\n\n⚠️ Đây là bản dự phòng. ĐỪNG huỷ bản giấy gốc.');
+      }
+    });
+  });
+
+  if (oTim) {
+    let hen = null;
+    oTim.addEventListener('input', () => { clearTimeout(hen); hen = setTimeout(nap, 300); });
+  }
+  if (oSapHet) oSapHet.addEventListener('change', nap);
+
+  await nap();
 }
 
 /* ---- Mở tab đầu tiên người dùng được xem -------------------------------- */

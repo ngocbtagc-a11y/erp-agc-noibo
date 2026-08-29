@@ -433,7 +433,29 @@ export const API = {
   hoanSkuMapDanhSach: () => goi('/api/hoan/sku-map'),
   hoanSkuMapGan: (tenSanPham, maSku) => goi('/api/hoan/sku-map', {
     method: 'POST', body: JSON.stringify({ ten_san_pham: tenSanPham, ma_sku: maSku })
-  })
+  }),
+
+  /* ---- Kho tài liệu quản trị (CTL-0026) ------------------------------
+     MỘT kho, HAI cửa vào: `tlLuu` nhận cả `cua_vao: 'kho_chung'` (Đợt 1) lẫn
+     `cua_vao: 'nhan_su' + gan_id` (Đợt 2, CTL-0025) — Đợt 2 KHÔNG phải thêm
+     hàm mới ở đây. `tep` là chuỗi base64 của file PDF đã gộp ở máy. */
+  tlDanhSach: (tuyChon = {}) => {
+    const u = new URLSearchParams();
+    if (tuyChon.q) u.set('q', tuyChon.q);
+    if (tuyChon.nhom) u.set('nhom', tuyChon.nhom);
+    if (tuyChon.sapHetHan) u.set('sap_het_han', '1');
+    /* `ganId` = nhìn qua cửa HỒ SƠ MỘT NGƯỜI (CTL-0025 Đợt 2). Không truyền =
+       nhìn qua cửa kho chung, và kho chung thấy CẢ giấy đã quét vào hồ sơ —
+       một kho, hai cửa nhìn, không phải hai kho. */
+    if (tuyChon.ganId) u.set('gan_id', tuyChon.ganId);
+    return goi('/api/tai-lieu' + (u.toString() ? '?' + u : ''));
+  },
+  tlLuu: (than) => goi('/api/tai-lieu/luu', { method: 'POST', body: JSON.stringify(than) }),
+  tlMo: (id) => goi('/api/tai-lieu/mo?id=' + encodeURIComponent(id)),
+  tlNhatKy: (id) => goi('/api/tai-lieu/nhat-ky?id=' + encodeURIComponent(id)),
+  tlAn: (id) => goi('/api/tai-lieu/an', { method: 'POST', body: JSON.stringify({ id }) })
+  // Bản PDF mở thẳng bằng /api/tai-lieu/tep?id=... (máy chủ trả file kèm kiểm
+  // quyền + ghi nhật ký), không qua lớp fetch này.
   // Lưu ý: kết nối Shopee đi thẳng bằng chuyển trang tới /api/shopee/connect
   // (server trả 302 sang trang ủy quyền Shopee), không qua lớp fetch này.
 };

@@ -853,3 +853,69 @@ có vấn đề" trong khi nó nghĩa là "không có giới hạn" — ngược
 *(BH-45 · BH-46 — số đã dùng ở nhánh `feature/ctl-0023-dot2-cam` cho hai bài học khác
 ["Phép đo CHỌN TAY…", "Một token gánh HAI VAI…"]. Cố ý bỏ trống ở đây để hai nhánh gộp vào
 không đè nhau — xem REV-0030. Đây không phải chỗ trống để điền.)*
+
+**BH-57 · MÔ HÌNH ĐỌC ẢNH KHÔNG HỎNG GỌN: có một DẢI GIỮA nó giữ đúng danh tính tờ giấy mà
+thay lặng lẽ vài CON SỐ.** (REV-0040 — Hồ Ly đo, Gạo chốt hướng xử)
+Vòng 1 chỉ thấy hai đầu của cái thang: ảnh đúng thông số sản phẩm → 8/8 đúng; ảnh thảm hoạ →
+bịa cả tờ, chốt mỏ neo bắt gọn. Giữa hai đầu ấy có một dải (ảnh 500–620px) mà mô hình vẫn
+đọc **đúng tên tờ giấy, đúng số hiệu**, nhưng MST `0110938472` ra `0110934872`, bên mua bịa
+tên khác, năm 2026 thành 2020 — **không cảnh báo, không `[không rõ]`**. Đường đọc CCCD ra ca
+nguy nhất: **họ tên ĐÚNG đứng cạnh số CCCD SAI 11 chữ số**; cái tên đúng làm người ta tin
+luôn con số.
+→ **Mỏ neo không cứu được dải này.** Mỏ neo (số hiệu · tên công ty · tên loại giấy tờ) chỉ
+bắt ca bịa TOÀN TRANG, vì nó kiểm DANH TÍNH. Dải giữa danh tính đúng, chỉ số sai.
+→ Chốt đúng cho dải này là **thể chế, không phải thuật toán**: mọi CON SỐ do AI bóc ra đeo
+nhãn *"AI đọc — CHƯA KIỂM"*, hiện khác hẳn về thị giác, và **không được tự điền vào ô dữ
+liệu chính thức** cho tới khi có người xác nhận. Chữ MÔ TẢ thì thoải mái; con số thì không.
+→ Vì sao khắt khe đúng với con số: trong kho pháp lý và hồ sơ lao động, một con số sai
+**không phải lỗi phần mềm — là giấy tờ sai sự thật**. Thà bắt người gõ tay 12 chữ số.
+→ Bài học về PHÉP ĐO: đo ở **đúng thông số sản phẩm** là phép đo kịch trần, tức phép đo mù.
+Muốn biết một chốt AI đáng tin tới đâu thì phải **dựng thang tụt cho tới lúc nó GÃY**, rồi
+soi kỹ **khúc ngay trước chỗ gãy** — chỗ đó mới là chỗ nó nói dối trôi chảy nhất.
+
+**BH-58 · "Bàn đo X sạch y hệt nền" là một LỜI KHAI, phải chạy mới được nói.** (REV-0040)
+Vòng 1 tôi khai `npm run do-cat-im-lang` "y hệt nền" — **SAI, và đây là đính chính**. Chạy
+thật ra **3 chỗ hỏng, cả 3 nằm trong file của chính đợt này**, trong đó `nhatKyTaiLieu()`
+`LIMIT 200` là cắt im lặng THẬT, cắt đúng **màn nhật ký truy cập** — chỗ ít được phép cắt
+lặng nhất trong cả ERP, vì nó tồn tại để trả lời *"ai đã tiếp cận dữ liệu cá nhân này"*.
+→ "Y hệt nền" chỉ đúng khi nền và bản mới **có cùng tập tệp**. Đợt này đẻ ra 4 tệp mới không
+tồn tại ở nền `a9dc0f1`, nên mọi vi phạm trong đó là **nợ MỚI**, không phải nợ cũ. So với nền
+mà quên rằng tập tệp đã đổi thì phép so đó tự sinh ra một chỗ mù.
+→ Cùng lớp, chiều ngược lại: **báo oan nguy ngang để lọt.** `quet-tai-lieu.js:144` bị tố oan
+(`.slice(0, 40)` trên một UUID) chỉ vì lưới `String\([^)]*\)` không nuốt nổi một tầng ngoặc
+lồng. Người ta không sửa một máy quét hay báo oan — người ta **tắt nó đi**. Nên mỗi lần nới
+lưới phải kèm **một mẫu sạch (chống oan) VÀ một mẫu bẩn cùng hình dạng (chống cửa sau)**.
+→ Bẫy môi trường đã ăn một lần trong đợt này: máy Windows để `core.autocrlf=true`, tệp trong
+cây làm việc là CRLF hay LF **tuỳ tệp đó vừa đi qua công cụ nào**, mà `git diff` thì chuẩn
+hoá nên nhìn không thấy. Ca đối chứng khớp chuỗi có `\n` vì thế **trượt im lặng**. Mọi bàn đo
+đọc tệp nguồn phải `.replace(/\r\n/g, '\n')` trước khi khớp — số đo đổi theo cấu hình git là
+số đo không dùng được.
+
+**BH-59 · Đổi thẻ của một ô nhập thì phải sửa cả cái thước đo nó.** 29/08/2026, gộp
+REV-0047 từ `main`: 5 ô chữ dài của màn quét đổi `<input>` → `<textarea>`. Ngón tay vẫn
+chạm đúng 7 lần, nhưng bộ đếm chạm trong `ban-quet-tai-lieu.html` lọc bằng
+`closest('button, a, label, input, [data-viec]')` — **không có `textarea`** — nên nó khai
+**5 chạm**. Nếu con số ấy không có một câu khẳng định cứng (`chamErpHoSo === 7`) canh bên
+cạnh thì lượt gộp này đã **đẻ ra một chỉ số đẹp hơn sự thật** và không ai biết. Bài học
+không phải "nhớ thêm `textarea`", mà là: **mọi bộ lọc liệt kê tên thẻ đều là một danh sách
+sẽ lỗi thời**, và thứ cứu nó là con số kỳ vọng viết cứng ngay cạnh — sai lệch phải làm
+bàn đo ĐỎ, không được làm nó im.
+
+**BH-60 · Token CSS không tồn tại là lỗi mà máy dò MÀU không bao giờ thấy.**
+`.jd-mau-nut` và `.kn-nguoi` cùng viết `background: var(--panel)` — `--panel` chưa từng
+được khai, và cả hai chỗ đều không có giá trị dự phòng, nên CSS coi thuộc tính đó là
+`unset`: **nền hoá trong suốt**, cái nút trông như không có nút. `do-ba-mau` mù hoàn toàn
+với ca này suốt nhiều vòng, vì cả 5 mục của nó đều đi **tìm mã màu** — mà ở đây *không có
+mã màu nào cả*; lỗi chính là **chỗ đáng lẽ có màu thì trống rỗng**. Một phép đo đi tìm
+"thứ sai" luôn mù với "thứ thiếu". Muốn bắt phải hỏi một câu **khác hẳn về loại**: *"mọi
+`var(--x)` có trỏ tới một khai báo có thật không?"* → mục ⑥, kèm cả **đối chứng ngược**
+(token có thật thì phải IM) vì phép kiểm báo bừa cũng vô dụng y như phép kiểm mù.
+
+**BH-61 · Thứ tự chạy migration nằm ở TÊN FILE, mà `.sort()` trần thì so cả cái đuôi.**
+`them-kho-tai-lieu-cot-ocr-neo.sql` xếp **trước** `them-kho-tai-lieu.sql` vì dấu `-`
+(0x2D) đứng trước dấu `.` (0x2E) trong bảng mã — tức là bảng liệt kê "cần chạy" bảo người
+ta chạy `ALTER TABLE` trước khi có bảng. Cắt đuôi `.sql` rồi mới so thì tên ngắn luôn là
+tiền tố của tên dài và luôn đứng trước — đúng nếp "file gốc trước, file vá cột sau". Sửa
+xong mới thấy nó **không phải lỗi của riêng cặp file mới**: 6 cặp trong repo đang xếp
+ngược (`them-chat`, `them-congviec`, `them-donhang`, `them-gopy`, `them-kho`,
+`them-vinhdanh`). Một dòng `.sort()` mặc định, sai âm thầm suốt 6 lần.

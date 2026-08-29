@@ -312,6 +312,64 @@ console.log('\n─── ⑤ MÃ MÀU NGOÀI style.css (HTML · manifest · JS) 
   if (!thu.length) process.exit(2);
 }
 
+/* ── ⑥ TOKEN MA — `var(--x)` DÙNG mà KHÔNG KHAI ─────────────────────────
+   REV-0050 (Hồ Ly, vòng 5): phép kiểm này VỪA MÙ ĐÚNG CA NÀY. `.jd-mau-nut`
+   và `.kn-nguoi` cùng viết `background: var(--panel)` — `--panel` không được
+   khai ở đâu cả, và cả hai chỗ đều KHÔNG có giá trị dự phòng. CSS xử lý một
+   biến không khai bằng cách coi thuộc tính đó là `unset` → nền hoá TRONG
+   SUỐT. Trên nền `.modal` sáng thì cái nút trông như không có nút.
+
+   VÌ SAO §① ⑤ KHÔNG BAO GIỜ BẮT ĐƯỢC. Cả hai mục kia đều đi tìm MÃ MÀU. Ở
+   đây KHÔNG CÓ MÃ MÀU NÀO CẢ — đó đúng là lỗi: chỗ đáng lẽ có một màu thì
+   trống rỗng. Phép kiểm đi tìm màu sai thì mù với chỗ THIẾU MÀU. Muốn bắt
+   phải hỏi một câu khác hẳn: "mọi `var(--x)` có trỏ tới một khai báo có
+   thật không?"
+
+   MỨC ĐỘ. Không dự phòng = HỎNG THẬT (trong suốt) → tính vào lỗi. Có dự
+   phòng `var(--x, …)` thì vẫn vẽ ra màu, nhưng token vẫn là ma: người sau
+   sửa bảng màu sẽ sửa `--panel` mà không có `--panel` nào để sửa → cũng
+   tính vào lỗi, chỉ ghi rõ mức nhẹ hơn ở dòng in.
+   Bỏ chú thích trước khi quét — cùng lý do như mục ⑤: mã và token nhắc
+   trong chú thích không phải là thứ đang chạy.                            */
+function soiTokenMa(css) {
+  const sach = css.replace(/\/\*[\s\S]*?\*\//g, m => m.replace(/[^\n]/g, ' '));
+  const khai = new Set([...sach.matchAll(/(?:^|[;{\s])(--[\w-]+)\s*:/g)].map(m => m[1]));
+  const ra = [];
+  for (const m of sach.matchAll(/var\(\s*(--[\w-]+)\s*(,)?/g)) {
+    if (khai.has(m[1])) continue;
+    ra.push({ token: m[1], coDuPhong: !!m[2],
+              dong: sach.slice(0, m.index).split('\n').length });
+  }
+  return ra;
+}
+const tokenMa = soiTokenMa(rawGoc);
+console.log('\n─── ⑥ TOKEN MA — var(--x) dùng mà không khai ───');
+if (tokenMa.length) {
+  console.log(`  ✗ ${tokenMa.length} chỗ gọi token KHÔNG TỒN TẠI:`);
+  for (const x of tokenMa) {
+    console.log(`      d.${x.dong}  ${x.token}  — ${x.coDuPhong
+      ? 'có dự phòng (vẫn vẽ ra màu, nhưng sửa bảng màu sẽ trượt)'
+      : 'KHÔNG dự phòng → thuộc tính unset, nền TRONG SUỐT'}`);
+  }
+} else {
+  console.log('  ĐẠT  Mọi var(--x) đều trỏ tới một khai báo có thật.');
+}
+{
+  /* Đối chứng (BH-26 — nói trước vì sao PHẢI bắt được): tiêm lại ĐÚNG ca đã
+     lọt, cả hai biến thể. Không bắt được thì mục này vô nghĩa. */
+  const a = soiTokenMa('.doi-chung{background:var(--panel)}');
+  const b = soiTokenMa('.doi-chung-2{background:var(--panel-2, var(--warn-wash))}');
+  const okA = a.some(x => x.token === '--panel' && !x.coDuPhong);
+  const okB = b.some(x => x.token === '--panel-2' && x.coDuPhong);
+  console.log(`  ${okA ? 'BẮT ĐƯỢC      ' : 'KHÔNG BẮT ←HỎNG'} đối chứng: var(--panel) không dự phòng (ca REV-0050)`);
+  console.log(`  ${okB ? 'BẮT ĐƯỢC      ' : 'KHÔNG BẮT ←HỎNG'} đối chứng: var(--panel-2, …) có dự phòng`);
+  /* Đối chứng NGƯỢC: token có thật thì KHÔNG được báo — phép kiểm mà báo
+     bừa cũng vô dụng y như phép kiểm mù. */
+  const c = soiTokenMa(':root{--cam:#eb7c17}\n.ok{color:var(--cam)}');
+  console.log(`  ${c.length === 0 ? 'IM ĐÚNG CHỖ   ' : 'BÁO BỪA ←HỎNG '} đối chứng ngược: var(--cam) đã khai`);
+  if (!okA || !okB || c.length) process.exit(2);
+}
+
 /* ── ④ BH-16 · CA ĐỐI CHỨNG ─────────────────────────────────────────────── */
 console.log('\n─── ④ CA ĐỐI CHỨNG (BH-16) — phép kiểm phải BẮT ĐƯỢC lỗi cố ý ───');
 /*  Vì sao mấy ca này BẮT BUỘC phải hỏng (BH-26 — nói ra trước khi chạy):
@@ -377,9 +435,9 @@ if (bat !== CA.length) {
   console.log('  ✗ PHÉP KIỂM HỎNG — không bắt được màu cố ý sai. Sửa phép kiểm trước.');
   process.exit(2);
 }
-const loi = chinh.kq.lac.length + chinh.trangDen.length;
+const loi = chinh.kq.lac.length + chinh.trangDen.length + tokenMa.length;
 console.log(`  Đối chứng: bắt được ${bat}/${CA.length}`);
 console.log(loi === 0
-  ? '  ✓ ĐẠT LUẬT BA MÀU — không có họ thứ tư, không còn trắng/đen tuyền.'
-  : `  ✗ ${chinh.kq.lac.length} mã ngoài ba họ · ${chinh.trangDen.length} mã trắng/đen tuyền`);
+  ? '  ✓ ĐẠT LUẬT BA MÀU — không có họ thứ tư, không còn trắng/đen tuyền, không token ma.'
+  : `  ✗ ${chinh.kq.lac.length} mã ngoài ba họ · ${chinh.trangDen.length} mã trắng/đen tuyền · ${tokenMa.length} token ma`);
 process.exit(loi === 0 ? 0 : 1);

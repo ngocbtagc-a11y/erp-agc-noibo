@@ -55,6 +55,27 @@ window.__DO_MOC_NOI = (ca) => {
       TOI.quyen = ['danhba'];
       return goiMocNoi('LAM_MOI_TRANGTHAI_DANHBA', 'danhba', 'NS-NGOC', 'ban', null);
     }
+    /* ---- layMocNoi: LẤY hàm thay vì GỌI nó (thêm 29/08/2026, màn việc gộp).
+       Chỗ vẽ nút cho từng dòng bảng cần CÙNG một hàm 300 lần; dùng goiMocNoi ở
+       đó là 300 dòng console.error giống hệt nhau khi móc nối vắng, tức che
+       mất mọi lỗi khác. Nhưng "báo ít đi" rất dễ trượt thành "im luôn" —
+       nên hợp đồng hét/im phải đo y như goiMocNoi. */
+    if (ca === 'lay-co-quyen-vang-moc') {
+      delete window.CV_HTML_NUT_DONG;
+      TOI.quyen = ['congviec'];
+      return layMocNoi('CV_HTML_NUT_DONG', 'congviec');
+    }
+    if (ca === 'lay-khong-quyen-vang-moc') {
+      delete window.CV_HTML_NUT_DONG;
+      TOI.quyen = ['tongquan'];
+      return layMocNoi('CV_HTML_NUT_DONG', 'congviec');
+    }
+    if (ca === 'lay-co-moc') {
+      TOI.quyen = ['congviec'];
+      window.CV_HTML_NUT_DONG = (r, loai) => 'NÚT:' + loai + ':' + r.id;
+      const f = layMocNoi('CV_HTML_NUT_DONG', 'congviec');
+      return typeof f === 'function' ? f({ id: 7 }, 'giao') : 'KHÔNG PHẢI HÀM';
+    }
   } finally { TOI.quyen = quyenGoc; }
 };
 `;
@@ -99,6 +120,22 @@ for (const [ten, moc] of [['co-quyen-vang-moc', 'moChatVoi'],
   const r = await ca('co-moc');
   ok('③ móc nối CÓ MẶT → gọi đúng, đủ tham số, không lỗi',
     r.tra === 'GỌI ĐƯỢC:NS-DUY|Phạm Khương Duy|KD' && r.loiMoi.length === 0, String(r.tra));
+}
+{
+  const r = await ca('lay-co-quyen-vang-moc');
+  ok('⑤ layMocNoi · có quyền + móc nối VẮNG → hét lên (giống goiMocNoi)',
+    r.loiMoi.length === 1 && r.loiMoi[0].includes('CV_HTML_NUT_DONG') && r.tra === null,
+    r.loiMoi.length ? r.loiMoi[0].slice(0, 70) : 'IM RE — nuốt lỗi y như `?.`');
+}
+{
+  const r = await ca('lay-khong-quyen-vang-moc');
+  ok('⑤ layMocNoi · KHÔNG quyền + móc nối vắng → IM (không báo oan)',
+    r.loiMoi.length === 0 && r.tra === null, r.loiMoi.length ? 'hét oan' : 'im đúng');
+}
+{
+  const r = await ca('lay-co-moc');
+  ok('⑤ layMocNoi · móc nối CÓ MẶT → trả về CHÍNH HÀM, gọi được',
+    r.tra === 'NÚT:giao:7' && r.loiMoi.length === 0, String(r.tra));
 }
 {
   const r = await ca('doi-chung-dau-cham-hoi');
