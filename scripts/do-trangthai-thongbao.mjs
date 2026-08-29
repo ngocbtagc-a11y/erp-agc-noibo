@@ -141,12 +141,16 @@ async function chay() {
      Đo lại cho đúng sự thật, rồi đòi phải có một dấu hiệu NGOÀI popup. */
   {
     const moPopup = html.indexOf('id="cnbPopup"');
-    const dongPopup = html.indexOf('id="cnbGanDay"');   // phần tử đầu tiên SAU khi popup đóng thẻ
+    /* Mốc "hết popup" = phần tử đầu tiên NGOÀI `#cnbPopup`. Trước 29/08/2026
+       mốc này là `id="cnbGanDay"` (cột bong bóng); cột đó đã BỎ HẲN (REV-0038
+       · L2) nên nay bám vào `#cnbNut` — nút chat nổi, phần tử kế tiếp và là
+       thứ không thể biến mất khỏi widget. */
+    const dongPopup = html.indexOf('id="cnbNut"');
     const trongPopup = (id) => {
       const v = html.indexOf(`id="${id}"`);
       return v > moPopup && v < dongPopup;
     };
-    if (moPopup < 0 || dongPopup < 0) { console.error('HỎNG: không tìm được mốc #cnbPopup/#cnbGanDay'); process.exit(2); }
+    if (moPopup < 0 || dongPopup < 0) { console.error('HỎNG: không tìm được mốc #cnbPopup/#cnbNut'); process.exit(2); }
     ok('SỰ THẬT: #tbdMoi và #cnbChuong ĐỀU nằm trong #cnbPopup → vẫn phải MỞ cửa sổ chat mới thấy',
       trongPopup('tbdMoi') && trongPopup('cnbChuong'), 'đúng như REV-0031 chỉ ra');
     ok('#cnbPopup có thuộc tính hidden (popup đóng khi vừa vào ERP)',

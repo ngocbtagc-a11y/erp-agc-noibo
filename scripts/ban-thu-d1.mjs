@@ -97,7 +97,20 @@ class D1Cau {
 class D1 {
   constructor(db) { this.db = db; }
   prepare(sql) { return new D1Cau(this.db, sql); }
-  async batch(cacCau) { const kq = []; for (const c of cacCau) kq.push(await c.run()); return kq; }
+  /* D1 THẬT trả một `D1Result` cho MỖI câu trong batch, và câu ĐỌC có kèm
+     `results` (các dòng). Vỏ cũ ở đây chỉ gọi `run()`, nên một câu SELECT đi
+     qua `batch()` trên bàn thử ra RỖNG trong khi bản thật ra đủ dòng — bàn
+     thử nói dối NGƯỢC CHIỀU: mã đúng mà bàn thử báo sai. Sửa 29/08/2026 khi
+     `chatGanDay()` gộp 2 câu đọc vào một `batch()` (REV-0038 · L4).
+     Câu GHI vẫn đi `run()` để giữ nguyên `meta.changes` / `last_row_id`. */
+  async batch(cacCau) {
+    const kq = [];
+    for (const c of cacCau) {
+      const laDoc = /^\s*(WITH|SELECT)\b/i.test(c.sql);
+      kq.push(laDoc ? await c.all() : await c.run());
+    }
+    return kq;
+  }
   async exec(sql) { this.db.exec(thayDongHo(sql)); return { count: 0, duration: 0 }; }
 }
 

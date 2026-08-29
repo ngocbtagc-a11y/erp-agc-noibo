@@ -401,11 +401,27 @@ async function chatDanhSach(req, env) {
     : `nguoi_nhan_id IS NULL`;
   const thamSoPhamVi = voi ? [phien.nhan_su_id, voi, voi, phien.nhan_su_id] : [];
 
-  const cauLenh = sauId > 0
-    ? `SELECT ${cotChung} FROM tin_nhan_chat WHERE ${dieuKienPhamVi} AND id > ? ORDER BY id ASC`
-    : `SELECT ${cotChung} FROM tin_nhan_chat WHERE ${dieuKienPhamVi} ORDER BY id DESC LIMIT 50`;
+  /* CON TRỎ LÙI `truoc_id` — "Xem tin cũ hơn".
+     Trước bản này trần cứng 50 tin và KHÔNG có đường nào đi tiếp: tin thứ 51
+     trở đi coi như không tồn tại với người dùng. Cùng lỗi REV-0034 · L2 mà
+     `cvLichSu`/`hoanLichSu` đã vá bằng con trỏ `truoc` — chép đúng khuôn đó,
+     chỉ khác là chat sắp theo `id` nên con trỏ chỉ cần MỘT số, khỏi ghép cặp.
+     Lấy GH+1 dòng để biết CÒN NỮA hay không mà không phải chạy COUNT(*) thứ
+     hai (một câu lệnh, không phải hai). */
+  const GH = 50;
+  const truocId = parseInt(url.searchParams.get('truoc_id'), 10);
 
-  const thamSo = sauId > 0 ? [...thamSoPhamVi, sauId] : thamSoPhamVi;
+  let cauLenh, thamSo;
+  if (sauId > 0) {
+    cauLenh = `SELECT ${cotChung} FROM tin_nhan_chat WHERE ${dieuKienPhamVi} AND id > ? ORDER BY id ASC`;
+    thamSo = [...thamSoPhamVi, sauId];
+  } else if (truocId > 0) {
+    cauLenh = `SELECT ${cotChung} FROM tin_nhan_chat WHERE ${dieuKienPhamVi} AND id < ? ORDER BY id DESC LIMIT ${GH + 1}`;
+    thamSo = [...thamSoPhamVi, truocId];
+  } else {
+    cauLenh = `SELECT ${cotChung} FROM tin_nhan_chat WHERE ${dieuKienPhamVi} ORDER BY id DESC LIMIT ${GH + 1}`;
+    thamSo = [...thamSoPhamVi];
+  }
   const { results } = await env.DB.prepare(cauLenh).bind(...thamSo).all();
 
   /* CTL-0014 — NHỊP TIM "tôi đang mở cửa sổ chat với ai".
@@ -439,29 +455,86 @@ async function chatDanhSach(req, env) {
   }
 
   // Lấy 50 tin gần nhất theo id giảm dần thì phải đảo lại cho đúng thứ tự thời gian
-  const tinNhan = sauId > 0 ? (results || []) : (results || []).reverse();
-  return json({ tin_nhan: tinNhan, toi_id: phien.nhan_su_id });
+  if (sauId > 0) return json({ tin_nhan: results || [], con_nua: false, toi_id: phien.nhan_su_id });
+  const nguoc = results || [];
+  const conNua = nguoc.length > GH;          // hỏi GH+1, thừa 1 tức là còn tin cũ hơn
+  const tinNhan = nguoc.slice(0, GH).reverse();
+  return json({ tin_nhan: tinNhan, con_nua: conNua, toi_id: phien.nhan_su_id });
 }
 
-/* Danh sách người đã từng chat riêng gần đây (2 chiều) — để hiện bong bóng
-   truy cập nhanh cạnh nút chat nổi, khỏi phải vào Danh bạ bấm lại "Chat
-   ngay" mỗi lần (Sếp Ngọc yêu cầu 20/08/2026). Sắp theo tin mới nhất. */
+/* Danh sách hội thoại: kênh chung + những người đã từng chat riêng gần đây
+   (2 chiều), sắp theo tin mới nhất. Dựng thẳng danh sách trong cửa sổ chat,
+   khỏi phải sang Danh bạ bấm lại "Chat ngay" mỗi lần (Sếp Ngọc 20/08/2026).
+   (Cột bong bóng nổi mà bản đầu nuôi bằng chính lượt gọi này đã BỎ HẲN
+   29/08/2026 — nay chỉ còn danh sách trong cửa sổ dùng dữ liệu này.) */
 async function chatGanDay(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
-  const { results } = await env.DB.prepare(`
-    SELECT ns.id, ns.ho_ten, ns.viet_tat, MAX(x.id) AS tin_cuoi_id
-      FROM (
-        SELECT CASE WHEN nguoi_gui_id = ? THEN nguoi_nhan_id ELSE nguoi_gui_id END AS doi_tac_id, id
-          FROM tin_nhan_chat
-         WHERE nguoi_nhan_id IS NOT NULL AND (nguoi_gui_id = ? OR nguoi_nhan_id = ?)
-      ) x
+  /* Mở rộng 29/08/2026 — DANH SÁCH HỘI THOẠI, không chỉ mấy chữ viết tắt.
+     Trước bản này cửa sổ chat mở thẳng vào "Kênh chung", muốn nhắn riêng ai
+     thì phải rời cửa sổ, sang tab Danh bạ, tìm người, bấm "Chat ngay" — bốn
+     bước cho một việc mà kho vận làm hàng chục lần mỗi ca, trên điện thoại.
+     Nay trả kèm TIN CUỐI · GIỜ · SỐ CHƯA ĐỌC để dựng thẳng danh sách.
+
+     SỔ SÁCH D1 — NÓI THẲNG (REV-0038 · L4 sửa lại lời khai cũ).
+     Chú thích bản đầu ghi "vẫn ĐÚNG MỘT câu lệnh đọc, không thêm lượt D1 nào
+     so với bản cũ". SAI, và sai hai lần:
+       ① Hàm này nay chạy HAI câu lệnh đọc, không phải một — thêm câu lấy
+         Kênh chung ở dưới.
+       ② Phía giao diện, `/api/chat/gan-day` trước chỉ gọi lúc NẠP TRANG, nay
+         gọi thêm MỖI LẦN MỞ CỬA SỔ CHAT. Kho vận mở chat hàng chục lần một
+         ca → TỔNG lượt đọc TĂNG, không giảm.
+     Bù lại thì bỏ được `taiLanDau()` lúc nạp trang (bớt một lượt
+     `/api/chat/tin-nhan` mỗi lần mở ERP) — đổi ngang, không phải lãi.
+     GỘP được tới đâu thì gộp: hai câu lệnh dưới đây đi CHUNG một `DB.batch()`
+     nên chỉ còn MỘT vòng gọi D1 (batch chạy tuần tự trong một giao dịch, hai
+     câu đều là SELECT nên không có rủi ro ghi). Không gộp được thành một câu
+     SQL: một câu trả nhiều dòng theo người, câu kia trả đúng một dòng tổng.
+     Tất cả đều là ĐỌC — không đụng hạn mức GHI vừa vá hôm nay.
+
+     `chua_doc` đếm theo mốc `chat_xem_id` của TÀI KHOẢN — cùng mốc mà huy
+     hiệu tổng đang dùng, nên hai con số không bao giờ đá nhau.
+     LIMIT nới 6 → 20 = đúng số nhân sự công ty; vẫn là một trang, không phân
+     trang, không đẻ thêm lượt ghi. */
+  const cauRieng = env.DB.prepare(`
+    WITH moc AS (SELECT COALESCE(chat_xem_id, 0) AS xem_id FROM tai_khoan WHERE id = ?),
+    rieng AS (
+      SELECT CASE WHEN nguoi_gui_id = ? THEN nguoi_nhan_id ELSE nguoi_gui_id END AS doi_tac_id,
+             id, noi_dung, tep_ten, tao_luc, nguoi_gui_id
+        FROM tin_nhan_chat
+       WHERE nguoi_nhan_id IS NOT NULL AND (nguoi_gui_id = ? OR nguoi_nhan_id = ?)
+    )
+    SELECT ns.id, ns.ho_ten, ns.viet_tat,
+           MAX(x.id) AS tin_cuoi_id,
+           (SELECT y.noi_dung FROM rieng y WHERE y.doi_tac_id = ns.id ORDER BY y.id DESC LIMIT 1) AS tin_cuoi,
+           (SELECT y.tep_ten  FROM rieng y WHERE y.doi_tac_id = ns.id ORDER BY y.id DESC LIMIT 1) AS tep_cuoi,
+           (SELECT y.tao_luc  FROM rieng y WHERE y.doi_tac_id = ns.id ORDER BY y.id DESC LIMIT 1) AS luc_cuoi,
+           (SELECT y.nguoi_gui_id FROM rieng y WHERE y.doi_tac_id = ns.id ORDER BY y.id DESC LIMIT 1) AS gui_cuoi,
+           SUM(CASE WHEN x.nguoi_gui_id != ? AND x.id > (SELECT xem_id FROM moc) THEN 1 ELSE 0 END) AS chua_doc
+      FROM rieng x
       JOIN nhan_su ns ON ns.id = x.doi_tac_id
      GROUP BY ns.id
      ORDER BY tin_cuoi_id DESC
-     LIMIT 6
-  `).bind(phien.nhan_su_id, phien.nhan_su_id, phien.nhan_su_id).all();
-  return json({ gan_day: results || [] });
+     LIMIT 20
+  `).bind(phien.tai_khoan_id, phien.nhan_su_id, phien.nhan_su_id, phien.nhan_su_id,
+          phien.nhan_su_id);
+
+  // Kênh chung là một "hội thoại" như mọi hội thoại khác — người dùng không
+  // phải học hai chỗ khác nhau. Một câu lệnh nữa, vẫn chỉ ĐỌC.
+  const cauKenhChung = env.DB.prepare(`
+    SELECT (SELECT noi_dung FROM tin_nhan_chat WHERE nguoi_nhan_id IS NULL ORDER BY id DESC LIMIT 1) AS tin_cuoi,
+           (SELECT tep_ten  FROM tin_nhan_chat WHERE nguoi_nhan_id IS NULL ORDER BY id DESC LIMIT 1) AS tep_cuoi,
+           (SELECT tao_luc  FROM tin_nhan_chat WHERE nguoi_nhan_id IS NULL ORDER BY id DESC LIMIT 1) AS luc_cuoi,
+           (SELECT nguoi_gui_ten FROM tin_nhan_chat WHERE nguoi_nhan_id IS NULL ORDER BY id DESC LIMIT 1) AS ten_cuoi,
+           (SELECT COUNT(*) FROM tin_nhan_chat
+             WHERE nguoi_nhan_id IS NULL AND nguoi_gui_id != ?
+               AND id > (SELECT COALESCE(chat_xem_id, 0) FROM tai_khoan WHERE id = ?)) AS chua_doc
+  `).bind(phien.nhan_su_id, phien.tai_khoan_id);
+
+  // MỘT vòng gọi D1 cho cả hai câu (xem sổ sách ở chú thích trên).
+  const [rieng, chung] = await env.DB.batch([cauRieng, cauKenhChung]);
+  return json({ gan_day: rieng?.results || [],
+                kenh_chung: (chung?.results && chung.results[0]) || null });
 }
 
 /* Đếm tin CHƯA XEM trên TOÀN BỘ các luồng (kênh chung + mọi cuộc chat riêng

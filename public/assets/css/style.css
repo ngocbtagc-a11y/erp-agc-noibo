@@ -1702,26 +1702,16 @@ tr.canh-bao:hover > td { background: #fbdbd6; }
    dấu vẫn nằm đó, người đang bật thật vẫn thấy 🔕 — báo oan. */
 .cnb-dau-tb[hidden] { display: none; }
 
-/* Bong bóng truy cập nhanh các chat riêng gần đây — xếp dọc ngay trên nút chính */
-.cnb-ganday {
-  position: fixed; right: 28px; bottom: 92px; z-index: 301;
-  display: flex; flex-direction: column-reverse; align-items: center; gap: 10px;
-}
-.cnb-gd-item {
-  position: relative;
-  width: 40px; height: 40px;
-  border-radius: 50%;
-  background: var(--sage-dark);
-  color: var(--white);
-  border: 2px solid var(--card);
-  cursor: pointer;
-  font-size: 12px; font-weight: 700;
-  display: flex; align-items: center; justify-content: center;
-  box-shadow: var(--shadow-md);
-  transition: transform .12s;
-}
-.cnb-gd-item:hover { transform: translateY(-1px) scale(1.05); }
-.cnb-gd-item .tb-badge { top: -3px; right: -3px; }
+/* CỘT BONG BÓNG "chat gần đây" (`.cnb-ganday` / `.cnb-gd-item`) — ĐÃ BỎ HẲN
+   29/08/2026, không phải chỉ giấu. Bản trước giấu bằng `body.cnb-mo
+   .cnb-ganday{display:none}`, tức là chỉ giấu LÚC CỬA SỔ ĐANG MỞ; đóng cửa sổ
+   là cột về chỗ cũ và tiếp tục đè lên nút bấm của trang (đo ở 375px lúc cửa
+   sổ đóng: 1 nút bị đè; ép `display:none`: 0).
+   Bỏ đi KHÔNG mất đường vào nhanh nào — cột bị `BONG_TOI_DA = 3` cắt còn 3
+   chữ viết tắt, trong khi danh sách hội thoại ngay trong cửa sổ hiện 9 dòng
+   có TÊN ĐẦY ĐỦ + TIN CUỐI + GIỜ + SỐ CHƯA ĐỌC. Thứ thay thế hơn hẳn thứ bị bỏ.
+   Thẻ `#cnbGanDay` trong `app.html` và hàm vẽ bong bóng trong `app.js` cũng
+   đã gỡ cùng lượt — bỏ nửa vời (giữ thẻ, giữ CSS) là để lại rác chờ hồi sinh. */
 
 .cnb-popup {
   position: fixed; right: 24px; bottom: 92px; z-index: 300;
@@ -1861,10 +1851,147 @@ tr.canh-bao:hover > td { background: #fbdbd6; }
   background: var(--surface);
 }
 
-@media (max-width: 480px) {
-  .cnb-popup { right: 12px; left: 12px; width: auto; bottom: 88px; }
+/* ==========================================================================
+   DANH SÁCH HỘI THOẠI — màn ĐẦU TIÊN của cửa sổ chat
+   ---------------------------------------------------------------------------
+   Mỗi dòng là MỘT nút bấm cao tối thiểu 56px. Kho vận bấm bằng ngón cái khi
+   đang bê hàng: 44px là sàn (WCAG 2.5.5 / Apple HIG), đây lại là chỗ bấm
+   nhiều nhất của cả cửa sổ nên cho dư. Con số này ĐO ĐƯỢC bằng
+   `node scripts/do-chat-noibo.mjs` ở 375px và 320px, không phải lời khai
+   suông — commit trước trong chính repo này từng tự khai 44px mà đo ra 28px.
+   `box-sizing: border-box` bắt buộc: thiếu nó thì padding cộng thêm ra ngoài
+   và số đo thật lệch khỏi con số khai ở đây.
+   ========================================================================== */
+/* Nút "Chat ngay" ở Danh bạ — chính cái nút Sếp Ngọc bấm mà không ăn.
+   ĐO ĐƯỢC 29/08/2026 ở 375px và 320px: 88.2 × 28px, tức thiếu 16px so với sàn
+   44px. Bấm bằng ngón cái giữa ca thì trượt là thường — và vì lỗi TDZ ở
+   app.js làm cú bấm im lặng, không ai phân biệt được "bấm trượt" với "bấm
+   trúng mà hỏng". Vá cả hai.
+   ⚠️ ĐÃ THỬ CÁCH HIỂN NHIÊN VÀ NÓ HỎNG: đặt thẳng `min-height: 44px` lên nút
+   thì ô bảng cộng thêm lề dọc của nó, dòng Danh bạ phình 62.5 → 67px và số
+   dòng lọt màn 375px tụt 7 → 6. Đó là ràng buộc cứng "không làm giảm số dòng
+   hiện trên màn 375px" — vá một lỗi bằng cách đẻ ra lỗi khác thì không tính.
+   → Cách dùng: NỚI VÙNG CHẠM, KHÔNG NỚI Ô. Thẻ `::after` trong suốt cao 44px
+   căn giữa theo nút; nó thuộc về chính nút nên chạm vào nó là chạm vào nút,
+   mà `position: absolute` thì không chiếm chỗ trong dòng — chiều cao dòng
+   đứng yên ở 62.5px, vẫn 7 dòng.
+   ĐO BẰNG `elementFromPoint` ở mép trên/mép dưới vùng chạm, không đo
+   `getBoundingClientRect` của nút: cái cần biết là "chạm chỗ đó có trúng nút
+   không", chứ không phải "nút vẽ to bao nhiêu". Xem `cham_44` trong
+   `scripts/do-chat-noibo.mjs`. */
+[data-chatngay] { position: relative; }
+[data-chatngay]::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0;
+  top: 50%; transform: translateY(-50%);
+  height: 44px;
+}
+
+.cnb-ds {
+  flex: 1; min-height: 0; overflow-y: auto;
+  background: var(--surface);
+  display: flex; flex-direction: column;
+}
+.cnb-ds[hidden] { display: none; }
+.cnb-ds-muc {
+  box-sizing: border-box;
+  min-height: 56px;
+  display: flex; align-items: center; gap: 12px;
+  width: 100%; text-align: left;
+  padding: 10px 14px;
+  background: none; border: none; border-bottom: 1px solid var(--line);
+  cursor: pointer; font: inherit; color: var(--ink);
+}
+.cnb-ds-muc:hover { background: var(--sage-wash); }
+.cnb-ds-avt {
+  box-sizing: border-box;
+  flex-shrink: 0;
+  width: 44px; height: 44px; border-radius: 50%;
+  background: var(--sage-dark); color: var(--white);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 700;
+}
+.cnb-ds-giua { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.cnb-ds-ten {
+  font-weight: 600; font-size: 14px; color: var(--ink);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.cnb-ds-phu {
+  font-size: 12px; color: var(--text-mute);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.cnb-ds-phai {
+  flex-shrink: 0; display: flex; flex-direction: column;
+  align-items: flex-end; gap: 4px; min-width: 44px;
+}
+.cnb-ds-gio { font-size: 11px; color: var(--text-mute); }
+/* Số chưa đọc: CAM, không phải đỏ. Đỏ trong ERP này chỉ dành cho LỖI
+   (`docs/BANG-MAU.md`); tin chưa đọc không phải lỗi — nó là việc cần làm.
+   NỀN dùng `--cam-dark`, KHÔNG phải `--cam` — chính luật ở dòng 161-174 file
+   này: "nền cam + chữ trắng → `--cam-dark`". Bản đầu dùng `--cam` cho ra
+   #fffcf4 trên #e8730a = 2.76:1, dưới sàn 4.5 của WCAG AA. Đây là SỐ CHƯA
+   ĐỌC — thứ người ta LIẾC MẮT tìm chứ không ngồi đọc; mờ là mất hẳn tác
+   dụng. `--cam-dark` #b45606 cho 4.91:1. Đo: `node scripts/do-tuong-phan-mau.mjs`. */
+.cnb-ds-dem {
+  min-width: 20px; height: 20px; padding: 0 6px;
+  border-radius: 999px;
+  background: var(--cam-dark); color: var(--white);
+  font-size: 11px; font-weight: 700; line-height: 20px; text-align: center;
+}
+
+/* "Xem tin cũ hơn" — ĐƯỜNG ĐI TIẾP khi đã tải hết 50 tin của trang này.
+   Trước bản này trần cứng 50 tin và KHÔNG có đường nào đi tiếp: tin thứ 51
+   trở đi coi như không tồn tại với người dùng (đúng lỗi REV-0034 · L2 mà
+   `cvLichSu`/`hoanLichSu` đã vá bằng con trỏ `truoc`). */
+.chat-cu-hon {
+  box-sizing: border-box;
+  align-self: center; flex-shrink: 0;
+  min-height: 44px; padding: 10px 20px; margin-bottom: 8px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--line);
+  background: var(--card); color: var(--sage-dark);
+  font: inherit; font-size: 13px; font-weight: 600;
+  cursor: pointer;
+}
+.chat-cu-hon:hover { background: var(--sage-wash); border-color: var(--sage-pale); }
+.chat-cu-hon:disabled { opacity: .6; cursor: default; }
+
+/* ==========================================================================
+   ĐIỆN THOẠI — CHAT CHIẾM TOÀN MÀN HÌNH
+   ---------------------------------------------------------------------------
+   Bản cũ giữ nguyên ô nổi 360px ở góc CẢ trên điện thoại: đo ở iPhone SE
+   (375 × 812) ra vùng đọc tin cao 335px — chưa tới một nửa màn. Kho vận đọc
+   chat bằng một tay giữa ca, đây là chỗ đau nhất.
+   `100dvh` chứ KHÔNG phải `100vh`: `vh` tính theo màn hình lúc CHƯA có thanh
+   địa chỉ và CHƯA bật bàn phím, nên ô nhập tin bị đẩy xuống dưới mép màn và
+   người ta gõ mà không nhìn thấy mình đang gõ gì. `dvh` co đúng theo phần
+   NHÌN THẤY ĐƯỢC, kể cả khi bàn phím bật lên.
+   Ngưỡng 640px (không phải 480px như cũ): điện thoại nằm ngang và máy nhỏ
+   cũng chật y hệt, cắt ở 480px là bỏ sót đúng nhóm đó.
+   ========================================================================== */
+@media (max-width: 640px) {
+  .cnb-popup {
+    inset: 0; top: 0; right: 0; bottom: 0; left: 0;
+    width: 100%; max-width: none;
+    height: 100dvh; max-height: 100dvh;
+    border-radius: 0; border: none;
+    z-index: 320;              /* trên cả nút nổi (301) — không còn gì đè lên */
+  }
+  /* Trên điện thoại cửa sổ chiếm cả màn nên nút nổi cũng thành thứ thừa. */
+  body.cnb-mo .cnb-nut { display: none; }
+  /* Khoá cuộn trang nền: thiếu dòng này thì vuốt trong đoạn chat kéo luôn cả
+     trang phía sau trôi theo, đóng cửa sổ ra là lạc mất chỗ đang đứng. */
+  body.cnb-mo { overflow: hidden; }
+
   .cnb-nut { right: 16px; bottom: 16px; }
-  .cnb-ganday { right: 20px; bottom: 84px; }   /* theo đúng nút chính dời vị trí ở mobile */
+
+  /* Chừa lề an toàn dưới (tai thỏ / thanh vuốt iPhone) cho ô nhập tin — thiếu
+     nó thì nút Gửi nằm đúng chỗ thanh vuốt, bấm ra… về màn hình chính.
+     `env()` trả 0 trên máy không có tai thỏ nên không hại gì. */
+  .chat-nhap { padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px)); }
+  .cnb-ds-muc { min-height: 60px; }            /* ngón cái, không phải con trỏ chuột */
+  .chat-tin { max-width: 86%; }                /* màn hẹp: bó ở 72% là phí mất lề */
 }
 
 .chat-tin { display: flex; gap: 8px; max-width: 72%; margin-top: 12px; }
@@ -1999,7 +2126,22 @@ tr.canh-bao:hover > td { background: #fbdbd6; }
   outline: none; background: var(--white); border-color: var(--cam);
   box-shadow: 0 0 0 3px rgba(235,124,23,.28);
 }
-.chat-nut-tep { flex-shrink: 0; padding: 10px; border-radius: 50%; width: auto; }
+/* Ô nhập + hai nút của nó. ĐO ĐƯỢC ở 375px trước bản này: nút 📎 chỉ
+   38 × 38px và nút "Gửi" cao 36.8px — cả hai dưới sàn 44px, mà đây là hai nút
+   bấm nhiều nhất của cả ERP. `box-sizing: border-box` bắt buộc, thiếu nó thì
+   padding cộng ra ngoài và số đo thật lệch khỏi con số khai ở đây.
+   Kiểm lại: `node scripts/do-chat-noibo.mjs --rong 375`. */
+.chat-nut-tep {
+  box-sizing: border-box;
+  flex-shrink: 0; padding: 10px; border-radius: 50%; width: auto;
+  min-width: 44px; min-height: 44px;
+  display: flex; align-items: center; justify-content: center;
+}
+.chat-nhap input[type="text"] { box-sizing: border-box; min-height: 44px; }
+.chat-nhap .btn-primary {
+  box-sizing: border-box;
+  min-width: 44px; min-height: 44px; flex-shrink: 0;
+}
 
 /* ==========================================================================
    BẢNG DÀI — cuộn gọn trong 1 màn hình (~15 dòng) + cố định tiêu đề + các cột đầu
