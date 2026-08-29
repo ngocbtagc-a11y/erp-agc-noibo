@@ -3219,6 +3219,24 @@ tr.kd-chiadoi td {
   border-radius: var(--r-sm); font-size: 13px; color: var(--text);
   max-height: 340px; overflow: auto;
 }
+/* ⚠️ CON SỐ AI ĐỌC — "AI đọc — CHƯA KIỂM" (vá REV-0040 #3).
+   Phải khác HẲN về thị giác so với chữ thường, vì mô hình có dải giữ đúng danh
+   tính tờ giấy mà vẫn thay lặng lẽ vài chữ số. Dùng VÀNG NÂU (`--warn-*`) —
+   vẫn trong họ nâu–cam của docs/BANG-MAU.md, KHÔNG dùng đỏ: đỏ chỉ dành cho
+   thứ đã hỏng, còn đây là thứ CHƯA ĐƯỢC KIỂM. Gạch dưới nét đứt để người mù
+   màu vẫn phân biệt được — màu không bao giờ là tín hiệu duy nhất. */
+.so-ai {
+  background: var(--warn-wash); color: var(--warn-dark);
+  border-bottom: 2px dashed var(--warn-dark);
+  padding: 0 2px; border-radius: 3px; font-weight: 700;
+}
+.tl-so-ai-nhac {
+  margin: 0 0 8px; font-size: 12px; line-height: 1.5; color: var(--text-mute);
+  background: var(--warn-wash); border-radius: var(--r-sm); padding: 8px 10px;
+}
+.tl-chu-van { margin: 0; font: inherit; white-space: pre-wrap; word-break: break-word; }
+.tl-nk-ds { margin: 0; padding-left: 20px; }
+.tl-nk-ds li { margin-bottom: 4px; }
 .tl-dai {
   display: inline-block; padding: 2px 10px; border-radius: var(--r-pill);
   font-size: 12px; font-weight: 600;

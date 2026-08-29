@@ -814,3 +814,40 @@ kiểu mình đang cầm: `BigInt` cho chat id Telegram, và chỉ lùi về so 
 *(BH-45 · BH-46 — số đã dùng ở nhánh `feature/ctl-0023-dot2-cam` cho hai bài học khác
 ["Phép đo CHỌN TAY…", "Một token gánh HAI VAI…"]. Cố ý bỏ trống ở đây để hai nhánh gộp vào
 không đè nhau — xem REV-0030. Đây không phải chỗ trống để điền.)*
+
+**BH-57 · MÔ HÌNH ĐỌC ẢNH KHÔNG HỎNG GỌN: có một DẢI GIỮA nó giữ đúng danh tính tờ giấy mà
+thay lặng lẽ vài CON SỐ.** (REV-0040 — Hồ Ly đo, Gạo chốt hướng xử)
+Vòng 1 chỉ thấy hai đầu của cái thang: ảnh đúng thông số sản phẩm → 8/8 đúng; ảnh thảm hoạ →
+bịa cả tờ, chốt mỏ neo bắt gọn. Giữa hai đầu ấy có một dải (ảnh 500–620px) mà mô hình vẫn
+đọc **đúng tên tờ giấy, đúng số hiệu**, nhưng MST `0110938472` ra `0110934872`, bên mua bịa
+tên khác, năm 2026 thành 2020 — **không cảnh báo, không `[không rõ]`**. Đường đọc CCCD ra ca
+nguy nhất: **họ tên ĐÚNG đứng cạnh số CCCD SAI 11 chữ số**; cái tên đúng làm người ta tin
+luôn con số.
+→ **Mỏ neo không cứu được dải này.** Mỏ neo (số hiệu · tên công ty · tên loại giấy tờ) chỉ
+bắt ca bịa TOÀN TRANG, vì nó kiểm DANH TÍNH. Dải giữa danh tính đúng, chỉ số sai.
+→ Chốt đúng cho dải này là **thể chế, không phải thuật toán**: mọi CON SỐ do AI bóc ra đeo
+nhãn *"AI đọc — CHƯA KIỂM"*, hiện khác hẳn về thị giác, và **không được tự điền vào ô dữ
+liệu chính thức** cho tới khi có người xác nhận. Chữ MÔ TẢ thì thoải mái; con số thì không.
+→ Vì sao khắt khe đúng với con số: trong kho pháp lý và hồ sơ lao động, một con số sai
+**không phải lỗi phần mềm — là giấy tờ sai sự thật**. Thà bắt người gõ tay 12 chữ số.
+→ Bài học về PHÉP ĐO: đo ở **đúng thông số sản phẩm** là phép đo kịch trần, tức phép đo mù.
+Muốn biết một chốt AI đáng tin tới đâu thì phải **dựng thang tụt cho tới lúc nó GÃY**, rồi
+soi kỹ **khúc ngay trước chỗ gãy** — chỗ đó mới là chỗ nó nói dối trôi chảy nhất.
+
+**BH-58 · "Bàn đo X sạch y hệt nền" là một LỜI KHAI, phải chạy mới được nói.** (REV-0040)
+Vòng 1 tôi khai `npm run do-cat-im-lang` "y hệt nền" — **SAI, và đây là đính chính**. Chạy
+thật ra **3 chỗ hỏng, cả 3 nằm trong file của chính đợt này**, trong đó `nhatKyTaiLieu()`
+`LIMIT 200` là cắt im lặng THẬT, cắt đúng **màn nhật ký truy cập** — chỗ ít được phép cắt
+lặng nhất trong cả ERP, vì nó tồn tại để trả lời *"ai đã tiếp cận dữ liệu cá nhân này"*.
+→ "Y hệt nền" chỉ đúng khi nền và bản mới **có cùng tập tệp**. Đợt này đẻ ra 4 tệp mới không
+tồn tại ở nền `a9dc0f1`, nên mọi vi phạm trong đó là **nợ MỚI**, không phải nợ cũ. So với nền
+mà quên rằng tập tệp đã đổi thì phép so đó tự sinh ra một chỗ mù.
+→ Cùng lớp, chiều ngược lại: **báo oan nguy ngang để lọt.** `quet-tai-lieu.js:144` bị tố oan
+(`.slice(0, 40)` trên một UUID) chỉ vì lưới `String\([^)]*\)` không nuốt nổi một tầng ngoặc
+lồng. Người ta không sửa một máy quét hay báo oan — người ta **tắt nó đi**. Nên mỗi lần nới
+lưới phải kèm **một mẫu sạch (chống oan) VÀ một mẫu bẩn cùng hình dạng (chống cửa sau)**.
+→ Bẫy môi trường đã ăn một lần trong đợt này: máy Windows để `core.autocrlf=true`, tệp trong
+cây làm việc là CRLF hay LF **tuỳ tệp đó vừa đi qua công cụ nào**, mà `git diff` thì chuẩn
+hoá nên nhìn không thấy. Ca đối chứng khớp chuỗi có `\n` vì thế **trượt im lặng**. Mọi bàn đo
+đọc tệp nguồn phải `.replace(/\r\n/g, '\n')` trước khi khớp — số đo đổi theo cấu hình git là
+số đo không dùng được.

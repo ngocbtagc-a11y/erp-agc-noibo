@@ -45,6 +45,8 @@ import {
 } from './quyen.js';
 import { luuFile, layFile, xoaFile, timHoacTaoThuMuc, daCauHinh, duongDanTep } from './kho-file.js';
 import { gioVN, ngayVN, duocGuiNhac } from './nhac-nhan-su.js';
+import { catBot, nhanCat } from './cat-danh-sach.js';
+import { NHAN_SO_AI, viTriSoAI } from './so-ai.js';
 
 /** Câu phải xuất hiện ở mọi cửa. Đặt ở ĐÚNG MỘT chỗ để không có hai bản
  *  lệch nhau, và để phép kiểm tự động soi được một chuỗi duy nhất. */
@@ -87,21 +89,27 @@ export const MO_HINH_DOC_ANH = '@cf/meta/llama-4-scout-17b-16e-instruct';
 
 /* ⚠️ ĐỊNH DẠNG ĐẦU VÀO — ĐO NGÀY 29/08/2026. ĐÂY LÀ CHỖ ĐÃ LÀM HỎNG CẢ TÍNH NĂNG
    ---------------------------------------------------------------------------
-   Cùng một mô hình, cùng một tấm ảnh, hai định dạng, hai kết quả khác hẳn:
+   ĐÚNG MỘT mô hình, ĐÚNG MỘT tấm ảnh, đổi mỗi định dạng — hai kết quả khác hẳn
+   (`@cf/meta/llama-4-scout-17b-16e-instruct`, đo cạnh nhau trong cùng một lượt):
 
-     { image: [...bytes], prompt }   → 0/4 mốc. Mô hình KHÔNG BÁO LỖI, nó bịa
-                                       ra một công văn của Bộ Giáo dục.
-     { messages: [ text + image_url ] } → 4/4 mốc, 8,8 giây. Đọc đúng tờ giấy.
+     { image: [...bytes], prompt }      → 0/4 mốc, 15,8 giây. KHÔNG BÁO LỖI —
+                                          nó bịa ra một công văn của Bộ Giáo dục.
+     { messages: [ text + image_url ] } → 4/4 mốc, 8,4 giây. Đọc đúng tờ giấy.
 
    Khuôn `{image, prompt}` là khuôn cũ của llama-3.2-vision. Mô hình đời mới
-   (llama-4, mistral-small-3.1, gemma-3) nhận ảnh qua `messages` kiểu OpenAI;
-   đưa sai khuôn thì trường `image` bị BỎ QUA LẶNG LẼ và mô hình chỉ trả lời
-   riêng câu nhắc — nghe rất xuôi tai, và sai hoàn toàn.
+   nhận ảnh qua `messages` kiểu OpenAI; đưa sai khuôn thì trường `image` bị
+   BỎ QUA LẶNG LẼ và mô hình chỉ trả lời riêng câu nhắc. Không `try/catch` nào
+   bắt được chuyện này: nó KHÔNG phải một lỗi, nó là một câu trả lời SAI trông
+   y như câu trả lời đúng. Đó là lý do phải có chốt `chuCoThatKhong()` ở dưới.
 
-   Đo thêm cho khỏi phải thử lại: `@cf/mistralai/mistral-small-3.1-24b-instruct`
-   cũng 4/4 (9,3 giây) nhưng dấu tiếng Việt kém hơn — để làm đường lui.
-   `@cf/llava-hf/llava-1.5-7b-hf` 0/4: nó chép lại câu nhắc, không đọc giấy.
-   `@cf/unum/uform-gen2-qwen-500m` đã bị Cloudflare gỡ từ 30/05/2026. */
+   Đo cả bảng cho người sau khỏi thử lại (tài khoản công ty, 29/08/2026):
+     mistral-small-3.1-24b · messages → 4/4, 9,1 giây, NHƯNG dấu tiếng Việt
+       kém rõ ("CỐ SỐ DỰ ĐIỀU KIỆN" thay vì "CƠ SỞ ĐỦ ĐIỀU KIỆN") — đường lui.
+     llava-1.5-7b-hf · legacy → 0/4: nó chép lại chính câu nhắc, không đọc giấy.
+     uform-gen2-qwen-500m → 5028, Cloudflare gỡ từ 30/05/2026.
+     gemma-3-12b-it → 5018 "This account is not allowed" — CỔNG KHÁC với 5016,
+       KHÔNG phải thứ gửi `prompt:'agree'` mở được. Đừng mất công.
+     qwen2.5-vl-7b-instruct → 5007, Workers AI không có mô hình này. */
 export function khuonDocAnh(anhBase64, nhac) {
   const sach = String(anhBase64 || '').replace(/^data:[^,]*,/, '');
   return {
@@ -148,10 +156,25 @@ export function boDau(s) {
     .trim();
 }
 
-/** Chuỗi nhét vào cột `tim_kiem`. Gộp mọi thứ đáng tra vào một ô, đã bỏ dấu. */
+/** Chuỗi nhét vào cột `tim_kiem`. Gộp mọi thứ đáng tra vào một ô, đã bỏ dấu.
+ *
+ *  ⚠️ VÁ REV-0040 · LỖI #4 — Ô TÌM KIẾM LÀ MỘT ĐƯỜNG ĐỌC RUỘT KHÔNG AI THẤY.
+ *  Bản trước nhét CẢ `noi_dung` vào đây cho mọi nhóm, kể cả nhóm NHẠY CẢM. Đo
+ *  được: chuỗi sinh ra chứa nguyên `001091027384` và `18.500.000`. Mà đường
+ *  danh sách quét `tim_kiem LIKE ?` và **ghi 0 lượt nhật ký** — nên chỉ cần gõ
+ *  một số CCCD vào ô tìm, thấy dòng hiện lên là đã XÁC NHẬN số đó nằm trong hồ
+ *  sơ nào, đọc được ruột mà không để lại một vết nào. Đúng thứ Luật BVDLCN
+ *  91/2025/QH15 bắt phải ghi lại.
+ *
+ *  Vá: nhóm NHẠY CẢM thì `noi_dung` KHÔNG vào ô tìm kiếm. Cái mất: không tra
+ *  được hồ sơ nhân sự bằng chữ bên trong giấy. Cái được: không ai dò được số
+ *  CCCD hay mức lương bằng cách gõ mò. Đổi như thế là đúng — muốn đọc ruột
+ *  giấy tờ nhạy cảm thì phải MỞ nó ra, và mở là có nhật ký.
+ *  Tiêu đề, số hiệu, loại, tên nhóm vẫn tra được bình thường. */
 export function chuoiTimKiem({ tieu_de, so_hieu, loai, nhom, noi_dung }) {
   const ten = NHOM_TAI_LIEU[nhom]?.ten || '';
-  return boDau([tieu_de, so_hieu, loai, ten, noi_dung].filter(Boolean).join(' ')).slice(0, 20000);
+  const ruot = nhomTaiLieuNhayCam(nhom) ? null : noi_dung;
+  return boDau([tieu_de, so_hieu, loai, ten, ruot].filter(Boolean).join(' ')).slice(0, 20000);
 }
 
 /* ==========================================================================
@@ -240,27 +263,112 @@ function dichLoiAI(e) {
    Nên: `so_hieu` do người quét TỰ GÕ khi nhìn vào tờ giấy là mẩu sự thật duy
    nhất máy chủ có. Chữ bóc được mà KHÔNG chứa số hiệu đó thì gần như chắc
    chắn không phải chữ của tờ giấy này → vứt, và nói rõ vì sao vứt.
-   Chốt này chỉ chạy khi người dùng có gõ `so_hieu` — nói thẳng giới hạn đó,
-   đừng để ai tưởng nó bắt được mọi ca bịa.
+
+   ⚠️ VÁ REV-0040 · LỖI CHẶN #1 — BA MỎ NEO, KHÔNG PHẢI MỘT
+   ---------------------------------------------------------------------------
+   Bản trước chỉ có MỘT mỏ neo là `so_hieu`, nên nó hở đúng chỗ người quét vội:
+     · **ô số hiệu để trống** → chốt KHÔNG CHẠY, công văn bịa vào thẳng kho;
+     · số hiệu < 4 ký tự ("12") → cũng không chạy.
+   Người quét một xấp giấy tờ **SẼ** bỏ trống ô số hiệu. Đó không phải ca hiếm,
+   đó là ca thường — Hồ Ly gọi đúng tên.
+
+   Nay chữ bóc được phải trúng ÍT NHẤT MỘT trong ba mỏ neo:
+     ① `so_hieu` người vừa gõ                    (mốc mạnh nhất, nếu có)
+     ② TÊN CÔNG TY — giấy tờ của công ty gần như luôn có tên công ty trên đó,
+        kể cả khi đứng ở vai bên mua trên hoá đơn của người khác. Hồ Ly đo mỏ
+        neo này bắt **7/7** ca bịa toàn trang, KỂ CẢ khi ô số hiệu trống.
+     ③ TÊN LOẠI GIẤY TỜ / TÊN TÀI LIỆU người vừa gõ — khớp theo TỪ NGUYÊN VẸN
+        (không khớp mẩu), từ ≥ 5 chữ cái, để "quyết định" đừng trúng oan
+        "nghị định".
+
+   CÓ MỎ NEO thì phải trúng; KHÔNG có mỏ neo nào dùng được thì nói thẳng là
+   chốt không chạy chứ không giả vờ đã kiểm.
+   ⚠️ Mỏ neo KHÔNG cứu được DẢI GIỮA (danh tính đúng, vài con số bị thay lặng
+   lẽ) — dải đó chặn bằng `src/so-ai.js`: nhãn "AI đọc — CHƯA KIỂM" và cấm con
+   số tự vào ô dữ liệu chính thức. Đừng ai tưởng chốt này bắt được cả hai.
    ========================================================================== */
-function chuCoThatKhong(chu, soHieu) {
-  if (!chu || !soHieu) return { that: true, viSao: null };
+
+/** Tên công ty — mỏ neo ②. Gồm cả tên HKD tiền thân vì giấy tờ 2024–2025 còn
+ *  mang tên đó, và giai đoạn hợp nhất hai pháp nhân vẫn đang chạy (Q3/2026). */
+export const TEN_CONG_TY_NEO = [
+  'Công ty TNHH Alpha Green Commerce',
+  'Alpha Green Commerce',
+  'Onfod'
+];
+
+/** Từ trong `loai`/`tieu_de` đủ dài để làm mỏ neo. Dưới 5 chữ cái thì quá dễ
+ *  trúng oan ("dinh" nằm trong "nghị định"), mà trúng oan là mở lại đúng cái
+ *  lỗ vừa vá. */
+const DAI_TU_NEO = 5;
+
+function chuCoThatKhong(chu, { soHieu = null, loai = null, tieuDe = null,
+                              cum = null, tenCum = 'dòng chữ bắt buộc của loại giấy tờ này' } = {}) {
+  if (!chu) return { that: true, viSao: null, neo: null };
+
   /* So sau khi bỏ dấu VÀ bỏ mọi ký tự không phải chữ-số: mô hình hay đọc
      "124/2026/GCN-ATTP" thành "124 / 2026 / GCN – ATTP". Khác dấu gạch thì
      vẫn là cùng một số hiệu, đừng vứt oan chữ đọc đúng. */
   const gon = (s) => boDau(s).replace(/[^a-z0-9]/g, '');
-  const ma = gon(soHieu);
-  if (ma.length < 4) return { that: true, viSao: null };   // số hiệu quá ngắn, không đủ để kết luận
-  if (gon(chu).includes(ma)) return { that: true, viSao: null };
+  const chuGon = gon(chu);
+  const chuTu = new Set(boDau(chu).split(/[^a-z0-9]+/).filter(Boolean));
+
+  const coMoc = [];      // mỏ neo DÙNG ĐƯỢC (người đã cho ta mẩu sự thật)
+  let trung = null;      // mỏ neo đã TRÚNG
+
+  /* Mỏ neo CỤM — dành cho loại giấy tờ mà chính tờ giấy LUÔN in sẵn một dòng
+     cố định: thẻ CCCD luôn có "CĂN CƯỚC CÔNG DÂN". Khác `tuNeo` ở chỗ đây là
+     cả CỤM (khớp trên chuỗi đã gộp, nên "CĂN CƯỚC CÔNG DÂN" và
+     "Căn-cước công dân" là một), và nó vừa ĐÒI vừa TRÚNG được: dòng đó bắt
+     buộc phải có, thiếu là thứ trong ảnh không phải tờ giấy nó đang khai. */
+  if (Array.isArray(cum) && cum.length) {
+    coMoc.push(tenCum);
+    if (cum.some(c => chuGon.includes(gon(c)))) trung = trung || tenCum;
+  }
+
+  const maSo = gon(soHieu || '');
+  if (maSo.length >= 4) {
+    coMoc.push(`số hiệu "${soHieu}"`);
+    if (chuGon.includes(maSo)) trung = trung || `số hiệu "${soHieu}"`;
+  }
+
+  const tuNeo = [...new Set(
+    boDau([loai, tieuDe].filter(Boolean).join(' '))
+      .split(/[^a-z0-9]+/).filter(t => t.length >= DAI_TU_NEO)
+  )];
+  if (tuNeo.length) {
+    coMoc.push(`tên tài liệu bạn vừa gõ`);
+    if (tuNeo.some(t => chuTu.has(t))) trung = trung || 'tên tài liệu bạn vừa gõ';
+  }
+
+  /* Tên công ty CHỈ ĐỂ TRÚNG, không để ĐÒI: giấy tờ của nhà cung cấp hoặc của
+     một cá nhân hoàn toàn có thể không nhắc tên công ty. Đưa nó vào `coMoc`
+     thì mọi tờ như thế bị vứt oan. */
+  if (TEN_CONG_TY_NEO.some(t => chuGon.includes(gon(t)))) trung = trung || 'tên công ty';
+
+  if (!coMoc.length) {
+    return {
+      that: true, neo: null,
+      viSao: 'Bạn chưa gõ số hiệu và tên tài liệu quá ngắn, nên máy KHÔNG có ' +
+             'mốc nào để đối chiếu — chữ AI đọc được lưu NGUYÊN VĂN mà chưa ' +
+             'kiểm là của đúng tờ giấy này. Gõ số hiệu vào để máy kiểm giúp.'
+    };
+  }
+  if (trung) return { that: true, viSao: null, neo: trung };
+
   return {
-    that: false,
-    viSao: `Chữ AI đọc được KHÔNG chứa số hiệu "${soHieu}" bạn vừa gõ — nhiều ` +
-           'khả năng AI không nhìn thấy ảnh mà tự bịa ra nội dung, nên đã bỏ đi. ' +
-           'Tài liệu vẫn lưu bình thường, tra bằng tên và số hiệu.'
+    that: false, neo: null,
+    viSao: `Chữ AI đọc được KHÔNG chứa ${coMoc.join(' hay ')}, cũng không nhắc ` +
+           'tên công ty — nhiều khả năng AI không nhìn thấy ảnh mà tự bịa ra nội ' +
+           'dung, nên đã bỏ đi. Tài liệu vẫn lưu bình thường, tra bằng tên và số hiệu.'
   };
 }
 
-async function bocChu(env, dsAnhOCR, soHieu = null) {
+/* Xuất ra để bàn đo gọi thẳng được — chốt chống bịa mà chỉ đo gián tiếp qua
+   `luuTaiLieu` thì mỗi ca phải dựng cả một lượt lưu, và ca "số hiệu trống"
+   dễ bị bỏ sót đúng như vòng 1. */
+export { chuCoThatKhong };
+
+async function bocChu(env, dsAnhOCR, moc = {}) {
   if (!env.AI) return { chu: '', soTrang: 0, ghiChu: 'Máy chủ chưa bật AI đọc ảnh' };
   if (!dsAnhOCR.length) return { chu: '', soTrang: 0, ghiChu: 'Không có ảnh để bóc chữ' };
 
@@ -286,12 +394,14 @@ async function bocChu(env, dsAnhOCR, soHieu = null) {
     }
   }
   const chuGop = phan.join('\n\n').slice(0, 60000);
-  const that = chuCoThatKhong(chuGop, soHieu);
+  const that = chuCoThatKhong(chuGop, moc);
   if (!that.that) return { chu: '', soTrang: 0, ghiChu: that.viSao };
   return {
     chu: chuGop,
     soTrang: phan.length,
-    ghiChu: phan.length ? null : (hong || 'Không đọc được chữ nào')
+    /* `that.viSao` khi `that === true` là câu "chốt KHÔNG chạy vì thiếu mốc" —
+       phải nói ra, đừng để ai tưởng chữ này đã được kiểm. */
+    ghiChu: phan.length ? (that.viSao || null) : (hong || 'Không đọc được chữ nào')
   };
 }
 
@@ -372,9 +482,12 @@ export async function luuTaiLieu(env, phien, body) {
      Cố ý: nếu AI treo thì ta chưa đẩy gì lên Drive, không để lại file mồ côi.
      `bocChu` tự nuốt mọi lỗi nên nó không bao giờ chặn luồng. */
   const dsOCR = Array.isArray(body.anh_boc_chu) ? body.anh_boc_chu.slice(0, TRAN_TRANG_BOC_CHU) : [];
-  /* Đưa `so_hieu` người dùng vừa gõ xuống làm mốc đối chiếu chữ bịa — xem
-     `chuCoThatKhong()`. Đây là mẩu sự thật duy nhất máy chủ có về tờ giấy. */
-  const boc = await bocChu(env, dsOCR, chuoi(body.so_hieu, 120));
+  /* Đưa MỌI mẩu sự thật người vừa gõ xuống làm mốc đối chiếu chữ bịa — xem
+     `chuCoThatKhong()`. Bản trước chỉ đưa `so_hieu`, nên bỏ trống ô đó là chốt
+     tắt hẳn (REV-0040 lỗi #1). */
+  const boc = await bocChu(env, dsOCR, {
+    soHieu: chuoi(body.so_hieu, 120), loai: chuoi(body.loai, 120), tieuDe: tieuDe
+  });
 
   /* ---- Lưu lên Drive ---------------------------------------------------
      Đi qua `src/kho-file.js` — MỘT CỬA DUY NHẤT ra kho ngoài (SPEC-0005 5.1).
@@ -493,6 +606,9 @@ export async function luuTaiLieu(env, phien, body) {
     co_byte: banGhi.co_byte,
     ocr_so_trang: boc.soTrang,
     ocr_ghi_chu: boc.ghiChu,
+    /* Có bóc được chữ thì lượt quét nào cũng phải mang theo câu này — người
+       vừa quét là người duy nhất còn cầm tờ giấy trên tay để đối chiếu. */
+    canh_bao_so_ai: boc.chu ? NHAN_SO_AI : null,
     duong_dan: duongDanTep(luuXong.khoa),
     canh_bao: CANH_BAO_PHAP_LY + (nhayCam ? ' ' + CANH_BAO_TRA_GIAY : '')
   });
@@ -504,7 +620,7 @@ export async function luuTaiLieu(env, phien, body) {
 export async function danhSachTaiLieu(env, phien, thamSo) {
   const duocXem = nhomTaiLieuXemDuoc(phien.vai_tro);
   if (!duocXem.length) {
-    return json({ ds: [], nhom: [], canh_bao: CANH_BAO_PHAP_LY, tong: 0, bi_cat: false });
+    return json({ ds: [], nhom: [], canh_bao: CANH_BAO_PHAP_LY, tong: 0, bi_cat: false, cat: null });
   }
 
   const dieuKien = [`an = 0`, `cua_vao = ?`];
@@ -537,7 +653,7 @@ export async function danhSachTaiLieu(env, phien, thamSo) {
   const sapHet = thamSo.get('sap_het_han') === '1';
   if (sapHet) dieuKien.push(`ngay_het_han IS NOT NULL AND ngay_het_han <= date('now','+7 hours','+60 days')`);
 
-  const TRAN = 50;
+  const GH = 50;
   /* ⚠️ `trich` CẮT Ở MÁY CHỦ CHO GIẤY TỜ NHẠY CẢM — REV-0036 lỗi #5.
      180 ký tự đầu của chữ đã bóc từ một tờ CCCD hay hợp đồng lao động là RUỘT
      của giấy tờ đó: họ tên, số CCCD, mức lương thường nằm ngay mấy dòng đầu.
@@ -548,7 +664,7 @@ export async function danhSachTaiLieu(env, phien, thamSo) {
      và mở là có nhật ký. Cắt bằng CASE trong SQL, không lọc trong JS: dữ liệu
      không rời máy chủ thì không có chỗ nào quên lọc.
      Danh sách vẫn còn tiêu đề, số hiệu, ngày hết hạn — đủ để tra cứu. */
-  const { results } = await env.DB.prepare(`
+  const kq = await env.DB.prepare(`
     SELECT id, nhom, loai, tieu_de, so_hieu, ngay_ban_hanh, ngay_het_han,
            han_luu, so_trang, co_byte, ocr_so_trang, nhay_cam, nguoi_tao, tao_luc,
            CASE WHEN nhay_cam = 1 THEN NULL
@@ -556,20 +672,26 @@ export async function danhSachTaiLieu(env, phien, thamSo) {
       FROM tai_lieu
      WHERE ${dieuKien.join(' AND ')}
      ORDER BY (ngay_het_han IS NULL), ngay_het_han, tao_luc DESC
-     LIMIT ${TRAN + 1}
+     LIMIT ${GH + 1}
   `).bind(...bien).all();
 
-  const ds = results || [];
   /* Danh sách bị cắt thì PHẢI NÓI RA — luật "danh sách bị cắt mà không nói là
-     đã cắt" (docs/LUAT-GOP-Y-LA-TRIEU-CHUNG.md Mục 2). */
-  const biCat = ds.length > TRAN;
-  if (biCat) ds.length = TRAN;
+     đã cắt" (docs/LUAT-GOP-Y-LA-TRIEU-CHUNG.md Mục 2). Dùng CHUNG
+     `src/cat-danh-sach.js` chứ không tự viết lại lần thứ hai: bản tự viết cũ
+     ở đây trả đúng `bi_cat` nhưng KHÔNG có tổng thật, và mỗi bản chép tay là
+     một chỗ nữa để lệch (REV-0040). Câu đếm chỉ chạy KHI có cắt — 0 đồng cho
+     ca thường ngày. */
+  const { ds, biCat } = catBot(kq, GH);
+  const cat = await nhanCat(env, biCat, GH,
+    `SELECT COUNT(*) AS n FROM tai_lieu WHERE ${dieuKien.join(' AND ')}`, bien,
+    'Gõ vào ô tìm hoặc chọn một nhóm để thu hẹp lại.');
 
   return json({
     ds,
     tong: ds.length,
     bi_cat: biCat,
-    tran: TRAN,
+    cat,
+    tran: GH,
     nhom: duocXem.map(m => ({ ma: m, ...NHOM_TAI_LIEU[m] })),
     nhom_luu_duoc: nhomTaiLieuLuuDuoc(phien.vai_tro),
     canh_bao: CANH_BAO_PHAP_LY
@@ -650,7 +772,14 @@ export async function moTaiLieu(env, phien, id) {
       ngay_ban_hanh: tl.ngay_ban_hanh, ngay_het_han: tl.ngay_het_han,
       han_luu: tl.han_luu, so_trang: tl.so_trang, co_byte: tl.co_byte,
       noi_dung: tl.noi_dung, ocr_so_trang: tl.ocr_so_trang, ocr_ghi_chu: tl.ocr_ghi_chu,
-      nhay_cam: tl.nhay_cam, nguoi_tao: tl.nguoi_tao, tao_luc: tl.tao_luc
+      nhay_cam: tl.nhay_cam, nguoi_tao: tl.nguoi_tao, tao_luc: tl.tao_luc,
+      /* ⚠️ VÁ REV-0040 · LỖI #3 — CON SỐ AI ĐỌC PHẢI ĐEO NHÃN.
+         `noi_dung` là chữ MÁY ĐỌC, và REV-0040 đo được dải mô hình giữ đúng
+         danh tính tờ giấy mà vẫn thay lặng lẽ vài con số (MST lệch 2 chữ số).
+         Máy chủ trả VỊ TRÍ từng cụm số để giao diện bôi khác hẳn — một định
+         nghĩa ở `src/so-ai.js`, không chép bản thứ hai sang trình duyệt. */
+      so_ai: viTriSoAI(tl.noi_dung),
+      nhan_so_ai: NHAN_SO_AI
     },
     canh_bao: CANH_BAO_PHAP_LY
   });
@@ -684,17 +813,30 @@ export async function nhatKyTaiLieu(env, phien, id) {
   if (!id) return loi('Thiếu mã tài liệu');
   /* `k.luc` là giờ mở ĐẦU TIÊN trong ngày — nhật ký gộp theo ngày, xem
      `ghiNhatKy()`. Đặt tên cột trả về cho đúng nghĩa để màn hình không lỡ
-     hiển thị "lúc 9:05" như thể đó là lượt mở gần nhất. */
-  const { results } = await env.DB.prepare(`
+     hiển thị "lúc 9:05" như thể đó là lượt mở gần nhất.
+
+     ⚠️ VÁ REV-0040 · LỖI #6 — ĐÂY LÀ CẮT IM LẶNG THẬT, VÀ CẮT ĐÚNG CHỖ TỆ NHẤT.
+     Bản trước `LIMIT 200` mà không báo gì. Nhật ký truy cập là chỗ ÍT ĐƯỢC
+     PHÉP cắt lặng nhất trong cả ERP: nó tồn tại để trả lời "ai đã tiếp cận dữ
+     liệu cá nhân này". Một màn nhật ký cắt 200 dòng đầu rồi im lặng không phải
+     màn thiếu dữ liệu — nó là màn KHẲNG ĐỊNH SAI rằng đây là toàn bộ lượt truy
+     cập, đúng lúc người ta cần con số đó để trả lời cơ quan quản lý hoặc chủ
+     thể dữ liệu. */
+  const GH = 200;
+  const kq = await env.DB.prepare(`
     SELECT k.ngay, k.hanh_dong, k.luc AS lan_dau_luc, k.nhan_su_id,
            COALESCE(n.ho_ten, k.nhan_su_id) AS ho_ten
       FROM tai_lieu_nhat_ky k
       LEFT JOIN nhan_su n ON n.id = k.nhan_su_id
      WHERE k.tai_lieu_id = ?
      ORDER BY k.ngay DESC, k.luc DESC
-     LIMIT 200
+     LIMIT ${GH + 1}
   `).bind(id).all();
-  return json({ ds: results || [] });
+  const { ds, biCat } = catBot(kq, GH);
+  const cat = await nhanCat(env, biCat, GH,
+    'SELECT COUNT(*) AS n FROM tai_lieu_nhat_ky WHERE tai_lieu_id = ?', [id],
+    'Đây là nhật ký truy cập — cần bản đầy đủ thì lấy từ bản sao lưu tháng.');
+  return json({ ds, bi_cat: biCat, cat, tran: GH });
 }
 
 /** Ẩn một tài liệu. KHÔNG xoá: SPEC-0005 Mục 7.5 cấm xoá tài liệu gốc, và

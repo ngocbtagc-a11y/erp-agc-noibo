@@ -219,7 +219,7 @@ muc('② CA ĐỐI CHỨNG (BH-16) — bản BỎ CHẶN phải LỌT');
   } else {
     const boChan = goc
       .replace(chan, '  /* CỐ Ý BỎ CHẶN — ca đối chứng BH-16 */')
-      .replace(/from '\.\/(quyen|kho-file|nhac-nhan-su)\.js'/g,
+      .replace(/from '\.\/(quyen|kho-file|nhac-nhan-su|cat-danh-sach|so-ai)\.js'/g,
                (m, t) => `from '${pathToFileURL(path.join(GOC, 'src', t + '.js')).href}'`);
     const duong = path.join(TAM, 'tai-lieu-BO-CHAN.mjs');
     writeFileSync(duong, boChan);
@@ -442,7 +442,12 @@ muc('⑥ CÂU "KHÔNG THAY BẢN GIẤY" — có mặt ở cả ba nơi');
    ========================================================================== */
 muc('⑦ NGƯỠNG NGÓN TAY 44px trong CSS thật');
 {
-  const css = readFileSync(path.join(GOC, 'public/assets/css/style.css'), 'utf8');
+  /* Quy về LF y như `docNguon()`: `core.autocrlf=true` trên máy Windows này
+     nên tệp trong cây làm việc là CRLF hay LF tuỳ tệp đó vừa đi qua công cụ
+     nào. Ca đối chứng dưới đây khớp chuỗi có `\n`, nên không quy về LF thì nó
+     im lặng trượt — và một ca đối chứng trượt lặng còn tệ hơn không có nó. */
+  const css = readFileSync(path.join(GOC, 'public/assets/css/style.css'), 'utf8')
+    .replace(/\r\n/g, '\n');
   const NUT = ['.tl-nut-quet', '.tl-chip', '.tl-nut-mo', '.tl-tim', '.tl-loc-han',
     '.tlq-x', '.tlq-o-nhom', '.tlq-nut-chinh', '.tlq-nut-nhi', '.tlq-nut-phu', '.tlq-o'];
   function caoNhoNhat(sel, nguon) {
@@ -527,7 +532,7 @@ async function napBanVa(nhan, ...thay) {
     if (!ma.includes(tim)) { dat(false, `Bản vá "${nhan}": tìm được chỗ để sửa`, '→ đã đổi mã, sửa lại bàn đo!'); return null; }
     ma = ma.replace(tim, the);
   }
-  ma = ma.replace(/from '\.\/(quyen|kho-file|nhac-nhan-su)\.js'/g,
+  ma = ma.replace(/from '\.\/(quyen|kho-file|nhac-nhan-su|cat-danh-sach|so-ai)\.js'/g,
     (m, t) => `from '${pathToFileURL(path.join(GOC, 'src', t + '.js')).href}'`);
   const duong = path.join(TAM, `tai-lieu-va-${++soBanVa}.mjs`);
   writeFileSync(duong, ma);
@@ -754,12 +759,328 @@ muc('⑧d CHỮ BỊA — mô hình không nhìn thấy ảnh vẫn trả lời 
   dat(String(gonDau.dong.noi_dung || '').includes('124'),
     'Số hiệu lệch dấu gạch / khoảng trắng: KHÔNG vứt oan chữ đọc đúng');
 
-  /* Không gõ số hiệu thì không có mốc nào để đối chiếu — phải nói thẳng là
-     chốt này KHÔNG chạy, đừng để ai tưởng nó bắt được mọi ca bịa. */
+  /* ⚠️ VÁ REV-0040 · LỖI CHẶN #1 — Ô SỐ HIỆU ĐỂ TRỐNG.
+     Vòng 1 phép đo này khẳng định "không gõ số hiệu → chốt KHÔNG chạy, chữ vẫn
+     vào kho, đây là chỗ hở còn lại". Hồ Ly chỉ đúng: người quét một xấp giấy
+     SẼ bỏ trống ô đó, nên hở ở đấy không phải ca hiếm mà là ca thường. Nay
+     mỏ neo TÊN TÀI LIỆU + TÊN CÔNG TY phải bắt được, KHÔNG cần số hiệu. */
   const khongMoc = await luuVoiChuAI(CHU_BIA, null);
-  dat(String(khongMoc.dong.noi_dung || '').includes('Quảng Ngãi'),
-    'Không gõ số hiệu → chốt KHÔNG chạy (giới hạn đã biết, có ghi trong mã)',
-    '→ chữ vẫn vào kho, đây là chỗ hở còn lại');
+  dat(khongMoc.ma === 200 && !khongMoc.dong.noi_dung,
+    'BỎ TRỐNG ô số hiệu → chữ bịa VẪN bị chặn (mỏ neo tên tài liệu)',
+    `→ noi_dung=${JSON.stringify(khongMoc.dong.noi_dung)}`);
+  const thatKhongMoc = await luuVoiChuAI(CHU_THAT, null);
+  dat(String(thatKhongMoc.dong.noi_dung || '').includes('ALPHA GREEN'),
+    'BỎ TRỐNG ô số hiệu → chữ THẬT vẫn vào kho (không vứt oan)');
+}
+
+muc('⑧d2 MỎ NEO — 7 ca bịa toàn trang, KỂ CẢ khi ô số hiệu trống (vá REV-0040 #1)');
+{
+  /* Bảy ca bịa toàn trang: đúng kiểu chữ mô hình trả về khi nó KHÔNG nhìn thấy
+     ảnh — nghe rất xuôi tai, không một chữ nào có trên tờ giấy. Gọi thẳng
+     `chuCoThatKhong` để đo được cả ca "số hiệu trống" mà không phải dựng bảy
+     lượt lưu (vòng 1 bỏ sót đúng ca này vì chỉ đo gián tiếp). */
+  const BIA = [
+    'Số: 2345/KH-UBND Kế hoạch triển khai Nghị định 01/2021/NĐ-CP. Bộ Giáo dục và Đào tạo, tỉnh Quảng Ngãi.',
+    'UỶ BAN NHÂN DÂN TỈNH ĐỒNG THÁP — Sở Tài nguyên và Môi trường. Số 118/QĐ-STNMT.',
+    'CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM. Thông báo về việc nghỉ lễ Quốc khánh 02/9.',
+    'BỆNH VIỆN ĐA KHOA TỈNH LÂM ĐỒNG — Phiếu kết quả xét nghiệm, mã BN 20260418.',
+    'HỢP ĐỒNG THUÊ NHÀ Ở giữa ông Trần Văn Bảy và bà Lê Thị Tám, quận Bình Thạnh.',
+    'TRƯỜNG ĐẠI HỌC BÁCH KHOA HÀ NỘI — Bảng điểm học kỳ 1 năm học 2024-2025.',
+    'NGÂN HÀNG TMCP NGOẠI THƯƠNG — Sao kê tài khoản 0451000123456, tháng 07/2026.'
+  ];
+  /* Mốc người dùng gõ: TÊN tài liệu + LOẠI, KHÔNG có số hiệu. Đây là đúng cảnh
+     Hồ Ly nêu — người quét vội bỏ trống ô số hiệu. */
+  const MOC_TRONG = { soHieu: null, loai: 'Giấy chứng nhận', tieuDe: 'Giấy chứng nhận ATTP Alpha Green' };
+  let bat = 0;
+  for (const chu of BIA) if (!tailieu.chuCoThatKhong(chu, MOC_TRONG).that) bat++;
+  dat(bat === BIA.length, `Bắt ${bat}/${BIA.length} ca bịa toàn trang khi ô số hiệu TRỐNG`,
+    `→ ${bat}/${BIA.length}`);
+
+  /* ĐỐI CHỨNG ①: chữ THẬT của bảy loại giấy công ty đang có — không được vứt
+     oan lấy một tờ. Vứt oan là mất chữ tra cứu của giấy đọc đúng. */
+  const THAT = [
+    ['GIẤY CHỨNG NHẬN CƠ SỞ ĐỦ ĐIỀU KIỆN AN TOÀN THỰC PHẨM. Số: 124/2026/GCN-ATTP. CÔNG TY TNHH ALPHA GREEN COMMERCE.', MOC_TRONG],
+    ['HOÁ ĐƠN GIÁ TRỊ GIA TĂNG. Đơn vị mua: Công ty TNHH Alpha Green Commerce, MST 0110938472.',
+      { soHieu: null, loai: 'Hoá đơn', tieuDe: 'Hoá đơn tháng 8' }],
+    ['TỜ KHAI HÀNG HOÁ NHẬP KHẨU số 106284471230, người nhập khẩu ALPHA GREEN COMMERCE CO., LTD.',
+      { soHieu: null, loai: 'Tờ khai hải quan', tieuDe: 'Tờ khai lô hạnh nhân' }],
+    /* Giấy KHÔNG nhắc tên công ty: phải trúng bằng mỏ neo TÊN TÀI LIỆU. */
+    ['HỢP ĐỒNG NGUYÊN TẮC cung cấp hàng hoá giữa Bên A và Bên B, hiệu lực 01/01/2026.',
+      { soHieu: null, loai: 'Hợp đồng nguyên tắc', tieuDe: 'Hợp đồng NCC hạt điều' }],
+    /* Có số hiệu thì số hiệu là mỏ neo mạnh nhất, lệch dấu gạch vẫn trúng. */
+    ['Số: 124 / 2026 / GCN – ATTP, cấp ngày 15/03/2026.',
+      { soHieu: '124/2026/GCN-ATTP', loai: null, tieuDe: 'Giay ATTP' }],
+    ['CÔNG TY TNHH ALPHA GREEN COMMERCE — Điều lệ công ty, chương I.',
+      { soHieu: null, loai: null, tieuDe: 'Dieu le' }],
+    ['ONFOD — Biên bản kiểm kê kho ngày 31/07/2026.',
+      { soHieu: null, loai: null, tieuDe: 'Bien ban' }]
+  ];
+  const oan = THAT.filter(([chu, moc]) => !tailieu.chuCoThatKhong(chu, moc).that);
+  dat(oan.length === 0, 'Bảy tờ giấy THẬT: không vứt oan tờ nào',
+    `→ ${oan.length} tờ bị vứt oan${oan.length ? ': ' + oan[0][0].slice(0, 40) : ''}`);
+
+  /* ĐỐI CHỨNG ②: BỎ mỏ neo tên tài liệu + tên công ty → bảy ca bịa phải LỌT
+     hết. Không lọt thì phép đo trên không đo mỏ neo, nó đo cái gì đó khác. */
+  let lot = 0;
+  for (const chu of BIA) if (tailieu.chuCoThatKhong(chu, { soHieu: null }).that) lot++;
+  dat(lot === BIA.length,
+    'ĐỐI CHỨNG: gỡ hết mỏ neo → cả 7 ca bịa LỌT (phép đo có đo thật)',
+    `→ ${lot}/${BIA.length} lọt`);
+
+  /* Không mốc nào dùng được thì PHẢI NÓI RA là chốt không chạy — im lặng cho
+     qua là để người ta tưởng chữ này đã được kiểm. */
+  const khongMoc = tailieu.chuCoThatKhong(BIA[0], { soHieu: '12' });
+  dat(khongMoc.that && /chưa gõ số hiệu/.test(String(khongMoc.viSao)),
+    'Số hiệu < 4 ký tự và không có tên: chốt không chạy nhưng NÓI RA',
+    `→ "${String(khongMoc.viSao).slice(0, 50)}…"`);
+}
+
+muc('⑧d3 CON SỐ AI ĐỌC — nhãn "AI đọc — CHƯA KIỂM" (vá REV-0040 #3, dải giữa)');
+{
+  const soAi = await import(pathToFileURL(path.join(GOC, 'src/so-ai.js')).href);
+  const chu = 'Mã số thuế 0110938472 — Tổng cộng 42.350.000 đồng — ngày 05/01/1995.';
+  const vt = soAi.viTriSoAI(chu);
+  const lay = vt.map(([i, d]) => chu.slice(i, i + d));
+  dat(lay.includes('0110938472') && lay.includes('42.350.000') && lay.includes('05/01/1995'),
+    'Bắt trọn cụm số, KHÔNG cắt vụn "42.350.000" thành ba mẩu', `→ ${lay.join(' · ')}`);
+  dat(soAi.NHAN_SO_AI === 'AI đọc — CHƯA KIỂM', 'Nhãn đúng MỘT câu, khai ở một chỗ');
+
+  /* CON SỐ KHÔNG ĐƯỢC TỰ ĐIỀN VÀO Ô CHÍNH THỨC — Gạo chốt 29/08/2026. */
+  const { thongTin, soChuaKiem } = soAi.tachSoChuaKiem(
+    { ho_ten: 'Phạm Khương Duy', so_cccd: '001091027384', ngay_sinh: '1990-02-11', que_quan: 'Hà Nội' },
+    ['so_cccd', 'ngay_sinh']);
+  dat(!('so_cccd' in thongTin) && !('ngay_sinh' in thongTin),
+    'Số CCCD / ngày sinh KHÔNG nằm trong khối điền sẵn `thong_tin`',
+    `→ thong_tin = ${Object.keys(thongTin).join(', ')}`);
+  dat(soChuaKiem.so_cccd && soChuaKiem.so_cccd.nhan === 'AI đọc — CHƯA KIỂM',
+    'Số đi ra bằng đường riêng, ĐEO NHÃN, người phải xác nhận mới vào ô');
+  dat(thongTin.ho_ten === 'Phạm Khương Duy', 'Chữ MÔ TẢ vẫn điền sẵn bình thường');
+
+  /* ĐỐI CHỨNG: bỏ danh sách tên trường SỐ → số CCCD chui thẳng vào khối điền
+     sẵn. Không bắt được thì phép đo trên là phép đo suông. */
+  const hong = soAi.tachSoChuaKiem({ so_cccd: '001091027384' }, []);
+  dat(hong.thongTin.so_cccd === '001091027384',
+    'ĐỐI CHỨNG: bỏ chốt → số CCCD tự điền vào ô chính thức (phải lọt)');
+
+  /* Máy chủ phải TRẢ vị trí số ra ngoài, không thì giao diện lấy đâu mà bôi. */
+  const { kho, env } = d1SQLite();
+  nhetTaiLieu(kho, banGhiThuong);
+  const r = await doc(await tailieu.moTaiLieu(env, phienCua('ke_toan_truong'), 'tl_kt_9'));
+  const cum = (r.tai_lieu.so_ai || []).map(([i, d]) => String(r.tai_lieu.noi_dung).slice(i, i + d));
+  dat(cum.includes('0110938472') && r.tai_lieu.nhan_so_ai === 'AI đọc — CHƯA KIỂM',
+    'Mở tài liệu: máy chủ trả kèm vị trí từng cụm số + nhãn', `→ ${cum.join(' · ')}`);
+  const gd = readFileSync(path.join(GOC, 'public/assets/js/app.js'), 'utf8');
+  dat(/class="so-ai"/.test(gd) && /AI đọc — CHƯA KIỂM/.test(gd),
+    'Giao diện bôi con số bằng `.so-ai` và in đúng câu nhãn');
+}
+
+muc('⑧d4 ĐƯỜNG CCCD — chốt chống bịa + số CCCD luôn 12 chữ số (vá REV-0040 #2)');
+{
+  const nhansuMod = await import(pathToFileURL(path.join(GOC, 'src/nhansu.js')).href);
+  const phienHR = { vai_tro: 'hcns', nhan_su_id: 'ns_huong' };
+  const anhGia = Buffer.alloc(400, 7).toString('base64');
+
+  async function docThe(traLoi) {
+    const env = { AI: { async run() { return { response: traLoi }; } } };
+    return await doc(await nhansuMod.docCCCD(env, phienHR, { anh: anhGia }));
+  }
+
+  const THE_THAT = (so) => JSON.stringify({
+    ho_ten: 'PHẠM KHƯƠNG DUY', ngay_sinh: '1990-02-11', gioi_tinh: 'Nam',
+    so_cccd: so, que_quan: 'Hà Nội', noi_thuong_tru: 'Cầu Giấy, Hà Nội',
+    chu_tren_the: 'CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM — CĂN CƯỚC CÔNG DÂN'
+  });
+
+  /* ⚠️ CA HỒ LY ĐO ĐƯỢC, ca nguy nhất: HỌ TÊN ĐÚNG đứng cạnh số CCCD SAI 11
+     chữ số. Cái tên đúng làm người ta tin luôn con số. */
+  const mat1 = await docThe(THE_THAT('03691004271'));
+  dat(mat1.ok === true && !(mat1.so_chua_kiem || {}).so_cccd,
+    'Số CCCD 11 chữ số → CHẶN, không đi ra ô nào', `→ ${JSON.stringify(mat1.so_chua_kiem)}`);
+  dat(/11 chữ số/.test(String(mat1.loi_so_cccd)),
+    'Nói rõ vì sao bỏ, không im lặng', `→ "${String(mat1.loi_so_cccd).slice(0, 56)}…"`);
+  dat(mat1.thong_tin.ho_ten === 'PHẠM KHƯƠNG DUY',
+    'Họ tên (chữ mô tả) vẫn điền sẵn — không cắt quá tay');
+
+  const du12 = await docThe(THE_THAT('001091027384'));
+  dat(du12.so_chua_kiem.so_cccd.gia_tri === '001091027384' &&
+      du12.so_chua_kiem.so_cccd.nhan === 'AI đọc — CHƯA KIỂM',
+    'Số CCCD đủ 12 chữ số: qua, nhưng đeo nhãn và KHÔNG tự vào ô chính thức');
+  dat(!('so_cccd' in du12.thong_tin) && !('ngay_sinh' in du12.thong_tin),
+    'Khối điền sẵn KHÔNG có con số nào', `→ ${Object.keys(du12.thong_tin).join(', ')}`);
+
+  /* Khuôn CŨ bịa hẳn một tấm thẻ tưởng tượng. Không có dòng "CĂN CƯỚC CÔNG
+     DÂN" nào thì thứ trong ảnh không phải cái thẻ nó đang khai. */
+  const bia = await docThe(JSON.stringify({
+    ho_ten: 'NGUYỄN VĂN A', so_cccd: '1234567890123', ngay_sinh: '1980-01-01',
+    que_quan: '', noi_thuong_tru: '', chu_tren_the: 'Kế hoạch số 2345/KH-UBND tỉnh Quảng Ngãi'
+  }));
+  dat(bia.ok === false && !Object.keys(bia.thong_tin || {}).length,
+    'Thẻ BỊA (không có dòng "CĂN CƯỚC CÔNG DÂN") → vứt sạch, mời điền tay',
+    `→ "${String(bia.loi_ai).slice(0, 52)}…"`);
+
+  /* ĐỐI CHỨNG: bản BỎ chốt 12 chữ số → số sai phải LỌT ra ngoài. */
+  let ma = docNguon('src/nhansu.js')
+    .replace('const soDung = /^\\d{12}$/.test(soTho);', 'const soDung = !!soTho;   /* CỐ Ý BỎ CHỐT */')
+    .replace(/from '\.\/(tai-lieu|quyen|so-ai)\.js'/g,
+             (m, t) => `from '${pathToFileURL(path.join(GOC, 'src', t + '.js')).href}'`);
+  if (!ma.includes('CỐ Ý BỎ CHỐT')) {
+    dat(false, 'Tìm được chốt 12 chữ số để gỡ', '→ đã đổi mã, sửa lại bàn đo!');
+  } else {
+    const duong = path.join(TAM, 'nhansu-BO-CHOT.mjs');
+    writeFileSync(duong, ma);
+    const modHong = await import(pathToFileURL(duong).href + '?v=' + Date.now());
+    const env = { AI: { async run() { return { response: THE_THAT('03691004271') }; } } };
+    const r = await doc(await modHong.docCCCD(env, phienHR, { anh: anhGia }));
+    dat(r.so_chua_kiem.so_cccd && r.so_chua_kiem.so_cccd.gia_tri === '03691004271',
+      'ĐỐI CHỨNG: bỏ /^\\d{12}$/ → số 11 chữ số LỌT (phải lọt, sạch là PHÉP ĐO hỏng)',
+      `→ ${JSON.stringify(r.so_chua_kiem.so_cccd)}`);
+  }
+}
+
+muc('⑧d5 Ô TÌM KIẾM — dò được ruột giấy tờ nhạy cảm, 0 nhật ký (vá REV-0040 #4)');
+{
+  /* Hồ Ly: cột `tim_kiem` chứa NGUYÊN số CCCD và mức lương của nhóm nhạy cảm.
+     Đường danh sách quét `tim_kiem LIKE ?` và ghi 0 lượt nhật ký — gõ thẳng
+     một số CCCD vào ô tìm, thấy dòng hiện lên là đã XÁC NHẬN số đó nằm trong
+     hồ sơ nào. Đọc được ruột, không để lại vết. */
+  const chuoiNS = tailieu.chuoiTimKiem({
+    tieu_de: 'CCCD Nguyễn Thị Huyền', so_hieu: 'HS-09', loai: 'CCCD', nhom: 'nhan_su',
+    noi_dung: 'Số: 001301234567 — Ngày sinh 05/01/1995 — Lương thoả thuận 18.500.000đ'
+  });
+  dat(!/001301234567|18\.500\.000|1995/.test(chuoiNS),
+    'Nhóm NHẠY CẢM: số CCCD / lương KHÔNG vào cột `tim_kiem`', `→ "${chuoiNS}"`);
+  dat(/nguyen thi huyen/.test(chuoiNS) && /hs-09/.test(chuoiNS),
+    'Vẫn tra được bằng tiêu đề và số hiệu — không cắt quá tay');
+
+  const chuoiKT = tailieu.chuoiTimKiem({
+    tieu_de: 'Hoá đơn tháng 8', so_hieu: 'HD-0812', loai: 'Hoá đơn', nhom: 'ke_toan',
+    noi_dung: 'Mã số thuế 0110938472 — Tổng cộng 42.350.000 đồng'
+  });
+  dat(/0110938472/.test(chuoiKT),
+    'Nhóm THƯỜNG: nội dung vẫn vào ô tìm kiếm như cũ (hoá đơn phải tra được)');
+
+  /* ĐO THẬT QUA API. Hồ sơ thử dùng số hiệu HỒ SƠ (`HS-09`), không lấy số CCCD
+     làm số hiệu — `so_hieu` là thứ NGƯỜI TỰ GÕ để tra cứu, nó có mặt trong ô
+     tìm là đúng và cố ý. Cái phải chặn là RUỘT do AI bóc ra: mức lương, ngày
+     sinh, quê quán — những thứ không ai gõ vào mà vẫn dò được. */
+  const hoSo = (mod = tailieu) => ({
+    ...banGhiNhayCam, so_hieu: 'HS-09',
+    tim_kiem: mod.chuoiTimKiem({
+      tieu_de: banGhiNhayCam.tieu_de, so_hieu: 'HS-09', loai: banGhiNhayCam.loai,
+      nhom: 'nhan_su', noi_dung: banGhiNhayCam.noi_dung })
+  });
+  const { kho, env, so } = d1SQLite();
+  nhetTaiLieu(kho, hoSo(), banGhiThuong);
+
+  for (const [nhan, q] of [['số CCCD', '001301234567'], ['mức lương', '18.000.000'],
+                           ['ngày sinh', '05/01/1995'], ['quê quán', 'Yên Hoà']]) {
+    const rKT = await doc(await tailieu.danhSachTaiLieu(env, phienCua('ke_toan_truong'),
+      new URLSearchParams({ q })));
+    const rAd = await doc(await tailieu.danhSachTaiLieu(env, phienCua('admin'),
+      new URLSearchParams({ q })));
+    dat((rKT.ds || []).length === 0 && (rAd.ds || []).length === 0 &&
+        !/001301234567|18\.000\.000|Yên Hoà/.test(JSON.stringify(rKT) + JSON.stringify(rAd)),
+      `Gõ ${nhan.padEnd(9)} vào ô tìm: 0 dòng cho CẢ kế toán lẫn Admin`,
+      `→ ${(rKT.ds || []).length} / ${(rAd.ds || []).length} dòng`);
+  }
+  /* Muốn đọc ruột thì phải MỞ tài liệu — và mở là có nhật ký. Đó là toàn bộ ý
+     của bản vá: không bịt đường đọc, chỉ bắt nó đi qua chỗ có ghi vết. */
+  const rTen = await doc(await tailieu.danhSachTaiLieu(env, phienCua('admin'),
+    new URLSearchParams({ q: 'nguyen thi huyen' })));
+  dat((rTen.ds || []).length === 1, 'Vẫn tra được bằng TIÊU ĐỀ — không bịt đường tra cứu',
+    `→ ${(rTen.ds || []).length} dòng`);
+  dat(so.ghi === 0, 'Đường tìm kiếm vẫn 0 lượt ghi D1', `→ ${so.ghi}`);
+
+  /* ĐỐI CHỨNG: bỏ đúng chỗ cắt trong `chuoiTimKiem` → ruột chui vào cột tìm
+     kiếm và dò ra được ngay. */
+  const hong = await napBanVa('tim_kiem không cắt',
+    ['  const ruot = nhomTaiLieuNhayCam(nhom) ? null : noi_dung;', '  const ruot = noi_dung;']);
+  if (hong) {
+    const x = d1SQLite();
+    nhetTaiLieu(x.kho, hoSo(hong));
+    const r3 = await doc(await hong.danhSachTaiLieu(x.env, phienCua('admin'),
+      new URLSearchParams({ q: '18.000.000' })));
+    dat((r3.ds || []).length === 1,
+      'ĐỐI CHỨNG: bỏ chốt → gõ mức lương vào ô tìm là DÒ RA (phải ra 1 dòng)',
+      `→ ${(r3.ds || []).length} dòng`);
+  }
+}
+
+muc('⑧d6 SAO LƯU TỰ ĐỘNG — toàn văn CCCD/HĐLĐ ra CSV lên Drive (vá REV-0040 #5)');
+{
+  const saoLuu = await import(pathToFileURL(path.join(GOC, 'src/sao-luu.js')).href);
+  const cot = ['id', 'nhom', 'tieu_de', 'nhay_cam', 'noi_dung', 'tim_kiem'];
+
+  const dongNS = saoLuu.dongCsv(cot, saoLuu.cheDongNhayCam('tai_lieu', banGhiNhayCam));
+  dat(!/001301234567|18\.000\.000|05\/01\/1995/.test(dongNS),
+    'Dòng NHẠY CẢM ra CSV: 0 mảnh số CCCD / lương / ngày sinh',
+    `→ ${dongNS.trim().slice(0, 60)}…`);
+  dat(dongNS.includes('đã loại khỏi bản sao lưu'),
+    'GHI RÕ vì sao ô trống — không để trống lặng lẽ rồi ai đó đi quét lại');
+  dat(dongNS.includes('CCCD Nguyễn Thị Huyền'),
+    'Tiêu đề / nhóm VẪN còn — bản sao lưu vẫn biết tài liệu nào đã từng có');
+
+  const dongKT = saoLuu.dongCsv(cot, saoLuu.cheDongNhayCam('tai_lieu', banGhiThuong));
+  dat(/0110938472/.test(dongKT) && /42\.350\.000/.test(dongKT),
+    'Dòng THƯỜNG (hoá đơn): chữ đã bóc VẪN vào bản sao lưu — không cắt quá tay');
+
+  /* Bảng khác không được đụng tới — chốt này là phép biến đổi THEO DÒNG của
+     đúng một bảng, sao lưu vừa lên hôm nay, đừng làm hỏng nó. */
+  const nsGoc = { id: 'ns_1', ho_ten: 'Phạm Khương Duy', luong: 25000000 };
+  dat(saoLuu.cheDongNhayCam('nhan_su', nsGoc) === nsGoc,
+    'Bảng KHÁC đi qua nguyên vẹn (cùng một tham chiếu) — sao lưu không đổi hành vi');
+  dat(saoLuu.cheDongNhayCam('tai_lieu', banGhiThuong) === banGhiThuong,
+    'Dòng KHÔNG nhạy cảm cũng đi qua nguyên vẹn — 0 chi phí cho ca thường');
+
+  /* ĐỐI CHỨNG: bỏ luật che → toàn văn CCCD ra thẳng CSV, đúng như REV-0040 tả. */
+  const cheHong = { ...banGhiNhayCam };
+  dat(/001301234567/.test(saoLuu.dongCsv(cot, cheHong)),
+    'ĐỐI CHỨNG: không qua `cheDongNhayCam` → số CCCD ra thẳng CSV (phải lọt)');
+  dat(/cheDongNhayCam\(bang, r\)/.test(readFileSync(path.join(GOC, 'src/sao-luu.js'), 'utf8')),
+    'Chốt nằm ĐÚNG trên đường ra CSV (`motLo`), không phải một hàm không ai gọi');
+}
+
+muc('⑧d7 MÀN NHẬT KÝ + NÚT QUÉT — vá REV-0040 #6 #7 #8');
+{
+  const { kho, env } = d1SQLite();
+  nhetTaiLieu(kho, banGhiNhayCam);
+  /* 250 dòng nhật ký để vượt trần 200 — cắt là phải NÓI RA, và đây là màn ít
+     được phép cắt lặng nhất trong cả ERP. */
+  const cau = kho.prepare(`INSERT INTO tai_lieu_nhat_ky
+    (khoa, tai_lieu_id, nhan_su_id, ngay, hanh_dong, so_lan, luc) VALUES (?,?,?,?,?,1,?)`);
+  for (let i = 0; i < 250; i++) {
+    const ng = new Date(Date.UTC(2026, 0, 1) + i * 86400000).toISOString().slice(0, 10);
+    cau.run(`tl_ns_9|ns_${i}|${ng}|mo`, 'tl_ns_9', `ns_${i}`, ng, 'mo', `${ng} 09:00:00`);
+  }
+  const r = await doc(await tailieu.nhatKyTaiLieu(env, phienCua('admin'), 'tl_ns_9'));
+  dat(r.ds.length === 200 && r.bi_cat === true,
+    'Nhật ký 250 dòng, trần 200 → NÓI RA là đã cắt', `→ ${r.ds.length} dòng, bi_cat=${r.bi_cat}`);
+  dat(r.cat && r.cat.tong === 250,
+    'Và nói ĐÚNG tổng thật, không chỉ "còn nữa"', `→ tổng ${r.cat && r.cat.tong}`);
+
+  const it = d1SQLite(); nhetTaiLieu(it.kho, banGhiNhayCam);
+  const r2 = await doc(await tailieu.nhatKyTaiLieu(it.env, phienCua('admin'), 'tl_ns_9'));
+  dat(r2.bi_cat === false && r2.cat === null, 'Chưa chạm trần → KHÔNG báo cắt oan, 0 câu đếm');
+
+  const r3 = await tailieu.nhatKyTaiLieu(it.env, phienCua('hcns'), 'tl_ns_9');
+  dat(r3.status === 403, 'Nhật ký chỉ Admin — HCNS gọi thẳng API vẫn 403', `→ HTTP ${r3.status}`);
+
+  /* Nhật ký ghi mà KHÔNG MÀN NÀO đọc được thì chỉ là ghi cho có. */
+  const gd = readFileSync(path.join(GOC, 'public/assets/js/app.js'), 'utf8');
+  dat(/API\.tlNhatKy\(/.test(gd), 'Có màn hình THẬT gọi `API.tlNhatKy` (trước đây không ai gọi)');
+  dat(/data-nk=/.test(gd) && /laAdminTL/.test(gd),
+    'Nút nhật ký chỉ bày cho Admin, và chỉ ở giấy tờ nhạy cảm');
+
+  /* Nút "Quét tài liệu" — 3 vai trò không lưu được nhóm nào. */
+  dat(/nutQuet\.hidden = !nhomLuuDuoc\.length/.test(gd),
+    'Nút "Quét tài liệu" ẩn khi không lưu được nhóm nào');
+  const html = readFileSync(path.join(GOC, 'public/app.html'), 'utf8');
+  dat(/id="tl-nut-quet"[^>]*\shidden/.test(html),
+    'Và ẩn SẴN trong HTML — không nháy một cú hứa suông rồi mới ẩn');
+  for (const vt of ['nhan_vien_kho', 'cskh', 'nguoi_dung']) {
+    dat(quyen.nhomTaiLieuLuuDuoc(vt).length === 0 && quyen.nhomTaiLieuXemDuoc(vt).length > 0,
+      `${vt.padEnd(14)} xem được nhưng KHÔNG lưu được → nút phải ẩn`);
+  }
 }
 
 muc('⑧e HAI FILE LUẬT phải NẰM TRONG REPO — trích dẫn mà không có thì lần sau mất');
@@ -783,7 +1104,7 @@ muc('⑧f MÔ HÌNH ĐỌC ẢNH — một chỗ khai, hai đường dùng');
     'Không chỗ gọi AI nào chép tay chuỗi mô hình', `→ ${goiAI.join(', ')}`);
   dat(!/llama-3\.2-11b-vision/.test(tailieu.MO_HINH_DOC_ANH),
     'Mô hình đang dùng KHÔNG phải mô hình đòi ký thoả thuận Meta');
-  dat(/import \{ MO_HINH_DOC_ANH, khuonDocAnh \} from '\.\/tai-lieu\.js'/.test(nhansu) &&
+  dat(/import \{ MO_HINH_DOC_ANH, khuonDocAnh(, chuCoThatKhong)? \} from '\.\/tai-lieu\.js'/.test(nhansu) &&
       /env\.AI\.run\(MO_HINH_DOC_ANH,/.test(nhansu),
     'src/nhansu.js dùng CHUNG hằng số với kho tài liệu (không chép tay)',
     `→ ${tailieu.MO_HINH_DOC_ANH}`);

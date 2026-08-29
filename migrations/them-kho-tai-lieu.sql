@@ -116,3 +116,27 @@ CREATE TABLE IF NOT EXISTS tai_lieu_nhat_ky (
 );
 
 CREATE INDEX IF NOT EXISTS idx_tai_lieu_nhat_ky_tl ON tai_lieu_nhat_ky (tai_lieu_id, ngay DESC);
+
+-- ==========================================================================
+-- VÁ REV-0040 · LỖI #4 — DỌN RUỘT GIẤY TỜ NHẠY CẢM RA KHỎI Ô TÌM KIẾM
+-- --------------------------------------------------------------------------
+-- `chuoiTimKiem()` nay KHÔNG đưa `noi_dung` của nhóm nhạy cảm vào cột
+-- `tim_kiem` nữa: cột đó chứa nguyên số CCCD và mức lương, mà đường tìm kiếm
+-- quét `tim_kiem LIKE ?` và GHI 0 LƯỢT NHẬT KÝ — gõ mò một số CCCD, thấy dòng
+-- hiện lên là đã xác nhận số đó nằm trong hồ sơ nào, đọc được ruột mà không để
+-- lại vết. Đúng thứ Luật BVDLCN 91/2025/QH15 bắt phải ghi lại.
+--
+-- Nhưng bản vá ở mã nguồn chỉ tác động lúc LƯU. Dòng nào đã lưu TRƯỚC bản vá
+-- vẫn còn nguyên ruột trong ô tìm — một bản vá chỉ chặn dòng mới mà bỏ mặc
+-- dòng cũ thì lỗ vẫn còn nguyên, chỉ là ngừng lớn thêm.
+--
+-- Dựng lại `tim_kiem` từ đúng ba mảnh được phép tra: tiêu đề · số hiệu · loại.
+-- SQLite không có hàm bỏ dấu, nên dòng CŨ chỉ tra được đúng chữ đã lưu cho tới
+-- lượt quét lại — chấp nhận: thà tra khó còn hơn để dò ra số CCCD.
+-- Câu này chạy lại bao nhiêu lần cũng cho cùng kết quả.
+UPDATE tai_lieu
+   SET tim_kiem = LOWER(TRIM(
+         COALESCE(tieu_de, '') || ' ' ||
+         COALESCE(so_hieu, '') || ' ' ||
+         COALESCE(loai, '')))
+ WHERE nhay_cam = 1;

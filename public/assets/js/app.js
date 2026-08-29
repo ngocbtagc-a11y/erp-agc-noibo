@@ -8632,15 +8632,26 @@ if (TOI.quyen.includes('quantri')) {
 async function khoiDongKhoTaiLieu() {
   const oDanhSach = $('#tl-danh-sach');
   const oTrong = $('#tl-trong');
-  const oCat = $('#tl-cat');
   const oTim = $('#tl-tim');
   const oSapHet = $('#tl-sap-het');
   const oNhomLoc = $('#tl-nhom-loc');
   if (!oDanhSach) return;
 
+  const nutQuet = $('#tl-nut-quet');
   let dsNhom = [];            // nhóm XEM được
   let nhomLuuDuoc = [];       // nhóm LƯU được (tập con)
   let nhomDangLoc = '';
+  const laAdminTL = TOI.vai_tro === 'admin';
+
+  /* ⚠️ VÁ REV-0040 · LỖI #8 — ĐỪNG HỨA SUÔNG.
+     Ba vai trò (nhân viên kho · CSKH · người dùng) XEM được nhóm "Quản trị nội
+     bộ" nhưng KHÔNG lưu được nhóm nào. Bản trước vẫn bày nút "📷 Quét tài liệu
+     mới" cho họ: bấm vào là mở màn quét rỗng, không nhóm nào chọn được. Máy
+     chủ đã chặn đúng (`duocLuuNhomTaiLieu`) nên không mất dữ liệu — nhưng hứa
+     một việc rồi không cho làm là lỗi với người dùng.
+     BA CHỖ: ẩn sẵn lúc khởi động, hiện lại sau mỗi lần nạp, và cả khi nạp hỏng. */
+  function veNutQuet() { if (nutQuet) nutQuet.hidden = !nhomLuuDuoc.length; }
+  veNutQuet();
 
   const tenNhom = (ma) => (dsNhom.find(n => n.ma === ma) || {}).ten || ma;
 
@@ -8697,9 +8708,40 @@ async function khoiDongKhoTaiLieu() {
         <div class="tl-the-nut">
           <a class="tl-nut-mo" href="/api/tai-lieu/tep?id=${encodeURIComponent(t.id)}" target="_blank" rel="noopener">Mở bản quét</a>
           <button type="button" class="tl-nut-mo tl-nut-chu" data-xem="${t.id}">Xem chữ đã bóc</button>
+          ${/* ⚠️ VÁ REV-0040 · LỖI #7 — NHẬT KÝ GHI MÀ KHÔNG AI XEM ĐƯỢC.
+                `API.tlNhatKy` có sẵn từ đợt trước nhưng KHÔNG chỗ nào gọi. Nhật
+                ký tồn tại để trả lời "ai đã tiếp cận dữ liệu cá nhân này, ngày
+                nào" (Luật BVDLCN 91/2025/QH15) — ghi đủ mà không mở ra xem được
+                thì chưa chứng minh được gì, chỉ là ghi cho có.
+                CHỈ ADMIN: máy chủ đã chặn 403, đây chỉ là không bày nút vô ích.
+                Chỉ hiện ở giấy tờ NHẠY CẢM vì chỉ nhóm đó mới có nhật ký. */''}
+          ${laAdminTL && t.nhay_cam
+            ? `<button type="button" class="tl-nut-mo tl-nut-nk" data-nk="${t.id}">Nhật ký truy cập</button>` : ''}
         </div>
         <div class="tl-chu" id="tl-chu-${t.id}" hidden></div>
+        <div class="tl-chu tl-nk" id="tl-nk-${t.id}" hidden></div>
       </article>`;
+  }
+
+  /* ⚠️ VÁ REV-0040 · LỖI #3 — CON SỐ AI ĐỌC PHẢI HIỆN KHÁC HẲN.
+     Hồ Ly đo được một dải mà mô hình GIỮ ĐÚNG danh tính tờ giấy nhưng thay
+     lặng lẽ vài con số: MST `0110938472` → `0110934872`, bên mua bịa tên khác,
+     không một lời cảnh báo. Mỏ neo không cứu được dải này — danh tính đúng,
+     chỉ số sai. Nên mọi con số phải TỰ NÓI nó chưa được kiểm.
+     Vị trí cụm số do MÁY CHỦ tính (`so_ai`, src/so-ai.js) — trình duyệt không
+     giữ bản dò số thứ hai, vì hai bản chép tay của cùng một định nghĩa chính
+     là cách đường đọc CCCD chết âm thầm 11 ngày. */
+  function veChuCoSo(chu, viTri) {
+    const s = String(chu || '');
+    if (!Array.isArray(viTri) || !viTri.length) return esc(s);
+    let ra = '', xong = 0;
+    for (const [i, dai] of viTri) {
+      if (!Number.isFinite(i) || !Number.isFinite(dai) || i < xong) continue;
+      ra += esc(s.slice(xong, i));
+      ra += `<mark class="so-ai" title="AI đọc — CHƯA KIỂM">${esc(s.slice(i, i + dai))}</mark>`;
+      xong = i + dai;
+    }
+    return ra + esc(s.slice(xong));
   }
 
   async function nap() {
@@ -8712,14 +8754,18 @@ async function khoiDongKhoTaiLieu() {
       if (kq.nhom && kq.nhom.length !== dsNhom.length) { dsNhom = kq.nhom; veLoc(); }
       else if (!dsNhom.length) { dsNhom = kq.nhom || []; veLoc(); }
       nhomLuuDuoc = kq.nhom_luu_duoc || [];
+      veNutQuet();
 
       const ds = kq.ds || [];
       oDanhSach.innerHTML = ds.map(veMot).join('');
       oTrong.hidden = ds.length > 0;
-      /* Bị cắt thì nói ra bằng lời, kèm cách thu hẹp — không im lặng cắt. */
-      oCat.hidden = !kq.bi_cat;
-      if (kq.bi_cat) oCat.textContent =
-        `Đang hiện ${kq.tran} tài liệu mới nhất. Gõ vào ô tìm hoặc chọn một nhóm để thu hẹp lại.`;
+      /* Bị cắt thì nói ra bằng lời, kèm cách thu hẹp — không im lặng cắt. Dùng
+         CHUNG `veDaiCat` như mọi màn khác: bản tự viết cũ ở đây in "đang hiện
+         50" mà không có tổng thật, tức là vẫn giấu mất con số người ta cần. */
+      veDaiCat('#tl-cat', kq.cat, {
+        don_vi: 'tài liệu',
+        goi_y: 'Gõ vào ô tìm hoặc chọn một nhóm để thu hẹp lại.'
+      });
 
       oDanhSach.querySelectorAll('[data-xem]').forEach(b => b.addEventListener('click', async () => {
         const o = document.getElementById('tl-chu-' + b.dataset.xem);
@@ -8728,19 +8774,62 @@ async function khoiDongKhoTaiLieu() {
         o.textContent = 'Đang mở…'; o.hidden = false;
         try {
           const r = await API.tlMo(b.dataset.xem);
-          o.textContent = r.tai_lieu.noi_dung ||
-            ('Chưa bóc được chữ từ tài liệu này' +
-             (r.tai_lieu.ocr_ghi_chu ? ' — ' + r.tai_lieu.ocr_ghi_chu : '') + '.');
+          const tl = r.tai_lieu || {};
+          if (!tl.noi_dung) {
+            o.textContent = 'Chưa bóc được chữ từ tài liệu này' +
+              (tl.ocr_ghi_chu ? ' — ' + tl.ocr_ghi_chu : '') + '.';
+            return;
+          }
+          /* Câu nhắc đứng TRƯỚC đoạn chữ, không phải chú thích cuối trang:
+             người đọc phải biết đây là chữ máy đọc TRƯỚC khi đọc con số. */
+          o.innerHTML =
+            '<p class="tl-so-ai-nhac">⚠️ <b>AI đọc — CHƯA KIỂM.</b> Con số được bôi ' +
+            'là do AI đọc từ ảnh. AI có thể đọc đúng tờ giấy mà vẫn chép sai vài ' +
+            'chữ số — đối chiếu bản giấy trước khi dùng bất kỳ con số nào vào giấy ' +
+            'tờ, tờ khai hay hồ sơ.</p>' +
+            `<pre class="tl-chu-van">${veChuCoSo(tl.noi_dung, tl.so_ai)}</pre>` +
+            (tl.ocr_ghi_chu ? `<p class="tl-so-ai-nhac">${esc(tl.ocr_ghi_chu)}</p>` : '');
+        } catch (e) { o.textContent = e.message; }
+      }));
+
+      /* Nhật ký truy cập — chỉ Admin, chỉ giấy tờ nhạy cảm (vá REV-0040 #7). */
+      oDanhSach.querySelectorAll('[data-nk]').forEach(b => b.addEventListener('click', async () => {
+        const o = document.getElementById('tl-nk-' + b.dataset.nk);
+        if (!o) return;
+        if (!o.hidden) { o.hidden = true; return; }
+        o.textContent = 'Đang mở…'; o.hidden = false;
+        try {
+          const r = await API.tlNhatKy(b.dataset.nk);
+          const d = r.ds || [];
+          if (!d.length) { o.textContent = 'Chưa ai mở tài liệu này.'; return; }
+          /* Nhãn nói ĐÚNG cái nhật ký đang đo: mốc NGÀY, giờ là lượt mở ĐẦU
+             TIÊN trong ngày. Ghi "lúc 9:05" trơn là để người ta hiểu nhầm đó là
+             lượt mở gần nhất (xem ghiNhatKy() trong src/tai-lieu.js). */
+          o.innerHTML =
+            '<p class="tl-so-ai-nhac">Nhật ký gộp theo NGÀY: mỗi người mỗi ngày một ' +
+            'dòng, giờ ghi là lượt mở <b>đầu tiên</b> trong ngày — không phải số lượt.</p>' +
+            '<ul class="tl-nk-ds">' + d.map(k =>
+              `<li><b>${esc(k.ho_ten || k.nhan_su_id || '—')}</b> — ` +
+              `${k.hanh_dong === 'tai' ? 'tải file' : 'mở xem'} ngày ` +
+              `${esc(String(k.ngay || '').split('-').reverse().join('/'))}` +
+              `${k.lan_dau_luc ? ', lần đầu lúc ' + esc(String(k.lan_dau_luc).slice(11, 16)) : ''}</li>`
+            ).join('') + '</ul>' +
+            (r.bi_cat
+              ? `<p class="tl-so-ai-nhac">✂️ Đã tải ${r.tran}` +
+                `${r.cat && Number.isFinite(r.cat.tong) ? ' trong tổng ' + r.cat.tong : ''} ` +
+                'dòng — nhật ký này <b>đã bị cắt bớt</b>. Cần bản đầy đủ thì lấy từ ' +
+                'bản sao lưu tháng.</p>'
+              : '');
         } catch (e) { o.textContent = e.message; }
       }));
     } catch (e) {
       oDanhSach.innerHTML = '';
       oTrong.hidden = false;
       oTrong.textContent = 'Không tải được kho tài liệu: ' + e.message;
+      nhomLuuDuoc = []; veNutQuet();
     }
   }
 
-  const nutQuet = $('#tl-nut-quet');
   if (nutQuet) nutQuet.addEventListener('click', () => {
     moQuetTaiLieu({
       cuaVao: 'kho_chung',
@@ -8748,8 +8837,11 @@ async function khoiDongKhoTaiLieu() {
       khiXong: (kq) => {
         nap();
         const chu = kq.ocr_so_trang
-          ? `Đã lưu ${kq.so_trang} trang, bóc chữ được ${kq.ocr_so_trang} trang.`
-          : `Đã lưu ${kq.so_trang} trang. Chưa bóc được chữ — vẫn tra được bằng tên.`;
+          ? `Đã lưu ${kq.so_trang} trang, bóc chữ được ${kq.ocr_so_trang} trang.` +
+            '\n\n⚠️ AI đọc — CHƯA KIỂM: mọi con số trong phần chữ đã bóc là do AI ' +
+            'đọc từ ảnh, có thể sai vài chữ số. Đối chiếu bản giấy trước khi dùng.'
+          : `Đã lưu ${kq.so_trang} trang. Chưa bóc được chữ — vẫn tra được bằng tên.` +
+            (kq.ocr_ghi_chu ? '\n\n' + kq.ocr_ghi_chu : '');
         alert(chu + '\n\n⚠️ Đây là bản dự phòng. ĐỪNG huỷ bản giấy gốc.');
       }
     });

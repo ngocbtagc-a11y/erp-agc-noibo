@@ -2285,7 +2285,10 @@
       </div>
 
       <div class="tl-thanh">
-        <button type="button" class="btn-primary tl-nut-quet" id="tl-nut-quet">📷 Quét tài liệu mới</button>
+        <!-- Ẩn SẴN: chỉ hiện lại khi máy chủ xác nhận người này lưu được ít
+             nhất một nhóm (`nhom_luu_duoc`). Bày nút rồi mới ẩn là một cú nháy
+             hứa suông. Vá REV-0040 #8. -->
+        <button type="button" class="btn-primary tl-nut-quet" id="tl-nut-quet" hidden>📷 Quét tài liệu mới</button>
         <input type="search" id="tl-tim" class="tl-tim" placeholder="Tìm: gõ có dấu hay không dấu đều được">
         <label class="tl-loc-han"><input type="checkbox" id="tl-sap-het"> Chỉ giấy sắp hết hạn</label>
       </div>

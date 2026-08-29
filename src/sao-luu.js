@@ -173,6 +173,46 @@ export const COT_KHONG_SAO_LUU = {
     chưa ai nghĩ tới. Thà thiếu một cột còn hơn phát tán một khoá. */
 const MAU_TEN_COT_NGUY = /(access_token|refresh_token|_secret$|^secret|partner_key|app_secret|api_key)/i;
 
+/* ==========================================================================
+   ⚠️ VÁ REV-0040 · LỖI #5 — DỮ LIỆU CÁ NHÂN ĐI RA DRIVE MỖI THÁNG, 0 NHẬT KÝ
+   ---------------------------------------------------------------------------
+   `danhSachBang()` liệt kê bảng ĐỘNG bằng `sqlite_master` rồi trừ một danh
+   sách loại trừ. Bảng `tai_lieu` (CTL-0026, mới hôm nay) không nằm trong danh
+   sách đó, và `noi_dung`/`tim_kiem` không khớp `MAU_TEN_COT_NGUY`. Nghĩa là
+   **toàn văn chữ đã bóc từ CCCD và hợp đồng lao động được gói ra CSV đưa lên
+   Drive hằng tháng, không một dòng nhật ký nào**. Chú thích ngay trong file
+   này đã tiên liệu "bảng mới sẽ còn thêm (tai_lieu…)" — nó thêm thật, và mang
+   theo dữ liệu cá nhân.
+
+   VÌ SAO KHÔNG BỎ CẢ CỘT (`COT_KHONG_SAO_LUU`): bỏ cột là bỏ luôn chữ đã bóc
+   của hoá đơn, tờ khai, giấy ATTP — những thứ hoàn toàn nên có trong bản sao
+   lưu. Cái phải loại là mấy DÒNG nhạy cảm, không phải cả cột.
+
+   VÌ SAO KHÔNG ĐỂ TRỐNG LẶNG LẼ: người phục hồi mở CSV thấy ô rỗng sẽ tưởng
+   tài liệu chưa bóc được chữ rồi đi quét lại. Ghi thẳng câu vì sao — cùng một
+   luật với "danh sách bị cắt thì phải nói là đã cắt".
+
+   ⚠️ ĐỪNG LÀM HỎNG SAO LƯU (nó vừa lên hôm nay): đây là một phép biến đổi
+   THEO DÒNG, không đụng danh sách bảng, không đụng danh sách cột, không đụng
+   cách đếm byte — canary vẫn đếm trên đúng chuỗi đã ghi ra.
+   ========================================================================== */
+export const O_DA_CHE = '[đã loại khỏi bản sao lưu — dữ liệu cá nhân, Luật BVDLCN 91/2025/QH15]';
+
+/** Bảng nào có dòng nhạy cảm, nhận ra bằng đâu, và che cột nào. */
+export const CHE_DONG_NHAY_CAM = {
+  tai_lieu: { co: (r) => Number(r.nhay_cam) === 1, cot: ['noi_dung', 'tim_kiem'] }
+};
+
+/** Bản ghi ĐÃ CHE nếu dòng này nhạy cảm, còn không thì trả nguyên bản.
+    Không sửa tại chỗ: `results` còn được đọc `__rid` sau đó. */
+export function cheDongNhayCam(bang, banGhi) {
+  const luat = CHE_DONG_NHAY_CAM[bang];
+  if (!luat || !luat.co(banGhi)) return banGhi;
+  const ra = { ...banGhi };
+  for (const c of luat.cot) if (c in ra && ra[c] !== null && ra[c] !== '') ra[c] = O_DA_CHE;
+  return ra;
+}
+
 /** Cột hay bị Excel ăn mất số 0 đứng đầu → bọc ="0...". */
 export const COT_BOC_CHUOI = new Set([
   'sdt', 'so_dien_thoai', 'dien_thoai', 'ma_nv', 'ma_sku', 'ma_ts',
@@ -1152,7 +1192,9 @@ async function motLo(env, p, bao) {
   ).bind(p.rid_cuoi, DONG_MOI_LO).all();
 
   let van = '';
-  for (const r of results) van += dongCsv(cot, r);
+  /* Che dòng nhạy cảm NGAY TRƯỚC khi thành chữ — xem `cheDongNhayCam()`. Đặt
+     đúng ở đây để không có đường vòng nào ra CSV mà không đi qua chốt này. */
+  for (const r of results) van += dongCsv(cot, cheDongNhayCam(bang, r));
   if (results.length) p.rid_cuoi = results[results.length - 1].__rid;
   p.muc_so_dong += results.length;
   themNoiDung(p, van);
