@@ -55,7 +55,7 @@ trong `quyen.js`), Approval Core, Process/Workflow Core tổng quát.
 | SKU mapping | Vận hành sàn | phần trong `shopee.js`/`tiktok.js` | Nằm trong `/api/shopee/*`, `/api/tiktok/*` | `sku_map` | PRODUCTION | — | Đúng pattern channel-mapping, không phải silo |
 | MISA eShop | UNDECIDED | — | — | — | **UNDECIDED** | UNDECIDED | Chưa kết nối, chưa xác định Source of Truth — xem [SOURCE-OF-TRUTH.md](./SOURCE-OF-TRUTH.md) |
 | MISA AMIS | UNDECIDED | — | — | — | **UNDECIDED** | UNDECIDED | Chưa kết nối |
-| Cloudflare Workers AI (OCR CCCD) | ERP Owner | `src/nhansu.js` | Nằm trong `/api/nhan-su/*` | — | EXPERIMENTAL (đang hoàn thiện, tạm ẩn UI) | AI → ERP (đọc, không tự lưu) | `@cf/meta/llama-3.2-vision` |
+| Cloudflare Workers AI (OCR CCCD) | ERP Owner | `src/nhansu.js` | Nằm trong `/api/nhan-su/*` | — | EXPERIMENTAL (đang hoàn thiện, tạm ẩn UI) | AI → ERP (đọc, không tự lưu) | `@cf/meta/llama-4-scout-17b-16e` (khai ở `src/tai-lieu.js`, dùng chung) |
 
 ---
 

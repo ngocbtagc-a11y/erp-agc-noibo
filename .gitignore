@@ -45,3 +45,6 @@ erp-agc-noibo/
 # bản src cũ dựng ra để lấy số ĐO TRƯỚC. Bàn đo tự tạo, tự xoá.
 .dc-*/
 .src-cu/
+
+# Thư mục tạm của bàn đo (scripts/do-kho-tai-lieu.mjs) — sinh ra rồi bỏ
+.do-tam/

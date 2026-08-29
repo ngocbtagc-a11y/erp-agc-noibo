@@ -100,11 +100,23 @@ function napSW(maSW, { navigator: nv, tabs = [], traLoi = { ok: true, so_luong: 
   return { ...r, nhatKyFetch, tb, self_ };
 }
 
+/* ĐỌC MÃ NGUỒN LUÔN QUY VỀ `\n` — 29/08/2026, lượt gộp `main` vào
+   feature/ctl-0026-kho-tai-lieu.
+   Máy này để `core.autocrlf=true`, nên MỌI tệp git lấy ra đều mang `\r\n`.
+   Ca đối chứng ② tìm bằng `/\n  \}\n/` — trên `\r\n` thì KHÔNG KHỚP, phép gỡ
+   không gỡ được gì, và bàn đo tự khai TRƯỢT 1. Đã chứng minh: nội dung tệp
+   trên ổ đĩa giống HỆT blob `origin/main` sau khi bỏ `\r` — sai lệch DUY
+   NHẤT là ký tự xuống dòng, không phải mã.
+   Đây là lỗi của PHÉP ĐO, không phải của mã: bất kỳ ai `git clone` trên
+   Windows cũng gặp. Quy về `\n` ngay tại chỗ đọc để mọi regex phía sau chỉ
+   phải biết một dạng xuống dòng. */
+const docMa = (p) => readFileSync(p, 'utf8').replace(/\r\n/g, '\n');
+
 async function chay() {
   const M = await nap(NGUON);
-  const maSW = readFileSync(SW, 'utf8');
-  const maApp = readFileSync(APP_JS, 'utf8');
-  const html = readFileSync(APP_HTML, 'utf8');
+  const maSW = docMa(SW);
+  const maApp = docMa(APP_JS);
+  const html = docMa(APP_HTML);
 
   /* ==== A · CON SỐ — số trên biểu tượng KHỚP số đỏ trong ERP ============== */
   console.log('\nA · CON SỐ TRÊN BIỂU TƯỢNG KHỚP SỐ ĐỎ TRONG ERP');
@@ -291,7 +303,7 @@ async function chay() {
 
 /* ---- Ba bản gỡ cơ học của `so-do-bieu-tuong.js` -------------------------- */
 async function doiChungModule(M) {
-  const goc = readFileSync(NGUON, 'utf8');
+  const goc = docMa(NGUON);      /* quy về `\n` — xem chú thích ở `docMa` */
 
   const BAN = [
     {

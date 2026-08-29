@@ -247,7 +247,14 @@ const LA_CHUOI = [
   // dấu vết đứng TRƯỚC: (x || '').slice(0,10) · String(x).slice(0,…) · .trim().slice(…)
   // VÁ 29/08/2026: thêm randomUUID()/res.text()/JSON.stringify() (sinh mã id,
   // cắt đuôi thông báo lỗi) và nhận cả `.slice(-2)` (lấy 2 từ cuối của HỌ TÊN).
-  /(\|\|\s*''\s*\)|String\s*\([^)]*\)|JSON\.stringify\([^)]*\)|toISOString\(\)|randomUUID\(\)|\.text\(\)|\.trim\(\)|\.split\([^)]*\)|\.value|\.textContent|\.toFixed\([^)]*\))(?:\s*\))*\s*\.slice\(\s*-?\s*[0-9A-Za-z_$]/,
+  // VÁ 29/08/2026 (REV-0040 — BÁO OAN): `String(…)` phải nuốt được MỘT tầng
+  // ngoặc lồng. Ca thật `public/assets/js/quet-tai-lieu.js:144`:
+  //   (crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random())).slice(0, 40)
+  // `[^)]*` dừng ngay ở `Date.now()` nên cả dòng trượt lưới "đây là CHUỖI" rồi
+  // bị tố là cắt danh sách. Sinh một mã gửi 40 ký tự thì không cắt của ai cái
+  // gì. Báo oan là cách nhanh nhất để người ta tắt máy quét đi — nguy hiểm
+  // ngang với để lọt.
+  /(\|\|\s*''\s*\)|String\s*\((?:[^()]|\([^()]*\))*\)|JSON\.stringify\([^)]*\)|toISOString\(\)|randomUUID\(\)|\.text\(\)|\.trim\(\)|\.split\([^)]*\)|\.value|\.textContent|\.toFixed\([^)]*\))(?:\s*\))*\s*\.slice\(\s*-?\s*[0-9A-Za-z_$]/,
   // dấu vết đứng SAU: s.slice(0, 10).split('-') — chỉ chuỗi mới làm tiếp được
   // mấy việc này. Bắt được lỗi thật ở app.js:534 ngay vòng quét đầu.
   /\.slice\(\s*0\s*,\s*[A-Za-z0-9_$.]+\s*\)\s*\.(split|replace|padStart|padEnd|toUpperCase|toLowerCase|trim|charAt|includes)\s*\(/,
@@ -437,6 +444,25 @@ function veHet(ds) {
   o.innerHTML = h;
 }
 function xoaHet(ds) { ds.length = 0; }
+`,
+  /* REV-0040 — ca BÁO OAN thật ở quet-tai-lieu.js:144. Sinh một mã gửi, cắt
+     CHUỖI 40 ký tự. Lưới cũ tố nó vì `String\\([^)]*\\)` không nuốt nổi
+     `Date.now()`. Giữ nguyên văn để lần sau ai siết lưới còn đo lại được. */
+  'ban/sach-uuid-ngoac-long.js': `
+function moiBo() {
+  return {
+    maGui: (crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random())).slice(0, 40),
+    trang: []
+  };
+}
+`,
+  /* Bẫy đi kèm: ngoặc lồng KHÔNG được thành cửa sau. Đây là cắt DANH SÁCH
+     thật, chỉ khác là trên dòng có một `String(...)` chứa ngoặc lồng. Lưới
+     rộng ra mà bắt trượt dòng này thì bản vá trên là mở một lỗ mới. */
+  'ban/ban-ngoac-long-van-cat.js': `
+function veTop(ds) {
+  o.innerHTML = String(new Date().getFullYear() + ' — top') + ds.slice(0, 5).map(x => x.ten).join(', ');
+}
 `
 };
 const docMau = (t) => MAU[t];
@@ -491,7 +517,13 @@ function tuKiem() {
   if (sachChuoi.length !== 0) chet('cắt CHUỖI bằng ĐỊNH DANH (`.slice(0, MA_DAI)` trên mã đơn) bị bắt oan');
   if (sachVong.length !== 0)  chet('vòng lặp chạy HẾT `i < ds.length` và `ds.length = 0` bị bắt oan');
 
-  console.log('  ✅ Ca đối chứng: 12/12 mẫu bẩn BỊ BẮT · 7/7 mẫu sạch KHÔNG bị bắt oan — máy quét có hiệu lực.');
+  /* REV-0040 — vá BÁO OAN, kèm bẫy để bản vá không thành cửa sau. */
+  const sachUuid = quetGiaoDien(['ban/sach-uuid-ngoac-long.js'], docMau);
+  const banLong  = quetGiaoDien(['ban/ban-ngoac-long-van-cat.js'], docMau);
+  if (sachUuid.length !== 0) chet('sinh mã gửi `(… : String(Date.now() + Math.random())).slice(0, 40)` bị bắt oan — đúng ca REV-0040');
+  if (banLong.length !== 1)  chet('nới `String(…)` cho ngoặc lồng đã mở CỬA SAU: dòng có String(…) mà cắt danh sách thật KHÔNG bị bắt');
+
+  console.log('  ✅ Ca đối chứng: 13/13 mẫu bẩn BỊ BẮT · 8/8 mẫu sạch KHÔNG bị bắt oan — máy quét có hiệu lực.');
 }
 
 /* ==========================================================================
