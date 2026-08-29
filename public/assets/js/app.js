@@ -13,6 +13,10 @@
 import { API } from './api.js';
 import { tinhTrangThaiTB, veGiaoDienTB, hoanDuoc } from './tbd-trangthai.js';
 import { nenChayVongLap, nenDongDau } from './nhip-tim-chat.js';
+/* Nén ảnh dùng chung — CTL-0011 gộp 3 hàm về 1, CTL-0026 dời sang file riêng
+   để module Kho tài liệu dùng lại được. KHÔNG có hàm nén thứ hai trong ERP. */
+import { nenAnhChung, coByteCuaDataUrl } from './anh-chung.js';
+import { moQuetTaiLieu } from './quet-tai-lieu.js';
 
 /* ---- Danh mục tab -------------------------------------------------------
    "nhom" = nhóm cha hiện trên sidebar, bám theo 4 phòng ban thật của công ty
@@ -30,6 +34,7 @@ const TAB = [
   { id: 'ketoan',    ten: 'Kế toán',    nhom: 'Support', icon: 'M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6' },
   { id: 'taisan',    ten: 'Tài sản',    nhom: 'Support', icon: 'M20 7h-3V6a3 3 0 00-3-3h-4a3 3 0 00-3 3v1H4a1 1 0 00-1 1v11a2 2 0 002 2h14a2 2 0 002-2V8a1 1 0 00-1-1zM9 6a1 1 0 011-1h4a1 1 0 011 1v1H9V6z' },
   { id: 'xepca',     ten: 'Xếp ca',     nhom: 'Support', icon: 'M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V6a2 2 0 012-2z' },
+  { id: 'khotailieu', ten: 'Kho tài liệu', nhom: 'Quản trị doanh nghiệp', icon: 'M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8zM14 2v6h6M16 13H8M16 17H8M10 9H8' },
   { id: 'quantri',   ten: 'Quản trị',   nhom: 'Quản trị doanh nghiệp', icon: 'M12 15a3 3 0 100-6 3 3 0 000 6zM19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-2.82 1.17V21a2 2 0 01-4 0v-.09A1.65 1.65 0 006 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.6 14a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 7.6a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z' }
 ];
 
@@ -1189,92 +1194,10 @@ if (TOI.phai_doi_mk) {
    ngày 27/08/2026 ("làm luôn đi, sau cái gì mà sau").
    ========================================================================== */
 
-/* Số byte THẬT của ảnh sau khi giải mã base64 — đúng cách backend đo
-   (`atob(raw).length` trong gopYGui), để frontend không đoán sai rồi bị
-   backend trả 413. */
-function coByteCuaDataUrl(dataUrl) {
-  const s = String(dataUrl || '');
-  const b64 = s.slice(s.indexOf(',') + 1);
-  const demDauBang = b64.endsWith('==') ? 2 : b64.endsWith('=') ? 1 : 0;
-  return Math.floor(b64.length * 3 / 4) - demDauBang;
-}
-
-/* Nén ảnh bằng canvas — MỘT hàm cho mọi chỗ trong ERP. Luôn trả về data URL
-   JPEG (máy chủ chỉ lưu base64/nhị phân thẳng vào D1, không tự nén được).
-
-   tuyChon:
-   - `cheDo`        'vua-khung' (mặc định) giữ nguyên tỉ lệ, CHỈ co lại chứ
-                    không phóng to · 'vuong' cắt giữa thành ảnh vuông đúng
-                    `canhToiDa`×`canhToiDa` (ảnh đại diện — phải đủ nét ở mọi
-                    kích thước hiển thị nên cho phép phóng to ảnh nhỏ).
-   - `canhToiDa`    cạnh dài nhất (px).
-   - `chatLuong`    chất lượng JPEG lượt vẽ đầu (0–1).
-   - `gioiHanByte`  > 0 thì nén cho tới khi LỌT giới hạn của backend: hạ chất
-                    lượng trước (chữ trong ảnh chụp màn hình còn đọc được),
-                    hết nấc mới thu nhỏ kích thước. Rule 12 (Human Cost) —
-                    người dùng dán ảnh to thì máy tự lo, không bắt họ mở phần
-                    mềm khác cắt/nén rồi quay lại.
-
-   Luôn tô NỀN TRẮNG trước khi vẽ: JPEG không có kênh trong suốt, không tô
-   thì ảnh PNG trong suốt ra nền ĐEN, người dùng tưởng ảnh hỏng. */
-function nenAnhChung(file, tuyChon = {}) {
-  const {
-    cheDo = 'vua-khung',
-    canhToiDa = 1600,
-    chatLuong = 0.8,
-    gioiHanByte = 0,
-    nacChatLuong = [0.7, 0.6, 0.5],
-    soLanThuNho = 6
-  } = tuyChon;
-
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      const canvas = document.createElement('canvas');
-
-      const ve = (tiLe, cl) => {
-        let sx = 0, sy = 0, sw = img.width, sh = img.height;
-        if (cheDo === 'vuong') {
-          const canh = Math.min(img.width, img.height);
-          sx = (img.width - canh) / 2; sy = (img.height - canh) / 2;
-          sw = canh; sh = canh;
-          canvas.width = canvas.height = Math.max(1, Math.round(canhToiDa * tiLe));
-        } else {
-          canvas.width = Math.max(1, Math.round(img.width * tiLe));
-          canvas.height = Math.max(1, Math.round(img.height * tiLe));
-        }
-        const ctx = canvas.getContext('2d');
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(img, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
-        return canvas.toDataURL('image/jpeg', cl);
-      };
-
-      let ti = cheDo === 'vuong'
-        ? 1
-        : Math.min(1, canhToiDa / Math.max(img.width, img.height));
-
-      let kq = ve(ti, chatLuong);
-      if (gioiHanByte > 0) {
-        for (const cl of nacChatLuong) {
-          if (coByteCuaDataUrl(kq) <= gioiHanByte) break;
-          kq = ve(ti, cl);
-        }
-        // Vẫn nặng (ảnh chụp màn hình 4K nhiều chi tiết) → thu nhỏ dần.
-        const clCuoi = nacChatLuong.length ? nacChatLuong[nacChatLuong.length - 1] : chatLuong;
-        for (let i = 0; i < soLanThuNho && coByteCuaDataUrl(kq) > gioiHanByte; i++) {
-          ti *= 0.8;
-          kq = ve(ti, clCuoi);
-        }
-      }
-      resolve(kq);
-    };
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Không đọc được ảnh này')); };
-    img.src = url;
-  });
-}
+/* `coByteCuaDataUrl` và `nenAnhChung` nay nằm ở `assets/js/anh-chung.js`
+   (import ở đầu file). CTL-0026 cần đúng hàm nén này cho module Kho tài
+   liệu, mà module riêng không import ngược vào `app.js` được — nên DỜI CHỖ,
+   nội dung giữ nguyên từng chữ. Vẫn là MỘT hàm nén cho cả ERP (Rule 5). */
 
 /* Lấy file ảnh đầu tiên trong một DataTransfer (clipboard hoặc kéo–thả).
    Windows/macOS chụp màn hình đều để ảnh ở dạng file trong `items`. */
@@ -6046,6 +5969,11 @@ if (TOI.quyen.includes('xepca')) {
   try { await khoiDongXepCa(); } catch (e) { console.error('Xếp ca:', e); }
 }
 
+/* -- Kho tài liệu quản trị (CTL-0026 Đợt 1) -- */
+if (TOI.quyen.includes('khotailieu')) {
+  try { await khoiDongKhoTaiLieu(); } catch (e) { console.error('Kho tài liệu:', e); }
+}
+
 /* -- Đơn hoàn Shopee/TikTok — danh sách nằm trong tab Kho vận (kho xử lý),
    khối kết nối nằm trong tab Kết nối sàn. Chạy cho MỌI vai trò xem được đơn
    hoàn (gồm cả kho), không chỉ vai trò có tab Kết nối sàn. -- */
@@ -8689,6 +8617,143 @@ if (TOI.quyen.includes('quantri')) {
     try { await navigator.clipboard.writeText(txt); $('#mkModalChep').textContent = 'Đã chép ✓'; }
     catch { $('#mkModalChep').textContent = 'Hãy chép thủ công'; }
   });
+}
+
+/* ==========================================================================
+   KHO TÀI LIỆU QUẢN TRỊ  ·  CTL-0026 Đợt 1 — cửa vào KHO CHUNG
+   ---------------------------------------------------------------------------
+   Màn này CHỈ làm ba việc: bày danh sách, tìm, và mở màn quét. Toàn bộ lõi
+   quét (chụp → nén → gộp trang → gửi lại khi hụt) nằm ở `quet-tai-lieu.js`
+   để Đợt 2 (CTL-0025 — quét vào hồ sơ một người) gọi lại y nguyên.
+
+   Danh sách nhóm và quyền lưu do MÁY CHỦ trả về (`nhom`, `nhom_luu_duoc`);
+   ở đây không có một dòng nào tự quyết ai xem được gì.
+   ========================================================================== */
+async function khoiDongKhoTaiLieu() {
+  const oDanhSach = $('#tl-danh-sach');
+  const oTrong = $('#tl-trong');
+  const oCat = $('#tl-cat');
+  const oTim = $('#tl-tim');
+  const oSapHet = $('#tl-sap-het');
+  const oNhomLoc = $('#tl-nhom-loc');
+  if (!oDanhSach) return;
+
+  let dsNhom = [];            // nhóm XEM được
+  let nhomLuuDuoc = [];       // nhóm LƯU được (tập con)
+  let nhomDangLoc = '';
+
+  const tenNhom = (ma) => (dsNhom.find(n => n.ma === ma) || {}).ten || ma;
+
+  function veLoc() {
+    if (!oNhomLoc) return;
+    oNhomLoc.innerHTML =
+      `<button type="button" class="tl-chip${nhomDangLoc ? '' : ' chon'}" data-nhom="">Tất cả</button>` +
+      dsNhom.map(n => `<button type="button" class="tl-chip${nhomDangLoc === n.ma ? ' chon' : ''}" data-nhom="${esc(n.ma)}">${esc(n.ten)}</button>`).join('');
+    oNhomLoc.querySelectorAll('[data-nhom]').forEach(b => b.addEventListener('click', () => {
+      nhomDangLoc = b.dataset.nhom; veLoc(); nap();
+    }));
+  }
+
+  function ngayGon(s) { return s ? s.split('-').reverse().join('/') : ''; }
+
+  /** Còn mấy ngày tới hạn — số âm là đã quá hạn. */
+  function conNgay(hetHan) {
+    if (!hetHan) return null;
+    const homNay = new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
+    return Math.round((Date.parse(hetHan) - Date.parse(homNay)) / 86400000);
+  }
+
+  function veMot(t) {
+    const con = conNgay(t.ngay_het_han);
+    /* Đỏ là NGOẠI LỆ DUY NHẤT của luật ba màu (docs/BANG-MAU.md Mục 3) và chỉ
+       dùng cho thứ đã hỏng: giấy đã quá hạn. Sắp hết hạn thì dùng `--warn`
+       (vàng nâu, vẫn trong họ nâu–cam), không phải đỏ. */
+    const dai = con === null ? ''
+      : con < 0 ? `<span class="tl-dai tl-dai-qua">Quá hạn ${-con} ngày</span>`
+      : con <= 30 ? `<span class="tl-dai tl-dai-sap">Còn ${con} ngày</span>`
+      : `<span class="tl-dai">Hết hạn ${ngayGon(t.ngay_het_han)}</span>`;
+    return `
+      <article class="tl-the">
+        <div class="tl-the-dau">
+          <b class="tl-ten">${esc(t.tieu_de)}</b>
+          ${t.nhay_cam ? '<span class="tl-dai tl-dai-kin">Nhạy cảm</span>' : ''}
+          ${dai}
+        </div>
+        <div class="tl-the-phu">
+          ${esc(tenNhom(t.nhom))}${t.loai ? ' · ' + esc(t.loai) : ''}${t.so_hieu ? ' · ' + esc(t.so_hieu) : ''}
+          · ${Number(t.so_trang)||0} trang
+          ${t.ocr_so_trang ? `· đã bóc chữ ${Number(t.ocr_so_trang)||0} trang`
+            : '· <i>chưa bóc được chữ — tra bằng tên</i>'}
+        </div>
+        ${t.trich ? `<p class="tl-trich">${esc(t.trich)}…</p>` : ''}
+        <div class="tl-the-nut">
+          <a class="tl-nut-mo" href="/api/tai-lieu/tep?id=${encodeURIComponent(t.id)}" target="_blank" rel="noopener">Mở bản quét</a>
+          <button type="button" class="tl-nut-mo tl-nut-chu" data-xem="${t.id}">Xem chữ đã bóc</button>
+        </div>
+        <div class="tl-chu" id="tl-chu-${t.id}" hidden></div>
+      </article>`;
+  }
+
+  async function nap() {
+    try {
+      const kq = await API.tlDanhSach({
+        q: oTim ? oTim.value.trim() : '',
+        nhom: nhomDangLoc,
+        sapHetHan: oSapHet && oSapHet.checked
+      });
+      if (kq.nhom && kq.nhom.length !== dsNhom.length) { dsNhom = kq.nhom; veLoc(); }
+      else if (!dsNhom.length) { dsNhom = kq.nhom || []; veLoc(); }
+      nhomLuuDuoc = kq.nhom_luu_duoc || [];
+
+      const ds = kq.ds || [];
+      oDanhSach.innerHTML = ds.map(veMot).join('');
+      oTrong.hidden = ds.length > 0;
+      /* Bị cắt thì nói ra bằng lời, kèm cách thu hẹp — không im lặng cắt. */
+      oCat.hidden = !kq.bi_cat;
+      if (kq.bi_cat) oCat.textContent =
+        `Đang hiện ${kq.tran} tài liệu mới nhất. Gõ vào ô tìm hoặc chọn một nhóm để thu hẹp lại.`;
+
+      oDanhSach.querySelectorAll('[data-xem]').forEach(b => b.addEventListener('click', async () => {
+        const o = document.getElementById('tl-chu-' + b.dataset.xem);
+        if (!o) return;
+        if (!o.hidden) { o.hidden = true; return; }
+        o.textContent = 'Đang mở…'; o.hidden = false;
+        try {
+          const r = await API.tlMo(b.dataset.xem);
+          o.textContent = r.tai_lieu.noi_dung ||
+            ('Chưa bóc được chữ từ tài liệu này' +
+             (r.tai_lieu.ocr_ghi_chu ? ' — ' + r.tai_lieu.ocr_ghi_chu : '') + '.');
+        } catch (e) { o.textContent = e.message; }
+      }));
+    } catch (e) {
+      oDanhSach.innerHTML = '';
+      oTrong.hidden = false;
+      oTrong.textContent = 'Không tải được kho tài liệu: ' + e.message;
+    }
+  }
+
+  const nutQuet = $('#tl-nut-quet');
+  if (nutQuet) nutQuet.addEventListener('click', () => {
+    moQuetTaiLieu({
+      cuaVao: 'kho_chung',
+      nhom: dsNhom.filter(n => nhomLuuDuoc.includes(n.ma)),
+      khiXong: (kq) => {
+        nap();
+        const chu = kq.ocr_so_trang
+          ? `Đã lưu ${kq.so_trang} trang, bóc chữ được ${kq.ocr_so_trang} trang.`
+          : `Đã lưu ${kq.so_trang} trang. Chưa bóc được chữ — vẫn tra được bằng tên.`;
+        alert(chu + '\n\n⚠️ Đây là bản dự phòng. ĐỪNG huỷ bản giấy gốc.');
+      }
+    });
+  });
+
+  if (oTim) {
+    let hen = null;
+    oTim.addEventListener('input', () => { clearTimeout(hen); hen = setTimeout(nap, 300); });
+  }
+  if (oSapHet) oSapHet.addEventListener('change', nap);
+
+  await nap();
 }
 
 /* ---- Mở tab đầu tiên người dùng được xem -------------------------------- */

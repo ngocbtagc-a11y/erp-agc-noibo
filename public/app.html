@@ -2265,6 +2265,39 @@
       </div>
     </section>
 
+    <!-- ---------- Kho tài liệu quản trị (CTL-0026) ----------
+         Tab mở cho MỌI vai trò, nhưng NHÓM GIẤY TỜ bên trong thì cắt ở máy
+         chủ (src/quyen.js + src/tai-lieu.js). Kế toán không thấy hồ sơ nhân
+         sự, quản lý kho không thấy CCCD — kể cả khi gọi thẳng API. -->
+    <section class="view" id="v-khotailieu" hidden>
+      <div class="view-head">
+        <h3>Kho tài liệu</h3>
+        <p>Giấy tờ quản trị bản cứng quét bằng điện thoại, gộp nhiều trang thành một tài liệu, bóc chữ để tra cứu, lưu trên Google Drive. Có nhắc trước khi giấy hết hạn.</p>
+      </div>
+
+      <!-- ⚠️ CÂU BẮT BUỘC — CTL-0026 Mục 2. Không có nó là có ngày ai đó dọn
+           kho giấy. Đặt NGAY ĐẦU TAB, trước cả nút quét. -->
+      <div class="tl-luat" id="tl-luat">
+        <b>⚠️ Đây là bản dự phòng để tra cứu. KHÔNG thay bản giấy — đừng huỷ giấy gốc.</b>
+        <p>Luật Giao dịch điện tử 2023 (hiệu lực 01/7/2024) chỉ công nhận bản số hoá khi
+           có ký số và bảo đảm toàn vẹn; quét bằng điện thoại không đạt. Luật Kế toán vẫn
+           bắt giữ bản gốc có chữ ký và dấu đỏ, lưu 5 năm / 10 năm / vĩnh viễn tuỳ loại.</p>
+      </div>
+
+      <div class="tl-thanh">
+        <button type="button" class="btn-primary tl-nut-quet" id="tl-nut-quet">📷 Quét tài liệu mới</button>
+        <input type="search" id="tl-tim" class="tl-tim" placeholder="Tìm: gõ có dấu hay không dấu đều được">
+        <label class="tl-loc-han"><input type="checkbox" id="tl-sap-het"> Chỉ giấy sắp hết hạn</label>
+      </div>
+
+      <div class="tl-nhom-loc" id="tl-nhom-loc"></div>
+
+      <div id="tl-danh-sach"></div>
+      <p class="tl-trong" id="tl-trong" hidden>Chưa có tài liệu nào trong kho.</p>
+      <!-- Danh sách bị cắt thì phải NÓI RA (LUAT-GOP-Y-LA-TRIEU-CHUNG Mục 2) -->
+      <div class="dai-cat" id="tl-cat" hidden></div>
+    </section>
+
     <!-- ---------- Quản trị (chỉ admin) ---------- -->
     <section class="view" id="v-quantri" hidden>
       <div class="view-head">

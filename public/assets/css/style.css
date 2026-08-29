@@ -3140,3 +3140,196 @@ tr.kd-chiadoi td {
   .cv-dong { flex-direction: column; align-items: flex-start; gap: 2px; }
   .cv-dong-phu { white-space: normal; }
 }
+
+/* ==========================================================================
+   KHO TÀI LIỆU QUẢN TRỊ  ·  CTL-0026 Đợt 1
+   ---------------------------------------------------------------------------
+   LUẬT BA MÀU (docs/BANG-MAU.md): khối dưới đây KHÔNG có một mã màu mới nào.
+   Mọi màu đều là biến đã có: nâu (--bg/--surface/--card/--line/--ink/--text),
+   xanh lá (--sage/--ok-*), cam (--cam/--cam-dark/--cam-wash/--cam-text),
+   vàng nâu --warn-* (trong họ nâu–cam, không tính là màu thứ tư) và --danger-*
+   — ngoại lệ DUY NHẤT, chỉ dùng cho giấy ĐÃ QUÁ HẠN, tức là thứ đã hỏng.
+
+   MỘT điểm nhấn cam đậm cho một khung nhìn (luật ③): trong tab này chỉ có
+   `.tl-nut-quet`; trong màn quét chỉ có `.tlq-nut-chinh`.
+
+   NGÓN TAY 44px: mọi nút bấm được ở đây đều min-height 44px. Đo bằng
+   `node scripts/do-kho-tai-lieu.mjs`, không khai bằng miệng.
+   ========================================================================== */
+
+/* ---- Câu cảnh báo pháp lý — bắt buộc, và phải ĐỌC ĐƯỢC ---------------- */
+.tl-luat {
+  background: var(--warn-wash);
+  border: 1px solid var(--warn);
+  border-left: 4px solid var(--warn-dark);
+  border-radius: var(--r-md);
+  padding: 12px 14px;
+  margin-bottom: 16px;
+}
+.tl-luat b { color: var(--warn-dark); display: block; margin-bottom: 4px; }
+.tl-luat p { margin: 0; font-size: 13px; color: var(--text-mute); line-height: 1.5; }
+
+/* ---- Thanh công cụ ---- */
+.tl-thanh { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+.tl-nut-quet { width: auto; min-height: 44px; padding: 0 18px; }
+.tl-tim {
+  flex: 1 1 220px; min-height: 44px; padding: 0 14px;
+  border: 1px solid var(--line); border-radius: var(--r-pill);
+  background: var(--card); color: var(--ink); font: inherit;
+}
+.tl-loc-han {
+  display: inline-flex; align-items: center; gap: 8px;
+  min-height: 44px; padding: 0 12px; cursor: pointer;
+  font-size: 14px; color: var(--text);
+}
+
+/* ---- Lọc theo nhóm giấy tờ ---- */
+.tl-nhom-loc { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+.tl-chip {
+  min-height: 44px; padding: 0 14px; cursor: pointer;
+  border: 1px solid var(--line); border-radius: var(--r-pill);
+  background: var(--surface); color: var(--text); font: inherit; font-size: 13px;
+}
+.tl-chip.chon { background: var(--cam-wash); border-color: var(--cam); color: var(--cam-text); font-weight: 600; }
+
+/* ---- Thẻ tài liệu ---- */
+.tl-the {
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: var(--r-md); padding: 14px; margin-bottom: 10px;
+}
+.tl-the-dau { display: flex; gap: 8px; flex-wrap: wrap; align-items: baseline; }
+.tl-ten { color: var(--ink); font-size: 15px; }
+.tl-the-phu { margin-top: 4px; font-size: 13px; color: var(--text-mute); }
+.tl-trich {
+  margin: 8px 0 0; font-size: 13px; color: var(--text-mute);
+  background: var(--surface-2); border-radius: var(--r-sm); padding: 8px 10px;
+  max-height: 4.5em; overflow: hidden;
+}
+.tl-the-nut { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.tl-nut-mo {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: 44px; padding: 0 14px; cursor: pointer;
+  border: 1px solid var(--sage); border-radius: var(--r-pill);
+  background: var(--sage-wash); color: var(--sage-dark);
+  font: inherit; font-size: 13px; font-weight: 600; text-decoration: none;
+}
+.tl-chu {
+  margin-top: 10px; padding: 10px 12px; white-space: pre-wrap;
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--r-sm); font-size: 13px; color: var(--text);
+  max-height: 340px; overflow: auto;
+}
+.tl-dai {
+  display: inline-block; padding: 2px 10px; border-radius: var(--r-pill);
+  font-size: 12px; font-weight: 600;
+  background: var(--surface-2); color: var(--text-mute);
+}
+/* Sắp hết hạn = vàng nâu (còn trong họ nâu-cam). */
+.tl-dai-sap { background: var(--warn-wash); color: var(--warn-dark); }
+/* ĐỎ: ngoại lệ duy nhất, chỉ cho thứ ĐÃ hỏng — giấy đã quá hạn. Đỏ phải hiếm. */
+.tl-dai-qua { background: var(--danger-wash); color: var(--danger-dark); }
+.tl-dai-kin { background: var(--cam-wash); color: var(--cam-text); }
+.tl-trong { color: var(--text-mute); padding: 20px 0; }
+
+/* ==========================================================================
+   MÀN QUÉT — dùng chung cho cả kho chung (Đợt 1) lẫn hồ sơ nhân sự (Đợt 2)
+   ========================================================================== */
+.tlq-khoa-cuon { overflow: hidden; }
+.tlq-nen {
+  position: fixed; inset: 0; z-index: 1200;
+  background: rgba(44, 33, 23, .55);
+  display: flex; align-items: flex-end; justify-content: center;
+}
+.tlq-tam {
+  width: 100%; max-width: 560px; max-height: 92vh; overflow: auto;
+  background: var(--bg); border-radius: var(--r-lg) var(--r-lg) 0 0;
+  box-shadow: var(--shadow-lg);
+}
+@media (min-width: 640px) {
+  .tlq-nen { align-items: center; }
+  .tlq-tam { border-radius: var(--r-lg); }
+}
+.tlq-dau {
+  position: sticky; top: 0; z-index: 2;
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 14px 16px; background: var(--card); border-bottom: 1px solid var(--line);
+}
+.tlq-dau b { color: var(--ink); font-size: 16px; }
+.tlq-x {
+  min-width: 44px; min-height: 44px; cursor: pointer;
+  border: 1px solid var(--line); border-radius: var(--r-pill);
+  background: var(--surface); color: var(--text); font-size: 18px; line-height: 1;
+}
+.tlq-luat {
+  padding: 12px 16px; background: var(--warn-wash);
+  border-bottom: 1px solid var(--warn);
+}
+.tlq-luat > b { color: var(--warn-dark); display: block; font-size: 14px; }
+.tlq-luat-phu { margin-top: 4px; font-size: 12px; color: var(--text-mute); line-height: 1.5; }
+.tlq-than { padding: 16px; }
+.tlq-huong { font-size: 13px; color: var(--text-mute); margin: 0 0 12px; line-height: 1.5; }
+.tlq-canh {
+  font-size: 13px; color: var(--warn-dark); background: var(--warn-wash);
+  border-radius: var(--r-sm); padding: 8px 10px; margin: 0 0 12px;
+}
+.tlq-loi {
+  font-size: 13px; color: var(--danger-dark); background: var(--danger-wash);
+  border: 1px solid var(--danger); border-radius: var(--r-sm);
+  padding: 10px 12px; margin: 12px 0;
+}
+
+/* Chọn nhóm giấy tờ TRƯỚC KHI chụp — ô to, một tay bấm được, không bấm nhầm. */
+.tlq-nhom { display: grid; gap: 10px; }
+.tlq-o-nhom {
+  display: block; width: 100%; min-height: 64px; text-align: left; cursor: pointer;
+  padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--r-md);
+  background: var(--card); color: var(--ink); font: inherit;
+}
+.tlq-o-nhom b { display: block; font-size: 15px; }
+.tlq-o-nhom span { display: block; font-size: 12px; color: var(--text-mute); margin-top: 2px; }
+.tlq-o-nhom i { display: block; font-size: 11px; color: var(--cam-text); font-style: normal; margin-top: 4px; }
+
+/* Danh sách trang đã chụp — xem lại và CHỤP LẠI TỪNG TRANG trước khi lưu. */
+.tlq-dsdanh { display: grid; gap: 10px; margin-bottom: 12px; }
+.tlq-the {
+  display: grid; grid-template-columns: 64px 1fr auto; gap: 10px; align-items: center;
+  padding: 8px; background: var(--card); border: 1px solid var(--line); border-radius: var(--r-md);
+}
+.tlq-the img { width: 64px; height: 84px; object-fit: cover; border-radius: var(--r-sm); background: var(--surface-2); }
+.tlq-the-tin b { display: block; font-size: 14px; color: var(--ink); }
+.tlq-the-tin span { font-size: 12px; color: var(--text-mute); }
+.tlq-the-nut { display: grid; gap: 6px; }
+.tlq-do { font-size: 12px; color: var(--text-mute); margin: 0 0 12px; }
+
+.tlq-nut-chinh {
+  display: block; width: 100%; min-height: 52px; cursor: pointer; margin-bottom: 10px;
+  border: 0; border-radius: var(--r-pill); background: var(--cam); color: var(--white);
+  font: inherit; font-size: 16px; font-weight: 700; box-shadow: var(--shadow-cam);
+}
+.tlq-nut-chinh:disabled { background: var(--surface-2); color: var(--text-mute); box-shadow: none; }
+.tlq-nut-nhi {
+  display: block; width: 100%; min-height: 44px; cursor: pointer;
+  border: 1px solid var(--line); border-radius: var(--r-pill);
+  background: var(--surface); color: var(--text); font: inherit; font-size: 14px;
+}
+.tlq-nut-phu {
+  min-height: 44px; padding: 0 12px; cursor: pointer;
+  border: 1px solid var(--line); border-radius: var(--r-pill);
+  background: var(--surface); color: var(--text); font: inherit; font-size: 13px;
+}
+
+.tlq-form { display: block; }
+.tlq-nhan { display: block; font-size: 13px; font-weight: 600; color: var(--text); margin: 12px 0 4px; }
+.tlq-nhan i { color: var(--cam-text); font-style: normal; }
+.tlq-o {
+  width: 100%; min-height: 44px; padding: 0 12px;
+  border: 1px solid var(--line); border-radius: var(--r-sm);
+  background: var(--card); color: var(--ink); font: inherit;
+}
+.tlq-chip { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.tlq-dongy {
+  margin-top: 16px; padding: 12px; border: 1px solid var(--cam);
+  border-radius: var(--r-md); background: var(--cam-wash);
+}
+.tlq-dongy > b { color: var(--cam-text); font-size: 14px; }
+.tlq-dongy > p { margin: 4px 0 0; font-size: 12px; color: var(--text-mute); }

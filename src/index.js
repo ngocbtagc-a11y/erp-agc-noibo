@@ -30,6 +30,9 @@ import * as hopdong from './hopdong.js';
 import * as motacv from './mota-cv.js';
 import * as kynang from './ky-nang.js';
 import { quetNhacNhanSu, thangKeTiep, gioVN } from './nhac-nhan-su.js';
+/* CTL-0026 — Kho tài liệu quản trị. Lõi dùng chung với CTL-0025 (quét giấy tờ
+   nhân sự): một kho, hai cửa vào. Đợt 1 mở cửa KHO CHUNG. */
+import * as tailieu from './tai-lieu.js';
 import { quetNhacCongViec, soNgayGiua } from './nhac-cong-viec.js';
 import { sinhMa } from './dinh-danh.js';
 /* CTL-0014 — đẩy thông báo lên điện thoại. Mọi chốt chặn chống làm phiền nằm
@@ -5467,6 +5470,44 @@ async function nsAnhXem(req, env) {
   return new Response(bin, { headers: { 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, max-age=3600' } });
 }
 
+/* ---- Kho tài liệu quản trị (CTL-0026 Đợt 1) -----------------------------
+   Tab `khotailieu` mở cho MỌI vai trò — ai cũng phải tra được quy trình, quy
+   định nội bộ đã ban hành. Cái được chặn là NHÓM GIẤY TỜ bên trong, và chặn
+   đó nằm ở `src/tai-lieu.js` + `src/quyen.js`, KHÔNG ở đây. Ở đây chỉ hỏi
+   "đã đăng nhập chưa" — đúng khuôn `knDanhMuc`/`mtcvDanhSach` phía trên. */
+async function tlDanhSach(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  return tailieu.danhSachTaiLieu(env, phien, new URL(req.url).searchParams);
+}
+async function tlLuu(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return tailieu.luuTaiLieu(env, phien, b);
+}
+async function tlMo(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  return tailieu.moTaiLieu(env, phien, new URL(req.url).searchParams.get('id'));
+}
+async function tlTep(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  return tailieu.tepTaiLieu(env, phien, new URL(req.url).searchParams.get('id'));
+}
+async function tlNhatKy(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  return tailieu.nhatKyTaiLieu(env, phien, new URL(req.url).searchParams.get('id'));
+}
+async function tlAn(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return tailieu.anTaiLieu(env, phien, b);
+}
+
 /* ---- Bộ định tuyến ------------------------------------------------------ */
 
 const DUONG_DAN = {
@@ -5643,7 +5684,13 @@ const DUONG_DAN = {
   'GET  /api/tiktok/callback':   tiktokCallback,
   'POST /api/tiktok/dong-bo':    tiktokDongBo,
   'POST /api/nhan-su/doc-cccd':  nsDocCCCD,
-  'POST /api/nhan-su/don-moi':   nsDonMoi
+  'POST /api/nhan-su/don-moi':   nsDonMoi,
+  'GET  /api/tai-lieu':          tlDanhSach,
+  'POST /api/tai-lieu/luu':      tlLuu,
+  'GET  /api/tai-lieu/mo':       tlMo,
+  'GET  /api/tai-lieu/tep':      tlTep,
+  'GET  /api/tai-lieu/nhat-ky':  tlNhatKy,
+  'POST /api/tai-lieu/an':       tlAn
 };
 
 export default {
@@ -5675,6 +5722,13 @@ export default {
          TẮT KHẨN CẤP: đặt biến môi trường NHAC_VIEC_TAT=1 → câm ngay, không
          cần deploy. Bật PILOT riêng một phòng: NHAC_VIEC_BO_PHAN="Kho vận". */
       try { await quetNhacCongViec(env, guiThongBao, guiTelegram); } catch (e) { console.error('Cron nhắc việc:', e.message); }
+      /* CTL-0026 — nhắc GIẤY TỜ SẮP HẾT HẠN. ĐÚNG MỘT DÒNG thêm vào cron đã
+         có; `wrangler.toml` KHÔNG đổi, KHÔNG có lịch thứ hai (ràng buộc
+         CTL-0026 Mục 6). Hàm tự đóng cửa ngoài 8h–18h và Chủ nhật (ADR-0013),
+         tự gộp một người MỘT tin/ngày, tự chống trùng bằng bảng `thong_bao`.
+         Chưa nạp migration thì nó về ngay, không làm hỏng việc nền nào khác.
+         Vì sao đáng nhắc: giấy hết hạn = khoá gian hàng = mất doanh thu thật. */
+      try { await tailieu.quetNhacHetHanTaiLieu(env, guiThongBao); } catch (e) { console.error('Cron nhắc hạn tài liệu:', e.message); }
       /* CTL-0014 — dọn nhật ký đẩy quá 3 ngày. Nhật ký chỉ để tính gộp 60 giây
          và trần theo ngày, giữ lâu hơn là phình bảng vô ích. Một dòng, chung
          cron sẵn có, KHÔNG thêm lịch thứ hai vào `wrangler.toml`. */
