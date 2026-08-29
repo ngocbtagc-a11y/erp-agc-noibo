@@ -1811,6 +1811,20 @@ tr.canh-bao:hover > td { background: #fbdbd6; }
 /* Dải trạng thái khi đang điếc: nền cảnh báo, khác hẳn nền mời xanh nhạt. */
 .tbd-moi.tbd-moi-canhbao { background: #fdf1e6; }
 
+/* Dải nhắc CÀI ERP LÊN MÁY — mỏng, một dòng, không chiếm chỗ của công việc.
+   Nút dùng lại đúng lớp `.tbd-nut` (đã đủ 44px cho ngón tay, đã đo). */
+.dai-cai-may {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  margin: 12px 16px 0;
+  padding: 10px 14px;
+  background: var(--sage-wash);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.dai-cai-may[hidden] { display: none; }
+.dai-cai-may-chu { flex: 1 1 260px; font-size: 13px; line-height: 1.45; color: var(--ink); }
+.dai-cai-may-nut { display: flex; gap: 8px; flex-wrap: wrap; }
+
 .tbd-moi {
   flex-shrink: 0;
   padding: 12px 16px;

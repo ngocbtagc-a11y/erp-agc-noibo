@@ -75,12 +75,51 @@ self.addEventListener('push', (e) => {
     }
   };
 
-  e.waitUntil(
+  e.waitUntil(Promise.all([
     self.registration.showNotification(tieuDe, tuyChon).catch(() =>
       self.registration.showNotification('ERP Alpha Green', { body: 'Bạn có thông báo mới' })
-    )
-  );
+    ),
+    datSoDoBieuTuong()
+  ]));
 });
+
+/* ---- SỐ ĐỎ TRÊN BIỂU TƯỢNG (29/08/2026) ---------------------------------
+   Sếp Ngọc: *"Nếu tao dùng desktop thì hiện thông báo như này nè, để không bị
+   miss tin nhắn"* — số đỏ trên biểu tượng thanh tác vụ, kiểu Zalo. Đây là
+   đường QUAN TRỌNG NHẤT vì nó chạy khi ERP đã ĐÓNG HẲN; lúc đó `app.js` không
+   tồn tại, chỉ service worker này còn sống.
+
+   MỘT NGUỒN SỐ DUY NHẤT (`so-do-bieu-tuong.js` luật ①). SW này KHÔNG tự đếm,
+   KHÔNG cộng dồn, KHÔNG nhớ gì cả — nó hỏi ĐÚNG `/api/chat/chua-doc`, đúng cái
+   API mà huy hiệu trong ERP đang dùng, nên hai con số không thể lệch. Tự cộng
+   dồn trong SW là cách chắc chắn để lệch: một tin đọc trên điện thoại là số
+   trên máy tính sai vĩnh viễn.
+     · Phiên đăng nhập là cookie HttpOnly same-origin → `credentials:'same-origin'`
+       từ SW vẫn đính đúng cookie, không cần token, không cần đụng gì thêm.
+
+   SỔ SÁCH D1 (hạn mức vừa vá 29/08). Nếu ERP đang mở ở tab nào thì SW KHÔNG
+   gọi gì cả — `veBadge()` trong `app.js` đã đặt số mỗi 6 giây rồi, gọi thêm là
+   lượt đọc thừa VÀ là chỗ ghi thứ hai. Chỉ khi ERP đóng hẳn mới có một lượt
+   SELECT, mà lượt đẩy đã bị chặn bởi gộp 60 giây và trần 12 tin/ngày
+   (`TRAN_NGAY`, src/day-thong-bao.js) → tối đa 12 lượt đọc/người/ngày. So với
+   14.400 lượt/ngày của một tab đang mở thì đây là số làm tròn thành 0.
+
+   HỎNG ÊM: Firefox/Safari và mọi máy CHƯA CÀI ERP không có `setAppBadge` —
+   hàm này lặng lẽ về, không ném, không log. */
+async function datSoDoBieuTuong() {
+  try {
+    if (typeof self.navigator?.setAppBadge !== 'function') return;
+    const tabs = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    if (tabs.some((t) => t.url.includes('/app.html'))) return;   // app.js đang lo, đừng chen
+
+    const res = await fetch('/api/chat/chua-doc', { credentials: 'same-origin' });
+    if (!res.ok) return;                       // hết phiên (401) → không đoán bừa một con số
+    const { so_luong } = await res.json();
+    const n = Number(so_luong);
+    if (!Number.isFinite(n) || n <= 0) await self.navigator.clearAppBadge();
+    else await self.navigator.setAppBadge(Math.floor(n));
+  } catch { /* mất mạng / không hỗ trợ / hệ điều hành từ chối — im lặng đúng luật ② */ }
+}
 
 /* Bấm vào thông báo: ERP đang mở sẵn ở tab nào thì ĐƯA TAB ĐÓ LÊN (không mở
    thêm tab thứ hai chồng chất); chưa mở thì mở mới đúng đường dẫn kèm theo.
