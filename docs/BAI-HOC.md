@@ -817,9 +817,10 @@ Sếp Ngọc gửi ảnh thanh cuộn ngang **trong chat**. Đo ra bong bóng ch
 `word-break: break-word`, chuỗi 100 ký tự dính liền vẫn xuống dòng gọn. Thủ phạm thật là hai
 thứ Sếp **không** chỉ vào: ① *thanh chat* là `<input type="text">` — thẻ một dòng thì không
 CSS nào bắt nó xuống dòng được, gõ 133 ký tự ra `scrollWidth` 1034px trong ô rộng 232px; và
-cả ERP có **12** ô cùng kiểu nhận 120–2000 ký tự. ② không có chốt chặn từ-dài toàn cục: bơm
-một link Shopee vào bất kỳ khung chữ nào thì **cả 6 tab** phình từ 375px ra 654–991px.
-→ Sửa đúng chỗ được chỉ là sửa 1/13. **Đo cả lớp trước khi vá**: liệt kê mọi chỗ cùng cơ chế,
+cả ERP có **111** ô cùng kiểu *(vòng 1 khai 12 — sai, xem BH-58)*. ② không có chốt chặn
+từ-dài toàn cục: bơm một link Shopee vào bất kỳ khung chữ nào thì **cả 6 tab** phình từ 375px
+ra 654–991px.
+→ Sửa đúng chỗ được chỉ là sửa 1/112. **Đo cả lớp trước khi vá**: liệt kê mọi chỗ cùng cơ chế,
 rồi mới quyết vá ở đâu.
 → `overflow-wrap: break-word` cho chữ xuống dòng nhưng **không hạ min-content**, mà bề rộng
 tối thiểu của một ô flex/grid lấy đúng min-content — nên từ dài vẫn banh rộng cả hàng flex,
@@ -827,9 +828,27 @@ chữ bên trong xuống dòng cũng vô ích. Đã đo: đặt `break-word` to�
 tràn 1071px và 971px. Phải `anywhere`, rồi trả riêng `table, table *` về `break-word` để cột
 bảng không vỡ — **kèm ca đối chứng "bảng nhiều cột vẫn cuộn ngang được"**, nếu không lần sau
 có người "sửa cho triệt để" và làm vỡ hết bảng mà không ai biết.
-→ Phép đo phải **nhìn thấy thứ nó khai**: 11/12 ô nằm trong hộp thoại đang đóng, mà phần tử
-ẩn thì cao 0px — đo thẳng là bàn đo XANH vì nó chẳng nhìn thấy gì. Phải gỡ tạm `hidden`, đo,
-rồi trả lại nguyên trạng, và **đếm đủ 12/12 mới cho xanh**.
+→ Phép đo phải **nhìn thấy thứ nó khai**: gần hết số ô nằm trong hộp thoại đang đóng, mà
+phần tử ẩn thì cao 0px — đo thẳng là bàn đo XANH vì nó chẳng nhìn thấy gì. Phải gỡ tạm
+`hidden`, đo, rồi trả lại nguyên trạng, và **đếm đủ mới cho xanh**.
+
+**BH-58 · PHÉP LỌC ĐỂ ĐẾM CŨNG LÀ MỘT CHỖ CÓ THỂ MÙ — và chỗ "không khai gì" là chỗ nguy
+hiểm nhất, không phải chỗ vô hại.**
+BH-57 ở trên rút ra đúng bài "đo cả lớp trước khi vá" — rồi **hụt ở đúng bước đếm**. Bàn đo
+lọc ô bệnh bằng `i.maxLength >= 100`. Nhưng một `<input>` **không khai `maxlength`** thì
+`maxLength === -1` → **bị loại sạch khỏi phép đếm**. Kết quả: bàn đo khai "12 ô, đã vá 12,
+còn 0" và XANH — trong khi bơm 200 ký tự vào mọi ô thì **99/99 ô một dòng còn lại vẫn kéo
+ngang, và 99/99 không có `maxlength`**, tức nhận chữ **vô hạn**, nặng hơn hẳn ô 120 ký tự đã
+vá. Con số thật của cả lớp là **111**, không phải 12. Bàn đo đó sẽ báo xanh mãi mãi.
+→ **Vá phép đếm trước, rồi mới vá.** Vá 15 ô rồi đếm bằng cái lọc cũ thì lứa sau lại sót.
+→ Tiêu chí đếm phải hỏi **"ô này có NHẬN chữ dài không"**, không phải *"ô này có KHAI trần
+lớn không"*. Giá trị **vắng mặt** (`-1`, `null`, `undefined`, `''`) hay bị đọc thành "không
+có vấn đề" trong khi nó nghĩa là "không có giới hạn" — ngược hẳn.
+→ Dấu hiệu nhận ra sớm: **một phép đếm mà mẫu số nhỏ bất thường**. "12 ô trong cả một ERP
+3.100 dòng HTML" đáng phải làm người viết dừng lại hỏi *mẫu số kia lấy ở đâu ra*.
+→ Ca đối chứng phải bắn vào **đúng lỗ mù đó**, không chỉ vào ca dễ: `--tu-kiem` giờ chèn
+**ba** vết thương, trong đó có một ô **cố ý không khai `maxlength`**. Phép lọc cũ trượt ô đó
+100%; bắt được nó mới là bằng chứng phép đếm đã sáng mắt.
 
 *(BH-45 · BH-46 — số đã dùng ở nhánh `feature/ctl-0023-dot2-cam` cho hai bài học khác
 ["Phép đo CHỌN TAY…", "Một token gánh HAI VAI…"]. Cố ý bỏ trống ở đây để hai nhánh gộp vào

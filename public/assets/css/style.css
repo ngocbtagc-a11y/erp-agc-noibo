@@ -2205,9 +2205,15 @@ tr.canh-bao:hover > td { background: #fbdbd6; }
    1034px / clientWidth 232px — phải kéo ngang trong ô mới đọc lại được câu
    mình vừa gõ.
 
-   Cả ERP có 12 ô một dòng nhận tới 120–2000 ký tự, tất cả cùng một bệnh. Lớp
-   này là thuốc chung: `<textarea rows="1">` trông y hệt ô một dòng lúc rỗng,
-   tự cao dần khi chữ dài, chặn trần rồi mới cuộn DỌC (không bao giờ ngang).
+   Cả ERP có 111 ô một dòng cùng bệnh — KHÔNG phải 12 như vòng 1 khai. Vòng 1
+   đếm bằng `maxLength >= 100` nên bỏ sót sạch 99 ô KHÔNG khai `maxlength`,
+   tức nhóm nhận chữ VÔ HẠN (REV-0047/L1, BH-58). Chữa theo hai đường:
+     · 31 ô CHỮ DÀI (tiêu đề, tên hàng, tên NCC, địa chỉ, lý do…) dùng lớp này
+       — `<textarea rows="1">` trông y hệt ô một dòng lúc rỗng, tự cao dần khi
+       chữ dài, chặn trần rồi mới cuộn DỌC (không bao giờ ngang).
+     · 80 ô CHỮ NGẮN (tìm kiếm, SĐT, mã, số lượng…) khai `maxlength` < 100 cho
+       đúng thứ chúng thật sự nhận — trần thấp thì chữ không bao giờ đủ dài để
+       phải kéo ngang.
 
    Enter vẫn GỬI / vẫn LƯU như trước — `noiDayONhieuDong()` trong app.js giữ
    nguyên thói quen cũ; Shift+Enter mới là xuống dòng. Đổi khác đi là bắt 20
@@ -2222,12 +2228,17 @@ tr.canh-bao:hover > td { background: #fbdbd6; }
 }
 /* `.field textarea` (ở đầu file) đặt `min-height: 90px` cho ô mô tả nhiều
    dòng. Ô này thay chỗ một `<input>` MỘT DÒNG nên phải gỡ sàn đó ra, không
-   thì 11 ô vừa đổi mỗi ô phình thêm ~50px và màn 375px mất bớt dòng — đúng
+   thì mỗi ô vừa đổi phình thêm ~50px và màn 375px mất bớt dòng — đúng
    thứ bản vá này không được phép làm. Cần cả `.field` lẫn `textarea` trong
    bộ chọn để thắng độ ưu tiên của luật kia. */
 .field textarea.o-nhieu-dong { min-height: 0; resize: none; }
+/* `min-height: 44px` — REV-0047 ghi nhận ô này cao 34px, dưới sàn chạm 44px.
+   Bản `<input>` cũ còn thấp hơn (32px) nên đây không phải lỗi mới, nhưng đã
+   đụng vào thì nâng nốt cho đủ sàn. `box-sizing` bắt buộc: thiếu nó thì
+   padding cộng thêm ra ngoài 44px và luật F2 ("ô rỗng không quá 48px") đỏ. */
 .thd-panel textarea.o-nhieu-dong {
   width: 100%; padding: 7px 9px;
+  box-sizing: border-box; min-height: 44px;
   border: 1px solid var(--line); border-radius: var(--r-sm);
   font-size: 12.5px; color: var(--ink); background: var(--surface);
 }

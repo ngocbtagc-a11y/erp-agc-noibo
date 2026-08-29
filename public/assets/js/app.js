@@ -738,16 +738,21 @@ window.toggleDaiGon = function (btn) {
    tiếng Việt vào thanh chat ra scrollWidth 1034px trên ô rộng 232px; muốn
    đọc lại câu mình vừa gõ phải kéo ngang TRONG ô.
 
-   Cả ERP có 12 ô một dòng nhận 120–2000 ký tự, tất cả cùng một bệnh (xem
-   `scripts/do-chu-dai-xuong-dong.mjs`). Đây là thuốc chung, gắn MỘT LẦN bằng
+   Cả ERP có 111 ô một dòng cùng bệnh (vòng 1 khai 12 — sai vì phép đếm, xem
+   REV-0047/L1 và BH-58). 31 ô CHỮ DÀI mang lớp này; 80 ô CHỮ NGẮN chữa bằng
+   `maxlength` < 100 chứ không đổi thẻ. Đây là thuốc chung, gắn MỘT LẦN bằng
    uỷ quyền trên `document` nên ô nào thêm sau này cũng được che, kể cả ô do
    JS dựng ra — không phải nhớ gọi hàm khởi tạo cho từng chỗ.
 
-   ENTER VẪN GỬI / VẪN LƯU NHƯ TRƯỚC. Trước bản này 12 ô đều là `<input>`
+   ENTER VẪN GỬI / VẪN LƯU NHƯ TRƯỚC. Trước bản này chúng đều là `<input>`
    trong `<form>`, nên Enter = submit theo mặc định của trình duyệt. Đổi sang
    `<textarea>` là mất mặc định đó — 20 người sẽ gõ Enter và không có gì xảy
    ra. Dòng `keydown` dưới đây trả lại đúng thói quen cũ; Shift+Enter mới là
-   xuống dòng thủ công. Ca đối chứng "Enter vẫn gửi" nằm trong bàn đo.
+   xuống dòng thủ công. Đo được: 29/31 ô nằm trong `<form>` và cả 29 đều gửi
+   bằng Enter, 0/31 gửi nhầm khi Shift+Enter hay khi bộ gõ tiếng Việt đang
+   dựng dấu (arm G của bàn đo). Hai ô còn lại (`thdGhiChu`,
+   `gyCtGhiChuDuyet`) nằm NGOÀI `<form>` — bản `<input>` cũ cũng vậy, Enter ở
+   đó chưa từng làm gì, không phải hồi quy.
    ========================================================================== */
 function caoTheoChu(o) {
   if (!o || o.offsetParent === null) return;     /* ô đang ẩn thì scrollHeight vô nghĩa — đo lúc nó hiện ra */
@@ -7645,7 +7650,10 @@ async function khoiDongXepCa() {
         const oCells = cacNgay.map(ng => {
           const cm = caMoHienCo.find(c => c.mau_ca_id === mc.id && c.ngay === ng);
           const gtri = cm ? cm.can_bao_nhieu_nguoi : '';
-          return `<td><input type="text" inputmode="numeric" class="xc-kh-o" data-xc-kh-ngay="${ng}" data-xc-kh-mauca="${mc.id}" value="${gtri}" style="width:44px;text-align:center;border:1px solid var(--line);border-radius:6px;padding:3px"></td>`;
+          /* `maxlength`: ô một dòng KHÔNG khai trần là ô nhận chữ vô hạn — nặng
+             hơn ô 120 ký tự, mà phép đếm cũ lọc `maxLength >= 100` thì bỏ sót
+             sạch (REV-0047/L1). Ô này đếm người nên 3 chữ số là quá đủ. */
+          return `<td><input type="text" maxlength="3" inputmode="numeric" class="xc-kh-o" data-xc-kh-ngay="${ng}" data-xc-kh-mauca="${mc.id}" value="${gtri}" style="width:44px;text-align:center;border:1px solid var(--line);border-radius:6px;padding:3px"></td>`;
         }).join('');
         return `<tr><td class="xc-col-fixed sm">${esc(mc.ma_ca)} — ${esc(mc.ten_ca)}<br><span style="font-weight:400">${esc(mc.gio_bat_dau)}–${esc(mc.gio_ket_thuc)}</span></td>${oCells}</tr>`;
       }).join('');

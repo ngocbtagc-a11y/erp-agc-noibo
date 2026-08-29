@@ -7,8 +7,13 @@
    Đo ra HAI bệnh, không phải một:
      ① THANH CHAT là `<input type="text">` — thẻ một dòng, KHÔNG có cách nào
         xuống dòng dù CSS viết gì. Ở 375px, gõ 133 ký tự tiếng Việt ra
-        scrollWidth 1034px trên ô rộng 232px. Cả ERP có 12 ô cùng kiểu, nhận
-        120–2000 ký tự.
+        scrollWidth 1034px trên ô rộng 232px.
+        VÒNG 1 khai "cả ERP có 12 ô cùng kiểu" — SỐ ĐÓ SAI, và sai vì phép
+        đếm chứ không vì thiếu tìm (REV-0047/L1, xem chú thích arm C). Con số
+        thật: 99 ô một dòng còn lại đều nhận chữ VÔ HẠN vì không khai
+        `maxlength` nào cả. Vòng 2 vá cả 99: 19 ô chữ dài đổi sang
+        `<textarea class="o-nhieu-dong">` (tổng 31 ô), 80 ô chữ ngắn khai trần
+        `maxlength` < 100 cho đúng thứ chúng thật sự nhận.
      ② KHÔNG có chốt chặn TOÀN CỤC cho từ dài. Bơm một link Shopee (không có
         dấu cách) vào bất kỳ khung chữ nào — tiêu đề, dòng phụ, ô "chưa có dữ
         liệu" — cả trang phình từ 375px ra 654–854px ở CẢ 6 TAB.
@@ -19,12 +24,16 @@
      · A. Bong bóng chat với 4 ca chữ (link · 80 số · từ dính 100 ký tự · tiếng
           Việt bình thường làm ca đối chứng "không được đổi").
      · B. Thanh chat: gõ chữ dài vào có kéo ngang không.
-     · C. Đếm ô nhập MỘT DÒNG nhận ≥100 ký tự — phải bằng 0.
+     · C. Đếm ô nhập MỘT DÒNG NHẬN CHỮ DÀI — phải bằng 0.
      · D. Bơm chuỗi độc vào MỌI khung hiện chữ của MỌI tab, đo thanh cuộn
           ngang cấp trang.
      · E. CA ĐỐI CHỨNG CHỐNG SỬA QUÁ TAY: bảng nhiều cột PHẢI vẫn cuộn ngang
           được trong khung riêng của nó. Ép bảng xuống dòng là vỡ cột.
      · F. Số dòng hiện trên màn — bản vá không được ăn bớt vùng đọc.
+     · G. Ô đã đổi sang `<textarea>` phải giữ nguyên thói quen phím: Enter GỬI,
+          Shift+Enter xuống dòng, bộ gõ tiếng Việt không bị cướp phím.
+     · H. CÙNG một trường ở hai chỗ (tạo việc / sửa việc…) phải CÙNG hành vi —
+          chống lại kiểu vá nửa vời đã xảy ra ở vòng 1 (REV-0047/L2).
 
    CHẠY:
      npm run do-chu-dai                      → 375px
@@ -59,13 +68,20 @@ const CA = [
 ];
 
 /* ---- MẪU HỎNG GIẢ -------------------------------------------------------
-   Hai vết thương cố ý, mỗi vết cho một arm của bàn đo:
-     · một khung chữ tự tắt chốt chặn `overflow-wrap` → arm D phải bắt.
-     · một ô nhập MỘT DÒNG nhận 500 ký tự            → arm C phải bắt.
+   BA vết thương cố ý:
+     · một khung chữ tự tắt chốt chặn `overflow-wrap`  → arm D phải bắt.
+     · một ô nhập MỘT DÒNG khai `maxlength="500"`      → arm C phải bắt.
+     · một ô nhập MỘT DÒNG KHÔNG khai `maxlength` gì   → arm C phải bắt.
+   Vết thứ ba là ca đối chứng cho ĐÚNG chỗ phép đếm cũ bị mù (REV-0047/L1):
+   bản cũ lọc `i.maxLength >= 100`, mà ô không khai `maxlength` thì
+   `maxLength === -1` nên bị loại sạch khỏi phép đếm — trong khi nó là ô
+   NẶNG NHẤT, nhận chữ vô hạn. Cố ý để sót một ô kiểu đó ở đây, bàn đo không
+   bắt được thì chính phép đếm mới là thứ hỏng.
    Chỉ sửa BẢN TẠM, không đụng tệp thật trong repo. */
 const VET_THUONG = `
 <div id="mau-hong-khung" style="overflow-wrap:normal;word-break:normal">${LINK}</div>
-<form id="mau-hong-form"><input type="text" id="mau-hong-o" maxlength="500"></form>
+<form id="mau-hong-form"><input type="text" id="mau-hong-o" maxlength="500">
+<input type="text" id="mau-hong-o-vo-han"></form>
 `;
 const suaTep = TU_KIEM
   ? (s, ten) => (ten === 'app.html' && s.includes('</body>') ? s.replace('</body>', VET_THUONG + '</body>') : s)
@@ -100,25 +116,13 @@ const kq = { commit: COMMIT || 'cây làm việc', rong: RONG, tu_kiem: TU_KIEM 
 const doVi = [];
 
 /* ======================================================================== *
-   C. Ô NHẬP MỘT DÒNG NHẬN CHỮ DÀI — phải bằng 0
-   `<input type="text">` không bao giờ xuống dòng được; cho nó 100+ ký tự là
-   chắc chắn có ngày phải kéo ngang trong ô. Đo bằng cấu trúc chứ không bằng
-   bề rộng: ô nằm trong hộp thoại chưa mở thì clientWidth = 0, đo bề rộng ở
-   đó là đo cái không tồn tại — đúng bẫy "phép đo im lặng nói dối".
- * ======================================================================== */
-kq.C_o_mot_dong = await cr.chay(`(() =>
-  [...document.querySelectorAll('input[type="text"], input:not([type])')]
-    .filter(i => i.maxLength >= 100)
-    .map(i => ({ id: i.id || '(không id)', max: i.maxLength })))()`);
-if (kq.C_o_mot_dong.length)
-  doVi.push(`${kq.C_o_mot_dong.length} ô nhập MỘT DÒNG nhận ≥100 ký tự (` +
-    kq.C_o_mot_dong.map(o => o.id).join(', ') + ')');
-
-/* ======================================================================== *
    E. CA ĐỐI CHỨNG CHỐNG SỬA QUÁ TAY — bảng nhiều cột PHẢI còn cuộn ngang
-   Chốt chặn `overflow-wrap: break-word` cố ý KHÔNG dùng `anywhere` vì
-   `anywhere` đổi cả min-content và làm CỘT BẢNG VỠ. Nếu một ngày ai đó đổi
-   sang `anywhere`, dòng đo này đỏ trước khi Sếp nhìn thấy bảng vỡ.
+   Chốt chặn toàn cục là `body { overflow-wrap: anywhere }` — `anywhere` hạ cả
+   min-content nên hàng flex co lại được, đó là lý do phải dùng nó thay
+   `break-word`. Cái giá: Ô BẢNG cũng co theo và CỘT BẢNG VỠ, nên `style.css`
+   trả riêng `table, table *` về `break-word`. Dòng đo này canh đúng chỗ đó:
+   ai gỡ luật `table` kia thì bảng nhiều cột hết cuộn ngang và bàn đo đỏ
+   trước khi Sếp nhìn thấy bảng vỡ.
  * ======================================================================== */
 kq.E_bang_van_cuon = await cr.chay(`(() => {
   const k = [...document.querySelectorAll('.table-wrap, .table-wrap-cuon')]
@@ -190,6 +194,52 @@ for (const t of TAB) {
 }
 
 /* ======================================================================== *
+   C. Ô NHẬP MỘT DÒNG NHẬN CHỮ DÀI — phải bằng 0
+   ---------------------------------------------------------------------------
+   `<input type="text">` không bao giờ xuống dòng được, dù CSS viết gì. Nên
+   câu hỏi đúng là "ô này có NHẬN chữ dài không", KHÔNG phải "ô này có KHAI
+   maxlength lớn không".
+
+   PHÉP LỌC CŨ SAI, VÀ SAI Ở ĐÚNG BƯỚC ĐẾM (REV-0047/L1). Nó lọc
+   `i.maxLength >= 100`. Nhưng input KHÔNG khai `maxlength` thì
+   `maxLength === -1` → bị loại sạch khỏi phép đếm. Đo thật: bơm 200 ký tự vào
+   mọi ô, 99/99 ô một dòng còn lại đều kéo ngang và 99/99 KHÔNG có
+   `maxlength` — tức nhận chữ VÔ HẠN, nặng hơn hẳn ô 120 ký tự đã vá, mà bị
+   đếm bằng 0. Bàn đo cũ vì thế sẽ báo XANH mãi mãi.
+
+   Luật mới: ô một dòng nhận chữ mà `maxLength === -1` (vô hạn) HOẶC
+   `maxLength >= 100` đều là vi phạm. Cách chữa có hai đường, chọn theo bản
+   chất của ô:
+     · ô CHỮ DÀI (tên hàng, địa chỉ, tiêu đề, lý do…) → `<textarea
+       class="o-nhieu-dong" rows="1">` — trông y hệt ô một dòng, tự xuống dòng.
+     · ô CHỮ NGẮN (tìm kiếm, SĐT, mã, số lượng…) → khai `maxlength` < 100 cho
+       đúng thứ nó thật sự nhận. Trần thấp thì chữ không bao giờ đủ dài để
+       phải kéo ngang.
+
+   Đo bằng CẤU TRÚC chứ không bằng bề rộng: ô nằm trong hộp thoại chưa mở thì
+   clientWidth = 0, đo bề rộng ở đó là đo cái không tồn tại — đúng bẫy "phép
+   đo im lặng nói dối". Và đếm SAU vòng bơm ở trên, khi cả 6 tab đã dựng xong,
+   để bắt luôn những ô do JS sinh ra chứ không chỉ ô viết sẵn trong app.html.
+ * ======================================================================== */
+kq.C_o_mot_dong = await cr.chay(`(() => {
+  /* Loại nhận CHỮ. Bỏ number/date/time/checkbox/radio/file/hidden/color/range
+     (không nhận chữ tự do) và password (không thể đổi sang textarea). */
+  const LOAI = ['', 'text', 'search', 'url', 'email', 'tel'];
+  const het = [...document.querySelectorAll('input')]
+    .filter(i => LOAI.includes((i.getAttribute('type') || '').toLowerCase()));
+  const pham = het.filter(i => i.maxLength < 0 || i.maxLength >= 100);
+  return { tong_o_mot_dong: het.length, so_pham: pham.length,
+    pham: pham.map(i => ({ id: i.id || '(không id)',
+      loai: i.getAttribute('type') || '(không khai)',
+      vi_sao: i.maxLength < 0 ? 'KHÔNG khai maxlength — nhận chữ VÔ HẠN'
+                              : 'maxlength ' + i.maxLength })) };
+})()`);
+if (kq.C_o_mot_dong.so_pham)
+  doVi.push(`${kq.C_o_mot_dong.so_pham}/${kq.C_o_mot_dong.tong_o_mot_dong} ô nhập MỘT DÒNG còn nhận chữ dài (` +
+    kq.C_o_mot_dong.pham.slice(0, 12).map(o => `${o.id}: ${o.vi_sao}`).join(' · ') +
+    (kq.C_o_mot_dong.so_pham > 12 ? ` · …và ${kq.C_o_mot_dong.so_pham - 12} ô nữa` : '') + ')');
+
+/* ======================================================================== *
    F2. Ô ĐÃ ĐỔI KHÔNG ĐƯỢC ĂN BỚT DÒNG
    11 ô đổi từ `<input>` sang `<textarea>`. Luật `.field textarea` trong
    style.css đặt `min-height: 90px` cho ô mô tả nhiều dòng — dính phải luật
@@ -217,10 +267,116 @@ kq.F2_o_rong_cao = await cr.chay(`(() => {
   }
   return ra;
 })()`);
+const SO_O_NHIEU_DONG = 31;   /* 12 ô đợt đầu + 19 ô nhóm chữ dài vá theo REV-0047/L1-L2 */
 for (const o of kq.F2_o_rong_cao)
   if (o.cao > 48) doVi.push(`ô "${o.id}" lúc RỖNG cao ${o.cao}px (min-height ${o.min}) — ăn bớt dòng trên màn hẹp`);
-if (kq.F2_o_rong_cao.length < 12)
-  doVi.push(`chỉ đo được ${kq.F2_o_rong_cao.length}/12 ô nhiều dòng — thiếu ô nào là thiếu chỗ đó`);
+if (kq.F2_o_rong_cao.length < SO_O_NHIEU_DONG)
+  doVi.push(`chỉ đo được ${kq.F2_o_rong_cao.length}/${SO_O_NHIEU_DONG} ô nhiều dòng — thiếu ô nào là thiếu chỗ đó`);
+
+/* ======================================================================== *
+   G. PHÍM CỦA Ô ĐÃ ĐỔI — Enter GỬI · Shift+Enter XUỐNG DÒNG · bộ gõ tiếng
+      Việt KHÔNG bị cướp phím
+   ---------------------------------------------------------------------------
+   Đổi `<input>` sang `<textarea>` là mất mặc định "Enter = submit" của trình
+   duyệt. Không đo dòng này thì 20 người gõ Enter và không có gì xảy ra.
+   Đo TOÀN BỘ ô `.o-nhieu-dong`, không riêng thanh chat.
+
+   Ba chỗ dễ đo sai, xử lý sẵn:
+     · Ô trong hộp thoại chưa mở → gỡ tạm `hidden` rồi TRẢ LẠI.
+     · `requestSubmit()` chạy kiểm tra `required` trước; ô rỗng thì sự kiện
+       `submit` KHÔNG bao giờ bắn và phép đo báo "Enter không gửi" oan. Nên
+       tắt tạm `noValidate` và đổ chữ vào ô trước khi bấm.
+     · Bắt `submit` bằng CAPTURE TRÊN `document`, không phải trên chính form:
+       ở giai đoạn "at target" thì listener capture và bubble bắn theo thứ tự
+       ĐĂNG KÝ, nên gắn trên form là chạy SAU handler thật của app — tức là
+       phép đo vô tình gửi thật một cái form.
+ * ======================================================================== */
+kq.G_phim = await cr.chay(`(() => {
+  const ra = [];
+  for (const o of document.querySelectorAll('.o-nhieu-dong')) {
+    const daGo = [];
+    for (let e = o; e && e !== document.body; e = e.parentElement)
+      if (e.hidden) { e.hidden = false; daGo.push(e); }
+    const form = o.closest('form');
+    let enter = null, shift = null, goDau = null;
+    if (form) {
+      const nvCu = form.noValidate; form.noValidate = true;
+      const giu = o.value; o.value = 'thu phim';
+      let ban = 0;
+      const nghe = e => { if (e.target === form) { e.preventDefault(); e.stopPropagation(); ban++; } };
+      document.addEventListener('submit', nghe, true);
+      const bam = kh => { ban = 0;
+        o.dispatchEvent(new KeyboardEvent('keydown',
+          Object.assign({ key: 'Enter', bubbles: true, cancelable: true }, kh)));
+        return ban > 0; };
+      enter = bam({});
+      shift = bam({ shiftKey: true });
+      goDau = bam({ isComposing: true });
+      document.removeEventListener('submit', nghe, true);
+      form.noValidate = nvCu; o.value = giu;
+      o.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    ra.push({ id: o.id || '(không id)', trong_form: !!form,
+              enter_gui: enter, shift_enter_gui: shift, go_dau_gui: goDau });
+    daGo.forEach(e => { e.hidden = true; });
+  }
+  return ra;
+})()`);
+for (const p of kq.G_phim) {
+  if (!p.trong_form) continue;      /* ngoài <form> thì Enter cứ xuống dòng — bản cũ cũng thế */
+  if (!p.enter_gui)   doVi.push(`ô "${p.id}": Enter KHÔNG còn gửi/lưu`);
+  if (p.shift_enter_gui) doVi.push(`ô "${p.id}": Shift+Enter lại đi gửi — phải là xuống dòng`);
+  if (p.go_dau_gui)   doVi.push(`ô "${p.id}": bộ gõ tiếng Việt đang dựng dấu mà Enter đã gửi — nuốt chữ`);
+}
+/* ======================================================================== *
+   H. CÙNG MỘT TRƯỜNG THÌ PHẢI CÙNG MỘT HÀNH VI
+   ---------------------------------------------------------------------------
+   REV-0047/L2: vòng 1 vá `cv-sua-tieu-de` (sửa việc) mà bỏ `cv-tieu-de` (tạo
+   việc) — CÙNG một ô "Tên việc", người dùng gặp hai hành vi khác nhau tuỳ
+   vào việc họ đang tạo hay đang sửa. Kiểu lệch đó không có bàn đo nào bắt
+   được vì mỗi ô xét riêng đều "hợp lệ".
+   Nên liệt kê thẳng các NHÓM ô là cùng một trường, rồi đòi chúng giống nhau
+   cả ba thứ người dùng cảm thấy: loại thẻ · có tự xuống dòng không · trần ký
+   tự. Thêm ô mới cho một trường đã có thì thêm id vào nhóm của nó.
+ * ======================================================================== */
+const NHOM_CUNG_TRUONG = {
+  'tên việc':        ['cv-tieu-de', 'cv-sua-tieu-de'],
+  'tiêu đề mục tiêu': ['mt-tieu-de', 'cv-mtm-tieude'],
+  'tên sản phẩm':    ['kdsp-ten', 'kvTenSP', 'kvSua-ten'],
+  'tên nhà cung cấp': ['dln-ncc-ten', 'kvNhapNCC', 'tsThemNCC', 'tsSuaNCC'],
+  'tên tài sản':     ['tsThemTen', 'tsSuaTen'],
+  'địa chỉ':         ['dln-ncc-diachi', 'dln-kho-diachi', 'dmQueQuan', 'dmThuongTru']
+};
+kq.H_cung_truong = await cr.chay(`(() => {
+  const N = ${JSON.stringify(NHOM_CUNG_TRUONG)};
+  const ra = {};
+  for (const [ten, ids] of Object.entries(N))
+    ra[ten] = ids.map(id => {
+      const e = document.getElementById(id);
+      if (!e) return { id, thieu: true };
+      return { id, the: e.tagName,
+               xuong_dong: e.classList.contains('o-nhieu-dong'),
+               tran: e.maxLength };
+    });
+  return ra;
+})()`);
+for (const [ten, ds] of Object.entries(kq.H_cung_truong)) {
+  const thieu = ds.filter(o => o.thieu).map(o => o.id);
+  if (thieu.length) { doVi.push(`nhóm "${ten}": không tìm thấy ô ${thieu.join(', ')}`); continue; }
+  const van = ds.map(o => `${o.the}/${o.xuong_dong}/${o.tran}`);
+  if (new Set(van).size > 1)
+    doVi.push(`nhóm "${ten}" LỆCH HÀNH VI: ` +
+      ds.map(o => `${o.id}=${o.the}${o.xuong_dong ? '+tự xuống dòng' : '+KÉO NGANG'}(trần ${o.tran})`).join(' vs '));
+}
+
+kq.G_tom_tat = {
+  tong: kq.G_phim.length,
+  trong_form: kq.G_phim.filter(p => p.trong_form).length,
+  enter_gui: kq.G_phim.filter(p => p.enter_gui).length,
+  shift_enter_gui: kq.G_phim.filter(p => p.shift_enter_gui).length,
+  go_dau_gui: kq.G_phim.filter(p => p.go_dau_gui).length,
+  ngoai_form: kq.G_phim.filter(p => !p.trong_form).map(p => p.id)
+};
 
 /* Mẫu hỏng giả nằm ngoài mọi tab (cuối <body>) — đo riêng một nhát. */
 if (TU_KIEM) {
@@ -340,12 +496,16 @@ for (const d of doVi) console.error('  · ' + d);
    vết thương đã chèn, không phải đỏ vì lý do nào khác. Xanh ở đây nghĩa là
    chính bàn đo mới là thứ hỏng, nên thoát 1 để không ai kịp tin nó. */
 if (TU_KIEM) {
-  const batC = doVi.some(d => d.includes('mau-hong-o'));
+  const idPham = (kq.C_o_mot_dong.pham || []).map(o => o.id);
+  const batC = idPham.includes('mau-hong-o');
+  /* CA ĐỐI CHỨNG CHO ĐÚNG CHỖ PHÉP ĐẾM CŨ MÙ: ô cố ý KHÔNG khai `maxlength`.
+     Phép lọc cũ (`maxLength >= 100`) trượt ô này 100%. */
+  const batCVoHan = idPham.includes('mau-hong-o-vo-han');
   const batD = doVi.some(d => d.includes('mẫu hỏng giả'));
-  const dat = !XANH && batC && batD;
+  const dat = !XANH && batC && batCVoHan && batD;
   console.error(dat
-    ? '  ✅ TỰ KIỂM ĐẠT — bắt được CẢ HAI vết thương giả (ô một dòng + khung tắt chốt chặn).'
-    : `  ❌ TỰ KIỂM TRƯỢT — arm C ${batC ? 'bắt' : 'KHÔNG bắt'}, arm D ${batD ? 'bắt' : 'KHÔNG bắt'}: bàn đo là đồ trang trí.`);
+    ? '  ✅ TỰ KIỂM ĐẠT — bắt được CẢ BA vết thương giả (ô 500 ký tự · ô KHÔNG khai maxlength · khung tắt chốt chặn).'
+    : `  ❌ TỰ KIỂM TRƯỢT — arm C/500 ${batC ? 'bắt' : 'KHÔNG bắt'}, arm C/vô hạn ${batCVoHan ? 'bắt' : 'KHÔNG bắt'}, arm D ${batD ? 'bắt' : 'KHÔNG bắt'}: bàn đo là đồ trang trí.`);
   process.exit(dat ? 0 : 1);
 }
 

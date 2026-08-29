@@ -199,7 +199,7 @@
                   <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
                 </button>
                 <div class="combo1-panel" id="vd-nguoipanel" hidden>
-                  <input type="search" id="vd-nguoitim" placeholder="Tìm theo mã hoặc tên...">
+                  <input maxlength="80" type="search" id="vd-nguoitim" placeholder="Tìm theo mã hoặc tên...">
                   <div class="ql-goiy" id="vd-nguoigoiy"></div>
                 </div>
               </div>
@@ -400,7 +400,7 @@
               <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
                 <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
               </svg>
-              <input type="search" id="ls-cv-tim" placeholder="Tìm: tên việc · người nhận · người giao · mục tiêu">
+              <input maxlength="80" type="search" id="ls-cv-tim" placeholder="Tìm: tên việc · người nhận · người giao · mục tiêu">
             </div>
             <select id="ls-cv-loctt" class="chon-nho" title="Lọc theo trạng thái">
               <option value="">Tất cả trạng thái</option>
@@ -450,7 +450,7 @@
             <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
               <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
             </svg>
-            <input type="search" id="db-tim" placeholder="Gõ tên, bộ phận hoặc chức vụ — ví dụ: kho, kế toán, Duy">
+            <input maxlength="80" type="search" id="db-tim" placeholder="Gõ tên, bộ phận hoặc chức vụ — ví dụ: kho, kế toán, Duy">
           </div>
         </div>
         <div class="table-wrap">
@@ -834,7 +834,7 @@
           <form id="qtFormThem" class="form-luoi" autocomplete="off">
             <div class="field">
               <label>Họ tên *</label>
-              <input type="text" id="qtHoTen" required placeholder="Ví dụ: Trần Văn Nam">
+              <input maxlength="80" type="text" id="qtHoTen" required placeholder="Ví dụ: Trần Văn Nam">
             </div>
             <div class="field">
               <label>Chức danh <span class="hint">· <a href="#" data-mo-tab="quantri">quản lý ở Quản trị</a></span></label>
@@ -844,7 +844,7 @@
                   <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
                 </button>
                 <div class="combo1-panel" id="qtChucDanhPanel" hidden>
-                  <input type="search" id="qtChucDanhTim" placeholder="Tìm chức danh...">
+                  <input maxlength="80" type="search" id="qtChucDanhTim" placeholder="Tìm chức danh...">
                   <div class="ql-goiy" id="qtChucDanhGoiY"></div>
                 </div>
               </div>
@@ -858,7 +858,7 @@
                   <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
                 </button>
                 <div class="combo1-panel" id="qtPhongBanPanel" hidden>
-                  <input type="search" id="qtPhongBanTim" placeholder="Tìm phòng ban...">
+                  <input maxlength="80" type="search" id="qtPhongBanTim" placeholder="Tìm phòng ban...">
                   <div class="ql-goiy" id="qtPhongBanGoiY"></div>
                 </div>
               </div>
@@ -866,11 +866,11 @@
             </div>
             <div class="field">
               <label>Số điện thoại</label>
-              <input type="text" id="qtSdt" placeholder="09xx xxx xxx">
+              <input maxlength="20" type="text" id="qtSdt" placeholder="09xx xxx xxx">
             </div>
             <div class="field">
               <label>Email</label>
-              <input type="text" id="qtEmail" placeholder="ten@alphagreen.vn">
+              <input maxlength="80" type="text" id="qtEmail" placeholder="ten@alphagreen.vn">
             </div>
             <div class="field">
               <label>Quản lý trực tiếp</label>
@@ -880,7 +880,7 @@
                   <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
                 </button>
                 <div class="combo1-panel" id="qtQuanLyPanel" hidden>
-                  <input type="search" id="qtQuanLyTim" placeholder="Tìm theo mã hoặc tên...">
+                  <input maxlength="80" type="search" id="qtQuanLyTim" placeholder="Tìm theo mã hoặc tên...">
                   <div class="ql-goiy" id="qtQuanLyGoiY"></div>
                 </div>
               </div>
@@ -907,7 +907,7 @@
             </div>
             <div class="field" id="qtFieldLuong">
               <label>Lương (đồng/tháng)</label>
-              <input type="text" id="qtLuong" inputmode="numeric" placeholder="Để trống nếu chưa có">
+              <input maxlength="20" type="text" id="qtLuong" inputmode="numeric" placeholder="Để trống nếu chưa có">
             </div>
             <div class="field field-nut">
               <button type="submit" class="btn-primary" id="qtNutThem">Thêm nhân sự</button>
@@ -928,7 +928,7 @@
               <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
                 <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
               </svg>
-              <input type="search" id="ns-tim" placeholder="Tìm theo mã, họ tên, SĐT hoặc email...">
+              <input maxlength="80" type="search" id="ns-tim" placeholder="Tìm theo mã, họ tên, SĐT hoặc email...">
             </div>
             <select id="ns-locbophan" class="chon-nho" title="Lọc theo bộ phận">
               <option value="">Tất cả bộ phận</option>
@@ -1119,7 +1119,7 @@
               <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
                 <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
               </svg>
-              <input type="search" id="kd-ds-tim" placeholder="Tìm: mã đơn hoàn · đơn gốc · mã vận đơn · sản phẩm · SKU">
+              <input maxlength="80" type="search" id="kd-ds-tim" placeholder="Tìm: mã đơn hoàn · đơn gốc · mã vận đơn · sản phẩm · SKU">
             </div>
             <select id="kd-ds-locnguon" class="chon-nho" title="Lọc theo nguồn">
               <option value="">Tất cả nguồn</option>
@@ -1212,7 +1212,7 @@
               <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
                 <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
               </svg>
-              <input type="search" id="kdsp-tim" placeholder="Tìm theo tên, mã hàng hoặc nhóm hàng">
+              <input maxlength="80" type="search" id="kdsp-tim" placeholder="Tìm theo tên, mã hàng hoặc nhóm hàng">
             </div>
           </div>
           <div class="panel-body" id="kdsp-panel-them" hidden>
@@ -1220,15 +1220,15 @@
               <input type="hidden" id="kdsp-id">
               <div class="field">
                 <label>Mã hàng (SKU) *</label>
-                <input type="text" id="kdsp-sku" required placeholder="VD: HN-MY-1000">
+                <input maxlength="50" type="text" id="kdsp-sku" required placeholder="VD: HN-MY-1000">
               </div>
               <div class="field">
                 <label>Tên sản phẩm *</label>
-                <input type="text" id="kdsp-ten" required placeholder="VD: Hạnh nhân Mỹ tách vỏ 1kg">
+                <textarea class="o-nhieu-dong" rows="1" maxlength="200" id="kdsp-ten" required placeholder="VD: Hạnh nhân Mỹ tách vỏ 1kg"></textarea>
               </div>
               <div class="field">
                 <label>Nhóm hàng</label>
-                <input type="text" id="kdsp-danhmuc" placeholder="Hạt dinh dưỡng">
+                <input maxlength="80" type="text" id="kdsp-danhmuc" placeholder="Hạt dinh dưỡng">
               </div>
               <div class="field">
                 <label>Đơn vị tính <span class="hint">· <a href="#" data-mo-tab="khovan">quản lý ở Kho vận</a></span></label>
@@ -1236,7 +1236,7 @@
               </div>
               <div class="field">
                 <label>Mức tồn tối thiểu</label>
-                <input type="text" id="kdsp-tonmin" inputmode="numeric" placeholder="Cảnh báo khi tồn xuống dưới mức này">
+                <input maxlength="15" type="text" id="kdsp-tonmin" inputmode="numeric" placeholder="Cảnh báo khi tồn xuống dưới mức này">
               </div>
               <div class="field">
                 <label class="ck"><input type="checkbox" id="kdsp-theodoihsd" checked> Theo dõi hạn sử dụng</label>
@@ -1337,7 +1337,7 @@
               <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
                 <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
               </svg>
-              <input type="search" id="kv-tim" placeholder="Tìm theo tên, mã hàng hoặc nhóm hàng">
+              <input maxlength="80" type="search" id="kv-tim" placeholder="Tìm theo tên, mã hàng hoặc nhóm hàng">
             </div>
           </div>
           <div class="table-wrap kv-ton-table">
@@ -1368,15 +1368,15 @@
             <form id="kvFormThemSP" class="form-luoi" autocomplete="off">
               <div class="field">
                 <label>Mã hàng (SKU) *</label>
-                <input type="text" id="kvSku" required placeholder="VD: HN-MY-1000">
+                <input maxlength="50" type="text" id="kvSku" required placeholder="VD: HN-MY-1000">
               </div>
               <div class="field">
                 <label>Tên sản phẩm *</label>
-                <input type="text" id="kvTenSP" required placeholder="VD: Hạnh nhân Mỹ tách vỏ 1kg">
+                <textarea class="o-nhieu-dong" rows="1" maxlength="200" id="kvTenSP" required placeholder="VD: Hạnh nhân Mỹ tách vỏ 1kg"></textarea>
               </div>
               <div class="field">
                 <label>Nhóm hàng</label>
-                <input type="text" id="kvDanhMuc" placeholder="Hạt dinh dưỡng">
+                <input maxlength="80" type="text" id="kvDanhMuc" placeholder="Hạt dinh dưỡng">
               </div>
               <div class="field">
                 <label>Đơn vị tính <span class="hint">· <a href="#" data-mo-tab="khovan">quản lý ở Kho vận</a></span></label>
@@ -1384,7 +1384,7 @@
               </div>
               <div class="field">
                 <label>Mức tồn tối thiểu</label>
-                <input type="text" id="kvTonMin" inputmode="numeric" placeholder="Cảnh báo khi tồn xuống dưới mức này">
+                <input maxlength="15" type="text" id="kvTonMin" inputmode="numeric" placeholder="Cảnh báo khi tồn xuống dưới mức này">
               </div>
               <div class="field">
                 <label class="ck"><input type="checkbox" id="kvTheoDoiHsd" checked> Theo dõi hạn sử dụng (quản theo lô, xuất FEFO)</label>
@@ -1412,7 +1412,7 @@
                     <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
                   </button>
                   <div class="combo1-panel" id="kvNhapSPPanel" hidden>
-                    <input type="search" id="kvNhapSPTim" placeholder="Tìm theo tên hoặc mã SKU...">
+                    <input maxlength="80" type="search" id="kvNhapSPTim" placeholder="Tìm theo tên hoặc mã SKU...">
                     <div class="ql-goiy" id="kvNhapSPGoiY"></div>
                   </div>
                 </div>
@@ -1420,15 +1420,15 @@
               </div>
               <div class="field">
                 <label>Số lượng nhập *</label>
-                <input type="text" id="kvNhapSL" inputmode="numeric" required placeholder="VD: 200">
+                <input maxlength="15" type="text" id="kvNhapSL" inputmode="numeric" required placeholder="VD: 200">
               </div>
               <div class="field" id="kvNhapFieldGia" hidden>
                 <label>Đơn giá nhập (đ/đơn vị)</label>
-                <input type="text" id="kvNhapGia" inputmode="numeric" placeholder="Giá vốn — để trống nếu chưa có">
+                <input maxlength="15" type="text" id="kvNhapGia" inputmode="numeric" placeholder="Giá vốn — để trống nếu chưa có">
               </div>
               <div class="field kv-field-hsd">
                 <label>Số lô</label>
-                <input type="text" id="kvNhapLo" placeholder="Mã lô của NCC (nếu có)">
+                <input maxlength="50" type="text" id="kvNhapLo" placeholder="Mã lô của NCC (nếu có)">
               </div>
               <div class="field kv-field-hsd">
                 <label>Hạn sử dụng</label>
@@ -1436,7 +1436,7 @@
               </div>
               <div class="field">
                 <label>Nhà cung cấp</label>
-                <input type="text" id="kvNhapNCC" placeholder="VD: California Nuts Co.">
+                <textarea class="o-nhieu-dong" rows="1" maxlength="200" id="kvNhapNCC" placeholder="VD: California Nuts Co."></textarea>
               </div>
               <div class="field field-rong">
                 <label>Ghi chú</label>
@@ -1466,7 +1466,7 @@
                     <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
                   </button>
                   <div class="combo1-panel" id="kvXuatSPPanel" hidden>
-                    <input type="search" id="kvXuatSPTim" placeholder="Tìm theo tên hoặc mã SKU...">
+                    <input maxlength="80" type="search" id="kvXuatSPTim" placeholder="Tìm theo tên hoặc mã SKU...">
                     <div class="ql-goiy" id="kvXuatSPGoiY"></div>
                   </div>
                 </div>
@@ -1477,11 +1477,11 @@
               </div>
               <div class="field">
                 <label>Số lượng xuất *</label>
-                <input type="text" id="kvXuatSL" inputmode="numeric" required placeholder="VD: 50">
+                <input maxlength="15" type="text" id="kvXuatSL" inputmode="numeric" required placeholder="VD: 50">
               </div>
               <div class="field">
                 <label>Kênh / Đơn</label>
-                <input type="text" id="kvXuatKenh" placeholder="VD: Shopee, TikTok, đơn nội bộ">
+                <input maxlength="80" type="text" id="kvXuatKenh" placeholder="VD: Shopee, TikTok, đơn nội bộ">
               </div>
               <div class="field field-rong">
                 <label>Ghi chú</label>
@@ -1547,7 +1547,7 @@
                 <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
                   <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
                 </svg>
-                <input type="search" id="dh-tim" placeholder="Tìm: mã đơn hoàn · đơn gốc · mã vận đơn · sản phẩm · SKU · người mua">
+                <input maxlength="80" type="search" id="dh-tim" placeholder="Tìm: mã đơn hoàn · đơn gốc · mã vận đơn · sản phẩm · SKU · người mua">
               </div>
               <label class="dh-tick-nguon"><input type="checkbox" id="dh-nguon-shopee" checked> Shopee</label>
               <label class="dh-tick-nguon"><input type="checkbox" id="dh-nguon-tiktok" checked> TikTok</label>
@@ -1597,7 +1597,7 @@
                 <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
                   <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
                 </svg>
-                <input type="search" id="ls-tim" placeholder="Tìm: mã đơn hoàn · đơn gốc · mã vận đơn · sản phẩm · SKU · người mua">
+                <input maxlength="80" type="search" id="ls-tim" placeholder="Tìm: mã đơn hoàn · đơn gốc · mã vận đơn · sản phẩm · SKU · người mua">
               </div>
               <label class="dh-tick-nguon"><input type="checkbox" id="ls-nguon-shopee" checked> Shopee</label>
               <label class="dh-tick-nguon"><input type="checkbox" id="ls-nguon-tiktok" checked> TikTok</label>
@@ -1643,7 +1643,7 @@
             <div class="panel-head"><h4>Đơn vị tính</h4><span class="hint" id="dln-dv-dem"></span></div>
             <div class="panel-body">
               <form id="dln-dv-form" style="display:flex; gap:8px" autocomplete="off">
-                <input type="text" id="dln-dv-ten" placeholder="Tên đơn vị mới, VD: kg" required style="flex:1">
+                <input maxlength="30" type="text" id="dln-dv-ten" placeholder="Tên đơn vị mới, VD: kg" required style="flex:1">
                 <button type="submit" class="btn-nho btn-primary" style="width:auto">+ Thêm</button>
               </form>
               <div class="form-loi" id="dln-dv-loi"></div>
@@ -1664,19 +1664,19 @@
                 <input type="hidden" id="dln-ncc-id">
                 <div class="field field-rong">
                   <label>Tên nhà cung cấp *</label>
-                  <input type="text" id="dln-ncc-ten" required>
+                  <textarea class="o-nhieu-dong" rows="1" maxlength="200" id="dln-ncc-ten" required></textarea>
                 </div>
                 <div class="field">
                   <label>Mã số thuế</label>
-                  <input type="text" id="dln-ncc-mst">
+                  <input maxlength="20" type="text" id="dln-ncc-mst">
                 </div>
                 <div class="field">
                   <label>Điện thoại</label>
-                  <input type="text" id="dln-ncc-dt">
+                  <input maxlength="20" type="text" id="dln-ncc-dt">
                 </div>
                 <div class="field field-rong">
                   <label>Địa chỉ</label>
-                  <input type="text" id="dln-ncc-diachi">
+                  <textarea class="o-nhieu-dong" rows="1" maxlength="300" id="dln-ncc-diachi"></textarea>
                 </div>
                 <div class="field field-nut" style="display:flex; gap:10px">
                   <button type="submit" class="btn-primary" id="dln-ncc-nutluu" style="width:auto">+ Thêm</button>
@@ -1699,11 +1699,11 @@
                 <input type="hidden" id="dln-kho-id">
                 <div class="field field-rong">
                   <label>Tên kho *</label>
-                  <input type="text" id="dln-kho-ten" required placeholder="VD: Kho chính Hoài Đức">
+                  <input maxlength="80" type="text" id="dln-kho-ten" required placeholder="VD: Kho chính Hoài Đức">
                 </div>
                 <div class="field field-rong">
                   <label>Địa chỉ</label>
-                  <input type="text" id="dln-kho-diachi">
+                  <textarea class="o-nhieu-dong" rows="1" maxlength="300" id="dln-kho-diachi"></textarea>
                 </div>
                 <div class="field field-nut" style="display:flex; gap:10px">
                   <button type="submit" class="btn-primary" id="dln-kho-nutluu" style="width:auto">+ Thêm</button>
@@ -1817,7 +1817,7 @@
           <form id="tsThemForm" class="form-luoi" autocomplete="off">
             <div class="field field-rong">
               <label>Tên tài sản *</label>
-              <input type="text" id="tsThemTen" required placeholder="VD: Laptop Dell Latitude 5420">
+              <textarea class="o-nhieu-dong" rows="1" maxlength="200" id="tsThemTen" required placeholder="VD: Laptop Dell Latitude 5420"></textarea>
             </div>
             <div class="field">
               <label>Danh mục *</label>
@@ -1827,7 +1827,7 @@
                   <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
                 </button>
                 <div class="combo1-panel" id="tsThemDanhMucPanel" hidden>
-                  <input type="search" id="tsThemDanhMucTim" placeholder="Tìm danh mục...">
+                  <input maxlength="80" type="search" id="tsThemDanhMucTim" placeholder="Tìm danh mục...">
                   <div class="ql-goiy" id="tsThemDanhMucGoiY"></div>
                 </div>
               </div>
@@ -1841,7 +1841,7 @@
                   <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
                 </button>
                 <div class="combo1-panel" id="tsThemViTriPanel" hidden>
-                  <input type="search" id="tsThemViTriTim" placeholder="Tìm vị trí...">
+                  <input maxlength="80" type="search" id="tsThemViTriTim" placeholder="Tìm vị trí...">
                   <div class="ql-goiy" id="tsThemViTriGoiY"></div>
                 </div>
               </div>
@@ -1852,11 +1852,11 @@
               <button type="button" class="btn-nho" id="tsThemNutChiTiet">+ Thêm chi tiết (hãng SX, serial, giá mua, ảnh...)</button>
             </div>
             <div class="field-rong" id="tsThemChiTiet" hidden>
-              <div class="field"><label>Hãng sản xuất</label><input type="text" id="tsThemHangSx" placeholder="Dell, HP, Canon..."></div>
-              <div class="field"><label>Model</label><input type="text" id="tsThemModel"></div>
-              <div class="field"><label>Số serial</label><input type="text" id="tsThemSerial" placeholder="Mã serial của nhà sản xuất"></div>
+              <div class="field"><label>Hãng sản xuất</label><input maxlength="60" type="text" id="tsThemHangSx" placeholder="Dell, HP, Canon..."></div>
+              <div class="field"><label>Model</label><input maxlength="60" type="text" id="tsThemModel"></div>
+              <div class="field"><label>Số serial</label><input maxlength="60" type="text" id="tsThemSerial" placeholder="Mã serial của nhà sản xuất"></div>
               <div class="field"><label>Ngày mua</label><input type="date" id="tsThemNgayMua"></div>
-              <div class="field"><label>Nhà cung cấp</label><input type="text" id="tsThemNCC"></div>
+              <div class="field"><label>Nhà cung cấp</label><textarea class="o-nhieu-dong" rows="1" maxlength="200" id="tsThemNCC"></textarea></div>
               <div class="field"><label>Giá mua (đ) <span class="hint">— chỉ để tham chiếu, không phải sổ kế toán</span></label><input type="number" id="tsThemGiaMua" min="0" step="1000"></div>
               <div class="field"><label>Hết bảo hành</label><input type="date" id="tsThemHetBaoHanh"></div>
               <div class="field">
@@ -1893,7 +1893,7 @@
             <div>
               <p class="hint" style="margin:0 0 8px">Danh mục</p>
               <form id="ts-dm-form" style="display:flex; gap:8px" autocomplete="off">
-                <input type="text" id="ts-dm-ten" placeholder="Danh mục mới, VD: Máy chấm công" required style="flex:1">
+                <input maxlength="60" type="text" id="ts-dm-ten" placeholder="Danh mục mới, VD: Máy chấm công" required style="flex:1">
                 <button type="submit" class="btn-nho btn-primary" style="width:auto">+ Thêm</button>
               </form>
               <div class="form-loi" id="ts-dm-loi"></div>
@@ -1902,7 +1902,7 @@
             <div>
               <p class="hint" style="margin:0 0 8px">Vị trí</p>
               <form id="ts-vt-form" style="display:flex; gap:8px" autocomplete="off">
-                <input type="text" id="ts-vt-ten" placeholder="Vị trí mới, VD: Kho tầng 3" required style="flex:1">
+                <input maxlength="60" type="text" id="ts-vt-ten" placeholder="Vị trí mới, VD: Kho tầng 3" required style="flex:1">
                 <button type="submit" class="btn-nho btn-primary" style="width:auto">+ Thêm</button>
               </form>
               <div class="form-loi" id="ts-vt-loi"></div>
@@ -1923,7 +1923,7 @@
               <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
                 <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
               </svg>
-              <input type="search" id="ts-tim" placeholder="Tìm theo mã, tên, danh mục hoặc serial...">
+              <input maxlength="80" type="search" id="ts-tim" placeholder="Tìm theo mã, tên, danh mục hoặc serial...">
             </div>
             <select id="ts-loctrangthai" class="chon-nho" title="Lọc theo trạng thái">
               <option value="">Tất cả trạng thái</option>
@@ -2002,7 +2002,7 @@
         <h4>Sửa tài sản</h4>
         <form id="tsSuaForm" class="form-luoi" autocomplete="off">
           <input type="hidden" id="tsSuaId">
-          <div class="field field-rong"><label>Tên tài sản *</label><input type="text" id="tsSuaTen" required></div>
+          <div class="field field-rong"><label>Tên tài sản *</label><textarea class="o-nhieu-dong" rows="1" maxlength="200" id="tsSuaTen" required></textarea></div>
           <div class="field">
             <label>Danh mục</label>
             <div class="combo1" id="tsSuaDanhMucCombo">
@@ -2011,7 +2011,7 @@
                 <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
               </button>
               <div class="combo1-panel" id="tsSuaDanhMucPanel" hidden>
-                <input type="search" id="tsSuaDanhMucTim" placeholder="Tìm danh mục...">
+                <input maxlength="80" type="search" id="tsSuaDanhMucTim" placeholder="Tìm danh mục...">
                 <div class="ql-goiy" id="tsSuaDanhMucGoiY"></div>
               </div>
             </div>
@@ -2025,7 +2025,7 @@
                 <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
               </button>
               <div class="combo1-panel" id="tsSuaViTriPanel" hidden>
-                <input type="search" id="tsSuaViTriTim" placeholder="Tìm vị trí...">
+                <input maxlength="80" type="search" id="tsSuaViTriTim" placeholder="Tìm vị trí...">
                 <div class="ql-goiy" id="tsSuaViTriGoiY"></div>
               </div>
             </div>
@@ -2040,11 +2040,11 @@
               <option value="hong">Hỏng</option>
             </select>
           </div>
-          <div class="field"><label>Hãng sản xuất</label><input type="text" id="tsSuaHangSx"></div>
-          <div class="field"><label>Model</label><input type="text" id="tsSuaModel"></div>
-          <div class="field"><label>Số serial</label><input type="text" id="tsSuaSerial"></div>
+          <div class="field"><label>Hãng sản xuất</label><input maxlength="60" type="text" id="tsSuaHangSx"></div>
+          <div class="field"><label>Model</label><input maxlength="60" type="text" id="tsSuaModel"></div>
+          <div class="field"><label>Số serial</label><input maxlength="60" type="text" id="tsSuaSerial"></div>
           <div class="field"><label>Ngày mua</label><input type="date" id="tsSuaNgayMua"></div>
-          <div class="field"><label>Nhà cung cấp</label><input type="text" id="tsSuaNCC"></div>
+          <div class="field"><label>Nhà cung cấp</label><textarea class="o-nhieu-dong" rows="1" maxlength="200" id="tsSuaNCC"></textarea></div>
           <div class="field"><label>Giá mua (đ)</label><input type="number" id="tsSuaGiaMua" min="0" step="1000"></div>
           <div class="field"><label>Hết bảo hành</label><input type="date" id="tsSuaHetBaoHanh"></div>
           <div class="field"><label>Phòng ban sở hữu</label><select id="tsSuaPhongBan"><option value="">— Chưa gán —</option></select></div>
@@ -2072,7 +2072,7 @@
         <div class="form-loi" id="tsQuetLoi"></div>
         <div class="field field-rong" style="margin-top:14px">
           <label>Hoặc nhập mã tài sản trực tiếp</label>
-          <input type="text" id="tsQuetNhapTay" placeholder="VD: TS0001" autocapitalize="characters">
+          <input maxlength="40" type="text" id="tsQuetNhapTay" placeholder="VD: TS0001" autocapitalize="characters">
         </div>
         <div class="field field-nut" style="display:flex; gap:10px">
           <button type="button" class="btn-primary" id="tsQuetTraCuu" style="width:auto">Mở tài sản</button>
@@ -2219,11 +2219,11 @@
               <input type="hidden" id="xcMcId">
               <div class="field">
                 <label>Ký hiệu ngắn *</label>
-                <input type="text" id="xcMcMa" required placeholder="VD: S">
+                <input maxlength="10" type="text" id="xcMcMa" required placeholder="VD: S">
               </div>
               <div class="field">
                 <label>Tên ca *</label>
-                <input type="text" id="xcMcTen" required placeholder="VD: Ca sáng">
+                <input maxlength="40" type="text" id="xcMcTen" required placeholder="VD: Ca sáng">
               </div>
               <div class="field">
                 <label>Giờ bắt đầu *</label>
@@ -2323,7 +2323,7 @@
             <div class="panel-head"><h4>Phòng ban</h4><span class="hint" id="dln-pb-dem"></span></div>
             <div class="panel-body">
               <form id="dln-pb-form" style="display:flex; gap:8px" autocomplete="off">
-                <input type="text" id="dln-pb-ten" placeholder="Tên phòng ban mới, VD: Kho vận" required style="flex:1">
+                <input maxlength="60" type="text" id="dln-pb-ten" placeholder="Tên phòng ban mới, VD: Kho vận" required style="flex:1">
                 <button type="submit" class="btn-nho btn-primary" style="width:auto">+ Thêm</button>
               </form>
               <div class="form-loi" id="dln-pb-loi"></div>
@@ -2336,7 +2336,7 @@
             <div class="panel-head"><h4>Chức danh</h4><span class="hint" id="dln-cd-dem"></span></div>
             <div class="panel-body">
               <form id="dln-cd-form" style="display:flex; gap:8px" autocomplete="off">
-                <input type="text" id="dln-cd-ten" placeholder="Tên chức danh mới, VD: Nhân viên kho" required style="flex:1">
+                <input maxlength="60" type="text" id="dln-cd-ten" placeholder="Tên chức danh mới, VD: Nhân viên kho" required style="flex:1">
                 <button type="submit" class="btn-nho btn-primary" style="width:auto">+ Thêm</button>
               </form>
               <div class="form-loi" id="dln-cd-loi"></div>
@@ -2374,7 +2374,7 @@
           <form id="dmForm" class="form-luoi" autocomplete="off" style="margin-top:18px">
             <div class="field">
               <label>Họ tên *</label>
-              <input type="text" id="dmHoTen" required placeholder="Nguyễn Văn A">
+              <input maxlength="80" type="text" id="dmHoTen" required placeholder="Nguyễn Văn A">
             </div>
             <div class="field">
               <label>Ngày sinh</label>
@@ -2388,36 +2388,36 @@
             </div>
             <div class="field">
               <label>Số CCCD <span class="goi-y">· nhạy cảm</span></label>
-              <input type="text" id="dmSoCccd" inputmode="numeric" placeholder="12 số">
+              <input maxlength="20" type="text" id="dmSoCccd" inputmode="numeric" placeholder="12 số">
             </div>
             <div class="field field-rong">
               <label>Quê quán</label>
-              <input type="text" id="dmQueQuan">
+              <textarea class="o-nhieu-dong" rows="1" maxlength="300" id="dmQueQuan"></textarea>
             </div>
             <div class="field field-rong">
               <label>Nơi thường trú</label>
-              <input type="text" id="dmThuongTru">
+              <textarea class="o-nhieu-dong" rows="1" maxlength="300" id="dmThuongTru"></textarea>
             </div>
 
             <div class="field">
               <label>Số điện thoại</label>
-              <input type="text" id="dmSdt" inputmode="tel" placeholder="09xx xxx xxx">
+              <input maxlength="20" type="text" id="dmSdt" inputmode="tel" placeholder="09xx xxx xxx">
             </div>
             <div class="field">
               <label>Email</label>
-              <input type="text" id="dmEmail" placeholder="ten@alphagreen.vn">
+              <input maxlength="80" type="text" id="dmEmail" placeholder="ten@alphagreen.vn">
             </div>
             <div class="field">
               <label>Số sổ BHXH <span class="goi-y">· nhạy cảm</span></label>
-              <input type="text" id="dmSoBhxh" inputmode="numeric">
+              <input maxlength="20" type="text" id="dmSoBhxh" inputmode="numeric">
             </div>
             <div class="field">
               <label>Chức vụ</label>
-              <input type="text" id="dmChucVu" placeholder="Nhân viên kho">
+              <input maxlength="60" type="text" id="dmChucVu" placeholder="Nhân viên kho">
             </div>
             <div class="field">
               <label>Bộ phận</label>
-              <input type="text" id="dmBoPhan" placeholder="Kho vận">
+              <input maxlength="60" type="text" id="dmBoPhan" placeholder="Kho vận">
             </div>
             <div class="field">
               <label>Quản lý trực tiếp</label>
@@ -2438,7 +2438,7 @@
             </div>
             <div class="field" id="dmFieldLuong">
               <label>Lương (đồng/tháng)</label>
-              <input type="text" id="dmLuong" inputmode="numeric" placeholder="Để trống nếu chưa có">
+              <input maxlength="20" type="text" id="dmLuong" inputmode="numeric" placeholder="Để trống nếu chưa có">
             </div>
 
             <div class="field field-nut">
@@ -2462,7 +2462,7 @@
               <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
                 <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
               </svg>
-              <input type="search" id="qt-tim" placeholder="Tìm theo mã, họ tên hoặc tên đăng nhập...">
+              <input maxlength="80" type="search" id="qt-tim" placeholder="Tìm theo mã, họ tên hoặc tên đăng nhập...">
             </div>
             <select id="qt-locvaitro" class="chon-nho" title="Lọc theo vai trò">
               <option value="">Tất cả vai trò</option>
@@ -2501,14 +2501,14 @@
     <form id="hopNhapForm" class="form-luoi" autocomplete="off">
       <div class="field field-rong">
         <label id="hopNhap-nhan"></label>
-        <input type="text" id="hopNhap-input" hidden>
+        <textarea class="o-nhieu-dong" rows="1" maxlength="500" id="hopNhap-input" hidden></textarea>
         <div class="combo1" id="hopNhap-selectcombo" hidden>
           <button type="button" class="combo1-hienthi rong" id="hopNhap-selecthienthi">
             <span>Chọn...</span>
             <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
           </button>
           <div class="combo1-panel" id="hopNhap-selectpanel" hidden>
-            <input type="search" id="hopNhap-selecttim" placeholder="Tìm theo mã hoặc tên...">
+            <input maxlength="80" type="search" id="hopNhap-selecttim" placeholder="Tìm theo mã hoặc tên...">
             <div class="ql-goiy" id="hopNhap-selectgoiy"></div>
           </div>
         </div>
@@ -2541,11 +2541,11 @@
       <input type="hidden" id="nsSua-id">
       <div class="field field-rong">
         <label>Họ tên *</label>
-        <input type="text" id="nsSua-hoten" required>
+        <input maxlength="80" type="text" id="nsSua-hoten" required>
       </div>
       <div class="field" id="nsSua-fieldmanv" hidden>
         <label>Mã nhân sự <span class="goi-y">· chỉ Admin sửa được, hiếm khi cần đổi</span></label>
-        <input type="text" id="nsSua-manv" placeholder="VD: 01-0001">
+        <input maxlength="20" type="text" id="nsSua-manv" placeholder="VD: 01-0001">
       </div>
       <div class="field">
         <label>Chức danh <span class="hint">· <a href="#" data-mo-tab="quantri">quản lý ở Quản trị</a></span></label>
@@ -2555,7 +2555,7 @@
             <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
           </button>
           <div class="combo1-panel" id="nsSua-chucdanhpanel" hidden>
-            <input type="search" id="nsSua-chucdanhtim" placeholder="Tìm chức danh...">
+            <input maxlength="80" type="search" id="nsSua-chucdanhtim" placeholder="Tìm chức danh...">
             <div class="ql-goiy" id="nsSua-chucdanhgoiy"></div>
           </div>
         </div>
@@ -2569,7 +2569,7 @@
             <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
           </button>
           <div class="combo1-panel" id="nsSua-phongbanpanel" hidden>
-            <input type="search" id="nsSua-phongbantim" placeholder="Tìm phòng ban...">
+            <input maxlength="80" type="search" id="nsSua-phongbantim" placeholder="Tìm phòng ban...">
             <div class="ql-goiy" id="nsSua-phongbangoiy"></div>
           </div>
         </div>
@@ -2577,11 +2577,11 @@
       </div>
       <div class="field">
         <label>Số điện thoại</label>
-        <input type="text" id="nsSua-sdt">
+        <input maxlength="20" type="text" id="nsSua-sdt">
       </div>
       <div class="field">
         <label>Email</label>
-        <input type="text" id="nsSua-email">
+        <input maxlength="80" type="text" id="nsSua-email">
       </div>
       <div class="field">
         <label>Quản lý trực tiếp</label>
@@ -2591,7 +2591,7 @@
             <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
           </button>
           <div class="combo1-panel" id="nsSua-quanlypanel" hidden>
-            <input type="search" id="nsSua-quanlytim" placeholder="Tìm theo mã hoặc tên...">
+            <input maxlength="80" type="search" id="nsSua-quanlytim" placeholder="Tìm theo mã hoặc tên...">
             <div class="ql-goiy" id="nsSua-quanlygoiy"></div>
           </div>
         </div>
@@ -2618,7 +2618,7 @@
       </div>
       <div class="field" id="nsSua-fieldluong">
         <label>Đổi lương (đồng/tháng) <span class="goi-y">· để trống = giữ nguyên</span></label>
-        <input type="text" id="nsSua-luong" inputmode="numeric" placeholder="Chỉ gõ nếu muốn đổi">
+        <input maxlength="20" type="text" id="nsSua-luong" inputmode="numeric" placeholder="Chỉ gõ nếu muốn đổi">
       </div>
       <div class="field field-nut" style="display:flex; gap:10px">
         <button type="submit" class="btn-primary" id="nsSua-nutluu" style="width:auto">Lưu thay đổi</button>
@@ -2818,15 +2818,15 @@
       </div>
       <div class="field">
         <label>Số hợp đồng <span class="goi-y">· để trống cũng được</span></label>
-        <input type="text" id="nsHd-sohd" placeholder="VD: 12/2026/HĐLĐ">
+        <input maxlength="50" type="text" id="nsHd-sohd" placeholder="VD: 12/2026/HĐLĐ">
       </div>
       <div class="field">
         <label>Lần ký thứ <span class="goi-y">· máy tự tính, không sửa được</span></label>
-        <input type="text" id="nsHd-lanthu" value="—" readonly>
+        <input maxlength="5" type="text" id="nsHd-lanthu" value="—" readonly>
       </div>
       <div class="field field-rong" id="nsHd-fieldlydo" hidden>
         <label>Lý do vẫn ký như vậy *</label>
-        <input type="text" id="nsHd-lydo" placeholder="Ghi ngắn gọn — lý do này được lưu vào lịch sử hồ sơ">
+        <textarea class="o-nhieu-dong" rows="1" maxlength="500" id="nsHd-lydo" placeholder="Ghi ngắn gọn — lý do này được lưu vào lịch sử hồ sơ"></textarea>
       </div>
       <div class="field field-nut" style="display:flex; gap:10px">
         <button type="submit" class="btn-primary" id="nsHd-nutluu" style="width:auto">Lưu hợp đồng</button>
@@ -2884,7 +2884,7 @@
     <form id="mt-form" class="form-luoi" autocomplete="off">
       <div class="field field-rong">
         <label>Tên mục tiêu *</label>
-        <input type="text" id="mt-tieu-de" required placeholder="VD: Doanh thu Shopee đạt 30 tỷ trong quý">
+        <textarea class="o-nhieu-dong" rows="1" maxlength="200" id="mt-tieu-de" required placeholder="VD: Doanh thu Shopee đạt 30 tỷ trong quý"></textarea>
       </div>
       <div class="field field-rong">
         <label>Mô tả (tuỳ chọn)</label>
@@ -2976,7 +2976,7 @@
             <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
           </button>
           <div class="combo1-panel" id="cv-nguoi-nhanpanel" hidden>
-            <input type="search" id="cv-nguoi-nhantim" placeholder="Tìm theo mã hoặc tên...">
+            <input maxlength="80" type="search" id="cv-nguoi-nhantim" placeholder="Tìm theo mã hoặc tên...">
             <div class="ql-goiy" id="cv-nguoi-nhangoiy"></div>
           </div>
         </div>
@@ -2988,7 +2988,7 @@
       </div>
       <div class="field field-rong">
         <label>Tên việc *</label>
-        <input type="text" id="cv-tieu-de" required placeholder="Ví dụ: Rà soát tồn kho lô hàng chè chưng yến">
+        <textarea class="o-nhieu-dong" rows="1" maxlength="200" id="cv-tieu-de" required placeholder="Ví dụ: Rà soát tồn kho lô hàng chè chưng yến"></textarea>
       </div>
       <div class="field field-rong">
         <label>Đầu ra cụ thể cần đạt *</label>
@@ -3013,11 +3013,11 @@
         </div>
         <div class="field" id="cv-mtm-field-bophan">
           <label>Phòng ban / bộ phận *</label>
-          <input type="text" id="cv-mtm-bophan" placeholder="VD: Kho vận, Kế toán, Vận hành sàn...">
+          <input maxlength="80" type="text" id="cv-mtm-bophan" placeholder="VD: Kho vận, Kế toán, Vận hành sàn...">
         </div>
         <div class="field field-rong">
           <label>Tên mục tiêu mới *</label>
-          <input type="text" id="cv-mtm-tieude" placeholder="VD: Doanh thu Shopee đạt 30 tỷ trong quý">
+          <textarea class="o-nhieu-dong" rows="1" maxlength="200" id="cv-mtm-tieude" placeholder="VD: Doanh thu Shopee đạt 30 tỷ trong quý"></textarea>
         </div>
       </div>
 
@@ -3031,7 +3031,7 @@
             <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
               <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
             </svg>
-            <input type="text" id="cv-phoi-hop-tim" placeholder="Gõ tên để lọc…">
+            <input maxlength="80" type="text" id="cv-phoi-hop-tim" placeholder="Gõ tên để lọc…">
           </div>
           <div id="cv-phoi-hop" class="cv-phoihop"></div>
         </div>
@@ -3115,11 +3115,11 @@
       <input type="hidden" id="kvSua-id">
       <div class="field field-rong">
         <label>Tên sản phẩm *</label>
-        <input type="text" id="kvSua-ten" required>
+        <textarea class="o-nhieu-dong" rows="1" maxlength="200" id="kvSua-ten" required></textarea>
       </div>
       <div class="field">
         <label>Nhóm hàng</label>
-        <input type="text" id="kvSua-danhmuc">
+        <input maxlength="80" type="text" id="kvSua-danhmuc">
       </div>
       <div class="field">
         <label>Đơn vị tính</label>
@@ -3127,7 +3127,7 @@
       </div>
       <div class="field">
         <label>Mức tồn tối thiểu</label>
-        <input type="text" id="kvSua-tonmin" inputmode="numeric">
+        <input maxlength="15" type="text" id="kvSua-tonmin" inputmode="numeric">
       </div>
       <div class="field">
         <label class="ck"><input type="checkbox" id="kvSua-theodoihsd"> Theo dõi hạn sử dụng</label>
@@ -3224,7 +3224,7 @@
             <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
           </button>
           <div class="combo1-panel" id="tsCapPhatNguoiPanel" hidden>
-            <input type="search" id="tsCapPhatNguoiTim" placeholder="Tìm theo mã hoặc tên...">
+            <input maxlength="80" type="search" id="tsCapPhatNguoiTim" placeholder="Tìm theo mã hoặc tên...">
             <div class="ql-goiy" id="tsCapPhatNguoiGoiY"></div>
           </div>
         </div>
@@ -3232,7 +3232,7 @@
       </div>
       <div class="field field-rong">
         <label>Vị trí</label>
-        <input type="text" id="tsCapPhatViTri" placeholder="VD: Văn phòng, Kho chính...">
+        <textarea class="o-nhieu-dong" rows="1" maxlength="200" id="tsCapPhatViTri" placeholder="VD: Văn phòng, Kho chính..."></textarea>
       </div>
       <div class="field field-rong">
         <label>Ghi chú</label>
@@ -3289,7 +3289,7 @@
     <form id="taoTkForm" class="form-luoi" autocomplete="off">
       <div class="field field-rong">
         <label>Tên đăng nhập (số điện thoại) *</label>
-        <input type="text" id="taoTkTen" required placeholder="09xx xxx xxx">
+        <input maxlength="80" type="text" id="taoTkTen" required placeholder="09xx xxx xxx">
       </div>
       <div class="field field-rong">
         <label>Vai trò *</label>
@@ -3299,7 +3299,7 @@
             <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
           </button>
           <div class="combo1-panel" id="taoTkVaiTroPanel" hidden>
-            <input type="search" id="taoTkVaiTroTim" placeholder="Tìm vai trò...">
+            <input maxlength="80" type="search" id="taoTkVaiTroTim" placeholder="Tìm vai trò...">
             <div class="ql-goiy" id="taoTkVaiTroGoiY"></div>
           </div>
         </div>
@@ -3328,7 +3328,7 @@
             <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
           </button>
           <div class="combo1-panel" id="doiVaiTroMoiPanel" hidden>
-            <input type="search" id="doiVaiTroMoiTim" placeholder="Tìm vai trò...">
+            <input maxlength="80" type="search" id="doiVaiTroMoiTim" placeholder="Tìm vai trò...">
             <div class="ql-goiy" id="doiVaiTroMoiGoiY"></div>
           </div>
         </div>

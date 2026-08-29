@@ -14,6 +14,9 @@
        tin-nhan lỗi 500 ở ĐÚNG lượt gọi lúc khởi động (đúng ca của Sếp)
      node scripts/do-chat-noibo.mjs --css <commit> → hoàn nguyên public/ về
        commit đó rồi đo (ca đối chứng BH-16)
+   MÃ THOÁT: 0 = xanh, 1 = đỏ. (Tới 29/08/2026 tệp này KHÔNG có `process.exit`
+   nào — luôn thoát 0, tức chạy nó như cổng hồi quy là tự lừa. REV-0047/L4.
+   Ngưỡng của từng phép đo nằm ở cuối tệp, mục "PHÉP TRƯỢT".)
    ========================================================================== */
 
 import { cpSync, mkdirSync, readFileSync, writeFileSync, rmSync, existsSync, statSync } from 'node:fs';
@@ -420,10 +423,72 @@ if (raAnh) {
   await doi(900); await chup('chat-luong');
 }
 
+/* ==========================================================================
+   PHÉP TRƯỢT — MÃ THOÁT 0/1
+   ---------------------------------------------------------------------------
+   REV-0047/L4: tệp này TỪNG KHÔNG CÓ `process.exit` nào cả. Nó chạy, in một
+   đống JSON, rồi thoát 0 dù mọi số đo có tệ đến đâu. Cả ngày 29/08 nhiều báo
+   cáo trích "`do-chat-noibo` thoát 0" như bằng chứng hồi quy — bằng chứng đó
+   VÔ NGHĨA: một cổng không bao giờ đỏ được thì nó không phải cổng.
+
+   Từ đây mỗi phép đo có một ngưỡng viết thẳng ra. Chỉ chốt những thứ ĐÃ ĐO
+   ĐƯỢC và phải đúng, không chốt thứ phụ thuộc dữ liệu giả (số bong bóng gần
+   đây, bề rộng dòng hội thoại lúc đang trong một đoạn chat…) — cổng báo oan
+   thì lần sau không ai đọc nữa.
+   ========================================================================== */
+const doVi = [];
+const doi44 = (ten, o) => {
+  if (!o) { doVi.push(`không tìm thấy ${ten}`); return; }
+  if (o.h < 44 || o.w < 44) doVi.push(`${ten} chỉ ${o.w}×${o.h}px — dưới sàn chạm 44px`);
+};
+
+if (kq.co_moChatVoi !== 'function') doVi.push('window.moChatVoi không phải hàm — nút "Chat ngay" chắc chắn chết');
+if (!kq.so_nut_chatngay) doVi.push('không có nút "Chat ngay" nào trong Danh bạ');
+if (kq.mo !== kq.bam) doVi.push(`bấm ${kq.bam} nút "Chat ngay" mà chỉ mở được ${kq.mo} — đúng lỗi Sếp Ngọc báo`);
+if (kq.loi_console.length) doVi.push(`${kq.loi_console.length} dòng console.error: ${kq.loi_console.slice(0, 3).join(' | ')}`);
+
+const ds = kq.danh_sach || {};
+if (!ds.co || !ds.hien) doVi.push('mở nút nổi mà KHÔNG ra danh sách hội thoại');
+if (!ds.so_dong) doVi.push('danh sách hội thoại rỗng');
+if (!ds.co_kenh_chung) doVi.push('danh sách hội thoại thiếu Kênh chung');
+if (!ds.o_nhap_an) doVi.push('đang ở màn DANH SÁCH mà ô nhập tin vẫn hiện — gõ vào đó không biết gửi cho ai');
+
+const x = kq.xem_tin_cu || {};
+if (!x.co_nut || !x.nut_hien) doVi.push('không có nút "Xem tin cũ hơn" dù còn tin cũ');
+if (!(x.sau_so > x.trang1_so)) doVi.push(`bấm "Xem tin cũ hơn" mà số tin không tăng (${x.trang1_so} → ${x.sau_so})`);
+if (x.trung) doVi.push(`${x.trung} tin bị lặp sau khi tải trang 2`);
+if (x.sot) doVi.push(`${x.sot} tin bị sót giữa hai trang — thủng lịch sử chat`);
+
+const n = kq.do_nut || {};
+doi44('nút nổi #cnbNut', n.cnbNut);
+doi44('nút đóng #cnbDong', n.cnbDong);
+doi44('nút lùi #cnbLui', n.cnbLui);
+doi44('nút Gửi', n.guiTin);
+doi44('nút đính kèm 📎', n.tep);
+doi44('nút "Xem tin cũ hơn"', n.cuHon);
+if (n.oNhap && n.oNhap.h < 44) doVi.push(`ô nhập tin cao ${n.oNhap.h}px — dưới sàn chạm 44px`);
+/* Nút "Chat ngay" vẽ CAO 28px nhưng có `::after` trong suốt nới vùng chạm.
+   Nên hỏi bằng `elementFromPoint`, không hỏi bằng bề cao vẽ ra. */
+const c = kq.cham_44 || {};
+if (!c.trung_mep_tren || !c.trung_mep_duoi)
+  doVi.push(`vùng chạm nút "Chat ngay" thủng: mép trên ${c.trung_mep_tren ? 'trúng' : 'TRƯỢT'}, mép dưới ${c.trung_mep_duoi ? 'trúng' : 'TRƯỢT'}`);
+
+if (kq.chong_lan && kq.chong_lan.bi_de_boi_bong)
+  doVi.push(`cột bong bóng đè lên ${kq.chong_lan.bi_de_boi_bong} nút của trang`);
+
+kq.ket_luan = doVi.length ? 'ĐỎ' : 'XANH';
+kq.vi_sao_do = doVi;
+
 console.log(JSON.stringify(kq, null, 2));
+console.error('');
+console.error(`CHAT NỘI BỘ [${kq.css} @${BE_NGANG}px${HONG_LAN_DAU ? ' · hỏng-lần-đầu' : ''}]: ${doVi.length ? '❌ ĐỎ' : '✅ XANH'}`);
+for (const d of doVi) console.error('  · ' + d);
 
 ws.close();
 chrome.kill();
 may.close();
 try { rmSync(tam, { recursive: true, force: true }); } catch {}
 try { rmSync(hoSo, { recursive: true, force: true }); } catch {}
+
+/* MÃ THOÁT: 0 = xanh, 1 = đỏ. Không có dòng này thì cả tệp là đồ trang trí. */
+process.exit(doVi.length ? 1 : 0);
