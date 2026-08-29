@@ -570,6 +570,18 @@
         <div class="gy-the-ds" id="gy-quahan-ds"></div>
       </div>
 
+      <!-- ĐÃ LÊN HỆ THỐNG — CHỜ XÁC NHẬN.
+           Máy đọc mã góp ý trong thông điệp commit (GY-12) sau mỗi lần deploy.
+           Góp ý ĐÃ QUA cổng duyệt thì máy tự đẩy tiếp và nhắn người gửi. Góp ý
+           CHƯA qua cổng thì máy DỪNG LẠI ở đây — thà để nguyên chờ người xác
+           nhận, còn hơn đánh dấu xong nhầm. -->
+      <div class="panel" id="gy-dalen-panel" hidden>
+        <div class="panel-head"><h4 id="gy-dalen-tieude">Đã lên hệ thống — chờ xác nhận</h4></div>
+        <div class="sm" style="margin:0 0 8px">Có commit khai đã sửa những góp ý này và bản vá <b>đã lên hệ thống thật</b>. Nhưng chúng chưa đi qua cổng duyệt, nên máy <b>không tự đánh dấu xong</b>. Sếp xem rồi chốt giúp.</div>
+        <div class="gy-the-ds" id="gy-dalen-ds"></div>
+        <div class="form-loi" id="gy-dalen-loi"></div>
+      </div>
+
       <div class="panel" id="gy-xacminh-panel" hidden>
         <div class="panel-head"><h4 id="gy-xacminh-tieude">Cần xác minh lại</h4></div>
         <div class="sm" style="margin:0 0 8px">Mang nhãn “Hoàn thành” nhưng chưa có link Pull Request/commit nào chứng minh. Mở từng cái ra để dán bằng chứng, hoặc mở lại cho làm tiếp.</div>
@@ -699,6 +711,33 @@
             </div>
           </form>
           <div class="form-loi" id="gyCtTriageLoi"></div>
+        </div>
+
+        <!-- ĐÓNG MÀ KHÔNG SỬA CODE. Có góp ý đúng là không cần một dòng code
+             nào — trả lời bằng hướng dẫn, hoặc quyết định không làm. Trước
+             bản này chúng KẸT: “Hoàn thành” đòi link Pull Request mà không có
+             PR nào tồn tại, nên chúng nằm mãi ở “Đã duyệt — chờ phân tích”. -->
+        <div id="gyCtKhongCodeKhoi" hidden>
+          <div class="kv-md-muc">Đóng mà không sửa code</div>
+          <div class="sm" style="margin-bottom:8px">Câu bạn viết dưới đây được <b>gửi thẳng cho người gửi</b> — họ đọc đúng câu này, nên viết cho tử tế.</div>
+          <form id="gyCtKhongCodeForm" class="form-luoi">
+            <div class="field">
+              <label>Đóng theo kiểu</label>
+              <select id="gyCtKhongCodeKieu">
+                <option value="huong_dan">Đã trả lời bằng hướng dẫn — không phải sửa phần mềm</option>
+                <option value="khong_lam">Quyết định không làm</option>
+              </select>
+            </div>
+            <div class="field field-rong">
+              <label>Viết cho người gửi (bắt buộc, từ 20 ký tự)</label>
+              <input type="text" id="gyCtKhongCodeGhiChu" maxlength="500"
+                     placeholder="Ví dụ: Chỗ này đã có sẵn ở mục Kho vận → nút Lọc, chị bấm vào đó nhé.">
+            </div>
+            <div class="field field-nut">
+              <button type="submit" class="btn-primary" id="gyCtNutKhongCode" style="width:auto">Đóng góp ý này</button>
+            </div>
+          </form>
+          <div class="form-loi" id="gyCtKhongCodeLoi"></div>
         </div>
 
         <div class="kv-md-muc">Lịch sử</div>

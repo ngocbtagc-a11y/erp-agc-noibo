@@ -17,6 +17,11 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ac4732957e4ef577d32bfe4595f8f022
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Cần đủ lịch sử để đọc được CÁC COMMIT TRONG LƯỢT ĐẨY NÀY
+          # (github.event.before..github.sha). Nông quá thì git log không thấy
+          # commit cũ, và bước chốt góp ý bên dưới tự lùi về "chỉ commit cuối".
+          fetch-depth: 50
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -27,3 +32,32 @@ jobs:
           # Khóa BÍ MẬT — lưu trong GitHub Secrets, KHÔNG viết thẳng vào file này
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           command: deploy
+
+      # ====================================================================
+      # BÁO VỀ ERP: NHỮNG GÓP Ý NÀO VỪA ĐƯỢC SỬA XONG VÀ ĐÃ LÊN THẬT
+      # --------------------------------------------------------------------
+      # Sếp Ngọc 28/08/2026: "lỗi nào đã làm xong thì hiện đã xong đi chứ".
+      # Trước bước này, quy trình là: góp ý → duyệt → xây → soi → đẩy lên…
+      # RỒI HẾT. Không ai quay lại đổi trạng thái góp ý, nên người báo lỗi
+      # không bao giờ biết lỗi của mình đã được sửa.
+      #
+      # SỢI DÂY: mã góp ý trong THÔNG ĐIỆP COMMIT (`GY-12`). Bước này đọc mọi
+      # commit vừa lên, gói lại, ký HMAC rồi POST về chính ERP vừa deploy.
+      # Không dịch vụ mới, không cron mới, không khoá của bên thứ ba, chi phí 0.
+      #
+      # ⚠️ KHÔNG ĐƯỢC LÀM HỎNG DEPLOY. Deploy đã xong ở bước trên; đây chỉ là
+      # báo tin. `continue-on-error` để một lần mạng lỗi không nhuộm đỏ một bản
+      # deploy đã thành công.
+      # ====================================================================
+      - name: Báo ERP những góp ý vừa lên hệ thống
+        continue-on-error: true
+        env:
+          ERP_URL: https://erp-agc.noiboagc.workers.dev
+          # Khoá chung với két Cloudflare:
+          #   npx wrangler secret put DEPLOY_CHOT_KHOA
+          # Hai bên phải GIỐNG HỆT NHAU. Thiếu một bên thì bước này bỏ qua êm
+          # và KHÔNG góp ý nào bị đổi.
+          DEPLOY_CHOT_KHOA: ${{ secrets.DEPLOY_CHOT_KHOA }}
+          DEPLOY_TRUOC: ${{ github.event.before }}
+          DEPLOY_NAY: ${{ github.sha }}
+        run: node scripts/bao-deploy-len-erp.mjs

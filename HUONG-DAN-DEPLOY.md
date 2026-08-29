@@ -198,3 +198,75 @@ ERP tự phát hiện ca này và bắn Telegram trong vòng 5 phút, nên thư�
 Quyền đẩy code lên `main` = quyền đưa thay đổi lên bản thật cho cả công ty dùng.
 Nên **giới hạn số người** có quyền này (Sếp Ngọc + tối đa 1–2 người tin cậy).
 Luôn có thể **rollback 1 chạm** trên Cloudflare nếu có sự cố, nên rủi ro được kiểm soát.
+
+---
+
+## Deploy xong thì góp ý tự chuyển sang "đã xong" — bật 2 bước, MỘT LẦN
+
+Sếp Ngọc 28/08/2026: *"lỗi nào đã làm xong thì hiện đã xong đi chứ"*.
+Trước bản này, quy trình là góp ý → duyệt → xây → soi → đẩy lên… **rồi hết**.
+Không ai quay lại đổi trạng thái, nên người báo lỗi không bao giờ biết lỗi của
+mình đã được sửa. Nay máy tự làm khâu cuối đó.
+
+**Bước 1 — nạp cột mới vào DB thật** (chạy TRƯỚC khi đẩy code):
+
+```bash
+npm run nap-dalenthat
+```
+
+**Bước 2 — đặt cùng một khoá ở hai nơi** (tự nghĩ ra một chuỗi dài, ngẫu nhiên):
+
+| Đặt ở đâu | Cách đặt |
+|---|---|
+| GitHub | Settings → Secrets and variables → Actions → New secret, tên `DEPLOY_CHOT_KHOA` |
+| Cloudflare | `npx wrangler secret put DEPLOY_CHOT_KHOA` |
+
+Hai bên phải **giống hệt nhau**. Thiếu một bên thì bước báo tin bỏ qua êm và
+**không góp ý nào bị đổi** — deploy vẫn chạy bình thường.
+
+### Từ đó về sau: viết mã góp ý vào thông điệp commit
+
+```
+git commit -m "GY-12: gộp thông báo tin nhắn, không rung 5 lần nữa"
+```
+
+Chấp nhận `GY-12`, `gy 12`, `GY_12`. **Không** chấp nhận `GY12` (dính liền) —
+cố ý chặt tay để không bắt nhầm một con số nào trong câu tiếng Anh.
+
+### Máy làm gì với góp ý đó
+
+| Góp ý đang ở | Máy làm | Ai nhận tin |
+|---|---|---|
+| Sẵn sàng phát hành | → **Hoàn thành** | người gửi, đúng 1 tin |
+| Đang làm / kiểm tra / cần chỉnh sửa | → **Chờ nghiệm thu** | người gửi, đúng 1 tin |
+| Chưa qua cổng duyệt, hoặc đang bị chặn | **KHÔNG đổi gì** — dựng cờ chờ Sếp | Sếp (Telegram) |
+| Đã hoàn thành / huỷ / từ chối | không đụng | không ai |
+
+Máy **không bao giờ** tự đưa một góp ý chưa qua cổng duyệt sang "đã xong".
+Báo xong mà chưa xong là mất lòng tin của người báo — họ sẽ thôi báo, và đó là
+mất mát lớn nhất. Cái Sếp cần bấm nằm ở panel **"Đã lên hệ thống — chờ xác
+nhận"** trên màn Góp ý: *Đúng, đã xong* / *Không phải góp ý này*.
+
+### Góp ý không sửa bằng code thì đóng thế nào
+
+Mở góp ý → khối **"Đóng mà không sửa code"** → chọn *đã trả lời bằng hướng dẫn*
+hoặc *quyết định không làm*, viết một câu cho người gửi (bắt buộc, từ 20 ký tự —
+họ đọc đúng câu đó). Trước bản này những góp ý loại này **kẹt**: "Hoàn thành"
+đòi link Pull Request mà không có PR nào tồn tại.
+
+### Đóng lùi những góp ý đã sửa xong TỪ TRƯỚC
+
+Bản vá lên trước hôm nay thì commit không có mã nào, máy không đọc ra được.
+Dùng dụng cụ chạy tay — nó **in rõ sẽ đổi những gì rồi mới hỏi**:
+
+```bash
+node scripts/dong-lui-gop-y.mjs --remote --tim "thông báo khi có tin nhắn"
+node scripts/dong-lui-gop-y.mjs --remote 12=7bf0e58 15=cc13f89        # xem trước
+node scripts/dong-lui-gop-y.mjs --remote --ghi 12=7bf0e58 15=cc13f89  # ghi thật
+```
+
+Không có cờ `--ghi` thì nó **không ghi một chữ nào**. Có `--ghi` thì vẫn phải
+gõ đúng hai chữ `ĐỒNG Ý`. Chạy xong nó in ra bằng chứng: đã đổi mấy dòng, có
+dòng nào ngoài danh sách không (phải là 0).
+
+**Kiểm lại bất cứ lúc nào:** `npm run do-chot-gopy` (59 phép đo, có ca đối chứng).

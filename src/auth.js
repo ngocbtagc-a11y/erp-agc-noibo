@@ -35,8 +35,15 @@ async function pbkdf2(matKhau, salt, soVong) {
 
 /* So sánh theo kiểu không để lộ thời gian.
    Nếu so sánh thường, kẻ tấn công đo được câu trả lời nhanh/chậm để đoán
-   dần từng ký tự. Vòng lặp này luôn chạy hết nên thời gian như nhau. */
-function bangNhauAnToan(a, b) {
+   dần từng ký tự. Vòng lặp này luôn chạy hết nên thời gian như nhau.
+
+   ⚠️ NHẬN MẢNG BYTE (Uint8Array), KHÔNG nhận chuỗi. Đưa chuỗi vào thì
+   `a[i] ^ b[i]` ra NaN, `khac |= NaN` giữ nguyên 0, và hàm trả TRUE cho hai
+   chuỗi khác nhau — im lặng mở toang cửa. Chuỗi hex phải đổi ra byte trước.
+
+   Xuất ra ngoài (28/08): cửa HMAC của deploy (`gopYDaLenThat` trong
+   src/index.js) dùng chung ĐÚNG hàm này, không ai viết bản thứ hai. */
+export function bangNhauAnToan(a, b) {
   if (a.length !== b.length) return false;
   let khac = 0;
   for (let i = 0; i < a.length; i++) khac |= a[i] ^ b[i];

@@ -124,6 +124,15 @@ export const API = {
   // Hoàn tác cú duyệt/từ chối vừa bấm (15 phút, chỉ chính người bấm).
   gopYHoanTac: (id) => goi('/api/gop-y/hoan-tac', { method: 'POST', body: JSON.stringify({ id }) }),
   gopYLichSu: (id) => goi('/api/gop-y/lich-su?id=' + encodeURIComponent(id)),
+  /* ĐƯỜNG SỬA TAY khi máy đoán sai. Deploy chỉ DỰNG CỜ cho những góp ý chưa
+     qua cổng duyệt, không tự đóng — hai cửa dưới đây là chỗ Sếp chốt hoặc gỡ. */
+  gopYXacNhanDaLen: (id, dongY) => goi('/api/gop-y/xac-nhan-da-len', {
+    method: 'POST', body: JSON.stringify({ id, dong_y: !!dongY })
+  }),
+  // Đóng góp ý KHÔNG sửa bằng code: trả lời bằng hướng dẫn, hoặc không làm.
+  gopYDongKhongCode: (du) => goi('/api/gop-y/dong-khong-code', {
+    method: 'POST', body: JSON.stringify(du)
+  }),
 
   /* ---- Vinh danh (Tổng quan) ---- */
   vdDanhSach: () => goi('/api/vinh-danh'),
