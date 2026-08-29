@@ -3100,6 +3100,66 @@ const NHAN_TRUONG = {
   nguoi_nhan_id: 'người nhận', muc_tieu_id: 'mục tiêu', phoi_hop: 'người phối hợp'
 };
 
+/* ==========================================================================
+   MỤC TIÊU — CÙNG BỘ LUẬT, RIÊNG BỘ CHỮ (Sếp Ngọc nhắc LẦN THỨ BA:
+   "còn việc sửa mục tiêu sau khi đã giao nữa").
+   --------------------------------------------------------------------------
+   `mtCapNhat` bản trước chỉ nhận `tieu_de` · `mo_ta` · `trang_thai`. Bốn
+   trường còn lại — `cap` · `bo_phan` · `nam` · `quy` — TẠO XONG LÀ ĐÓNG BĂNG,
+   đúng lớp vấn đề Sếp đã nêu ba lần. Đặt sai quý một mục tiêu thì chỉ còn
+   nước xoá đi tạo lại: mất sạch lịch sử, và mọi việc con đang treo vào đó
+   rơi ra ngoài.
+
+   BỐN NHÓM, xếp theo mức nặng dần — cùng thang với `CV_MO_THEO_TRANG_THAI`:
+     ① sửa thoải mái, có vết, KHÔNG hỏi lý do — `tieu_de`, `mo_ta`
+        (gõ nhầm một chữ mà bắt viết lý do thì người ta quay lại thói xoá đi
+         tạo lại, và lúc đó mất sạch lịch sử — CẮT QUÁ TAY CŨNG LÀ HỎNG)
+     ② có vết, KHÔNG hỏi lý do — `bo_phan` (đổi phòng phụ trách)
+     ③ có vết + BẮT BUỘC lý do — `cap`, `nam`, `quy` (xem ba chỗ nguy hiểm dưới)
+     ④ KHOÁ — mục tiêu đã `hoan_thanh`/`huy` khoá phần NỘI DUNG; mục tiêu công
+        ty ĐÃ CHỐT thì khoá hẳn, không mở lại được (đã dùng làm bằng chứng cả
+        quý). Nhóm ④ để đúng MỘT lối ra: `trang_thai` -> `dang_thuc_hien`
+        ("Mở lại"), bắt buộc lý do. Khoá cứng không lối ra thì một cú bấm nhầm
+        nút "Xong" (nút này không có bước xác nhận nào) đóng băng vĩnh viễn cả
+        mục tiêu của quý — lại đúng cái bẫy cắt quá tay ở trên.
+
+   BA CHỖ NGUY HIỂM, mỗi chỗ một cái chốt riêng:
+   ① ĐỔI `nam`/`quy` LÀ ĐỔI KỲ BÁO CÁO. Mục tiêu quý 3 sang quý 4 thì SỐ LIỆU
+      HAI QUÝ ĐỀU ĐỔI — quý 3 hụt đi một mục tiêu, quý 4 tự nhiên mọc thêm
+      một cái không ai bàn. `mtDanhSach` lọc cứng theo `nam`/`quy`, nên với
+      người đang mở Trạm Mục Tiêu quý 3 thì mục tiêu đó BIẾN MẤT. Vết phải đủ
+      để dựng lại (cũ · mới · ai · lý do) và NGƯỜI ĐẶT MỤC TIÊU phải được báo.
+   ② ĐỔI `cap` LÀ ĐỔI AI NHÌN THẤY NÓ. `mtDanhSach` chỉ trả mục tiêu cấp
+      `ca_nhan` cho CHÍNH người tạo. Hạ một mục tiêu công ty xuống cá nhân là
+      GIẤU NÓ KHỎI TOÀN CÔNG TY mà không xoá dòng nào — nhìn từ CSDL chẳng mất
+      gì, nhìn từ màn hình đồng nghiệp thì nó bốc hơi. Vì thế: bắt lý do, và
+      chỉ CHỦ mục tiêu (hoặc Admin) mới đổi được cấp — quản lý cấp trên KHÔNG,
+      cùng lẽ với `dau_ra` ở `cvSua` (không tự đổi phạm vi công khai cam kết
+      của người khác). Nâng lên `cong_ty` vẫn chỉ Admin, y hệt `mtTao` — nếu
+      không thì cửa sửa này là đường vòng để lách đúng cái chốt đó.
+   ③ VIỆC ĐANG GẮN VÀO. `cong_viec.muc_tieu_id` trỏ THẲNG vào id mục tiêu,
+      KHÔNG đi qua `cap`/`bo_phan`/`nam`/`quy` — nên đổi mấy trường này KHÔNG
+      làm việc con mồ côi, dây nối vẫn nguyên (ĐÃ ĐO, không đoán —
+      `do-sua-muc-tieu-day-du.mjs` mục ⑤). Cái mất là TẦM NHÌN: thẻ mục tiêu
+      rời khỏi màn hình người khác trong khi N việc vẫn đang chạy dưới nó. Nên
+      trả `so_viec` về cho giao diện cảnh báo TRƯỚC khi bấm Lưu, không im lặng.
+   ========================================================================== */
+const MT_NHAN = {
+  tieu_de: 'tên mục tiêu', mo_ta: 'mô tả', cap: 'cấp mục tiêu',
+  bo_phan: 'phòng ban phụ trách', nam: 'năm', quy: 'quý', trang_thai: 'trạng thái'
+};
+const MT_CAP_DOC = { cong_ty: 'Công ty', phong_ban: 'Phòng ban', ca_nhan: 'Cá nhân' };
+const MT_TT_DOC = { dang_thuc_hien: 'Đang thực hiện', hoan_thanh: 'Hoàn thành', huy: 'Đã huỷ' };
+/* Nhóm ③ — đổi cam kết của cả kỳ thì phải nói vì sao. `bo_phan` CỐ Ý KHÔNG
+   nằm đây: đổi phòng phụ trách là điều phối bình thường, bắt lý do là cắt quá
+   tay. `trang_thai` cũng không nằm đây — trừ đúng một nước MỞ LẠI mục tiêu đã
+   đóng sổ, chốt riêng trong `mtCapNhat`. */
+const MT_CAN_LY_DO = new Set(['cap', 'nam', 'quy']);
+/* Đổi thì NGƯỜI ĐẶT MỤC TIÊU phải biết — MỘT tin GỘP, không phải một tin mỗi
+   trường (bốn tin cho một lần sửa thì lần sau họ tắt chuông, và mất luôn cảnh
+   báo quá hạn đang chạy tốt — đúng lẽ đã dùng ở `cvSua`). */
+const MT_BAO_NGUOI_TAO = new Set(['cap', 'bo_phan', 'nam', 'quy', 'trang_thai']);
+
 /* 'YYYY-MM-DD' -> 'DD/MM/YYYY'. Lịch sử để NGƯỜI đọc, không phải máy đọc. */
 function ngayDoc(s) {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s || '').trim());
@@ -3112,7 +3172,7 @@ function ngayDoc(s) {
       báo giá"
    Dựng ở MÁY CHỦ chứ không ở trình duyệt: cùng một câu cho web, cho thông
    báo, cho bản tin — một chỗ sửa, không ba chỗ lệch nhau. */
-function cauSuaDoc(d) {
+function cauSuaDoc(d, bang) {
   /* Hai vết KHÔNG phải "đổi A thành B" nên có câu riêng — ép chúng vào khuôn
      chung ra những câu vô nghĩa kiểu *"Sếp đổi go 'lời khen' → (trống)"*, mà
      một dòng sổ đọc không hiểu thì đúng bằng không ghi (REV-0037 · L5, L9). */
@@ -3123,9 +3183,19 @@ function cauSuaDoc(d) {
   }
   if (d.truong === 'go') return `${d.nguoi_ten} đã gỡ lời khen: "${d.gia_tri_cu}"`;
 
-  const nhan = NHAN_TRUONG[d.truong] || d.truong;
+  /* CÙNG MỘT TÊN CỘT, HAI NGHĨA KHÁC NHAU. `tieu_de` ở `cong_viec` là "tên
+     việc", ở `muc_tieu` là "tên mục tiêu" — in nhầm thì Sếp mở sổ mục tiêu
+     ra đọc thấy "đổi tên việc", tưởng đang xem nhầm bản ghi. Nên nhãn tra
+     theo BẢNG trước, rơi về nhãn chung sau. */
+  const laMt = bang === 'muc_tieu';
+  const nhan = (laMt && MT_NHAN[d.truong]) || NHAN_TRUONG[d.truong] || d.truong;
+  /* Mã máy (`cong_ty`, `dang_thuc_hien`) không phải thứ để Sếp đọc — dịch
+     ngay tại chỗ dựng câu, một chỗ cho cả web lẫn thông báo. */
+  const doc = (bang_, v) => (bang_ && bang_[v]) || (v == null || v === '' ? '(trống)' : String(v));
   const la = d.truong === 'han_chot' ? ngayDoc
-    : (v) => (v == null || v === '' ? '(trống)' : String(v));
+    : d.truong === 'cap' ? (v) => doc(MT_CAP_DOC, v)
+    : d.truong === 'trang_thai' ? (v) => doc(MT_TT_DOC, v)
+    : (v) => doc(null, v);
   const than = `${d.nguoi_ten} đổi ${nhan} ${la(d.gia_tri_cu)} → ${la(d.gia_tri_moi)}`;
   return d.ly_do ? `${than} — lý do: ${d.ly_do}` : than;
 }
@@ -3195,7 +3265,7 @@ async function suaLichSu(req, env) {
   const cat = await nhanCat(env, biCat, GH,
     'SELECT COUNT(*) AS n FROM lich_su_thay_doi_nen WHERE bang = ? AND ban_ghi_id = ?',
     [bang, String(id)], null);
-  return json({ ds: ds.map(d => ({ ...d, cau: cauSuaDoc(d) })), cat });
+  return json({ ds: ds.map(d => ({ ...d, cau: cauSuaDoc(d, bang) })), cat });
 }
 
 /* SỬA NỘI DUNG VIỆC ĐÃ GIAO.
@@ -3709,8 +3779,9 @@ async function mtChot(req, env) {
   return json({ ok: true, nguoi });
 }
 
-/* Người tạo hoặc admin đổi trạng thái (hoàn thành/huỷ) hoặc sửa tiêu đề/mô tả.
-   Mục tiêu công ty ĐÃ CHỐT thì khoá — không sửa/huỷ được nữa (phải chốt cẩn thận). */
+/* SỬA MỤC TIÊU ĐÃ GIAO — cả BẢY trường, không còn trường nào đóng băng.
+   Bảng luật + ba chỗ nguy hiểm: xem khối chú thích ở `MT_NHAN` phía trên.
+   Đo bằng JSON thật: `node scripts/do-sua-muc-tieu-day-du.mjs`. */
 async function mtCapNhat(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
@@ -3722,53 +3793,221 @@ async function mtCapNhat(req, env) {
   if (!mt) return loi('Không tìm thấy mục tiêu', 404);
   if (mt.da_chot) return loi('Mục tiêu công ty đã chốt, không sửa được nữa', 409);
 
+  /* --- AI ĐƯỢC SỬA — cắt ở MÁY CHỦ, đúng luật CTL-0017 ---
+     · người đặt mục tiêu (và Admin) — chủ của cam kết.
+     · QUẢN LÝ CẤP TRÊN của người đặt — sửa được mọi thứ TRỪ `cap`. Anh Duy
+       phải nắn được mục tiêu của team kho mà không phải chạy lên Sếp; nhưng
+       đổi `cap` là đổi AI NHÌN THẤY nó, đó là quyền của chủ, không phải
+       quyền điều phối (cùng lẽ với `dau_ra` ở `cvSua`).
+     · người ngoài — không gì cả. */
   const laChu = mt.nguoi_tao_id === phien.nhan_su_id || laAdmin(phien.vai_tro);
-  if (!laChu) return loi('Chỉ người tạo (hoặc Admin) mới sửa được mục tiêu này', 403);
+  const laQuanLy = !laChu && await laCapTrenCua(env, phien.nhan_su_id, mt.nguoi_tao_id);
+  if (!laChu && !laQuanLy) {
+    return loi('Chỉ người đặt mục tiêu, quản lý cấp trên của họ, hoặc Admin mới sửa được mục tiêu này', 403);
+  }
 
-  const truong = {};
-  if (b.trang_thai != null) {
+  const lyDo = String(b.ly_do || '').trim().slice(0, 500);
+  const doi = [];   // [{ truong, cu, moi }] — để ghi lịch sử
+  const cot = {};   // { cột: giá trị }      — để UPDATE
+  /* Chỉ nhận trường CÓ GỬI LÊN. Không gửi = không đụng tới — nên sửa mỗi
+     tiêu đề sẽ KHÔNG vô tình xoá trắng mô tả hay kéo mục tiêu về quý hiện
+     tại. (Bản trước dùng `!= null` cho `mo_ta` nên gửi `mo_ta: ''` là xoá
+     trắng — giữ nguyên hành vi đó, chỉ chặt hơn ở chỗ `undefined`.) */
+  const xin = (t) => b[t] !== undefined && b[t] !== null;
+
+  /* --- ④ KHOÁ: đã hoàn thành / đã huỷ ---
+     Bản ghi là KẾT QUẢ CỦA KỲ, sửa nội dung lúc này là sửa bằng chứng sau khi
+     đã báo cáo. Nhưng khoá cứng KHÔNG LỐI RA thì một cú bấm nhầm nút "Xong"
+     (nút đó không có bước xác nhận) đóng băng vĩnh viễn cả mục tiêu quý —
+     đúng cái bẫy "cắt quá tay" Sếp đã cảnh báo. Nên để ĐÚNG MỘT lối ra:
+     mở lại về `dang_thuc_hien`, có vết, BẮT BUỘC lý do, và người đặt mục
+     tiêu được báo. Mở lại rồi mới sửa tiếp — hai nước, hai vết, không lẫn. */
+  const daDong = mt.trang_thai === 'hoan_thanh' || mt.trang_thai === 'huy';
+  let moLai = false;
+  if (xin('trang_thai')) {
     const tt = String(b.trang_thai).trim();
     if (!['dang_thuc_hien', 'hoan_thanh', 'huy'].includes(tt)) return loi('Trạng thái không hợp lệ');
-    truong.trang_thai = tt;
+    if (tt !== mt.trang_thai) {
+      if (daDong && tt !== 'dang_thuc_hien') {
+        return loi(`Mục tiêu đã ${MT_TT_DOC[mt.trang_thai].toLowerCase()} — muốn đổi thì bấm "Mở lại" trước đã`, 409);
+      }
+      moLai = daDong;
+      doi.push({ truong: 'trang_thai', cu: mt.trang_thai, moi: tt });
+      cot.trang_thai = tt;
+    }
   }
-  if (b.tieu_de != null) truong.tieu_de = String(b.tieu_de).trim().slice(0, 200) || mt.tieu_de;
-  if (b.mo_ta != null) truong.mo_ta = String(b.mo_ta).trim().slice(0, 2000) || null;
-  if (!Object.keys(truong).length) return loi('Không có gì để sửa');
+  /* Gọi SAU khi đã biết trường đó có THẬT SỰ đổi hay không — gọi trước thì
+     gửi lại đúng giá trị cũ cũng ăn 409 oan (REV-0037 · L10, đã cắn một lần
+     ở `cvSua`). */
+  const chan = (t) => daDong
+    ? loi(`Mục tiêu đã ${MT_TT_DOC[mt.trang_thai].toLowerCase()} — bản ghi này là kết quả của kỳ. Muốn sửa ${MT_NHAN[t]} thì bấm "Mở lại" trước (có ghi vết + lý do).`, 409)
+    : null;
 
-  /* CTL-0017 — MỤC TIÊU SỬA ĐƯỢC NHƯNG KHÔNG GHI VẾT là "sửa được một nửa",
-     cùng một lớp vấn đề với việc-không-sửa-được. Trước bản này: đổi tên một
-     mục tiêu quý xong thì không còn dấu nào cho biết nó từng tên gì, ai đổi,
-     đổi lúc nào — trong khi ĐÂY LÀ MỤC TIÊU CỦA CẢ QUÝ, thứ mà mọi việc con
-     treo vào để tính tiến độ. Ghi vào ĐÚNG sổ đang dùng cho `cong_viec`, một
-     lượt `batch` chung với UPDATE nên chỉ tốn thêm 1 dòng ghi mỗi trường
-     thật sự đổi (hạn mức ghi D1 — REV-0031).
-     `da_chot` đã chặn ở trên: mục tiêu công ty chốt rồi thì khoá hẳn, đó là
-     nhóm "KHÔNG được sửa" — đã dùng làm bằng chứng cho cả quý. */
+  /* --- ① SỬA THOẢI MÁI: tên + mô tả. KHÔNG hỏi lý do. --- */
+  if (xin('tieu_de')) {
+    const v = String(b.tieu_de).trim().slice(0, 200);
+    if (!v) return loi('Tên mục tiêu không được để trống');
+    if (v !== mt.tieu_de) {
+      const c = chan('tieu_de'); if (c) return c;
+      doi.push({ truong: 'tieu_de', cu: mt.tieu_de, moi: v }); cot.tieu_de = v;
+    }
+  }
+  if (xin('mo_ta')) {
+    const v = String(b.mo_ta).trim().slice(0, 2000) || null;
+    if (v !== (mt.mo_ta || null)) {
+      const c = chan('mo_ta'); if (c) return c;
+      doi.push({ truong: 'mo_ta', cu: mt.mo_ta, moi: v }); cot.mo_ta = v;
+    }
+  }
+
+  /* --- ② + ③ CẤP và PHÒNG BAN ĐI THÀNH CẶP ---
+     Tính giá trị đích CHO CẢ HAI trước, chuẩn hoá, rồi mới so với giá trị cũ.
+     Làm rời từng trường thì hạ `cong_ty` xuống `phong_ban` mà quên gửi
+     `bo_phan` sẽ đẻ ra mục tiêu phòng ban KHÔNG CÓ PHÒNG NÀO — thẻ hiện chip
+     rỗng, không ai biết ai phụ trách. Chiều ngược cũng vậy: nâng phòng ban
+     lên công ty mà để nguyên nhãn phòng cũ là nhãn treo lơ lửng, sai hẳn. */
+  let capMoi = mt.cap;
+  let boPhanMoi = mt.bo_phan || null;
+  if (xin('cap')) {
+    const v = String(b.cap).trim();
+    if (!['cong_ty', 'phong_ban', 'ca_nhan'].includes(v)) return loi('Cấp mục tiêu không hợp lệ');
+    capMoi = v;
+  }
+  if (xin('bo_phan')) boPhanMoi = String(b.bo_phan).trim().slice(0, 80) || null;
+  if (capMoi !== 'phong_ban') boPhanMoi = null;
+  if (capMoi === 'phong_ban' && !boPhanMoi) return loi('Cấp phòng ban thì phải ghi rõ phòng ban/bộ phận nào phụ trách');
+
+  if (capMoi !== mt.cap) {
+    const c = chan('cap'); if (c) return c;
+    /* ⚠️ NGUY HIỂM ②. Đổi cấp là đổi ai nhìn thấy — quyền của chủ, không phải
+       của người điều phối. Và nâng lên `cong_ty` vẫn chỉ Admin, y hệt
+       `mtTao`: nếu không thì cửa sửa này là đường vòng lách đúng chốt đó. */
+    if (!laChu) {
+      return loi('Chỉ người đặt mục tiêu hoặc Admin mới đổi được CẤP — đổi cấp là đổi ai nhìn thấy mục tiêu này', 403);
+    }
+    if (capMoi === 'cong_ty' && !laAdmin(phien.vai_tro)) {
+      return loi('Chỉ Admin mới được đặt mục tiêu cấp công ty', 403);
+    }
+    doi.push({ truong: 'cap', cu: mt.cap, moi: capMoi }); cot.cap = capMoi;
+  }
+  if (boPhanMoi !== (mt.bo_phan || null)) {
+    const c = chan('bo_phan'); if (c) return c;
+    doi.push({ truong: 'bo_phan', cu: mt.bo_phan, moi: boPhanMoi }); cot.bo_phan = boPhanMoi;
+  }
+
+  /* --- ③ KỲ BÁO CÁO: năm + quý. NGUY HIỂM ①. --- */
+  if (xin('nam')) {
+    const v = parseInt(b.nam, 10);
+    if (!v || v < 2020 || v > 2100) return loi('Năm không hợp lệ');
+    if (v !== mt.nam) {
+      const c = chan('nam'); if (c) return c;
+      doi.push({ truong: 'nam', cu: mt.nam, moi: v }); cot.nam = v;
+    }
+  }
+  if (xin('quy')) {
+    const v = parseInt(b.quy, 10);
+    if (!(v >= 1 && v <= 4)) return loi('Quý không hợp lệ (1-4)');
+    if (v !== mt.quy) {
+      const c = chan('quy'); if (c) return c;
+      doi.push({ truong: 'quy', cu: mt.quy, moi: v }); cot.quy = v;
+    }
+  }
+
+  if (!doi.length) return loi('Không có gì để sửa');
+
+  /* ⚠️ CỬA LÝ DO — chốt CUỐI CÙNG, sau khi đã biết đổi những gì.
+     Chốt sớm hơn thì gửi lại `quy` y hệt giá trị cũ cũng bị đòi lý do, và
+     người dùng học được cách gõ lý do vu vơ cho xong — luật thành hình thức.
+     Và chiều ngược quan trọng không kém: sửa MỖI chính tả tên/mô tả thì
+     KHÔNG được hỏi lý do câu nào (ca đối chứng DC-B'). */
+  const canLyDo = doi.filter(d => MT_CAN_LY_DO.has(d.truong));
+  if (canLyDo.length || moLai) {
+    if (lyDo.length < 5) {
+      return loi(moLai
+        ? 'Mở lại một mục tiêu đã đóng sổ thì phải ghi lý do — cả quý đã nhìn vào con số của nó'
+        : `Đổi ${[...new Set(canLyDo.map(d => MT_NHAN[d.truong]))].join(' và ')} thì phải ghi lý do — đây là đổi cam kết của cả kỳ, số liệu quý sẽ đổi theo`,
+        400);
+    }
+  }
+  const canCotLyDo = canLyDo.length > 0 || moLai;
+  const dinhLyDo = (t) => MT_CAN_LY_DO.has(t) || (t === 'trang_thai' && moLai);
+
+  /* --- GHI: MỘT LƯỢT `batch` --- số dòng ghi = 1 (UPDATE) + số trường THẬT
+     SỰ đổi. Sửa một lỗi chính tả = ĐÚNG 2 dòng (hạn mức ghi D1 — REV-0031). */
   const nguoiSuaTen = phien.ho_ten || phien.ten_dang_nhap;
-  const cotSet = Object.keys(truong).map(k => `${k} = ?`).join(', ');
-  const lenh = [env.DB.prepare(
+  const lenh = [];
+  const cotSet = Object.keys(cot).map(k => `${k} = ?`).join(', ');
+  lenh.push(env.DB.prepare(
     `UPDATE muc_tieu SET ${cotSet}, cap_nhat_luc = datetime('now','+7 hours') WHERE id = ?`
-  ).bind(...Object.values(truong), id)];
-  /* ⚠️ KHÔNG NHẮC TỚI CỘT `ly_do` Ở CÂU NÀY — CỐ Ý (REV-0037 · L2).
-     `deploy.yml` tự deploy khi đẩy `main` nhưng KHÔNG chạy migration, nên
-     luôn có một khoảng mã MỚI chạy trên CSDL CŨ. `mtCapNhat` là tính năng
-     ĐANG CHẠY (sửa mục tiêu có từ 28976b6), không phải tính năng mới — nó nổ
-     500 ở đó là làm hỏng thứ hôm qua còn tốt. Mà ở cửa này `ly_do` LUÔN NULL
-     (mục tiêu không có trường cam kết nào thuộc nhóm ③), nên bỏ hẳn tên cột
-     đi thì câu chạy được trên CẢ hai đời CSDL: cột chưa có cũng xong, cột có
-     rồi thì SQLite tự điền NULL. Luật chung chứ không phải mẹo riêng —
-     MÃ MỚI PHẢI CHỊU ĐƯỢC CSDL CŨ, vì thứ tự triển khai không ai bảo đảm. */
-  const ghiVet = env.DB.prepare(
+  ).bind(...Object.values(cot), id));
+
+  /* ⚠️ HAI KHUÔN INSERT, CÓ CHỦ Ý (REV-0037 · L2). `deploy.yml` tự deploy khi
+     đẩy `main` nhưng KHÔNG chạy migration, nên luôn có một khoảng mã MỚI chạy
+     trên CSDL CŨ chưa có cột `ly_do`. Luật phân biệt:
+       · sửa tên/mô tả/phòng ban — TÍNH NĂNG ĐANG CHẠY từ 28976b6. KHÔNG nhắc
+         tên cột `ly_do` (ở nhánh này nó luôn NULL) nên câu chạy được trên CẢ
+         hai đời CSDL. Phải sống, không được nổ 500.
+       · đổi cấp/kỳ/mở lại — TÍNH NĂNG MỚI, và lý do là PHẦN KHÔNG THỂ BỎ của
+         nó. Ghi mà mất lý do là "sửa mà mất vết" — hỏng theo chiều nguy hiểm.
+         Nên ở nhánh này thà TỪ CHỐI cả lượt (batch lùi luôn UPDATE) và nói rõ
+         phải nạp migration, còn hơn ghi nửa vời. */
+  const ghiVetCoLyDo = env.DB.prepare(
+    `INSERT INTO lich_su_thay_doi_nen (bang, ban_ghi_id, truong, gia_tri_cu, gia_tri_moi,
+                                       nguoi_id, nguoi_ten, ly_do, luc)
+     VALUES ('muc_tieu', ?, ?, ?, ?, ?, ?, ?, datetime('now','+7 hours'))`);
+  const ghiVetTron = env.DB.prepare(
     `INSERT INTO lich_su_thay_doi_nen (bang, ban_ghi_id, truong, gia_tri_cu, gia_tri_moi,
                                        nguoi_id, nguoi_ten, luc)
-     VALUES ('muc_tieu', ?, ?, ?, ?, ?, ?, datetime('now','+7 hours'))`
-  );
-  for (const [k, v] of Object.entries(truong)) {
-    if (String(mt[k] ?? '') === String(v ?? '')) continue;   // không đổi thì khỏi ghi
-    lenh.push(ghiVet.bind(String(id), k, mt[k] ?? null, v ?? null, phien.nhan_su_id, nguoiSuaTen));
+     VALUES ('muc_tieu', ?, ?, ?, ?, ?, ?, datetime('now','+7 hours'))`);
+  /* `String(...)` KHÔNG thừa: `ban_ghi_id`, `gia_tri_cu`, `gia_tri_moi` là cột
+     TEXT, mà `nam`/`quy` là SỐ. Nhét số vào cột TEXT có nơi ra chuỗi "2026.0"
+     — đọc lại thành câu vô nghĩa. Ép kiểu ngay tại chỗ ghi. */
+  const chu = (v) => (v == null ? null : String(v));
+  for (const d of doi) {
+    lenh.push(canCotLyDo
+      ? ghiVetCoLyDo.bind(String(id), d.truong, chu(d.cu), chu(d.moi),
+                          phien.nhan_su_id, nguoiSuaTen, dinhLyDo(d.truong) ? lyDo : null)
+      : ghiVetTron.bind(String(id), d.truong, chu(d.cu), chu(d.moi),
+                        phien.nhan_su_id, nguoiSuaTen));
   }
-  await env.DB.batch(lenh);
-  return json({ ok: true, so_dong_ghi: lenh.length });
+  try {
+    await env.DB.batch(lenh);
+  } catch (e) {
+    /* HAI CÁCH SQLite NÓI "THIẾU CỘT", tuỳ câu là SELECT hay INSERT:
+         SELECT → "no such column: ly_do"
+         INSERT → "table lich_su_thay_doi_nen has no column named ly_do"
+       Bàn đo bắt được: bắt mỗi chuỗi đầu thì nhánh này KHÔNG BAO GIỜ chạy, và
+       người dùng ăn "Máy chủ gặp sự cố" 500 thay vì câu chỉ đúng việc phải
+       làm. Một cái lưới an toàn không bao giờ bung thì bằng không có lưới. */
+    if (canCotLyDo && /no such column|has no column named/i.test(String((e && e.message) || e))) {
+      return loi('Máy chủ chưa nạp bản vá "lý do sửa" (migrations/them-ly-do-sua.sql) — chưa đổi được cấp/kỳ mục tiêu. Sửa tên và mô tả thì vẫn dùng bình thường.', 503);
+    }
+    throw e;
+  }
+
+  /* --- BÁO AI --- MỘT tin GỘP cho NGƯỜI ĐẶT MỤC TIÊU, và chỉ khi người sửa
+     KHÔNG phải chính họ (tự sửa mục tiêu của mình thì tự biết rồi, bắn tin
+     cho chính mình là dạy người ta tắt chuông). */
+  const dangKe = doi.filter(d => MT_BAO_NGUOI_TAO.has(d.truong));
+  if (dangKe.length && mt.nguoi_tao_id && mt.nguoi_tao_id !== phien.nhan_su_id) {
+    const tomTat = dangKe.map(d => cauSuaDoc({
+      truong: d.truong, gia_tri_cu: d.cu, gia_tri_moi: d.moi,
+      nguoi_ten: nguoiSuaTen, ly_do: dinhLyDo(d.truong) ? lyDo : null
+    }, 'muc_tieu')).join('; ');
+    await guiThongBao(env, null, `Mục tiêu "${cot.tieu_de || mt.tieu_de}" vừa đổi: ${tomTat}`,
+                      'muc_tieu_sua', String(id), mt.nguoi_tao_id);
+  }
+
+  /* ⚠️ NGUY HIỂM ③ — trả về số việc đang gắn vào. Dây nối `cong_viec.
+     muc_tieu_id` KHÔNG đứt khi đổi `cap`/`bo_phan`/`nam`/`quy` (đã đo), nhưng
+     đổi kỳ/cấp thì THẺ mục tiêu rời khỏi Trạm Mục Tiêu của người khác trong
+     khi N việc vẫn đang chạy dưới nó. Giao diện dùng số này để cảnh báo. */
+  let soViec = null;
+  if (doi.some(d => ['cap', 'nam', 'quy'].includes(d.truong))) {
+    const r = await env.DB.prepare('SELECT COUNT(*) AS n FROM cong_viec WHERE muc_tieu_id = ?').bind(id).first();
+    soViec = r?.n || 0;
+  }
+  return json({ ok: true, so_dong_ghi: lenh.length, so_viec: soViec, mo_lai: moLai });
 }
 
 /* Bấm vào 1 thẻ mục tiêu ở Trạm Mục Tiêu (MBOs) → xem chi tiết TOÀN BỘ việc

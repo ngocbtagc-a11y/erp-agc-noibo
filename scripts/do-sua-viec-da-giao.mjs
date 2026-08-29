@@ -618,9 +618,14 @@ console.log('\n=== ⑩ CA ĐỐI CHỨNG — mỗi ca bẻ gãy ĐÚNG một ch�
    đúng lớp lỗi `do-cat-im-lang` dựng ra để canh. Ca này chứng minh dòng
    `nhanCat` đang thật sự gánh việc, không phải trang trí. */
 {
+  /* Neo bám ĐUÔI câu, không bám cả dòng: `cauSuaDoc` vừa nhận thêm tham số
+     `bang` (đợt mở 7 trường mục tiêu — nhãn `tieu_de` ở sổ mục tiêu phải đọc
+     là "tên mục tiêu", không phải "tên việc"), và một ca đối chứng gãy neo là
+     một ca LẶNG LẼ NGỪNG CANH. `banBeGay` ném lỗi nếu không bẻ được gì —
+     chính nó bắt được lần gãy này. */
   const src = banBeGay('dc-g', s => s.replace(
-    "  return json({ ds: ds.map(d => ({ ...d, cau: cauSuaDoc(d) })), cat });",
-    "  return json({ ds: ds.map(d => ({ ...d, cau: cauSuaDoc(d) })), cat: null });"));
+    'cau: cauSuaDoc(d, bang) })), cat });',
+    'cau: cauSuaDoc(d, bang) })), cat: null });'));
   const V = await dungVong(src);
   const chen = V.db.prepare(`INSERT INTO lich_su_thay_doi_nen
     (bang, ban_ghi_id, truong, gia_tri_cu, gia_tri_moi, nguoi_id, nguoi_ten, ly_do, luc)

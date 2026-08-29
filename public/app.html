@@ -2937,27 +2937,97 @@
      mới nữa (Sếp Ngọc chốt 21/08/2026: "thêm mục tiêu và giao mục tiêu bản
      chất như nhau, giao mục tiêu vẫn có mục giao cho tôi, đang trùng lặp
      thừa thãi — gộp chung đi"). Tạo mục tiêu MỚI giờ nằm trong hộp "+ Giao
-     Mục Tiêu" bên dưới, phần "Thuộc mục tiêu" → "+ Tạo mục tiêu mới…". Cấp/
-     Phòng ban không sửa được sau khi tạo (mtCapNhat không nhận 2 trường
-     này) nên hộp này chỉ còn Tên + Mô tả. -->
+     Mục Tiêu" bên dưới, phần "Thuộc mục tiêu" → "+ Tạo mục tiêu mới…".
+
+     MỞ HẾT BẢY Ô (Sếp Ngọc nhắc LẦN THỨ BA: "còn việc sửa mục tiêu sau khi
+     đã giao nữa"). Trước bản này hộp chỉ có Tên + Mô tả, còn Cấp · Phòng ban
+     · Năm · Quý thì tạo xong là đóng băng — đặt sai quý là phải xoá đi tạo
+     lại, mất sạch lịch sử. Bốn ô đó nay mở, xếp theo mức nặng dần để người
+     sửa NHÌN LÀ BIẾT mình đang đụng vào cái gì:
+       ① sửa thoải mái   — Tên, Mô tả (không hỏi lý do câu nào)
+       ② có ghi vết      — Phòng ban phụ trách
+       ③ phải có lý do   — Cấp, Năm, Quý (đổi cam kết của cả kỳ)
+       ④ khoá / mở lại   — mục tiêu đã Hoàn thành / Đã huỷ
+     Mọi luật chốt thật ở MÁY CHỦ (`mtCapNhat`); ở đây chỉ hỏi đúng lúc và in
+     nguyên văn lỗi máy chủ trả về.
+     Điện thoại là đường chính: Sếp sửa mục tiêu trên điện thoại. -->
 <div class="modal-nen" id="mtFormModalNen" hidden>
   <div class="modal">
-    <h4>Sửa mục tiêu</h4>
+    <h4 id="mt-form-tieude">Sửa mục tiêu</h4>
+    <p class="hint" id="mt-form-nhac" style="margin:0 0 14px"></p>
     <form id="mt-form" class="form-luoi" autocomplete="off">
-      <div class="field field-rong">
-        <label>Tên mục tiêu *</label>
-        <textarea class="o-nhieu-dong" rows="1" maxlength="200" id="mt-tieu-de" required placeholder="VD: Doanh thu Shopee đạt 30 tỷ trong quý"></textarea>
+      <div class="field field-rong mt-o-noidung">
+        <label for="mt-tieu-de">Tên mục tiêu *</label>
+        <textarea class="o-nhieu-dong" rows="1" maxlength="200" id="mt-tieu-de" placeholder="VD: Doanh thu Shopee đạt 30 tỷ trong quý"></textarea>
       </div>
-      <div class="field field-rong">
-        <label>Mô tả (tuỳ chọn)</label>
-        <textarea id="mt-mo-ta" rows="2" placeholder="Bối cảnh, con số cụ thể, cách đo..."></textarea>
+      <div class="field field-rong mt-o-noidung">
+        <label for="mt-mo-ta">Mô tả (tuỳ chọn)</label>
+        <textarea id="mt-mo-ta" rows="2" maxlength="2000" placeholder="Bối cảnh, con số cụ thể, cách đo..."></textarea>
       </div>
-      <div class="field field-nut" style="display:flex; gap:10px">
-        <button type="submit" class="btn-primary" id="mt-nut-luu" style="width:auto">Lưu thay đổi</button>
-        <button type="button" class="btn-phu" id="mt-nut-huy" style="width:auto">Hủy</button>
+
+      <div class="field mt-o-noidung">
+        <label for="mt-cap">Cấp mục tiêu</label>
+        <select id="mt-cap">
+          <option value="ca_nhan">Cá nhân (chỉ mình tôi thấy)</option>
+          <option value="phong_ban">Phòng ban</option>
+          <option value="cong_ty" id="mt-cap-opt-congty" hidden>Công ty</option>
+        </select>
+      </div>
+      <div class="field mt-o-noidung" id="mt-field-bophan">
+        <label for="mt-bo-phan">Phòng ban / bộ phận phụ trách *</label>
+        <input maxlength="80" type="text" id="mt-bo-phan" placeholder="VD: Kho vận, Kế toán, Vận hành sàn...">
+      </div>
+      <div class="field mt-o-noidung">
+        <label for="mt-nam">Năm</label>
+        <input type="number" id="mt-nam" min="2020" max="2100" step="1">
+      </div>
+      <div class="field mt-o-noidung">
+        <label for="mt-quy">Quý</label>
+        <select id="mt-quy">
+          <option value="1">Quý 1</option>
+          <option value="2">Quý 2</option>
+          <option value="3">Quý 3</option>
+          <option value="4">Quý 4</option>
+        </select>
+      </div>
+      <div class="field mt-o-noidung" id="mt-field-trangthai">
+        <label for="mt-trang-thai">Trạng thái</label>
+        <select id="mt-trang-thai">
+          <option value="dang_thuc_hien">Đang thực hiện</option>
+          <option value="hoan_thanh">Hoàn thành</option>
+          <option value="huy">Đã huỷ</option>
+        </select>
+      </div>
+
+      <!-- ⚠️ NGUY HIỂM ② + ③ — cảnh báo TRƯỚC khi bấm Lưu, không phải sau.
+           Đổi cấp/kỳ là làm thẻ mục tiêu RỜI KHỎI màn hình người khác trong
+           khi việc con vẫn đang chạy dưới nó. Nói ra bằng số việc thật. -->
+      <div class="field-rong mt-canh-bao" id="mt-canh-bao" hidden></div>
+
+      <!-- Hộp lý do CHỈ hiện khi cấp/năm/quý THẬT SỰ đổi (hoặc mở lại mục
+           tiêu đã đóng sổ). Hiện sẵn từ đầu thì người ta gõ cho có mỗi lần
+           sửa chính tả, và luật thành hình thức. -->
+      <div class="field field-rong cv-sua-canhbao" id="mt-khoi-lydo" hidden>
+        <label for="mt-ly-do" id="mt-ly-do-nhan">Vì sao đổi? *</label>
+        <p class="hint" style="margin:0 0 8px">Đây là <b>đổi cam kết của cả kỳ</b>. Giá trị cũ, giá trị mới, tên bạn và lý do này đều được ghi lại, và <b>người đặt mục tiêu sẽ nhận được thông báo</b>.</p>
+        <textarea id="mt-ly-do" class="o-nhieu-dong" rows="1" maxlength="500" placeholder="VD: quý 3 không kịp triển khai, chuyển cam kết sang quý 4"></textarea>
+      </div>
+
+      <div class="field field-nut" style="display:flex; gap:10px; flex-wrap:wrap">
+        <button type="submit" class="btn-primary cv-sua-nut" id="mt-nut-luu" style="width:auto">Lưu thay đổi</button>
+        <button type="button" class="btn-phu cv-sua-nut" id="mt-nut-huy" style="width:auto">Hủy</button>
       </div>
     </form>
     <div class="form-loi" id="mt-loi"></div>
+
+    <!-- Sổ sửa của CHÍNH mục tiêu này — cùng khuôn với hộp sửa việc. Câu
+         tiếng Việt dựng sẵn ở máy chủ (`cauSuaDoc`) nên web và thông báo
+         không lệch nhau. -->
+    <div class="cv-sua-lichsu" id="mt-lichsu-khoi" hidden>
+      <h5>Đã sửa những gì</h5>
+      <ul id="mt-lichsu"></ul>
+      <div class="dai-cat" id="mt-lichsu-cat" hidden></div>
+    </div>
   </div>
 </div>
 

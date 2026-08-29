@@ -2757,24 +2757,146 @@ async function khoiDongMucTieu() {
   // — Sếp Ngọc chốt 21/08/2026: "thêm mục tiêu và giao mục tiêu bản chất
   // như nhau, giao mục tiêu vẫn có mục giao cho tôi, đang trùng lặp thừa
   // thãi, gộp chung đi". Hộp mt-form ở đây giờ CHỈ CÒN dùng để SỬA mục tiêu
-  // đã có (mtCapNhat không đổi được cấp/phòng ban nên hộp sửa không cần 2
-  // trường đó nữa).
+  // đã có — nhưng SỬA ĐƯỢC CẢ BẢY TRƯỜNG, không còn ô nào đóng băng (Sếp
+  // Ngọc nhắc LẦN THỨ BA: "còn việc sửa mục tiêu sau khi đã giao nữa").
+  //
+  // Hộp này KHÔNG tự quyết được gì: mọi luật (ai sửa được, trường nào bắt
+  // buộc lý do, mục tiêu đóng sổ thì khoá tới đâu) đều nằm ở máy chủ và trả
+  // về mã lỗi thật. Ở đây làm đúng bốn việc — đổ sẵn giá trị đang có, hỏi lý
+  // do ĐÚNG LÚC cần, cảnh báo hậu quả TRƯỚC khi bấm Lưu, và in lại lỗi máy
+  // chủ nguyên văn. Bịa luật lần hai ở trình duyệt là mời hai bên lệch nhau.
   const mtFormModal = $('#mtFormModalNen');
   let mtDangSuaId = null;
+  let mtDangSua = null;      // bản ghi GỐC — để so xem trường nào THẬT SỰ đổi
+  let mtCheDoMoLai = false;  // mục tiêu đã đóng sổ: chỉ cho mở lại, không sửa nội dung
 
-  function moFormSua(m) {
+  const MT_CAP_TEN = { cong_ty: 'Công ty', phong_ban: 'Phòng ban', ca_nhan: 'Cá nhân' };
+
+  /* Ô "Phòng ban" chỉ có nghĩa khi cấp = phòng ban. Cấp khác mà vẫn hiện ô đó
+     là mời người ta điền vào một chỗ máy chủ sẽ xoá trắng. */
+  function capNhatOBoPhanMt() {
+    $('#mt-field-bophan').hidden = $('#mt-cap').value !== 'phong_ban';
+  }
+
+  /* Trường nào ĐANG THẬT SỰ khác giá trị gốc — dùng chung cho cả ba việc:
+     bật hộp lý do, dựng dải cảnh báo, và gói dữ liệu gửi đi. Một nguồn sự
+     thật, không ba chỗ so lệch nhau. */
+  function mtCacTruongDoi() {
+    const m = mtDangSua || {};
+    const doi = {};
+    const v = (id) => $(id).value.trim();
+    if (v('#mt-tieu-de') !== (m.tieu_de || '')) doi.tieu_de = v('#mt-tieu-de');
+    if (v('#mt-mo-ta') !== (m.mo_ta || '')) doi.mo_ta = v('#mt-mo-ta');
+    if ($('#mt-cap').value !== m.cap) doi.cap = $('#mt-cap').value;
+    // Phòng ban chỉ tính khi ô đang hiện — cấp khác thì máy chủ tự xoá nhãn.
+    if (!$('#mt-field-bophan').hidden && v('#mt-bo-phan') !== (m.bo_phan || '')) {
+      doi.bo_phan = v('#mt-bo-phan');
+    }
+    if (Number($('#mt-nam').value) !== Number(m.nam)) doi.nam = Number($('#mt-nam').value);
+    if (Number($('#mt-quy').value) !== Number(m.quy)) doi.quy = Number($('#mt-quy').value);
+    if ($('#mt-trang-thai').value !== m.trang_thai) doi.trang_thai = $('#mt-trang-thai').value;
+    return doi;
+  }
+
+  /* Hộp lý do bật khi cấp/năm/quý thật sự đổi (hoặc đang mở lại mục tiêu đã
+     đóng sổ). Bật sẵn từ đầu thì người ta gõ cho có mỗi lần sửa chính tả, và
+     luật thành hình thức — sửa chính tả PHẢI đi lọt không câu hỏi nào. */
+  function capNhatCanhBaoMt() {
+    const doi = mtCheDoMoLai ? { trang_thai: 'dang_thuc_hien' } : mtCacTruongDoi();
+    const nangKy = doi.nam !== undefined || doi.quy !== undefined;
+    const nangCap = doi.cap !== undefined;
+    const canLyDo = mtCheDoMoLai || nangKy || nangCap;
+
+    $('#mt-khoi-lydo').hidden = !canLyDo;
+    $('#mt-ly-do').required = canLyDo;
+    $('#mt-ly-do-nhan').textContent = mtCheDoMoLai
+      ? 'Vì sao mở lại mục tiêu này? *'
+      : (nangKy && nangCap ? 'Vì sao đổi cấp và đổi kỳ? *'
+        : (nangKy ? 'Vì sao chuyển mục tiêu sang kỳ khác? *' : 'Vì sao đổi cấp mục tiêu? *'));
+
+    /* ⚠️ HẬU QUẢ THẬT, NÓI TRƯỚC KHI BẤM LƯU. Hai chỗ, mỗi chỗ một câu — và
+       kèm SỐ VIỆC đang treo dưới mục tiêu, vì "3 việc" đọc khác hẳn "0 việc". */
+    const m = mtDangSua || {};
+    const cauCanhBao = [];
+    if (nangKy) {
+      const kyCu = `Quý ${m.quy}/${m.nam}`;
+      const kyMoi = `Quý ${doi.quy ?? m.quy}/${doi.nam ?? m.nam}`;
+      cauCanhBao.push(`Chuyển <b>${kyCu} → ${kyMoi}</b> là <b>đổi kỳ báo cáo</b>: số liệu cả hai quý đều đổi theo. Ai đang mở Trạm Mục Tiêu ${kyCu} sẽ không còn thấy mục tiêu này.`);
+    }
+    if (nangCap) {
+      cauCanhBao.push(doi.cap === 'ca_nhan'
+        ? `Hạ xuống <b>Cá nhân</b> là <b>giấu mục tiêu khỏi cả công ty</b> — chỉ mình bạn còn nhìn thấy nó ở Trạm Mục Tiêu.`
+        : `Đổi cấp <b>${MT_CAP_TEN[m.cap] || m.cap} → ${MT_CAP_TEN[doi.cap] || doi.cap}</b> là đổi <b>ai nhìn thấy mục tiêu này</b>.`);
+    }
+    if (cauCanhBao.length && m.so_viec > 0) {
+      cauCanhBao.push(`Mục tiêu này đang có <b>${m.so_viec} việc</b> gắn vào. Việc <b>không mất</b> — vẫn treo nguyên vào mục tiêu — nhưng người đang làm sẽ không còn thấy thẻ mục tiêu ở chỗ cũ nữa.`);
+    }
+    $('#mt-canh-bao').innerHTML = cauCanhBao.join('<br><br>');
+    $('#mt-canh-bao').hidden = cauCanhBao.length === 0;
+  }
+
+  async function veLichSuSuaMt(id) {
+    const khoi = $('#mt-lichsu-khoi');
+    khoi.hidden = true;
+    veDaiCat('#mt-lichsu-cat', null);
+    try {
+      const ls = await API.suaLichSu('muc_tieu', id);
+      const ds = ls.ds || [];
+      if (ds.length) {
+        $('#mt-lichsu').innerHTML = ds.map(d =>
+          `<li>${esc(d.cau)} <span class="luc">· ${esc(String(d.luc || '').slice(0, 16))}</span></li>`).join('');
+        veDaiCat('#mt-lichsu-cat', ls.cat, { don_vi: 'lần sửa' });
+        khoi.hidden = false;
+      }
+    } catch { /* không xem được lịch sử thì thôi, đừng chặn việc sửa */ }
+  }
+
+  /* `moLai = true` → mục tiêu đã Hoàn thành/Đã huỷ: khoá hết ô nội dung, chỉ
+     còn đúng một nước là mở lại (kèm lý do). Máy chủ cũng chốt y hệt — ở đây
+     giấu ô đi cho người dùng khỏi gõ xong mới bị từ chối. */
+  function moFormSua(m, moLai) {
     mtDangSuaId = m.id;
-    $('#mt-tieu-de').value = m.tieu_de;
+    mtDangSua = m;
+    mtCheDoMoLai = !!moLai;
+    $('#mt-loi').textContent = '';
+    $('#mt-ly-do').value = '';
+    $('#mt-tieu-de').value = m.tieu_de || '';
     $('#mt-mo-ta').value = m.mo_ta || '';
+    $('#mt-cap').value = m.cap;
+    $('#mt-bo-phan').value = m.bo_phan || '';
+    $('#mt-nam').value = m.nam;
+    $('#mt-quy').value = String(m.quy);
+    $('#mt-trang-thai').value = moLai ? 'dang_thuc_hien' : m.trang_thai;
+    // Cấp công ty chỉ Admin mới đặt được (y hệt lúc tạo) — giấu hẳn lựa chọn
+    // đó với người khác thay vì để họ chọn rồi ăn 403.
+    $('#mt-cap-opt-congty').hidden = !TOI.la_admin && m.cap !== 'cong_ty';
+
+    $('#mt-form-tieude').textContent = moLai ? 'Mở lại mục tiêu' : 'Sửa mục tiêu';
+    $('#mt-form-nhac').textContent = moLai
+      ? `Mục tiêu này đã ${m.trang_thai === 'huy' ? 'huỷ' : 'hoàn thành'} — bản ghi là kết quả của kỳ nên nội dung đang khoá. Mở lại về "Đang thực hiện" thì sửa tiếp được, nhưng phải ghi lý do và có để lại vết.`
+      : 'Sửa tên và mô tả thì thoải mái. Đổi phòng ban phụ trách thì có ghi vết. Đổi cấp, năm hoặc quý thì phải ghi lý do — đó là đổi cam kết của cả kỳ.';
+    document.querySelectorAll('.mt-o-noidung').forEach(o => { o.hidden = !!moLai; });
+    if (!moLai) capNhatOBoPhanMt();
+    $('#mt-nut-luu').textContent = moLai ? 'Mở lại mục tiêu' : 'Lưu thay đổi';
+
+    capNhatCanhBaoMt();
     mtFormModal.hidden = false;
+    veLichSuSuaMt(m.id);
   }
   function dongMoFormMt() {
     mtFormModal.hidden = true;
     mtDangSuaId = null;
+    mtDangSua = null;
+    mtCheDoMoLai = false;
     $('#mt-form').reset();
   }
   mtFormModal.addEventListener('click', e => { if (e.target === mtFormModal) dongMoFormMt(); });
   $('#mt-nut-huy').addEventListener('click', dongMoFormMt);
+  $('#mt-cap').addEventListener('change', () => { capNhatOBoPhanMt(); capNhatCanhBaoMt(); });
+  ['#mt-nam', '#mt-quy', '#mt-trang-thai', '#mt-bo-phan'].forEach(s => {
+    $(s).addEventListener('change', capNhatCanhBaoMt);
+    $(s).addEventListener('input', capNhatCanhBaoMt);
+  });
 
   function veThe1MucTieu(m) {
     const pct = m.so_viec > 0 ? Math.round((m.so_viec_xong / m.so_viec) * 100) : 0;
@@ -2806,10 +2928,20 @@ async function khoiDongMucTieu() {
     // Sửa được khi chưa xong/huỷ/chốt (mục tiêu công ty ĐÃ CHỐT thì khoá hẳn —
     // Sếp Ngọc xác nhận 21/08/2026: "cấp công ty thì tôi sẽ không sửa vì đã
     // chốt rồi nhưng bình thường sẽ phải chỉnh cho phù hợp tình hình cụ thể").
-    const duocSua = (m.nguoi_tao_id === TOI.id || TOI.la_admin) && !daXong && !daHuy && !m.da_chot;
+    // Nút Sửa nay mở CẢ BẢY trường, không chỉ tên + mô tả.
+    const cuaToi = m.nguoi_tao_id === TOI.id || TOI.la_admin;
+    const duocSua = cuaToi && !daXong && !daHuy && !m.da_chot;
+    /* MỞ LẠI — mục tiêu đã Hoàn thành/Đã huỷ thì nội dung khoá, nhưng phải
+       còn ĐÚNG MỘT lối ra. Nút "Xong" không có bước xác nhận nào: bấm nhầm
+       một cái mà đóng băng vĩnh viễn cả mục tiêu của quý thì đó là cắt quá
+       tay, không phải an toàn. Mở lại có ghi vết + bắt lý do nên không ai
+       lặng lẽ dựng lại một mục tiêu đã đóng sổ được. */
+    const duocMoLai = cuaToi && (daXong || daHuy) && !m.da_chot;
     const nutSua = duocSua
       ? `<span class="mt-the-nut"><button type="button" class="btn-nho" data-mt-sua="${m.id}">Sửa</button> <button type="button" class="btn-nho" data-mt-xong="${m.id}">Xong</button> <button type="button" class="btn-nho" data-mt-huy="${m.id}">Huỷ</button></span>`
-      : '';
+      : (duocMoLai
+        ? `<span class="mt-the-nut"><button type="button" class="btn-nho" data-mt-molai="${m.id}">Mở lại</button></span>`
+        : '');
 
     // Thẻ nhỏ gọn: hàng 1 = tên (cắt 1 dòng, rê chuột hiện đủ) + % nổi bật;
     // hàng 2 = thanh tiến độ; hàng 3 = mô tả 1 dòng; hàng 4 = badge + số việc + nút.
@@ -2903,13 +3035,25 @@ async function khoiDongMucTieu() {
     const nut = $('#mt-nut-luu');
     nut.disabled = true;
     try {
-      await API.mtCapNhat(mtDangSuaId, {
-        tieu_de: $('#mt-tieu-de').value.trim(),
-        mo_ta: $('#mt-mo-ta').value.trim()
-      });
+      /* CHỈ gửi trường THẬT SỰ đổi. Gửi hết mọi trường thì mỗi lần bấm Lưu là
+         đẻ một loạt dòng lịch sử "đổi A → A" — sổ đầy rác, đọc không ra cái
+         gì, và tốn hạn mức ghi D1 vô ích (REV-0031). */
+      const doi = mtCheDoMoLai ? { trang_thai: 'dang_thuc_hien' } : mtCacTruongDoi();
+      if (!mtCheDoMoLai && doi.tieu_de !== undefined && !doi.tieu_de) {
+        $('#mt-loi').textContent = 'Tên mục tiêu không được để trống.';
+        return;
+      }
+      if (!Object.keys(doi).length) { dongMoFormMt(); return; }
+      if (mtCheDoMoLai || doi.cap !== undefined || doi.nam !== undefined || doi.quy !== undefined) {
+        doi.ly_do = $('#mt-ly-do').value.trim();
+      }
+      await API.mtCapNhat(mtDangSuaId, doi);
       dongMoFormMt();
       await taiLaiMucTieu();
     } catch (err) {
+      // In NGUYÊN VĂN lỗi máy chủ — nó đã nói rõ vì sao bị chặn (thiếu lý do,
+      // sai vai, mục tiêu đã đóng sổ). Thay bằng câu chung chung là giấu mất
+      // lời giải ngay trước mắt người đang bí.
       $('#mt-loi').textContent = err.message || 'Không lưu được, thử lại nhé.';
     } finally {
       nut.disabled = false;
@@ -2978,7 +3122,13 @@ async function khoiDongMucTieu() {
     const nutSua = e.target.closest('[data-mt-sua]');
     if (nutSua) {
       const m = DS_MT.find(x => String(x.id) === String(nutSua.getAttribute('data-mt-sua')));
-      if (m) moFormSua(m);
+      if (m) moFormSua(m, false);
+      return;
+    }
+    const nutMoLai = e.target.closest('[data-mt-molai]');
+    if (nutMoLai) {
+      const m = DS_MT.find(x => String(x.id) === String(nutMoLai.getAttribute('data-mt-molai')));
+      if (m) moFormSua(m, true);
       return;
     }
     const nutChot = e.target.closest('[data-mt-chot]');
@@ -3009,9 +3159,17 @@ async function khoiDongMucTieu() {
       nut.textContent = dangLam;
     }
   }
-  $('#mt-congty-list').addEventListener('click', xuLyNutMucTieu);
-  $('#mt-phongban-list').addEventListener('click', xuLyNutMucTieu);
-  $('#mt-canhan-list').addEventListener('click', xuLyNutMucTieu);
+  /* ⚠️ SÁU Ô CHỨA, KHÔNG PHẢI BA. `veNhomMucTieu` đổ mục tiêu ĐANG LÀM vào
+     `#mt-*-list` nhưng mục tiêu ĐÃ XONG/ĐÃ HUỶ vào `#mt-*-daxong-list` (khối
+     gấp lại, Sếp Ngọc yêu cầu 23/08/2026). Ba ô chứa "đã xong" trước bản này
+     KHÔNG có listener nào — nghĩa là bấm vào thẻ mục tiêu đã hoàn thành thì
+     KHÔNG MỞ ĐƯỢC hộp chi tiết xem việc, im lặng, không báo lỗi gì. Bàn đo
+     `do-hop-sua-muctieu.mjs` bắt được khi nút "Mở lại" bấm mãi không lên hộp.
+     Nút chết vì thiếu listener là loại lỗi không ai thấy cho tới lúc cần. */
+  ['congty', 'phongban', 'canhan'].forEach(p => {
+    $(`#mt-${p}-list`).addEventListener('click', xuLyNutMucTieu);
+    $(`#mt-${p}-daxong-list`).addEventListener('click', xuLyNutMucTieu);
+  });
 
   await taiLaiMucTieu();
 }
