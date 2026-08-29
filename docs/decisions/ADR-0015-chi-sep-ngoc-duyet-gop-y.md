@@ -171,11 +171,27 @@ Nguyên văn của Sếp, sau khi nghe REV-0027 khoá cửa `dat-lai-mat-khau` b
 | e | `tai_khoan` trong bản sao lưu | vốn chỉ có hash — giữ nguyên |
 | f | **đặt nhầm chìa** — `TELEGRAM_CHAT_ID_SEP` bị dán bằng chat id **nhóm chung** (REV-0032 M1) | hai chat id trùng nhau → **409**, không đụng mật khẩu. Kiểm **lúc dùng**, không phải lúc cài: secret đổi lúc nào mã không hay biết. Hiểm ở **người** — người đi đặt secret chính là người đang bị giữ bí mật |
 
+**So hai chat id phải so BẰNG SỐ** (REV-0035 L2). Bản đầu so chuỗi, nên
+`-01002222` và `-1002222` — **cùng một nhóm** với Telegram vì nó đọc `chat_id`
+thành số nguyên 64-bit — lại lọt qua chốt (f) và mật khẩu tạm bay vào nhóm
+chung. Nay hai vế đều là số nguyên thì so bằng `BigInt`; dạng `@ten_kenh` thì
+vẫn so chuỗi sau khi cắt khoảng trắng (`cungMotChat` trong `src/index.js`).
+
 **Chốt nhịp — 1 lần / 5 phút cho mỗi tài khoản** (REV-0032 M2). Mỗi cú bấm sinh
 mật khẩu mới **và** `DELETE FROM phien`, nên bấm liên tục là **khoá Sếp ra khỏi
 ERP** không giới hạn, kèm spam chat riêng. Vượt nhịp → **429**, Sếp nhận **một**
 tin báo mỗi cửa sổ. Mốc nhịp đọc từ chính dòng `nhan_su_lich_su` của lần trước —
 0 bảng mới, 0 migration.
+
+**Chốt nhịp hỏng thì ĐÓNG, không mở** (REV-0035 L3). Mốc nhịp nằm trong
+`nhan_su_lich_su`; bản đầu bọc câu đọc trong `try/catch` rồi đi tiếp với
+`ganDay = null` — mất bảng đó (hoặc câu đọc hỏng vì bất cứ lẽ gì) là chốt nhịp
+**tắt âm thầm ngay trên đường phát mật khẩu**. Nay đọc không được thì trả
+**503** và **không** đụng mật khẩu hiện tại. Chiều còn lại — *ghi* dòng mốc
+hỏng — không rút mật khẩu về được nữa, nên nó **kêu ra nhóm chung** rằng chốt
+chặn bấm dồn đang hở, thay vì nuốt bằng một dòng log. Đã quét cả `src/`,
+`scripts/`, `migrations/`, `schema.sql`: **không** chỗ nào `DELETE`/`DROP`/dọn
+định kỳ bảng `nhan_su_lich_su` — nó append-only theo thiết kế.
 
 **Gửi xong mà ghi CSDL hỏng** (REV-0032 L5): mọi dấu vết cũ đều ghi **sau** câu
 `UPDATE`, nên ca này từng **vô hình** với công ty. Nay: `console.error` + tin cho
@@ -224,10 +240,47 @@ bản thật là **mất công ty**. Nghĩa là suốt thời gian qua, *quên m
    kể cả `phien` (muốn đá phiên cũ thì dùng nút trong tab Quản trị).
 3. **In rõ đang đổi cho ai rồi mới hỏi.** Không gõ lại đúng số điện thoại thì
    DỪNG, không ghi gì. Chạy không có bàn phím (CI/cron) → đọc phải EOF → cũng
-   DỪNG.
+   DỪNG. Trả lời qua **ống dẫn** (`echo <số> | node scripts/dat-lai-mat-khau.mjs
+   <số>`) thì **được nhận** — REV-0035 L5: bản đầu coi luôn ống dẫn là EOF rồi
+   huỷ oan, người vận hành tưởng script hỏng.
+
+**REV-0035 L1 — đường cứu này TỪNG KHÔNG CHẠY ĐƯỢC LẦN NÀO.** Từ `53c77ef` đến
+`5f84d6d`, hàm gọi wrangler dùng `execFileSync('npx', args, { shell: true })`:
+bật `shell` thì Node không bọc nháy từng đối số nữa, câu SQL có khoảng trắng bị
+vỏ lệnh cắt vụn, wrangler ném `Unknown arguments: t.id,, t.ten_dang_nhap,, …` và
+script chết ngay bước `[1/3]` — trên **cả** PowerShell lẫn Bash. Bàn đo cũ chỉ
+`import` hai hàm sinh SQL nên xanh suốt (BH-47).
+Vá: gọi **thẳng file JS của wrangler bằng chính `node`** (`process.execPath`),
+`shell` tắt hẳn. *Bỏ `shell: true` không thôi là chưa đủ trên Windows*: `npx` ở
+đó là `npx.cmd`, mà Node từ 18.20.2 cấm chạy `.cmd` khi `shell` tắt — đo trên
+máy này (Node 24): `npx.cmd` → `EINVAL`, `npx` → `ENOENT`. Tự bọc nháy cũng
+không xong vì luật nháy của `cmd.exe` và của `sh` khác nhau (hash có dạng
+`pbkdf2$100000$…`, `sh` sẽ nuốt `$`). Cần đã `npm install` (wrangler nằm trong
+`devDependencies`).
 
 Bàn đo `scripts/do-quyen-duyet-gopy.mjs` chụp **toàn bộ** CSDL trước và sau khi
 chạy câu ghi ấy rồi so từng bảng: đúng 1 bảng đổi, 0 dòng mất, đúng 1 dòng
 trong `tai_khoan`, đúng 2 cột, cờ `duyet_gopy` không bị đụng, và hash sinh ra
 đăng nhập được bằng chính `kiemTraMatKhau()` của `src/auth.js`. Kèm ca đối
 chứng cho chính phép so đó (cố ý `DELETE FROM nhan_su` — phép đo bắt được).
+
+Từ REV-0035, bàn đo còn **chạy thật cả script** trong một tiến trình riêng, trên
+D1 `--local` thật, đủ bốn đường — có xác nhận · gõ nhầm · số không tồn tại ·
+tài khoản đang khoá — cộng ca đối chứng giữ nguyên `shell: true` (bản hỏng phải
+chết). `import` hàm không thay được việc chạy script.
+
+## Thứ tự triển khai: DB TRƯỚC, CODE SAU — và khoảng chờ giữa hai bước là CỬA HỞ
+
+Code mới **chịu được** thiếu cột (đo rồi: 200 hết, cron không ném), còn DB mới
+thì code cũ **không đụng tới**. Nạp code trước là mở cửa 14/17 suốt khoảng chờ.
+
+**Cửa 17 vẫn hở khi DB chưa nạp** (REV-0035 L4): chừng nào `gop_y.cho_duyet_tu_luc`
+chưa tồn tại, đồng hồ SLA lùi về `cap_nhat_luc` — mà duyệt→hoàn tác đều ghi lại
+cột đó, nên một cú hoàn tác là xoá tuổi hàng chờ và cron thôi đẩy việc lên Sếp.
+Đây **không vá được ở tầng code** (không có cột thì không có mốc nào khác để
+đọc). Cách duy nhất là **thu hẹp khoảng chờ**: nạp DB xong thì deploy **ngay**,
+đừng nạp DB hôm nay rồi mai mới deploy. Trong khoảng đó, một việc bị duyệt rồi
+hoàn tác có thể phải giao lại tay.
+
+Danh sách lệnh chép-dán, mỗi bước kèm một lệnh kiểm: xem
+`docs/handoff/TRIEN-KHAI-gopy-chi-sep-duyet.md`.

@@ -107,6 +107,11 @@ khẩu), nên không ai làm lén được.
 > Bấm dồn không giải quyết được gì: mỗi lần bấm là **đá hết phiên** của Sếp,
 > nên trong **5 phút** ERP chỉ cho khôi phục **một lần** (lần sau trả **429**
 > và báo cho Sếp). Mật khẩu tạm vừa gửi vẫn còn dùng được — cứ dùng nó.
+>
+> Gặp **503** *"không kiểm được chốt nhịp"*: ERP không đọc được sổ
+> `nhan_su_lich_su` nên **từ chối** thay vì phát mật khẩu mù. Mật khẩu hiện tại
+> **không bị đụng**. Đây là lỗi kỹ thuật của DB — báo người phụ trách, hoặc đi
+> thẳng **Nấc 2**.
 
 **Nấc 2 — mất luôn Telegram: đặt lại mật khẩu ở tầng dữ liệu.**
 
@@ -123,7 +128,13 @@ Script in rõ đang đổi cho ai rồi **bắt gõ lại số điện thoại**
 > **không đăng nhập được**. Tài khoản đang hoạt động thì không đụng cột này.
 >
 > Script **hỏi bằng bàn phím**. Chạy trong CI/cron (không có bàn phím) thì nó
-> **dừng ngay với mã thoát khác 0**, không ghi gì — không treo.
+> **dừng ngay với mã thoát khác 0**, không ghi gì — không treo. Trả lời sẵn
+> bằng **ống dẫn** cũng được: `echo <số> | node scripts/dat-lai-mat-khau.mjs <số> --remote`.
+>
+> Cần đã chạy **`npm install`** ở thư mục dự án (script gọi wrangler trong
+> `node_modules`). Nếu thấy `Unknown arguments: t.id,, t.ten_dang_nhap,, …` thì
+> đang chạy bản **trước REV-0035** — bản đó chưa bao giờ chạy được, cập nhật code
+> rồi làm lại.
 
 > ⚠️ **TUYỆT ĐỐI KHÔNG** dùng `scripts/tao-tai-khoan.mjs` thay cho việc này.
 > File đó ghi `seed.sql` **xoá sạch dữ liệu cũ** — chạy trên bản thật là **mất

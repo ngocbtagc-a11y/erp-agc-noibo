@@ -1067,6 +1067,22 @@ const LOI_MAT_NGUOI_DUYET =
    PHÁT HIỆN ĐƯỢC, KHÔNG CẦN CHẶN: cả công ty thấy dòng "[Bảo mật] X vừa khôi
    phục tài khoản Y" trên Telegram nhóm, Sếp nhận thêm một tin trong ERP và
    MỘT DÒNG `nhan_su_lich_su` — không làm lén được. */
+/* HAI CHAT ID CÓ PHẢI CÙNG MỘT CHỖ KHÔNG (REV-0035 L2).
+   So chuỗi thôi là lọt: Telegram đọc `chat_id` thành số nguyên 64-bit, nên
+   `-01002222` và `-1002222` là CÙNG một nhóm mà hai chuỗi lại khác nhau — dán
+   nhầm kiểu đó là chốt M1 mở toang, mật khẩu tạm của Sếp bay vào nhóm chung.
+   Hai vế đều là số nguyên thì so BẰNG SỐ (BigInt: chat id vượt 2^53). Không
+   phải số (dạng `@ten_kenh`) thì quay về so chuỗi đã cắt khoảng trắng. */
+export function cungMotChat(a, b) {
+  const sa = String(a ?? '').trim(), sb = String(b ?? '').trim();
+  if (!sa || !sb) return false;
+  if (sa === sb) return true;
+  if (/^-?\d+$/.test(sa) && /^-?\d+$/.test(sb)) {
+    try { return BigInt(sa) === BigInt(sb); } catch { return false; }
+  }
+  return false;
+}
+
 async function qtDatLaiMatKhau(req, env) {
   const { phien, loi: l } = await batBuocAdmin(req, env);
   if (l) return l;
@@ -1107,7 +1123,7 @@ async function qtDatLaiMatKhau(req, env) {
      KIỂM LÚC DÙNG, không phải lúc cài — secret đổi được bất cứ lúc nào mà mã
      không hay biết, nên chốt phải nằm ngay trên đường đi của mật khẩu. */
   if (khoiPhucHo && env.TELEGRAM_CHAT_ID &&
-      String(env.TELEGRAM_CHAT_ID_SEP).trim() === String(env.TELEGRAM_CHAT_ID).trim()) {
+      cungMotChat(env.TELEGRAM_CHAT_ID_SEP, env.TELEGRAM_CHAT_ID)) {
     console.error('[ERP] TELEGRAM_CHAT_ID_SEP TRÙNG TELEGRAM_CHAT_ID (nhóm chung) — ' +
                   'từ chối khôi phục đăng nhập để mật khẩu tạm không phát cho cả công ty.');
     return loi('TELEGRAM_CHAT_ID_SEP đang trùng đúng TELEGRAM_CHAT_ID của nhóm chung — gửi mật khẩu ' +
@@ -1133,7 +1149,19 @@ async function qtDatLaiMatKhau(req, env) {
          WHERE nhan_su_id = ? AND loai_su_kien = 'khoi_phuc_dang_nhap'
            AND luc > datetime('now', '+7 hours', '-${KHOI_PHUC_NHIP_PHUT} minutes')
          ORDER BY luc DESC LIMIT 1`).bind(tk.nhan_su_id).first();
-    } catch (e) { console.error('Đọc mốc nhịp khôi phục đăng nhập:', e.message); }
+    } catch (e) {
+      /* HỎNG PHẢI ĐÓNG, KHÔNG PHẢI MỞ (REV-0035 L3). Bản cũ nuốt lỗi rồi đi
+         tiếp với `ganDay = null` — tức là mất bảng `nhan_su_lich_su` (hoặc câu
+         đọc hỏng vì bất cứ lẽ gì) là chốt nhịp TẮT ÂM THẦM, và cái tắt âm thầm
+         đó nằm đúng trên đường phát mật khẩu. Không đọc được sổ thì không biết
+         vừa phát cách đây mấy giây — từ chối là hướng an toàn: mật khẩu hiện
+         tại không bị đụng, mật khẩu tạm lần trước (nếu có) vẫn dùng được. */
+      console.error('[ERP] KHÔNG ĐỌC ĐƯỢC MỐC NHỊP khôi phục đăng nhập — TỪ CHỐI để không phát ' +
+                    `mật khẩu dồn dập: ${e.message}`);
+      return loi('Không kiểm được chốt nhịp khôi phục đăng nhập (đọc sổ nhân sự hỏng) — đã TỪ CHỐI ' +
+                 'thay vì phát mật khẩu tạm mà không biết vừa phát cách đây bao lâu. Mật khẩu hiện ' +
+                 'tại KHÔNG bị đụng. Báo người phụ trách kỹ thuật xem bảng nhan_su_lich_su.', 503);
+    }
     if (ganDay) {
       console.warn(`[ERP] Chặn bấm dồn: khôi phục đăng nhập cho ${tk.ten_dang_nhap} vừa chạy lúc ` +
                    `${ganDay.luc}, trong ${KHOI_PHUC_NHIP_PHUT} phút chỉ cho một lần.`);
@@ -1222,7 +1250,18 @@ async function qtDatLaiMatKhau(req, env) {
           .bind(tk.nhan_su_id, tk.ten_dang_nhap, phien.nhan_su_id,
                 `${nguoiBam} khôi phục đăng nhập hộ. Mật khẩu tạm gửi thẳng kênh riêng của ERP Owner, ` +
                 `KHÔNG hiện cho người bấm.`).run();
-      } catch (e) { console.error('Ghi nhan_su_lich_su khôi phục đăng nhập:', e.message); }
+      } catch (e) {
+        /* Dòng này VỪA là sổ VỪA là mốc của chốt nhịp (REV-0035 L3). Ghi hụt
+           thì mật khẩu đã phát rồi — không rút lại được — nhưng chốt nhịp 5
+           phút coi như KHÔNG có cho lần sau. Không nuốt bằng một dòng log:
+           kêu ra nhóm chung để người còn kịp biết mà đừng bấm dồn. */
+        console.error('[ERP] GHI MỐC NHỊP HỎNG — chốt nhịp 5 phút KHÔNG có hiệu lực cho lần bấm ' +
+                      `tiếp theo trên tài khoản ${tk.ten_dang_nhap}: ${e.message}`);
+        guiTelegram(env,
+          `⚠️ [Bảo mật] ERP không ghi được mốc nhịp khôi phục đăng nhập cho ${tk.ten_dang_nhap} lúc ` +
+          `${luc} — chốt chặn bấm dồn ĐANG HỞ cho tài khoản này. Đừng bấm khôi phục thêm lần nữa; ` +
+          `báo người phụ trách kỹ thuật xem bảng nhan_su_lich_su.`).catch(() => {});
+      }
     }
     // (d) — Telegram NHÓM CHUNG: cả công ty thấy, không kèm mật khẩu.
     guiTelegram(env,

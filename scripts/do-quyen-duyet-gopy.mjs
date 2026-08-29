@@ -43,16 +43,20 @@
    chạy ra 65/25. Cùng loại lệch, lần thứ ba (REV-0032 L4): lời khai vòng 2
    nói ảnh chụp CSDL phủ "48 bảng" trong khi bàn đo in ra **57 bảng** — con
    số đúng là con số bàn đo in ra, không phải con số nhớ được. Bản REV-0030:
-   146 phép, 16 ca đối chứng. Bản REV-0032 này: 175 phép, 20 ca đối chứng.
-   Chấm lại cây REV-0030 (`53c77ef`) bằng chính bàn đo này: 164 ĐẠT /
-   11 TRƯỢT — đúng bốn lỗi REV-0032 ở tầng máy chủ (cửa 17 · M1 · M2 · L5),
-   không thiếu không thừa. (L2/L3 nằm trong `scripts/`, không đổi theo
-   `GOPY_SRC`, nên có ca đo và ca ngược riêng.) Đo cây cũ:
+   146 phép, 16 ca đối chứng. Bản REV-0032: 175 phép, 20 ca đối chứng.
+   Bản REV-0035 này: 192 phép, 22 ca đối chứng.
+   Chấm lại cây REV-0030 (`53c77ef`) bằng chính bàn đo này: 177 ĐẠT /
+   15 TRƯỢT — đúng sáu lỗi ở tầng máy chủ (cửa 17 · M1 · M2 · L5 của REV-0032,
+   cộng L2 so chat id bằng chuỗi và L3 chốt nhịp hỏng-mở của REV-0035), không
+   thiếu không thừa. (Phần trong `scripts/` — hai hàm SQL, `hoiMotLan`, và cả
+   việc CHẠY THẬT script cứu hộ — không đổi theo `GOPY_SRC`, nên có ca đo và
+   ca đối chứng riêng.) Đo cây cũ:
      GOPY_SRC=<thư mục src cũ> node scripts/do-quyen-duyet-gopy.mjs
 
    Chạy:  node scripts/do-quyen-duyet-gopy.mjs
    ========================================================================== */
 
+import { execFileSync, spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync, mkdirSync, rmSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -1032,6 +1036,49 @@ async function doKhoiPhuc(thuMucSrc) {
     t.db.close?.();
   }
 
+  /* ⑨ SỐ 0 THỪA Ở ĐẦU (REV-0035 L2) — `-01002222` và `-1002222` là CÙNG một
+     nhóm với Telegram (nó đọc chat_id thành số nguyên) nhưng KHÁC chuỗi. So
+     chuỗi thôi thì chốt ⑥ mở toang. */
+  {
+    TELEGRAM.length = 0; TELEGRAM_CT.length = 0;
+    const t = await motVong(thuMucSrc,
+      { TELEGRAM_CHAT_ID: '-1002222', TELEGRAM_CHAT_ID_SEP: '-01002222' });
+    const truoc = hashCua(t, 1);
+    r.soKhongThua = (await t.post('/api/quan-tri/dat-lai-mat-khau', 'PHONG', { tai_khoan_id: 1 })).status;
+    r.hashDoiKhiSoKhongThua = hashCua(t, 1) !== truoc;
+    r.tinNhomKhiSoKhongThua = TELEGRAM_CT.filter(x => /Mật khẩu tạm:/.test(x.text || '')).length;
+    t.db.close?.();
+  }
+
+  /* ⑩ CA NGƯỢC CỦA ⑨ — hai số chỉ lệch ĐÚNG MỘT CHỮ SỐ cuối là hai chỗ khác
+     nhau thật, không được siết oan. */
+  {
+    TELEGRAM.length = 0; TELEGRAM_CT.length = 0;
+    const t = await motVong(thuMucSrc,
+      { TELEGRAM_CHAT_ID: '-1002222', TELEGRAM_CHAT_ID_SEP: '-1002223' });
+    r.chatKhacThat = (await t.post('/api/quan-tri/dat-lai-mat-khau', 'PHONG', { tai_khoan_id: 1 })).status;
+    r.tinRiengKhacThat = TELEGRAM_CT.filter(x => x.chatId === '-1002223'
+                                             && /Mật khẩu tạm:/.test(x.text || '')).length;
+    t.db.close?.();
+  }
+
+  /* ⑪ CHỐT NHỊP HỎNG THÌ PHẢI ĐÓNG, KHÔNG PHẢI MỞ (REV-0035 L3).
+     Mất bảng `nhan_su_lich_su` = không đọc được mốc = không biết vừa phát cách
+     đây mấy giây. Bản cũ nuốt lỗi rồi phát tiếp như không có gì. */
+  {
+    TELEGRAM.length = 0; TELEGRAM_CT.length = 0;
+    const t = await motVong(thuMucSrc, { TELEGRAM_CHAT_ID_SEP: CHAT_SEP });
+    const truoc = hashCua(t, 1);
+    t.db.exec('DROP TABLE nhan_su_lich_su');
+    const { kq, dong } = await batConsole(() =>
+      t.post('/api/quan-tri/dat-lai-mat-khau', 'PHONG', { tai_khoan_id: 1 }));
+    r.soHong = kq.status;
+    r.soHongConsole = dong.join('\n');
+    r.hashDoiKhiSoHong = hashCua(t, 1) !== truoc;
+    r.tinRiengKhiSoHong = TELEGRAM_CT.filter(x => x.chatId === CHAT_SEP).length;
+    t.db.close?.();
+  }
+
   /* ⑦ CHỐT NHỊP (REV-0032 M2) — BẤM DỒN.
      Hai cú bấm liên tiếp trong cùng cửa sổ 5 phút: cú thứ hai phải 429, và
      KHÔNG được sinh mật khẩu mới, KHÔNG được đá phiên, KHÔNG spam chat Sếp. */
@@ -1147,6 +1194,25 @@ ok('  Và KHÔNG một mật khẩu tạm nào bay vào nhóm chung',
    kp.tinNhomKhiChiaTrung === 0, `${kp.tinNhomKhiChiaTrung} tin có mật khẩu trong nhóm`);
 ok('  CA NGƯỢC — hai chat id KHÁC nhau thì vẫn chạy bình thường (không siết oan)',
    kp.ma === 200 && kp.rieng.length === 1, `HTTP ${kp.ma} · ${kp.rieng.length} tin vào chat riêng`);
+
+console.log('\n  · REV-0035 L2 — CÙNG MỘT CHAT NHƯNG KHÁC CHUỖI:');
+ok('  "-01002222" vs "-1002222" (số 0 thừa) → vẫn bắt là TRÙNG, 409',
+   kp.soKhongThua === 409 && !kp.hashDoiKhiSoKhongThua,
+   `HTTP ${kp.soKhongThua} · mật khẩu ${kp.hashDoiKhiSoKhongThua ? 'ĐÃ BỊ ĐỔI (sai)' : 'nguyên vẹn'}`);
+ok('  Và KHÔNG một mật khẩu tạm nào được gửi đi đường nào',
+   kp.tinNhomKhiSoKhongThua === 0, `${kp.tinNhomKhiSoKhongThua} tin có mật khẩu`);
+ok('  CA NGƯỢC — lệch đúng một chữ số cuối là hai chỗ KHÁC nhau thật, vẫn chạy',
+   kp.chatKhacThat === 200 && kp.tinRiengKhacThat === 1,
+   `HTTP ${kp.chatKhacThat} · ${kp.tinRiengKhacThat} tin mật khẩu vào chat riêng`);
+
+console.log('\n  · REV-0035 L3 — SỔ HỎNG THÌ CHỐT NHỊP PHẢI ĐÓNG:');
+ok('  Mất bảng nhan_su_lich_su → TỪ CHỐI (503), không phát mật khẩu mù',
+   kp.soHong === 503 && !kp.hashDoiKhiSoHong && kp.tinRiengKhiSoHong === 0,
+   `HTTP ${kp.soHong} · mật khẩu ${kp.hashDoiKhiSoHong ? 'ĐÃ BỊ ĐỔI (sai)' : 'nguyên vẹn'} · ` +
+   `${kp.tinRiengKhiSoHong} tin vào chat riêng`);
+ok('  Và nói rõ trong Workers Logs vì sao từ chối',
+   /KHÔNG ĐỌC ĐƯỢC MỐC NHỊP/.test(kp.soHongConsole || ''),
+   (kp.soHongConsole || '').split('\n').filter(Boolean).length + ' dòng log');
 
 console.log('\n  · REV-0032 M2 — BẤM DỒN:');
 ok('  Bấm lần 2 trong 5 phút → 429, KHÔNG sinh mật khẩu mới',
@@ -1285,6 +1351,20 @@ console.log('\n=== LỖI 3: SCRIPT ĐẶT LẠI MẬT KHẨU TẦNG DỮ LIỆU 
     const ms = Number(process.hrtime.bigint() - batDau) / 1e6;
     ok('L2 — EOF (CI/cron, không có bàn phím) thì NÉM ngay, không treo',
        nem && ms < 3000, `${nem ? 'ném EOF' : 'TREO / ném lỗi khác'} sau ${ms.toFixed(0)}ms`);
+
+    /* REV-0035 L5 — CA NGƯỢC: luồng vào là ỐNG DẪN có sẵn câu trả lời
+       (`echo 0911994696 | node scripts/dat-lai-mat-khau.mjs 0911994696`).
+       Bản cũ coi luôn là EOF và huỷ oan, vì readline phát 'line' rồi 'close'
+       ngay trong cùng một nhịp còn `.then` chạy sau. */
+    const rl2 = createInterface({
+      input: Readable.from(['0911994696\n']),
+      output: new Writable({ write(c, e, cb) { cb(); } })
+    });
+    let traLoi = null, loiOng = null;
+    try { traLoi = await mod.hoiMotLan(rl2, 'xác nhận: '); } catch (e) { loiOng = e.message; }
+    rl2.close();
+    ok('L5 — ỐNG DẪN có câu trả lời thì NHẬN, không coi là EOF rồi huỷ oan',
+       traLoi === '0911994696', loiOng ? `bị từ chối: ${loiOng}` : `nhận "${traLoi}"`);
   }
   /* CA ĐỐI CHỨNG CHO CHÍNH PHÉP ĐO NÀY (BH-16): nếu script LÀM ĐÚNG cái mà
      tao-tai-khoan.mjs làm (xoá sạch rồi dựng lại), phép đo trên có bắt được
@@ -1301,6 +1381,141 @@ console.log('\n=== LỖI 3: SCRIPT ĐẶT LẠI MẬT KHẨU TẦNG DỮ LIỆU 
     db2.close?.();
   }
   db.close?.();
+}
+
+/* ==========================================================================
+   REV-0035 L1 — CHẠY THẬT CẢ SCRIPT CỨU HỘ, KHÔNG CHỈ IMPORT HÀM
+
+   Bàn đo REV-0032 `import` đúng hai hàm sinh SQL rồi tuyên bố script an toàn.
+   Nó chưa bao giờ CHẠY script — nên không thấy `execFileSync(..., {shell:true})`
+   cắt vụn câu SQL, tức là đường cứu cuối cùng chưa từng chạy được lần nào mà
+   bàn đo vẫn xanh. Đúng BH-47: bàn đo xanh mà lỗi còn thì sửa bàn đo trước.
+
+   Từ đây bàn đo GỌI CHÍNH FILE ĐÓ như người vận hành gọi — tiến trình riêng,
+   D1 `--local` thật, wrangler thật — đủ bốn đường: xác nhận · gõ nhầm ·
+   số không tồn tại · tài khoản đang khoá; cộng ca đối chứng giữ `shell: true`.
+
+   Cần `npm install` (wrangler nằm trong devDependencies). Thiếu thì các phép
+   dưới TRƯỢT chứ không lặng lẽ bỏ qua — bỏ qua là bàn đo nói dối lần nữa.
+   ========================================================================== */
+
+console.log('\n=== REV-0035 L1: CHẠY THẬT SCRIPT CỨU HỘ TRÊN D1 --local =======\n');
+{
+  const duongScript = path.join(GOC, 'scripts', 'dat-lai-mat-khau.mjs');
+  const modS = await import(pathToFileURL(duongScript).href);
+  const TK = 'ttb';                       // tài khoản thử trên D1 bản máy
+  const S = { loi: null };
+  let BIN = null;
+  try { BIN = modS.timWrangler(); } catch (e) { S.loi = e.message; }
+
+  const d1 = (sql) => {
+    const raw = execFileSync(process.execPath,
+      [BIN, 'd1', 'execute', 'crm-agc', '--local', '--command', sql, '--json'],
+      { encoding: 'utf8', cwd: GOC });
+    return JSON.parse(raw.slice(raw.indexOf('[')))[0].results;
+  };
+  const doc = () => d1(`SELECT ten_dang_nhap, mat_khau_hash, phai_doi_mk, kich_hoat ` +
+                       `FROM tai_khoan WHERE ten_dang_nhap = '${TK}'`)[0];
+  const dem = () => d1('SELECT COUNT(*) AS n FROM tai_khoan')[0].n;
+  const chay = (script, doiSo, goVao) => {
+    const k = spawnSync(process.execPath, [script, ...doiSo],
+      { input: goVao, encoding: 'utf8', cwd: GOC, timeout: 180000 });
+    return { ma: k.status, ra: (k.stdout || '') + (k.stderr || '') };
+  };
+  const layMk = (ra) => (String(ra).match(/Mật khẩu tạm\s*:\s*(\S+)/) || [])[1] || null;
+
+  if (!S.loi) try {
+    /* Dựng đúng cái fixture script cần: câu tra cứu của nó đọc `t.duyet_gopy`,
+       cột do `them-quyen-duyet-gopy.sql` thêm. D1 bản máy của người chạy có
+       thể chưa nạp migration đó — thêm đúng một cột, đúng khuôn migration, và
+       nói ra là đã thêm. Bàn đo dựng fixture thì phải khai, không làm lén. */
+    const cot = d1('PRAGMA table_info(tai_khoan)').map(x => x.name);
+    if (!cot.includes('duyet_gopy')) {
+      d1('ALTER TABLE tai_khoan ADD COLUMN duyet_gopy INTEGER NOT NULL DEFAULT 0');
+      console.log('   (bàn đo đã thêm cột duyet_gopy vào D1 bản máy — đúng khuôn them-quyen-duyet-gopy.sql)');
+    }
+    const goc = doc();
+    if (!goc) throw new Error(`D1 bản máy chưa có tài khoản "${TK}" — nạp schema.sql + seed.sql trước.`);
+    S.demTruoc = dem();
+
+    // ① SỐ KHÔNG TỒN TẠI → dừng, không ghi gì
+    S.khongCo = chay(duongScript, ['khongcotaikhoannay'], 'khongcotaikhoannay\n');
+    S.demSauKhongCo = dem();
+
+    // ② GÕ NHẦM số xác nhận → HUỶ
+    S.goNham = chay(duongScript, [TK], 'gonhamso\n');
+    S.hashSauGoNham = doc().mat_khau_hash;
+
+    // ③ KHÔNG CÓ BÀN PHÍM (luồng vào rỗng — đúng cảnh CI/cron) → HUỶ
+    S.khongBanPhim = chay(duongScript, [TK], '');
+    S.hashSauKhongBanPhim = doc().mat_khau_hash;
+
+    // ④ ĐƯỜNG CHÍNH — xác nhận đúng, đưa vào qua ỐNG DẪN (REV-0035 L5)
+    S.chinh = chay(duongScript, [TK], TK + '\n');
+    S.mk = layMk(S.chinh.ra);
+    const sau = doc();
+    S.hashDoi = sau.mat_khau_hash !== goc.mat_khau_hash;
+    S.phaiDoiMk = Number(sau.phai_doi_mk);
+    S.mkDungHash = S.mk ? await kiemTraMatKhau(S.mk, sau.mat_khau_hash) : false;
+    S.demSauChinh = dem();
+
+    // ⑤ TÀI KHOẢN ĐANG KHOÁ → cùng câu lệnh đó bật lại kich_hoat
+    d1(`UPDATE tai_khoan SET kich_hoat = 0 WHERE ten_dang_nhap = '${TK}'`);
+    S.khoa = chay(duongScript, [TK], TK + '\n');
+    S.kichHoatSauKhoa = Number(doc().kich_hoat);
+
+    // ⑥ ĐỐI CHỨNG (BH-16) — đúng bản cũ: `npx` + `shell: true`. Phép đo phải bắt.
+    const thuMuc = path.join(GOC, '.dc-script-cuu-ho');
+    rmSync(thuMuc, { recursive: true, force: true });
+    mkdirSync(thuMuc, { recursive: true });
+    const nguyen = readFileSync(duongScript, 'utf8');
+    const banHong = nguyen
+      .replace("const args = [timWrangler(), 'd1'", "const args = ['wrangler', 'd1'")
+      .replace("return execFileSync(process.execPath, args, { encoding: 'utf8' });",
+               "return execFileSync('npx', args, { encoding: 'utf8', shell: true });");
+    S.doiChungDoiThat = banHong !== nguyen;
+    const duongHong = path.join(thuMuc, 'dat-lai-mat-khau.mjs');
+    writeFileSync(duongHong, banHong, 'utf8');
+    S.hong = chay(duongHong, [TK], TK + '\n');
+    S.hongMk = layMk(S.hong.ra);
+    rmSync(thuMuc, { recursive: true, force: true });
+
+    // Trả tài khoản thử về nguyên trạng — bàn đo không để lại dấu.
+    d1(`UPDATE tai_khoan SET mat_khau_hash = '${goc.mat_khau_hash}', ` +
+       `phai_doi_mk = ${Number(goc.phai_doi_mk)}, kich_hoat = ${Number(goc.kich_hoat)} ` +
+       `WHERE ten_dang_nhap = '${TK}'`);
+    S.traLai = doc().mat_khau_hash === goc.mat_khau_hash;
+  } catch (e) { S.loi = e.message; }
+
+  const vi = (x) => S.loi ? `KHÔNG ĐO ĐƯỢC: ${S.loi}` : x;
+  ok('Script CHẠY THẬT được: xác nhận đúng (qua ống dẫn) → thoát 0, in ra mật khẩu tạm',
+     !S.loi && S.chinh?.ma === 0 && !!S.mk && !/Unknown arguments/.test(S.chinh?.ra || ''),
+     vi(`thoát ${S.chinh?.ma} · mật khẩu tạm ${S.mk ? 'có' : 'KHÔNG'}`));
+  ok('Mật khẩu tạm đó ĐĂNG NHẬP ĐƯỢC (khớp kiemTraMatKhau của src/auth.js), phai_doi_mk = 1',
+     !S.loi && S.hashDoi && S.mkDungHash && S.phaiDoiMk === 1,
+     vi(`hash ${S.hashDoi ? 'đã đổi' : 'KHÔNG đổi'} · khớp: ${S.mkDungHash} · phai_doi_mk=${S.phaiDoiMk}`));
+  ok('Chạy thật KHÔNG thêm không bớt dòng nào trong tai_khoan',
+     !S.loi && S.demTruoc === S.demSauChinh && S.demTruoc === S.demSauKhongCo,
+     vi(`${S.demTruoc} → ${S.demSauKhongCo} → ${S.demSauChinh} dòng`));
+  ok('GÕ NHẦM số xác nhận → thoát 1, "Đã HUỶ", mật khẩu NGUYÊN VẸN',
+     !S.loi && S.goNham?.ma === 1 && /Đã HUỶ/.test(S.goNham?.ra || '')
+       && S.hashSauGoNham === S.hashSauKhongBanPhim,
+     vi(`thoát ${S.goNham?.ma}`));
+  ok('SỐ KHÔNG TỒN TẠI → thoát 1, nói rõ "KHÔNG ghi gì cả"',
+     !S.loi && S.khongCo?.ma === 1 && /Không có tài khoản nào/.test(S.khongCo?.ra || ''),
+     vi(`thoát ${S.khongCo?.ma} · ${(S.khongCo?.ra || '').split('\n').filter(Boolean).pop() || ''}`.slice(0, 90)));
+  ok('KHÔNG CÓ BÀN PHÍM (CI/cron) → thoát 1, không ghi gì',
+     !S.loi && S.khongBanPhim?.ma === 1 && /Đã HUỶ/.test(S.khongBanPhim?.ra || ''),
+     vi(`thoát ${S.khongBanPhim?.ma}`));
+  ok('TÀI KHOẢN ĐANG KHOÁ → chạy thật xong thì kich_hoat = 1, có báo trước khi hỏi',
+     !S.loi && S.khoa?.ma === 0 && /TÀI KHOẢN ĐANG BỊ KHOÁ/.test(S.khoa?.ra || '')
+       && S.kichHoatSauKhoa === 1,
+     vi(`thoát ${S.khoa?.ma} · kich_hoat = ${S.kichHoatSauKhoa}`));
+  ok('ĐỐI CHỨNG — giữ nguyên `shell: true` thì phép đo BẮT ĐƯỢC (chết ngay [1/3])',
+     !S.loi && S.doiChungDoiThat && S.hong?.ma !== 0 && !S.hongMk,
+     vi(`bản hỏng thoát ${S.hong?.ma} · ${/Unknown arguments/.test(S.hong?.ra || '') ? 'Unknown arguments' : 'lỗi khác'}`));
+  ok('Bàn đo trả tài khoản thử về nguyên trạng, không để lại dấu',
+     !S.loi && S.traLai === true, vi(String(S.traLai)));
 }
 
 /* ==========================================================================
@@ -1548,6 +1763,22 @@ const DC2 = [
     doKhoiPhuc,
     (d) => d.bam2 !== 429 || d.hashDoiKhiBam2 || d.phienConSauBam2 !== 1,
     'bấm liên tục là sinh mật khẩu mới và đá phiên Sếp không giới hạn (M2)'],
+
+  /* DC-V — so hai chat id CHỈ BẰNG CHUỖI, đúng bản trước REV-0035 (L2). */
+  ['V-so-chat-chi-so-chuoi', (f, s) => f === 'index.js'
+    ? s.replace('cungMotChat(env.TELEGRAM_CHAT_ID_SEP, env.TELEGRAM_CHAT_ID)',
+                'String(env.TELEGRAM_CHAT_ID_SEP).trim() === String(env.TELEGRAM_CHAT_ID).trim()') : s,
+    doKhoiPhuc,
+    (d) => d.soKhongThua !== 409 || d.tinNhomKhiSoKhongThua > 0,
+    'chat id thừa số 0 ở đầu lọt chốt trùng → mật khẩu tạm vào nhóm chung (L2)'],
+
+  /* DC-W — trả chốt nhịp về HỎNG-MỞ: đọc sổ lỗi thì cho qua (L3). */
+  ['W-chot-nhip-hong-mo', (f, s) => f === 'index.js'
+    ? s.replace("      return loi('Không kiểm được chốt nhịp",
+                "      ganDay = null; if (false) return loi('Không kiểm được chốt nhịp") : s,
+    doKhoiPhuc,
+    (d) => d.soHong !== 503 || d.hashDoiKhiSoHong || d.tinRiengKhiSoHong > 0,
+    'mất bảng nhan_su_lich_su → chốt nhịp tắt âm thầm mà vẫn phát mật khẩu (L3)'],
 
   /* DC-U — quay lại "ghi hỏng thì im lặng" (L5). */
   ['U-ghi-hong-im-lang', (f, s) => f === 'index.js'

@@ -639,6 +639,37 @@ về hành vi thật còn tệ hơn không có chú thích (Rule 10).
 nó nằm trong một script tay ai cũng nghĩ là chuyện vặt: script dừng phải **thoát khác 0**,
 không phải treo — treo trong cron là giữ chỗ mãi mãi mà không ai biết.
 
+**BH-55 · `shell: true` TẮT cơ chế bọc nháy của `execFile` — và bàn đo `import` hàm thì
+không bao giờ thấy điều đó.**
+`scripts/dat-lai-mat-khau.mjs` gọi `execFileSync('npx', args, { shell: true })`. Bật `shell`
+thì Node không bọc nháy từng đối số nữa mà nối tất cả bằng dấu cách rồi ném cho `cmd.exe`/`sh`
+— câu SQL có khoảng trắng bị cắt vụn, wrangler ném `Unknown arguments: t.id,, …`. Đường cứu
+cuối cùng cho tình huống Sếp không đăng nhập được **chưa từng chạy được lần nào**, mà bàn đo
+vẫn xanh vì nó chỉ `import` hai hàm sinh SQL.
+→ Đối số có khoảng trắng thì **đừng cho đi qua vỏ lệnh**. Không có cách bọc nháy nào đúng cho
+cả hai vỏ: `"` của `cmd` không chặn `%`, `"` của `sh` không chặn `$` (mà hash là
+`pbkdf2$100000$…`).
+→ Trên Windows, **bỏ `shell: true` không thôi là chưa đủ**: `npx` ở đó là `npx.cmd`, và Node
+từ 18.20.2 cấm chạy `.cmd` khi `shell` tắt — đo được: `npx.cmd` → `EINVAL`, `npx` → `ENOENT`.
+Cách chạy được ở mọi vỏ: gọi **thẳng file JS của công cụ bằng chính `node`**
+(`execFileSync(process.execPath, [duongDanCLI, …])`).
+→ Và bài học lớn hơn (nối BH-47): **`import` một hàm KHÔNG PHẢI là chạy script.** Script tay
+cũng phải được bàn đo **spawn thật, trong tiến trình riêng, trên dữ liệu thật**, đủ cả đường
+huỷ lẫn đường thành công — kèm ca đối chứng giữ nguyên lỗi cũ để biết phép đo có mắt.
+
+**BH-56 · Chốt an toàn HỎNG thì phải ĐÓNG, và so định danh phải so theo KIỂU của hệ thống
+sở hữu nó.**
+Hai lỗ cùng một họ, cùng nằm trên đường phát mật khẩu tạm: ① chốt nhịp đọc mốc trong
+`try/catch` rồi đi tiếp với `null` — mất bảng `nhan_su_lich_su` là chốt **tắt âm thầm**, chỉ
+còn một dòng log; ② so hai chat id **bằng chuỗi**, mà Telegram đọc `chat_id` thành số nguyên
+64-bit, nên `-01002222` và `-1002222` là **cùng một nhóm** lại lọt.
+→ Cái gì đang canh một việc nguy hiểm mà **không tự kiểm được** thì trả lời "không", không
+trả lời "chắc là được". Từ chối là hướng an toàn: mật khẩu cũ vẫn dùng được, chỉ chậm lại.
+→ Chiều không rút lại được (mật khẩu **đã** gửi, mốc ghi hụt) thì tối thiểu phải **kêu ra chỗ
+người khác nhìn thấy**, không nuốt bằng một dòng `console.error`.
+→ So định danh của hệ thống ngoài thì so theo kiểu dữ liệu **của hệ thống đó**, không theo
+kiểu mình đang cầm: `BigInt` cho chat id Telegram, và chỉ lùi về so chuỗi khi không phải số.
+
 *(BH-45 · BH-46 — số đã dùng ở nhánh `feature/ctl-0023-dot2-cam` cho hai bài học khác
 ["Phép đo CHỌN TAY…", "Một token gánh HAI VAI…"]. Cố ý bỏ trống ở đây để hai nhánh gộp vào
 không đè nhau — xem REV-0030. Đây không phải chỗ trống để điền.)*

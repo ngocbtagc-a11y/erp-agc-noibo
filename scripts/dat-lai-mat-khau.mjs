@@ -25,7 +25,10 @@
         đụng bảng nào khác.
      ③ IN RÕ ĐANG ĐỔI CHO AI RỒI MỚI HỎI. Không gõ đúng số điện thoại để xác
         nhận thì DỪNG, không ghi gì. Chạy trong môi trường không có bàn phím
-        (CI, cron) thì đọc phải EOF → cũng DỪNG với mã thoát KHÁC 0.
+        (CI, cron) thì đọc phải EOF → cũng DỪNG với mã thoát KHÁC 0. Trả lời
+        sẵn qua ỐNG DẪN (`echo <số> | node scripts/...`) thì NHẬN — REV-0035 L5:
+        bản đầu coi luôn ống dẫn là EOF rồi huỷ oan, người vận hành quen gõ kiểu
+        đó sẽ tưởng script hỏng.
         REV-0032 L2: `rl.question()` gặp EOF thì TREO chứ không ném, nên câu
         `try/catch` không đủ — phải bắt sự kiện 'close' của readline (xem
         `hoiMotLan`). Đo được: trước bản vá, 3 giây không trả về. Chú thích
@@ -38,7 +41,7 @@
      và màn hình nói rõ điều đó TRƯỚC khi hỏi xác nhận. Tài khoản đang hoạt
      động bình thường thì câu lệnh vẫn đúng hai cột như cũ.
 
-   Chạy:
+   Chạy (cần đã `npm install` — script gọi wrangler trong node_modules):
      node scripts/dat-lai-mat-khau.mjs 0911994696              (bản máy)
      node scripts/dat-lai-mat-khau.mjs 0911994696 --remote     (BẢN THẬT)
 
@@ -50,6 +53,9 @@
 
 import { execFileSync } from 'node:child_process';
 import { webcrypto as crypto } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import path from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { pathToFileURL } from 'node:url';
 
@@ -125,18 +131,67 @@ export function cauDatLai(ten, hash, moKhoa = false) {
    khi gặp EOF — bắt chính sự kiện đó rồi ném, để nhánh huỷ chạy như thường. */
 export function hoiMotLan(rl, cauHoi) {
   return new Promise((giai, tuChoi) => {
-    const khiDong = () => tuChoi(new Error('EOF — không có bàn phím để trả lời'));
+    let daTraLoi = false;
+    /* REV-0035 L5: ống dẫn (`echo 0911994696 | node scripts/...`) cũng bị coi
+       là EOF và huỷ oan. Vì readline phát 'line' rồi 'close' NGAY trong cùng
+       một nhịp đọc, còn `.then` của question là microtask chạy sau — nên
+       nhánh từ chối settle trước, câu trả lời thật bị vứt. Người vận hành gõ
+       lệnh có ống dẫn sẽ tưởng script hỏng.
+       Hoãn nhánh từ chối một nhịp: có dòng trả lời thì nhận, luồng vào rỗng
+       thật (CI/cron) thì vẫn ném ngay, không treo. */
+    const khiDong = () => setImmediate(() => {
+      if (!daTraLoi) tuChoi(new Error('EOF — không có bàn phím để trả lời'));
+    });
     rl.once('close', khiDong);
     rl.question(cauHoi).then(
-      v => { rl.off('close', khiDong); giai(v); },
-      e => { rl.off('close', khiDong); tuChoi(e); });
+      v => { daTraLoi = true; rl.off('close', khiDong); giai(v); },
+      e => { daTraLoi = true; rl.off('close', khiDong); tuChoi(e); });
   });
 }
 
+/* GỌI WRANGLER — KHÔNG ĐI QUA VỎ LỆNH (REV-0035 L1).
+
+   BẢN CŨ HỎNG, CHƯA TỪNG CHẠY ĐƯỢC MỘT LẦN NÀO:
+     execFileSync('npx', args, { shell: true })
+   Bật `shell` thì Node KHÔNG bọc nháy từng đối số nữa — nó nối tất cả bằng
+   dấu cách rồi ném cả chuỗi cho cmd.exe / sh. Câu SQL có khoảng trắng nên bị
+   vỏ lệnh cắt vụn thành mấy chục đối số:
+     X [ERROR] Unknown arguments: t.id,, t.ten_dang_nhap,, ... FROM, tai_khoan, t, ...
+   Chết ngay bước [1/3], cả PowerShell lẫn Bash. Đây là lớp phòng thủ cuối khi
+   Sếp không đăng nhập được — mà nó hỏng từ `53c77ef`. Lọt vì bàn đo chỉ
+   `import` hai hàm sinh SQL, chưa bao giờ CHẠY script (BH-47).
+
+   VÌ SAO KHÔNG PHẢI CHỈ "BỎ shell: true": trên Windows `npx` là `npx.cmd`, mà
+   Node từ 18.20.2 CẤM chạy thẳng file .cmd/.bat khi `shell` tắt. Đo được trên
+   máy này (Node 24): `npx.cmd` → EINVAL, `npx` → ENOENT. Bỏ `shell` thôi là
+   đổi lỗi này lấy lỗi khác.
+
+   VÌ SAO KHÔNG PHẢI "TỰ BỌC NHÁY": luật bọc nháy của cmd.exe và của sh khác
+   nhau (`"` của cmd không chặn `%`, `"` của sh không chặn `$` — mà hash có
+   dạng `pbkdf2$100000$...$...`). Một chuỗi đúng cho vỏ này là sai cho vỏ kia.
+
+   CÁCH LÀM ĐÚNG: chạy thẳng file JS của wrangler bằng chính `node` đang chạy.
+   `process.execPath` là một .exe thật nên `shell` tắt được, đối số đi nguyên
+   vẹn qua CreateProcess/execvp, và KHÔNG có vỏ lệnh nào ở giữa để mà cắt —
+   nên hành vi giống hệt nhau trên PowerShell, cmd và Bash. */
+let DUONG_WRANGLER = null;
+export function timWrangler() {
+  if (DUONG_WRANGLER) return DUONG_WRANGLER;
+  let goi;
+  try { goi = createRequire(import.meta.url).resolve('wrangler/package.json'); }
+  catch { throw new Error('Không tìm thấy gói wrangler. Chạy `npm install` ở thư mục dự án rồi thử lại.'); }
+  const bin = JSON.parse(readFileSync(goi, 'utf8')).bin;
+  const tuongDoi = typeof bin === 'string' ? bin : bin && bin.wrangler;
+  if (!tuongDoi) throw new Error(`Gói wrangler ở ${goi} không khai báo lệnh chạy (bin.wrangler).`);
+  DUONG_WRANGLER = path.resolve(path.dirname(goi), tuongDoi);
+  return DUONG_WRANGLER;
+}
+
 function wrangler(moiTruong, sql, json = false) {
-  const args = ['wrangler', 'd1', 'execute', 'crm-agc', moiTruong, '--command', sql];
+  const args = [timWrangler(), 'd1', 'execute', 'crm-agc', moiTruong, '--command', sql];
   if (json) args.push('--json');
-  return execFileSync('npx', args, { encoding: 'utf8', shell: true });
+  // shell: KHÔNG. Đặt lại là hỏng lại — xem khối chú thích ngay trên.
+  return execFileSync(process.execPath, args, { encoding: 'utf8' });
 }
 
 async function chinh() {
