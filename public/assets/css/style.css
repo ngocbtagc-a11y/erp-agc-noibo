@@ -3389,6 +3389,10 @@ tr.kd-chiadoi td {
 /* ĐỎ: ngoại lệ duy nhất, chỉ cho thứ ĐÃ hỏng — giấy đã quá hạn. Đỏ phải hiếm. */
 .tl-dai-qua { background: var(--danger-wash); color: var(--danger-dark); }
 .tl-dai-kin { background: var(--cam-wash); color: var(--cam-text); }
+/* "Đã đối chiếu" = xanh lá, vai NHẬN DIỆN/trạng thái tốt trong luật ba màu.
+   Cặp đôi của nó là `.tl-dai-sap` (vàng nâu) cho phần chữ CHƯA KIỂM — không
+   dùng đỏ: chưa kiểm không phải đã hỏng. */
+.tl-dai-neo { background: var(--sage-wash); color: var(--sage-dark); }
 .tl-trong { color: var(--text-mute); padding: 20px 0; }
 
 /* ==========================================================================

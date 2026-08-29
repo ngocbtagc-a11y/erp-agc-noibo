@@ -71,7 +71,13 @@ CREATE TABLE IF NOT EXISTS tai_lieu (
 
   noi_dung       TEXT,                   -- chữ AI bóc được, CÓ dấu — để đọc
   ocr_so_trang   INTEGER NOT NULL DEFAULT 0,      -- đã bóc chữ mấy trang
-  ocr_ghi_chu    TEXT,                   -- vì sao không bóc được, nếu hỏng
+  -- Trong số đó, mấy trang ĐỐI CHIẾU ĐƯỢC với một mỏ neo MẠNH (số hiệu người
+  -- gõ · tên công ty · cụm chữ bắt buộc của loại giấy). Xem `docTinChu()` trong
+  -- src/tai-lieu.js. Mỏ neo KHÔNG dùng để vứt chữ — chữ LUÔN được lưu; con số
+  -- này chỉ nói phần chữ ấy tin được tới đâu, và chỉ trang đã đối chiếu mới
+  -- được phép vào cột `tim_kiem`.
+  ocr_so_trang_neo INTEGER NOT NULL DEFAULT 0,
+  ocr_ghi_chu    TEXT,                   -- trang nào chưa đối chiếu được, vì sao
 
   -- Luật BVDLCN: ghi nhận đồng ý. Bắt buộc với nhóm nhạy cảm (nhan_su).
   nhay_cam       INTEGER NOT NULL DEFAULT 0,

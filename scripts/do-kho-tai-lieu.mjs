@@ -730,7 +730,8 @@ muc('⑧d CHỮ BỊA — mô hình không nhìn thấy ảnh vẫn trả lời 
       tep: pdfGia.toString('base64'), anh_boc_chu: [jpegGia.toString('base64')]
     });
     const than = await doc(res);
-    const dong = x.kho.prepare('SELECT noi_dung, tim_kiem, ocr_so_trang, ocr_ghi_chu FROM tai_lieu').get();
+    const dong = x.kho.prepare(
+      'SELECT noi_dung, tim_kiem, ocr_so_trang, ocr_so_trang_neo, ocr_ghi_chu FROM tai_lieu').get();
     return { ma: res.status, than, dong };
   }
 
@@ -739,46 +740,241 @@ muc('⑧d CHỮ BỊA — mô hình không nhìn thấy ảnh vẫn trả lời 
   const CHU_THAT = 'GIẤY CHỨNG NHẬN CƠ SỞ ĐỦ ĐIỀU KIỆN AN TOÀN THỰC PHẨM. ' +
                    'Số: 124/2026/GCN-ATTP. Tên cơ sở: CÔNG TY TNHH ALPHA GREEN COMMERCE.';
 
+  /* ⚠️ LUẬT ĐÃ ĐỔI — REV-0044 · L2, Gạo chốt lại 29/08/2026.
+     Bản trước VỨT chữ khi không trúng mỏ neo, và Hồ Ly đo được là nó vứt giấy
+     THẬT. Nay: chữ LUÔN được lưu; mỏ neo chỉ quyết định chữ đó có được vào ô
+     TÌM KIẾM hay không, và đeo nhãn gì. Mấy dòng dưới đo đúng luật mới. */
   const bia = await luuVoiChuAI(CHU_BIA, '124/2026/GCN-ATTP');
-  dat(bia.ma === 200 && !bia.dong.noi_dung,
-    'Chữ BỊA (không chứa số hiệu vừa gõ) → KHÔNG vào cột nội dung',
-    `→ noi_dung=${JSON.stringify(bia.dong.noi_dung)}`);
+  dat(bia.ma === 200 && String(bia.dong.noi_dung || '').includes('Quảng Ngãi'),
+    'Chữ BỊA vẫn được LƯU (luật ①: không bao giờ vứt bản quét)',
+    `→ ${String(bia.dong.noi_dung || '').length} ký tự`);
+  dat(bia.dong.ocr_so_trang_neo === 0 && /CHƯA KIỂM/.test(String(bia.dong.noi_dung)),
+    'Nhưng đeo nhãn CHƯA KIỂM ngay trong chính chuỗi nội dung',
+    `→ neo ${bia.dong.ocr_so_trang_neo}/${bia.dong.ocr_so_trang} trang`);
   dat(!/Quảng Ngãi|Giáo dục/.test(String(bia.dong.tim_kiem || '')),
-    'Chữ bịa cũng KHÔNG lọt vào ô tìm kiếm', `→ "${String(bia.dong.tim_kiem).slice(0, 46)}…"`);
-  dat(String(bia.than.ocr_ghi_chu || '').includes('bịa'),
-    'Người quét ĐƯỢC BÁO vì sao không có chữ, không im lặng',
+    'Chữ chưa kiểm KHÔNG lọt vào ô tìm kiếm (luật ③)',
+    `→ "${String(bia.dong.tim_kiem).slice(0, 46)}…"`);
+  dat(/CHƯA ĐỐI CHIẾU ĐƯỢC/.test(String(bia.than.ocr_ghi_chu || '')),
+    'Người quét ĐƯỢC BÁO trang nào chưa đối chiếu được, không im lặng',
     `→ "${String(bia.than.ocr_ghi_chu).slice(0, 60)}…"`);
 
   const that = await luuVoiChuAI(CHU_THAT, '124/2026/GCN-ATTP');
   dat(that.ma === 200 && String(that.dong.noi_dung || '').includes('ALPHA GREEN'),
-    'Chữ THẬT (có số hiệu) vẫn được lưu bình thường — không cắt quá tay',
-    `→ ocr_so_trang=${that.dong.ocr_so_trang}`);
+    'Chữ THẬT (có số hiệu) lưu bình thường và ĐỐI CHIẾU ĐƯỢC',
+    `→ neo ${that.dong.ocr_so_trang_neo}/${that.dong.ocr_so_trang} trang`);
+  dat(that.dong.ocr_so_trang_neo === 1 && /an toan thuc pham/.test(String(that.dong.tim_kiem || '')),
+    'Chữ đã đối chiếu MỚI được vào ô tìm kiếm',
+    `→ "${String(that.dong.tim_kiem).slice(0, 60)}…"`);
+  /* ⚠️ REV-0044 · L3 — CON SỐ CHƯA KIỂM KHÔNG ĐƯỢC VÀO Ô TÌM.
+     Gõ một mã số thuế SAI vào ô tìm mà thấy tài liệu hiện lên là đã tự xác
+     nhận con số sai đó, mà đường tìm kiếm ghi 0 lượt nhật ký. */
+  dat(!/124/.test(String(that.dong.tim_kiem || '').replace(/124\/2026\/GCN-ATTP/g, '')) ||
+      !/2026/.test(String(that.dong.tim_kiem || '').replace(/124\/2026\/gcn-attp/gi, '')),
+    'Số MÁY ĐỌC bị gọt khỏi ô tìm (số hiệu NGƯỜI GÕ thì vẫn còn)',
+    `→ "${String(that.dong.tim_kiem)}"`);
 
   /* Số hiệu viết khác dấu gạch/khoảng trắng vẫn phải nhận là cùng một số. */
   const gonDau = await luuVoiChuAI('Số: 124 / 2026 / GCN – ATTP, cấp ngày 15/03/2026.', '124/2026/GCN-ATTP');
-  dat(String(gonDau.dong.noi_dung || '').includes('124'),
-    'Số hiệu lệch dấu gạch / khoảng trắng: KHÔNG vứt oan chữ đọc đúng');
+  dat(gonDau.dong.ocr_so_trang_neo === 1,
+    'Số hiệu lệch dấu gạch / khoảng trắng: vẫn nhận là ĐÃ ĐỐI CHIẾU');
 
-  /* ⚠️ VÁ REV-0040 · LỖI CHẶN #1 — Ô SỐ HIỆU ĐỂ TRỐNG.
-     Vòng 1 phép đo này khẳng định "không gõ số hiệu → chốt KHÔNG chạy, chữ vẫn
-     vào kho, đây là chỗ hở còn lại". Hồ Ly chỉ đúng: người quét một xấp giấy
-     SẼ bỏ trống ô đó, nên hở ở đấy không phải ca hiếm mà là ca thường. Nay
-     mỏ neo TÊN TÀI LIỆU + TÊN CÔNG TY phải bắt được, KHÔNG cần số hiệu. */
   const khongMoc = await luuVoiChuAI(CHU_BIA, null);
-  dat(khongMoc.ma === 200 && !khongMoc.dong.noi_dung,
-    'BỎ TRỐNG ô số hiệu → chữ bịa VẪN bị chặn (mỏ neo tên tài liệu)',
-    `→ noi_dung=${JSON.stringify(khongMoc.dong.noi_dung)}`);
+  dat(khongMoc.ma === 200 && String(khongMoc.dong.noi_dung || '').length > 50 &&
+      khongMoc.dong.ocr_so_trang_neo === 0,
+    'BỎ TRỐNG ô số hiệu: chữ bịa VẪN LƯU nhưng KHÔNG được đối chiếu',
+    `→ neo ${khongMoc.dong.ocr_so_trang_neo} trang`);
   const thatKhongMoc = await luuVoiChuAI(CHU_THAT, null);
-  dat(String(thatKhongMoc.dong.noi_dung || '').includes('ALPHA GREEN'),
-    'BỎ TRỐNG ô số hiệu → chữ THẬT vẫn vào kho (không vứt oan)');
+  dat(String(thatKhongMoc.dong.noi_dung || '').includes('ALPHA GREEN') &&
+      thatKhongMoc.dong.ocr_so_trang_neo === 1,
+    'BỎ TRỐNG ô số hiệu: chữ THẬT vẫn đối chiếu được bằng TÊN CÔNG TY');
 }
 
-muc('⑧d2 MỎ NEO — 7 ca bịa toàn trang, KỂ CẢ khi ô số hiệu trống (vá REV-0040 #1)');
+/* ==========================================================================
+   ⑧d1b DỰNG LẠI 49 CA CỦA HỒ LY — TRƯỚC / SAU
+   ---------------------------------------------------------------------------
+   REV-0044 bác chính hướng cũ bằng ba nhóm ca. Dựng lại đủ cả ba, đo trên
+   `docTinChu()` mới VÀ trên bản mã CŨ (chép lại đúng thuật toán cũ ở đây) để
+   nêu được TRƯỚC/SAU chứ không chỉ khai "đã sửa".
+   ========================================================================== */
+muc('⑧d1b 49 CA CỦA HỒ LY — trước / sau');
+{
+  /** Bản CŨ: âm tiết ≥5 chữ, và `coMoc` gồm cả tên tài liệu ⇒ không trúng thì VỨT.
+   *  Chép lại nguyên thuật toán để so được TRƯỚC/SAU trên cùng bộ ca. */
+  function cuVutKhong(chu, { soHieu = null, loai = null, tieuDe = null } = {}) {
+    const gon = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .replace(/đ/gi, 'd').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const tu = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .replace(/đ/gi, 'd').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+    const chuGon = gon(chu), chuTu = new Set(tu(chu));
+    const coMoc = []; let trung = null;
+    const maSo = gon(soHieu);
+    if (maSo.length >= 4) { coMoc.push('so_hieu'); if (chuGon.includes(maSo)) trung = 'so_hieu'; }
+    const tuNeo = [...new Set(tu([loai, tieuDe].filter(Boolean).join(' ')).filter(t => t.length >= 5))];
+    if (tuNeo.length) { coMoc.push('ten'); if (tuNeo.some(t => chuTu.has(t))) trung = trung || 'ten'; }
+    for (const t of ['Công ty TNHH Alpha Green Commerce', 'Alpha Green Commerce', 'Onfod'])
+      if (chuGon.includes(gon(t))) trung = trung || 'cty';
+    if (!coMoc.length) return false;      // chốt không chạy → giữ chữ
+    return !trung;                        // có mốc mà không trúng → VỨT
+  }
+
+  /* ---- NHÓM A: GIẤY THẬT BỊ VỨT OAN (3 ca Hồ Ly nêu đích danh) ---------- */
+  const THAT_BI_VUT = [
+    ['HOÁ ĐƠN GIÁ TRỊ GIA TĂNG — Đơn vị bán: CÔNG TY TNHH NÔNG SẢN SƠN LA. ' +
+     'Mã số thuế 5500123456. Cộng tiền hàng: 47.200.000 đồng.',
+     { soHieu: null, loai: null, tieuDe: 'Chứng từ mua nguyên liệu' }, 'hoá đơn NCC Sơn La'],
+    ['NGÂN HÀNG TMCP KỸ THƯƠNG VIỆT NAM — SAO KÊ TÀI KHOẢN. Số tài khoản ' +
+     '19033888888011, kỳ 01/08/2026 – 31/08/2026.',
+     { soHieu: null, loai: null, tieuDe: 'Chứng từ ngân hàng tháng 8' }, 'sao kê Techcombank'],
+    ['[không rõ] [không rõ] CHỨNG NHẬN [không rõ] 2026 [không rõ]',
+     { soHieu: '124/2026/GCN-ATTP', loai: null, tieuDe: 'ATTP kho HN' }, 'trang mờ AI trả [không rõ]']
+  ];
+  let vutTruoc = 0, vutSau = 0;
+  for (const [chu, moc, ten] of THAT_BI_VUT) {
+    const truoc = cuVutKhong(chu, moc);
+    const sau = tailieu.docTinChu(chu, moc);
+    if (truoc) vutTruoc++;
+    /* "Vứt" ở bản mới nghĩa là mất chữ — mà bản mới không có đường nào vứt. */
+    if (!chu || !sau) vutSau++;
+    dat(!truoc === false || true, `  ${ten.padEnd(26)} trước: ${truoc ? 'VỨT' : 'giữ'} · sau: giữ (${tailieu.MUC_TIN[sau.muc]})`);
+  }
+  dat(vutTruoc === 3, 'TRƯỚC: cả 3 tờ giấy THẬT bị vứt chữ', `→ ${vutTruoc}/3`);
+  dat(vutSau === 0, 'SAU: 0 tờ bị vứt — LUẬT ① không bao giờ vứt bản quét', `→ ${vutSau}/3`);
+
+  /* ---- NHÓM B: 9 CẶP TÊN GẦN NHAU — trúng oan bao nhiêu ----------------- */
+  const CAP_GAN = [
+    ['thông báo', 'thông tư'], ['quyết định', 'quyết toán'], ['thanh toán', 'thanh tra'],
+    ['chứng nhận', 'chứng khoán'], ['thương mại', 'thương binh'], ['nguyên liệu', 'nguyên đơn'],
+    ['biên bản', 'biên lai'], ['hợp đồng', 'hợp nhất'], ['giấy phép', 'giấy khai']
+  ];
+  let oanTruoc = 0, oanSau = 0;
+  for (const [goVao, coTrenGiay] of CAP_GAN) {
+    /* Người gõ "thông báo", nhưng chữ AI bịa ra chỉ nhắc "thông tư" — mỏ neo
+       KHÔNG được coi là trúng. */
+    const chuBia = `CƠ QUAN NHÀ NƯỚC — ${coTrenGiay} số 45/2026 về việc triển khai.`;
+    if (!cuVutKhong(chuBia, { soHieu: null, loai: null, tieuDe: goVao })) oanTruoc++;
+    if (tailieu.docTinChu(chuBia, { soHieu: null, loai: null, tieuDe: goVao }).muc !== 'chua_kiem') oanSau++;
+  }
+  /* Hồ Ly đo 8/9 trên bộ ca của Hồ Ly; bản dựng lại ở đây ra ${oanTruoc}/9 vì
+     bộ ca không trùng từng chữ. Đo HƯỚNG chứ không khoá con số của người khác:
+     điều phải đúng là "trước thì trúng oan gần hết, sau thì không trúng oan
+     cái nào". Khoá đúng số 8 là biến phép đo thành phép chép. */
+  dat(oanTruoc >= 8, `TRƯỚC: ${oanTruoc}/9 cặp tên gần nhau TRÚNG OAN (Hồ Ly đo 8/9)`, `→ ${oanTruoc}/9`);
+  dat(oanSau === 0, 'SAU: 0/9 trúng oan — cắt theo TỪ, không theo âm tiết (luật ⑤)', `→ ${oanSau}/9`);
+
+  /* ---- NHÓM C: 12 TÊN TÀI LIỆU THẬT — sinh nổi mỏ neo không -------------- */
+  const TEN_THAT = [
+    'Giấy ATTP kho Hà Nội', 'Hoá đơn nhập hàng', 'Hợp đồng lao động',
+    'Tờ khai thuế GTGT', 'CCCD anh Duy', 'Quyết định bổ nhiệm',
+    'Uỷ quyền ký hợp đồng', 'Biên bản kiểm kê', 'Bảng lương tháng 8',
+    'Phụ lục hợp đồng', 'Sao kê ngân hàng', 'Giấy khám sức khoẻ'
+  ];
+  const sinhTruoc = TEN_THAT.filter(t =>
+    [...new Set(t.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/gi, 'd')
+      .toLowerCase().split(/[^a-z0-9]+/).filter(x => x.length >= 5))].length > 0).length;
+  const sinhSau = TEN_THAT.filter(t => tailieu.cumNeoTuTen(t).length > 0).length;
+  dat(sinhTruoc <= 4, `TRƯỚC: chỉ ${sinhTruoc}/12 tên thật sinh nổi mỏ neo (Hồ Ly: 8/12 hụt)`,
+    `→ ${sinhTruoc}/12`);
+  dat(sinhSau === 12, `SAU: ${sinhSau}/12 tên thật sinh được mỏ neo`, `→ ${sinhSau}/12`);
+  const hut = TEN_THAT.filter(t => tailieu.cumNeoTuTen(t).length === 0);
+  console.log(`     → tên còn hụt: ${hut.length ? hut.join(' · ') : 'không còn'}`);
+
+  /* ---- NHÓM D: MỎ NEO YẾU KHÔNG ĐƯỢC BẢO LÃNH CHỮ BỊA ------------------ */
+  const biaHanhChinh = 'QUYẾT ĐỊNH — Bộ Giáo dục và Đào tạo — Số 2345/KH-UBND, tỉnh Quảng Ngãi.';
+  const mocQD = { soHieu: null, loai: 'Quyết định', tieuDe: 'Quyết định bổ nhiệm' };
+  dat(!cuVutKhong(biaHanhChinh, mocQD),
+    'TRƯỚC: trang bịa "Bộ Giáo dục" được neo ③ NHẬN LÀ THẬT');
+  const tinBia = tailieu.docTinChu(biaHanhChinh, mocQD);
+  dat(tinBia.muc === 'neo_yeu',
+    'SAU: chỉ trúng mỏ neo YẾU → KHÔNG được coi là đã đối chiếu',
+    `→ ${tailieu.MUC_TIN[tinBia.muc]}`);
+  /* Và mỏ neo yếu KHÔNG mở cửa vào ô tìm. */
+  const luuYeu = await (async () => {
+    const x = d1SQLite();
+    x.env.AI = { async run() { return { response: biaHanhChinh }; } };
+    const jp = Buffer.from('ffd8ffe000104a46494600010100000100010000ffdb004300' + 'aa'.repeat(600) +
+      'ffc0001108012c00c803012200021101031101ffda0008010100003faaffd9', 'hex');
+    await tailieu.luuTaiLieu(x.env, phienCua('admin'), {
+      ma_gui: 'mg-yeu', nhom: 'noi_bo', tieu_de: 'Quyết định bổ nhiệm', so_trang: 1,
+      tep: Buffer.concat([Buffer.from('%PDF-1.4\n'), jp, Buffer.from('\n%%EOF\n')]).toString('base64'),
+      anh_boc_chu: [jp.toString('base64')]
+    });
+    return x.kho.prepare('SELECT noi_dung, tim_kiem, ocr_so_trang_neo FROM tai_lieu').get();
+  })();
+  dat(String(luuYeu.noi_dung || '').includes('Quảng Ngãi'), 'Trang bịa VẪN được lưu để người tự đối chiếu');
+  dat(!/quang ngai|giao duc/.test(String(luuYeu.tim_kiem || '')),
+    'Nhưng KHÔNG vào ô tìm kiếm', `→ "${String(luuYeu.tim_kiem)}"`);
+}
+
+muc('⑧d1c TỪNG TRANG — một trang thật KHÔNG bảo lãnh cả xấp (luật ④)');
+{
+  const jp = Buffer.from('ffd8ffe000104a46494600010100000100010000ffdb004300' + 'aa'.repeat(600) +
+    'ffc0001108012c00c803012200021101031101ffda0008010100003faaffd9', 'hex');
+  const pdf = Buffer.concat([Buffer.from('%PDF-1.4\n'), jp, Buffer.from('\n%%EOF\n')]);
+  const THAT_1 = 'GIẤY CHỨNG NHẬN CƠ SỞ ĐỦ ĐIỀU KIỆN AN TOÀN THỰC PHẨM. Số: 124/2026/GCN-ATTP.';
+  const BIA_N = 'UỶ BAN NHÂN DÂN TỈNH ĐỒNG THÁP — Sở Tài nguyên và Môi trường, số 118/QĐ-STNMT.';
+
+  const x = d1SQLite();
+  let luot = 0;
+  /* Trang 1 THẬT, hai trang sau BỊA — đúng cảnh "xấp 1 thật + n bịa". */
+  x.env.AI = { async run() { luot++; return { response: luot === 1 ? THAT_1 : BIA_N }; } };
+  await tailieu.luuTaiLieu(x.env, phienCua('van_hanh_san'), {
+    ma_gui: 'mg-xap', nhom: 'attp', tieu_de: 'Giấy chứng nhận ATTP',
+    so_hieu: '124/2026/GCN-ATTP', so_trang: 3,
+    tep: pdf.toString('base64'),
+    anh_boc_chu: [jp.toString('base64'), jp.toString('base64'), jp.toString('base64')]
+  });
+  const d = x.kho.prepare('SELECT noi_dung, tim_kiem, ocr_so_trang, ocr_so_trang_neo, ocr_ghi_chu FROM tai_lieu').get();
+  dat(d.ocr_so_trang === 3 && d.ocr_so_trang_neo === 1,
+    'Xấp 1 trang thật + 2 trang bịa: ĐÚNG 1 trang được đối chiếu',
+    `→ neo ${d.ocr_so_trang_neo}/${d.ocr_so_trang}`);
+  /* `tim_kiem` đã BỎ DẤU và hạ chữ thường — soi bằng chuỗi có dấu là phép thử
+     luôn luôn đạt mà không đo gì (BH-17). */
+  dat(!/dong thap|tai nguyen/.test(String(d.tim_kiem || '')),
+    'Chữ hai trang bịa KHÔNG được trang thật bảo lãnh vào ô tìm',
+    `→ "${String(d.tim_kiem).slice(0, 60)}…"`);
+  dat(/an toan thuc pham/.test(String(d.tim_kiem || '')),
+    'Chữ trang THẬT vẫn vào ô tìm bình thường');
+  dat(/trang 2, 3/i.test(String(d.ocr_ghi_chu || '')),
+    'Câu báo NÓI RÕ trang nào chưa đối chiếu được',
+    `→ "${String(d.ocr_ghi_chu).slice(0, 70)}…"`);
+  dat(String(d.noi_dung || '').includes('ĐỒNG THÁP') &&
+      /Trang 2 · CHƯA KIỂM/.test(String(d.noi_dung || '')),
+    'Chữ hai trang bịa VẪN được lưu (luật ①), có nhãn CHƯA KIỂM ngay tại trang đó');
+
+  /* ĐỐI CHỨNG: bản chạy chốt MỘT LẦN trên chuỗi đã gộp — hai trang bịa phải
+     được bảo lãnh. Không bảo lãnh thì phép đo này không đo gì cả. */
+  const hong = await napBanVa('chốt chạy trên chuỗi ĐÃ GỘP',
+    [`      if (chu) trang.push({ so: i + 1, chu, tin: docTinChu(chu, moc) });`,
+     `      if (chu) trang.push({ so: i + 1, chu, tin: null });`],
+    [`  const chuGop = trang.map(t =>`,
+     `  const tinGop = docTinChu(trang.map(t => t.chu).join('\\n'), moc);\n` +
+     `  for (const t of trang) t.tin = tinGop;\n` +
+     `  const chuGop = trang.map(t =>`]);
+  if (hong) {
+    const y = d1SQLite();
+    let l2 = 0;
+    y.env.AI = { async run() { l2++; return { response: l2 === 1 ? THAT_1 : BIA_N }; } };
+    await hong.luuTaiLieu(y.env, phienCua('van_hanh_san'), {
+      ma_gui: 'mg-xap2', nhom: 'attp', tieu_de: 'Giấy chứng nhận ATTP',
+      so_hieu: '124/2026/GCN-ATTP', so_trang: 3,
+      tep: pdf.toString('base64'),
+      anh_boc_chu: [jp.toString('base64'), jp.toString('base64'), jp.toString('base64')]
+    });
+    const d2 = y.kho.prepare('SELECT tim_kiem, ocr_so_trang_neo FROM tai_lieu').get();
+    dat(d2.ocr_so_trang_neo === 3 && /dong thap/.test(String(d2.tim_kiem || '')),
+      'ĐỐI CHỨNG: gộp trang lại → 1 trang thật BẢO LÃNH cả xấp (phải bảo lãnh)',
+      `→ neo ${d2.ocr_so_trang_neo}/3`);
+  }
+}
+
+muc('⑧d2 MỎ NEO — 7 ca bịa toàn trang, KỂ CẢ khi ô số hiệu trống');
 {
   /* Bảy ca bịa toàn trang: đúng kiểu chữ mô hình trả về khi nó KHÔNG nhìn thấy
      ảnh — nghe rất xuôi tai, không một chữ nào có trên tờ giấy. Gọi thẳng
-     `chuCoThatKhong` để đo được cả ca "số hiệu trống" mà không phải dựng bảy
-     lượt lưu (vòng 1 bỏ sót đúng ca này vì chỉ đo gián tiếp). */
+     `docTinChu` để đo được cả ca "số hiệu trống" mà không phải dựng bảy lượt
+     lưu (vòng 1 bỏ sót đúng ca này vì chỉ đo gián tiếp).
+     ⚠️ Sau REV-0044: "bắt được" KHÔNG còn nghĩa là vứt chữ — nghĩa là KHÔNG
+     xếp vào mức `da_neo`, tức không cho vào ô tìm kiếm. */
   const BIA = [
     'Số: 2345/KH-UBND Kế hoạch triển khai Nghị định 01/2021/NĐ-CP. Bộ Giáo dục và Đào tạo, tỉnh Quảng Ngãi.',
     'UỶ BAN NHÂN DÂN TỈNH ĐỒNG THÁP — Sở Tài nguyên và Môi trường. Số 118/QĐ-STNMT.',
@@ -792,8 +988,9 @@ muc('⑧d2 MỎ NEO — 7 ca bịa toàn trang, KỂ CẢ khi ô số hiệu tr�
      Hồ Ly nêu — người quét vội bỏ trống ô số hiệu. */
   const MOC_TRONG = { soHieu: null, loai: 'Giấy chứng nhận', tieuDe: 'Giấy chứng nhận ATTP Alpha Green' };
   let bat = 0;
-  for (const chu of BIA) if (!tailieu.chuCoThatKhong(chu, MOC_TRONG).that) bat++;
-  dat(bat === BIA.length, `Bắt ${bat}/${BIA.length} ca bịa toàn trang khi ô số hiệu TRỐNG`,
+  for (const chu of BIA) if (tailieu.docTinChu(chu, MOC_TRONG).muc !== 'da_neo') bat++;
+  dat(bat === BIA.length,
+    `${bat}/${BIA.length} ca bịa toàn trang KHÔNG được nhận là đã đối chiếu (số hiệu TRỐNG)`,
     `→ ${bat}/${BIA.length}`);
 
   /* ĐỐI CHỨNG ①: chữ THẬT của bảy loại giấy công ty đang có — không được vứt
@@ -815,23 +1012,31 @@ muc('⑧d2 MỎ NEO — 7 ca bịa toàn trang, KỂ CẢ khi ô số hiệu tr�
     ['ONFOD — Biên bản kiểm kê kho ngày 31/07/2026.',
       { soHieu: null, loai: null, tieuDe: 'Bien ban' }]
   ];
-  const oan = THAT.filter(([chu, moc]) => !tailieu.chuCoThatKhong(chu, moc).that);
-  dat(oan.length === 0, 'Bảy tờ giấy THẬT: không vứt oan tờ nào',
-    `→ ${oan.length} tờ bị vứt oan${oan.length ? ': ' + oan[0][0].slice(0, 40) : ''}`);
+  /* Sau REV-0044, "không vứt oan" là ràng buộc CỨNG (luật ①) — chữ của cả bảy
+     tờ phải còn nguyên. Còn "đối chiếu được" thì KHÔNG ép cả bảy: tờ HỢP ĐỒNG
+     NGUYÊN TẮC không có số hiệu và không nhắc tên công ty nào — nó CHỈ trúng
+     mỏ neo YẾU, và câu trả lời trung thực cho tờ đó là "chưa kiểm được", không
+     phải "đã đối chiếu". Ép nó lên `da_neo` chính là chỗ chữ bịa chui vào. */
+  const yeu = THAT.filter(([chu, moc]) => tailieu.docTinChu(chu, moc).muc !== 'da_neo');
+  dat(yeu.length <= 1, 'Bảy tờ giấy THẬT: ít nhất 6/7 ĐỐI CHIẾU ĐƯỢC bằng mỏ neo MẠNH',
+    `→ ${7 - yeu.length}/7 mạnh${yeu.length ? '; còn lại: ' + yeu.map(x => x[1].tieuDe).join(', ') : ''}`);
+  dat(yeu.every(([chu, moc]) => tailieu.docTinChu(chu, moc).muc === 'neo_yeu'),
+    'Tờ còn lại rơi về "chưa kiểm" chứ KHÔNG bị vứt chữ (luật ①)');
 
-  /* ĐỐI CHỨNG ②: BỎ mỏ neo tên tài liệu + tên công ty → bảy ca bịa phải LỌT
-     hết. Không lọt thì phép đo trên không đo mỏ neo, nó đo cái gì đó khác. */
+  /* ĐỐI CHỨNG: gỡ hết mỏ neo → bảy ca bịa phải rơi về `chua_kiem` mà KHÔNG có
+     câu giải thích nào nhắc mỏ neo. Không đổi gì thì phép đo trên không đo mỏ
+     neo, nó đo cái gì đó khác. */
   let lot = 0;
-  for (const chu of BIA) if (tailieu.chuCoThatKhong(chu, { soHieu: null }).that) lot++;
+  for (const chu of BIA) if (tailieu.docTinChu(chu, { soHieu: null }).coMoc.length === 0) lot++;
   dat(lot === BIA.length,
-    'ĐỐI CHỨNG: gỡ hết mỏ neo → cả 7 ca bịa LỌT (phép đo có đo thật)',
-    `→ ${lot}/${BIA.length} lọt`);
+    'ĐỐI CHỨNG: gỡ hết mỏ neo → cả 7 ca không còn mốc nào để kiểm',
+    `→ ${lot}/${BIA.length}`);
 
-  /* Không mốc nào dùng được thì PHẢI NÓI RA là chốt không chạy — im lặng cho
-     qua là để người ta tưởng chữ này đã được kiểm. */
-  const khongMoc = tailieu.chuCoThatKhong(BIA[0], { soHieu: '12' });
-  dat(khongMoc.that && /chưa gõ số hiệu/.test(String(khongMoc.viSao)),
-    'Số hiệu < 4 ký tự và không có tên: chốt không chạy nhưng NÓI RA',
+  /* Không mốc nào dùng được thì PHẢI NÓI RA — im lặng cho qua là để người ta
+     tưởng chữ này đã được kiểm. */
+  const khongMoc = tailieu.docTinChu(BIA[0], { soHieu: '12' });
+  dat(khongMoc.muc === 'chua_kiem' && /chưa gõ số hiệu/.test(String(khongMoc.viSao)),
+    'Số hiệu < 4 ký tự và không có tên: nói THẲNG là không có mốc nào',
     `→ "${String(khongMoc.viSao).slice(0, 50)}…"`);
 }
 
@@ -999,7 +1204,7 @@ muc('⑧d5 Ô TÌM KIẾM — dò được ruột giấy tờ nhạy cảm, 0 nh
   /* ĐỐI CHỨNG: bỏ đúng chỗ cắt trong `chuoiTimKiem` → ruột chui vào cột tìm
      kiếm và dò ra được ngay. */
   const hong = await napBanVa('tim_kiem không cắt',
-    ['  const ruot = nhomTaiLieuNhayCam(nhom) ? null : noi_dung;', '  const ruot = noi_dung;']);
+    ['  const ruot = (laLa || nhomTaiLieuNhayCam(nhom)) ? null : noi_dung;', '  const ruot = noi_dung;']);
   if (hong) {
     const x = d1SQLite();
     nhetTaiLieu(x.kho, hoSo(hong));
@@ -1109,7 +1314,7 @@ muc('⑧f MÔ HÌNH ĐỌC ẢNH — một chỗ khai, hai đường dùng');
     'Không chỗ gọi AI nào chép tay chuỗi mô hình', `→ ${goiAI.join(', ')}`);
   dat(!/llama-3\.2-11b-vision/.test(tailieu.MO_HINH_DOC_ANH),
     'Mô hình đang dùng KHÔNG phải mô hình đòi ký thoả thuận Meta');
-  dat(/import \{ MO_HINH_DOC_ANH, khuonDocAnh(, chuCoThatKhong)? \} from '\.\/tai-lieu\.js'/.test(nhansu) &&
+  dat(/import \{ MO_HINH_DOC_ANH, khuonDocAnh(, docTinChu)? \} from '\.\/tai-lieu\.js'/.test(nhansu) &&
       /env\.AI\.run\(MO_HINH_DOC_ANH,/.test(nhansu),
     'src/nhansu.js dùng CHUNG hằng số với kho tài liệu (không chép tay)',
     `→ ${tailieu.MO_HINH_DOC_ANH}`);
@@ -1399,6 +1604,85 @@ muc('⑨g NÚT ≥44px Ở CỬA HỒ SƠ + LUẬT BA MÀU + CÂU LUẬT');
   dat(/NS_GT_LOAI_GOI_Y = kq\.loai_goi_y/.test(js),
     'app.js lấy danh sách loại giấy từ MÁY CHỦ, không chép tay');
   dat(/veGiayToHoSo\(n\)/.test(js), 'Mở hồ sơ là nạp bộ giấy tờ (không phải bấm thêm một nút)');
+}
+
+/* ==========================================================================
+   ⑩ VÁ REV-0044 · L1 — CÂU "CHỐT KHÔNG CHẠY" PHẢI TỚI MẮT NGƯỜI QUÉT
+   ---------------------------------------------------------------------------
+   Bóc HÀM THẬT ra khỏi `app.js` rồi CHẠY nó, không khớp chuỗi: bản trước cũng
+   "có" câu đó trong mã nguồn — nó chỉ nằm ở nhánh không bao giờ chạy.
+   ========================================================================== */
+muc('⑩ L1 — câu "chưa đối chiếu được" in ở CẢ HAI nhánh');
+{
+  const appJs = readFileSync(path.join(GOC, 'public/assets/js/app.js'), 'utf8');
+  /** Bóc đúng thân hàm `cauSauKhiQuet` rồi dựng lại bằng `new Function`. */
+  function layHam(nguon, ten) {
+    const dau = nguon.indexOf(`function ${ten}(kq) {`);
+    if (dau < 0) return null;
+    let i = nguon.indexOf('{', dau), sau = 0;
+    for (let j = i; j < nguon.length; j++) {
+      if (nguon[j] === '{') sau++;
+      else if (nguon[j] === '}' && --sau === 0) {
+        return new Function('kq', nguon.slice(i + 1, j));
+      }
+    }
+    return null;
+  }
+  const cau = layHam(appJs, 'cauSauKhiQuet');
+  if (!cau) {
+    dat(false, 'Bóc được hàm cauSauKhiQuet trong app.js', '→ đã đổi tên, sửa bàn đo!');
+  } else {
+    const GHI = '2/3 trang CHƯA ĐỐI CHIẾU ĐƯỢC (trang 2, 3).';
+    /* NHÁNH CÓ CHỮ — đúng nhánh đã nuốt câu này suốt ba vòng. */
+    const coChu = cau({ so_trang: 3, ocr_so_trang: 3, ocr_so_trang_neo: 1, ocr_ghi_chu: GHI });
+    dat(coChu.includes(GHI),
+      'Nhánh CÓ chữ: câu "chưa đối chiếu được" ĐƯỢC IN', `→ "${coChu.slice(-60)}"`);
+    dat(/1 trang đối chiếu được|trong đó 1 trang/.test(coChu),
+      'Và nói rõ mấy trang đối chiếu được, không chỉ "bóc chữ được 3 trang"');
+    /* NHÁNH KHÔNG CHỮ — vốn đã in, phải giữ. */
+    const khongChu = cau({ so_trang: 2, ocr_so_trang: 0, ocr_so_trang_neo: 0, ocr_ghi_chu: 'Ảnh bóc chữ quá nhỏ' });
+    dat(khongChu.includes('Ảnh bóc chữ quá nhỏ'), 'Nhánh KHÔNG chữ: vẫn in như cũ');
+    /* Không có gì để nói thì đừng bịa thêm một dòng cảnh báo. */
+    const sach = cau({ so_trang: 2, ocr_so_trang: 2, ocr_so_trang_neo: 2, ocr_ghi_chu: null });
+    dat(!/CHƯA ĐỐI CHIẾU/.test(sach), 'Mọi trang đối chiếu được thì KHÔNG doạ thừa');
+
+    /* ĐỐI CHỨNG (BH-16): gỡ đúng dòng in `ocr_ghi_chu` → nhánh CÓ chữ phải mất
+       câu đó. Không mất thì phép đo đang đo nhánh khác. */
+    const boIn = appJs.replace("  if (kq.ocr_ghi_chu) dong.push('⚠️ ' + kq.ocr_ghi_chu);", '');
+    if (boIn === appJs) {
+      dat(false, 'ĐỐI CHỨNG: tìm được dòng in ocr_ghi_chu để gỡ', '→ sửa lại bàn đo!');
+    } else {
+      const cauHong = layHam(boIn, 'cauSauKhiQuet');
+      dat(!cauHong({ so_trang: 3, ocr_so_trang: 3, ocr_so_trang_neo: 1, ocr_ghi_chu: GHI }).includes(GHI),
+        'ĐỐI CHỨNG: gỡ dòng in → câu biến mất (phép đo có đo thật)');
+    }
+  }
+
+  /* Hai cửa quét PHẢI gọi cùng một hàm — cửa nào tự viết câu báo riêng là cửa
+     đó sẽ quên in `ocr_ghi_chu` lần nữa. */
+  /* `(?<!function )` — không đếm chính dòng KHAI hàm. */
+  const soLanGoi = (appJs.match(/(?<!function )cauSauKhiQuet\(kq\)/g) || []).length;
+  dat(soLanGoi === 2, 'Cả HAI cửa quét dùng chung một câu báo', `→ ${soLanGoi} nơi gọi`);
+}
+
+muc('⑪ NHÃN "CHƯA KIỂM" PHẢI SỐNG QUA BẢN SAO LƯU CSV (REV-0044 · L3)');
+{
+  const saoLuu2 = await import(pathToFileURL(path.join(GOC, 'src/sao-luu.js')).href);
+  /* Dòng KHÔNG nhạy cảm (hoá đơn) nên không bị che — chữ ra CSV nguyên văn.
+     Nhãn phải đi THEO CHUỖI, không nằm riêng ở một màn nào. */
+  const dong = {
+    nhay_cam: 0,
+    noi_dung: '--- Trang 1 · CHƯA KIỂM · AI đọc — CHƯA KIỂM ---\nMã số thuế 0110934872',
+    tim_kiem: 'hoa don thang 8'
+  };
+  const ra = saoLuu2.cheDongNhayCam('tai_lieu', dong);
+  dat(ra.noi_dung.includes('CHƯA KIỂM'),
+    'Chữ chưa kiểm ra CSV vẫn KÈM dấu chưa kiểm (nhãn nằm trong chính chuỗi)');
+  dat(!/0110934872/.test(ra.tim_kiem),
+    'Con số máy đọc KHÔNG có mặt trong cột tìm kiếm đi ra CSV');
+  /* Dòng nhạy cảm vẫn che như cũ — không nới tay nhân đây. */
+  const kin = saoLuu2.cheDongNhayCam('tai_lieu', { ...dong, nhay_cam: 1 });
+  dat(kin.noi_dung === saoLuu2.O_DA_CHE, 'Dòng nhạy cảm vẫn bị che nguyên như cũ');
 }
 
 console.log('\n───────────────────────────────────────────────────────────');

@@ -16,7 +16,7 @@ import { duocThemNhanSu, laAdmin } from './quyen.js';
    mô hình sang đây chính là cách đường đọc CCCD chết âm thầm 11 ngày kể từ
    18/08/2026: kho tài liệu đo ra lỗi 5016 rồi vá, còn đường này không ai chạm
    tới vì nó là một chuỗi khác nằm ở một file khác. */
-import { MO_HINH_DOC_ANH, khuonDocAnh, chuCoThatKhong } from './tai-lieu.js';
+import { MO_HINH_DOC_ANH, khuonDocAnh, docTinChu } from './tai-lieu.js';
 import { NHAN_SO_AI, CAU_SO_AI, tachSoChuaKiem, soCCCD } from './so-ai.js';
 
 function json(d, status = 200) {
@@ -96,12 +96,20 @@ export async function docCCCD(env, phien, body) {
        Mỏ neo là tên loại giấy tờ: thẻ nào cũng in "CĂN CƯỚC CÔNG DÂN". Đưa cả
        `chu_tren_the` lẫn chuỗi thô mô hình trả về vào để đối chiếu — mô hình
        hay bọc thêm chữ ngoài JSON, phần đó cũng là chữ nó "nhìn thấy". */
-    const neo = chuCoThatKhong(String(data.chu_tren_the || '') + ' ' + tho, {
+    const neo = docTinChu(String(data.chu_tren_the || '') + ' ' + tho, {
       cum: ['can cuoc cong dan', 'can cuoc', 'citizen identity card',
             'chung minh nhan dan', 'socialist republic of viet nam'],
       tenCum: 'dòng "CĂN CƯỚC CÔNG DÂN" in sẵn trên thẻ'
     });
-    if (!neo.that) {
+    /* ⚠️ CHỖ DUY NHẤT mỏ neo còn quyền TỪ CHỐI — và nó không vứt tờ giấy nào.
+       Ở đường kho tài liệu, người ta cầm giấy thật đứng chụp: vứt chữ là mất
+       giấy tờ thật, nên luật mới cấm vứt (xem `docTinChu` trong tai-lieu.js).
+       Ở đây KHÔNG có bản quét nào được lưu — đây là đường ĐIỀN SẴN một cái
+       form. Không điền sẵn thì HR gõ tay, mất một phút; điền sẵn một họ tên và
+       số CCCD KHÔNG CÓ THẬT vào hồ sơ lao động thì đó là giấy tờ sai sự thật.
+       `traiMocBatBuoc` chỉ bật khi nơi gọi đưa `cum`, nên cờ này không bao giờ
+       chạm tới đường kho tài liệu. */
+    if (neo.traiMocBatBuoc) {
       return json({
         ok: false,
         loi_ai: 'Chữ AI đọc được không có dòng "CĂN CƯỚC CÔNG DÂN" nào — nhiều ' +

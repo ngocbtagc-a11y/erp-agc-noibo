@@ -4931,6 +4931,9 @@ if (TOI.quyen.includes('nhansu')) {
             ${t.so_hieu ? ' · ' + esc(t.so_hieu) : ''}
             ${t.ngay_ban_hanh ? ' · ban hành ' + esc(ngayIsoVN(t.ngay_ban_hanh)) : ''}
             · ${Number(t.so_trang) || 0} trang
+            ${Number(t.ocr_so_trang) > Number(t.ocr_so_trang_neo || 0)
+              ? `<span class="tl-dai tl-dai-sap">${Number(t.ocr_so_trang) - Number(t.ocr_so_trang_neo || 0)} trang chữ CHƯA KIỂM</span>`
+              : ''}
           </div>
           <div class="tl-the-phu">
             Quét bởi <b>${esc(nsGtNguoiQuet(t.nguoi_tao))}</b>
@@ -5012,11 +5015,10 @@ if (TOI.quyen.includes('nhansu')) {
         dongYGoiY: n.ho_ten || '',
         khiXong: (kq) => {
           veGiayToHoSo(n);
-          alert(`Đã lưu ${kq.so_trang} trang vào bộ giấy tờ của ${n.ho_ten}.` +
-            (kq.ocr_so_trang
-              ? `\nBóc chữ được ${kq.ocr_so_trang} trang — ⚠️ AI đọc, CHƯA KIỂM: ` +
-                'mọi con số có thể sai, đối chiếu bản giấy trước khi dùng.'
-              : '\nChưa bóc được chữ — vẫn tra được bằng tên.') +
+          /* Dùng CHUNG `cauSauKhiQuet` với cửa kho chung — đó là chỗ `ocr_ghi_chu`
+             được in ở CẢ HAI nhánh (vá REV-0044 · L1). Viết lại câu báo ở đây là
+             dựng thêm một cửa nữa để quên in nó. */
+          alert(`Vào bộ giấy tờ của ${n.ho_ten}.\n\n` + cauSauKhiQuet(kq) +
             '\n\n⚠️ Đây là BẢN DỰ PHÒNG. Đừng huỷ bản giấy gốc.' +
             '\n⚠️ TRẢ GIẤY lại cho nhân viên ngay — doanh nghiệp không được giữ bản gốc.');
         }
@@ -8976,6 +8978,37 @@ if (TOI.quyen.includes('quantri')) {
 }
 
 /* ==========================================================================
+   CÂU BÁO SAU MỖI LƯỢT QUÉT — DÙNG CHUNG CHO CẢ HAI CỬA
+   ---------------------------------------------------------------------------
+   ⛔ VÁ REV-0044 · L1 — CÂU "CHỐT KHÔNG CHẠY" BỊ GIAO DIỆN NUỐT.
+   Bản trước rẽ theo `kq.ocr_so_trang` và **nhánh CÓ chữ không in `ocr_ghi_chu`**.
+   Cả thiết kế "không giả vờ đã kiểm" nằm ở một dòng chữ KHÔNG BAO GIỜ được in:
+   người quét — người DUY NHẤT còn cầm tờ giấy trên tay để đối chiếu — thấy
+   "bóc chữ được 3 trang" rồi bấm OK; câu kia chỉ hiện về sau ở màn "Xem chữ đã
+   bóc", cho người KHÔNG cầm giấy.
+
+   Nên `ocr_ghi_chu` in ở CẢ HAI nhánh, và đặt ở ĐÚNG MỘT hàm để không có cửa
+   nào lỡ quên — cửa hồ sơ nhân sự (CTL-0025) gọi lại chính hàm này.
+   ========================================================================== */
+function cauSauKhiQuet(kq) {
+  const n = Number(kq.ocr_so_trang) || 0;
+  const neo = Number(kq.ocr_so_trang_neo) || 0;
+  const dong = [`Đã lưu ${kq.so_trang} trang.`];
+
+  if (!n) {
+    dong.push('Chưa bóc được chữ — vẫn tra được bằng tên.');
+  } else {
+    dong.push(`Bóc chữ được ${n} trang, trong đó ${neo} trang đối chiếu được với ` +
+              'thứ bạn vừa gõ.');
+    dong.push('⚠️ AI đọc — CHƯA KIỂM: mọi con số trong phần chữ đã bóc là do AI đọc ' +
+              'từ ảnh, có thể sai vài chữ số. Đối chiếu bản giấy trước khi dùng.');
+  }
+  /* Câu này in ở CẢ HAI nhánh — đó chính là bản vá. */
+  if (kq.ocr_ghi_chu) dong.push('⚠️ ' + kq.ocr_ghi_chu);
+  return dong.join('\n\n');
+}
+
+/* ==========================================================================
    KHO TÀI LIỆU QUẢN TRỊ  ·  CTL-0026 Đợt 1 — cửa vào KHO CHUNG
    ---------------------------------------------------------------------------
    Màn này CHỈ làm ba việc: bày danh sách, tìm, và mở màn quét. Toàn bộ lõi
@@ -9054,7 +9087,15 @@ async function khoiDongKhoTaiLieu() {
                 người tra không biết của người nào. */''}
           ${t.gan_ten ? '· <b>hồ sơ ' + esc(t.gan_ten) + '</b>' : ''}
           · ${Number(t.so_trang)||0} trang
-          ${t.ocr_so_trang ? `· đã bóc chữ ${Number(t.ocr_so_trang)||0} trang`
+          ${/* Bóc được mấy trang, và mấy trang trong số đó ĐỐI CHIẾU được. Nói
+                cả hai con số: "đã bóc chữ 3 trang" trơn làm người đọc tưởng cả
+                ba trang đều đã được kiểm (REV-0044 · L2 — chữ bịa được bảo
+                lãnh). Chưa đối chiếu được thì nói thẳng ra ngay ở danh sách. */''}
+          ${t.ocr_so_trang
+            ? `· bóc chữ ${Number(t.ocr_so_trang) || 0} trang` +
+              (Number(t.ocr_so_trang_neo) >= Number(t.ocr_so_trang)
+                ? ' <span class="tl-dai tl-dai-neo">đã đối chiếu</span>'
+                : ` <span class="tl-dai tl-dai-sap">${Number(t.ocr_so_trang) - (Number(t.ocr_so_trang_neo) || 0)} trang CHƯA KIỂM</span>`)
             : '· <i>chưa bóc được chữ — tra bằng tên</i>'}
         </div>
         ${t.trich ? `<p class="tl-trich">${esc(t.trich)}…</p>`
@@ -9197,13 +9238,7 @@ async function khoiDongKhoTaiLieu() {
       nhom: dsNhom.filter(n => nhomLuuDuoc.includes(n.ma)),
       khiXong: (kq) => {
         nap();
-        const chu = kq.ocr_so_trang
-          ? `Đã lưu ${kq.so_trang} trang, bóc chữ được ${kq.ocr_so_trang} trang.` +
-            '\n\n⚠️ AI đọc — CHƯA KIỂM: mọi con số trong phần chữ đã bóc là do AI ' +
-            'đọc từ ảnh, có thể sai vài chữ số. Đối chiếu bản giấy trước khi dùng.'
-          : `Đã lưu ${kq.so_trang} trang. Chưa bóc được chữ — vẫn tra được bằng tên.` +
-            (kq.ocr_ghi_chu ? '\n\n' + kq.ocr_ghi_chu : '');
-        alert(chu + '\n\n⚠️ Đây là bản dự phòng. ĐỪNG huỷ bản giấy gốc.');
+        alert(cauSauKhiQuet(kq) + '\n\n⚠️ Đây là bản dự phòng. ĐỪNG huỷ bản giấy gốc.');
       }
     });
   });
