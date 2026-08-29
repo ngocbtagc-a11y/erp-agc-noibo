@@ -215,11 +215,17 @@ for (const [ten, kbps] of CO_MANG) {
 ghi('\n─── ③ SỐ CHẠM (từ mở kho tới lưu xong, bộ 3 trang) ───');
 
 /* Đếm chạm THẬT: bắt `click` ở tầng document, giai đoạn capture. Mọi lần
-   `.click()` bàn đo gọi ra chính là một lần ngón tay chạm. */
+   `.click()` bàn đo gọi ra chính là một lần ngón tay chạm.
+   ⚠️ `textarea` PHẢI có trong danh sách này. 29/08/2026, gộp REV-0047 từ
+   `main`: 5 ô chữ dài của màn quét đổi từ `<input>` sang `<textarea>`. Ngón
+   tay vẫn chạm đúng chừng ấy lần, nhưng bộ đếm chỉ nhận `input` nên tụt từ
+   7 xuống 5 chạm và mục ⑥ hoá đỏ. Đó là PHÉP ĐO sai, không phải sản phẩm
+   sai — và nó sai theo hướng NGUY HIỂM: khoe ít chạm hơn thực tế. Ai đổi
+   thẻ của một ô nhập thì sửa danh sách này cùng lúc. */
 let soCham = 0;
 const nhatKyCham = [];
 document.addEventListener('click', (e) => {
-  const t = e.target.closest('button, a, label, input, [data-viec]');
+  const t = e.target.closest('button, a, label, input, textarea, select, [data-viec]');
   if (!t) return;
   soCham++;
   nhatKyCham.push(`${soCham}. ${(t.textContent || t.id || t.tagName).trim().slice(0, 42)}`);

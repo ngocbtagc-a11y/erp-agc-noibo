@@ -681,7 +681,7 @@ button { cursor: pointer; border: none; background: none; }
 }
 .xc-matrix thead th {
   position: sticky; top: 0; z-index: 2;
-  background: var(--bg2, #f2eee6);
+  background: var(--surface-2);
 }
 .xc-matrix .xc-col-fixed {
   position: sticky; left: 0; z-index: 1;
@@ -3120,7 +3120,7 @@ tr.kd-chiadoi td {
   background: var(--danger-wash); border-left-color: var(--danger);
 }
 .ns-vieccanlam .vcl-dong.vcl-nhe {
-  background: var(--panel-2, var(--warn-wash)); border-left-color: var(--line, var(--warn));
+  background: var(--warn-wash); border-left-color: var(--line);
 }
 .ns-vieccanlam .vcl-ten { color: var(--text-mute); font-size: 12px; }
 .ns-vieccanlam .btn-nho { flex: none; }
@@ -3159,10 +3159,10 @@ tr.kd-chiadoi td {
 .jd-mau-ds { display: grid; gap: 8px; }
 .jd-mau-nut {
   text-align: left; width: 100%; cursor: pointer;
-  background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-sm);
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--r-sm);
   padding: 9px 11px; font: inherit; color: var(--ink); line-height: 1.45;
 }
-.jd-mau-nut:hover { border-color: var(--brand, var(--warn)); }
+.jd-mau-nut:hover { border-color: var(--warn); }
 .jd-mau-nut b { display: block; font-size: 13px; font-weight: 650; }
 .jd-mau-nut span { display: block; font-size: 12px; color: var(--text-mute); margin-top: 2px; }
 .jd-mau-nut i { display: block; font-size: 11px; color: var(--text-mute); margin-top: 3px; font-style: normal; }
@@ -3205,7 +3205,7 @@ tr.kd-chiadoi td {
 .kn-nguoi {
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
   padding: 9px 11px; border: 1px solid var(--line); border-radius: var(--r-sm);
-  background: var(--panel); font-size: 13px;
+  background: var(--card); font-size: 13px;
 }
 .kn-nguoi .kn-phu { color: var(--text-mute); font-size: 11.5px; flex-basis: 100%; }
 .kn-antoan { color: var(--danger-dark); font-weight: 600; }
@@ -3604,6 +3604,14 @@ tr.kd-chiadoi td {
   border: 1px solid var(--line); border-radius: var(--r-sm);
   background: var(--card); color: var(--ink); font: inherit;
 }
+/* 5 ô chữ dài của màn quét (tên tài liệu · loại · số hiệu · ai đồng ý · mục
+   đích) là `<textarea class="o-nhieu-dong">` chứ không phải `<input>` — cùng
+   luật REV-0047 mà `main` áp cho 111 ô, chỉ khác là 5 ô này SINH RA SAU lượt
+   vá đó nên phải vá tay.
+   `padding: 0 12px` của `.tlq-o` căn giữa được chữ trong `<input>` (input tự
+   căn giữa theo chiều dọc) nhưng `<textarea>` thì KHÔNG — chữ dính sát mép
+   trên. Trả lại đệm dọc, và giữ đúng sàn chạm 44px lúc ô còn rỗng. */
+textarea.tlq-o { padding: 10px 12px; }
 .tlq-chip { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
 /* Chip loại giấy ĐANG CHỌN — nhạt cam, KHÔNG phải cam đậm: trong màn quét, cam
    đậm đã thuộc về đúng một nút "Lưu" (luật ③ docs/BANG-MAU.md — một điểm nhấn

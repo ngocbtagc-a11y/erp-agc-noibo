@@ -435,14 +435,27 @@ export function moQuetTaiLieu(t) {
       </div>`;
   }
 
+  /* CHỮ DÀI TỰ XUỐNG DÒNG — REV-0047, gộp từ `main` 29/08/2026.
+     Luật của lượt vá 111 ô: ô MỘT DÒNG nhận chữ mà `maxLength === -1` HOẶC
+     `>= 100` là vi phạm. 5 ô dưới đây (tên tài liệu 200 · loại 120 · số hiệu
+     120 · ai đồng ý 200 · mục đích 300) sinh ra ở nhánh CTL-0026 nên KHÔNG
+     nằm trong 111 ô đã vá — nay vá cho đồng bộ: đổi sang
+     `<textarea class="o-nhieu-dong" rows="1">`, trông y hệt ô một dòng lúc
+     rỗng, tự cao dần tới trần 132px rồi cuộn dọc, không bao giờ kéo ngang.
+     Ba thứ đi kèm KHÔNG mất: `maxlength` giữ nguyên; Enter vẫn Lưu (uỷ quyền
+     `keydown` trên `document` trong app.js — kể cả ô do JS dựng ra như ở
+     đây); giá trị cũ chuyển từ `value="…"` sang phần TỬ CON của thẻ, `esc()`
+     đã chặn `&<>` nên không hở HTML.
+     `tlqTimNguoi` (60) và hai ô `type="date"` KHÔNG đổi — chưa từng vi phạm. */
   function veThongTin() {
     const n = nhomDangChon();
     return `
       <div class="tlq-than">
         <form class="tlq-form" id="tlqForm">
           <label class="tlq-nhan">Tên tài liệu <i>*</i></label>
-          <input class="tlq-o" id="tlqTieuDe" data-tu-focus maxlength="200" required
-                 value="${esc(hs.tieuDe)}" placeholder="VD: Giấy chứng nhận ATTP nhà xưởng">
+          <textarea class="tlq-o o-nhieu-dong" rows="1" id="tlqTieuDe" data-tu-focus
+                    maxlength="200" required
+                    placeholder="VD: Giấy chứng nhận ATTP nhà xưởng">${esc(hs.tieuDe)}</textarea>
 
           <label class="tlq-nhan">Loại giấy</label>
           ${dsLoaiGoiY.length ? `
@@ -452,14 +465,14 @@ export function moQuetTaiLieu(t) {
                         data-viec="loai" data-ten="${esc(l.ten)}"
                         data-so="${esc(l.goi_y_so || '')}">${esc(l.ten)}</button>`).join('')}
             </div>` : ''}
-          <input class="tlq-o" id="tlqLoai" maxlength="120" value="${esc(hs.loai)}"
-                 placeholder="${esc((n && n.vi_du ? n.vi_du.split(',')[0] : '') || 'VD: Hợp đồng')}">
+          <textarea class="tlq-o o-nhieu-dong" rows="1" id="tlqLoai" maxlength="120"
+                    placeholder="${esc((n && n.vi_du ? n.vi_du.split(',')[0] : '') || 'VD: Hợp đồng')}">${esc(hs.loai)}</textarea>
           ${dsLoaiGoiY.length ? `<p class="tlq-huong">Bấm một loại ở trên, hoặc gõ tay —
             danh sách này là <b>gợi ý</b>, không phải danh sách đóng.</p>` : ''}
 
           <label class="tlq-nhan">Số hiệu</label>
-          <input class="tlq-o" id="tlqSoHieu" maxlength="120" value="${esc(hs.soHieu)}"
-                 placeholder="${esc(goiYSoHieu())}">
+          <textarea class="tlq-o o-nhieu-dong" rows="1" id="tlqSoHieu" maxlength="120"
+                    placeholder="${esc(goiYSoHieu())}">${esc(hs.soHieu)}</textarea>
           ${laCCCD(hs.loai) ? `<p class="tlq-huong"><b>Số CCCD phải đủ 12 chữ số.</b>
             CCCD Việt Nam mẫu từ 2021 luôn 12 chữ số — thiếu một chữ là hồ sơ lao động
             mang số sai. Máy chủ chặn, không phải nhắc suông.</p>` : ''}
@@ -483,11 +496,11 @@ export function moQuetTaiLieu(t) {
               <b>Giấy tờ cá nhân — bắt buộc ghi nhận đồng ý</b>
               <p>Luật Bảo vệ dữ liệu cá nhân 91/2025/QH15 và NĐ 356/2025, hiệu lực 01/01/2026.</p>
               <label class="tlq-nhan">Ai đồng ý cho lưu <i>*</i></label>
-              <input class="tlq-o" id="tlqDongYBoi" maxlength="200" value="${esc(hs.dongYBoi)}"
-                     placeholder="Họ tên người có giấy tờ">
+              <textarea class="tlq-o o-nhieu-dong" rows="1" id="tlqDongYBoi" maxlength="200"
+                        placeholder="Họ tên người có giấy tờ">${esc(hs.dongYBoi)}</textarea>
               <label class="tlq-nhan">Đồng ý cho mục đích gì <i>*</i></label>
-              <input class="tlq-o" id="tlqMucDich" maxlength="300" value="${esc(hs.dongYMucDich)}"
-                     placeholder="VD: quản lý hồ sơ lao động, đóng BHXH">
+              <textarea class="tlq-o o-nhieu-dong" rows="1" id="tlqMucDich" maxlength="300"
+                        placeholder="VD: quản lý hồ sơ lao động, đóng BHXH">${esc(hs.dongYMucDich)}</textarea>
             </div>` : ''}
 
           ${loiGui ? `<p class="tlq-loi">${esc(loiGui)}

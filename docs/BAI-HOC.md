@@ -890,3 +890,32 @@ cây làm việc là CRLF hay LF **tuỳ tệp đó vừa đi qua công cụ nà
 hoá nên nhìn không thấy. Ca đối chứng khớp chuỗi có `\n` vì thế **trượt im lặng**. Mọi bàn đo
 đọc tệp nguồn phải `.replace(/\r\n/g, '\n')` trước khi khớp — số đo đổi theo cấu hình git là
 số đo không dùng được.
+
+**BH-59 · Đổi thẻ của một ô nhập thì phải sửa cả cái thước đo nó.** 29/08/2026, gộp
+REV-0047 từ `main`: 5 ô chữ dài của màn quét đổi `<input>` → `<textarea>`. Ngón tay vẫn
+chạm đúng 7 lần, nhưng bộ đếm chạm trong `ban-quet-tai-lieu.html` lọc bằng
+`closest('button, a, label, input, [data-viec]')` — **không có `textarea`** — nên nó khai
+**5 chạm**. Nếu con số ấy không có một câu khẳng định cứng (`chamErpHoSo === 7`) canh bên
+cạnh thì lượt gộp này đã **đẻ ra một chỉ số đẹp hơn sự thật** và không ai biết. Bài học
+không phải "nhớ thêm `textarea`", mà là: **mọi bộ lọc liệt kê tên thẻ đều là một danh sách
+sẽ lỗi thời**, và thứ cứu nó là con số kỳ vọng viết cứng ngay cạnh — sai lệch phải làm
+bàn đo ĐỎ, không được làm nó im.
+
+**BH-60 · Token CSS không tồn tại là lỗi mà máy dò MÀU không bao giờ thấy.**
+`.jd-mau-nut` và `.kn-nguoi` cùng viết `background: var(--panel)` — `--panel` chưa từng
+được khai, và cả hai chỗ đều không có giá trị dự phòng, nên CSS coi thuộc tính đó là
+`unset`: **nền hoá trong suốt**, cái nút trông như không có nút. `do-ba-mau` mù hoàn toàn
+với ca này suốt nhiều vòng, vì cả 5 mục của nó đều đi **tìm mã màu** — mà ở đây *không có
+mã màu nào cả*; lỗi chính là **chỗ đáng lẽ có màu thì trống rỗng**. Một phép đo đi tìm
+"thứ sai" luôn mù với "thứ thiếu". Muốn bắt phải hỏi một câu **khác hẳn về loại**: *"mọi
+`var(--x)` có trỏ tới một khai báo có thật không?"* → mục ⑥, kèm cả **đối chứng ngược**
+(token có thật thì phải IM) vì phép kiểm báo bừa cũng vô dụng y như phép kiểm mù.
+
+**BH-61 · Thứ tự chạy migration nằm ở TÊN FILE, mà `.sort()` trần thì so cả cái đuôi.**
+`them-kho-tai-lieu-cot-ocr-neo.sql` xếp **trước** `them-kho-tai-lieu.sql` vì dấu `-`
+(0x2D) đứng trước dấu `.` (0x2E) trong bảng mã — tức là bảng liệt kê "cần chạy" bảo người
+ta chạy `ALTER TABLE` trước khi có bảng. Cắt đuôi `.sql` rồi mới so thì tên ngắn luôn là
+tiền tố của tên dài và luôn đứng trước — đúng nếp "file gốc trước, file vá cột sau". Sửa
+xong mới thấy nó **không phải lỗi của riêng cặp file mới**: 6 cặp trong repo đang xếp
+ngược (`them-chat`, `them-congviec`, `them-donhang`, `them-gopy`, `them-kho`,
+`them-vinhdanh`). Một dòng `.sort()` mặc định, sai âm thầm suốt 6 lần.
