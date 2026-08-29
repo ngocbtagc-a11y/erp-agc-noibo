@@ -2855,6 +2855,39 @@
     </form>
     <div class="form-loi" id="nsHd-loi"></div>
 
+    <!-- ==================================================================
+         GIẤY TỜ CỦA NGƯỜI NÀY  ·  CTL-0025 Đợt 2
+         ------------------------------------------------------------------
+         Sếp Ngọc 29/08/2026: "khi có các giấy tờ kiểu như quyết định, uỷ
+         quyền liên quan đến nhân sự đó tao sẽ lưu vào đây luôn THÀNH 1 BỘ
+         là đẹp". Mở hồ sơ là thấy TRỌN bộ giấy của người đó — không phải
+         sang tab Kho tài liệu mò.
+
+         Nhưng đây là một CỬA NHÌN, không phải kho thứ hai: cùng những tờ
+         giấy ấy vẫn nằm trong kho chung. Một kho, hai cửa nhìn.
+
+         Quyền cắt ở MÁY CHỦ (`src/quyen.js` — quản lý kho KHÔNG có nhóm
+         `nhan_su`). Khối này chỉ vẽ những gì máy chủ chịu trả. -->
+    <div class="kv-md-muc">Giấy tờ của người này</div>
+    <div class="tl-luat">
+      <b>⚠️ Đây là bản dự phòng để tra cứu. KHÔNG thay bản giấy — đừng huỷ giấy gốc.</b>
+      <p>
+        Chỉ lưu <b>BẢN SAO</b>. Quét xong <b>trả giấy lại cho nhân viên ngay</b> —
+        doanh nghiệp không được giữ giấy tờ gốc của người lao động (BLLĐ 2019 Đ.17).
+        Mỗi lượt mở giấy tờ ở đây đều <b>ghi nhật ký</b> theo Luật Bảo vệ dữ liệu
+        cá nhân 91/2025/QH15.
+      </p>
+    </div>
+    <div class="tl-thanh">
+      <button type="button" class="btn-primary tl-nut-quet" id="nsGt-quet" hidden>
+        📷 Quét thêm giấy tờ
+      </button>
+      <span class="sm" id="nsGt-dem"></span>
+    </div>
+    <div id="nsGt-ds"></div>
+    <div class="empty tl-trong" id="nsGt-trong" hidden></div>
+    <div id="nsGt-cat"></div>
+
     <div class="kv-md-muc">Lịch sử thay đổi</div>
     <div class="table-wrap">
       <table>

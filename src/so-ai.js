@@ -87,6 +87,23 @@ export function coSoAI(chu) {
      `so_chua_kiem`    → CHỈ là gợi ý, người phải tự gõ hoặc bấm xác nhận
    ========================================================================== */
 
+/** SỐ CCCD LUÔN ĐỦ 12 CHỮ SỐ — một định nghĩa, mọi đường dùng.
+ *
+ *  CCCD Việt Nam (mẫu từ 2021) luôn 12 chữ số. Ca REV-0040 đo được là ca nguy
+ *  nhất: họ tên ĐÚNG đứng cạnh `03691004271` — 11 chữ số, mất đúng một chữ, mà
+ *  cái tên đúng làm người ta tin luôn con số.
+ *
+ *  Trước đây luật này nằm CHÉP TAY trong `src/nhansu.js` (`/^\d{12}$/`), nên
+ *  đường quét giấy tờ vào hồ sơ nhân sự (CTL-0025) không có gì để gọi và suýt
+ *  chép bản thứ hai. Hai bản chép tay của cùng một hằng số chính là cách đường
+ *  đọc CCCD chết âm thầm 11 ngày (xem `MO_HINH_DOC_ANH`) — không lặp lại.
+ *
+ *  Trả về `{ so, dung }`: `so` là chuỗi CHỈ CÒN chữ số, `dung` là đủ 12 hay chưa. */
+export function soCCCD(v) {
+  const so = String(v ?? '').replace(/\D+/g, '');
+  return { so, dung: /^\d{12}$/.test(so) };
+}
+
 /** Tách một bộ trường thành (điền sẵn được) / (phải người xác nhận).
  *  @param truong   object các trường AI đọc ra
  *  @param tenSo    tên các trường thuộc diện CON SỐ */

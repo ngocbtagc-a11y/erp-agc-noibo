@@ -429,6 +429,10 @@ export const API = {
     if (tuyChon.q) u.set('q', tuyChon.q);
     if (tuyChon.nhom) u.set('nhom', tuyChon.nhom);
     if (tuyChon.sapHetHan) u.set('sap_het_han', '1');
+    /* `ganId` = nhìn qua cửa HỒ SƠ MỘT NGƯỜI (CTL-0025 Đợt 2). Không truyền =
+       nhìn qua cửa kho chung, và kho chung thấy CẢ giấy đã quét vào hồ sơ —
+       một kho, hai cửa nhìn, không phải hai kho. */
+    if (tuyChon.ganId) u.set('gan_id', tuyChon.ganId);
     return goi('/api/tai-lieu' + (u.toString() ? '?' + u : ''));
   },
   tlLuu: (than) => goi('/api/tai-lieu/luu', { method: 'POST', body: JSON.stringify(than) }),

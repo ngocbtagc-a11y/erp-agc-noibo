@@ -61,6 +61,7 @@
     "nap-khotailieu": "node scripts/chay-migration.mjs them-kho-tai-lieu.sql --remote",
     "do-kho-tai-lieu": "node scripts/do-kho-tai-lieu.mjs",
     "ban-kho-tai-lieu": "node scripts/ban-quet-tai-lieu.mjs",
+    "do-quet-375": "node scripts/ban-quet-tai-lieu.mjs --tu-dong",
     "do-boc-chu": "node scripts/do-boc-chu.mjs",
     "cong-khoi": "node scripts/cong-khoi.mjs",
     "cong-khoi-dienthoai": "node scripts/cong-khoi.mjs --rong 375",

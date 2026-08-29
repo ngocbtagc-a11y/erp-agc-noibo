@@ -46,12 +46,61 @@ import {
 import { luuFile, layFile, xoaFile, timHoacTaoThuMuc, daCauHinh, duongDanTep } from './kho-file.js';
 import { gioVN, ngayVN, duocGuiNhac } from './nhac-nhan-su.js';
 import { catBot, nhanCat } from './cat-danh-sach.js';
-import { NHAN_SO_AI, viTriSoAI } from './so-ai.js';
+import { NHAN_SO_AI, viTriSoAI, soCCCD } from './so-ai.js';
 
 /** Câu phải xuất hiện ở mọi cửa. Đặt ở ĐÚNG MỘT chỗ để không có hai bản
  *  lệch nhau, và để phép kiểm tự động soi được một chuỗi duy nhất. */
 export const CANH_BAO_PHAP_LY =
   'Đây là bản dự phòng để tra cứu. KHÔNG thay bản giấy — đừng huỷ giấy gốc.';
+
+/* ==========================================================================
+   HAI CỬA VÀO, MỘT KHO  ·  CTL-0025 Đợt 2 mở cửa `nhan_su`
+   ---------------------------------------------------------------------------
+   Sếp Ngọc 29/08/2026: *"khi có các giấy tờ kiểu như quyết định, uỷ quyền liên
+   quan đến nhân sự đó tao sẽ lưu vào đây luôn THÀNH 1 BỘ là đẹp"*.
+
+   "Thành 1 bộ" = mở hồ sơ một người là thấy TRỌN giấy tờ của người đó, không
+   phải sang kho chung mò. Nhưng đó là MỘT CỬA NHÌN, không phải kho thứ hai:
+   giấy quét ở cửa hồ sơ vẫn nằm nguyên trong bảng `tai_lieu`, vẫn hiện ở kho
+   chung với ai có quyền xem nhóm `nhan_su`. Hai kho là hai chỗ để lệch nhau,
+   hai chỗ phải sao lưu, hai chỗ phải phân quyền.
+
+   Khác nhau giữa hai cửa CHỈ là hai cột: `cua_vao` + `gan_id`.
+   ========================================================================== */
+export const CUA_VAO_HOP_LE = ['kho_chung', 'nhan_su'];
+
+/* Cửa `nhan_su` KHOÁ CỨNG vào nhóm giấy tờ `nhan_su`. Không phải cho gọn: nhóm
+   đó là nhóm NHẠY CẢM, và chính cờ `nhay_cam` mới bật hai thứ luật đòi — bắt
+   ghi nhận đồng ý lúc lưu, và ghi nhật ký mỗi lượt mở. Cho phép gắn một tờ hoá
+   đơn nhóm `ke_toan` vào hồ sơ một người là mở đúng lối đi vòng qua cả hai. */
+export const NHOM_CUA_NHAN_SU = 'nhan_su';
+
+/* ⚠️ LOẠI GIẤY TỜ NHÂN SỰ — KHAI Ở MÁY CHỦ, KHÔNG CHÉP SANG TRÌNH DUYỆT.
+   Sếp gọi đích danh "quyết định" và "uỷ quyền"; phần còn lại là bộ giấy một hồ
+   sơ lao động thật sự có. Đây là GỢI Ý cho ô "Loại giấy" (bấm một cái thay vì
+   gõ tay trên điện thoại) — KHÔNG phải danh sách đóng: gõ tay loại khác vẫn
+   lưu được, vì đời thật luôn có tờ giấy không nằm trong danh sách nào.
+
+   `cccd: true` bật chốt "số hiệu phải là 12 chữ số" — xem `luuTaiLieu`. */
+export const LOAI_GIAY_NHAN_SU = [
+  { ma: 'quyet_dinh',  ten: 'Quyết định',         goi_y_so: 'VD: 12/2026/QĐ-AGC' },
+  { ma: 'uy_quyen',    ten: 'Uỷ quyền',           goi_y_so: 'VD: 03/2026/GUQ' },
+  { ma: 'hdld',        ten: 'Hợp đồng lao động',  goi_y_so: 'VD: 12/2026/HĐLĐ' },
+  { ma: 'phu_luc',     ten: 'Phụ lục hợp đồng',   goi_y_so: 'VD: 01/PL-HĐLĐ' },
+  { ma: 'cccd',        ten: 'CCCD',               goi_y_so: '12 chữ số', cccd: true },
+  { ma: 'bang_cap',    ten: 'Bằng cấp – chứng chỉ', goi_y_so: 'Số hiệu bằng' },
+  { ma: 'suc_khoe',    ten: 'Khám sức khoẻ',      goi_y_so: 'Số phiếu khám' },
+  { ma: 'cam_ket',     ten: 'Cam kết',            goi_y_so: 'Số hiệu (nếu có)' },
+  { ma: 'bien_ban',    ten: 'Biên bản',           goi_y_so: 'VD: 05/2026/BB' }
+];
+
+/** Loại giấy người dùng gõ/chọn có phải CCCD không — so bằng TÊN đã bỏ dấu, vì
+ *  ô "Loại giấy" là ô chữ tự do (bấm chip điền sẵn tên, nhưng gõ tay cũng được).
+ *  Cố tình rộng tay: "cccd", "CCCD/CMND", "Căn cước công dân" đều tính. */
+export function laLoaiCCCD(loai) {
+  const s = boDau(loai || '');
+  return /\bcccd\b|\bcmnd\b|can cuoc/.test(s);
+}
 
 /** Nhóm nhạy cảm thì thêm câu này (CTL-0025 Mục 2 ②). */
 export const CANH_BAO_TRA_GIAY =
@@ -409,7 +458,17 @@ async function bocChu(env, dsAnhOCR, moc = {}) {
    4. LƯU MỘT TÀI LIỆU  —  POST /api/tai-lieu/luu
    ========================================================================== */
 export async function luuTaiLieu(env, phien, body) {
-  const nhom = chuoi(body.nhom, 40);
+  /* ---- CỬA VÀO — đọc TRƯỚC nhóm, vì cửa `nhan_su` khoá cứng nhóm -------- */
+  const cuaVao = chuoi(body.cua_vao, 20) || 'kho_chung';
+  if (!CUA_VAO_HOP_LE.includes(cuaVao)) {
+    return loi(`Cửa vào "${cuaVao}" không có thật`, 400);
+  }
+  /* `gan_id` chỉ có nghĩa ở cửa hồ sơ. Cửa kho chung mà gửi kèm thì VỨT, đừng
+     lưu: một dòng `cua_vao='kho_chung'` mang `gan_id` là dòng không cửa nào tra
+     ra — kho chung không lọc theo nó, hồ sơ thì không nhận nó. */
+  const ganId = cuaVao === 'nhan_su' ? chuoi(body.gan_id, 64) : null;
+
+  const nhom = cuaVao === 'nhan_su' ? NHOM_CUA_NHAN_SU : chuoi(body.nhom, 40);
   if (!nhom || !NHOM_TAI_LIEU[nhom]) return loi('Chưa chọn nhóm giấy tờ');
 
   /* ⚠️ CẮT Ở MÁY CHỦ. Đây là chỗ chặn thật — giao diện có ẩn nút hay không
@@ -426,12 +485,34 @@ export async function luuTaiLieu(env, phien, body) {
   if (soTrang < 1) return loi('Chưa có trang nào');
   if (soTrang > TRAN_SO_TRANG) return loi(`Một tài liệu tối đa ${TRAN_SO_TRANG} trang`);
 
-  /* CỬA VÀO. Đợt 1 chỉ mở 'kho_chung'; 'nhan_su' đã có đường nhưng khoá lại
-     cho tới khi CTL-0025 mở giao diện — thà chặn sớm còn hơn để dữ liệu nửa
-     vời vào bảng rồi Đợt 2 phải đi dọn. */
-  const cuaVao = chuoi(body.cua_vao, 20) || 'kho_chung';
-  if (cuaVao !== 'kho_chung') {
-    return loi('Cửa vào hồ sơ nhân sự thuộc Đợt 2 (CTL-0025), chưa mở', 409);
+  /* ---- CỬA HỒ SƠ NHÂN SỰ: phải gắn vào một người CÓ THẬT ----------------
+     Một lượt ĐỌC D1 để đổi lấy việc không bao giờ có tài liệu mồ côi trong
+     bảng. Gắn nhầm `gan_id` thì tờ giấy biến mất khỏi mọi hồ sơ mà vẫn nằm
+     trong kho — không ai đi tìm, không ai biết nó của ai. Lượt đọc rẻ hơn lượt
+     ghi cả một bậc, và đây là đường ghi (mỗi lượt quét đúng một lần). */
+  let tenNguoi = null;
+  if (cuaVao === 'nhan_su') {
+    if (!ganId) return loi('Quét vào hồ sơ nhân sự thì phải kèm mã nhân sự');
+    const ns = await env.DB.prepare(
+      'SELECT id, ho_ten FROM nhan_su WHERE id = ?').bind(ganId).first();
+    if (!ns) return loi('Không có nhân sự nào mang mã này', 404);
+    tenNguoi = ns.ho_ten || null;
+  }
+
+  /* ---- SỐ CCCD PHẢI ĐỦ 12 CHỮ SỐ ---------------------------------------
+     Ô "Số hiệu" của một tờ CCCD chính là số CCCD. CCCD Việt Nam (mẫu từ 2021)
+     luôn 12 chữ số; lưu một số 11 chữ số vào hồ sơ lao động không phải lỗi
+     phần mềm — là giấy tờ sai sự thật (xem `soCCCD()` trong src/so-ai.js, cùng
+     luật với đường đọc ảnh CCCD ở src/nhansu.js).
+     Bỏ trống thì thôi, không ép: có người quét CCCD trước, đối chiếu số sau. */
+  const loaiGiay = chuoi(body.loai, 120);
+  const soHieuTho = chuoi(body.so_hieu, 120);
+  if (soHieuTho && laLoaiCCCD(loaiGiay)) {
+    const { so, dung } = soCCCD(soHieuTho);
+    if (!dung) {
+      return loi(`Số CCCD phải đủ 12 chữ số — bạn nhập "${soHieuTho}" ` +
+                 `(${so.length} chữ số). Nhìn thẻ và gõ lại, hoặc để trống.`);
+    }
   }
 
   const nhayCam = nhomTaiLieuNhayCam(nhom) ? 1 : 0;
@@ -486,7 +567,7 @@ export async function luuTaiLieu(env, phien, body) {
      `chuCoThatKhong()`. Bản trước chỉ đưa `so_hieu`, nên bỏ trống ô đó là chốt
      tắt hẳn (REV-0040 lỗi #1). */
   const boc = await bocChu(env, dsOCR, {
-    soHieu: chuoi(body.so_hieu, 120), loai: chuoi(body.loai, 120), tieuDe: tieuDe
+    soHieu: soHieuTho, loai: loaiGiay, tieuDe: tieuDe
   });
 
   /* ---- Lưu lên Drive ---------------------------------------------------
@@ -515,14 +596,14 @@ export async function luuTaiLieu(env, phien, body) {
     id,
     ma_gui: maGui,
     nhom,
-    loai: chuoi(body.loai, 120),
+    loai: loaiGiay,
     tieu_de: tieuDe,
-    so_hieu: chuoi(body.so_hieu, 120),
+    so_hieu: soHieuTho,
     ngay_ban_hanh: ngay(body.ngay_ban_hanh),
     ngay_het_han: ngay(body.ngay_het_han),
     han_luu: NHOM_TAI_LIEU[nhom].han_luu,
     cua_vao: cuaVao,
-    gan_id: chuoi(body.gan_id, 64),
+    gan_id: ganId,
     so_trang: soTrang,
     kho_nha: luuXong.nha,
     kho_khoa: luuXong.khoa,
@@ -602,6 +683,9 @@ export async function luuTaiLieu(env, phien, body) {
   return json({
     ok: true,
     id,
+    cua_vao: cuaVao,
+    gan_id: ganId,
+    gan_ten: tenNguoi,
     so_trang: soTrang,
     co_byte: banGhi.co_byte,
     ocr_so_trang: boc.soTrang,
@@ -619,12 +703,39 @@ export async function luuTaiLieu(env, phien, body) {
    ========================================================================== */
 export async function danhSachTaiLieu(env, phien, thamSo) {
   const duocXem = nhomTaiLieuXemDuoc(phien.vai_tro);
-  if (!duocXem.length) {
-    return json({ ds: [], nhom: [], canh_bao: CANH_BAO_PHAP_LY, tong: 0, bi_cat: false, cat: null });
+
+  /* ---- MỘT KHO, HAI CỬA NHÌN  ·  CTL-0025 Đợt 2 -------------------------
+     `gan_id` có mặt = đang nhìn qua cửa HỒ SƠ MỘT NGƯỜI (chỉ giấy của người
+     đó). Không có = nhìn qua cửa KHO CHUNG, và kho chung thấy TẤT CẢ, kể cả
+     giấy quét vào hồ sơ ai đó.
+
+     ⚠️ Bản Đợt 1 khoá cứng `cua_vao = 'kho_chung'` ở đây. Giữ nguyên dòng đó
+     là biến "hai cửa nhìn" thành HAI KHO: giấy quét ở hồ sơ biến mất khỏi kho
+     chung, HCNS đi tìm một tờ quyết định phải nhớ nó được quét ở cửa nào. Bỏ
+     lọc `cua_vao` KHÔNG nới quyền một chút nào — quyền vẫn cắt bằng NHÓM ở
+     ngay dưới, và giấy nhân sự vốn đã thuộc nhóm `nhan_su`. */
+  const ganId = String(thamSo.get('gan_id') || '').trim().slice(0, 64);
+
+  /* Xin giấy tờ của MỘT NGƯỜI mà không có quyền xem nhóm nhân sự → 403 nói
+     thẳng, KHÔNG trả danh sách rỗng. Rỗng làm người ta tưởng người này chưa có
+     giấy tờ nào và đi quét lại từ đầu — che quyền bằng cách nói dối về dữ liệu
+     là chỗ tệ nhất để tiết kiệm một dòng chữ. */
+  if (ganId && !duocXemNhomTaiLieu(phien.vai_tro, NHOM_CUA_NHAN_SU)) {
+    return loi('Bạn không có quyền xem giấy tờ nhân sự. Chỉ HCNS và Ban giám ' +
+               'đốc mở được hồ sơ giấy tờ của người khác.', 403);
   }
 
-  const dieuKien = [`an = 0`, `cua_vao = ?`];
-  const bien = ['kho_chung'];
+  if (!duocXem.length) {
+    return json({ ds: [], nhom: [], canh_bao: CANH_BAO_PHAP_LY, tong: 0, bi_cat: false, cat: null,
+                  nhom_luu_duoc: [], loai_goi_y: [] });
+  }
+
+  const dieuKien = [`an = 0`];
+  const bien = [];
+  if (ganId) {
+    dieuKien.push(`cua_vao = ? AND gan_id = ?`);
+    bien.push('nhan_su', ganId);
+  }
 
   /* Lọc theo nhóm NGAY TRONG CÂU SQL. Cố ý không lấy hết rồi lọc trong JS:
      lấy hết là dữ liệu đã rời máy chủ, và chỉ cần một lần quên lọc là lộ. */
@@ -667,6 +778,13 @@ export async function danhSachTaiLieu(env, phien, thamSo) {
   const kq = await env.DB.prepare(`
     SELECT id, nhom, loai, tieu_de, so_hieu, ngay_ban_hanh, ngay_het_han,
            han_luu, so_trang, co_byte, ocr_so_trang, nhay_cam, nguoi_tao, tao_luc,
+           cua_vao, gan_id,
+           -- Tên người tờ giấy này thuộc về — để kho chung nói được "của ai"
+           -- thay vì bày một mã ns_xxx. Câu con, KHÔNG phải JOIN: dieuKien ở
+           -- trên viết cột trần (an, nhom) và được dùng lại NGUYÊN VĂN cho câu
+           -- ĐẾM ở nhanCat — thêm JOIN là cột trần thành nhập nhằng ở đúng câu
+           -- đếm mà không ai thử.
+           (SELECT ho_ten FROM nhan_su WHERE nhan_su.id = tai_lieu.gan_id) AS gan_ten,
            CASE WHEN nhay_cam = 1 THEN NULL
                 ELSE substr(COALESCE(noi_dung,''), 1, 180) END AS trich
       FROM tai_lieu
@@ -694,7 +812,12 @@ export async function danhSachTaiLieu(env, phien, thamSo) {
     tran: GH,
     nhom: duocXem.map(m => ({ ma: m, ...NHOM_TAI_LIEU[m] })),
     nhom_luu_duoc: nhomTaiLieuLuuDuoc(phien.vai_tro),
-    canh_bao: CANH_BAO_PHAP_LY
+    /* Cửa hồ sơ nhân sự: trả kèm bộ loại giấy tờ + quyền quét, để giao diện
+       KHÔNG giữ bản chép tay nào của hai thứ đó. Một chỗ khai, một đường đi. */
+    gan_id: ganId || null,
+    loai_goi_y: ganId ? LOAI_GIAY_NHAN_SU : [],
+    duoc_quet_nhan_su: duocLuuNhomTaiLieu(phien.vai_tro, NHOM_CUA_NHAN_SU),
+    canh_bao: CANH_BAO_PHAP_LY + (ganId ? ' ' + CANH_BAO_TRA_GIAY : '')
   });
 }
 

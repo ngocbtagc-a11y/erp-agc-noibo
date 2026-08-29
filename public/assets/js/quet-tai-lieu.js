@@ -121,11 +121,23 @@ function congNam(n) {
                                   các nhóm người này được LƯU (máy chủ vẫn
                                   kiểm lại, đây chỉ là bớt chỗ bấm nhầm)
    @param {string} [t.tenGoiY]    điền sẵn tiêu đề (Đợt 2: tên nhân viên)
+   @param {string} [t.dongYGoiY]  điền sẵn ô "ai đồng ý" (Đợt 2: tên nhân viên
+                                  — người có giấy tờ CHÍNH LÀ người đó)
+   @param {Array}  [t.loaiGoiY]   [{ma, ten, goi_y_so}] — chip bấm một cái là
+                                  xong ô "Loại giấy", thay vì gõ tay trên điện
+                                  thoại. MÁY CHỦ trả danh sách này, trình duyệt
+                                  KHÔNG giữ bản chép tay.
+   @param {boolean} [t.boQuaChonNhom] cửa chỉ có ĐÚNG MỘT nhóm (hồ sơ nhân sự)
+                                  thì bỏ hẳn màn chọn nhóm và mở máy ảnh luôn —
+                                  tiết kiệm đúng một cú chạm. Cửa kho chung
+                                  KHÔNG truyền cờ này: ở đó chọn nhóm là một
+                                  quyết định thật.
    @param {Function} t.khiXong    gọi lại sau khi lưu thành công
    ========================================================================== */
 export function moQuetTaiLieu(t) {
   const cuaVao = t.cuaVao || 'kho_chung';
   const ganId = t.ganId || null;
+  const dsLoaiGoiY = Array.isArray(t.loaiGoiY) ? t.loaiGoiY.filter(x => x && x.ten) : [];
   const dsNhom = (t.nhom || []).filter(n => n && n.ma);
   if (!dsNhom.length) {
     alert('Bạn không có quyền quét tài liệu vào nhóm nào. Nhờ Admin cấp quyền.');
@@ -133,8 +145,12 @@ export function moQuetTaiLieu(t) {
   }
 
   /* ---- Trạng thái ---- */
+  /* Bỏ màn chọn nhóm CHỈ khi cửa vào thật sự có đúng một nhóm — cờ do nơi gọi
+     bật, không tự đoán: đoán sai là người ta mất luôn màn chọn nhóm ở kho
+     chung mà không hiểu vì sao. */
+  const boQuaChonNhom = t.boQuaChonNhom === true && dsNhom.length === 1;
   let hs = docNhap(cuaVao, ganId) || moiBo();
-  let manHinh = hs.trang.length ? 'trang' : 'chon-nhom';
+  let manHinh = (hs.trang.length || boQuaChonNhom) ? 'trang' : 'chon-nhom';
   let dangGui = false;
   let loiGui = null;
   let nhapKhongLuuDuoc = false;                       // localStorage không ghi được
@@ -144,7 +160,12 @@ export function moQuetTaiLieu(t) {
       maGui: (crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random())).slice(0, 40),
       nhom: dsNhom.length === 1 ? dsNhom[0].ma : '',
       trang: [], tieuDe: t.tenGoiY || '', loai: '', soHieu: '',
-      ngayBanHanh: '', ngayHetHan: '', dongYBoi: '', dongYMucDich: ''
+      ngayBanHanh: '', ngayHetHan: '',
+      /* Điền sẵn TÊN người, KHÔNG điền sẵn mục đích: "ai đồng ý" là chuyện xác
+         định được (giấy của người nào thì người đó), còn "đồng ý cho mục đích
+         gì" là chuyện phải hỏi thật. Điền sẵn cả hai thì cái dấu đồng ý của
+         Luật BVDLCN 91/2025/QH15 thành một ô máy tự gõ. */
+      dongYBoi: t.dongYGoiY || '', dongYMucDich: ''
     };
   }
 
@@ -154,6 +175,19 @@ export function moQuetTaiLieu(t) {
   }
 
   function nhomDangChon() { return dsNhom.find(n => n.ma === hs.nhom) || null; }
+
+  /** Loại giấy đang chọn có phải CCCD không. Bản NGẮN của `laLoaiCCCD()` ở máy
+   *  chủ, và cố ý chỉ dùng để HIỆN LỜI NHẮC — chốt thật nằm ở máy chủ
+   *  (`src/tai-lieu.js`), nên hai bản có lệch nhau thì cùng lắm là thiếu một
+   *  dòng nhắc, KHÔNG phải lọt một số CCCD sai. */
+  function laCCCD(loai) {
+    return /cccd|cmnd|căn cước|can cuoc/i.test(String(loai || ''));
+  }
+
+  function goiYSoHieu() {
+    const l = dsLoaiGoiY.find(x => x.ten === hs.loai);
+    return (l && l.goi_y_so) || 'VD: 123/2026/GCN-ATTP';
+  }
 
   /* ---- Khung ---- */
   const nen = document.createElement('div');
@@ -322,12 +356,24 @@ export function moQuetTaiLieu(t) {
                  value="${esc(hs.tieuDe)}" placeholder="VD: Giấy chứng nhận ATTP nhà xưởng">
 
           <label class="tlq-nhan">Loại giấy</label>
+          ${dsLoaiGoiY.length ? `
+            <div class="tlq-chip">
+              ${dsLoaiGoiY.map(l => `
+                <button type="button" class="tlq-nut-phu${hs.loai === l.ten ? ' chon' : ''}"
+                        data-viec="loai" data-ten="${esc(l.ten)}"
+                        data-so="${esc(l.goi_y_so || '')}">${esc(l.ten)}</button>`).join('')}
+            </div>` : ''}
           <input class="tlq-o" id="tlqLoai" maxlength="120" value="${esc(hs.loai)}"
                  placeholder="${esc((n && n.vi_du ? n.vi_du.split(',')[0] : '') || 'VD: Hợp đồng')}">
+          ${dsLoaiGoiY.length ? `<p class="tlq-huong">Bấm một loại ở trên, hoặc gõ tay —
+            danh sách này là <b>gợi ý</b>, không phải danh sách đóng.</p>` : ''}
 
           <label class="tlq-nhan">Số hiệu</label>
           <input class="tlq-o" id="tlqSoHieu" maxlength="120" value="${esc(hs.soHieu)}"
-                 placeholder="VD: 123/2026/GCN-ATTP">
+                 placeholder="${esc(goiYSoHieu())}">
+          ${laCCCD(hs.loai) ? `<p class="tlq-huong"><b>Số CCCD phải đủ 12 chữ số.</b>
+            CCCD Việt Nam mẫu từ 2021 luôn 12 chữ số — thiếu một chữ là hồ sơ lao động
+            mang số sai. Máy chủ chặn, không phải nhắc suông.</p>` : ''}
 
           <label class="tlq-nhan">Ngày ban hành</label>
           <input class="tlq-o" id="tlqBanHanh" type="date" value="${esc(hs.ngayBanHanh)}">
@@ -398,6 +444,15 @@ export function moQuetTaiLieu(t) {
           const nam = parseInt(el.dataset.nam, 10);
           const o = tam.querySelector('#tlqHetHan');
           if (o) o.value = nam ? congNam(nam) : '';
+          return;
+        }
+        /* Chip loại giấy: THU trước rồi mới vẽ lại — không thu là tiêu đề và
+           số hiệu người ta vừa gõ bay sạch chỉ vì bấm một cái chip. */
+        if (v === 'loai') {
+          thu();
+          hs.loai = el.dataset.ten || '';
+          luuNhap();
+          ve();
           return;
         }
       });
@@ -492,6 +547,11 @@ export function moQuetTaiLieu(t) {
   }
 
   ve();
+  /* Cửa một-nhóm (hồ sơ nhân sự): mở máy ảnh LUÔN, đúng tinh thần "chọn xong
+     máy ảnh bật luôn, không tốn thêm một cú chạm nào" (CTL-0025 Mục 3 ④). Chỉ
+     làm khi chưa có trang nào — đang mở lại bộ quét dở mà máy ảnh tự bật là
+     cướp mất màn xem lại. */
+  if (boQuaChonNhom && !hs.trang.length && hs.nhom) moMayAnh(-1);
   /* Đang có bản nháp dở thì nói ngay, đừng để người ta tưởng mất ảnh. */
   if (hs.trang.length) {
     setTimeout(() => {

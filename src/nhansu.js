@@ -17,7 +17,7 @@ import { duocThemNhanSu, laAdmin } from './quyen.js';
    18/08/2026: kho tài liệu đo ra lỗi 5016 rồi vá, còn đường này không ai chạm
    tới vì nó là một chuỗi khác nằm ở một file khác. */
 import { MO_HINH_DOC_ANH, khuonDocAnh, chuCoThatKhong } from './tai-lieu.js';
-import { NHAN_SO_AI, CAU_SO_AI, tachSoChuaKiem } from './so-ai.js';
+import { NHAN_SO_AI, CAU_SO_AI, tachSoChuaKiem, soCCCD } from './so-ai.js';
 
 function json(d, status = 200) {
   return new Response(JSON.stringify(d), {
@@ -114,9 +114,12 @@ export async function docCCCD(env, phien, body) {
        Ca Hồ Ly đo được là ca nguy nhất: họ tên ĐÚNG đứng cạnh `03691004271`
        — 11 chữ số, mất đúng một chữ. Cái tên đúng làm người ta tin luôn con
        số. CCCD Việt Nam (mẫu từ 2021) LUÔN 12 chữ số; không đủ 12 thì đó KHÔNG
-       phải số CCCD, dù nó trông giống. Vứt, và nói rõ vì sao. */
-    const soTho = String(data.so_cccd || '').replace(/\D+/g, '');
-    const soDung = /^\d{12}$/.test(soTho);
+       phải số CCCD, dù nó trông giống. Vứt, và nói rõ vì sao.
+
+       Luật "đủ 12 chữ số" nay nằm ở `soCCCD()` trong `src/so-ai.js` — MỘT chỗ
+       khai, để đường quét giấy tờ vào hồ sơ nhân sự (CTL-0025) dùng CÙNG luật
+       chứ không chép bản thứ hai. */
+    const { so: soTho, dung: soDung } = soCCCD(data.so_cccd);
 
     /* ---- CHỐT ③ CON SỐ KHÔNG TỰ ĐIỀN VÀO Ô CHÍNH THỨC ---------------------
        Gạo chốt 29/08/2026. `thong_tin` (chữ mô tả) điền sẵn được; `so_chua_kiem`

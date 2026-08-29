@@ -4883,6 +4883,146 @@ if (TOI.quyen.includes('nhansu')) {
       }
     });
 
+    /* ====================================================================
+       GIẤY TỜ CỦA NGƯỜI NÀY  ·  CTL-0025 Đợt 2 — cửa vào HỒ SƠ NHÂN SỰ
+       --------------------------------------------------------------------
+       Sếp Ngọc 29/08/2026: *"cho tao thêm chỗ để scan bộ thông tin nhân sự
+       lên nữa … lưu vào đây luôn THÀNH 1 BỘ là đẹp"*.
+
+       MỘT KHO, HAI CỬA NHÌN. Khối này gọi ĐÚNG API của kho tài liệu, chỉ
+       thêm `ganId` — không có bảng riêng, không có đường lưu riêng, không
+       có bản chép tay nào của luật phân quyền. Giấy quét ở đây vẫn hiện ở
+       tab Kho tài liệu và ngược lại.
+
+       Lõi quét (chụp → nén → gộp trang → gửi lại khi sóng yếu) dùng NGUYÊN
+       `quet-tai-lieu.js` của Đợt 1 — Đợt 2 không viết lại một dòng nào.
+
+       ⚠️ RANH GIỚI CỨNG: quyền cắt ở MÁY CHỦ. `admin_backup` mở được hộp
+       hồ sơ (có `them_nhan_su`) nhưng KHÔNG xem được nhóm `nhan_su` — máy
+       chủ trả 403 và khối này nói thẳng ra, không vẽ một danh sách rỗng.
+       ==================================================================== */
+    let NS_GT_DANG_MO = null;         // id người đang mở, để câu trả lời chậm không lạc chủ
+    let NS_GT_LOAI_GOI_Y = [];        // loại giấy tờ — MÁY CHỦ trả, không chép tay
+    let NS_GT_QUET_DUOC = false;
+
+    function nsGtNguoiQuet(idNguoi) {
+      if (!idNguoi) return 'không rõ';
+      const ng = DS_NHAN_SU_QT.find(x => x.id === idNguoi);
+      return ng ? ng.ho_ten : idNguoi;
+    }
+
+    function nsGtMotThe(t) {
+      const con = t.ngay_het_han ? conBaoNhieuNgay(t.ngay_het_han) : null;
+      /* Đỏ CHỈ cho thứ đã hỏng (giấy quá hạn) — ngoại lệ duy nhất của luật ba
+         màu. Sắp hết hạn dùng vàng nâu, vẫn trong họ nâu–cam. */
+      const dai = con === null ? ''
+        : con < 0 ? `<span class="tl-dai tl-dai-qua">Quá hạn ${-con} ngày</span>`
+        : con <= 30 ? `<span class="tl-dai tl-dai-sap">Còn ${con} ngày</span>`
+        : `<span class="tl-dai">Hết hạn ${esc(ngayIsoVN(t.ngay_het_han))}</span>`;
+      return `
+        <article class="tl-the">
+          <div class="tl-the-dau">
+            <b class="tl-ten">${esc(t.tieu_de)}</b>
+            ${t.nhay_cam ? '<span class="tl-dai tl-dai-kin">Nhạy cảm</span>' : ''}
+            ${dai}
+          </div>
+          <div class="tl-the-phu">
+            ${esc(t.loai || 'chưa ghi loại')}
+            ${t.so_hieu ? ' · ' + esc(t.so_hieu) : ''}
+            ${t.ngay_ban_hanh ? ' · ban hành ' + esc(ngayIsoVN(t.ngay_ban_hanh)) : ''}
+            · ${Number(t.so_trang) || 0} trang
+          </div>
+          <div class="tl-the-phu">
+            Quét bởi <b>${esc(nsGtNguoiQuet(t.nguoi_tao))}</b>
+            ${t.tao_luc ? ' lúc ' + esc(String(t.tao_luc).slice(0, 16)) : ''}
+            ${t.han_luu ? ' · hạn lưu bản giấy: ' + esc(t.han_luu) : ''}
+          </div>
+          <div class="tl-the-nut">
+            <a class="tl-nut-mo" href="/api/tai-lieu/tep?id=${encodeURIComponent(t.id)}"
+               target="_blank" rel="noopener">Mở bản quét</a>
+          </div>
+        </article>`;
+    }
+
+    async function veGiayToHoSo(n) {
+      const oDs = $('#nsGt-ds'), oTrong = $('#nsGt-trong'),
+            oDem = $('#nsGt-dem'), oNut = $('#nsGt-quet');
+      if (!oDs) return;
+      NS_GT_DANG_MO = n.id;
+      NS_GT_QUET_DUOC = false;
+      oNut.hidden = true;                 // ẩn TRƯỚC, hiện lại chỉ khi máy chủ cho
+      oDs.innerHTML = '';
+      oDem.textContent = 'Đang mở bộ giấy tờ…';
+      oTrong.hidden = true;
+      veDaiCat('#nsGt-cat', null, {});
+
+      let kq;
+      try {
+        kq = await API.tlDanhSach({ ganId: n.id });
+      } catch (e) {
+        if (NS_GT_DANG_MO !== n.id) return;
+        oDem.textContent = '';
+        oTrong.hidden = false;
+        /* Nói THẲNG là không có quyền. Danh sách rỗng làm người ta tưởng người
+           này chưa có giấy tờ nào rồi đi quét lại từ đầu. */
+        oTrong.textContent = e.message || 'Không mở được bộ giấy tờ của người này.';
+        return;
+      }
+      if (NS_GT_DANG_MO !== n.id) return;         // đã mở hồ sơ người khác
+
+      NS_GT_LOAI_GOI_Y = kq.loai_goi_y || [];
+      NS_GT_QUET_DUOC = kq.duoc_quet_nhan_su === true;
+      oNut.hidden = !NS_GT_QUET_DUOC;
+
+      const ds = kq.ds || [];
+      oDs.innerHTML = ds.map(nsGtMotThe).join('');
+      oDem.textContent = ds.length
+        ? `${ds.length} giấy tờ trong bộ${kq.bi_cat ? ' (đã cắt bớt)' : ''}`
+        : '';
+      oTrong.hidden = ds.length > 0;
+      oTrong.textContent = NS_GT_QUET_DUOC
+        ? 'Chưa có giấy tờ nào của người này. Bấm "Quét thêm giấy tờ" để lưu quyết định, uỷ quyền, HĐLĐ, CCCD…'
+        : 'Chưa có giấy tờ nào của người này.';
+      veDaiCat('#nsGt-cat', kq.cat, {
+        don_vi: 'giấy tờ',
+        goi_y: 'Bộ giấy của người này đã quá dài — tra tiếp ở tab Kho tài liệu.'
+      });
+    }
+
+    $('#nsGt-quet')?.addEventListener('click', () => {
+      const id = NS_GT_DANG_MO;
+      const n = id ? DS_NHAN_SU_QT.find(x => x.id === id) : null;
+      if (!n || !NS_GT_QUET_DUOC) return;
+      moQuetTaiLieu({
+        cuaVao: 'nhan_su',
+        ganId: n.id,
+        /* Cửa này CHỈ có một nhóm — máy chủ khoá cứng `nhom='nhan_su'` cho cửa
+           `nhan_su`, nên bày một màn chọn nhóm ở đây là bắt bấm thừa một cái.
+           Tên nhóm và hạn lưu vẫn lấy từ máy chủ, không gõ tay vào đây. */
+        nhom: (NS_GT_LOAI_GOI_Y.length ? [{
+          ma: 'nhan_su', ten: 'Nhân sự',
+          vi_du: NS_GT_LOAI_GOI_Y.map(l => l.ten).join(', '),
+          han_luu: 'HĐLĐ 10 năm sau chấm dứt', nhay_cam: 1
+        }] : []),
+        boQuaChonNhom: true,
+        loaiGoiY: NS_GT_LOAI_GOI_Y,
+        tenGoiY: n.ho_ten ? n.ho_ten + ' — ' : '',
+        /* Giấy tờ của ai thì người đó là người đồng ý. Điền sẵn TÊN thôi —
+           "đồng ý cho mục đích gì" vẫn phải gõ, vì đó là chuyện phải hỏi thật. */
+        dongYGoiY: n.ho_ten || '',
+        khiXong: (kq) => {
+          veGiayToHoSo(n);
+          alert(`Đã lưu ${kq.so_trang} trang vào bộ giấy tờ của ${n.ho_ten}.` +
+            (kq.ocr_so_trang
+              ? `\nBóc chữ được ${kq.ocr_so_trang} trang — ⚠️ AI đọc, CHƯA KIỂM: ` +
+                'mọi con số có thể sai, đối chiếu bản giấy trước khi dùng.'
+              : '\nChưa bóc được chữ — vẫn tra được bằng tên.') +
+            '\n\n⚠️ Đây là BẢN DỰ PHÒNG. Đừng huỷ bản giấy gốc.' +
+            '\n⚠️ TRẢ GIẤY lại cho nhân viên ngay — doanh nghiệp không được giữ bản gốc.');
+        }
+      });
+    });
+
     function moHopSuaNhanSu(id) {
       const n = DS_NHAN_SU_QT.find(x => x.id === id);
       if (!n) return;
@@ -4895,6 +5035,7 @@ if (TOI.quyen.includes('nhansu')) {
       veLichSuHoSo(id);
       veHopDongHoSo(id);
       veCongTacSinhNhat(n);
+      veGiayToHoSo(n);          // bộ giấy tờ của người này (CTL-0025 Đợt 2)
       veJdHoSo(n);
       veKnHoSo(n);
       $('#nsSua-id').value = n.id;
@@ -8907,6 +9048,11 @@ async function khoiDongKhoTaiLieu() {
         </div>
         <div class="tl-the-phu">
           ${esc(tenNhom(t.nhom))}${t.loai ? ' · ' + esc(t.loai) : ''}${t.so_hieu ? ' · ' + esc(t.so_hieu) : ''}
+          ${/* MỘT KHO, HAI CỬA NHÌN (CTL-0025 Đợt 2). Giấy quét ở cửa hồ sơ vẫn
+                nằm trong kho chung — nhưng phải NÓI RA nó thuộc hồ sơ của ai,
+                không thì kho chung hiện thêm một tờ "Quyết định" trôi nổi mà
+                người tra không biết của người nào. */''}
+          ${t.gan_ten ? '· <b>hồ sơ ' + esc(t.gan_ten) + '</b>' : ''}
           · ${Number(t.so_trang)||0} trang
           ${t.ocr_so_trang ? `· đã bóc chữ ${Number(t.ocr_so_trang)||0} trang`
             : '· <i>chưa bóc được chữ — tra bằng tên</i>'}

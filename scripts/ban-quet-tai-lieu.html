@@ -411,7 +411,95 @@ try {
   ghi('     → Máy chủ nhận ra mã trùng nên KHÔNG tạo bản thứ hai trên Drive');
   ghi(`  Thân yêu cầu một lượt quét thật (PDF + 3 ảnh bóc chữ): ${kb(lg.co_byte_than)}`);
 
+  /* ======================================================================
+     ⑥ CỬA HỒ SƠ NHÂN SỰ  ·  CTL-0025 Đợt 2 — ĐẾM CHẠM Ở 375px
+     ---------------------------------------------------------------------
+     Ca thật Sếp nêu: quét MỘT QUYẾT ĐỊNH 2 TRANG vào hồ sơ một người. Đếm từ
+     lúc bấm "Quét thêm giấy tờ" trong hồ sơ tới lúc lưu xong.
+     Cửa này chỉ có ĐÚNG MỘT nhóm nên bỏ hẳn màn chọn nhóm — tiết kiệm đúng
+     một cú chạm so với cửa kho chung.
+     ====================================================================== */
+  ghi('\n─── ⑥ CỬA HỒ SƠ NHÂN SỰ: quét một QUYẾT ĐỊNH 2 TRANG (375px) ───');
+  localStorage.removeItem('tl_nhap_v1_nhan_su_ns_huyen');
+  xongRoi = false;
+  const chamTruocHoSo = soCham, camTruocHoSo = soChamMayAnh;
+
+  /* Nút "Quét thêm giấy tờ" thật của khối trong hồ sơ — cùng lớp CSS. */
+  const nutHoSo = document.createElement('button');
+  nutHoSo.className = 'btn-primary tl-nut-quet';
+  nutHoSo.id = 'nsGt-quet';
+  nutHoSo.textContent = '📷 Quét thêm giấy tờ';
+  document.body.appendChild(nutHoSo);
+  const LOAI_GOI_Y = [
+    { ma: 'quyet_dinh', ten: 'Quyết định', goi_y_so: 'VD: 12/2026/QĐ-AGC' },
+    { ma: 'uy_quyen', ten: 'Uỷ quyền', goi_y_so: 'VD: 03/2026/GUQ' },
+    { ma: 'cccd', ten: 'CCCD', goi_y_so: '12 chữ số', cccd: true }
+  ];
+  nutHoSo.addEventListener('click', () => moQuetTaiLieu({
+    cuaVao: 'nhan_su', ganId: 'ns_huyen', boQuaChonNhom: true,
+    nhom: [{ ma: 'nhan_su', ten: 'Nhân sự', vi_du: 'Quyết định, uỷ quyền, HĐLĐ, CCCD',
+             han_luu: 'HĐLĐ 10 năm sau chấm dứt', nhay_cam: 1 }],
+    loaiGoiY: LOAI_GOI_Y,
+    tenGoiY: 'Nguyễn Thị Huyền — ',
+    dongYGoiY: 'Nguyễn Thị Huyền',
+    khiXong: () => { xongRoi = true; }
+  }));
+
+  nutHoSo.click();                                     // chạm 1 — máy ảnh mở LUÔN
+  await doi('.tlq-the');                               // trang 1 đã vào
+  ep375();
+  const caoNutQuetHoSo = Math.round(nutHoSo.getBoundingClientRect().height * 10) / 10;
+  (await doi('[data-viec="chup-tiep"]')).click();      // chạm 2
+  while (document.querySelectorAll('.tlq-the').length < 2) await cho(50);
+  (await doi('[data-viec="sang-thong-tin"]')).click(); // chạm 3
+  const oTenHs = await doi('#tlqTieuDe');
+  ep375();
+  /* Ô "ai đồng ý" phải ĐÃ ĐIỀN SẴN tên người — trống thì mất thêm một cú gõ,
+     và tệ hơn: dấu đồng ý dễ bị bỏ qua. */
+  const dongYDaDien = (document.querySelector('#tlqDongYBoi') || {}).value || '';
+  oTenHs.click();                                      // chạm 4 (đặt con trỏ)
+  oTenHs.value = 'Nguyễn Thị Huyền — Quyết định bổ nhiệm';
+  const chipLoai = document.querySelector('[data-viec="loai"][data-ten="Quyết định"]');
+  const caoChip = chipLoai ? Math.round(chipLoai.getBoundingClientRect().height * 10) / 10 : null;
+  chipLoai.click();                                    // chạm 5 (chip loại giấy)
+  await cho(120);
+  const loaiSauChip = (document.querySelector('#tlqLoai') || {}).value || '';
+  const tenConNguyen = (document.querySelector('#tlqTieuDe') || {}).value || '';
+  const oMd = await doi('#tlqMucDich');
+  oMd.click();                                         // chạm 6 (đặt con trỏ)
+  oMd.value = 'Quản lý hồ sơ lao động, đóng BHXH';
+  document.querySelector('#tlqForm button[type="submit"]').click();   // chạm 7
+  const t6 = Date.now();
+  while (!xongRoi && Date.now() - t6 < 10000) await cho(60);
+
+  const chamErpHoSo = soCham - chamTruocHoSo;
+  const camHoSo = soChamMayAnh - camTruocHoSo;
+  ghi(`  ${xongRoi ? 'ĐẠT ' : '✗ HỎNG'}  Lưu xong bộ 2 trang vào hồ sơ`);
+  ghi(`  Số chạm TRONG ERP (từ nút "Quét thêm" tới lưu xong): ${chamErpHoSo}`);
+  nhatKyCham.slice(chamTruocHoSo).forEach(d => ghi('    ' + d));
+  ghi(`  Số chạm trong ứng dụng máy ảnh: ${camHoSo} (2 trang × 2)`);
+  ghi(`  TỔNG NGÓN TAY: ${chamErpHoSo + camHoSo} chạm — cộng 1 chạm mở hồ sơ = ` +
+      `${chamErpHoSo + camHoSo + 1} từ danh sách nhân sự tới lưu xong.`);
+  ghi(`  ${dongYDaDien === 'Nguyễn Thị Huyền' ? 'ĐẠT ' : '✗ HỎNG'}  ` +
+      `Ô "ai đồng ý" điền sẵn tên người → "${dongYDaDien}"`);
+  ghi(`  ${loaiSauChip === 'Quyết định' ? 'ĐẠT ' : '✗ HỎNG'}  ` +
+      `Bấm chip điền đúng ô Loại giấy → "${loaiSauChip}"`);
+  ghi(`  ${/Quyết định bổ nhiệm/.test(tenConNguyen) ? 'ĐẠT ' : '✗ HỎNG'}  ` +
+      `Bấm chip KHÔNG làm bay tiêu đề đang gõ dở → "${tenConNguyen.slice(0, 40)}"`);
+  ghi(`  ${caoNutQuetHoSo >= 44 ? 'ĐẠT ' : '✗ HỎNG'}  Nút "Quét thêm giấy tờ" ${caoNutQuetHoSo}px`);
+  ghi(`  ${caoChip !== null && caoChip >= 44 ? 'ĐẠT ' : '✗ HỎNG'}  Chip loại giấy ${caoChip}px`);
+  /* Cửa hồ sơ KHÔNG được bày màn chọn nhóm — bày là bắt bấm thừa một cái cho
+     một lựa chọn chỉ có đúng một đáp án. */
+  ghi(`  ${chamErpHoSo === 7 ? 'ĐẠT ' : '✗ HỎNG'}  ` +
+      `Bỏ được màn chọn nhóm → 7 chạm ERP (cùng việc ở kho chung là 8)`);
+
+  const lgHoSo = await (await fetch('/lan-gui-cuoi')).json();
+
   ghi('\n───────────────────────────────────────────────────────────');
+  ghi(`KET_LUAN_HOSO cham_erp=${chamErpHoSo} cham_may_anh=${camHoSo} ` +
+      `tong_tu_ho_so=${chamErpHoSo + camHoSo + 1} luu_xong=${xongRoi} ` +
+      `dong_y_dien_san=${dongYDaDien === 'Nguyễn Thị Huyền'} chip_loai=${loaiSauChip === 'Quyết định'} ` +
+      `nut_quet_px=${caoNutQuetHoSo} chip_px=${caoChip} than_gui=${lgHoSo.co_byte_than || 0}`);
   ghi(`KET_LUAN cham_erp=${chamErpBo3} cham_may_anh=${chamCamBo3} tong=${chamErpBo3 + chamCamBo3} ` +
       `goc=${tongGoc} nen=${tongNen} pdf=${pdf.length} than_gui=${lg.co_byte_than || 0} ` +
       `nut_44=${datHet} doi_chung_bat_duoc=${caoHong < 44} luu_xong=${xongRoi} ` +

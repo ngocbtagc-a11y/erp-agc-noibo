@@ -119,5 +119,37 @@ createServer((req, res) => {
   }
 
   res.writeHead(404); res.end('Không có');
-}).listen(CONG, '127.0.0.1', () =>
-  console.log(`Bàn đo Kho tài liệu: http://127.0.0.1:${CONG}`));
+}).listen(CONG, '127.0.0.1', async () => {
+  console.log(`Bàn đo Kho tài liệu: http://127.0.0.1:${CONG}`);
+
+  /* ---- TỰ CHẠY (`--tu-dong`) -------------------------------------------
+     Bàn đo này vốn phải mở bằng tay, nên số đo của nó KHÔNG vào được cổng nào
+     và cũng không ai chạy lại sau mỗi lần sửa. Cùng một trang, cùng một mã:
+     mở bằng Chrome headless ở ĐÚNG 375px rồi đọc thẳng khối kết quả ra màn
+     hình. Số đo tự chạy được là số đo còn sống sau ba tuần.
+     Mã thoát 1 nếu có dòng HỎNG — để cắm được vào cổng. */
+  if (!process.argv.includes('--tu-dong')) return;
+  const { moChrome } = await import('./lib/ban-do-chrome.mjs');
+  /* `/index.html` chứ không phải `/`: `moChrome` tìm tab theo `url.includes('.html')`. */
+  const cr = await moChrome({ url: `http://127.0.0.1:${CONG}/index.html`, rong: 375, cao: 812, doiMs: 3000 });
+  let chu = '';
+  const han = Date.now() + 120000;
+  while (Date.now() < han) {
+    chu = await cr.chay(`document.querySelector('#kq')?.textContent || ''`);
+    if (/KET_LUAN /.test(chu) || /BÀN ĐO HỎNG/.test(chu)) break;
+    await cr.doi(500);
+  }
+  /* Lọc tiếng động của CHÍNH bàn đo, không lọc lỗi thật:
+       · 502 là cảnh "ép hỏng" mục ⑤ cố ý dựng ra — đó là thứ đang được ĐO.
+       · 404 là favicon; trang bàn đo không có icon.
+     Mọi `console.error` khác vẫn tính là trượt. */
+  const loiCon = cr.loiConsole.filter(l =>
+    !/^\[log\] Failed to load resource.*(404|502)/.test(String(l)));
+  cr.dong();
+  console.log(chu);
+  const soHong = (chu.match(/✗ HỎNG|BÀN ĐO HỎNG/g) || []).length;
+  console.error(`\nBÀN QUÉT [375px]: ` +
+    (soHong === 0 && loiCon.length === 0 ? '✅ ĐẠT' : `❌ ${soHong} dòng HỎNG, ${loiCon.length} console.error`));
+  for (const l of loiCon.slice(0, 8)) console.error('  console.error: ' + l);
+  process.exit(soHong === 0 && loiCon.length === 0 ? 0 : 1);
+});

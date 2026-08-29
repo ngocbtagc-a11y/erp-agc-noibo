@@ -918,9 +918,14 @@ muc('⑧d4 ĐƯỜNG CCCD — chốt chống bịa + số CCCD luôn 12 chữ s�
     'Thẻ BỊA (không có dòng "CĂN CƯỚC CÔNG DÂN") → vứt sạch, mời điền tay',
     `→ "${String(bia.loi_ai).slice(0, 52)}…"`);
 
-  /* ĐỐI CHỨNG: bản BỎ chốt 12 chữ số → số sai phải LỌT ra ngoài. */
+  /* ĐỐI CHỨNG: bản BỎ chốt 12 chữ số → số sai phải LỌT ra ngoài.
+     Luật này nay nằm ở `soCCCD()` trong src/so-ai.js (MỘT chỗ khai, dùng chung
+     với đường quét giấy tờ vào hồ sơ nhân sự — CTL-0025 Đợt 2), nên chỗ gỡ là
+     lời gọi ở đây, không còn là cái regex chép tay. */
   let ma = docNguon('src/nhansu.js')
-    .replace('const soDung = /^\\d{12}$/.test(soTho);', 'const soDung = !!soTho;   /* CỐ Ý BỎ CHỐT */')
+    .replace('const { so: soTho, dung: soDung } = soCCCD(data.so_cccd);',
+             'const soTho = String(data.so_cccd || "").replace(/\\D+/g, "");\n' +
+             '    const soDung = !!soTho;   /* CỐ Ý BỎ CHỐT */')
     .replace(/from '\.\/(tai-lieu|quyen|so-ai)\.js'/g,
              (m, t) => `from '${pathToFileURL(path.join(GOC, 'src', t + '.js')).href}'`);
   if (!ma.includes('CỐ Ý BỎ CHỐT')) {
@@ -1127,6 +1132,273 @@ muc('⑧f MÔ HÌNH ĐỌC ẢNH — một chỗ khai, hai đường dùng');
     `→ ${kep.messages[0].content[1].image_url.url}`);
   dat(/khuonDocAnh\(anh, prompt\)/.test(nhansu),
     'Đường đọc CCCD đi CÙNG khuôn với kho tài liệu (đường đã chết 11 ngày)');
+}
+
+/* ==========================================================================
+   ⑨ CỬA VÀO HỒ SƠ NHÂN SỰ  ·  CTL-0025 Đợt 2
+   ---------------------------------------------------------------------------
+   Đo trên SQLite THẬT (không phải D1 giả): câu "một kho, hai cửa nhìn" chỉ có
+   nghĩa khi CHẠY ĐÚNG câu SQL trên đúng dữ liệu — khớp chuỗi trong mã nguồn
+   thì sửa chuỗi là qua.
+   ========================================================================== */
+muc('⑨ CỬA VÀO HỒ SƠ NHÂN SỰ — mở cửa `nhan_su`, giữ nguyên ranh giới CCCD');
+
+const jpegDo = Buffer.from(
+  'ffd8ffe000104a46494600010100000100010000ffdb004300' + 'aa'.repeat(600) +
+  'ffc0001108012c00c803012200021101031101ffda0008010100003faaffd9', 'hex');
+const pdfDo = Buffer.concat([Buffer.from('%PDF-1.4\n'), jpegDo, Buffer.from('\n%%EOF\n')]);
+
+/** Dựng một kho có sẵn hai người thật + tuỳ chọn vài tài liệu. */
+function khoCoNguoi(...ds) {
+  const x = d1SQLite();
+  x.kho.exec(`INSERT INTO nhan_su (id, ho_ten) VALUES
+                ('ns_huyen','Nguyễn Thị Huyền'), ('ns_duy','Phạm Khương Duy')`);
+  if (ds.length) nhetTaiLieu(x.kho, ...ds);
+  return x;
+}
+
+function thanQuet(them = {}) {
+  return {
+    ma_gui: 'mg-ns-' + Math.random().toString(36).slice(2, 10),
+    cua_vao: 'nhan_su', gan_id: 'ns_huyen',
+    tieu_de: 'Quyết định bổ nhiệm — Nguyễn Thị Huyền',
+    loai: 'Quyết định', so_hieu: '12/2026/QĐ-AGC', so_trang: 2,
+    tep: pdfDo.toString('base64'),
+    anh_boc_chu: [jpegDo.toString('base64'), jpegDo.toString('base64')],
+    dong_y_boi: 'Nguyễn Thị Huyền', dong_y_muc_dich: 'Quản lý hồ sơ lao động',
+    ...them
+  };
+}
+
+muc('⑨a CỬA ĐÃ MỞ — và mở đúng người, đúng vai trò');
+{
+  const { kho, env, so, datLai } = khoCoNguoi();
+  datLai();
+  const res = await tailieu.luuTaiLieu(env, phienCua('hcns', 'ns_huong'), thanQuet());
+  const than = await doc(res);
+  dat(res.status === 200, 'HCNS quét giấy vào hồ sơ một người', `→ HTTP ${res.status} ${than.loi || ''}`);
+  dat(than.gan_id === 'ns_huyen' && than.gan_ten === 'Nguyễn Thị Huyền',
+    'Câu trả lời nói rõ giấy này thuộc hồ sơ AI', `→ ${than.gan_ten}`);
+  dat(so.ghi === 1, 'MỘT lượt quét vào hồ sơ = ĐÚNG 1 lượt ghi D1',
+    `→ ${so.ghi} lượt ghi, ${so.doc} lượt đọc`);
+  const dong = kho.prepare(`SELECT cua_vao, gan_id, nhom, nhay_cam, dong_y_luc FROM tai_lieu`).get();
+  dat(dong.cua_vao === 'nhan_su' && dong.gan_id === 'ns_huyen' && dong.nhom === 'nhan_su' &&
+      dong.nhay_cam === 1 && !!dong.dong_y_luc,
+    'Dòng lưu ra: cửa `nhan_su`, khoá vào nhóm `nhan_su`, có dấu đồng ý',
+    `→ ${JSON.stringify(dong)}`);
+
+  /* KHÔNG còn 409. Đây chính là dòng Đợt 1 khoá lại. */
+  dat(!/thuộc Đợt 2 \(CTL-0025\), chưa mở/.test(docNguon('src/tai-lieu.js')),
+    'Chốt 409 "Đợt 2 chưa mở" đã được gỡ khỏi mã nguồn');
+}
+
+muc('⑨b RANH GIỚI CỨNG — quản lý kho KHÔNG chạm được giấy tờ nhân sự');
+{
+  /* Anh Duy quản 12 người ở kho. Quản người KHÔNG phải là được xem giấy tờ tuỳ
+     thân của họ — CTL-0025 Mục 4 gọi đích danh ca này. Cắt ở MÁY CHỦ. */
+  const { env } = khoCoNguoi();
+  const r1 = await tailieu.luuTaiLieu(env, phienCua('quan_ly_kho', 'ns_duy'), thanQuet());
+  dat(r1.status === 403, 'Quản lý kho QUÉT vào hồ sơ nhân sự', `→ HTTP ${r1.status}`);
+
+  const { env: e2 } = khoCoNguoi({ ...banGhiNhayCam, cua_vao: 'nhan_su', gan_id: 'ns_huyen' });
+  const r2 = await tailieu.danhSachTaiLieu(e2, phienCua('quan_ly_kho', 'ns_duy'),
+    new URLSearchParams({ gan_id: 'ns_huyen' }));
+  const t2 = await doc(r2);
+  dat(r2.status === 403, 'Quản lý kho XIN bộ giấy tờ của một nhân viên', `→ HTTP ${r2.status}`);
+  dat(/không có quyền/i.test(t2.loi || ''),
+    'Câu trả lời nói THẲNG là không có quyền, không trả danh sách rỗng',
+    `→ "${String(t2.loi || '').slice(0, 60)}…"`);
+
+  /* CA CẮT QUÁ TAY — HCNS PHẢI xem được. Một chốt chặn tất cả cũng hỏng y như
+     một chốt không chặn ai. */
+  const { env: e3 } = khoCoNguoi({ ...banGhiNhayCam, cua_vao: 'nhan_su', gan_id: 'ns_huyen' });
+  const r3 = await doc(await tailieu.danhSachTaiLieu(e3, phienCua('hcns', 'ns_huong'),
+    new URLSearchParams({ gan_id: 'ns_huyen' })));
+  dat((r3.ds || []).length === 1 && r3.duoc_quet_nhan_su === true,
+    'HCNS xem được bộ giấy tờ VÀ quét thêm được (không cắt quá tay)',
+    `→ ${(r3.ds || []).length} giấy, quét được=${r3.duoc_quet_nhan_su}`);
+  dat((r3.loai_goi_y || []).length >= 9,
+    'Máy chủ trả bộ loại giấy tờ nhân sự (quyết định · uỷ quyền · …)',
+    `→ ${(r3.loai_goi_y || []).map(l => l.ten).join(' · ')}`);
+
+  const { env: e4 } = khoCoNguoi({ ...banGhiNhayCam, cua_vao: 'nhan_su', gan_id: 'ns_huyen' });
+  const r4 = await doc(await tailieu.danhSachTaiLieu(e4, phienCua('admin', 'ns_ngoc'),
+    new URLSearchParams({ gan_id: 'ns_huyen' })));
+  dat((r4.ds || []).length === 1, 'Ban giám đốc xem được bộ giấy tờ', `→ ${(r4.ds || []).length} giấy`);
+}
+
+muc('⑨c CA ĐỐI CHỨNG (BH-16) — bỏ chốt thì phép kiểm PHẢI bắt được');
+{
+  /* Đối chứng ĐÚNG CHỖ (BH-26): chỗ chặn cửa hồ sơ là đúng một lệnh `if` trong
+     `danhSachTaiLieu`. Bỏ nó → quản lý kho phải LỌT. Bản bỏ chặn mà vẫn 403 thì
+     phép đo đang bắt nhầm thứ khác, và mọi dòng ĐẠT ở ⑨b đều vô nghĩa. */
+  const hong = await napBanVa('bỏ chốt cửa hồ sơ',
+    [`  if (ganId && !duocXemNhomTaiLieu(phien.vai_tro, NHOM_CUA_NHAN_SU)) {`,
+     `  if (false) {`]);
+  if (hong) {
+    const { env } = khoCoNguoi({ ...banGhiNhayCam, cua_vao: 'nhan_su', gan_id: 'ns_huyen' });
+    const r = await hong.danhSachTaiLieu(env, phienCua('quan_ly_kho', 'ns_duy'),
+      new URLSearchParams({ gan_id: 'ns_huyen' }));
+    const t = await doc(r);
+    dat(r.status === 200, 'Bản BỎ CHỐT: quản lý kho qua được cửa 403',
+      `→ HTTP ${r.status} (phải 200 — nếu 403 thì PHÉP ĐO hỏng)`);
+    /* Nhưng lọc theo NHÓM vẫn phải giữ: đó là lớp đỡ thứ hai, phải sống độc
+       lập với lớp thứ nhất. Bỏ một lớp mà dữ liệu vẫn không rò = đúng. */
+    dat(!(t.ds || []).some(x => x.nhom === 'nhan_su'),
+      'Lớp đỡ THỨ HAI (lọc theo nhóm) vẫn chặn được dòng nhân sự',
+      `→ ${(t.ds || []).length} dòng lọt ra`);
+  }
+
+  /* Đối chứng thứ hai: bỏ khoá nhóm ở cửa `nhan_su` → kế toán trưởng gắn được
+     một tờ hoá đơn (nhóm `ke_toan`, KHÔNG nhạy cảm) vào hồ sơ một người, tức là
+     lách được cả dấu đồng ý lẫn nhật ký truy cập. */
+  const hong2 = await napBanVa('bỏ khoá nhóm ở cửa hồ sơ',
+    [`  const nhom = cuaVao === 'nhan_su' ? NHOM_CUA_NHAN_SU : chuoi(body.nhom, 40);`,
+     `  const nhom = chuoi(body.nhom, 40);`]);
+  if (hong2) {
+    const { kho, env } = khoCoNguoi();
+    const r = await hong2.luuTaiLieu(env, phienCua('ke_toan_truong', 'ns_hang'),
+      thanQuet({ nhom: 'ke_toan', dong_y_boi: null, dong_y_muc_dich: null }));
+    const dong = kho.prepare('SELECT nhom, nhay_cam FROM tai_lieu').get();
+    dat(r.status === 200 && dong && dong.nhay_cam === 0,
+      'Bản BỎ KHOÁ NHÓM: gắn được giấy KHÔNG nhạy cảm vào hồ sơ người',
+      `→ HTTP ${r.status}, nhom=${dong && dong.nhom} nhay_cam=${dong && dong.nhay_cam}`);
+    const { kho: k2, env: e2 } = khoCoNguoi();
+    await tailieu.luuTaiLieu(e2, phienCua('ke_toan_truong', 'ns_hang'),
+      thanQuet({ nhom: 'ke_toan', dong_y_boi: null, dong_y_muc_dich: null }));
+    dat(k2.prepare('SELECT COUNT(*) AS n FROM tai_lieu').get().n === 0,
+      'Bản THẬT: kế toán trưởng KHÔNG gắn được gì vào hồ sơ người');
+  }
+}
+
+muc('⑨d "THÀNH 1 BỘ" — nhưng vẫn MỘT KHO, không phải hai kho');
+{
+  /* Quét ở cửa HỒ SƠ → phải hiện ở CẢ hai cửa. Ràng buộc CTL-0026 Mục 5, và
+     cũng là chỗ dễ hỏng nhất: Đợt 1 khoá cứng `cua_vao = 'kho_chung'` trong câu
+     danh sách; giữ nguyên dòng đó là thành hai kho mà không ai thấy. */
+  const { kho, env } = khoCoNguoi();
+  await tailieu.luuTaiLieu(env, phienCua('hcns', 'ns_huong'), thanQuet());
+  const id = kho.prepare('SELECT id FROM tai_lieu').get().id;
+
+  const cuaHoSo = await doc(await tailieu.danhSachTaiLieu(env, phienCua('hcns', 'ns_huong'),
+    new URLSearchParams({ gan_id: 'ns_huyen' })));
+  const cuaKho = await doc(await tailieu.danhSachTaiLieu(env, phienCua('hcns', 'ns_huong'),
+    new URLSearchParams()));
+  dat((cuaHoSo.ds || []).some(x => x.id === id), 'Giấy quét ở cửa hồ sơ → HIỆN ở cửa hồ sơ');
+  dat((cuaKho.ds || []).some(x => x.id === id),
+    'Giấy quét ở cửa hồ sơ → CŨNG hiện ở kho chung (MỘT kho)',
+    `→ kho chung ${cuaKho.ds.length} giấy`);
+  dat((cuaKho.ds.find(x => x.id === id) || {}).gan_ten === 'Nguyễn Thị Huyền',
+    'Kho chung nói rõ tờ giấy này thuộc hồ sơ AI',
+    `→ ${(cuaKho.ds.find(x => x.id === id) || {}).gan_ten}`);
+
+  /* Chiều ngược lại: giấy quét ở KHO CHUNG (không gắn ai) KHÔNG được lọt vào bộ
+     giấy của một người — "thành 1 bộ" là bộ của ĐÚNG người đó. */
+  const { kho: k2, env: e2 } = khoCoNguoi();
+  await tailieu.luuTaiLieu(e2, phienCua('hcns', 'ns_huong'), {
+    ma_gui: 'mg-chung-1', cua_vao: 'kho_chung', nhom: 'nhan_su', gan_id: 'ns_huyen',
+    tieu_de: 'Mẫu hợp đồng lao động trắng', so_trang: 1,
+    tep: pdfDo.toString('base64'),
+    dong_y_boi: 'Ban giám đốc', dong_y_muc_dich: 'Mẫu biểu nội bộ'
+  });
+  const boCuaNguoi = await doc(await tailieu.danhSachTaiLieu(e2, phienCua('hcns', 'ns_huong'),
+    new URLSearchParams({ gan_id: 'ns_huyen' })));
+  const khoChung2 = await doc(await tailieu.danhSachTaiLieu(e2, phienCua('hcns', 'ns_huong'),
+    new URLSearchParams()));
+  dat((boCuaNguoi.ds || []).length === 0,
+    'Giấy quét ở kho chung KHÔNG lọt vào bộ giấy của một người',
+    `→ ${(boCuaNguoi.ds || []).length} giấy`);
+  dat((khoChung2.ds || []).length === 1, 'Giấy đó vẫn nằm trong kho chung', `→ ${khoChung2.ds.length}`);
+  dat(k2.prepare(`SELECT COUNT(*) AS n FROM tai_lieu WHERE gan_id IS NOT NULL`).get().n === 0,
+    'Cửa kho chung gửi kèm `gan_id` cũng bị VỨT (không có dòng mồ côi)');
+
+  const boDuy = await doc(await tailieu.danhSachTaiLieu(env, phienCua('hcns', 'ns_huong'),
+    new URLSearchParams({ gan_id: 'ns_duy' })));
+  dat((boDuy.ds || []).length === 0, 'Bộ giấy người này KHÔNG lẫn sang người kia',
+    `→ ns_duy có ${(boDuy.ds || []).length} giấy`);
+}
+
+muc('⑨e GẮN VÀO NGƯỜI KHÔNG CÓ THẬT — không được đẻ tài liệu mồ côi');
+{
+  const { kho, env } = khoCoNguoi();
+  const r1 = await tailieu.luuTaiLieu(env, phienCua('hcns', 'ns_huong'),
+    thanQuet({ gan_id: 'ns_khong_co_that' }));
+  dat(r1.status === 404, 'Gắn vào mã nhân sự không có thật → 404', `→ HTTP ${r1.status}`);
+  const r2 = await tailieu.luuTaiLieu(env, phienCua('hcns', 'ns_huong'), thanQuet({ gan_id: null }));
+  dat(r2.status === 400, 'Cửa hồ sơ mà thiếu mã nhân sự → chặn', `→ HTTP ${r2.status}`);
+  const r3 = await tailieu.luuTaiLieu(env, phienCua('hcns', 'ns_huong'),
+    thanQuet({ cua_vao: 'cua_bia_ra' }));
+  dat(r3.status === 400, 'Cửa vào bịa ra → chặn, đừng đoán', `→ HTTP ${r3.status}`);
+  dat(kho.prepare('SELECT COUNT(*) AS n FROM tai_lieu').get().n === 0,
+    'Không một dòng mồ côi nào lọt vào bảng');
+}
+
+muc('⑨f SỐ CCCD PHẢI ĐỦ 12 CHỮ SỐ — một luật, hai đường dùng');
+{
+  const soai = await import(pathToFileURL(path.join(GOC, 'src/so-ai.js')).href);
+  const CA = [['001301234567', true], ['03691004271', false], ['0013 0123 4567', true],
+              ['', false], ['abc', false], ['0013012345678', false]];
+  for (const [v, mong] of CA) {
+    dat(soai.soCCCD(v).dung === mong, `soCCCD("${v}")`, `→ ${soai.soCCCD(v).dung ? 'đủ 12' : 'KHÔNG đủ 12'}`);
+  }
+  dat(/soCCCD\(data\.so_cccd\)/.test(readFileSync(path.join(GOC, 'src/nhansu.js'), 'utf8')),
+    'Đường đọc ảnh CCCD dùng CHUNG luật (không chép tay `/^\\d{12}$/`)');
+
+  const { kho, env } = khoCoNguoi();
+  const r = await tailieu.luuTaiLieu(env, phienCua('hcns', 'ns_huong'),
+    thanQuet({ loai: 'CCCD', so_hieu: '03691004271' }));
+  const t = await doc(r);
+  dat(r.status === 400 && /12 chữ số/.test(t.loi || ''),
+    'Quét CCCD với số 11 chữ số → chặn ở MÁY CHỦ',
+    `→ HTTP ${r.status} "${String(t.loi || '').slice(0, 60)}"`);
+  const r2 = await tailieu.luuTaiLieu(env, phienCua('hcns', 'ns_huong'),
+    thanQuet({ loai: 'CCCD', so_hieu: '001301234567' }));
+  dat(r2.status === 200, 'Quét CCCD với số đủ 12 chữ số → lưu được', `→ HTTP ${r2.status}`);
+  /* CA CẮT QUÁ TAY: loại giấy KHÁC thì số hiệu tự do — "12/2026/QĐ-AGC" không
+     phải số CCCD, chặn nó là chặn oan cả bộ quyết định. */
+  const r3 = await tailieu.luuTaiLieu(env, phienCua('hcns', 'ns_huong'),
+    thanQuet({ loai: 'Quyết định', so_hieu: '12/2026/QĐ-AGC' }));
+  dat(r3.status === 200, 'Loại giấy khác: số hiệu tự do, KHÔNG chặn oan', `→ HTTP ${r3.status}`);
+  dat(kho.prepare('SELECT COUNT(*) AS n FROM tai_lieu').get().n === 2,
+    'Đúng 2 tờ lưu được, tờ CCCD sai số KHÔNG lưu');
+  for (const [l, mong] of [['CCCD', true], ['Căn cước công dân', true], ['CCCD/CMND', true],
+                           ['Quyết định', false], ['Hợp đồng lao động', false], ['', false]]) {
+    dat(tailieu.laLoaiCCCD(l) === mong, `laLoaiCCCD("${l}")`, `→ ${tailieu.laLoaiCCCD(l)}`);
+  }
+}
+
+muc('⑨g NÚT ≥44px Ở CỬA HỒ SƠ + LUẬT BA MÀU + CÂU LUẬT');
+{
+  const css = readFileSync(path.join(GOC, 'public/assets/css/style.css'), 'utf8');
+  const html = readFileSync(path.join(GOC, 'public/app.html'), 'utf8');
+  const js = readFileSync(path.join(GOC, 'public/assets/js/app.js'), 'utf8');
+
+  dat(/id="nsGt-quet"/.test(html) && /class="btn-primary tl-nut-quet" id="nsGt-quet"/.test(html),
+    'Nút "Quét thêm" dùng lại `.tl-nut-quet` (đã 44px, đã đo)');
+  dat(/\.tl-nut-quet\s*\{[^}]*min-height:\s*44px/.test(css), '.tl-nut-quet: min-height 44px');
+  dat(/\.tl-nut-mo\s*\{[^}]*min-height:\s*44px/.test(css), '.tl-nut-mo: min-height 44px');
+  dat(/\.tlq-nut-phu\s*\{[^}]*min-height:\s*44px/.test(css), '.tlq-nut-phu (chip loại giấy): min-height 44px');
+
+  /* Chip đang chọn dùng cam NHẠT (`--cam-wash`), không phải cam đậm: một điểm
+     nhấn cam đậm cho một khung nhìn (docs/BANG-MAU.md luật ③). */
+  const chip = (css.match(/\.tlq-nut-phu\.chon\s*\{[^}]*\}/) || [''])[0];
+  dat(/--cam-wash/.test(chip) && !/background:\s*var\(--cam\)\s*;/.test(chip),
+    'Chip đang chọn: cam NHẠT, không tranh điểm nhấn với nút Lưu');
+  dat(chip.length > 0 && !/#[0-9a-fA-F]{3,8}/.test(chip),
+    'Chip không có mã màu viết cứng — chỉ dùng biến bảng màu');
+
+  /* Câu pháp lý và câu trả giấy PHẢI có trên màn hồ sơ. Ràng buộc luật, không
+     phải chữ trang trí: không có nó là có ngày ai đó dọn kho giấy. */
+  const khoi = (html.match(/Giấy tờ của người này[\s\S]{0,2000}/) || [''])[0];
+  dat(/KHÔNG thay bản giấy/.test(khoi), 'Màn hồ sơ có câu "KHÔNG thay bản giấy"');
+  dat(/trả giấy lại cho nhân viên ngay/i.test(khoi), 'Màn hồ sơ có câu "trả giấy ngay"');
+  dat(/ghi nhật ký/i.test(khoi), 'Màn hồ sơ nói rõ mỗi lượt mở đều ghi nhật ký');
+
+  /* Giao diện KHÔNG được giữ bản chép tay của danh sách loại giấy — nó phải đi
+     từ máy chủ xuống, đúng bài học "hai bản chép tay của một hằng số". */
+  dat(/NS_GT_LOAI_GOI_Y = kq\.loai_goi_y/.test(js),
+    'app.js lấy danh sách loại giấy từ MÁY CHỦ, không chép tay');
+  dat(/veGiayToHoSo\(n\)/.test(js), 'Mở hồ sơ là nạp bộ giấy tờ (không phải bấm thêm một nút)');
 }
 
 console.log('\n───────────────────────────────────────────────────────────');

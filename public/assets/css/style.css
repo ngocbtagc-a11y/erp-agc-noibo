@@ -3487,6 +3487,15 @@ tr.kd-chiadoi td {
   background: var(--card); color: var(--ink); font: inherit;
 }
 .tlq-chip { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+/* Chip loại giấy ĐANG CHỌN — nhạt cam, KHÔNG phải cam đậm: trong màn quét, cam
+   đậm đã thuộc về đúng một nút "Lưu" (luật ③ docs/BANG-MAU.md — một điểm nhấn
+   cho một khung nhìn). Thêm viền trong dày lên để người mù màu vẫn thấy cái
+   nào đang chọn: màu không bao giờ là tín hiệu duy nhất. */
+.tlq-nut-phu.chon {
+  background: var(--cam-wash); border-color: var(--cam);
+  color: var(--cam-text); font-weight: 700;
+  box-shadow: inset 0 0 0 1px var(--cam);
+}
 .tlq-dongy {
   margin-top: 16px; padding: 12px; border: 1px solid var(--cam);
   border-radius: var(--r-md); background: var(--cam-wash);
