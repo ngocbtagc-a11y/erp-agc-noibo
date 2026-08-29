@@ -2283,7 +2283,13 @@
         <!-- Ẩn SẴN: chỉ hiện lại khi máy chủ xác nhận người này lưu được ít
              nhất một nhóm (`nhom_luu_duoc`). Bày nút rồi mới ẩn là một cú nháy
              hứa suông. Vá REV-0040 #8. -->
-        <button type="button" class="btn-primary tl-nut-quet" id="tl-nut-quet" hidden>📷 Quét tài liệu mới</button>
+        <!-- Nhãn KHÔNG nói "quét" trần nữa: từ CTL-0026 vòng 6 nút này mở HAI
+             đường — chụp bằng máy ảnh, hoặc chọn file có sẵn trên máy. Máy bàn
+             thường không có camera, gọi nó là nút "quét" thì Sếp ngồi máy tính
+             không nhận ra đây chính là chỗ tải file lên (đúng câu Sếp hỏi
+             29/08: "upload file từ máy tính lên thì không có chỗ thêm tài liệu
+             à"). Biểu tượng đôi 📷📁 nói thẳng là có hai đường. -->
+        <button type="button" class="btn-primary tl-nut-quet" id="tl-nut-quet" hidden>📷📁 Thêm tài liệu — chụp hoặc tải file</button>
         <!-- `maxlength` BẮT BUỘC — REV-0047/L1: ô một dòng không khai trần thì
              `maxLength === -1`, nhận chữ VÔ HẠN rồi kéo ngang ở 375px. 80 là
              trần chung của mọi ô tìm trong ERP (main `905791f` vá 80 ô cùng
@@ -2867,8 +2873,10 @@
       </p>
     </div>
     <div class="tl-thanh">
+      <!-- Cùng lý do với `#tl-nut-quet` ở tab Kho tài liệu: hai đường vào,
+           nhãn phải nói ra cả hai. -->
       <button type="button" class="btn-primary tl-nut-quet" id="nsGt-quet" hidden>
-        📷 Quét thêm giấy tờ
+        📷📁 Thêm giấy tờ — chụp hoặc tải file
       </button>
       <span class="sm" id="nsGt-dem"></span>
     </div>

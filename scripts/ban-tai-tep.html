@@ -1,0 +1,469 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bàn đo tải file lên kho — CTL-0026 vòng 6</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+<style>
+  body { font: 14px/1.6 system-ui, sans-serif; margin: 0; padding: 16px; background: #f5ecdf; color: #2c2117; }
+  pre { background: #fffcf4; border: 1px solid #e2d0ba; border-radius: 8px; padding: 12px; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<h2>Bàn đo tải file có sẵn lên kho — CTL-0026 vòng 6</h2>
+<pre id="kq">đang đo…</pre>
+
+<script>
+/* Bắt hộp thoại TRƯỚC khi nạp module — Chrome headless treo ở `alert()` nếu
+   không ai bắt, và cái treo đó lại trông y hệt "bàn đo chạy mãi không xong".
+   Ghi lại nguyên văn để đo được câu cảnh báo có NÓI RA con số hay không. */
+window.__ALERT = [];
+window.alert = (m) => { window.__ALERT.push(String(m)); };
+window.confirm = () => true;
+</script>
+
+<script type="module">
+import { moQuetTaiLieu, duongMacDinh, TRAN_BYTE_PDF_GOC } from '/assets/js/quet-tai-lieu.js';
+import { demTrangPDF, laByteCuaPDF, byteThanhBase64 } from '/assets/js/gop-trang-pdf.js';
+
+const dong = [];
+const ghi = (s) => { dong.push(s); document.getElementById('kq').textContent = dong.join('\n'); };
+let soHong = 0;
+const dat = (ok, nhan, them = '') => {
+  if (!ok) soHong++;
+  ghi(`  ${ok ? 'ĐẠT ' : '✗ HỎNG'}  ${nhan}${them ? '   ' + them : ''}`);
+  return ok;
+};
+const muc = (s) => ghi(`\n─── ${s} ───`);
+const cho = (ms) => new Promise(r => setTimeout(r, ms));
+const kb = (b) => (b / 1024).toFixed(0) + ' KB';
+
+const doi = async (chon, hen = 5000) => {
+  const t = Date.now();
+  while (Date.now() - t < hen) {
+    const e = document.querySelector(chon);
+    if (e) return e;
+    await cho(30);
+  }
+  throw new Error('Không thấy ' + chon);
+};
+
+try {
+
+/* ==========================================================================
+   Dựng vật liệu thử — ảnh JPEG thật và file PDF thật
+   ========================================================================== */
+function veTrangGiay(so) {
+  const c = document.createElement('canvas');
+  c.width = 1240; c.height = 1754;                    // A4 @150 DPI
+  const x = c.getContext('2d');
+  x.fillStyle = '#f2efe6'; x.fillRect(0, 0, c.width, c.height);
+  x.fillStyle = '#1a1a1a';
+  x.font = 'bold 46px "Times New Roman", serif';
+  x.textAlign = 'center';
+  x.fillText('CÔNG TY TNHH ALPHA GREEN COMMERCE', c.width / 2, 160);
+  x.font = 'bold 64px "Times New Roman", serif';
+  x.fillText('BẢN SCAN — TRANG ' + so, c.width / 2, 300);
+  x.font = '32px "Times New Roman", serif';
+  x.textAlign = 'left';
+  x.fillText('Số: 124/2026/GCN-ATTP    Ngày cấp: 15/03/2026', 120, 460);
+  /* Nhiễu nhẹ để JPEG không nén xuống mức phi thực tế. */
+  const a = x.getImageData(0, 0, c.width, c.height), d = a.data;
+  for (let i = 0; i < d.length; i += 4) { const n = (Math.random() - .5) * 18; d[i] += n; d[i+1] += n; d[i+2] += n; }
+  x.putImageData(a, 0, 0);
+  return c;
+}
+const canvasThanhTep = (c, ten) => new Promise(ok =>
+  c.toBlob(b => ok(new File([b], ten, { type: 'image/jpeg' })), 'image/jpeg', 0.9));
+
+/** File PDF thật — đủ chuẩn để `laByteCuaPDF` và `demTrangPDF` đọc được, và
+ *  để đo được "gửi lên có ĐÚNG BẰNG file gốc không". `soTrang` marker lặp lại
+ *  đúng chừng ấy lần vì `demTrangPDF` đếm cụm `/Type /Page`. */
+function dungPDF(soTrang, coByte) {
+  const dau = '%PDF-1.4\n' + '<< /Type /Page >>\n'.repeat(soTrang) +
+              '<< /Type /Pages /Count ' + soTrang + ' >>\n';
+  const duoi = '\n%%EOF\n';
+  const dem = Math.max(0, coByte - dau.length - duoi.length);
+  const u8 = new Uint8Array(dau.length + dem + duoi.length);
+  for (let i = 0; i < dau.length; i++) u8[i] = dau.charCodeAt(i);
+  u8.fill(0x20, dau.length, dau.length + dem);
+  for (let i = 0; i < duoi.length; i++) u8[dau.length + dem + i] = duoi.charCodeAt(i);
+  return u8;
+}
+const pdfThanhTep = (u8, ten) => new File([u8], ten, { type: 'application/pdf' });
+
+/* ==========================================================================
+   MÁY ẢNH / HỘP CHỌN FILE GIẢ
+   ---------------------------------------------------------------------------
+   Chặn `.click()` của ô `<input type=file>` và ghi lại ĐÚNG ô nào bị mở —
+   đó chính là phép đo "máy này mở ra thấy gì". Ô máy ảnh có `capture`; ô chọn
+   file có `multiple` và KHÔNG có `capture`.
+   ⚠️ BH-17: `DataTransfer` bị rút cạn sau lần gán đầu — dựng MỚI mỗi lần.
+   ========================================================================== */
+let oDaMo = [];                  // 'may-anh' | 'chon-tep', theo thứ tự mở
+let hangDoi = [];                // các File sẽ nhét vào lần mở tới
+let soChamHopThoai = 0;
+const clickGoc = HTMLInputElement.prototype.click;
+HTMLInputElement.prototype.click = function () {
+  if (this.type !== 'file') return clickGoc.call(this);
+  const laMayAnh = this.hasAttribute('capture');
+  oDaMo.push(laMayAnh ? 'may-anh' : 'chon-tep');
+  const nap = hangDoi;
+  hangDoi = [];
+  if (!nap.length) return;                 // mở rồi bấm Huỷ
+  /* Một hộp thoại = 1 chạm "Mở" + 1 chạm cho MỖI file được chọn. Nói rõ cách
+     đếm ra đây, đừng để con số tổng che mất cách tính. */
+  soChamHopThoai += nap.length + 1;
+  const dt = new DataTransfer();
+  for (const f of nap) dt.items.add(f);
+  this.files = dt.files;
+  this.dispatchEvent(new Event('change', { bubbles: true }));
+};
+
+/* Đếm chạm THẬT — bắt `click` ở tầng document, giai đoạn capture. `textarea`
+   PHẢI có trong danh sách: 5 ô chữ của màn quét là `<textarea>` từ REV-0047,
+   thiếu nó là bộ đếm khoe ít chạm hơn thực tế. */
+let soCham = 0, nhatKyCham = [];
+document.addEventListener('click', (e) => {
+  const t = e.target.closest('button, a, label, input, textarea, select, [data-viec]');
+  if (!t) return;
+  soCham++;
+  nhatKyCham.push(`${soCham}. ${(t.textContent || t.id || t.tagName).trim().slice(0, 40)}`);
+}, true);
+
+const NHOM = [
+  { ma: 'attp', ten: 'An toàn thực phẩm', vi_du: 'Giấy ATTP, tự công bố', han_luu: 'theo hạn giấy + 5 năm', nhay_cam: 0 },
+  { ma: 'ke_toan', ten: 'Kế toán – thuế', vi_du: 'Hoá đơn, chứng từ', han_luu: '5 / 10 năm', nhay_cam: 0 }
+];
+let hopDangMo = null;
+function moKho(duong) {
+  oDaMo = []; window.__ALERT.length = 0;
+  try { localStorage.removeItem('tl_nhap_v1_kho_chung_chung'); } catch {}
+  hopDangMo = moQuetTaiLieu({ cuaVao: 'kho_chung', nhom: NHOM, duongMacDinh: duong, khiXong: () => {} });
+}
+function dongKho() { try { hopDangMo?.dong(); } catch {} hopDangMo = null; }
+const layGui = async () => (await (await fetch('/so-gui')).json());
+
+const ROMG = Math.round(window.innerWidth);
+ghi(`Bề ngang khung nhìn: ${ROMG}px · pointer:coarse=${matchMedia('(pointer: coarse)').matches} · ` +
+    `maxTouchPoints=${navigator.maxTouchPoints}`);
+
+/* ==========================================================================
+   ① QUYẾT ĐỊNH ĐƯỜNG MẶC ĐỊNH — bốn tổ hợp máy, đo bằng chính hàm sản phẩm
+   ========================================================================== */
+muc('① MÁY NÀO MỞ RA THẤY GÌ — luật quyết định đường mặc định');
+{
+  ghi(`  Máy thật (khung ${ROMG}px): duongMacDinh() = "${duongMacDinh()}"`);
+  const mong = ROMG <= 640 ? 'may-anh' : 'chon-tep';
+  dat(duongMacDinh() === mong,
+    `  Khung ${ROMG}px → đường mặc định phải là "${mong}"`, `→ "${duongMacDinh()}"`);
+
+  /* Bốn tổ hợp máy, ép bằng cách thay hai nguồn tin `duongMacDinh()` đọc.
+     Ép ở đây chứ không đo bốn cái máy thật — nhưng ép vào ĐÚNG hai nguồn tin
+     hàm sản phẩm dùng, nên vẫn là gọi hàm thật, không phải chép luật ra đo. */
+  const mmGoc = window.matchMedia;
+  const tpGoc = Object.getOwnPropertyDescriptor(Navigator.prototype, 'maxTouchPoints');
+  const thu = (thoRap, cham) => {
+    window.matchMedia = (q) => /pointer:\s*coarse/.test(q) ? { matches: thoRap } : mmGoc.call(window, q);
+    Object.defineProperty(navigator, 'maxTouchPoints', { configurable: true, get: () => cham });
+    const r = duongMacDinh();
+    window.matchMedia = mmGoc;
+    delete navigator.maxTouchPoints;
+    if (tpGoc) Object.defineProperty(Navigator.prototype, 'maxTouchPoints', tpGoc);
+    return r;
+  };
+  const CA = [
+    ['Điện thoại  (coarse + cảm ứng)',        true,  5, 'may-anh'],
+    ['Máy bàn     (chuột, không cảm ứng)',    false, 0, 'chon-tep'],
+    ['Laptop cảm ứng (chuột là chính)',       false, 5, 'chon-tep'],
+    ['Máy lạ      (coarse, không cảm ứng)',   true,  0, 'chon-tep']
+  ];
+  for (const [ten, thoRap, cham, mongDoi] of CA) {
+    dat(thu(thoRap, cham) === mongDoi, `  ${ten} → ${mongDoi}`);
+  }
+  ghi('     → Máy bàn thường KHÔNG có camera, nên mặc định là hộp CHỌN FILE.');
+}
+
+/* ==========================================================================
+   ② MỞ RA THẤY GÌ THẬT — ô nào bật, nút nào mang màu cam
+   ========================================================================== */
+muc('② CHỌN NHÓM XONG THÌ Ô NÀO BẬT, NÚT NÀO LÀ NÚT CHÍNH');
+for (const [ten, duong, oMong] of [['MÁY TÍNH', 'chon-tep', 'chon-tep'], ['ĐIỆN THOẠI', 'may-anh', 'may-anh']]) {
+  moKho(duong);
+  (await doi('[data-viec="chon-nhom"]')).click();
+  await cho(120);
+  dat(oDaMo[0] === oMong, `  ${ten}: chọn nhóm xong → BẬT ô "${oMong}"`, `→ "${oDaMo[0]}"`);
+  const chinh = document.querySelector('.tlq-hai-duong .tlq-nut-chinh');
+  const nhi = document.querySelector('.tlq-hai-duong .tlq-nut-nhi');
+  const viecChinh = chinh?.dataset.viec;
+  dat(viecChinh === (duong === 'may-anh' ? 'chup-tiep' : 'chon-tep'),
+    `  ${ten}: nút CAM (điểm nhấn duy nhất) là "${chinh?.textContent.trim()}"`, `→ ${viecChinh}`);
+  dat(!!nhi && nhi.dataset.viec !== viecChinh,
+    `  ${ten}: đường còn lại vẫn có mặt ngay cạnh — "${nhi?.textContent.trim()}"`);
+  /* Luật ba màu ③: ĐÚNG MỘT nút cam đậm trên một khung nhìn. */
+  dat(document.querySelectorAll('.tlq-tam .tlq-nut-chinh').length === 1,
+    `  ${ten}: đúng MỘT nút cam đậm trên màn (luật ba màu ③)`,
+    `→ ${document.querySelectorAll('.tlq-tam .tlq-nut-chinh').length}`);
+  /* Hai nút NẰM CÙNG MỘT HÀNG — không được đẩy màn dài thêm. */
+  const a = chinh.getBoundingClientRect(), b = nhi.getBoundingClientRect();
+  dat(Math.abs(a.top - b.top) < 2, `  ${ten}: hai nút cùng MỘT HÀNG, màn không dài thêm`,
+    `→ lệch ${Math.abs(a.top - b.top).toFixed(0)}px`);
+  dat(a.height >= 44 && b.height >= 44, `  ${ten}: cả hai nút ≥44px (đo thật)`,
+    `→ ${a.height.toFixed(0)}px · ${b.height.toFixed(0)}px`);
+  dongKho();
+}
+
+/* ==========================================================================
+   ③ TẢI 1 FILE · 5 FILE — và THỨ TỰ THEO TÊN FILE
+   ========================================================================== */
+muc('③ TẢI 1 FILE và 5 FILE — thứ tự trang theo TÊN FILE');
+{
+  /* Tên cố ý lộn xộn và có số hai chữ số — đúng cảnh bản scan đánh số 1..11. */
+  const TEN = ['trang-10.jpg', 'trang-2.jpg', 'trang-1.jpg', 'trang-11.jpg', 'trang-3.jpg'];
+  const canvas = veTrangGiay(1);
+  const nam = [];
+  for (const t of TEN) nam.push(await canvasThanhTep(canvas, t));
+
+  /* --- 1 file --- */
+  moKho('chon-tep');
+  hangDoi = [nam[2]];                                   // trang-1.jpg
+  (await doi('[data-viec="chon-nhom"]')).click();
+  await doi('.tlq-the', 8000);
+  dat(document.querySelectorAll('.tlq-the').length === 1, '  Tải 1 file ảnh → 1 trang trong bộ');
+  dongKho();
+
+  /* --- 5 file một lượt --- */
+  moKho('chon-tep');
+  hangDoi = nam.slice();
+  (await doi('[data-viec="chon-nhom"]')).click();
+  const t0 = performance.now();
+  while (document.querySelectorAll('.tlq-the').length < 5 && performance.now() - t0 < 20000) await cho(80);
+  const the = [...document.querySelectorAll('.tlq-the')];
+  dat(the.length === 5, '  Tải 5 file ảnh MỘT LƯỢT → 5 trang', `→ ${the.length} trang, ${(performance.now() - t0).toFixed(0)} ms`);
+  const thuTu = the.map(x => x.querySelector('.tlq-ten-goc')?.textContent.trim());
+  ghi('     → Thứ tự trong bộ: ' + thuTu.join(' · '));
+  const MONG = ['trang-1.jpg', 'trang-2.jpg', 'trang-3.jpg', 'trang-10.jpg', 'trang-11.jpg'];
+  dat(JSON.stringify(thuTu) === JSON.stringify(MONG),
+    '  Xếp theo tên file CÓ HIỂU CHỮ SỐ: 1 · 2 · 3 · 10 · 11');
+  /* ĐỐI CHỨNG — `.sort()` trần trên đúng bộ tên này ra thứ tự SAI. Không có
+     ca này thì không chứng minh được `Intl.Collator` là thứ đang cứu. */
+  const sapTho = TEN.slice().sort();
+  dat(JSON.stringify(sapTho) !== JSON.stringify(MONG),
+    '  ĐỐI CHỨNG: `.sort()` trần cho thứ tự SAI', '→ ' + sapTho.join(' · '));
+
+  /* --- KÉO ĐỔI THỨ TỰ --- */
+  const keo = (tu, den) => {
+    const a = document.querySelectorAll('.tlq-the')[tu];
+    const b = document.querySelectorAll('.tlq-the')[den];
+    const dt = new DataTransfer();
+    a.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer: dt }));
+    b.dispatchEvent(new DragEvent('dragover', { bubbles: true, dataTransfer: dt }));
+    b.dispatchEvent(new DragEvent('drop', { bubbles: true, dataTransfer: dt }));
+  };
+  keo(4, 0);                                            // kéo trang cuối lên đầu
+  await cho(150);
+  const sauKeo = [...document.querySelectorAll('.tlq-the')].map(x => x.querySelector('.tlq-ten-goc')?.textContent.trim());
+  dat(sauKeo[0] === 'trang-11.jpg' && sauKeo[1] === 'trang-1.jpg',
+    '  KÉO thẻ cuối lên đầu → CHÈN vào đầu, không hoán đổi', '→ ' + sauKeo.join(' · '));
+
+  /* --- NÚT ↑ ↓ (đường chạy được cả trên điện thoại) --- */
+  document.querySelectorAll('.tlq-the')[0].querySelector('[data-viec="xuong"]').click();
+  await cho(150);
+  const sauNut = [...document.querySelectorAll('.tlq-the')].map(x => x.querySelector('.tlq-ten-goc')?.textContent.trim());
+  dat(sauNut[0] === 'trang-1.jpg' && sauNut[1] === 'trang-11.jpg',
+    '  Nút ↓ dời được một nấc (kéo thả không chạy bằng ngón tay)', '→ ' + sauNut.join(' · '));
+  const nutXep = document.querySelectorAll('.tlq-the')[1].querySelectorAll('.tlq-nut-phu');
+  const caoNut = [...nutXep].map(n => n.getBoundingClientRect().height);
+  dat(caoNut.every(h => h >= 44), `  Cả ${caoNut.length} nút trong thẻ trang ≥44px (đo thật)`,
+    '→ ' + caoNut.map(h => h.toFixed(0) + 'px').join(' · '));
+  dat(document.querySelectorAll('.tlq-the')[0].getBoundingClientRect().height <= 116,
+    '  Thẻ trang KHÔNG cao thêm dù có 4 nút (lưới 2×2)',
+    `→ ${document.querySelectorAll('.tlq-the')[0].getBoundingClientRect().height.toFixed(0)}px`);
+  dongKho();
+}
+
+/* ==========================================================================
+   ④ TẢI 1 FILE PDF — LƯU NGUYÊN BẢN, KHÔNG BỌC LẠI
+   ========================================================================== */
+muc('④ TẢI 1 FILE PDF — nguyên bản, và NÓI RA là chưa bóc được chữ');
+{
+  const u8 = dungPDF(3, 180 * 1024);
+  dat(laByteCuaPDF(u8) && demTrangPDF(u8) === 3,
+    '  Bàn đo dựng đúng một PDF 3 trang', `→ ${kb(u8.length)}, đếm ${demTrangPDF(u8)} trang`);
+
+  const truoc = (await layGui()).length;
+  moKho('chon-tep');
+  hangDoi = [pdfThanhTep(u8, 'hop-dong-ncc-son-la.pdf')];
+  (await doi('[data-viec="chon-nhom"]')).click();
+  await doi('.tlq-the-tep', 8000);
+  const chuThe = document.querySelector('.tlq-tam').textContent;
+  dat(/hop-dong-ncc-son-la\.pdf/.test(chuThe) && /3 trang/.test(chuThe),
+    '  Thẻ PDF hiện tên file và số trang đọc được từ chính file');
+  dat(/KHÔNG bọc lại/.test(chuThe), '  Màn hình nói rõ "lưu nguyên bản, KHÔNG bọc lại"');
+  dat(/chưa bóc được chữ|CHƯA bóc/i.test(chuThe),
+    '  ⚠️ NÓI RA "PDF lưu được nhưng chưa bóc chữ để tra cứu" NGAY TRƯỚC khi gửi');
+  dat(/không giữ trong bản nháp/i.test(chuThe),
+    '  Nói rõ file PDF không nằm trong bản nháp (chọn lại là được)');
+
+  (await doi('[data-viec="sang-thong-tin"]')).click();
+  const oTen = await doi('#tlqTieuDe');
+  /* Tên gợi ý bỏ đuôi `.pdf` VÀ đổi gạch nối/gạch dưới thành khoảng trắng —
+     tên file máy scan (`hop-dong-ncc-son-la.pdf`) đọc như tên máy, còn tiêu đề
+     trong kho là thứ Sếp đọc bằng mắt. Vẫn sửa được, đây chỉ là gợi ý. */
+  dat(oTen.value === 'hop dong ncc son la',
+    '  Tiêu đề gợi ý sẵn từ tên file, đã bỏ đuôi và gạch nối (vẫn sửa được)', `→ "${oTen.value}"`);
+  const chuForm = document.querySelector('.tlq-tam').textContent;
+  dat(/chưa bóc được chữ|CHƯA bóc/i.test(chuForm), '  Câu đó NHẮC LẠI ở màn nhập thông tin');
+  document.querySelector('.tlq-form button[type="submit"]').click();
+  await cho(1200);
+  const gui = await layGui();
+  const g = gui[gui.length - 1];
+  dat(gui.length === truoc + 1 && g.dinh_dang === 'pdf_goc' && g.nguon === 'tep_may',
+    '  Gửi lên với dinh_dang=pdf_goc, nguon=tep_may', `→ ${g?.dinh_dang} / ${g?.nguon}`);
+  dat(g.so_trang === 3, '  so_trang gửi lên = số trang ĐỌC ĐƯỢC từ file', `→ ${g?.so_trang}`);
+  dat(g.so_anh_boc_chu === 0, '  KHÔNG gửi ảnh bóc chữ (không có ảnh để gửi)');
+  /* CHỐT NẶNG NHẤT CỦA CẢ MỤC: byte gửi lên PHẢI trùng khít file gốc. Lệch
+     một byte là đã bọc lại, đã nén lại, hoặc đã sửa gì đó. */
+  dat(g.tep_b64 === byteThanhBase64(u8),
+    '  ⚠️ Byte gửi lên TRÙNG KHÍT file gốc — không bọc lại, không nén lại',
+    `→ ${kb(u8.length)} gốc · ${kb(g.tep_b64.length * 3 / 4)} gửi đi`);
+  dongKho();
+}
+
+/* ==========================================================================
+   ⑤ PDF 30 MB — BÁO TRƯỚC KHI GỬI, KHÔNG PHẢI GIỮA CHỪNG
+   ========================================================================== */
+muc('⑤ PDF 30 MB (vượt trần) — báo TRƯỚC khi gửi một byte nào');
+{
+  const truoc = (await layGui()).length;
+  /* Dựng 30 MB mà không dựng 30 MB trong bộ nhớ JS: `Blob` ghép 30 mẩu 1 MB. */
+  const meo = new Uint8Array(1 << 20);
+  const manh = [dungPDF(1, 4096)];
+  for (let i = 0; i < 30; i++) manh.push(meo);
+  const to = new File(manh, 'scan-300dpi-30MB.pdf', { type: 'application/pdf' });
+  ghi(`  File thử: ${(to.size / 1048576).toFixed(1)} MB · trần ${(TRAN_BYTE_PDF_GOC / 1048576).toFixed(0)} MB`);
+
+  moKho('chon-tep');
+  hangDoi = [to];
+  (await doi('[data-viec="chon-nhom"]')).click();
+  await cho(900);
+  const canh = window.__ALERT.join('\n');
+  dat(/3[01]\.\d\d MB/.test(canh) && /25 MB/.test(canh),
+    '  Báo NGAY lúc chọn, nêu CẢ HAI con số (cỡ file và trần)');
+  dat(/200 DPI/.test(canh) && /Tách file/i.test(canh) && /máy ảnh/i.test(canh),
+    '  Câu báo nói BA cách xử, không chỉ nói "quá to"');
+  dat(/128 MB|Cloudflare/.test(canh), '  Nói VÌ SAO trần là con số đó, không bắt tin suông');
+  dat(!document.querySelector('.tlq-the-tep'), '  File vượt trần KHÔNG vào bộ');
+  dat((await layGui()).length === truoc, '  ⚠️ KHÔNG gửi một byte nào lên máy chủ',
+    `→ ${(await layGui()).length - truoc} lượt gửi`);
+  ghi('     → Câu báo: ' + canh.replace(/\n/g, ' ').slice(0, 150) + '…');
+
+  /* ĐỐI CHỨNG — cùng đường, file 2 MB (dưới trần) phải VÀO BỘ bình thường.
+     Không có ca này thì "chặn 30 MB" có thể là chặn mọi PDF. */
+  window.__ALERT.length = 0;
+  hangDoi = [pdfThanhTep(dungPDF(2, 2 * 1024 * 1024), 'scan-2MB.pdf')];
+  document.querySelector('[data-viec="chon-tep"]').click();
+  await doi('.tlq-the-tep', 8000);
+  dat(!!document.querySelector('.tlq-the-tep') && window.__ALERT.length === 0,
+    '  ĐỐI CHỨNG: PDF 2 MB (dưới trần) vào bộ, không cảnh báo gì');
+  dongKho();
+}
+
+/* ==========================================================================
+   ⑥ FILE SAI LOẠI — nêu ĐÍCH DANH, không âm thầm bỏ
+   ========================================================================== */
+muc('⑥ FILE SAI LOẠI — nêu đích danh file nào');
+{
+  const truoc = (await layGui()).length;
+  moKho('chon-tep');
+  const docx = new File([new Uint8Array([0x50, 0x4B, 3, 4, 65, 65])],
+    'bang-luong-thang-8.docx',
+    { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+  hangDoi = [docx];
+  (await doi('[data-viec="chon-nhom"]')).click();
+  await cho(700);
+  const canh = window.__ALERT.join('\n');
+  dat(/bang-luong-thang-8\.docx/.test(canh), '  Câu báo GỌI ĐÍCH DANH tên file bị loại');
+  dat(/JPG|PNG|HEIC/.test(canh) && /PDF/.test(canh), '  Nói rõ kho nhận những loại nào');
+  dat(/xuất ra PDF/i.test(canh), '  Nói CÁCH XỬ cho file Word/Excel');
+  dat(document.querySelectorAll('.tlq-the').length === 0, '  Không thêm trang nào');
+  dat((await layGui()).length === truoc, '  Không gửi gì lên máy chủ');
+
+  /* ĐỐI CHỨNG — trộn ảnh và PDF trong một lượt: nói THẲNG giới hạn thay vì
+     im lặng lấy file đầu tiên. */
+  window.__ALERT.length = 0;
+  hangDoi = [await canvasThanhTep(veTrangGiay(1), 'a.jpg'),
+             pdfThanhTep(dungPDF(1, 8192), 'b.pdf')];
+  document.querySelector('[data-viec="chon-tep"]').click();
+  await cho(700);
+  dat(/hai lượt|Làm hai lượt/i.test(window.__ALERT.join('\n')) &&
+      document.querySelectorAll('.tlq-the').length === 0,
+    '  ĐỐI CHỨNG: trộn ảnh + PDF → nói thẳng giới hạn, không lấy bừa file đầu');
+
+  window.__ALERT.length = 0;
+  hangDoi = [pdfThanhTep(dungPDF(1, 8192), 'p1.pdf'), pdfThanhTep(dungPDF(1, 8192), 'p2.pdf')];
+  document.querySelector('[data-viec="chon-tep"]').click();
+  await cho(700);
+  dat(/Mỗi file PDF là MỘT tài liệu/i.test(window.__ALERT.join('\n')),
+    '  ĐỐI CHỨNG: chọn 2 PDF → nói rõ mỗi PDF là một tài liệu riêng');
+  dongKho();
+}
+
+/* ==========================================================================
+   ⑦ SỐ CHẠM — tải 5 file trên máy tính, từ nút "Thêm tài liệu" tới lưu xong
+   ========================================================================== */
+muc('⑦ SỐ CHẠM: tải 5 file bản scan trên MÁY TÍNH');
+{
+  const canvas = veTrangGiay(1);
+  const nam = [];
+  for (const t of ['s-1.jpg', 's-2.jpg', 's-3.jpg', 's-4.jpg', 's-5.jpg']) nam.push(await canvasThanhTep(canvas, t));
+
+  const nut = document.createElement('button');
+  nut.className = 'btn-primary tl-nut-quet';
+  nut.textContent = '📷📁 Thêm tài liệu — chụp hoặc tải file';
+  document.body.appendChild(nut);
+  nut.addEventListener('click', () => moKho('chon-tep'));
+
+  soCham = 0; nhatKyCham = []; soChamHopThoai = 0;
+  try { localStorage.removeItem('tl_nhap_v1_kho_chung_chung'); } catch {}
+
+  hangDoi = nam.slice();                         // hộp thoại sẽ mở ngay sau khi chọn nhóm
+  nut.click();                                              // ① mở màn
+  (await doi('[data-viec="chon-nhom"]')).click();           // ② chọn nhóm → hộp file bật LUÔN
+  const t0 = performance.now();
+  while (document.querySelectorAll('.tlq-the').length < 5 && performance.now() - t0 < 20000) await cho(80);
+  (await doi('[data-viec="sang-thong-tin"]')).click();      // ③ sang nhập thông tin
+  const o = await doi('#tlqTieuDe');
+  o.click(); o.value = 'Bộ chứng từ nhập khẩu tháng 8';     // ④ gõ tiêu đề
+  document.querySelector('.tlq-form button[type="submit"]').click();   // ⑤ lưu
+  await cho(1500);
+
+  ghi(`  Số chạm TRONG ERP: ${soCham}`);
+  for (const d of nhatKyCham) ghi('    ' + d);
+  ghi(`  Số chạm trong hộp thoại chọn file của hệ điều hành: ${soChamHopThoai} ` +
+      `(5 lần chọn file + 1 lần bấm "Mở")`);
+  ghi(`  TỔNG NGÓN TAY: ${soCham + soChamHopThoai} chạm cho 5 trang.`);
+  ghi('     → Nếu không có "chọn nhiều file", 5 trang là 5 lần mở hộp thoại: ' +
+      `${soCham + 5} chạm ERP + 10 chạm hộp thoại = ${soCham + 15}.`);
+  dat(soCham === 5, '  Đúng 5 chạm ERP (mở · nhóm · xong · tiêu đề · lưu)', `→ ${soCham}`);
+  const gui = await layGui();
+  const g = gui[gui.length - 1];
+  dat(g.so_trang === 5 && g.dinh_dang === 'anh_gop' && g.nguon === 'tep_may',
+    '  Lưu xong: 5 trang gộp thành MỘT tài liệu, đi đúng đường ảnh',
+    `→ ${g?.so_trang} trang, ${g?.dinh_dang}, ${g?.nguon}`);
+  dat(g.so_anh_boc_chu === 3, '  Vẫn gửi 3 ảnh cho AI bóc chữ như đường máy ảnh',
+    `→ ${g?.so_anh_boc_chu}`);
+  dongKho();
+  nut.remove();
+}
+
+ghi(`\nKET_LUAN rong=${ROMG} duong=${duongMacDinh()} hong=${soHong}`);
+
+} catch (e) {
+  ghi('\nBÀN ĐO HỎNG: ' + (e && e.stack || e));
+  ghi('KET_LUAN hong=1');
+}
+</script>
+</body>
+</html>

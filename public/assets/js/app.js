@@ -5448,7 +5448,7 @@ if (TOI.quyen.includes('nhansu')) {
         : '';
       oTrong.hidden = ds.length > 0;
       oTrong.textContent = NS_GT_QUET_DUOC
-        ? 'Chưa có giấy tờ nào của người này. Bấm "Quét thêm giấy tờ" để lưu quyết định, uỷ quyền, HĐLĐ, CCCD…'
+        ? 'Chưa có giấy tờ nào của người này. Bấm "Thêm giấy tờ" để chụp bằng máy ảnh, hoặc tải file ảnh/PDF có sẵn: quyết định, uỷ quyền, HĐLĐ, CCCD…'
         : 'Chưa có giấy tờ nào của người này.';
       veDaiCat('#nsGt-cat', kq.cat, {
         don_vi: 'giấy tờ',
@@ -9460,10 +9460,16 @@ if (TOI.quyen.includes('quantri')) {
 function cauSauKhiQuet(kq) {
   const n = Number(kq.ocr_so_trang) || 0;
   const neo = Number(kq.ocr_so_trang_neo) || 0;
-  const dong = [`Đã lưu ${kq.so_trang} trang.`];
+  /* Tải file có sẵn thì gọi ĐÚNG TÊN FILE — người vừa bấm là người biết mình
+     chọn file nào, và đó là mẩu duy nhất giúp họ nhận ra lưu đúng file chưa. */
+  const dong = [kq.la_tep_goc && kq.ten_tep_goc
+    ? `Đã lưu file "${kq.ten_tep_goc}" (${kq.so_trang} trang) — LƯU NGUYÊN BẢN, không bọc lại.`
+    : `Đã lưu ${kq.so_trang} trang.`];
 
   if (!n) {
-    dong.push('Chưa bóc được chữ — vẫn tra được bằng tên.');
+    /* Với PDF có sẵn thì `ocr_ghi_chu` ngay dưới nói đủ và nói ĐÚNG lý do —
+       in thêm câu chung chung này là nói hai lần, lần sau nhẹ hơn lần trước. */
+    if (!kq.la_tep_goc) dong.push('Chưa bóc được chữ — vẫn tra được bằng tên.');
   } else {
     dong.push(`Bóc chữ được ${n} trang, trong đó ${neo} trang đối chiếu được với ` +
               'thứ bạn vừa gõ.');

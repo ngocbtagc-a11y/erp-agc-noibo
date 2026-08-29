@@ -3577,8 +3577,39 @@ tr.kd-chiadoi td {
 .tlq-the img { width: 64px; height: 84px; object-fit: cover; border-radius: var(--r-sm); background: var(--surface-2); }
 .tlq-the-tin b { display: block; font-size: 14px; color: var(--ink); }
 .tlq-the-tin span { font-size: 12px; color: var(--text-mute); }
-.tlq-the-nut { display: grid; gap: 6px; }
+/* BỐN NÚT MỖI THẺ, NHƯNG THẺ KHÔNG CAO THÊM MỘT PIXEL NÀO.
+   Trước: hai nút xếp chồng = 2×44 + 6 = 94px. Nay: lưới 2×2 = vẫn 2 hàng,
+   vẫn 94px. Sếp Ngọc vừa chốt "ưu tiên vừa một trang, hạn chế kéo trang" —
+   thêm ↑↓ theo kiểu xếp chồng là đẩy thẻ lên 4 hàng (190px), màn dài gấp đôi.
+   Mỗi nút vẫn ≥44px (đo THẬT ở `do-tai-tep-len-kho`, không đọc CSS).
+   `min-width: 0` để nút ↑↓ co được trong cột hẹp mà không tràn thẻ. */
+.tlq-the-nut { display: grid; grid-template-columns: auto auto; gap: 6px; }
 .tlq-do { font-size: 12px; color: var(--text-mute); margin: 0 0 12px; }
+.tlq-ten-goc {
+  display: block; font-size: 11px; color: var(--text-mute);
+  /* Tên file dài (`scan_2026-08-29_hop-dong-ncc-son-la_p03.jpg`) KHÔNG được
+     kéo thẻ rộng ra — cắt bằng dấu … chứ đừng để nó đẩy hai nút ra ngoài màn.
+     Đây là cắt HÌNH THỨC chứ không cắt dữ liệu: file gốc vẫn nguyên tên. */
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%;
+}
+
+/* Thẻ của MỘT file PDF có sẵn — cùng khung `.tlq-the`, chỉ thay ô ảnh bằng
+   một ô chữ "PDF": file PDF không có ảnh xem trước, mà render nó ra ảnh cần
+   đúng thư viện ERP không có. Cùng cỡ 64×84 nên thẻ không nhảy. */
+.tlq-bieu-tuong {
+  width: 64px; height: 84px; display: flex; align-items: center; justify-content: center;
+  border-radius: var(--r-sm); background: var(--surface-2); border: 1px solid var(--line);
+  font-size: 13px; font-weight: 700; color: var(--cam-text); letter-spacing: .5px;
+}
+.tlq-the-tep .tlq-the-tin b {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%;
+}
+
+/* KÉO ĐỔI THỨ TỰ (máy tính). Chỉ đổi viền và độ mờ — không mảng màu mới,
+   không màu thứ tư (luật ④ `docs/BANG-MAU.md`: đường kẻ mảnh thay mảng màu). */
+.tlq-the[draggable="true"] { cursor: grab; }
+.tlq-the.dang-keo { opacity: .45; cursor: grabbing; }
+.tlq-the.dich { border-color: var(--cam); box-shadow: inset 0 0 0 1px var(--cam); }
 
 .tlq-nut-chinh {
   display: block; width: 100%; min-height: 52px; cursor: pointer; margin-bottom: 10px;
@@ -3596,6 +3627,31 @@ tr.kd-chiadoi td {
   border: 1px solid var(--line); border-radius: var(--r-pill);
   background: var(--surface); color: var(--text); font: inherit; font-size: 13px;
 }
+
+/* ⚠️ BA LUẬT RIÊNG DƯỚI ĐÂY PHẢI NẰM SAU BA KHỐI GỐC Ở TRÊN, KHÔNG ĐƯỢC ĐẨY
+   LÊN TRƯỚC. Hai lý do, lý do thứ hai mới là lý do thật:
+     ① Xếp sau là nếp CSS đúng: khai chung trước, khai riêng sau.
+     ② `do-kho-tai-lieu.mjs` mục "nút ≥44px" tìm `min-height` bằng cách bắt
+        LẦN XUẤT HIỆN ĐẦU TIÊN của tên lớp trong tệp. Đặt `.tlq-hai-duong
+        .tlq-nut-chinh { … }` lên trước khối gốc thì phép đo đọc trúng khối
+        riêng, không thấy `min-height` và báo "KHÔNG KHAI" — nút vẫn 52px
+        thật, chỉ là phép đo nói dối. Đã đo được đúng cảnh đó khi viết bản
+        này. Ai thêm luật riêng cho `.tlq-nut-*` thì thêm Ở ĐÂY, phía dưới.
+
+   Nút ↑↓ trong thẻ trang: bốn nút một thẻ nên cột hẹp lại; `min-width: 0` cho
+   nút co được mà không tràn thẻ. KHÔNG đụng `min-height` — 44px giữ nguyên. */
+.tlq-the-nut .tlq-nut-phu { min-width: 0; padding: 0 10px; }
+
+/* HAI ĐƯỜNG VÀO NẰM CẠNH NHAU — một hàng, không phải hai.
+   Thứ tự do JS quyết theo thiết bị (`duongMacDinh()`): máy tính thì "Chọn
+   file" đứng trước và mang màu cam; điện thoại thì "Chụp máy ảnh". Luật ba
+   màu ③ giữ nguyên: vẫn ĐÚNG MỘT nút cam đậm trên một khung nhìn.
+   Nút phụ được nâng lên 52px cho BẰNG nút chính — hai nút cạnh nhau lệch
+   chiều cao trông như một cái hỏng. Vẫn ≥44px. */
+.tlq-hai-duong { display: flex; gap: 8px; margin-bottom: 10px; }
+.tlq-hai-duong > * { flex: 1 1 0; min-width: 0; margin-bottom: 0; }
+.tlq-hai-duong .tlq-nut-chinh { font-size: 15px; }
+.tlq-hai-duong .tlq-nut-nhi { min-height: 52px; font-size: 15px; }
 
 .tlq-form { display: block; }
 .tlq-nhan { display: block; font-size: 13px; font-weight: 600; color: var(--text); margin: 12px 0 4px; }

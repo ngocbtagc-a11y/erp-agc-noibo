@@ -112,6 +112,74 @@ export const CANH_BAO_TRA_GIAY =
    không kéo cả Worker vượt CPU. */
 const TRAN_BYTE_PDF   = 6 * 1024 * 1024;
 const TRAN_SO_TRANG   = 12;
+
+/* ==========================================================================
+   ĐƯỜNG THỨ HAI VÀO CÙNG KHO: FILE CÓ SẴN TRÊN MÁY  ·  CTL-0026 vòng 6
+   ---------------------------------------------------------------------------
+   Sếp Ngọc 29/08/2026: *"nếu tôi upload file từ máy tính lên thì không có chỗ
+   thêm tài liệu à"*. Trên máy tính giấy tờ ĐÃ LÀ FILE — bản scan từ máy scan
+   thật, PDF nhận qua email. Bắt chụp lại màn hình là vô lý.
+
+   Máy chủ KHÔNG có đường xử lý thứ hai. Cùng `luuTaiLieu`, cùng phân quyền,
+   cùng chốt đồng ý, cùng chống trùng `ma_gui`, cùng ĐÚNG MỘT lượt ghi D1.
+   Khác nhau đúng HAI con số và MỘT nhánh bóc chữ, cả ba nằm ngay dưới đây.
+   ========================================================================== */
+
+/** Định dạng thân gửi lên. `anh_gop` = xấp ảnh đã gộp thành PDF ở máy (đường
+ *  cũ, mặc định khi trình duyệt cũ chưa gửi cột này). `pdf_goc` = file PDF có
+ *  sẵn, chép nguyên byte. */
+const DINH_DANG_HOP_LE = ['anh_gop', 'pdf_goc'];
+
+/* ⚠️ TRẦN 25 MB CHO PDF CÓ SẴN — BỐN CON SỐ ÉP RA NÓ (bản đầy đủ ở
+   `public/assets/js/quet-tai-lieu.js`, khai lại tóm tắt để người đọc máy chủ
+   không phải mở file khác):
+     ① BỘ NHỚ WORKER 128 MB là chốt CHẶT NHẤT. Một file N byte tồn tại nhiều
+        bản cùng lúc trong Worker: thân JSON (~1,34N) → chuỗi base64 sau
+        `JSON.parse` (~1,34N) → chuỗi nhị phân của `atob` (~1N) → `Uint8Array`
+        (~1N). Đỉnh ≈ 3,7N. N = 25 MB → ≈ 93 MB, còn chỗ thở; N = 30 MB →
+        ≈ 111 MB, sát trần tới mức một lượt gửi đôi là chết Worker.
+     ② Trần thân yêu cầu của Cloudflare Workers là 100 MB — 25 MB thành 33,4 MB
+        base64, dư rộng. KHÔNG phải chốt chặt nhất, đừng lấy nó biện minh cho
+        số to hơn.
+     ③ Drive còn ~12 GB (SPEC-0005 Mục 4): 25 MB/file thì được ~480 file.
+     ④ Đường máy ảnh GIỮ NGUYÊN 6 MB. Ảnh nén ở máy còn 150–400 KB/trang, 12
+        trang không bao giờ chạm 6 MB — nới trần đường đó là nới vô cớ.
+   Trình duyệt báo trần TRƯỚC khi gửi (đọc `file.size`, chưa tốn một byte
+   mạng). Dòng dưới đây là lưới thứ hai cho ca gọi thẳng API. */
+const TRAN_BYTE_PDF_GOC = 25 * 1024 * 1024;
+
+/* Bản scan máy scan thật hay dày 20–50 trang, và nó là MỘT tài liệu chứ không
+   phải mấy chục tài liệu. Trần 12 trang của đường máy ảnh sinh ra từ "chụp tay
+   quá 12 trang là quá sức", không áp được cho file đã có sẵn. 200 chỉ là chốt
+   chống số rác (`so_trang` do trình duyệt đếm và gửi lên). */
+const TRAN_SO_TRANG_PDF_GOC = 200;
+
+/** ⚠️ CÂU PHẢI GHI VÀO CỘT, KHÔNG PHẢI CHỈ HIỆN MỘT LẦN RỒI BAY.
+ *  Đường bóc chữ của ERP đọc ẢNH (Workers AI). Bóc chữ trong PDF đòi render
+ *  PDF ra ảnh trước, tức đòi thư viện đọc PDF — ERP KHÔNG có, và ràng buộc
+ *  chi phí 0 cấm thêm dịch vụ. Nói thẳng là giới hạn thật, đừng để `ocr_ghi_chu`
+ *  rỗng: rỗng thì người ta gõ một cụm chữ trong hợp đồng, không thấy gì, và
+ *  kết luận SAI rằng hợp đồng chưa được lưu.
+ *  Ghi vào CỘT nên câu này còn nguyên ở màn xem chữ, ở bản sao lưu CSV, ở bản
+ *  khôi phục — đúng bài học REV-0044 · L3 (nhãn chỉ sống trong một màn thì ra
+ *  tới Excel là trần trụi). */
+export const GHI_CHU_PDF_CHUA_BOC =
+  'File PDF lưu NGUYÊN BẢN. ERP chưa bóc được chữ bên trong PDF để tra cứu — ' +
+  'đường bóc chữ chỉ đọc được ảnh, mà đọc PDF cần thư viện ERP không có ' +
+  '(ràng buộc chi phí 0). Tài liệu này tra được bằng TÊN, số hiệu, loại giấy ' +
+  'và nhóm; KHÔNG tra được bằng chữ bên trong. Cần tra bằng nội dung thì quét ' +
+  'lại bằng máy ảnh.';
+
+/** Đúng là file PDF không — soi CHỮ KÝ `%PDF-`, 5 byte đầu.
+ *
+ *  ⚠️ SOI CHO CẢ HAI ĐƯỜNG, không riêng đường file có sẵn. Trước bản này máy
+ *  chủ nhận bất cứ khối byte nào rồi đẩy lên Drive với `kieu:'application/pdf'`
+ *  và đuôi `.pdf` — tức là ai gọi thẳng API cũng gửi được một file bất kỳ vào
+ *  kho giấy tờ pháp lý dưới lốt PDF. Năm byte này đóng đúng chỗ đó. */
+function laByteCuaPDF(b) {
+  return !!b && b.length > 5 &&
+    b[0] === 0x25 && b[1] === 0x50 && b[2] === 0x44 && b[3] === 0x46 && b[4] === 0x2D;
+}
 /* Bóc chữ tối đa 3 trang: trang đầu luôn là trang có tiêu đề, số hiệu, ngày —
    đủ để tra cứu. Bóc cả 12 trang thì mỗi lượt quét gọi AI 12 lần, chờ rất lâu
    mà giá trị tra cứu tăng không đáng kể. Nêu rõ ở `ocr_so_trang` để người đọc
@@ -607,9 +675,22 @@ export async function luuTaiLieu(env, phien, body) {
   const tieuDe = chuoi(body.tieu_de, 200);
   if (!tieuDe || tieuDe.length < 3) return loi('Vui lòng đặt tên cho tài liệu (ít nhất 3 ký tự)');
 
+  /* ---- ĐỊNH DẠNG THÂN GỬI LÊN — quyết định HAI trần và MỘT nhánh bóc chữ --
+     Thiếu cột này (trình duyệt còn nhớ bản cũ) thì rơi về `anh_gop`, tức là
+     đúng hành vi trước bản này. Mặc định phải là đường CHẶT hơn: đoán nhầm
+     thành `pdf_goc` là tự nới trần từ 6 MB lên 25 MB cho mọi lượt gửi. */
+  const dinhDang = DINH_DANG_HOP_LE.includes(chuoi(body.dinh_dang, 20))
+    ? chuoi(body.dinh_dang, 20) : 'anh_gop';
+  const laPdfGoc = dinhDang === 'pdf_goc';
+
   const soTrang = parseInt(body.so_trang, 10) || 0;
+  const tranTrang = laPdfGoc ? TRAN_SO_TRANG_PDF_GOC : TRAN_SO_TRANG;
   if (soTrang < 1) return loi('Chưa có trang nào');
-  if (soTrang > TRAN_SO_TRANG) return loi(`Một tài liệu tối đa ${TRAN_SO_TRANG} trang`);
+  if (soTrang > tranTrang) {
+    return loi(laPdfGoc
+      ? `File PDF khai ${soTrang} trang, vượt trần ${tranTrang} trang.`
+      : `Một tài liệu tối đa ${tranTrang} trang`);
+  }
 
   /* ---- GIẤY NHÂN SỰ: phải gắn vào một người CÓ THẬT ---------------------
      Một lượt ĐỌC D1 để đổi lấy việc không bao giờ có tài liệu mồ côi trong
@@ -681,21 +762,46 @@ export async function luuTaiLieu(env, phien, body) {
   let bytes;
   try { bytes = base64ToBytes(tep); } catch { return loi('Nội dung tài liệu không đọc được'); }
   if (bytes.length < 200) return loi('Tài liệu rỗng hoặc hỏng');
-  if (bytes.length > TRAN_BYTE_PDF) {
+  const tranByte = laPdfGoc ? TRAN_BYTE_PDF_GOC : TRAN_BYTE_PDF;
+  if (bytes.length > tranByte) {
     return loi(`Tài liệu nặng ${(bytes.length / 1048576).toFixed(1)} MB, vượt trần ` +
-               `${TRAN_BYTE_PDF / 1048576} MB. Chụp lại với ít trang hơn.`);
+               `${tranByte / 1048576} MB. ` +
+               (laPdfGoc
+                 ? 'Quét lại ở 200 DPI (chế độ xám hoặc đen trắng) thường nhẹ đi ' +
+                   '3–5 lần, hoặc tách file thành nhiều phần.'
+                 : 'Chụp lại với ít trang hơn.'));
+  }
+  /* ---- ĐÚNG LÀ PDF KHÔNG — soi CHỮ KÝ, không tin lời khai ---------------
+     Áp cho CẢ HAI đường. File đi lên Drive mang `kieu:'application/pdf'` và
+     đuôi `.pdf`; không soi ở đây thì bất cứ khối byte nào cũng vào được kho
+     giấy tờ pháp lý dưới lốt PDF. Trình duyệt đã soi một lần — đây là lưới
+     thứ hai, cho ca gọi thẳng API. */
+  if (!laByteCuaPDF(bytes)) {
+    return loi('Nội dung gửi lên không phải file PDF (thiếu chữ ký "%PDF-" ở ' +
+               'đầu file). Kho chỉ nhận ảnh JPG/PNG/HEIC (được gộp thành PDF ' +
+               'tại máy) và file PDF.');
   }
 
   /* ---- Bóc chữ TRƯỚC khi tải lên ---------------------------------------
      Cố ý: nếu AI treo thì ta chưa đẩy gì lên Drive, không để lại file mồ côi.
-     `bocChu` tự nuốt mọi lỗi nên nó không bao giờ chặn luồng. */
-  const dsOCR = Array.isArray(body.anh_boc_chu) ? body.anh_boc_chu.slice(0, TRAN_TRANG_BOC_CHU) : [];
+     `bocChu` tự nuốt mọi lỗi nên nó không bao giờ chặn luồng.
+
+     ⚠️ PDF CÓ SẴN: BỎ HẲN bước này, và NÓI RA VÌ SAO.
+     Không có ảnh để đưa cho AI, mà render PDF ra ảnh thì cần thư viện đọc PDF
+     ERP không có. Bản cẩu thả sẽ để `bocChu` chạy với mảng rỗng và trả câu
+     "Không có ảnh để bóc chữ" — câu đó đọc như một TRỤC TRẶC KỸ THUẬT nhất
+     thời, trong khi đây là một GIỚI HẠN VĨNH VIỄN của sản phẩm. Hai chuyện
+     khác hẳn nhau, và người đọc phải phân biệt được để biết có nên quét lại
+     bằng máy ảnh hay không. */
+  const dsOCR = laPdfGoc
+    ? []
+    : (Array.isArray(body.anh_boc_chu) ? body.anh_boc_chu.slice(0, TRAN_TRANG_BOC_CHU) : []);
   /* Đưa MỌI mẩu sự thật người vừa gõ xuống làm mốc đối chiếu — xem `docTinChu()`.
      Không mốc nào trúng thì chữ vẫn LƯU, chỉ là đeo nhãn CHƯA KIỂM và không vào
      ô tìm (luật ①②③ ở khối chú thích trên `docTinChu`). */
-  const boc = await bocChu(env, dsOCR, {
-    soHieu: soHieuTho, loai: loaiGiay, tieuDe: tieuDe
-  });
+  const boc = laPdfGoc
+    ? { chu: '', chuTim: '', soTrang: 0, soTrangNeo: 0, ghiChu: GHI_CHU_PDF_CHUA_BOC, trang: [] }
+    : await bocChu(env, dsOCR, { soHieu: soHieuTho, loai: loaiGiay, tieuDe: tieuDe });
 
   /* ---- Lưu lên Drive ---------------------------------------------------
      Đi qua `src/kho-file.js` — MỘT CỬA DUY NHẤT ra kho ngoài (SPEC-0005 5.1).

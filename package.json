@@ -77,7 +77,9 @@
     "do-danhsach-hoithoai": "node scripts/do-danhsach-hoithoai.mjs",
     "do-chu-dai": "node scripts/do-chu-dai-xuong-dong.mjs",
     "do-chu-dai-hep": "node scripts/do-chu-dai-xuong-dong.mjs --rong 320",
-    "do-chu-dai-tu-kiem": "node scripts/do-chu-dai-xuong-dong.mjs --tu-kiem"
+    "do-chu-dai-tu-kiem": "node scripts/do-chu-dai-xuong-dong.mjs --tu-kiem",
+    "ban-tai-tep": "node scripts/ban-tai-tep.mjs",
+    "do-tai-tep": "node scripts/ban-tai-tep.mjs --tu-dong"
   },
   "devDependencies": {
     "wrangler": "^4.0.0"

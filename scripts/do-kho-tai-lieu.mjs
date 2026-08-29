@@ -1825,5 +1825,290 @@ muc('⑫ CỘT MỚI PHẢI TỚI ĐƯỢC MÁY ĐÃ CÓ BẢNG (REV-0046 lỗi 
 }
 
 console.log('\n───────────────────────────────────────────────────────────');
+
+/* ==========================================================================
+   ⑬ TẢI FILE CÓ SẴN LÊN KHO — PHÍA MÁY CHỦ  ·  CTL-0026 vòng 6
+   ---------------------------------------------------------------------------
+   Sếp Ngọc 29/08/2026: *"nếu tôi upload file từ máy tính lên thì không có chỗ
+   thêm tài liệu à"*.
+
+   Sáu chốt, mỗi chốt kèm CA ĐỐI CHỨNG (BH-16) — chốt nào không có ca bỏ chốt
+   để so thì không chứng minh được phép đo đủ nhạy:
+     a. PDF có sẵn lưu NGUYÊN BẢN, KHÔNG gọi AI, và câu "chưa bóc chữ" ghi
+        thẳng vào cột `ocr_ghi_chu`
+     b. TRẦN 25 MB cho PDF có sẵn — ca vượt trần phải bị chặn TRƯỚC khi đẩy
+        lên Drive (0 file mồ côi, 0 lượt ghi D1)
+     c. Đường máy ảnh GIỮ NGUYÊN trần 6 MB — không nới lây
+     d. Chữ ký `%PDF-` — file sai loại bị chặn ở CẢ HAI đường
+     e. Trần số trang: 200 cho PDF có sẵn, vẫn 12 cho đường máy ảnh
+     f. Một lượt tải = ĐÚNG 1 lượt ghi D1, và tờ giấy hiện ở CẢ HAI CỬA
+   ========================================================================== */
+muc('⑬ TẢI FILE CÓ SẴN — PDF lưu nguyên bản, trần 25 MB, chữ ký %PDF-');
+{
+  /* PDF giả có cỡ đặt được — ruột là byte đệm, đủ để đo trần và chữ ký.
+     `%PDF-1.4` ở đầu là thứ `laByteCuaPDF()` soi; `/Type /Page` để bàn đo
+     phía trình duyệt và người đọc thấy được vì sao đếm ra 1 trang. */
+  const pdfCo = (byte) => {
+    const dau = Buffer.from('%PDF-1.4\n<< /Type /Page >>\n');
+    const duoi = Buffer.from('\n%%EOF\n');
+    const dem = Math.max(0, byte - dau.length - duoi.length);
+    return Buffer.concat([dau, Buffer.alloc(dem, 0x20), duoi]);
+  };
+  const jpegGia13 = Buffer.from(
+    'ffd8ffe000104a46494600010100000100010000ffdb004300' + 'aa'.repeat(600) +
+    'ffc0001108012c00c803012200021101031101ffda0008010100003faaffd9', 'hex');
+
+  /* Máy chủ giả CHUNG cho mục này: thư mục Drive đã có sẵn, chưa có `ma_gui`
+     nào. Đếm riêng số lượt gọi AI để chứng minh đường PDF KHÔNG chạm tới AI. */
+  let soLuotAI = 0;
+  function moiTruong13() {
+    const { db, so, cau } = d1Gia({
+      first: (sql) => /sao_luu_thu_muc/.test(sql) ? { drive_id: 'tm-co-san' }
+                    : /FROM nhan_su/.test(sql) ? { id: 'ns_duy', ho_ten: 'Phạm Khương Duy' }
+                    : null
+    });
+    return {
+      env: {
+        DB: db,
+        AI: { async run() { soLuotAI++; return { response: 'CHỮ TỪ ẢNH' }; } },
+        GOOGLE_CLIENT_ID: 'gia', GOOGLE_CLIENT_SECRET: 'gia', GOOGLE_REFRESH_TOKEN: 'gia'
+      },
+      so, cau
+    };
+  }
+  const than13 = (them = {}) => ({
+    ma_gui: 'mg13-' + Math.random().toString(36).slice(2, 9),
+    nhom: 'ke_toan', tieu_de: 'Sao kê Techcombank tháng 8', so_trang: 1,
+    ...them
+  });
+
+  /* ---- a. PDF CÓ SẴN: lưu nguyên bản, 0 lượt AI, câu ghi chú vào CỘT ----- */
+  {
+    const truocAI = soLuotAI, truocDrive = driveGia.size;
+    const goc = pdfCo(120 * 1024);
+    const { env, so, cau } = moiTruong13();
+    const res = await tailieu.luuTaiLieu(env, phienCua('ke_toan_truong'), than13({
+      tep: goc.toString('base64'), dinh_dang: 'pdf_goc', nguon: 'tep_may', anh_boc_chu: []
+    }));
+    const than = await doc(res);
+    dat(res.status === 200, 'a. Tải MỘT file PDF có sẵn (120 KB)', `→ HTTP ${res.status} ${than.loi || ''}`);
+    dat(so.ghi === 1, 'a. Một lượt tải file = ĐÚNG 1 lượt ghi D1',
+      `→ ${so.ghi} lượt ghi, ${so.doc} lượt đọc`);
+    dat(soLuotAI === truocAI, 'a. KHÔNG gọi Workers AI cho PDF (không có ảnh để đọc)',
+      `→ gọi thêm ${soLuotAI - truocAI} lượt`);
+    dat(driveGia.size === truocDrive + 1, 'a. Đúng MỘT file lên Drive',
+      `→ thêm ${driveGia.size - truocDrive}`);
+    dat(than.ocr_ghi_chu === tailieu.GHI_CHU_PDF_CHUA_BOC && than.ocr_so_trang === 0,
+      'a. NÓI RA "chưa bóc được chữ trong PDF" — không im lặng',
+      `→ ocr_so_trang=${than.ocr_so_trang}`);
+    console.log('     → Câu trả về: ' + String(than.ocr_ghi_chu).slice(0, 96) + '…');
+
+    /* Câu đó phải vào CỘT `ocr_ghi_chu` của câu INSERT, không phải chỉ vào
+       câu trả lời HTTP — nhãn chỉ sống trong một màn thì ra tới bản sao lưu
+       CSV là trần trụi (bài học REV-0044 · L3). */
+    const ins = cau.find(c => /INSERT INTO tai_lieu/i.test(c.sql));
+    const cot = ins.sql.match(/INSERT INTO tai_lieu\s*\(([\s\S]*?)\)\s*VALUES/)[1]
+      .split(',').map(s => s.trim());
+    const viTri = cot.indexOf('ocr_ghi_chu');
+    dat(viTri >= 0 && ins.ban[viTri] === tailieu.GHI_CHU_PDF_CHUA_BOC,
+      'a. Câu đó nằm trong CỘT ocr_ghi_chu của chính câu INSERT',
+      `→ cột thứ ${viTri + 1}`);
+    /* Chữ bóc được thì KHÔNG có, nên cũng không có gì lọt vào ô tìm kiếm —
+       không được bịa ra nội dung cho PDF. */
+    dat(ins.ban[cot.indexOf('noi_dung')] === null,
+      'a. Cột noi_dung để TRỐNG, không bịa nội dung cho PDF');
+
+    /* ĐỐI CHỨNG a — CÙNG file, CÙNG mọi thứ, chỉ đổi `dinh_dang` sang đường
+       máy ảnh và kèm một ảnh: AI PHẢI được gọi và câu ghi chú PHẢI khác.
+       Không có ca này thì "0 lượt AI" ở trên có thể chỉ vì AI giả không chạy. */
+    const truocAI2 = soLuotAI;
+    const { env: e2 } = moiTruong13();
+    const r2 = await tailieu.luuTaiLieu(e2, phienCua('ke_toan_truong'), than13({
+      tep: goc.toString('base64'), dinh_dang: 'anh_gop',
+      anh_boc_chu: [jpegGia13.toString('base64')]
+    }));
+    const t2 = await doc(r2);
+    dat(r2.status === 200 && soLuotAI === truocAI2 + 1 &&
+        t2.ocr_ghi_chu !== tailieu.GHI_CHU_PDF_CHUA_BOC,
+      'a. ĐỐI CHỨNG: cùng file, đổi sang đường ảnh → AI ĐƯỢC gọi, ghi chú khác',
+      `→ AI thêm ${soLuotAI - truocAI2} lượt, ocr_so_trang=${t2.ocr_so_trang}`);
+  }
+
+  /* ---- b. TRẦN 25 MB — ca VƯỢT TRẦN phải chặn TRƯỚC khi đụng Drive ------ */
+  {
+    const truocDrive = driveGia.size, truocGoogle = soLuotGoiGoogle;
+    const { env, so } = moiTruong13();
+    const res = await tailieu.luuTaiLieu(env, phienCua('ke_toan_truong'), than13({
+      tep: pdfCo(30 * 1024 * 1024).toString('base64'), dinh_dang: 'pdf_goc', nguon: 'tep_may'
+    }));
+    const than = await doc(res);
+    dat(res.status === 400 && /30\.0 MB/.test(than.loi || '') && /25 MB/.test(than.loi || ''),
+      'b. PDF 30 MB → CHẶN, và câu chặn NÊU CẢ HAI con số',
+      `→ HTTP ${res.status}: ${String(than.loi || '').slice(0, 78)}…`);
+    dat(so.ghi === 0 && driveGia.size === truocDrive && soLuotGoiGoogle === truocGoogle,
+      'b. Ca vượt trần: 0 ghi D1, 0 file lên Drive, 0 lượt gọi Google',
+      `→ ghi ${so.ghi}, Drive +${driveGia.size - truocDrive}, Google +${soLuotGoiGoogle - truocGoogle}`);
+    dat(/200 DPI|tách file/i.test(than.loi || ''),
+      'b. Câu chặn nói CÁCH XỬ, không chỉ nói "vượt trần"');
+
+    /* ĐỐI CHỨNG b — 20 MB (dưới trần) PHẢI LỌT. Không có ca này thì "chặn
+       30 MB" có thể chỉ là chặn mọi file to, kể cả file hợp lệ. */
+    const { env: e2, so: so2 } = moiTruong13();
+    const r2 = await tailieu.luuTaiLieu(e2, phienCua('ke_toan_truong'), than13({
+      tep: pdfCo(20 * 1024 * 1024).toString('base64'), dinh_dang: 'pdf_goc', nguon: 'tep_may'
+    }));
+    dat(r2.status === 200 && so2.ghi === 1,
+      'b. ĐỐI CHỨNG: PDF 20 MB (dưới trần) LỌT bình thường',
+      `→ HTTP ${r2.status}, ghi ${so2.ghi}`);
+  }
+
+  /* ---- c. ĐƯỜNG MÁY ẢNH GIỮ NGUYÊN TRẦN 6 MB — không nới lây ------------ */
+  {
+    const { env } = moiTruong13();
+    const res = await tailieu.luuTaiLieu(env, phienCua('ke_toan_truong'), than13({
+      tep: pdfCo(8 * 1024 * 1024).toString('base64'), dinh_dang: 'anh_gop'
+    }));
+    const than = await doc(res);
+    dat(res.status === 400 && /6 MB/.test(than.loi || ''),
+      'c. Đường máy ảnh vẫn chặn ở 6 MB — nới trần KHÔNG lây sang',
+      `→ HTTP ${res.status}: ${String(than.loi || '').slice(0, 62)}…`);
+
+    /* ĐỐI CHỨNG c — thiếu `dinh_dang` (trình duyệt bản cũ) phải rơi về đường
+       CHẶT, không phải đường rộng. Đoán nhầm chiều là tự nới trần cho mọi
+       lượt gửi mà không ai để ý. */
+    const { env: e2 } = moiTruong13();
+    const r2 = await tailieu.luuTaiLieu(e2, phienCua('ke_toan_truong'), than13({
+      tep: pdfCo(8 * 1024 * 1024).toString('base64')          // KHÔNG khai dinh_dang
+    }));
+    const t2 = await doc(r2);
+    dat(r2.status === 400 && /6 MB/.test(t2.loi || ''),
+      'c. ĐỐI CHỨNG: thiếu dinh_dang → rơi về trần CHẶT 6 MB, không phải 25 MB');
+    /* Và một `dinh_dang` bịa cũng phải rơi về đường chặt. */
+    const { env: e3 } = moiTruong13();
+    const r3 = await tailieu.luuTaiLieu(e3, phienCua('ke_toan_truong'), than13({
+      tep: pdfCo(8 * 1024 * 1024).toString('base64'), dinh_dang: 'pdf_goc_xin_noi_tran'
+    }));
+    dat(r3.status === 400, 'c. ĐỐI CHỨNG: dinh_dang bịa cũng rơi về trần chặt');
+  }
+
+  /* ---- d. CHỮ KÝ %PDF- — file sai loại bị chặn ở CẢ HAI đường ----------- */
+  {
+    const rac = Buffer.concat([Buffer.from('PK\x03\x04'), Buffer.alloc(4000, 0x41)]);  // .docx/.zip
+    for (const dd of ['pdf_goc', 'anh_gop']) {
+      const truocDrive = driveGia.size;
+      const { env, so } = moiTruong13();
+      const res = await tailieu.luuTaiLieu(env, phienCua('ke_toan_truong'), than13({
+        tep: rac.toString('base64'), dinh_dang: dd
+      }));
+      const than = await doc(res);
+      dat(res.status === 400 && /%PDF-/.test(than.loi || '') &&
+          so.ghi === 0 && driveGia.size === truocDrive,
+        `d. File sai loại (.docx đổi tên) qua đường ${dd} → CHẶN, 0 ghi, 0 file`,
+        `→ HTTP ${res.status}`);
+    }
+
+    /* ĐỐI CHỨNG d (BH-16) — bản BỎ chốt chữ ký PHẢI cho lọt. Không lọt thì
+       chốt này không phải thứ đang chặn, và phép đo đo nhầm chỗ. */
+    const goc = docNguon('src/tai-lieu.js');
+    const chan = `  if (!laByteCuaPDF(bytes)) {`;
+    if (!goc.includes(chan)) {
+      dat(false, 'd. Tìm được đúng chốt chữ ký để gỡ', '→ đã đổi mã, sửa lại bàn đo!');
+    } else {
+      const boChan = goc
+        .replace(chan, '  if (false) {   /* CỐ Ý BỎ CHỐT — ca đối chứng BH-16 */')
+        .replace(/from '\.\/(quyen|kho-file|nhac-nhan-su|cat-danh-sach|so-ai)\.js'/g,
+                 (m, t) => `from '${pathToFileURL(path.join(GOC, 'src', t + '.js')).href}'`);
+      const duong = path.join(TAM, 'tai-lieu-BO-CHU-KY.mjs');
+      writeFileSync(duong, boChan);
+      const modHong = await import(pathToFileURL(duong).href + '?v=' + Date.now());
+      const { env } = moiTruong13();
+      const r = await modHong.luuTaiLieu(env, phienCua('ke_toan_truong'), than13({
+        tep: rac.toString('base64'), dinh_dang: 'pdf_goc'
+      }));
+      dat(r.status === 200,
+        'd. ĐỐI CHỨNG (BH-16): bản BỎ chốt chữ ký cho file rác LỌT',
+        `→ HTTP ${r.status} (phải 200 — nếu 400 thì PHÉP ĐO hỏng)`);
+    }
+  }
+
+  /* ---- e. TRẦN SỐ TRANG: 200 cho PDF có sẵn, vẫn 12 cho đường máy ảnh --- */
+  {
+    const goc = pdfCo(200 * 1024).toString('base64');
+    const { env, so } = moiTruong13();
+    const r1 = await tailieu.luuTaiLieu(env, phienCua('ke_toan_truong'), than13({
+      tep: goc, dinh_dang: 'pdf_goc', so_trang: 30
+    }));
+    dat(r1.status === 200 && so.ghi === 1,
+      'e. Bản scan 30 trang qua đường PDF có sẵn → LỌT (một tài liệu, không phải 30)',
+      `→ HTTP ${r1.status}`);
+    const { env: e2 } = moiTruong13();
+    const r2 = await tailieu.luuTaiLieu(e2, phienCua('ke_toan_truong'), than13({
+      tep: goc, dinh_dang: 'anh_gop', so_trang: 30
+    }));
+    const t2 = await doc(r2);
+    dat(r2.status === 400 && /12 trang/.test(t2.loi || ''),
+      'e. ĐỐI CHỨNG: đường máy ảnh VẪN chặn ở 12 trang — trần cũ không bị nới',
+      `→ HTTP ${r2.status}`);
+    const { env: e3 } = moiTruong13();
+    const r3 = await tailieu.luuTaiLieu(e3, phienCua('ke_toan_truong'), than13({
+      tep: goc, dinh_dang: 'pdf_goc', so_trang: 500
+    }));
+    dat(r3.status === 400, 'e. ĐỐI CHỨNG: PDF khai 500 trang → vẫn chặn (chống số rác)');
+  }
+
+  /* ---- f. HAI CỬA — file tải lên phải HIỆN Ở CẢ HAI --------------------- */
+  {
+    const { env, cau } = moiTruong13();
+    const res = await tailieu.luuTaiLieu(env, phienCua('hcns', 'ns_huong'), than13({
+      nhom: 'nhan_su', gan_id: 'ns_duy', tieu_de: 'Phạm Khương Duy — Quyết định bổ nhiệm',
+      tep: pdfCo(90 * 1024).toString('base64'), dinh_dang: 'pdf_goc', nguon: 'tep_may',
+      dong_y_boi: 'Phạm Khương Duy', dong_y_muc_dich: 'quản lý hồ sơ lao động'
+    }));
+    const than = await doc(res);
+    dat(res.status === 200 && than.cua_vao === 'nhan_su' && than.gan_id === 'ns_duy',
+      'f. File PDF tải ở kho chung, nhóm Nhân sự, có chọn người → vào ĐÚNG bộ người đó',
+      `→ cua_vao=${than.cua_vao} gan_id=${than.gan_id}`);
+
+    /* Kho chung có thấy nó không: câu SQL của `danhSachTaiLieu` khi KHÔNG có
+       `gan_id` phải KHÔNG lọc `cua_vao` — đo trên chính câu SQL sinh ra, không
+       đọc mã đoán. */
+    const { env: e2, cau: c2 } = moiTruong13();
+    await tailieu.danhSachTaiLieu(e2, phienCua('admin'), new URLSearchParams());
+    const sqlChung = c2.find(c => /FROM tai_lieu/i.test(c.sql) && /SELECT id, nhom/i.test(c.sql));
+    dat(!!sqlChung && !/cua_vao\s*=/.test(sqlChung.sql),
+      'f. Cửa KHO CHUNG không lọc cua_vao → vẫn thấy file quét ở hồ sơ');
+    const { env: e3, cau: c3 } = moiTruong13();
+    await tailieu.danhSachTaiLieu(e3, phienCua('hcns', 'ns_huong'),
+      new URLSearchParams({ gan_id: 'ns_duy' }));
+    const sqlHoSo = c3.find(c => /FROM tai_lieu/i.test(c.sql) && /SELECT id, nhom/i.test(c.sql));
+    dat(!!sqlHoSo && /cua_vao = \? AND gan_id = \?/.test(sqlHoSo.sql) &&
+        sqlHoSo.ban.includes('ns_duy'),
+      'f. ĐỐI CHỨNG: cửa HỒ SƠ lọc đúng một người',
+      `→ tham số ${JSON.stringify(sqlHoSo?.ban || [])}`);
+
+    /* Giấy nhân sự KHÔNG chọn người thì vẫn 400 như cũ — đường file mới không
+       mở lối vòng qua chốt REV-0046 #2. */
+    const { env: e4, so: so4 } = moiTruong13();
+    const r4 = await tailieu.luuTaiLieu(e4, phienCua('hcns', 'ns_huong'), than13({
+      nhom: 'nhan_su', tieu_de: 'Quyết định không rõ của ai',
+      tep: pdfCo(90 * 1024).toString('base64'), dinh_dang: 'pdf_goc',
+      dong_y_boi: 'x', dong_y_muc_dich: 'y'
+    }));
+    dat(r4.status === 400 && so4.ghi === 0,
+      'f. ĐỐI CHỨNG: tải file nhóm Nhân sự mà KHÔNG chọn người → vẫn 400, 0 dòng',
+      `→ HTTP ${r4.status}`);
+    /* Và phân quyền không bị đường mới nới: kế toán KHÔNG lưu được nhóm nhân sự. */
+    const { env: e5 } = moiTruong13();
+    const r5 = await tailieu.luuTaiLieu(e5, phienCua('ke_toan_truong'), than13({
+      nhom: 'nhan_su', gan_id: 'ns_duy', tieu_de: 'Thử vượt quyền',
+      tep: pdfCo(90 * 1024).toString('base64'), dinh_dang: 'pdf_goc',
+      dong_y_boi: 'x', dong_y_muc_dich: 'y'
+    }));
+    dat(r5.status === 403,
+      'f. ĐỐI CHỨNG: kế toán tải file vào nhóm Nhân sự → vẫn 403 (quyền y nguyên)',
+      `→ HTTP ${r5.status}`);
+  }
+}
+
 console.log(soHong === 0 ? '  KẾT LUẬN: ĐẠT toàn bộ.' : `  KẾT LUẬN: ✗ ${soHong} mục HỎNG.`);
 process.exit(soHong === 0 ? 0 : 1);

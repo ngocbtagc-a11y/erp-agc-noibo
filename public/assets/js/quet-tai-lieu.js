@@ -37,7 +37,8 @@
    ========================================================================== */
 
 import { nenAnhChung, coByteCuaDataUrl } from './anh-chung.js';
-import { gopTrangThanhPDF, dataUrlThanhByte, byteThanhBase64 } from './gop-trang-pdf.js';
+import { gopTrangThanhPDF, dataUrlThanhByte, byteThanhBase64,
+         laByteCuaPDF, demTrangPDF } from './gop-trang-pdf.js';
 import { API } from './api.js';
 
 /* ---- Thông số nén. Đo thật rồi mới chốt (xem báo cáo CTL-0026):
@@ -54,6 +55,118 @@ export const CAU_PHAP_LY =
   'Đây là bản dự phòng để tra cứu. KHÔNG thay bản giấy — đừng huỷ giấy gốc.';
 export const CAU_TRA_GIAY =
   'Chỉ lưu BẢN SAO. Quét xong trả giấy lại cho nhân viên ngay.';
+
+/* ==========================================================================
+   ĐƯỜNG THỨ HAI VÀO CÙNG MỘT LÕI: TẢI FILE CÓ SẴN TRÊN MÁY
+   ---------------------------------------------------------------------------
+   Sếp Ngọc 29/08/2026, nhìn màn Kho tài liệu trên máy tính: *"rất oke nhưng
+   đang thấy chưa tối ưu, nếu tôi upload file từ máy tính lên thì không có chỗ
+   thêm tài liệu à"*.
+
+   Đúng. Bản trước CHỈ có `capture="environment"` — đường máy ảnh. Trên máy bàn
+   thường KHÔNG có camera, mà giấy tờ thì đã nằm sẵn trên đĩa: bản scan từ máy
+   scan thật, hoặc PDF nhận qua email. Bắt Sếp chụp lại màn hình là vô lý.
+
+   ⚠️ KHÔNG viết đường thứ hai. Ô chọn file chỉ khác ô máy ảnh ĐÚNG hai thuộc
+   tính (`capture` và `multiple`); từ chỗ có `File` trong tay trở đi, ẢNH đi
+   NGUYÊN đường cũ — `nenAnhChung()` → `gopTrangThanhPDF()` → cùng một `gui()`.
+   Chỉ PDF rẽ nhánh, và rẽ vì lý do ở luật ① dưới đây.
+
+   BỐN CHỖ KHÓ, XỬ THẲNG:
+
+   ① PDF ĐÃ LÀ PDF THÌ KHÔNG BỌC LẠI. Chép nguyên byte lên kho. Bọc lại phải
+      render từng trang ra ảnh (không có thư viện) rồi nén lần hai (phình
+      dung lượng, nhoè chữ). Xem chú thích ở `gop-trang-pdf.js` Mục 5.
+
+   ② PDF KHÔNG BÓC ĐƯỢC CHỮ — VÀ PHẢI NÓI RA. Đường bóc chữ của ERP nhận ẢNH
+      (Workers AI đọc ảnh). Muốn bóc chữ trong PDF thì phải render PDF ra ảnh
+      trước, tức là cần thư viện đọc PDF — ERP KHÔNG có, và ràng buộc chi phí 0
+      cấm thêm dịch vụ. Nên: PDF lưu được, tra được bằng TÊN/số hiệu/loại,
+      nhưng KHÔNG tra được bằng chữ bên trong. Câu đó in thẳng lên màn hình
+      TRƯỚC khi gửi và nhắc lại sau khi lưu. Im lặng ở đây là để người ta
+      tưởng đã tra cứu được — đúng cái bẫy `docs/LUAT-GOP-Y-LA-TRIEU-CHUNG.md`
+      gọi là "cắt im lặng".
+
+   ③ FILE TO. Ảnh thì nén được ở máy trước khi gửi; PDF thì KHÔNG (nén PDF cần
+      đúng cái thư viện ta không có). Máy scan thật ra PDF 10–50 MB, nên trần
+      phải nói rõ VÀ báo TRƯỚC KHI GỬI — xem `TRAN_BYTE_PDF_GOC`.
+
+   ④ KHÔNG PHÁ THỨ ĐANG CHẠY. Luật "con số AI đọc = chưa kiểm", mỏ neo, phân
+      quyền theo nhóm, nhật ký truy cập, câu pháp lý: không đụng một dòng.
+   ========================================================================== */
+
+/* ⚠️ TRẦN CHO FILE PDF CÓ SẴN — 25 MB. BỐN CON SỐ ÉP RA NÓ, KHÔNG PHẢI SỐ ĐẸP:
+   ---------------------------------------------------------------------------
+   ① BỘ NHỚ WORKER (chốt chặt nhất). Worker có 128 MB. Thân yêu cầu là JSON
+      mang base64, nên cùng một file tồn tại NHIỀU BẢN cùng lúc trong Worker:
+      chuỗi thân (~1,34×N) → `JSON.parse` sinh chuỗi base64 nữa (~1,34×N) →
+      `atob` ra chuỗi nhị phân (~1×N) → `Uint8Array` (~1×N). Đỉnh ≈ 3,7×N.
+      Với N = 25 MB là ≈ 93 MB — dưới 128 MB nhưng KHÔNG dư nhiều. 30 MB đã là
+      ≈ 111 MB, sát trần tới mức một lượt gửi đôi là chết Worker.
+   ② TRẦN THÂN YÊU CẦU CỦA CLOUDFLARE WORKERS: 100 MB. 25 MB → 33,4 MB base64,
+      dư rộng. Đây KHÔNG phải chốt chặt nhất, đừng lấy nó ra biện minh cho số
+      to hơn.
+   ③ CHỖ TRÊN DRIVE: còn ~12 GB (SPEC-0005 Mục 4), ước 0,9 GB/năm. Một tờ 25 MB
+      thì 12 GB được ~480 file. Bản scan cỡ đó là hàng hiếm, nhưng đây là lý do
+      màn hình khuyên hạ DPI thay vì cứ đẩy file to lên.
+   ④ ĐƯỜNG MÁY ẢNH GIỮ NGUYÊN TRẦN 6 MB (`src/tai-lieu.js`). Ảnh đã nén ở máy
+      còn 150–400 KB/trang, 12 trang không bao giờ chạm 6 MB — nới trần đường
+      đó là nới vô cớ.
+
+   File to hơn trần thì màn hình nói NGAY LÚC CHỌN, kèm con số thật và cách xử
+   (quét lại 200 DPI · tách file · chụp bằng máy ảnh). Để người ta bấm Lưu rồi
+   chờ 30 giây mới báo hỏng là cách tệ nhất. */
+export const TRAN_BYTE_PDF_GOC = 25 * 1024 * 1024;
+
+/** Đuôi ảnh nhận được. HEIC/HEIF có mặt vì iPhone mặc định chụp HEIC, nhưng
+ *  xem `LOI_HEIC` — Chrome trên máy tính KHÔNG giải mã được nó. */
+const DUOI_ANH = ['jpg', 'jpeg', 'png', 'heic', 'heif'];
+
+/** ⚠️ Windows/Chrome thường trả `type` RỖNG cho .heic, nên nhận diện phải soi
+ *  CẢ đuôi tên file, không chỉ MIME. Soi mỗi MIME thì file HEIC bị đá ra với
+ *  câu "sai loại" — sai câu, người ta đi tìm nhầm chỗ. */
+function loaiTep(f) {
+  const ten = String(f?.name || '').toLowerCase();
+  const duoi = ten.includes('.') ? ten.slice(ten.lastIndexOf('.') + 1) : '';
+  const mime = String(f?.type || '').toLowerCase();
+  if (mime === 'application/pdf' || duoi === 'pdf') return 'pdf';
+  if (DUOI_ANH.includes(duoi)) return 'anh';
+  if (mime.startsWith('image/')) return 'anh';
+  return 'la';
+}
+
+/* Trên máy tính, `canvas` của Chrome/Edge/Firefox KHÔNG giải mã được HEIC —
+   `nenAnhChung()` sẽ ném lỗi. Câu này phải nói ĐÚNG cách xử, không phải "ảnh
+   hỏng": file không hỏng, chỉ là trình duyệt không đọc được định dạng đó. */
+const LOI_HEIC =
+  'Trình duyệt trên máy này không mở được ảnh HEIC (định dạng mặc định của ' +
+  'iPhone). Ba cách: (1) đổi iPhone sang chụp JPG — Cài đặt → Máy ảnh → Định ' +
+  'dạng → "Tương thích nhất"; (2) gửi file PDF thay vì ảnh; (3) chụp thẳng ' +
+  'bằng nút máy ảnh ở đây.';
+
+/* SẮP XẾP THEO TÊN FILE — CÓ HIỂU CHỮ SỐ.
+   Bản scan hay đánh số 1, 2, … 10, 11. So chữ trần thì "10" đứng TRƯỚC "2",
+   nên xấp 12 trang vào kho sai thứ tự mà không ai để ý cho tới lúc mở ra đọc.
+   `Intl.Collator` với `numeric: true` đọc cụm chữ số thành SỐ — có sẵn trong
+   mọi trình duyệt, không thêm một byte thư viện nào. */
+const SAP_TEN = new Intl.Collator('vi', { numeric: true, sensitivity: 'base' });
+
+/** Máy này nên mở đường nào TRƯỚC. Trả `'may-anh'` hoặc `'chon-tep'`.
+ *
+ *  ⚠️ NHẬN DIỆN BẰNG CÁCH TRỎ, KHÔNG BẰNG CHUỖI `userAgent`. Chuỗi UA là bãi
+ *  lầy ai cũng giả được và đổi luôn. Hai dấu hiệu này nói đúng thứ ta cần:
+ *    · `pointer: coarse` — con trỏ CHÍNH là ngón tay, không phải chuột.
+ *    · `maxTouchPoints > 0` — màn hình có cảm ứng thật.
+ *  Cả hai cùng đúng = điện thoại/máy tính bảng → mở MÁY ẢNH trước.
+ *  Máy bàn, laptop (kể cả laptop màn cảm ứng: chuột vẫn là con trỏ chính, nên
+ *  `coarse` sai) → mở CHỌN FILE trước, vì máy bàn thường không có camera. */
+export function duongMacDinh() {
+  try {
+    const thoRap = window.matchMedia('(pointer: coarse)').matches;
+    const chamDuoc = (navigator.maxTouchPoints || 0) > 0;
+    return (thoRap && chamDuoc) ? 'may-anh' : 'chon-tep';
+  } catch { return 'chon-tep'; }
+}
 
 /* ==========================================================================
    1. Bản nháp trong máy — thứ giữ cho "gửi hụt không mất ảnh"
@@ -76,7 +189,15 @@ function docNhap(cuaVao, ganId) {
  *  màn hình sẽ nói thẳng câu đó ra thay vì im lặng. */
 function ghiNhap(cuaVao, ganId, d) {
   try {
-    localStorage.setItem(khoaNhap(cuaVao, ganId), JSON.stringify(d));
+    /* ⚠️ FILE PDF CÓ SẴN KHÔNG VÀO BẢN NHÁP — CỐ Ý, KHÔNG PHẢI SÓT.
+       `localStorage` cho khoảng 5–10 MB; một bản scan 25 MB thành base64 là
+       33 MB, ghi vào là ném `QuotaExceededError` và làm MẤT LUÔN bản nháp của
+       cả bộ ảnh đang có. Mà lý do bản nháp tồn tại là "chụp xong tắt máy thì
+       ảnh vẫn còn" — ảnh chụp mất là mất thật, còn FILE PDF thì vẫn nằm
+       nguyên trên đĩa máy Sếp, gửi hụt chỉ việc chọn lại. Hai chuyện khác
+       hẳn nhau, nên xử khác nhau. Màn hình nói thẳng điều này ở thẻ PDF. */
+    const { tepGoc, ...con } = d;
+    localStorage.setItem(khoaNhap(cuaVao, ganId), JSON.stringify(con));
     return true;
   } catch { return false; }
 }
@@ -179,6 +300,12 @@ export function moQuetTaiLieu(t) {
          trong bản nháp để tắt máy giữa chừng mở lại vẫn còn — mất nó là người
          ta phải chọn lại người cho một xấp ảnh đã chụp xong. */
       ganId: '', ganTen: '',
+      /* Một tài liệu là MỘT trong hai thứ, không bao giờ cả hai:
+           · `trang[]`  — xấp ảnh (chụp hoặc chọn từ máy) sẽ gộp thành 1 PDF
+           · `tepGoc`   — MỘT file PDF có sẵn, chép nguyên byte, không bọc lại
+         `tepGoc` KHÔNG nằm trong bản nháp `localStorage` — xem `ghiNhap()`. */
+      tepGoc: null,
+      nguon: null,                     // 'may_anh' | 'tep_may' — điền lúc nhận file
       trang: [], tieuDe: t.tenGoiY || '', loai: '', soHieu: '',
       ngayBanHanh: '', ngayHetHan: '',
       /* Điền sẵn TÊN người, KHÔNG điền sẵn mục đích: "ai đồng ý" là chuyện xác
@@ -265,18 +392,222 @@ export function moQuetTaiLieu(t) {
     oMayAnh.click();
   }
 
+  /* ======================================================================
+     3b. Ô CHỌN FILE CÓ SẴN — cùng lõi, khác đúng hai thuộc tính
+     ----------------------------------------------------------------------
+     KHÔNG có `capture`  → trình duyệt mở hộp chọn file thay vì máy ảnh.
+     CÓ `multiple`        → chọn cả xấp bản scan trong một lượt (Sếp có cả
+                            thư mục), thay vì mở hộp thoại 5 lần.
+     `accept` liệt kê CẢ MIME lẫn đuôi: Windows trả `type` rỗng cho .heic và
+     đôi khi cả .pdf, chỉ khai MIME thì hộp thoại làm mờ đúng file cần chọn.
+     ====================================================================== */
+  const oChonTep = document.createElement('input');
+  oChonTep.type = 'file';
+  oChonTep.multiple = true;
+  oChonTep.accept =
+    'image/jpeg,image/png,image/heic,image/heif,application/pdf,' +
+    '.jpg,.jpeg,.png,.heic,.heif,.pdf';
+  oChonTep.hidden = true;
+  document.body.appendChild(oChonTep);
+
+  let dangDocTep = false;              // hiện "Đang đọc file…" thay vì màn đứng im
+
+  oChonTep.addEventListener('change', async () => {
+    const ds = [...(oChonTep.files || [])];
+    oChonTep.value = '';               // chọn LẠI đúng file đó vẫn nổ sự kiện
+    if (!ds.length) return;
+    await nhanTepTuMay(ds);
+  });
+
+  /** Nhận một xấp `File` từ máy. Tách riêng khỏi trình bắt sự kiện để bàn đo
+   *  gọi thẳng được, và để đường kéo-thả (nếu ngày nào thêm) dùng lại. */
+  async function nhanTepTuMay(dsTho) {
+    /* ---- ① SẮP THEO TÊN FILE TRƯỚC MỌI THỨ KHÁC -------------------------
+       Trình duyệt trả `files` theo thứ tự người dùng bấm chuột, KHÔNG theo
+       tên. Không sắp là xấp bản scan vào kho theo thứ tự ngẫu nhiên. */
+    const ds = dsTho.slice().sort((a, b) => SAP_TEN.compare(a.name || '', b.name || ''));
+
+    /* ---- ② FILE SAI LOẠI: NÊU ĐÍCH DANH, ĐỪNG ÂM THẦM BỎ ---------------- */
+    const la = ds.filter(f => loaiTep(f) === 'la');
+    if (la.length) {
+      alert(`Không nhận được ${la.length} file này:\n` +
+        la.map(f => '• ' + f.name).join('\n') +
+        '\n\nKho chỉ nhận ẢNH (JPG · PNG · HEIC) và PDF. ' +
+        'File Word/Excel thì xuất ra PDF rồi tải lên.');
+      return;
+    }
+
+    const dsPdf = ds.filter(f => loaiTep(f) === 'pdf');
+    const dsAnh = ds.filter(f => loaiTep(f) === 'anh');
+
+    /* ---- ③ PDF KHÔNG TRỘN VỚI ẢNH, VÀ MỖI LƯỢT ĐÚNG MỘT PDF -------------
+       Vì sao KHÔNG gộp: gộp nhiều PDF (hay chèn ảnh vào PDF) cần đọc và ghi
+       lại cấu trúc PDF — đúng cái thư viện ERP không có (chi phí 0). Cách
+       duy nhất còn lại là bọc PDF vào PDF, tức là phá luật ①.
+       Nên nói THẲNG giới hạn thay vì im lặng lấy file đầu tiên. */
+    if (dsPdf.length && dsAnh.length) {
+      alert('Chọn ảnh và PDF cùng lúc thì kho không gộp được — gộp PDF cần thư ' +
+            'viện đọc PDF mà ERP không có (ràng buộc chi phí 0).\n\n' +
+            'Làm hai lượt: xấp ảnh một lượt, file PDF một lượt.');
+      return;
+    }
+    if (dsPdf.length > 1) {
+      alert(`Bạn chọn ${dsPdf.length} file PDF. Mỗi file PDF là MỘT tài liệu ` +
+            'riêng — kho lưu nguyên bản chứ không gộp (gộp PDF cần thư viện ' +
+            'ERP không có).\n\nChọn từng file PDF một. Nếu là ẢNH thì chọn cả ' +
+            'xấp một lượt được.');
+      return;
+    }
+
+    if (dsPdf.length === 1) return nhanMotPDF(dsPdf[0]);
+    return nhanXapAnh(dsAnh);
+  }
+
+  /** MỘT file PDF có sẵn → lưu NGUYÊN BẢN. Không bọc, không nén, không đụng. */
+  async function nhanMotPDF(f) {
+    if (hs.trang.length) {
+      if (!confirm(`Đang có ${hs.trang.length} trang ảnh trong bộ này.\n\n` +
+        'Một tài liệu chỉ là MỘT trong hai: xấp ảnh, hoặc một file PDF.\n' +
+        'Bấm OK để bỏ xấp ảnh và dùng file PDF này.')) return;
+      hs.trang = [];
+    }
+
+    /* ---- TRẦN BÁO TRƯỚC KHI GỬI, KHÔNG PHẢI GIỮA CHỪNG ------------------
+       Đọc `f.size` là đọc thuộc tính có sẵn — chưa nạp một byte nào vào bộ
+       nhớ, chưa gửi một byte nào lên mạng. Đây là chỗ RẺ NHẤT để chặn, và là
+       chỗ DUY NHẤT chặn được trước khi người ta ngồi chờ. */
+    if (f.size > TRAN_BYTE_PDF_GOC) {
+      alert(`File "${f.name}" nặng ${coDoc(f.size)}, vượt trần ` +
+        `${(TRAN_BYTE_PDF_GOC / 1048576).toFixed(0)} MB.\n\n` +
+        'Trần này do bộ nhớ 128 MB của máy chủ Cloudflare Workers ép ra: file ' +
+        'đi lên dưới dạng base64 nên trong máy chủ tồn tại nhiều bản cùng lúc, ' +
+        'đỉnh khoảng 3,7 lần cỡ file.\n\nBa cách xử:\n' +
+        '• Quét lại ở 200 DPI, chế độ xám hoặc đen trắng — thường nhẹ đi 3–5 lần\n' +
+        '• Tách file thành nhiều phần, mỗi phần một tài liệu\n' +
+        '• Chụp bằng nút máy ảnh ở đây (ảnh được nén ngay tại máy)');
+      return;
+    }
+
+    dangDocTep = true; manHinh = 'trang'; ve();
+    try {
+      const bytes = new Uint8Array(await f.arrayBuffer());
+      /* Soi CHỮ KÝ chứ không tin đuôi tên file. Đổi tên `anh.jpg` thành
+         `.pdf` là việc bấm hai cái; đây bắt được ngay tại máy, và máy chủ
+         còn soi lại lần nữa. */
+      if (!laByteCuaPDF(bytes)) {
+        dangDocTep = false; ve();
+        alert(`File "${f.name}" có đuôi .pdf nhưng ruột KHÔNG phải PDF ` +
+              '(thiếu chữ ký "%PDF-" ở đầu file). Có thể file hỏng, hoặc bị ' +
+              'đổi tên từ định dạng khác. Mở thử bằng trình đọc PDF xem sao.');
+        return;
+      }
+      const soTrang = demTrangPDF(bytes);
+      hs.tepGoc = {
+        ten: f.name,
+        coByte: bytes.length,
+        soTrang,                       // 0 = KHÔNG ĐẾM ĐƯỢC, xem `demTrangPDF`
+        base64: byteThanhBase64(bytes)
+      };
+      hs.nguon = 'tep_may';
+      if (!hs.tieuDe) {
+        /* Gợi ý tên từ tên file — bỏ đuôi, đổi gạch/gạch dưới thành khoảng
+           trắng. Chỉ là GỢI Ý, người ta sửa được; điền sẵn tiết kiệm đúng
+           một lần gõ mà không quyết thay ai. */
+        hs.tieuDe = String(f.name).replace(/\.pdf$/i, '').replace(/[_-]+/g, ' ').trim().slice(0, 200);
+      }
+    } catch (e) {
+      alert('Không đọc được file: ' + (e.message || 'không rõ lý do'));
+    }
+    dangDocTep = false;
+    ve();
+  }
+
+  /** Xấp ẢNH chọn từ máy → đi NGUYÊN đường của máy ảnh: nén tại máy rồi thành
+   *  các trang. Không một dòng xử lý riêng nào ngoài vòng lặp này. */
+  async function nhanXapAnh(dsAnh) {
+    if (hs.tepGoc) {
+      if (!confirm(`Đang có file PDF "${hs.tepGoc.ten}" trong bộ này.\n\n` +
+        'Bấm OK để bỏ file đó và dùng xấp ảnh vừa chọn.')) return;
+      hs.tepGoc = null;
+    }
+    const conCho = TRAN_SO_TRANG - hs.trang.length;
+    if (conCho <= 0) {
+      alert(`Một tài liệu tối đa ${TRAN_SO_TRANG} trang, bộ này đã đủ. ` +
+            'Tách thành hai tài liệu nhé.');
+      return;
+    }
+    /* Chọn quá trần thì NÓI RA rồi mới cắt — cắt im lặng ở đây nghĩa là Sếp
+       chọn 15 file, thấy 12 trang, tưởng mình chọn nhầm. */
+    let ds = dsAnh;
+    if (ds.length > conCho) {
+      if (!confirm(`Bạn chọn ${ds.length} ảnh, mà một tài liệu tối đa ` +
+        `${TRAN_SO_TRANG} trang (còn chỗ cho ${conCho}).\n\n` +
+        `Bấm OK để lấy ${conCho} file ĐẦU theo tên file, phần còn lại tải ` +
+        'thành một tài liệu khác.')) return;
+      ds = ds.slice(0, conCho);
+    }
+
+    dangDocTep = true; manHinh = 'trang'; ve();
+    const hong = [];
+    for (const f of ds) {
+      try {
+        const coGoc = f.size;
+        const t0 = performance.now();
+        /* ⚠️ ĐÚNG `nenAnhChung()` với ĐÚNG `ANH_TRANG` mà đường máy ảnh dùng.
+           Đây là chỗ dễ đẻ ra hàm nén thứ tư nhất — đừng. */
+        const nen_ = await nenAnhChung(f, ANH_TRANG);
+        hs.trang.push({
+          anh: nen_, ten_goc: f.name, co_goc: coGoc,
+          co_nen: coByteCuaDataUrl(nen_),
+          ms_nen: Math.round(performance.now() - t0)
+        });
+      } catch (e) {
+        hong.push({ ten: f.name, vi_sao: /heic|heif/i.test(f.name) ? LOI_HEIC : (e.message || 'không đọc được') });
+      }
+    }
+    hs.nguon = hs.nguon || 'tep_may';
+    luuNhap();
+    dangDocTep = false;
+    manHinh = 'trang';
+    ve();
+    /* File hỏng phải NÊU ĐÍCH DANH. "Đã thêm 3 trang" khi chọn 5 file là câu
+       nói dối bằng cách bỏ bớt. */
+    if (hong.length) {
+      alert(`${hong.length}/${ds.length} file KHÔNG mở được:\n` +
+        hong.map(h => `• ${h.ten}\n  ${h.vi_sao}`).join('\n') +
+        (hs.trang.length ? `\n\n${hs.trang.length} trang còn lại vẫn giữ nguyên.` : ''));
+    }
+  }
+
+  function moChonTep() { oChonTep.click(); }
+
+  /** Mở ĐƯỜNG MẶC ĐỊNH của máy này — dùng ở mọi chỗ trước đây gọi thẳng
+   *  `moMayAnh(-1)`. Máy tính bàn không có camera thì mở máy ảnh là mở một hộp
+   *  thoại vô nghĩa; điện thoại thì ngược lại, bắt đi tìm file là bắt chụp
+   *  trước ở ứng dụng khác rồi quay lại. */
+  const duong = t.duongMacDinh === 'may-anh' || t.duongMacDinh === 'chon-tep'
+    ? t.duongMacDinh : duongMacDinh();
+  function moDuongChinh() {
+    if (duong === 'may-anh') return moMayAnh(-1);
+    return moChonTep();
+  }
+
   /* ---- Đóng ---- */
   function dong() {
     document.body.classList.remove('tlq-khoa-cuon');
     nen.remove();
     oMayAnh.remove();
+    oChonTep.remove();
     document.removeEventListener('keydown', phimEsc);
   }
   function phimEsc(e) { if (e.key === 'Escape') hoiThoat(); }
   document.addEventListener('keydown', phimEsc);
 
   function hoiThoat() {
-    if (dangGui) return;
+    if (dangGui || dangDocTep) return;
+    if (hs.tepGoc && !confirm(
+      `Đã chọn file "${hs.tepGoc.ten}" nhưng chưa lưu.\n\n` +
+      'Bấm OK để đóng — file vẫn nằm nguyên trên máy, lần sau chọn lại là được.')) return;
     if (hs.trang.length && !confirm(
       `Còn ${hs.trang.length} trang đã chụp chưa lưu.\n\n` +
       `Bấm OK để đóng — bộ này vẫn giữ trong máy, lần sau mở ra quét tiếp được.`)) return;
@@ -401,37 +732,121 @@ export function moQuetTaiLieu(t) {
     ve();
   }
 
+  /* ⚠️ CÂU PHẢI NÓI RA VỀ PDF — chốt ② của lượt này.
+     ERP bóc chữ bằng Workers AI ĐỌC ẢNH. Muốn bóc chữ trong PDF thì phải
+     render PDF ra ảnh trước, cần thư viện đọc PDF mà ERP không có và chi phí 0
+     cấm thêm. Im lặng ở đây là để người ta tưởng tra cứu được bằng nội dung,
+     rồi gõ một cụm chữ trong hợp đồng, không thấy gì, và kết luận SAI rằng
+     hợp đồng đó chưa được lưu. */
+  const CAU_PDF_CHUA_BOC_CHU =
+    'File PDF lưu được nguyên bản, nhưng ERP CHƯA bóc được chữ bên trong PDF ' +
+    'để tra cứu — đường bóc chữ chỉ đọc được ẢNH. Tài liệu này sẽ tra bằng ' +
+    'TÊN, số hiệu và loại giấy. Cần tra bằng nội dung thì chụp bằng máy ảnh.';
+
+  /** Hai đường vào tài liệu, xếp theo ĐÚNG thiết bị.
+   *
+   *  ⚠️ NẰM CẠNH NHAU TRÊN MỘT HÀNG, không xếp chồng. Sếp vừa chốt "ưu tiên
+   *  vừa một trang, hạn chế kéo trang" — thêm một nút xếp chồng là thêm một
+   *  hàng 44px vào đúng màn Sếp bảo đừng làm dài ra. Một hàng hai nút thì
+   *  chiều cao màn KHÔNG đổi một pixel so với bản chỉ có máy ảnh.
+   *
+   *  Nút của đường mặc định mang `tlq-nut-chinh` (cam đậm — ĐÚNG MỘT điểm
+   *  nhấn trên một khung nhìn, luật ③ của `docs/BANG-MAU.md`), đường phụ mang
+   *  `tlq-nut-nhi`. Đảo thứ tự theo máy, không đảo màu: cam vẫn chỉ có một. */
+  function veHaiDuong() {
+    const co = hs.trang.length;
+    const nutAnh = (lop) => `
+      <button type="button" class="${lop}" data-viec="chup-tiep"
+              title="Mở máy ảnh chụp thẳng trang giấy">
+        📷 ${co ? 'Chụp thêm' : 'Chụp máy ảnh'}
+      </button>`;
+    const nutTep = (lop) => `
+      <button type="button" class="${lop}" data-viec="chon-tep"
+              title="Chọn ảnh JPG/PNG/HEIC hoặc file PDF có sẵn trên máy">
+        📁 ${co ? 'Thêm file' : 'Chọn file'}
+      </button>`;
+    return '<div class="tlq-hai-duong">' + (duong === 'may-anh'
+      ? nutAnh('tlq-nut-chinh') + nutTep('tlq-nut-nhi')
+      : nutTep('tlq-nut-chinh') + nutAnh('tlq-nut-nhi')) + '</div>';
+  }
+
+  function veTheTepGoc() {
+    const g = hs.tepGoc;
+    return `
+      <div class="tlq-than">
+        <div class="tlq-the tlq-the-tep">
+          <div class="tlq-bieu-tuong" aria-hidden="true">PDF</div>
+          <div class="tlq-the-tin">
+            <b>${esc(g.ten)}</b>
+            <span>${coDoc(g.coByte)} · ${g.soTrang
+              ? g.soTrang + ' trang'
+              : '<b>không đếm được số trang</b>'}</span>
+          </div>
+          <div class="tlq-the-nut">
+            <button type="button" class="tlq-nut-phu" data-viec="chon-tep">Đổi file</button>
+            <button type="button" class="tlq-nut-phu" data-viec="bo-tep">Bỏ</button>
+          </div>
+        </div>
+        <p class="tlq-canh"><b>Lưu nguyên bản</b> — kho KHÔNG bọc lại file PDF,
+          nên không phình dung lượng và không mất chất lượng.</p>
+        <p class="tlq-canh">${esc(CAU_PDF_CHUA_BOC_CHU)}</p>
+        ${g.soTrang ? '' : `<p class="tlq-huong">File này nén cấu trúc bên trong nên
+          máy không đếm được số trang; kho sẽ ghi <b>1 trang</b>. Số trang thật
+          vẫn xem được khi mở file.</p>`}
+        <p class="tlq-huong">File PDF <b>không</b> giữ trong bản nháp của trình duyệt
+          (quá lớn) — gửi hụt thì chọn lại file, nó vẫn nằm nguyên trên máy.</p>
+        <button type="button" class="tlq-nut-chinh" data-viec="sang-thong-tin">
+          Nhập thông tin →
+        </button>
+      </div>`;
+  }
+
   function veTrang() {
+    if (dangDocTep) {
+      return `<div class="tlq-than"><p class="tlq-huong">Đang đọc file…</p></div>`;
+    }
+    if (hs.tepGoc) return veTheTepGoc();
+
     const tongNen = hs.trang.reduce((a, x) => a + x.co_nen, 0);
     const tongGoc = hs.trang.reduce((a, x) => a + (x.co_goc || 0), 0);
+    const n = hs.trang.length;
     return `
       <div class="tlq-than">
         ${nhapKhongLuuDuoc ? `<p class="tlq-canh">Máy không lưu được bản nháp (hết chỗ hoặc chế độ ẩn danh).
           <b>Đừng đóng trang này</b> cho tới khi lưu xong.</p>` : ''}
         <div class="tlq-dsdanh">
           ${hs.trang.map((tr, i) => `
-            <div class="tlq-the">
+            <div class="tlq-the" draggable="true" data-i="${i}">
               <img src="${tr.anh}" alt="Trang ${i + 1}" loading="lazy">
               <div class="tlq-the-tin">
                 <b>Trang ${i + 1}</b>
                 <span>${coDoc(tr.co_goc || 0)} → <b>${coDoc(tr.co_nen)}</b></span>
+                ${tr.ten_goc ? `<span class="tlq-ten-goc">${esc(tr.ten_goc)}</span>` : ''}
               </div>
               <div class="tlq-the-nut">
-                <button type="button" class="tlq-nut-phu" data-viec="chup-lai" data-i="${i}">Chụp lại</button>
+                <button type="button" class="tlq-nut-phu" data-viec="len" data-i="${i}"
+                        ${i === 0 ? 'disabled' : ''} aria-label="Đưa trang ${i + 1} lên trên">↑</button>
+                <button type="button" class="tlq-nut-phu" data-viec="xuong" data-i="${i}"
+                        ${i === n - 1 ? 'disabled' : ''} aria-label="Đưa trang ${i + 1} xuống dưới">↓</button>
+                <button type="button" class="tlq-nut-phu" data-viec="chup-lai" data-i="${i}">Thay</button>
                 <button type="button" class="tlq-nut-phu" data-viec="xoa-trang" data-i="${i}">Xoá</button>
               </div>
             </div>`).join('')}
         </div>
-        ${hs.trang.length ? `<p class="tlq-do">
-          ${hs.trang.length} trang · gốc ${coDoc(tongGoc)} → sau nén <b>${coDoc(tongNen)}</b>
-          (nhẹ đi ${tongGoc ? Math.round((1 - tongNen / tongGoc) * 100) : 0}%)</p>` : ''}
-        <button type="button" class="tlq-nut-chinh" data-viec="chup-tiep">
-          📷 ${hs.trang.length ? 'Chụp trang tiếp' : 'Chụp trang đầu'}
-        </button>
-        ${hs.trang.length ? `
+        ${n ? `<p class="tlq-do">
+          ${n} trang · gốc ${coDoc(tongGoc)} → sau nén <b>${coDoc(tongNen)}</b>
+          (nhẹ đi ${tongGoc ? Math.round((1 - tongNen / tongGoc) * 100) : 0}%)${
+            n > 1 ? ' · xếp theo tên file, kéo thẻ hoặc bấm ↑↓ để đổi thứ tự' : ''}</p>` : ''}
+        ${veHaiDuong()}
+        ${n ? `
           <button type="button" class="tlq-nut-nhi" data-viec="sang-thong-tin">
-            Xong ${hs.trang.length} trang — nhập thông tin →
-          </button>` : ''}
+            Xong ${n} trang — nhập thông tin →
+          </button>`
+        /* Câu này CHỈ hiện lúc chưa có trang nào — đúng lúc màn hình trống, nên
+           nó không đẩy thứ gì xuống dưới. Có trang rồi thì thẻ trang đã nói đủ. */
+        : `<p class="tlq-huong">Nhận ảnh <b>JPG · PNG · HEIC</b> và <b>PDF</b>.
+             Chọn nhiều ảnh một lượt được — kho xếp theo <b>tên file</b>.
+             File PDF lưu nguyên bản, mỗi lượt một file.</p>`}
       </div>`;
   }
 
@@ -503,14 +918,19 @@ export function moQuetTaiLieu(t) {
                         placeholder="VD: quản lý hồ sơ lao động, đóng BHXH">${esc(hs.dongYMucDich)}</textarea>
             </div>` : ''}
 
+          ${hs.tepGoc ? `<p class="tlq-canh">${esc(CAU_PDF_CHUA_BOC_CHU)}</p>` : ''}
+
           ${loiGui ? `<p class="tlq-loi">${esc(loiGui)}
-            <br><b>Ảnh vẫn còn trong máy</b> — bấm Gửi lại khi có sóng.</p>` : ''}
+            <br><b>${hs.tepGoc
+              ? 'File vẫn nằm trên máy' : 'Ảnh vẫn còn trong máy'}</b> — bấm Gửi lại khi có sóng.</p>` : ''}
 
           <button type="submit" class="tlq-nut-chinh" ${dangGui ? 'disabled' : ''}>
-            ${dangGui ? 'Đang gửi…' : (loiGui ? '↻ Gửi lại' : `💾 Lưu ${hs.trang.length} trang vào kho`)}
+            ${dangGui ? 'Đang gửi…' : (loiGui ? '↻ Gửi lại'
+              : hs.tepGoc ? `💾 Lưu file ${esc(hs.tepGoc.ten)} vào kho`
+              : `💾 Lưu ${hs.trang.length} trang vào kho`)}
           </button>
           <button type="button" class="tlq-nut-nhi" data-viec="ve-trang" ${dangGui ? 'disabled' : ''}>
-            ← Quay lại xem ${hs.trang.length} trang
+            ← Quay lại ${hs.tepGoc ? 'xem file đã chọn' : `xem ${hs.trang.length} trang`}
           </button>
         </form>
       </div>`;
@@ -528,12 +948,12 @@ export function moQuetTaiLieu(t) {
           hs.nhom = el.dataset.ma;
           hs.ganId = ''; hs.ganTen = '';     // đổi nhóm là bỏ người đã chọn
           luuNhap();
-          /* Nhóm Nhân sự ở cửa kho chung: chọn NGƯỜI trước rồi mới mở máy ảnh
-             (REV-0046 #2). Nhóm khác thì máy ảnh bật luôn như cũ. */
+          /* Nhóm Nhân sự ở cửa kho chung: chọn NGƯỜI trước rồi mới mở đường
+             chính (REV-0046 #2). Nhóm khác thì bật luôn như cũ. */
           if (canChonNguoi()) { manHinh = 'chon-nguoi'; napNguoi(); return; }
           manHinh = 'trang';
           ve();
-          moMayAnh(-1);                      // chọn nhóm xong máy ảnh bật LUÔN
+          moDuongChinh();                    // chọn nhóm xong ĐƯỜNG CHÍNH bật LUÔN
           return;
         }
         if (v === 'chon-nguoi') {
@@ -546,18 +966,41 @@ export function moQuetTaiLieu(t) {
           luuNhap();
           manHinh = 'trang';
           ve();
-          if (!hs.trang.length) moMayAnh(-1);
+          if (!hs.trang.length) moDuongChinh();
           return;
         }
         if (v === 'tai-lai-nguoi') { napNguoi(); return; }
         if (v === 'doi-nhom') { manHinh = 'chon-nhom'; ve(); return; }
         if (v === 'chup-tiep') return moMayAnh(-1);
+        if (v === 'chon-tep') return moChonTep();
         if (v === 'chup-lai') return moMayAnh(parseInt(el.dataset.i, 10));
+        if (v === 'bo-tep') {
+          if (!confirm(`Bỏ file "${hs.tepGoc?.ten}" khỏi bộ này?`)) return;
+          hs.tepGoc = null; hs.nguon = null;
+          manHinh = 'trang'; ve(); return;
+        }
         if (v === 'xoa-trang') {
           const i = parseInt(el.dataset.i, 10);
           if (!confirm(`Xoá trang ${i + 1}?`)) return;
           hs.trang.splice(i, 1);
           luuNhap(); ve(); return;
+        }
+        /* ĐỔI THỨ TỰ BẰNG NÚT — đường CHÍNH, không phải đường dự phòng của kéo
+           thả. Kéo thả HTML5 không chạy bằng ngón tay trên điện thoại (không
+           có sự kiện `dragstart`), mà đây là sản phẩm điện thoại-trước. Nút
+           ↑↓ chạy ở CẢ HAI, đọc được bằng trình đọc màn hình, và bấm được
+           bằng bàn phím. */
+        if (v === 'len' || v === 'xuong') {
+          const i = parseInt(el.dataset.i, 10);
+          const j = v === 'len' ? i - 1 : i + 1;
+          if (j < 0 || j >= hs.trang.length) return;
+          [hs.trang[i], hs.trang[j]] = [hs.trang[j], hs.trang[i]];
+          luuNhap(); ve();
+          /* Giữ ngón tay/con trỏ ở ĐÚNG trang vừa dời, không nhảy về đầu danh
+             sách — dời 3 nấc là bấm 3 lần vào cùng một chỗ. */
+          setTimeout(() => tam.querySelector(
+            `.tlq-the[data-i="${j}"] [data-viec="${v}"]`)?.focus(), 0);
+          return;
         }
         if (v === 'sang-thong-tin') { thu(); manHinh = 'thong-tin'; loiGui = null; ve(); return; }
         if (v === 've-trang') { thu(); manHinh = 'trang'; ve(); return; }
@@ -579,6 +1022,47 @@ export function moQuetTaiLieu(t) {
       });
     });
 
+    /* ---- KÉO ĐỔI THỨ TỰ (máy tính) --------------------------------------
+       Bản scan hay đánh số 1,2,…,10 nên `SAP_TEN` (có hiểu chữ số) đã xếp
+       đúng ngay lúc chọn. Nhưng tên file đời thực còn tệ hơn thế —
+       `scan0001.pdf`, `IMG_2231`, `trang cuoi` — nên phải cho sửa tay TRƯỚC
+       khi lưu, vì lưu rồi thì thứ tự nằm trong file PDF, đổi là phải làm lại
+       cả bộ. Kéo thả là đường tự nhiên trên máy tính; nút ↑↓ ở trên là đường
+       chạy được ở mọi nơi. */
+    let keo = -1;
+    tam.querySelectorAll('.tlq-the[draggable="true"]').forEach(the => {
+      the.addEventListener('dragstart', (e) => {
+        keo = parseInt(the.dataset.i, 10);
+        the.classList.add('dang-keo');
+        /* Firefox KHÔNG khởi động thao tác kéo nếu `dataTransfer` rỗng. */
+        try { e.dataTransfer.setData('text/plain', String(keo)); } catch {}
+        e.dataTransfer.effectAllowed = 'move';
+      });
+      the.addEventListener('dragend', () => {
+        keo = -1;
+        tam.querySelectorAll('.tlq-the').forEach(x => x.classList.remove('dang-keo', 'dich'));
+      });
+      the.addEventListener('dragover', (e) => {
+        if (keo < 0) return;
+        e.preventDefault();                  // không chặn thì `drop` không nổ
+        e.dataTransfer.dropEffect = 'move';
+        the.classList.add('dich');
+      });
+      the.addEventListener('dragleave', () => the.classList.remove('dich'));
+      the.addEventListener('drop', (e) => {
+        e.preventDefault();
+        const tu = keo >= 0 ? keo : parseInt(e.dataTransfer.getData('text/plain') || '-1', 10);
+        const den = parseInt(the.dataset.i, 10);
+        if (tu < 0 || den < 0 || tu === den || tu >= hs.trang.length) return;
+        /* CHÈN vào vị trí thả, KHÔNG hoán đổi hai thẻ. Kéo trang 5 lên đầu mà
+           lại hoán đổi thì trang 1 rơi xuống vị trí 5 — người ta chỉ định dời
+           MỘT trang, không định dời hai. */
+        const [x] = hs.trang.splice(tu, 1);
+        hs.trang.splice(den, 0, x);
+        luuNhap(); ve();
+      });
+    });
+
     const form = tam.querySelector('#tlqForm');
     if (form) form.addEventListener('submit', (e) => { e.preventDefault(); gui(); });
 
@@ -597,7 +1081,7 @@ export function moQuetTaiLieu(t) {
         luuNhap();
         manHinh = 'trang';
         ve();
-        if (!hs.trang.length) moMayAnh(-1);
+        if (!hs.trang.length) moDuongChinh();
       }));
     });
   }
@@ -629,7 +1113,7 @@ export function moQuetTaiLieu(t) {
     if (dangGui) return;
     thu();
     if (!hs.tieuDe || hs.tieuDe.length < 3) { alert('Đặt tên cho tài liệu đã nhé.'); return; }
-    if (!hs.trang.length) { alert('Chưa có trang nào.'); return; }
+    if (!hs.trang.length && !hs.tepGoc) { alert('Chưa có trang nào.'); return; }
     /* Bản nháp cũ (lưu trước bản vá REV-0046 #2) có thể đã có đủ trang mà chưa
        có người. Máy chủ chặn thật; ở đây đưa người ta về đúng màn để chọn, chứ
        đừng để họ bấm Lưu rồi ăn một câu lỗi. */
@@ -644,14 +1128,33 @@ export function moQuetTaiLieu(t) {
 
     dangGui = true; loiGui = null; ve();
     try {
-      /* ① Gộp N trang thành MỘT file PDF — ngay tại máy, không nhờ máy chủ. */
-      const pdf = gopTrangThanhPDF(hs.trang.map(x => dataUrlThanhByte(x.anh)), { tieuDe: hs.tieuDe });
+      /* ---- HAI NGUỒN, MỘT LƯỢT GỬI ------------------------------------
+         `laTepGoc` là chỗ DUY NHẤT hai đường khác nhau, và khác đúng ba thứ:
+         byte gửi lên, số trang, và có ảnh cho AI bóc chữ hay không. Từ
+         `API.tlLuu(...)` trở xuống là chung tuyệt đối — chống trùng `ma_gui`,
+         gửi lại khi sóng yếu, phân quyền, đồng ý, nhật ký: y nguyên. */
+      const laTepGoc = !!hs.tepGoc;
+
+      /* ① ẢNH: gộp N trang thành MỘT file PDF, ngay tại máy.
+            PDF CÓ SẴN: chép nguyên byte, KHÔNG bọc lại (luật ①). */
+      const pdf = laTepGoc ? null
+        : gopTrangThanhPDF(hs.trang.map(x => dataUrlThanhByte(x.anh)), { tieuDe: hs.tieuDe });
+      const than64 = laTepGoc ? hs.tepGoc.base64 : byteThanhBase64(pdf);
+      const coByte = laTepGoc ? hs.tepGoc.coByte : pdf.length;
 
       /* ② Ảnh cho AI bóc chữ: thu nhỏ thêm một nấc, tối đa 3 trang đầu. AI
          đọc ảnh không cần nét bằng mắt người, mà ảnh nhỏ thì gọi nhanh hơn
-         nhiều và không tốn thêm đồng nào (Workers AI đã có sẵn). */
+         nhiều và không tốn thêm đồng nào (Workers AI đã có sẵn).
+
+         ⚠️ PDF CÓ SẴN KHÔNG CÓ ẢNH ĐỂ ĐƯA — và đó là một GIỚI HẠN THẬT phải
+         nói ra, không phải một mảng rỗng lặng lẽ. Bóc chữ trong PDF đòi
+         render PDF ra ảnh, tức là đòi thư viện đọc PDF mà ERP không có
+         (chi phí 0). Máy chủ nhận `dinh_dang: 'pdf_goc'` và ghi thẳng câu
+         "chưa bóc được chữ" vào `ocr_ghi_chu`, để nó còn nguyên ở màn xem
+         chữ, ở bản sao lưu CSV, ở bản khôi phục — chứ không chỉ trong một
+         cái `alert` bay mất sau ba giây. */
       const anhBocChu = [];
-      for (let i = 0; i < Math.min(hs.trang.length, TRAN_TRANG_BOC_CHU); i++) {
+      for (let i = 0; !laTepGoc && i < Math.min(hs.trang.length, TRAN_TRANG_BOC_CHU); i++) {
         const tep = dataUrlThanhTep(hs.trang[i].anh, `trang-${i + 1}.jpg`);
         anhBocChu.push(await nenAnhChung(tep, ANH_BOC_CHU));
       }
@@ -670,9 +1173,16 @@ export function moQuetTaiLieu(t) {
         so_hieu: hs.soHieu || null,
         ngay_ban_hanh: hs.ngayBanHanh || null,
         ngay_het_han: hs.ngayHetHan || null,
-        so_trang: hs.trang.length,
-        tep: byteThanhBase64(pdf),
+        /* PDF đếm được mấy trang thì ghi đúng chừng đó; đếm KHÔNG được thì
+           ghi 1 và màn hình đã nói trước là ghi 1 (xem `veTheTepGoc`). Máy chủ
+           đòi `so_trang >= 1`. */
+        so_trang: laTepGoc ? (hs.tepGoc.soTrang || 1) : hs.trang.length,
+        tep: than64,
         anh_boc_chu: anhBocChu,
+        /* Hai cột chỉ đường cho máy chủ: trần kích thước nào áp, có bỏ qua
+           bước bóc chữ không, và câu ghi chú nào phải ghi lại. */
+        nguon: laTepGoc ? 'tep_may' : (hs.nguon || 'may_anh'),
+        dinh_dang: laTepGoc ? 'pdf_goc' : 'anh_gop',
         dong_y_boi: hs.dongYBoi || null,
         dong_y_muc_dich: hs.dongYMucDich || null
       });
@@ -681,7 +1191,14 @@ export function moQuetTaiLieu(t) {
       xoaNhap(cuaVao, ganId);
       dong();
       if (typeof t.khiXong === 'function') {
-        t.khiXong({ ...kq, so_trang: hs.trang.length, co_byte_pdf: pdf.length, ms_gui: msGui });
+        t.khiXong({
+          ...kq,
+          so_trang: laTepGoc ? (hs.tepGoc.soTrang || 1) : hs.trang.length,
+          co_byte_pdf: coByte,
+          ms_gui: msGui,
+          la_tep_goc: laTepGoc,
+          ten_tep_goc: laTepGoc ? hs.tepGoc.ten : null
+        });
       }
     } catch (e) {
       /* KHÔNG xoá bản nháp. Đây chính là chỗ ràng buộc "sóng yếu gửi hụt phải
@@ -694,11 +1211,13 @@ export function moQuetTaiLieu(t) {
   }
 
   ve();
-  /* Cửa một-nhóm (hồ sơ nhân sự): mở máy ảnh LUÔN, đúng tinh thần "chọn xong
-     máy ảnh bật luôn, không tốn thêm một cú chạm nào" (CTL-0025 Mục 3 ④). Chỉ
-     làm khi chưa có trang nào — đang mở lại bộ quét dở mà máy ảnh tự bật là
-     cướp mất màn xem lại. */
-  if (boQuaChonNhom && !hs.trang.length && hs.nhom) moMayAnh(-1);
+  /* Cửa một-nhóm (hồ sơ nhân sự): mở ĐƯỜNG CHÍNH của máy này LUÔN, đúng tinh
+     thần "chọn xong máy ảnh bật luôn, không tốn thêm một cú chạm nào"
+     (CTL-0025 Mục 3 ④). Trên MÁY TÍNH "đường chính" là hộp CHỌN FILE chứ không
+     phải máy ảnh — máy bàn thường không có camera, mở máy ảnh ở đó là bắt Sếp
+     đóng một hộp thoại vô nghĩa rồi mới đi tìm nút đúng. Chỉ làm khi chưa có
+     trang nào — đang mở lại bộ quét dở mà tự bật là cướp mất màn xem lại. */
+  if (boQuaChonNhom && !hs.trang.length && hs.nhom) moDuongChinh();
   /* Đang có bản nháp dở thì nói ngay, đừng để người ta tưởng mất ảnh. */
   if (hs.trang.length) {
     setTimeout(() => {
