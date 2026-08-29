@@ -2459,10 +2459,25 @@ async function khoiDongVinhDanh() {
     $('#vd-form-body').hidden = !hienForm;
     nutMoVd.textContent = hienForm ? '✕ Đóng' : '+ Khen ai đó';
   }
-  nutMoVd.addEventListener('click', () => dongMoFormVd($('#vd-form-body').hidden));
+  /* ĐANG SỬA lời khen nào (null = đang gửi mới). DÙNG LẠI ĐÚNG FORM NÀY,
+     không dựng hộp thứ hai: form đã có đủ 3 thứ sửa được (người · nội dung ·
+     số sao), mà `vdSua` KHÔNG cho đổi người — nên ở chế độ sửa, ô người bị
+     khoá và có chữ nói rõ vì sao (chọn nhầm người thì phải Gỡ, xem `vdSua`). */
+  let vdDangSuaId = null;
+  function thoatCheDoSua() {
+    vdDangSuaId = null;
+    $('#vd-dang-sua').hidden = true;
+    $('#vd-nguoihienthi').classList.remove('khoa');
+    $('#vd-nut-gui').textContent = 'Vinh danh';
+  }
+  nutMoVd.addEventListener('click', () => {
+    if (vdDangSuaId) { $('#vd-form').reset(); veNguoiVd(); thoatCheDoSua(); }
+    dongMoFormVd($('#vd-form-body').hidden);
+  });
   $('#vd-nut-huy').addEventListener('click', () => {
     $('#vd-form').reset();
     veNguoiVd();
+    thoatCheDoSua();
     dongMoFormVd(false);
   });
 
@@ -2476,11 +2491,29 @@ async function khoiDongVinhDanh() {
      để cộng sao (điều cấm 20). Máy chỉ chỗ, NGƯỜI mới khen. */
   function moFormVinhDanh(nhanSuId, loiKhenNhap) {
     dongMoFormVd(true);
+    thoatCheDoSua();
     chonNguoi.value = nhanSuId;
     veNguoiVd();
     $('#vd-noidung').value = loiKhenNhap || '';
     const oSao = $('#vd-so-sao');
     if (oSao) oSao.value = 3;
+    $('#vd-noidung').focus();
+    $('#vd-form').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  /* Mở CHÍNH form trên ở chế độ SỬA một lời khen đã gửi (REV-0037 · L5). */
+  function moFormSuaKhen(r) {
+    dongMoFormVd(true);
+    vdDangSuaId = r.id;
+    chonNguoi.value = r.nhan_su_id;
+    veNguoiVd();
+    $('#vd-nguoihienthi').classList.add('khoa');
+    $('#vd-dang-sua').hidden = false;
+    $('#vd-dang-sua-ten').textContent = r.nhan_su_ten;
+    $('#vd-noidung').value = r.noi_dung || '';
+    const oSao = $('#vd-so-sao');
+    if (oSao) oSao.value = r.so_sao ?? 1;
+    $('#vd-nut-gui').textContent = 'Lưu lời khen';
     $('#vd-noidung').focus();
     $('#vd-form').scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
@@ -2509,7 +2542,20 @@ async function khoiDongVinhDanh() {
     }
 
     const list = $('#vd-list');
-    list.innerHTML = ds.map(r => `
+    /* Nút Sửa/Gỡ CHỈ hiện trên lời khen của CHÍNH mình và CHỈ trong 24h —
+       `con_sua_duoc` tính ở máy chủ để khỏi lệch múi giờ máy khách. Cửa thật
+       vẫn chốt ở `vdSua`; ẩn nút chỉ để khỏi vẽ thứ bấm vào là báo lỗi. */
+    VD_THEO_ID = {};
+    list.innerHTML = ds.map(r => {
+      VD_THEO_ID[r.id] = r;
+      const cuaToi = kq.toi && r.nguoi_gui_id === kq.toi;
+      const nut = (cuaToi && r.con_sua_duoc)
+        ? `<div class="vd-nut">
+             <button type="button" class="btn-nho" data-vd-sua="${r.id}">Sửa</button>
+             <button type="button" class="btn-nho" data-vd-go="${r.id}">Gỡ</button>
+           </div>`
+        : '';
+      return `
       <div class="vd-item person">
         ${avHtml(r.nhan_su_id, (r.nhan_su_ten || '?').trim().split(/\s+/).slice(-2).map(t => t[0]).join('').toUpperCase(), r.co_anh)}
         <div style="flex:1">
@@ -2518,11 +2564,31 @@ async function khoiDongVinhDanh() {
             ` <span class="tag sage" title="Tổng sao tích luỹ, dùng đổi quà">⭐ ${esc(r.sao ?? 0)} tổng</span></div>
           <div class="vd-noidung">${esc(r.noi_dung)}</div>
           <div class="sm">— ${esc(r.nguoi_gui_ten)} · ${thoiGianTruoc(r.tao_luc)}</div>
+          ${nut}
         </div>
-      </div>
-    `).join('');
+      </div>`;
+    }).join('');
     $('#vd-trong').hidden = ds.length > 0;
   }
+
+  let VD_THEO_ID = {};
+  $('#vd-list').addEventListener('click', async (e) => {
+    const nSua = e.target.closest('[data-vd-sua]');
+    if (nSua) { moFormSuaKhen(VD_THEO_ID[nSua.getAttribute('data-vd-sua')]); return; }
+    const nGo = e.target.closest('[data-vd-go]');
+    if (!nGo) return;
+    const r = VD_THEO_ID[nGo.getAttribute('data-vd-go')];
+    /* NÓI THẲNG HẬU QUẢ TRƯỚC KHI GỠ — người ta ĐÃ ĐỌC lời khen rồi, nên
+       "gỡ" ở đây không phải là xoá cho biến mất mà là gửi một lời đính chính.
+       Giấu điều đó đi là để Sếp bấm nhầm lần thứ hai. */
+    if (!confirm(`Gỡ lời khen gửi ${r.nhan_su_ten}?\n\n`
+      + `· Trừ lại ${r.so_sao ?? 1} ⭐ đã cộng\n`
+      + `· ${r.nhan_su_ten} SẼ NHẬN một thông báo đính chính (bạn ấy đã đọc lời khen rồi)\n`
+      + `· Việc gỡ được ghi vào sổ sửa`)) return;
+    nGo.disabled = true;
+    try { await API.vdSua(r.id, { go: true }); await taiLai(); }
+    catch (err) { alert(err.message || 'Không gỡ được, thử lại nhé.'); nGo.disabled = false; }
+  });
 
   $('#vd-form').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -2530,9 +2596,13 @@ async function khoiDongVinhDanh() {
     const nut = $('#vd-nut-gui');
     nut.disabled = true;
     try {
-      await API.vdGui(chonNguoi.value, $('#vd-noidung').value.trim(), parseInt($('#vd-so-sao').value, 10));
+      const noiDung = $('#vd-noidung').value.trim();
+      const soSao = parseInt($('#vd-so-sao').value, 10);
+      if (vdDangSuaId) await API.vdSua(vdDangSuaId, { noi_dung: noiDung, so_sao: soSao });
+      else await API.vdGui(chonNguoi.value, noiDung, soSao);
       $('#vd-form').reset();
       veNguoiVd();
+      thoatCheDoSua();
       dongMoFormVd(false);
       await taiLai();
     } catch (err) {
@@ -2911,6 +2981,10 @@ async function khoiDongMucTieu() {
 
 async function khoiDongCongViec() {
   const { danh_ba } = await API.danhBa();
+  /* CTL-0017 — bản ghi việc theo id, để hộp Sửa đổ sẵn giá trị đang có và để
+     biết trường nào THẬT SỰ đổi khi bấm Lưu. Nạp trong `taiLai()` từ đúng
+     lượt gọi đã có, KHÔNG thêm lượt gọi thứ hai. */
+  let CV_THEO_ID = {};
   const oPhoiHop = $('#cv-phoi-hop');
   const chonNguoiNhan = $('#cv-nguoi-nhan');
 
@@ -3095,6 +3169,11 @@ async function khoiDongCongViec() {
   async function taiLai() {
     let kq;
     try { kq = await API.cvDanhSach(); } catch { return; }
+    /* CTL-0017 — giữ lại bản ghi để hộp Sửa đổ sẵn giá trị đang có, khỏi bắt
+       người dùng gõ lại từ đầu (gõ lại là mời gõ nhầm). Nạp cùng lượt gọi đã
+       có, KHÔNG thêm lượt gọi thứ hai. */
+    CV_THEO_ID = {};
+    for (const r of [...(kq.nhan || []), ...(kq.giao || [])]) CV_THEO_ID[r.id] = r;
 
     veBang('#cv-bang-nhan', kq.nhan || [], r => {
       const tt = CV_TRANG_THAI[r.trang_thai] || CV_TRANG_THAI.moi;
@@ -3104,7 +3183,11 @@ async function khoiDongCongViec() {
       const chuaXong = ['moi', 'dang_lam', 'cho_duyet'].includes(r.trang_thai);
       let nut = '';
       if (laTodo) {
+        /* TODO CÁ NHÂN — tự giao cho mình thì tự sửa thoải mái, không phiền
+           ai. Đây đúng là ca hay gặp nhất: ghi vội một todo rồi muốn viết lại
+           cho rõ. Trước bản này phải xoá đi ghi lại. */
         if (chuaXong) nut = `<button type="button" class="btn-nho btn-primary" data-cv-xongngay="${r.id}">✓ Xong</button>` +
+          ` <button type="button" class="btn-nho cv-nut-sua" data-cv-sua="${r.id}">Sửa</button>` +
           ` <button type="button" class="btn-nho" data-cv-huy="${r.id}">Bỏ</button>`;
       } else if (r.trang_thai === 'moi') {
         nut = `<button type="button" class="btn-nho btn-primary" data-cv-batdau="${r.id}">Bắt đầu làm</button>`;
@@ -3131,7 +3214,15 @@ async function khoiDongCongViec() {
         nut = `<button type="button" class="btn-nho btn-primary" data-cv-duyet="${r.id}">Duyệt xong</button> ` +
               `<button type="button" class="btn-nho" data-cv-tralai="${r.id}">Trả lại</button>`;
       }
+      /* CTL-0017 — nút SỬA. Trước bản này ở đây CHỈ có "Huỷ": muốn sửa một
+         chữ trong đầu ra là phải huỷ rồi giao lại — mất lịch sử, người nhận
+         ăn hai thông báo. Cố ý ĐỂ NÂU (`.btn-nho` trần), không cam: một khung
+         nhìn chỉ MỘT thứ được cam đậm (luật ba màu ③), chỗ đó dành cho "Duyệt
+         xong". Bước `hoan_thanh`/`huy` không hiện nút — nhưng đó chỉ là phép
+         lịch sự với mắt người dùng, cửa THẬT nằm ở máy chủ
+         (`CV_MO_THEO_TRANG_THAI`): gọi thẳng API vẫn bị chặn 409. */
       if (r.trang_thai === 'moi' || r.trang_thai === 'dang_lam' || r.trang_thai === 'cho_duyet') {
+        nut += ` <button type="button" class="btn-nho cv-nut-sua" data-cv-sua="${r.id}">Sửa</button>`;
         nut += ` <button type="button" class="btn-nho" data-cv-huy="${r.id}">Huỷ</button>`;
       }
       return `<td><div class="nm">${esc(r.tieu_de)}</div>${r.muc_tieu_ten ? `<div class="sm">🎯 Thuộc mục tiêu: ${esc(r.muc_tieu_ten)}</div>` : ''}${r.mo_ta ? `<div class="sm">${dg(r.mo_ta)}</div>` : ''}${r.phoi_hop_ten ? `<div class="sm">🤝 Phối hợp: ${esc(r.phoi_hop_ten)}</div>` : ''}${r.ket_qua ? `<div class="sm"><b>Kết quả:</b> ${dg(r.ket_qua)}</div>` : ''}</td>` +
@@ -3224,7 +3315,115 @@ async function khoiDongCongViec() {
     }
   });
 
+  /* ==========================================================================
+     CTL-0017 — HỘP SỬA VIỆC ĐÃ GIAO
+     ------------------------------------------------------------------------
+     Hộp này KHÔNG tự quyết được gì: mọi luật (ai sửa được, bước nào sửa được,
+     trường nào bắt buộc lý do) đều nằm ở máy chủ và trả về mã lỗi thật. Ở đây
+     chỉ làm ba việc — đổ sẵn giá trị đang có, hỏi lý do ĐÚNG LÚC cần, và in
+     lại lỗi máy chủ nguyên văn. Bịa luật lần hai ở trình duyệt là mời hai bên
+     lệch nhau.
+     ====================================================================== */
+  const cvSuaModal = $('#cvSuaModalNen');
+  let cvDangSuaId = null, cvHanChotCu = null;
+
+  /* Hộp lý do chỉ bật khi hạn chót THẬT SỰ khác giá trị cũ. Bật sẵn từ đầu
+     thì người ta gõ cho có mỗi lần sửa chính tả, và luật thành hình thức. */
+  function capNhatHopLyDo() {
+    const doiHan = ($('#cv-sua-han-chot').value || '') !== (cvHanChotCu || '');
+    $('#cv-sua-khoi-lydo').hidden = !doiHan;
+    $('#cv-sua-ly-do').required = doiHan;
+  }
+
+  async function moHopSuaViec(id) {
+    const r = CV_THEO_ID[id];
+    if (!r) return;
+    cvDangSuaId = id;
+    cvHanChotCu = r.han_chot || '';
+    $('#cv-sua-tieu-de').value = r.tieu_de || '';
+    $('#cv-sua-dau-ra').value = r.dau_ra || '';
+    $('#cv-sua-mo-ta').value = r.mo_ta || '';
+    $('#cv-sua-han-chot').value = r.han_chot || '';
+    $('#cv-sua-ly-do').value = '';
+    $('#cv-sua-loi').textContent = '';
+
+    /* `cho_duyet` — người ta ĐÃ NỘP kết quả theo đầu ra cũ. Sửa đầu ra/hạn
+       chót lúc này là đổi thước đo sau khi đã đo xong, nên máy chủ khoá. Khoá
+       luôn ở đây để người dùng khỏi gõ xong mới bị từ chối — nhưng vẫn để
+       sửa được tiêu đề/ghi chú: chính tả không phải bằng chứng, khoá cả cái
+       đó mới là cắt quá tay. */
+    const daNop = r.trang_thai === 'cho_duyet';
+    $('#cv-sua-khoi-daura').hidden = daNop;
+    $('#cv-sua-khoi-han').hidden = daNop;
+    $('#cv-sua-buoc').textContent = daNop
+      ? 'Việc đã nộp chờ duyệt — chỉ sửa được tên việc và ghi chú. Đầu ra và hạn chót đã khoá vì người nhận đã nộp kết quả theo bản cũ.'
+      : 'Sửa tên việc và ghi chú thì thoải mái. Đổi đầu ra thì người nhận được báo. Dời hạn chót thì phải ghi lý do.';
+    capNhatHopLyDo();
+    cvSuaModal.hidden = false;
+
+    // Lịch sử sửa — gọi RIÊNG, và im lặng nếu hỏng: không xem được lịch sử
+    // thì vẫn phải sửa được việc.
+    const khoi = $('#cv-sua-lichsu-khoi');
+    khoi.hidden = true;
+    veDaiCat('#cv-sua-lichsu-cat', null);
+    try {
+      const ls = await API.suaLichSu('cong_viec', id);
+      const ds = ls.ds || [];
+      if (ds.length) {
+        $('#cv-sua-lichsu').innerHTML = ds.map(d =>
+          `<li>${esc(d.cau)} <span class="luc">· ${esc(String(d.luc || '').slice(0, 16))}</span></li>`).join('');
+        // Sổ bằng chứng bị cắt thì nói ra ngay dưới danh sách (REV-0037 · L1).
+        veDaiCat('#cv-sua-lichsu-cat', ls.cat, { don_vi: 'lần sửa' });
+        khoi.hidden = false;
+      }
+    } catch { /* không xem được lịch sử thì thôi, đừng chặn việc sửa */ }
+  }
+
+  function dongHopSuaViec() {
+    cvSuaModal.hidden = true;
+    cvDangSuaId = null;
+    cvHanChotCu = null;
+  }
+  cvSuaModal.addEventListener('click', e => { if (e.target === cvSuaModal) dongHopSuaViec(); });
+  $('#cv-sua-nut-huy').addEventListener('click', dongHopSuaViec);
+  $('#cv-sua-han-chot').addEventListener('change', capNhatHopLyDo);
+  $('#cv-sua-han-chot').addEventListener('input', capNhatHopLyDo);
+
+  $('#cv-sua-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    $('#cv-sua-loi').textContent = '';
+    const nut = $('#cv-sua-nut-luu');
+    const cu = CV_THEO_ID[cvDangSuaId] || {};
+    nut.disabled = true;
+    try {
+      /* CHỈ gửi trường THẬT SỰ đổi. Gửi hết mọi trường thì mỗi lần bấm Lưu
+         là đẻ một loạt dòng lịch sử "đổi A → A" — sổ đầy rác, đọc không ra
+         cái gì, và tốn hạn mức ghi D1 vô ích. */
+      const doi = {};
+      const v = (id) => $(id).value.trim();
+      if (v('#cv-sua-tieu-de') !== (cu.tieu_de || '')) doi.tieu_de = v('#cv-sua-tieu-de');
+      if (!$('#cv-sua-khoi-daura').hidden && v('#cv-sua-dau-ra') !== (cu.dau_ra || '')) doi.dau_ra = v('#cv-sua-dau-ra');
+      if (v('#cv-sua-mo-ta') !== (cu.mo_ta || '')) doi.mo_ta = v('#cv-sua-mo-ta');
+      if (!$('#cv-sua-khoi-han').hidden && ($('#cv-sua-han-chot').value || '') !== (cu.han_chot || '')) {
+        doi.han_chot = $('#cv-sua-han-chot').value || '';
+      }
+      if (!Object.keys(doi).length) { dongHopSuaViec(); return; }
+      if (doi.han_chot !== undefined) doi.ly_do = v('#cv-sua-ly-do');
+      await API.cvSua(cvDangSuaId, doi);
+      dongHopSuaViec();
+      await lamMoiCacManLienQuanCv();
+    } catch (err) {
+      // In NGUYÊN VĂN lỗi máy chủ — nó đã nói rõ vì sao bị chặn (thiếu lý do,
+      // sai vai, sai bước). Thay bằng câu chung chung là giấu mất lời giải.
+      $('#cv-sua-loi').textContent = err.message || 'Không sửa được, thử lại nhé.';
+    } finally {
+      nut.disabled = false;
+    }
+  });
+
   async function xuLyNut(e) {
+    const nutSua = e.target.closest('[data-cv-sua]');
+    if (nutSua) { await moHopSuaViec(nutSua.getAttribute('data-cv-sua')); return; }
     const nutBatDau = e.target.closest('[data-cv-batdau]');
     const nutNop = e.target.closest('[data-cv-nop]');
     const nutXongNgay = e.target.closest('[data-cv-xongngay]');

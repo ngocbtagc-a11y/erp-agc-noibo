@@ -944,6 +944,22 @@ img.av { object-fit: cover; display: block; cursor: default; }
 .vd-item .vd-noidung::after { content: '”'; }
 .vd-item .sm { font-size: 12px; }
 
+/* Sửa / Gỡ lời khen (REV-0037 · L5). Vùng chạm 44px như mọi nút khác trong
+   ERP — đây là nút bấm trên điện thoại, và bấm nhầm "Gỡ" thay vì "Sửa" thì
+   người được khen ăn ngay một tin đính chính không đáng có. */
+.vd-item .vd-nut { display: flex; gap: 8px; margin-top: 6px; }
+.vd-item .vd-nut .btn-nho {
+  min-height: 44px; min-width: 44px;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+/* Ô chọn người bị KHOÁ ở chế độ sửa — `vdSua` không cho đổi người nhận. */
+.combo1-hienthi.khoa { background: #e6e0d6; color: var(--text-mute); pointer-events: none; }
+.vd-dang-sua {
+  font-size: 13px; line-height: 1.5;
+  background: var(--warn-wash); border: 1px solid #ecd9b5;
+  border-radius: var(--r-md); padding: 10px 12px;
+}
+
 .sb-user .meta { min-width: 0; flex: 1; }
 /* REV-0025/G3 đã cảnh báo cái bẫy ở đây: `.sb-user .meta b` đặt chữ TRẮNG,
    mà popover `.thd-panel` nền TRẮNG lại nằm bên trong `.meta` — thẻ <b> nào
@@ -3281,4 +3297,76 @@ tr.kd-chiadoi td {
   .cv-hai-bang { grid-template-columns: 1fr; }
   .cv-dong { flex-direction: column; align-items: flex-start; gap: 2px; }
   .cv-dong-phu { white-space: normal; }
+}
+
+/* ==========================================================================
+   CTL-0017 — SỬA VIỆC ĐÃ GIAO
+   --------------------------------------------------------------------------
+   LUẬT BA MÀU (docs/BANG-MAU.md): không thêm màu thứ tư ở đây.
+     · nền/chữ  → họ NÂU (--surface-2 / --line / --ink / --text-mute)
+     · hộp lý do → --warn (vàng nâu) — NẰM TRONG họ nâu–cam, KHÔNG tính là
+       màu thứ tư. Cố ý KHÔNG dùng đỏ: dời hạn có lý do là việc hợp lệ, không
+       phải lỗi. Đỏ để dành đúng cho lỗi/quá hạn — rắc đỏ vào đây là làm loãng
+       chính cái đỏ mà kho vận đang dựa vào để bắt đơn hoàn quá hạn.
+     · một điểm nhấn cam duy nhất trong hộp: nút "Lưu thay đổi" (.btn-primary).
+       Nút "Sửa" ngoài bảng cố ý ĐỂ NÂU, không cam — hai chỗ cam cùng lúc thì
+       người dùng hết biết bấm cái nào (luật ③).
+
+   44px LÀ NGƯỠNG NGÓN TAY, ĐO THẬT (scripts/do-nut-sua-44px.mjs).
+   `.btn-nho` gốc chỉ cao ~29px (padding 6px + font 12.5px) — nhân viên kho
+   bấm bằng ngón cái khi đang bê hàng thì trượt. Nút của đợt này đặt
+   min-height CỨNG, kèm `box-sizing: border-box` (thiếu nó thì padding cộng
+   ra ngoài và số đo thật lệch khỏi số khai trong CSS).
+   ========================================================================== */
+.cv-sua-nut,
+.btn-nho.cv-nut-sua {
+  box-sizing: border-box;
+  min-height: 44px;
+  min-width: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Hộp "vì sao dời hạn" — vàng nâu, đủ nổi để không bấm nhầm cho qua, không
+   đỏ để khỏi trông như đang báo lỗi. */
+.cv-sua-canhbao {
+  background: var(--warn-wash);
+  border: 1px solid var(--warn);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+.cv-sua-canhbao label { color: var(--warn-dark); }
+.cv-sua-canhbao input {
+  box-sizing: border-box;
+  min-height: 44px;      /* ô nhập cũng là chỗ chạm — cùng ngưỡng ngón tay */
+}
+
+/* Lịch sử sửa — tách bằng ĐƯỜNG KẺ MẢNH, không bằng mảng nền xám (luật ④). */
+.cv-sua-lichsu {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.cv-sua-lichsu h5 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--text-mute);
+  font-weight: 600;
+}
+.cv-sua-lichsu ul { margin: 0; padding: 0; list-style: none; }
+.cv-sua-lichsu li {
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--ink);
+  padding: 7px 0;
+  border-bottom: 1px solid var(--line);
+}
+.cv-sua-lichsu li:last-child { border-bottom: 0; }
+.cv-sua-lichsu .luc { color: var(--text-mute); font-size: 11.5px; }
+
+/* ĐIỆN THOẠI LÀ ĐƯỜNG CHÍNH — Sếp và nhân viên kho sửa trên điện thoại.
+   Hai nút xuống hàng và chiếm hết bề ngang, khỏi phải nhắm. */
+@media (max-width: 640px) {
+  .cv-sua-nut { width: 100%; flex: 1 1 100%; }
 }

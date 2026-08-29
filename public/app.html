@@ -183,6 +183,14 @@
         </div>
         <div class="panel-body" id="vd-form-body" hidden>
           <form id="vd-form" class="form-luoi" autocomplete="off">
+            <!-- Chế độ SỬA lời khen đã gửi (REV-0037 · L5). Nói rõ VÌ SAO
+                 không đổi được người: sửa lặng lẽ tên người nhận là chuyển
+                 một lời khen ĐÃ ĐỌC từ người này sang người kia. -->
+            <div class="field field-rong vd-dang-sua" id="vd-dang-sua" hidden>
+              ✏️ Đang sửa lời khen gửi <b id="vd-dang-sua-ten"></b>.
+              Sửa được lời khen và số ⭐. <b>Chọn nhầm người thì phải bấm Gỡ</b>
+              rồi khen lại — bạn ấy đã đọc lời khen này rồi nên sẽ nhận tin đính chính.
+            </div>
             <div class="field field-rong">
               <label>Khen ai *</label>
               <div class="combo1" id="vd-nguoicombo">
@@ -2880,6 +2888,65 @@
       </div>
     </form>
     <div class="form-loi" id="mt-loi"></div>
+  </div>
+</div>
+
+<!-- CTL-0017 — SỬA VIỆC ĐÃ GIAO.
+     Trước bản này: giao xong là đóng băng, gõ nhầm một chữ cũng phải huỷ đi
+     giao lại (mất lịch sử, người nhận ăn hai thông báo).
+     Ba nhóm trường xếp theo mức nặng dần, để người sửa nhìn là biết mình
+     đang đụng vào cái gì:
+       ① sửa thoải mái  — tên việc, ghi chú
+       ② phải ghi vết   — đầu ra (thước nghiệm thu MBOs)
+       ③ phải có lý do  — hạn chót (đổi cam kết)
+     Điện thoại là đường chính: Sếp và nhân viên kho sửa trên điện thoại. -->
+<div class="modal-nen" id="cvSuaModalNen" hidden>
+  <div class="modal">
+    <h4>Sửa việc đã giao</h4>
+    <p class="hint" id="cv-sua-buoc" style="margin:0 0 14px"></p>
+    <form id="cv-sua-form" class="form-luoi" autocomplete="off">
+      <div class="field field-rong">
+        <label>Tên việc *</label>
+        <input type="text" id="cv-sua-tieu-de" required maxlength="200">
+      </div>
+      <div class="field field-rong" id="cv-sua-khoi-daura">
+        <label>Đầu ra cụ thể cần đạt *</label>
+        <textarea id="cv-sua-dau-ra" rows="3" maxlength="1000"></textarea>
+        <p class="hint">Đây là thước nghiệm thu. Sửa được, nhưng có ghi vết và người nhận được báo.</p>
+      </div>
+      <div class="field field-rong">
+        <label>Ghi chú thêm (tuỳ chọn)</label>
+        <textarea id="cv-sua-mo-ta" rows="2" maxlength="2000"></textarea>
+      </div>
+      <div class="field field-rong" id="cv-sua-khoi-han">
+        <label>Hạn chót</label>
+        <input type="date" id="cv-sua-han-chot">
+      </div>
+
+      <!-- Hộp lý do CHỈ hiện khi hạn chót thật sự đổi. Hiện sẵn từ đầu thì
+           người ta gõ cho có mỗi lần sửa chính tả, và luật thành hình thức. -->
+      <div class="field field-rong cv-sua-canhbao" id="cv-sua-khoi-lydo" hidden>
+        <label for="cv-sua-ly-do">Vì sao dời hạn chót? *</label>
+        <p class="hint" style="margin:0 0 8px">Dời hạn là đổi cam kết. Hạn cũ, hạn mới, tên bạn và lý do này đều được ghi lại, và <b>người giao việc sẽ nhận được thông báo</b>.</p>
+        <input type="text" id="cv-sua-ly-do" maxlength="500" placeholder="VD: chờ NCC gửi báo giá">
+      </div>
+
+      <div class="field field-nut" style="display:flex; gap:10px; flex-wrap:wrap">
+        <button type="submit" class="btn-primary cv-sua-nut" id="cv-sua-nut-luu" style="width:auto">Lưu thay đổi</button>
+        <button type="button" class="btn-phu cv-sua-nut" id="cv-sua-nut-huy" style="width:auto">Hủy</button>
+      </div>
+    </form>
+    <div class="form-loi" id="cv-sua-loi"></div>
+
+    <!-- Lịch sử sửa — ĐỌC HIỂU ĐƯỢC, không phải mã máy. Câu tiếng Việt dựng
+         sẵn ở máy chủ (`cauSuaDoc`) nên web và thông báo không lệch nhau. -->
+    <div class="cv-sua-lichsu" id="cv-sua-lichsu-khoi" hidden>
+      <h5>Đã sửa những gì</h5>
+      <ul id="cv-sua-lichsu"></ul>
+      <!-- Sổ bằng chứng cắt bớt thì PHẢI nói ra (REV-0037 · L1) — im lặng ở
+           đây là giấu đúng dòng người ta muốn giấu. -->
+      <div class="dai-cat" id="cv-sua-lichsu-cat" hidden></div>
+    </div>
   </div>
 </div>
 
