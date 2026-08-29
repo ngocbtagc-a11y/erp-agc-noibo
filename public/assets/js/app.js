@@ -13,6 +13,8 @@
 import { API } from './api.js';
 import { tinhTrangThaiTB, veGiaoDienTB, hoanDuoc } from './tbd-trangthai.js';
 import { nenChayVongLap, nenDongDau } from './nhip-tim-chat.js';
+import { soDoHienThi, chuHuyHieu, datSoDo, nenNhacCai, CHU_NHAC_CAI, KHOA_BO_QUA }
+  from './so-do-bieu-tuong.js';
 
 /* ---- GỌI MÓC NỐI GIỮA CÁC MÔ-ĐUN — thay cho `window.CAI_GI_DO?.()` -------
    BÀI HỌC 29/08/2026 (REV-0038 · L3). `window.moChatVoi?.()` đã biến một
@@ -1688,6 +1690,7 @@ window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
   _suKienCaiDat = e;
   nutCaiDat.hidden = false;
+  veDaiNhacCai();     // nút nhỏ trên thanh đầu dễ bị nhìn xuyên qua — xem dưới
 });
 nutCaiDat?.addEventListener('click', async () => {
   if (!_suKienCaiDat) return;
@@ -1696,7 +1699,51 @@ nutCaiDat?.addEventListener('click', async () => {
   await _suKienCaiDat.userChoice;
   _suKienCaiDat = null;
 });
-window.addEventListener('appinstalled', () => { nutCaiDat.hidden = true; });
+window.addEventListener('appinstalled', () => {
+  nutCaiDat.hidden = true;
+  const d = $('#daiCaiMay'); if (d) d.hidden = true;
+});
+
+/* ---- DẢI NHẮC CÀI ERP LÊN MÁY (29/08/2026) -------------------------------
+   Nút "⬇ Cài đặt ERP" ở trên đã có từ 25/08 nhưng nó là một nút phụ lẫn giữa
+   thanh đầu — không ai bấm vì không ai biết bấm vào được gì. Số đỏ trên biểu
+   tượng thanh tác vụ CHỈ chạy khi ERP đã cài như ứng dụng, nên phải nói thẳng
+   ra đúng cái người ta được lợi.
+   KỶ LUẬT: một dải nhỏ · một lần · bấm "Bỏ qua" là THÔI HẲN · điện thoại KHÔNG
+   hiện (ở đó đã có thông báo đẩy). Quyết định nằm ở `nenNhacCai()` — bàn thử
+   `scripts/do-so-do-bieu-tuong.mjs` đo ĐÚNG hàm đó, không đo bản chép lại. */
+function veDaiNhacCai() {
+  const dai = $('#daiCaiMay');
+  if (!dai) return;
+  let daBoQua = false;
+  try { daBoQua = localStorage.getItem(KHOA_BO_QUA) === '1'; }
+  catch { daBoQua = false; }   // chế độ riêng tư chặn localStorage — coi như chưa bỏ qua
+  const { hien } = nenNhacCai({
+    coSuKienCai: !!_suKienCaiDat,
+    daCaiRoi: window.matchMedia?.('(display-mode: standalone)')?.matches ||
+              navigator.standalone === true,
+    laDienThoai: window.matchMedia?.('(max-width: 820px)')?.matches ||
+                 (navigator.maxTouchPoints || 0) > 0,
+    daBoQua
+  });
+  dai.hidden = !hien;
+  const chu = $('#daiCaiMayChu');
+  if (chu && hien) chu.textContent = CHU_NHAC_CAI;
+}
+$('#daiCaiMayBat')?.addEventListener('click', async () => {
+  const dai = $('#daiCaiMay'); if (dai) dai.hidden = true;
+  if (!_suKienCaiDat) return;
+  nutCaiDat.hidden = true;
+  _suKienCaiDat.prompt();
+  await _suKienCaiDat.userChoice;
+  _suKienCaiDat = null;
+});
+$('#daiCaiMayBoQua')?.addEventListener('click', () => {
+  const dai = $('#daiCaiMay'); if (dai) dai.hidden = true;
+  // Bấm bỏ qua là KHÔNG HỎI LẠI — kể cả sau khi tải lại trang.
+  try { localStorage.setItem(KHOA_BO_QUA, '1'); } catch { /* riêng tư: đành hỏi lại */ }
+});
+veDaiNhacCai();   // ca trình duyệt đã bắn beforeinstallprompt TRƯỚC khi app.js chạy
 
 /* ==========================================================================
    CÁC KHỐI DỰNG SẴN
@@ -3891,9 +3938,19 @@ async function khoiDongChat() {
     await taiDanhSachHoiThoai();
   }
 
+  /* MỘT chỗ duy nhất trong toàn ERP được phép đổi số chưa đọc — cả huy hiệu
+     tròn trong trang LẪN số đỏ trên biểu tượng thanh tác vụ (Sếp Ngọc
+     29/08/2026: "để không bị miss tin nhắn"). Hai con số lấy từ CÙNG một hàm
+     `soDoHienThi`, nên không có đường nào để chúng đá nhau.
+     KHÔNG gọi `setAppBadge` ở bất kỳ chỗ nào khác trong `app.js` — thêm chỗ
+     thứ hai là dựng cơ chế đếm thứ hai. Xem `so-do-bieu-tuong.js` luật ①. */
   function veBadge() {
-    if (chuaDoc > 0 && !dangMo) { badge.textContent = chuaDoc > 99 ? '99+' : chuaDoc; badge.hidden = false; }
+    const so = soDoHienThi(chuaDoc, dangMo);
+    const chu = chuHuyHieu(so);
+    if (chu) { badge.textContent = chu; badge.hidden = false; }
     else badge.hidden = true;
+    // Máy chưa cài ERP / Firefox / Safari: `datSoDo` trả {lam:false}, im lặng.
+    datSoDo(so);
   }
 
   /* Giữ nguyên MẢNG tin đang hiển thị, không chỉ các thẻ DOM. Cần thế vì

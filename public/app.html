@@ -119,6 +119,19 @@
       <div class="date" id="ngayHomNay"></div>
     </header>
 
+    <!-- ---------- Dải nhắc cài ERP lên máy (29/08/2026) ----------
+         Số đỏ trên biểu tượng thanh tác vụ CHỈ chạy khi ERP đã được cài như
+         ứng dụng. Dải này hiện ĐÚNG MỘT LẦN, chỉ trên máy tính, chỉ khi trình
+         duyệt báo cài được; bấm "Bỏ qua" là không hỏi lại nữa. Luật quyết định
+         nằm ở `nenNhacCai()` trong assets/js/so-do-bieu-tuong.js. -->
+    <div class="dai-cai-may" id="daiCaiMay" hidden>
+      <span class="dai-cai-may-chu" id="daiCaiMayChu"></span>
+      <span class="dai-cai-may-nut">
+        <button type="button" class="tbd-nut tbd-nut-chinh" id="daiCaiMayBat">Cài lên máy</button>
+        <button type="button" class="tbd-nut" id="daiCaiMayBoQua">Bỏ qua</button>
+      </span>
+    </div>
+
     <!-- ---------- Tổng quan ---------- -->
     <section class="view" id="v-tongquan">
 
