@@ -139,7 +139,10 @@ export const API = {
   cvCapNhat: (id, trangThai, ketQua) => goi('/api/cong-viec/cap-nhat', {
     method: 'POST', body: JSON.stringify({ id, trang_thai: trangThai, ket_qua: ketQua })
   }),
-  cvLichSu: () => goi('/api/cong-viec/lich-su'),
+  /* `truoc` = con trỏ `cap_nhat_luc|id` của dòng cuối đã tải → máy chủ trả tiếp
+     500 việc CŨ HƠN. Đây là ĐƯỜNG ĐI TIẾP CÓ THẬT của dải cắt (REV-0034 · L2):
+     ô tìm kiếm ở màn đó lọc phía trình duyệt nên không với tới phần bị cắt. */
+  cvLichSu: (truoc) => goi('/api/cong-viec/lich-su' + (truoc ? `?truoc=${encodeURIComponent(truoc)}` : '')),
   cvTongQuanCongTy: () => goi('/api/cong-viec/tong-quan-congty'),
   cvTongQuanPhongBan: () => goi('/api/cong-viec/tong-quan-phongban'),
 
@@ -338,7 +341,9 @@ export const API = {
   shopeeTrangThai: () => goi('/api/shopee/trang-thai'),
   hoanDongBo: () => goi('/api/hoan/dong-bo', { method: 'POST' }),
   hoanDanhSach: () => goi('/api/hoan/danh-sach'),
-  hoanLichSu: () => goi('/api/hoan/lich-su'),
+  /* `truoc` = con trỏ `tao_luc_shopee|return_sn` — tải tiếp 500 đơn hoàn CŨ HƠN
+     (REV-0034 · L2, cùng lý do với cvLichSu). */
+  hoanLichSu: (truoc) => goi('/api/hoan/lich-su' + (truoc ? `?truoc=${encodeURIComponent(truoc)}` : '')),
   hoanDaNhan: (returnSn, tinhTrang) => goi('/api/hoan/da-nhan', {
     method: 'POST', body: JSON.stringify({ return_sn: returnSn, tinh_trang: tinhTrang })
   }),

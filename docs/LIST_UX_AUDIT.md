@@ -97,14 +97,18 @@ Canh tái phát: `npm run do-cat-im-lang` (tự kiểm bằng 3 mẫu vi phạm 
 ### Hàng đợi — CÓ LÝ DO, KHÔNG IM LẶNG
 
 Bảng dưới đây là bản người đọc của `MIEN_TRU` trong
-`scripts/do-cat-im-lang.mjs`. Máy quét in đủ 9 dòng này mỗi lần chạy và **báo
+`scripts/do-cat-im-lang.mjs`. Máy quét in đủ 8 dòng này mỗi lần chạy và **báo
 lỗi nếu một dòng không còn che vi phạm thật** — miễn trừ chết là giấy thông
 hành miễn phí cho lỗi sau.
 
+`layThongBao` **đã ra khỏi bảng này** (REV-0034 · L3): lý do miễn trừ cũ —
+*"chuông chỉ đếm chưa đọc nên chưa lệch nghĩa"* — là **sai**, vì `chuaDoc` đếm
+trên mảng đã bị trần 50 cắt, tức đúng lỗi `#ls-dem` in `500/500`. Nay hàm đó
+đếm bằng `COUNT(*)` (chỉ khi thật sự cắt) và có dải cắt riêng ở chuông.
+
 | Chỗ | Trần | Loại | Ghi chú |
 |---|---|---|---|
-| `chatDanhSach` — Chat nội bộ | 50 | **Hàng đợi** | Chưa có nút "xem tin cũ hơn"; cần thiết kế cuộn ngược riêng, không vá bằng một dải chữ |
-| `layThongBao` — Thông báo | 50 | **Hàng đợi** | Chuông chỉ đếm chưa đọc nên chưa lệch nghĩa; cần dải cắt khi bảng lớn lên |
+| `chatDanhSach` — Chat nội bộ | 50 | **Hàng đợi** | Chưa có nút "xem tin cũ hơn"; cần cuộn ngược thật, không vá bằng một dải chữ. Ước lượng ~1 buổi — nay đã có sẵn khuôn con trỏ `truoc` của `cvLichSu`/`hoanLichSu` để chép |
 | `nsLichSu` — Lịch sử 1 hồ sơ nhân sự | 200 | **Hàng đợi** | 23 nhân sự, còn xa ngưỡng |
 | `donHangHuy` — Đơn huỷ trong tháng | 300 | **Hàng đợi** | Chưa chạm trần theo số liệu 28/08/2026 |
 | `danhSach` (`hopdong.js`) | 100 | **Hàng đợi** | Hợp đồng của MỘT người |
@@ -116,7 +120,23 @@ hành miễn phí cho lỗi sau.
 Ngưỡng soi là `LIMIT ≥ 20`. Dưới ngưỡng là tra một dòng, hoặc lấy vài mục
 "gần đây/top" mà nhãn giao diện đã tự nói — chưa ai tin đó là "tất cả".
 Cron/tác vụ nền cắt lô không tính: không ai đang nhìn một màn hình để mà bị
-nói dối.
+nói dối. Riêng `.slice()` cắt danh sách thì **cỡ nào cũng phải nói ra**: một
+bảng "Top 5" im lặng vẫn là một bảng khẳng định sai "đây là tất cả".
+
+### Vòng 29/08/2026 — vá lưới, sửa câu chữ, gọn dải (REV-0034)
+
+| Việc | Trước | Sau |
+|---|---|---|
+| **Lưới bắt được mấy kiểu cắt** | 1/5 kiểu Hồ Ly viết ra | **9/9** (5 của Hồ Ly + 4 tự nghĩ: `.slice(-N)` · `.length = N` · `Math.min(N, …)` · `.slice()` ở máy chủ) |
+| **Hàm máy quét nhìn thấy** | 675 | **710** (+35, mở cho `const x = async () =>`; riêng `dulieunen.js` 22 → 43) |
+| **Vi phạm THẬT lòi thêm sau khi hết mù** | — | **0** — 35 hàm mới hiện ra hôm nay chưa hàm nào có `LIMIT`/`.slice` cỡ danh sách. Trước đây `dulieunen.js` là **lỗ chờ**: mai ai thêm, máy vẫn xanh |
+| **Dải PHẠM VI cao** (kể cả margin) | 148,8px @375 · 169px @320 | **52px** ở cả hai |
+| **Dòng bảng còn thấy được** | 5 dòng @375×667 · 2 dòng @320×568 | **7 dòng · 5 dòng** (tăng, không giảm) |
+| **Đường đi tiếp của dải cắt** | câu chữ chỉ sang ô tìm kiếm — mà ô đó lọc phía trình duyệt | nút **"Tải thêm N việc/đơn cũ hơn"** gọi lại máy chủ với con trỏ `?truoc=` |
+
+Đo bằng `npm run do-duong-di-tiep` (D1 thật, worker thật, tài khoản `hcns`,
+700 việc) và `npm run do-nut-dai-cat` (trình duyệt thật, có khung "bản trước"
+để so, có ca đối chứng gỡ luật 44px).
 
 ## Khi nào quay lại làm đầy đủ hơn
 

@@ -2092,8 +2092,7 @@ tr.kd-chiadoi td {
    `scripts/do-cat-im-lang.mjs`, không phải lời khai suông: commit trước
    trong chính kho mã này từng tự khai 44px mà đo tay ra 28px (BH-16).
    ========================================================================== */
-.dai-cat,
-.cv-pham-vi {
+.dai-cat {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -2105,13 +2104,10 @@ tr.kd-chiadoi td {
   font-size: 13.5px;
   color: var(--text);
   line-height: 1.5;
+  margin: 10px 0 2px;
 }
 
-.dai-cat { margin: 10px 0 2px; }
-.cv-pham-vi { margin: 0 0 12px; }
-
-.dai-cat-chu,
-.cv-pham-vi-chu { flex: 1 1 240px; min-width: 0; }
+.dai-cat-chu { flex: 1 1 240px; min-width: 0; }
 
 .dai-cat b { color: var(--warn-dark); }
 
@@ -2135,6 +2131,49 @@ tr.kd-chiadoi td {
 }
 
 .dai-cat-nut:hover { background: var(--warn-wash); border-color: var(--warn-dark); }
+
+/* ---------------------------------------------------------------------------
+   DẢI PHẠM VI — MỘT DÒNG, và CẢ DẢI LÀ CÁI NÚT (REV-0034 · L4).
+
+   Khác dải cắt ở một điểm quyết định: dải cắt CHỈ hiện khi thật sự có cắt,
+   còn dải này LUÔN hiện. Bản đầu là 4 dòng chữ + một nút riêng — đo được
+   137px ở 375px và 157px ở 320px, tức mỗi lần vào màn Công việc là mất ~2
+   dòng bảng, kể cả khi không có gì bị cắt, trên đúng màn hình nhân viên kho
+   cầm một tay. Trái đúng nguyên tắc chính chúng ta viết trong app.js: *"một
+   dải luôn hiện là một dải mắt người học được cách bỏ qua trong đúng một
+   tuần"*, và trái ràng buộc "không làm nhân viên kho cuộn thêm".
+
+   Nay: một dòng, không nút riêng, câu đầy đủ nằm ở `title=`. Vẫn ≥44px cho
+   ngón tay vì CẢ DẢI bấm được (đo: npm run do-nut-dai-cat).
+   Đặt SAU `.dai-cat-nut` vì phần tử mang cả hai lớp — thắng theo thứ tự.
+   --------------------------------------------------------------------------- */
+.cv-pham-vi {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: nowrap;
+  width: 100%;
+  margin: 0 0 8px;
+  padding: 4px 12px;
+  min-height: 44px;
+  border-radius: 12px;
+  background: var(--warn-wash);
+  border: 0;
+  border-left: 3px solid var(--warn);
+  color: var(--text);
+  font-size: 13.5px;
+  font-weight: 400;
+  line-height: 1.4;
+  text-align: left;
+  white-space: normal;
+  cursor: pointer;
+}
+
+.cv-pham-vi:hover { background: var(--warn-wash); border-left-color: var(--warn-dark); }
+
+.cv-pham-vi-chu { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cv-pham-vi-di { color: var(--warn-dark); font-weight: 600; white-space: nowrap; flex-shrink: 0; }
 
 /* Liên kết gọi / gửi thư trong danh bạ */
 .lnk {

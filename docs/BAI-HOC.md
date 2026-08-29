@@ -604,3 +604,54 @@ sau). Máy tự kiểm bằng **3 mẫu vi phạm giả + 5 mẫu sạch** trư�
 `shopee.js`, và một `s.slice(0,10).split('-')` cắt **chuỗi ngày**. Máy quét đọc cả ghi
 chú là máy quét sẽ bị người ta tắt đi.
 
+
+**BH-48 · BỘ ĐỐI CHỨNG DO CHÍNH NGƯỜI DỰNG LƯỚI TỰ CHỌN THÌ NÓ CHỈ CHỨA ĐÚNG LOẠI LƯỚI ẤY
+BẮT ĐƯỢC.** `scripts/do-cat-im-lang.mjs` (BH-47) tự kiểm bằng **3 mẫu vi phạm giả + 5 mẫu
+sạch** rồi in "SẠCH". Hồ Ly soi lại, **tự viết 5 mẫu vi phạm kiểu khác** — máy quét bắt
+**đúng 1**. Bốn kiểu lọt: `'… LIMIT ' + biến` (ghép chuỗi, không template), `.slice(0,
+ĐỊNH_DANH)` (tham số không phải chữ số), `for (i<30)` / `.splice(30)`, và nặng nhất:
+**handler khai bằng `export const x = async (…) => {}`** — `tachHam()` chỉ nhận `function`
+ở cột 0 nên **cả `src/dulieunen.js` vô hình với máy quét** (22/43 hàm nhìn thấy). Hôm ấy
+tệp đó chưa có `LIMIT` nào, nên **không ai thấy gì cả**: một **lỗ chờ**, mai ai thêm là máy
+vẫn xanh.
+→ **Lưới thủng thì câu "đã quét sạch" là vô nghĩa** — tệ hơn không quét, vì nó dập tắt
+đúng cái nghi ngờ đáng giữ. Số "0 vi phạm" chỉ có nghĩa khi đi kèm số **"lưới nhìn thấy
+bao nhiêu phần kho mã"**.
+→ Cách chữa, làm được ngay: ① liệt kê **theo KIỂU CẮT** chứ không theo một cú pháp
+(`LIMIT <số>` · `LIMIT ${…}` · `LIMIT ?` · `LIMIT` ghép chuỗi · `.slice(0,N)` · `.slice(-N)`
+· `.splice(N)` · `.length = N` · `for (i<N)` · `Math.min(N,…)`); ② **mỗi kiểu bắt buộc có
+một mẫu vi phạm trong bộ tự kiểm** — xoá mẫu nào là mở lại đúng lỗ đó; ③ **nhờ người khác
+viết mẫu**, và khi họ viết ra thì **thêm cả bộ của họ vào bàn đo**, đừng chỉ vá rồi kể lại;
+④ đo **độ phủ của chính cái lưới** (ở đây: 675 → 710 hàm nhìn thấy, +35).
+→ Rộng ra hơn `LIMIT`: mọi máy quét tĩnh trong kho mã này đều phải trả lời được hai câu —
+*"mày bắt được mấy trên mấy kiểu?"* và *"mày nhìn thấy bao nhiêu phần kho mã?"*. Không trả
+lời được thì màu xanh của nó không phải bằng chứng.
+
+**BH-49 · ĐỪNG VIẾT CÂU CHỈ ĐƯỜNG TRƯỚC RỒI KIỂM MÃ SAU.** Trong chính commit chống nói
+dối (BH-47), dải cắt của *Lịch sử làm việc* in *"Dùng ô tìm kiếm phía trên để lọc đúng
+việc cần xem"* — mà ô đó lọc **phía trình duyệt** trên đúng 500 dòng đã tải (`DS_LSCV`),
+**không với tới 200 việc bị cắt**. Dải *Lịch sử đơn hoàn* mắc y hệt: *"dùng ô tìm theo mã
+đơn nếu cần tra đơn cũ"*. **Chỉ người ta đi tìm ở chỗ không có còn tệ hơn không chỉ gì
+cả** — người không tìm thấy sẽ kết luận "hệ thống mất dữ liệu", đúng cái hiểu sai mà bản
+vá sinh ra để dập.
+→ Câu chữ chỉ đường là một **lời hứa về hành vi của phần mềm**, phải kiểm bằng mã (hoặc
+bằng bàn đo) **trước** khi viết, y như mọi con số. Một câu an ủi viết theo cảm giác thì
+cùng loại với `#ls-dem` in `500/500`.
+→ Đã sửa: `cvLichSu`/`hoanLichSu` nhận con trỏ `?truoc=` → nút **"Tải thêm N … cũ hơn"**
+gọi lại **máy chủ** thật. Bàn đo `npm run do-duong-di-tiep` (D1 thật, worker thật, tài
+khoản `hcns` của chị Lan Hương, 700 việc) chứng minh: trang 2 ra **200 dòng mới, 0 trùng,
+đủ 700 id, không sót**, và **ca đối chứng** gọi lại không kèm `truoc` phải ra y hệt trang 1
+— thiếu ca đó thì "nút chạy được" có thể chỉ là trang 1 hiện lại hai lần.
+
+**BH-50 · DẢI LUÔN HIỆN PHẢI TRẢ TIỀN THUÊ CHỖ BẰNG PIXEL.** Dải PHẠM VI (*"ba bảng dưới
+đây chỉ hiện việc của bạn…"*) là một dải **luôn hiện** — khác dải cắt, vốn chỉ hiện khi
+thật sự có cắt. Bản đầu 4 dòng chữ + một nút riêng: **148,8px ở 375px, 169px ở 320px**,
+tức mất ~2–3 dòng bảng **mỗi lần vào màn**, kể cả khi không có gì bị cắt, trên đúng màn
+hình nhân viên kho cầm một tay. Trái đúng nguyên tắc chính chúng ta vừa viết vào `app.js`:
+*"một dải luôn hiện là một dải mắt người học được cách bỏ qua trong đúng một tuần"*.
+→ Gọn còn **một dòng, cả dải LÀ cái nút** (vẫn 44px cho ngón tay), câu đầy đủ đẩy vào
+`title=`: **52px** ở cả hai bề ngang, và số dòng bảng thấy được **tăng** 5→7 (375×667) và
+2→5 (320×568). Ràng buộc "không làm nhân viên kho cuộn thêm" chỉ có nghĩa khi **đo bằng số
+dòng thấy được**, không phải bằng thiện chí.
+→ Bàn đo `npm run do-nut-dai-cat` nay dựng luôn **khung "bản trước"** chép nguyên văn CSS
+cũ, nên "gọn đi bao nhiêu" là **số đo hai bên**, không phải lời khai một bên.

@@ -64,6 +64,11 @@ export async function nhanCat(env, biCat, gioiHan, cauDem, thamSo = [], xemThem 
     const r = await env.DB.prepare(cauDem).bind(...thamSo).first();
     const v = r ? Number(Object.values(r)[0]) : NaN;
     if (Number.isFinite(v)) tong = v;
+    // REV-0034 · L6. `tong` NHỎ HƠN số dòng đang hiện là chuyện có thật: cron
+    // đơn hoàn xoá/ghi lại mỗi 5 phút, câu đếm chạy SAU câu đọc nên có thể rơi
+    // đúng lúc bảng vừa bị xoá bớt. Không chặn thì dải in *"còn -50 việc chưa
+    // hiện"* — một con số vô nghĩa còn tệ hơn không có số.
+    if (tong !== null && tong < gioiHan) tong = null;
   } catch { /* đếm hỏng thì vẫn báo là đã cắt, chỉ thiếu con số */ }
   return { gioi_han: gioiHan, tong, xem_them: xemThem };
 }

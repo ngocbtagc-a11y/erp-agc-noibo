@@ -53,8 +53,10 @@ const NGUONG = 20;
 const MIEN_TRU = [
   { tep: 'src/index.js', ham: 'chatDanhSach',
     lyDo: 'HÀNG ĐỢI: 50 tin gần nhất, chưa có nút "xem tin cũ hơn" — cần thiết kế cuộn ngược riêng, không vá bằng một dải chữ.' },
-  { tep: 'src/index.js', ham: 'layThongBao',
-    lyDo: 'HÀNG ĐỢI: 50 thông báo gần nhất; chuông chỉ đếm chưa đọc nên chưa lệch nghĩa, nhưng cần dải cắt khi bảng lớn lên.' },
+  /* `layThongBao` ĐÃ RA KHỎI BẢNG NÀY (REV-0034 · L3). Lý do miễn trừ cũ —
+     "chuông chỉ đếm chưa đọc nên chưa lệch nghĩa" — là SAI: `chuaDoc` đếm trên
+     mảng ĐÃ bị trần 50 cắt, tức đúng lỗi `#ls-dem` in "500/500". Nay hàm đó
+     gọi catBot/nhanCat thật nên không cần miễn trừ nữa. */
   { tep: 'src/index.js', ham: 'nsLichSu',
     lyDo: 'HÀNG ĐỢI: lịch sử 1 hồ sơ nhân sự, trần 200 — 23 nhân sự hiện tại còn xa ngưỡng.' },
   { tep: 'src/index.js', ham: 'kdKhachHoanNhieu',
@@ -86,31 +88,112 @@ function boGhiChu(src) {
     .replace(/(^|[^:"'`\\])\/\/[^\n]*/g, (m, p1) => p1 + ' '.repeat(m.length - p1.length));
 }
 
-/** Cắt mã nguồn thành các khối hàm ở cấp cao nhất (kiểu viết của kho mã này:
- *  `function x(`, `async function x(`, `export function x(`, …, cột 0). */
+/** Cắt mã nguồn thành các khối hàm ở cấp cao nhất.
+ *
+ *  ⚠️ VÁ 29/08/2026 (REV-0034 · L1). Bản đầu chỉ nhận `function x(` ở cột 0.
+ *  `src/dulieunen.js` khai TOÀN BỘ handler danh mục bằng
+ *  `export const danhSachPhongBan = async (env) => {…}` → **cả tệp vô hình với
+ *  máy quét**. Hôm nay chưa có `LIMIT` nào ở đó; mai ai thêm, máy vẫn xanh.
+ *  Một lưới thủng không phải là lưới — lời "đã quét sạch" khi ấy là vô nghĩa.
+ *
+ *  Nay nhận cả:
+ *    · `function x(` · `async function x(` · `export (default) (async) function x(`
+ *    · `(export) const|let|var x = (async) (…) => {`  ← kiểu của dulieunen.js
+ *    · `(export) const|let|var x = (async) function (`
+ *  Thêm khối `(cấp tệp)` cho phần mã nằm TRƯỚC hàm đầu tiên (hằng SQL dùng chung). */
+const MOC_HAM = [
+  /^(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s*\*?\s*([A-Za-z0-9_$]+)\s*\(/,
+  /^(?:export\s+)?(?:const|let|var)\s+([A-Za-z0-9_$]+)\s*=\s*(?:async\s+)?(?:function\b|\(|[A-Za-z0-9_$]+\s*=>)/
+];
+
 function tachHam(src) {
   const dong = src.split('\n');
   const moc = [];
   for (let i = 0; i < dong.length; i++) {
-    const m = /^(?:export\s+)?(?:async\s+)?function\s+([A-Za-z0-9_$]+)\s*\(/.exec(dong[i]);
-    if (m) moc.push({ ten: m[1], tu: i });
+    for (const r of MOC_HAM) {
+      const m = r.exec(dong[i]);
+      if (m) { moc.push({ ten: m[1], tu: i }); break; }
+    }
   }
-  return moc.map((m, k) => ({
+  const ra = moc.map((m, k) => ({
     ten: m.ten,
     tuDong: m.tu + 1,
     than: dong.slice(m.tu, k + 1 < moc.length ? moc[k + 1].tu : dong.length).join('\n')
   }));
+  if (moc.length && moc[0].tu > 0) {
+    ra.unshift({ ten: '(cấp tệp)', tuDong: 1, than: dong.slice(0, moc[0].tu).join('\n') });
+  } else if (!moc.length) {
+    ra.push({ ten: '(cấp tệp)', tuDong: 1, than: src });
+  }
+  return ra;
 }
 
-/** Mọi `LIMIT` cỡ danh sách trong một thân hàm. Bắt cả `LIMIT 300`,
- *  `LIMIT ${GH + 1}` (biến — không đọc được số nên coi như cỡ danh sách) và
- *  `LIMIT ?` (trần do người gọi truyền). */
-function limitCoDanhSach(than) {
+/* ==========================================================================
+   DẤU CẮT — MỌI KIỂU CẮT DANH SÁCH, không riêng `LIMIT <số>`
+   ---------------------------------------------------------------------------
+   VÁ 29/08/2026 (REV-0034 · L1). Hồ Ly viết 5 mẫu vi phạm kiểu khác, bản đầu
+   **bắt đúng 1**. Bài học của chính hôm nay: bộ đối chứng do người viết lưới
+   tự chọn thì nó chỉ chứa đúng loại lưới ấy bắt được. Nay liệt kê THEO KIỂU
+   CẮT, và mỗi kiểu phải có một mẫu vi phạm trong `tuKiem()`.
+   ========================================================================== */
+const DAU_CAT = [
+  // — máy chủ: câu SQL —
+  { ten: 'LIMIT <số>',        re: /\bLIMIT\s+(\d+)\b/gi },
+  { ten: 'LIMIT ${…}',        re: /\bLIMIT\s+(\$\{[^}]*\})/gi },
+  { ten: 'LIMIT ?',           re: /\bLIMIT\s+(\?)/gi },
+  // `'SELECT … LIMIT ' + tran` — ghép chuỗi bằng `+`, KHÔNG template. Mẫu ② Hồ Ly.
+  { ten: 'LIMIT ghép chuỗi',  re: /\bLIMIT\s*(['"`]\s*\+\s*[A-Za-z0-9_$.[\]]+)/gi },
+  // — cắt trong JS: mảng —
+  // `.slice(0, 30)` VÀ `.slice(0, TRAN_HIEN)` (mẫu ③ Hồ Ly — tham số là ĐỊNH DANH).
+  // `min: 2` — cắt danh sách bằng `.slice` thì CỠ NÀO cũng phải nói ra: một
+  // bảng "Top 5" im lặng vẫn là một bảng khẳng định sai "đây là tất cả".
+  { ten: '.slice(0, N)',      re: /\.slice\(\s*0\s*,\s*([A-Za-z0-9_$.]+)\s*\)/g, min: 2 },
+  { ten: '.slice(-N)',        re: /\.slice\(\s*-\s*([A-Za-z0-9_$.]+)\s*\)/g, min: 2 },
+  // `.splice(30)` một tham số = chặt đuôi. Mẫu ⑤ Hồ Ly.
+  { ten: '.splice(N)',        re: /\.splice\(\s*([A-Za-z0-9_$.]+)\s*\)/g, min: 2 },
+  // `ds.length = 100` — chặt đuôi bằng cách gán length. (Tôi thêm)
+  { ten: '.length = N',       re: /\.length\s*=\s*(\d+)\s*;/g },
+  // `for (let i = 0; i < 30; i++)` — chặn bằng vòng lặp. Mẫu ⑤ Hồ Ly.
+  { ten: 'for (i < N)',       re: /for\s*\([^;\n]*;[^;\n]*<\s*(\d+)\s*[;)]/g },
+  // `Math.min(50, ds.length)` — idiom cắt phổ biến nhất còn lại. (Tôi thêm)
+  { ten: 'Math.min(N, …)',    re: /Math\.min\(\s*(\d+)\s*,/g }
+];
+
+/** Một dấu cắt có "cỡ danh sách" không?
+ *  · số → phải ≥ NGUONG (dưới đó là `LIMIT 1`, top-3… nhãn đã tự nói rõ)
+ *  · định danh / `?` / `${…}` → KHÔNG đọc được số ⇒ phải coi là cỡ danh sách,
+ *    vì đúng chỗ đó là chỗ lưới cũ mù. */
+function coDanhSach(v, min = NGUONG) {
+  if (/^\d+$/.test(v)) return Number(v) >= min;
+  return true;
+}
+
+/** Dấu cắt nào là cắt trong JS (phải soi từng DÒNG để loại cắt CHUỖI),
+ *  dấu nào là cắt trong SQL (soi cả thân, vì câu SQL trải nhiều dòng). */
+const LA_CAT_JS = (ten) => /^(\.slice|\.splice|\.length|for |Math\.min)/.test(ten);
+
+/** Ở MÁY CHỦ, `.slice()` phần lớn KHÔNG phải cắt danh sách trả ra: cắt trần ảnh
+ *  tải lên (`b.anh.slice(0, 6)`), chọn suất trong thuật toán phân ca
+ *  (`hopLe.slice(0, con)`)… Lớp ta canh là **danh sách ĐI RA màn hình** bị cắt.
+ *  Dấu hiệu: chỗ cắt nằm trên dòng có dính tới kết quả truy vấn hoặc tới `json(`.
+ *  (Ở `public/` thì KHÔNG lọc kiểu này — ở đó mọi `.slice` đều là để vẽ.) */
+const CHAY_RA_MAN_HINH = /\bjson\s*\(|\bresults\b|\.all\(\)|\brows\b|\bds\b|\bdanh_sach\b/;
+
+/** Mọi dấu cắt cỡ danh sách trong một đoạn mã. */
+function dauCatCoDanhSach(than, locRaManHinh = false) {
   const ra = [];
-  for (const m of than.matchAll(/\bLIMIT\s+(\$\{[^}]*\}|\?|\d+)/gi)) {
-    const v = m[1];
-    if (/^\d+$/.test(v)) { if (Number(v) >= NGUONG) ra.push(v); }
-    else ra.push(v);                       // `${...}` hoặc `?` — không đọc được số
+  const dong = than.split('\n');
+  for (const d of DAU_CAT) {
+    if (LA_CAT_JS(d.ten)) {
+      for (const l of dong) {
+        // Cắt CHUỖI (ngày ISO, tiêu đề nhập vào, mã UUID) KHÔNG phải cắt danh sách.
+        if (laCatChuoi(l)) continue;
+        if (locRaManHinh && !CHAY_RA_MAN_HINH.test(l)) continue;
+        for (const m of l.matchAll(d.re)) if (coDanhSach(m[1], d.min)) ra.push(`${d.ten} → ${m[1]}`);
+      }
+    } else {
+      for (const m of than.matchAll(d.re)) if (coDanhSach(m[1], d.min)) ra.push(`${d.ten} → ${m[1]}`);
+    }
   }
   return ra;
 }
@@ -120,10 +203,10 @@ function laChoCanNoi(h) {
   // Chỉ soi hàm TRẢ RA TRÌNH DUYỆT. Cron/tác vụ nền cắt lô là đúng việc
   // của nó — không ai đang nhìn một màn hình để mà bị nói dối.
   if (!/\bjson\s*\(/.test(h.than)) return null;
-  const lim = limitCoDanhSach(h.than);
+  const lim = dauCatCoDanhSach(h.than, true);
   if (!lim.length) return null;
   if (/\b(?:catBot|nhanCat)\s*\(/.test(h.than)) return null;
-  return [...new Set(lim)].join(', ');
+  return [...new Set(lim)].join(' · ');
 }
 
 function quetMayChu(danhSachTep, docTep) {
@@ -162,10 +245,14 @@ function kiemMienTru(docTep) {
  *  danh sách. Nhận diện bằng dấu vết ngay trước lời gọi. */
 const LA_CHUOI = [
   // dấu vết đứng TRƯỚC: (x || '').slice(0,10) · String(x).slice(0,…) · .trim().slice(…)
-  /(\|\|\s*''\s*\)|String\s*\([^)]*\)|toISOString\(\)|\.trim\(\)|\.split\([^)]*\)|\.value)\s*\.slice\(\s*0\s*,/,
+  // VÁ 29/08/2026: thêm randomUUID()/res.text()/JSON.stringify() (sinh mã id,
+  // cắt đuôi thông báo lỗi) và nhận cả `.slice(-2)` (lấy 2 từ cuối của HỌ TÊN).
+  /(\|\|\s*''\s*\)|String\s*\([^)]*\)|JSON\.stringify\([^)]*\)|toISOString\(\)|randomUUID\(\)|\.text\(\)|\.trim\(\)|\.split\([^)]*\)|\.value|\.textContent|\.toFixed\([^)]*\))(?:\s*\))*\s*\.slice\(\s*-?\s*[0-9A-Za-z_$]/,
   // dấu vết đứng SAU: s.slice(0, 10).split('-') — chỉ chuỗi mới làm tiếp được
   // mấy việc này. Bắt được lỗi thật ở app.js:534 ngay vòng quét đầu.
-  /\.slice\(\s*0\s*,\s*\d+\s*\)\s*\.(split|replace|padStart|padEnd|toUpperCase|toLowerCase|trim|charAt)\s*\(/
+  /\.slice\(\s*0\s*,\s*[A-Za-z0-9_$.]+\s*\)\s*\.(split|replace|padStart|padEnd|toUpperCase|toLowerCase|trim|charAt|includes)\s*\(/,
+  // chuỗi văn bản: `'…'.slice(` / "…".slice( / `…`.slice(
+  /['"`]\s*\)?\s*\.slice\(/
 ];
 const laCatChuoi = (dong) => LA_CHUOI.some(r => r.test(dong));
 
@@ -177,12 +264,15 @@ function quetGiaoDien(danhSachTep, docTep, cuaSo = 6) {
   for (const tep of danhSachTep) {
     const dong = docTep(tep).split('\n');
     for (let i = 0; i < dong.length; i++) {
-      const m = /\.slice\(\s*0\s*,\s*(\d+)\s*\)/.exec(dong[i]);
-      if (!m) continue;
       if (laCatChuoi(dong[i])) continue;
+      // VÁ 29/08/2026 (L1): trước chỉ nhìn `.slice(0, <số>)`. Nay dùng CHUNG
+      // bảng DAU_CAT với phép quét máy chủ — `.slice(0, TRAN)`, `.slice(-N)`,
+      // `.splice(N)`, `.length = N`, `for (i < N)`, `Math.min(N, …)`.
+      const dau = dauCatCoDanhSach(dong[i]);
+      if (!dau.length) continue;
       const quanh = dong.slice(Math.max(0, i - cuaSo), i + cuaSo + 1).join('\n');
       if (CO_NOI.test(quanh)) continue;
-      loi.push({ tep, dong: i + 1, chi: dong[i].trim().slice(0, 90) });
+      loi.push({ tep, dong: i + 1, chi: dong[i].trim().slice(0, 90), dau: dau.join(' · ') });
     }
   }
   return loi;
@@ -252,6 +342,101 @@ async function dsKhaiSuong(req, env) {
   const { results } = await env.DB.prepare('SELECT * FROM viec LIMIT 300').all();
   return json({ viec: results });
 }
+`,
+
+  /* ======================================================================
+     5 MẪU CỦA HỒ LY (REV-0034 §④) — bản đầu bắt 1/5. Giữ NGUYÊN VĂN kiểu
+     viết của chị để lần sau ai sửa lưới còn đo lại được đúng chỗ đã thủng.
+     ====================================================================== */
+  'ban/hl1-offset.js': `
+async function dsPhanTrang(req, env) {
+  const { results } = await env.DB.prepare('SELECT * FROM viec LIMIT 50 OFFSET 100').all();
+  return json({ viec: results });   // giao diện KHÔNG có nút trang sau
+}
+`,
+  'ban/hl2-ghepchuoi.js': `
+async function dsGhepChuoi(req, env) {
+  const tran = 200;
+  const { results } = await env.DB.prepare('SELECT * FROM viec LIMIT ' + tran).all();
+  return json({ viec: results });
+}
+`,
+  'ban/hl3-slice-dinhdanh.js': `
+async function dsSliceDinhDanh(req, env) {
+  const TRAN_HIEN = 100;
+  const { results } = await env.DB.prepare('SELECT * FROM viec').all();
+  return json({ viec: results.slice(0, TRAN_HIEN) });
+}
+`,
+  'ban/hl4-arrow.js': `
+export const dsArrow = async (env) => {
+  const { results } = await env.DB.prepare('SELECT * FROM phong_ban LIMIT 300').all();
+  return json({ ds: results });
+};
+`,
+  'ban/hl5-for-splice.js': `
+async function dsVongLap(req, env) {
+  const { results } = await env.DB.prepare('SELECT * FROM viec').all();
+  const ra = [];
+  for (let i = 0; i < 30; i++) ra.push(results[i]);
+  return json({ viec: ra });
+}
+async function dsSplice(req, env) {
+  const { results } = await env.DB.prepare('SELECT * FROM viec').all();
+  results.splice(30);
+  return json({ viec: results });
+}
+`,
+
+  /* ======================================================================
+     4 MẪU TÔI TỰ NGHĨ THÊM — cùng LỚP, kiểu cắt khác nữa.
+     ====================================================================== */
+  'ban/kd1-slice-am.js': `
+async function dsSliceAm(req, env) {
+  const { results } = await env.DB.prepare('SELECT * FROM viec').all();
+  return json({ viec: results.slice(-50) });   // lấy 50 dòng CUỐI, im lặng
+}
+`,
+  'ban/kd2-gan-length.js': `
+async function dsGanLength(req, env) {
+  const { results } = await env.DB.prepare('SELECT * FROM viec').all();
+  results.length = 100;                        // chặt đuôi bằng cách gán length
+  return json({ viec: results });
+}
+`,
+  'ban/kd3-mathmin.js': `
+function veTopMathMin(ds) {
+  const n = Math.min(50, ds.length);
+  let h = '';
+  for (let k = 0; k < n; k++) h += ds[k].ten;
+  o.innerHTML = h;
+}
+`,
+  /* Mặt trận mới: MÁY CHỦ cắt bằng .slice() trước khi json() — trước đây phép
+     quét ② chỉ soi public/, nên chỗ này lọt cả hai lưới. */
+  'ban/kd4-slice-may-chu.js': `
+export const dsSliceMayChu = async (env) => {
+  const { results } = await env.DB.prepare('SELECT * FROM nhan_su').all();
+  return json({ ds: results.slice(0, 200) });
+};
+`,
+
+  /* ======================================================================
+     MẪU SẠCH mới — lưới rộng ra thì phải chứng minh không tố oan.
+     ====================================================================== */
+  'ban/sach-chuoi-dinhdanh.js': `
+function veMa(don) {
+  const MA_DAI = 12;
+  return String(don.ma || '').slice(0, MA_DAI).toUpperCase();
+}
+`,
+  'ban/sach-vonglap-thuc.js': `
+function veHet(ds) {
+  let h = '';
+  for (let i = 0; i < ds.length; i++) h += ds[i].ten;
+  o.innerHTML = h;
+}
+function xoaHet(ds) { ds.length = 0; }
 `
 };
 const docMau = (t) => MAU[t];
@@ -277,7 +462,36 @@ function tuKiem() {
   if (gdSach.length !== 0)   chet('mẫu GIAO DIỆN sạch (có "và N mục nữa") bị bắt OAN — phép quét ② sẽ bị tắt đi');
   if (gdChuoi.length !== 0)  chet('cắt CHUỖI ngày giờ bị nhận nhầm là cắt danh sách — phép quét ② sai địa chỉ');
 
-  console.log('  ✅ Ca đối chứng: 3/3 mẫu bẩn BỊ BẮT · 5/5 mẫu sạch KHÔNG bị bắt oan — máy quét có hiệu lực.');
+  /* ---- 9 KIỂU VI PHẠM KHÁC (REV-0034 · L1) ----
+     5 mẫu của Hồ Ly + 4 mẫu tôi tự nghĩ. Bản lưới đầu bắt 1/5. Mỗi dòng dưới
+     đây là một kiểu cắt mà lưới TỪNG mù — xoá dòng nào là mở lại đúng lỗ đó. */
+  const KIEU_KHAC = [
+    ['HL① LIMIT 50 OFFSET 100',        'ban/hl1-offset.js',        'may-chu'],
+    ['HL② LIMIT ghép chuỗi (+ biến)',  'ban/hl2-ghepchuoi.js',     'may-chu'],
+    ['HL③ .slice(0, ĐỊNH_DANH)',       'ban/hl3-slice-dinhdanh.js','may-chu'],
+    ['HL④ handler arrow-function',     'ban/hl4-arrow.js',         'may-chu'],
+    ['HL⑤ for (i<30) và .splice(30)',  'ban/hl5-for-splice.js',    'may-chu'],
+    ['KĐ⑥ .slice(-50) lấy đuôi',       'ban/kd1-slice-am.js',      'may-chu'],
+    ['KĐ⑦ gán .length = 100',          'ban/kd2-gan-length.js',    'may-chu'],
+    ['KĐ⑧ Math.min(50, ds.length)',    'ban/kd3-mathmin.js',       'giao-dien'],
+    ['KĐ⑨ .slice() ở MÁY CHỦ',         'ban/kd4-slice-may-chu.js', 'may-chu']
+  ];
+  let bat = 0;
+  const truot = [];
+  for (const [ten, tep, mat] of KIEU_KHAC) {
+    const n = mat === 'may-chu' ? quetMayChu([tep], docMau).length : quetGiaoDien([tep], docMau).length;
+    if (n > 0) bat++; else truot.push(ten);
+  }
+  console.log(`  ✅ Kiểu vi phạm KHÁC: bắt ${bat}/${KIEU_KHAC.length} (5 mẫu Hồ Ly + 4 mẫu tự nghĩ).`);
+  if (truot.length) chet('lưới vẫn thủng ở: ' + truot.join(' · ') +
+    ' — "đã quét sạch" là vô nghĩa khi lưới còn lỗ');
+
+  const sachChuoi = quetGiaoDien(['ban/sach-chuoi-dinhdanh.js'], docMau);
+  const sachVong  = quetGiaoDien(['ban/sach-vonglap-thuc.js'], docMau);
+  if (sachChuoi.length !== 0) chet('cắt CHUỖI bằng ĐỊNH DANH (`.slice(0, MA_DAI)` trên mã đơn) bị bắt oan');
+  if (sachVong.length !== 0)  chet('vòng lặp chạy HẾT `i < ds.length` và `ds.length = 0` bị bắt oan');
+
+  console.log('  ✅ Ca đối chứng: 12/12 mẫu bẩn BỊ BẮT · 7/7 mẫu sạch KHÔNG bị bắt oan — máy quét có hiệu lực.');
 }
 
 /* ==========================================================================
@@ -323,7 +537,7 @@ if (loiMayChu.length === 0) {
   console.log(`  ✅ Không có hàm trả JSON nào cắt im lặng (ngưỡng LIMIT ≥ ${NGUONG}).`);
 } else {
   for (const l of loiMayChu) {
-    console.log(`  ❌ ${l.tep}:${l.dong}  ${l.ham}()  LIMIT ${l.lim} — cắt mà KHÔNG gọi catBot/nhanCat và KHÔNG có trong bảng miễn trừ`);
+    console.log(`  ❌ ${l.tep}:${l.dong}  ${l.ham}()  [${l.lim}] — cắt mà KHÔNG gọi catBot/nhanCat và KHÔNG có trong bảng miễn trừ`);
   }
 }
 console.log(`  ℹ️  ${MIEN_TRU.length} chỗ miễn trừ CÓ LÝ DO VIẾT RA (hàng đợi + top-N có chủ ý):`);
@@ -333,7 +547,7 @@ console.log(`\n② GIAO DIỆN — quét ${TEP_GD.length} tệp trong public/`);
 if (loiGiaoDien.length === 0) {
   console.log('  ✅ Mọi chỗ .slice(0, N) cắt danh sách đều có nói ra phần bị cắt.');
 } else {
-  for (const l of loiGiaoDien) console.log(`  ❌ ${l.tep}:${l.dong}  ${l.chi}`);
+  for (const l of loiGiaoDien) console.log(`  ❌ ${l.tep}:${l.dong}  [${l.dau}]  ${l.chi}`);
 }
 
 /* ==========================================================================

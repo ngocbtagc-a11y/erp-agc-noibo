@@ -55,7 +55,8 @@
     "chay": "wrangler dev",
     "dua-len": "wrangler deploy",
     "do-cat-im-lang": "node scripts/do-cat-im-lang.mjs",
-    "do-nut-dai-cat": "node scripts/do-nut-dai-cat-44px.mjs"
+    "do-nut-dai-cat": "node scripts/do-nut-dai-cat-44px.mjs",
+    "do-duong-di-tiep": "node scripts/do-duong-di-tiep.mjs"
   },
   "devDependencies": {
     "wrangler": "^4.0.0"

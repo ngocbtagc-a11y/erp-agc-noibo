@@ -1854,15 +1854,25 @@ function veDaiCat(dich, cat, dat = {}) {
   const dv = dat.don_vi || 'mục';
   const gh = cat.gioi_han;
   const tong = Number.isFinite(cat.tong) ? cat.tong : null;
+  // "ĐÃ TẢI", không phải "đang hiện" (REV-0034 · L5). `gioi_han` là số dòng MÁY
+  // CHỦ trả về; nhiều màn còn lọc tiếp phía trình duyệt (Trạm Mục Tiêu chỉ hiện
+  // mục tiêu cá nhân CỦA CHÍNH người xem) nên "đang hiện 300" là một con số
+  // KHÔNG mô tả cái đang nhìn — cùng lớp nói dối với `#ls-dem` in "500/500".
   // Không đếm được tổng (bảng chưa nạp migration…) vẫn PHẢI báo là đã cắt —
   // im lặng vì thiếu con số là quay lại đúng cái lỗi đang vá.
   const chu = tong != null
-    ? `Đang hiện <b>${gh}</b> trong tổng <b>${tong}</b> ${esc(dv)} — còn <b>${tong - gh}</b> ${esc(dv)} chưa hiện ở đây.`
-    : `Đang hiện <b>${gh}</b> ${esc(dv)} đầu danh sách — danh sách này <b>đã bị cắt bớt</b>, còn nữa.`;
+    ? `Đã tải <b>${gh}</b> trong tổng <b>${tong}</b> ${esc(dv)} — còn <b>${Math.max(0, tong - gh)}</b> ${esc(dv)} chưa tải về máy.`
+    : `Đã tải <b>${gh}</b> ${esc(dv)} đầu danh sách — danh sách này <b>đã bị cắt bớt</b>, còn nữa.`;
   const nut = dat.nut
-    ? `<button type="button" class="dai-cat-nut" data-dai-cat-tab="${esc(dat.nut.tab)}">${esc(dat.nut.chu)}</button>`
+    ? `<button type="button" class="dai-cat-nut" ${dat.nut.tab ? `data-dai-cat-tab="${esc(dat.nut.tab)}"` : 'data-dai-cat-chay="1"'}>${esc(dat.nut.chu)}</button>`
     : '';
   box.innerHTML = `<span class="dai-cat-chu">✂️ ${chu}${dat.goi_y ? ' ' + esc(dat.goi_y) : ''}</span>${nut}`;
+  // Nút "tải thêm" chạy một HÀM chứ không nhảy tab — gắn thẳng, không qua
+  // handler chung (mỗi dải một hàm tải riêng).
+  if (dat.nut && dat.nut.chay) {
+    const b = box.querySelector('[data-dai-cat-chay]');
+    if (b) b.addEventListener('click', () => dat.nut.chay(b));
+  }
   box.hidden = false;
 }
 
@@ -2445,7 +2455,13 @@ async function khoiDongMucTieu() {
   async function taiLaiMucTieu() {
     const kq = await API.mtDanhSach();
     $('#mt-ky-hint').textContent = `Quý ${kq.quy}/${kq.nam}`;
-    veDaiCat('#mt-cat', kq.cat, { don_vi: 'mục tiêu' });
+    // REV-0034 · L5: dải nói "ĐÃ TẢI", không nói "đang hiện" — màn này còn lọc
+    // tiếp phía trình duyệt (cấp cá nhân chỉ hiện mục tiêu CỦA CHÍNH người
+    // xem), nên số máy chủ trả về không phải số đang nằm trên màn hình.
+    veDaiCat('#mt-cat', kq.cat, {
+      don_vi: 'mục tiêu',
+      goi_y: 'Cấp cá nhân chỉ hiện mục tiêu của chính bạn nên số thẻ trên màn còn ít hơn số đã tải.'
+    });
     DS_MT = [...(kq.cong_ty || []), ...(kq.phong_ban || []), ...(kq.ca_nhan || [])];
 
     veNhomMucTieu('congty', kq.cong_ty || []);
@@ -3045,14 +3061,50 @@ async function khoiDongLichSuViec() {
     $('#ls-cv-trong').hidden = ds.length > 0;
   }
 
-  async function taiLaiLichSuCv() {
+  /* CON TRỎ trang — chuỗi `cap_nhat_luc|id` của dòng cuối đã tải. `null` =
+     không còn gì cũ hơn. Xem src/index.js cvLichSu. */
+  let TRUOC_LSCV = null;
+  let TONG_LSCV = null;   // tổng thật của cả bảng cong_viec (chỉ có khi bị cắt)
+
+  /* Dải cắt của màn này — ĐÂY LÀ CHỖ CÁC DẢI KHÁC CHỈ NGƯỜI SANG, nên câu chữ
+     ở đây phải đúng sự thật đến từng chữ (REV-0034 · L2).
+     BẢN CŨ NÓI DỐI: *"dùng ô tìm kiếm phía trên để lọc đúng việc cần xem"* —
+     `#ls-cv-tim` lọc trên `DS_LSCV`, tức đúng những dòng ĐÃ TẢI, nó không hề
+     hỏi lại máy chủ (xem `veBangLsCv` ngay trên). Chỉ người ta đi tìm ở chỗ
+     không có thì tệ hơn là không chỉ gì cả.
+     BẢN NÀY: nói đúng giới hạn của ô tìm + cho một đường đi CÓ THẬT (nút gọi
+     lại API kèm `?truoc=`, tải tiếp 500 việc cũ hơn từ MÁY CHỦ). */
+  function veDaiCatLsCv() {
+    if (TRUOC_LSCV === null && TONG_LSCV === null) return veDaiCat('#ls-cv-cat', null);
+    const conLai = TONG_LSCV != null ? Math.max(0, TONG_LSCV - DS_LSCV.length) : null;
+    veDaiCat('#ls-cv-cat', { gioi_han: DS_LSCV.length, tong: TONG_LSCV }, {
+      don_vi: 'việc',
+      goi_y: 'Ô tìm kiếm phía trên chỉ tìm trong phần ĐÃ TẢI về máy.',
+      nut: {
+        chu: conLai != null ? `Tải thêm ${Math.min(500, conLai)} việc cũ hơn` : 'Tải thêm việc cũ hơn',
+        chay: async (b) => {
+          b.disabled = true; b.textContent = 'Đang tải…';
+          await taiLaiLichSuCv({ them: true });
+        }
+      }
+    });
+  }
+
+  async function taiLaiLichSuCv({ them = false } = {}) {
     try {
-      const kq = await API.cvLichSu();
-      DS_LSCV = kq.viec || [];
-      // Đây là màn các dải cắt khác CHỈ NGƯỜI SANG. Nó mà cắt im lặng thì lời
-      // chỉ đường thành lời hứa suông.
-      veDaiCat('#ls-cv-cat', kq.cat, { don_vi: 'việc', goi_y: 'Dùng ô tìm kiếm phía trên để lọc đúng việc cần xem.' });
-    } catch { /* trống — hiện bảng rỗng, không chặn cả trang */ }
+      const kq = await API.cvLichSu(them ? TRUOC_LSCV : null);
+      DS_LSCV = them ? DS_LSCV.concat(kq.viec || []) : (kq.viec || []);
+      TRUOC_LSCV = kq.truoc_tiep || null;
+      if (kq.cat && Number.isFinite(kq.cat.tong)) TONG_LSCV = kq.cat.tong;
+      else if (!them) TONG_LSCV = null;
+      // Tải hết rồi thì dải biến mất — không còn gì để nói nữa.
+      if (!TRUOC_LSCV) { TONG_LSCV = null; veDaiCat('#ls-cv-cat', null); }
+      else veDaiCatLsCv();
+    } catch {
+      // Mạng hỏng giữa chừng: vẽ lại dải để nút "Tải thêm" trở về bấm được,
+      // không để nó kẹt ở "Đang tải…" — kẹt im lặng cũng là một kiểu nói dối.
+      if (TRUOC_LSCV) veDaiCatLsCv();
+    }
     veBangLsCv();
   }
 
@@ -5965,6 +6017,9 @@ if (TOI.shopee && TOI.shopee.xem) {
       `${ICO[t.loai] || '🔔'} ${esc(t.noi_dung)}<div class="tb-gio">${esc(t.tao_luc || '')}</div></div>`
     ).join('');
     trong.hidden = list.length > 0;
+    // REV-0034 · L3: trần 50 tin — cắt thì phải nói ra. Không cắt thì dải
+    // biến mất hẳn (kq.cat = null), chuông không mọc thêm một dòng thừa.
+    veDaiCat('#tb-cat', kq.cat, { don_vi: 'thông báo' });
   }
 
   nut.addEventListener('click', async (e) => {
@@ -8131,6 +8186,7 @@ async function khoiDongDonHoan() {
 async function khoiDongLichSuHoan() {
   let DS_LS = [];
   let CAT_LS = null;   // vết cắt do trần LIMIT — null nghĩa là KHÔNG bị cắt
+  let TRUOC_LS = null; // con trỏ `tao_luc_shopee|return_sn` để tải tiếp đơn cũ hơn
   const TT_NHAN_LS = {
     con_tot: ['ok', '✓ Còn tốt'], hu_hong: ['danger', '⚠️ Hư hỏng'],
     thieu_hang: ['danger', '⚠️ Thiếu hàng'], sai_hang: ['danger', '⚠️ Sai hàng']
@@ -8199,15 +8255,33 @@ async function khoiDongLichSuHoan() {
     $('#ls-dem').textContent = `${ds.length}/${tong} đơn hoàn`;
   }
 
-  async function veLichSu() {
-    let kq;
-    try { kq = await API.hoanLichSu(); } catch { return; }
-    DS_LS = kq.don_hoan || [];
-    CAT_LS = kq.cat || null;
-    veDaiCat('#ls-cat', CAT_LS, {
+  /* Cùng lỗi câu chữ với Lịch sử làm việc (REV-0034 · L2): dải cũ chỉ người ta
+     *"dùng ô tìm theo mã đơn nếu cần tra đơn cũ"* — mà `#ls-tim` lọc trên
+     `DS_LS`, tức đúng 500 dòng ĐÃ TẢI; đơn cũ hơn không nằm trong đó nên tìm
+     mãi không ra. Nay: nói đúng giới hạn của ô tìm + nút tải tiếp từ MÁY CHỦ. */
+  function veDaiCatLs() {
+    if (!TRUOC_LS) return veDaiCat('#ls-cat', null);
+    const conLai = (CAT_LS && Number.isFinite(CAT_LS.tong))
+      ? Math.max(0, CAT_LS.tong - DS_LS.length) : null;
+    veDaiCat('#ls-cat', { gioi_han: DS_LS.length, tong: CAT_LS ? CAT_LS.tong : null }, {
       don_vi: 'đơn hoàn',
-      goi_y: 'Đang hiện các đơn sàn tạo GẦN NHẤT. Đơn cũ hơn chưa nằm trong bảng này — dùng ô tìm theo mã đơn nếu cần tra đơn cũ.'
+      goi_y: 'Đang tải các đơn sàn tạo GẦN NHẤT. Ô tìm phía trên chỉ tìm trong phần ĐÃ TẢI về máy.',
+      nut: {
+        chu: conLai != null ? `Tải thêm ${Math.min(500, conLai)} đơn cũ hơn` : 'Tải thêm đơn cũ hơn',
+        chay: async (b) => { b.disabled = true; b.textContent = 'Đang tải…'; await veLichSu({ them: true }); }
+      }
     });
+  }
+
+  async function veLichSu({ them = false } = {}) {
+    let kq;
+    try { kq = await API.hoanLichSu(them ? TRUOC_LS : null); }
+    catch { if (TRUOC_LS) veDaiCatLs(); return; }   // đừng để nút kẹt "Đang tải…"
+    DS_LS = them ? DS_LS.concat(kq.don_hoan || []) : (kq.don_hoan || []);
+    TRUOC_LS = kq.truoc_tiep || null;
+    if (kq.cat && Number.isFinite(kq.cat.tong)) CAT_LS = kq.cat;
+    else if (!them) CAT_LS = kq.cat || null;
+    veDaiCatLs();
     veBangLS($('#ls-tim').value);
   }
   $('#ls-tim').addEventListener('input', e => veBangLS(e.target.value));

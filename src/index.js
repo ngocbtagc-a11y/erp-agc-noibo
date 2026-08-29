@@ -1695,7 +1695,23 @@ async function hoanLichSu(req, env) {
   // 523 dòng / trần 500 — màn này ĐANG cắt mất 23 đơn hoàn và ô đếm `#ls-dem`
   // lại in "500/500", tức KHẲNG ĐỊNH SAI là đã hiện hết. Giữ trần (bảng còn
   // tăng), nhưng nói ra con số thật. Xem src/cat-danh-sach.js.
+  //
+  // ĐƯỜNG ĐI TIẾP PHẢI CÓ THẬT (REV-0034 · L2, cùng lỗi với cvLichSu): dải cắt
+  // cũ chỉ người ta *"dùng ô tìm theo mã đơn nếu cần tra đơn cũ"* — mà `#ls-tim`
+  // lọc PHÍA TRÌNH DUYỆT trên đúng 500 dòng đã tải, đơn cũ không nằm trong đó.
+  // Con trỏ `truoc` = `tao_luc_shopee|return_sn`, đúng thứ tự đang sắp.
   const GH = 500;
+  const truoc = (new URL(req.url).searchParams.get('truoc') || '').trim();
+  let dieuKienH = '', thamSoH = [];
+  if (truoc) {
+    const vach = truoc.lastIndexOf('|');
+    const luc = parseInt(vach > 0 ? truoc.slice(0, vach) : '', 10);
+    const rsn = vach > 0 ? truoc.slice(vach + 1) : '';
+    if (!Number.isFinite(luc) || !rsn) return loi('Con trỏ trang không hợp lệ');
+    dieuKienH = `WHERE (CAST(d.tao_luc_shopee AS INTEGER) < ?
+                    OR (CAST(d.tao_luc_shopee AS INTEGER) = ? AND d.return_sn < ?))`;
+    thamSoH = [luc, luc, rsn];
+  }
   const kqHoan = await env.DB.prepare(`
     SELECT d.return_sn, d.order_sn, d.trang_thai, d.ly_do, d.so_tien, d.tien_te, d.nguoi_mua,
            d.san_pham, d.san_pham_ten, COALESCE(d.san_pham_sku, m.ma_sku) AS san_pham_sku,
@@ -1706,11 +1722,16 @@ async function hoanLichSu(req, env) {
            ${coTT ? ', d.tinh_trang_hang, d.tinh_trang_luc, d.tinh_trang_boi' : ''}
       FROM don_hoan d
       LEFT JOIN sku_map m ON m.ten_san_pham = d.san_pham_ten
+     ${dieuKienH}
      ORDER BY CAST(d.tao_luc_shopee AS INTEGER) DESC, d.return_sn DESC LIMIT ${GH + 1}
-  `).all();
+  `).bind(...thamSoH).all();
   const { ds, biCat } = catBot(kqHoan, GH);
   const cat = await nhanCat(env, biCat, GH, 'SELECT COUNT(*) AS n FROM don_hoan', [], null);
-  return json({ don_hoan: ds, cat });
+  const cuoiH = ds[ds.length - 1];
+  return json({
+    don_hoan: ds, cat,
+    truoc_tiep: biCat && cuoiH ? `${cuoiH.tao_luc_shopee}|${cuoiH.return_sn}` : null
+  });
 }
 
 const TINH_TRANG_HOP_LE = ['con_tot', 'hu_hong', 'thieu_hang', 'sai_hang'];
@@ -2057,15 +2078,32 @@ async function layThongBao(req, env) {
     ? `(nhom IN (${nhom.map(() => '?').join(',')}) AND nguoi_nhan_id IS NULL) OR nguoi_nhan_id = ?`
     : `nguoi_nhan_id = ?`;
   const thamSo = [...nhom, phien.nhan_su_id];
-  const { results } = await env.DB.prepare(
+  // REV-0034 · L3. Lý do miễn trừ cũ — *"chuông chỉ đếm chưa đọc nên chưa lệch
+  // nghĩa"* — SAI: `chuaDoc` đếm trên mảng ĐÃ BỊ trần 50 cắt, tức đúng cái lỗi
+  // `#ls-dem` in "500/500" vừa vá. Trên 50 tin chưa đọc thì chuông đếm THIẾU.
+  // Hỏi 51 để biết có cắt; CHỈ khi cắt mới chạy COUNT(*) — chuông tự tải 5 phút
+  // một lần nên không được phép cõng thêm một câu đếm mỗi vòng (REV-0031).
+  const GH_TB = 50;
+  const kqTb = await env.DB.prepare(
     `SELECT id, nhom, noi_dung, loai, lien_ket, tao_luc FROM thong_bao
-      WHERE ${dieuKien} ORDER BY id DESC LIMIT 50`
+      WHERE ${dieuKien} ORDER BY id DESC LIMIT ${GH_TB + 1}`
   ).bind(...thamSo).all();
+  const { ds: results, biCat } = catBot(kqTb, GH_TB);
   const xem = await env.DB.prepare('SELECT tb_xem_luc FROM tai_khoan WHERE id = ?')
                           .bind(phien.tai_khoan_id).first();
   const moc = xem?.tb_xem_luc || '';
-  const chuaDoc = (results || []).filter(t => (t.tao_luc || '') > moc).length;
-  return json({ thong_bao: results || [], chua_doc: chuaDoc });
+  let chuaDoc = results.filter(t => (t.tao_luc || '') > moc).length;
+  if (biCat && chuaDoc === results.length) {
+    // Cả 50 tin đang tải đều chưa đọc VÀ còn tin nữa ⇒ con số 50 là con số cắt,
+    // không phải con số thật. Lúc này mới đáng một câu đếm.
+    const d = await env.DB.prepare(
+      `SELECT COUNT(*) AS n FROM thong_bao WHERE (${dieuKien}) AND tao_luc > ?`
+    ).bind(...thamSo, moc).first().catch(() => null);
+    if (Number.isFinite(Number(d?.n))) chuaDoc = Number(d.n);
+  }
+  const cat = await nhanCat(env, biCat, GH_TB,
+    `SELECT COUNT(*) AS n FROM thong_bao WHERE ${dieuKien}`, thamSo, null);
+  return json({ thong_bao: results, chua_doc: chuaDoc, cat });
 }
 
 async function thongBaoDaXem(req, env) {
@@ -2476,13 +2514,33 @@ async function cvLichSu(req, env) {
   if (!duocXemTab(phien.vai_tro, 'lichsuviec')) return loi('Bạn không có quyền', 403);
   // Đây là màn ta CHỈ NGƯỜI KHÁC sang để "xem việc toàn công ty" — nó mà cắt
   // im lặng thì lời chỉ đường thành lời hứa suông. Hỏi 501 để biết có cắt.
+  //
+  // ĐƯỜNG ĐI TIẾP PHẢI CÓ THẬT (REV-0034 · L2). Bản trước in gợi ý *"dùng ô
+  // tìm kiếm phía trên"* — nhưng ô đó lọc PHÍA TRÌNH DUYỆT trên đúng 500 dòng
+  // đã tải (`DS_LSCV` trong app.js), KHÔNG với tới phần bị cắt. Chỉ người ta
+  // đi tìm ở chỗ không có còn tệ hơn là không chỉ gì cả. Nay có con trỏ
+  // `truoc`: tải tiếp 500 việc CŨ HƠN từ MÁY CHỦ, đi đúng thứ tự đang sắp
+  // (`cap_nhat_luc DESC, id DESC`) nên không trùng và không sót dòng nào.
   const GH = 500;
+  const truoc = (new URL(req.url).searchParams.get('truoc') || '').trim();
+  let dieuKien = '', thamSo = [];
+  if (truoc) {
+    const vach = truoc.lastIndexOf('|');
+    const luc = vach > 0 ? truoc.slice(0, vach) : '';
+    const id = parseInt(vach > 0 ? truoc.slice(vach + 1) : '', 10);
+    if (!luc || !Number.isFinite(id)) return loi('Con trỏ trang không hợp lệ');
+    dieuKien = ' WHERE (c.cap_nhat_luc < ? OR (c.cap_nhat_luc = ? AND c.id < ?))';
+    thamSo = [luc, luc, id];
+  }
   const kq = await env.DB.prepare(
-    `SELECT ${CV_COT} FROM ${CV_TU} ORDER BY c.cap_nhat_luc DESC, c.id DESC LIMIT ${GH + 1}`
-  ).all();
+    `SELECT ${CV_COT} FROM ${CV_TU}${dieuKien} ORDER BY c.cap_nhat_luc DESC, c.id DESC LIMIT ${GH + 1}`
+  ).bind(...thamSo).all();
   const { ds, biCat } = catBot(kq, GH);
   const cat = await nhanCat(env, biCat, GH, 'SELECT COUNT(*) AS n FROM cong_viec', [], null);
-  return json({ viec: ds, cat });
+  // Con trỏ cho lần tải tiếp — CHỈ có khi còn nữa, để giao diện không mọc ra
+  // một cái nút bấm vào không có gì.
+  const cuoi = ds[ds.length - 1];
+  return json({ viec: ds, cat, truoc_tiep: biCat && cuoi ? `${cuoi.cap_nhat_luc}|${cuoi.id}` : null });
 }
 
 /* Tổng quan việc TOÀN CÔNG TY — chỉ Admin (Sếp Ngọc/Sếp Phong xem "full

@@ -111,6 +111,9 @@
           <div class="tb-panel-dau">Thông báo</div>
           <div id="tbDanhSach"></div>
           <div class="tb-trong" id="tbTrong" hidden>Chưa có thông báo nào.</div>
+          <!-- REV-0034 · L3: chuông cũng có trần (50 tin) — cắt thì phải nói ra,
+               y như mọi danh sách khác. Chỉ hiện khi thật sự bị cắt. -->
+          <div class="dai-cat" id="tb-cat" hidden></div>
         </div>
       </div>
       <div class="date" id="ngayHomNay"></div>
@@ -283,11 +286,21 @@
            màn hình KHÔNG NÓI điều đó ra, nên nhìn như hệ thống thiếu việc.
            Nói rõ phạm vi + chỉ đúng đường sang chỗ xem việc toàn công ty.
            KHÔNG mở thêm quyền: tab "Lịch sử làm việc" vốn đã mở cho MỌI vai
-           trò (src/quyen.js), đây chỉ là chỉ đường tới chỗ họ vẫn vào được. -->
-      <div class="cv-pham-vi">
-        <span class="cv-pham-vi-chu">Ba bảng dưới đây chỉ hiện <b>việc liên quan trực tiếp tới bạn</b> (bạn nhận · bạn được mời phối hợp · bạn giao). Việc của người khác không nằm ở đây.</span>
-        <button type="button" class="dai-cat-nut" data-dai-cat-tab="lichsuviec">Xem việc toàn công ty</button>
-      </div>
+           trò (src/quyen.js), đây chỉ là chỉ đường tới chỗ họ vẫn vào được.
+
+           GỌN LẠI 29/08/2026 (REV-0034 · L4). Bản đầu là một dải 4 dòng chữ +
+           một nút riêng: đo được 137px ở 375px và 157px ở 320px — ăn mất ~2
+           dòng bảng MỖI LẦN vào màn, kể cả khi không có gì bị cắt, trên đúng
+           màn hình nhân viên kho dùng bằng một tay. Trái đúng nguyên tắc viết
+           trong app.js: *"một dải luôn hiện là một dải mắt người học được cách
+           bỏ qua trong đúng một tuần"*. Nay: MỘT dòng, và cả dải LÀ cái nút
+           (vẫn ≥44px cho ngón tay — đo bằng npm run do-nut-dai-cat). Dải BÁO
+           CẮT thì giữ nguyên vì nó chỉ hiện khi thật sự có cắt. -->
+      <button type="button" class="cv-pham-vi dai-cat-nut" data-dai-cat-tab="lichsuviec"
+              title="Ba bảng dưới đây chỉ hiện việc bạn nhận · bạn được mời phối hợp · bạn giao. Việc của người khác không nằm ở đây.">
+        <span class="cv-pham-vi-chu">Đây chỉ là việc của bạn</span>
+        <span class="cv-pham-vi-di">Xem việc toàn công ty →</span>
+      </button>
 
       <div class="seg" id="cvSeg">
         <button class="seg-nut active" data-cv="nhan">Việc cần làm</button>
