@@ -84,7 +84,9 @@
     "do-bang-vua-man": "node scripts/do-bang-vua-man.mjs",
     "do-bang-vua-man-ke": "node scripts/do-bang-vua-man.mjs --bang-ke",
     "do-bang-vua-man-truoc": "node scripts/do-bang-vua-man.mjs --commit 755d556",
-    "do-bang-vua-man-tu-kiem": "node scripts/do-bang-vua-man.mjs --tu-kiem"
+    "do-bang-vua-man-tu-kiem": "node scripts/do-bang-vua-man.mjs --tu-kiem",
+    "ban-tai-tep": "node scripts/ban-tai-tep.mjs",
+    "do-tai-tep": "node scripts/ban-tai-tep.mjs --tu-dong"
   },
   "devDependencies": {
     "wrangler": "^4.0.0"

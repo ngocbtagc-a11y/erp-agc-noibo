@@ -225,3 +225,70 @@ export function byteThanhBase64(bytes) {
   }
   return btoa(chuoi);
 }
+
+/* ==========================================================================
+   5. ĐỌC MỘT FILE PDF CÓ SẴN  ·  CTL-0026 vòng 6 — "tải file từ máy tính"
+   ---------------------------------------------------------------------------
+   Sếp Ngọc 29/08/2026: *"nếu tôi upload file từ máy tính lên thì không có chỗ
+   thêm tài liệu à"*. Trên máy tính, giấy tờ thường ĐÃ LÀ FILE: bản scan từ máy
+   scan thật, hoặc PDF nhận qua email. Bắt chụp lại màn hình là vô lý.
+
+   ⚠️ LUẬT ① — PDF ĐÃ LÀ PDF THÌ KHÔNG BỌC LẠI.
+   Cám dỗ là cho PDF đi qua `gopTrangThanhPDF()` cho "một đường duy nhất". Làm
+   thế là SAI HAI LẦN: (a) muốn bọc thì phải RENDER từng trang PDF ra ảnh, mà
+   ERP không có thư viện đọc PDF và ràng buộc chi phí 0 cấm thêm dịch vụ;
+   (b) kể cả làm được thì ảnh → JPEG → PDF là nén hai lần: file phình lên và
+   chữ nhoè đi. Bản scan 300 DPI của máy scan thật vốn đã là PDF chuẩn — chép
+   NGUYÊN khối byte lên kho là đường vừa rẻ nhất vừa cho chất lượng cao nhất.
+
+   Hai hàm dưới đây KHÔNG sửa PDF. Chúng chỉ NHÌN vào file để trả lời hai câu
+   mà màn hình phải nói ra trước khi gửi: "đây có đúng là PDF không" và "nó
+   dày mấy trang".
+   ========================================================================== */
+
+/** Đúng là file PDF không — soi CHỮ KÝ 5 byte đầu `%PDF-`, không tin phần đuôi
+ *  tên file. Đổi tên `virus.exe` thành `hop-dong.pdf` là việc ai cũng làm được;
+ *  đổi 5 byte đầu thì không còn là cái file người ta định gửi nữa.
+ *  Máy chủ soi LẠI đúng chữ ký này (`src/tai-lieu.js`) — đây chỉ là báo sớm. */
+export function laByteCuaPDF(bytes) {
+  return !!bytes && bytes.length > 5 &&
+    bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 &&
+    bytes[3] === 0x46 && bytes[4] === 0x2D;                 // % P D F -
+}
+
+/** SỐ TRANG của một file PDF — hoặc `0` nếu KHÔNG ĐẾM ĐƯỢC.
+ *
+ *  ⚠️ Trả 0 là câu trả lời THẬT, không phải lỗi. PDF đời mới hay nén cả cây
+ *  đối tượng vào `/ObjStm` (object stream), lúc đó chuỗi `/Type /Page` nằm
+ *  trong khối đã nén Flate và KHÔNG đọc được nếu không giải nén — mà giải nén
+ *  cần thư viện. Đoán bừa "1 trang" cho một bản scan 30 trang là nói dối vào
+ *  đúng cột `so_trang` mà sau này người ta dùng để đối chiếu với xấp giấy.
+ *  Nơi gọi phải nói thẳng "không đếm được", xem `quet-tai-lieu.js`.
+ *
+ *  Đọc theo KHỐI 1 MB, KHÔNG dựng một chuỗi 25 MB: file scan to là chuyện
+ *  thường ở đây, và một chuỗi 25 MB trên điện thoại cũ là một cú treo tab.
+ *  Mỗi khối lại ghép từ mẩu 8 KB — `String.fromCharCode.apply` GÃY ở mảng
+ *  trên khoảng 100–200 KB (BH-27, xem `byteThanhBase64` ngay trên). Khối
+ *  chồng lấn 64 byte để không cắt đôi đúng cụm `/Type /Page` ở mép. */
+export function demTrangPDF(bytes) {
+  if (!laByteCuaPDF(bytes)) return 0;
+  const KHOI = 1 << 20, MAU = 8192, CHONG = 64;
+  let demTrang = 0, countLonNhat = 0;
+  for (let i = 0; i < bytes.length; i += KHOI) {
+    const het = Math.min(i + KHOI + CHONG, bytes.length);
+    let s = '';
+    for (let j = i; j < het; j += MAU) {
+      s += String.fromCharCode.apply(null, bytes.subarray(j, Math.min(j + MAU, het)));
+    }
+    /* `/Type /Page` KHÔNG theo sau bởi `s` — `/Pages` là NÚT CÂY, không phải
+       trang. Đếm nhầm nó là mọi PDF đều dày thêm đúng 1 trang. */
+    for (const _ of s.matchAll(/\/Type\s*\/Page(?![s\w])/g)) demTrang++;
+    /* Đường lui: `/Count N` của nút `/Pages` gốc. Lấy số LỚN NHẤT vì cây trang
+       nhiều tầng có nhiều `/Count`, gốc luôn là số lớn nhất. */
+    for (const m of s.matchAll(/\/Count\s+(\d+)/g)) {
+      const n = parseInt(m[1], 10);
+      if (Number.isFinite(n) && n > countLonNhat) countLonNhat = n;
+    }
+  }
+  return demTrang || countLonNhat || 0;
+}
