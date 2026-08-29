@@ -56,7 +56,12 @@
     "dua-len": "wrangler deploy",
     "do-cat-im-lang": "node scripts/do-cat-im-lang.mjs",
     "do-nut-dai-cat": "node scripts/do-nut-dai-cat-44px.mjs",
-    "do-duong-di-tiep": "node scripts/do-duong-di-tiep.mjs"
+    "do-duong-di-tiep": "node scripts/do-duong-di-tiep.mjs",
+    "cong-khoi": "node scripts/cong-khoi.mjs",
+    "cong-khoi-dienthoai": "node scripts/cong-khoi.mjs --rong 375",
+    "cong-khoi-tu-kiem": "node scripts/cong-khoi.mjs --tu-kiem",
+    "do-moc-noi": "node scripts/do-moc-noi.mjs",
+    "do-chat-noibo": "node scripts/do-chat-noibo.mjs"
   },
   "devDependencies": {
     "wrangler": "^4.0.0"

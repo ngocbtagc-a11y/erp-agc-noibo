@@ -153,7 +153,16 @@ const may = createServer((req, res) => {
         tep_cuoi: null, luc_cuoi: '2026-08-29 08:30:00', ten_cuoi: 'Phạm Khương Duy', chua_doc: 2 } });
     }
     if (duong === '/api/chat/chua-doc') return traJson({ so_luong: 0, id_lon_nhat: 120 });
-    return traJson({ ok: true, danh_sach: [], danh_ba: [], nhan_su: [], muc_tieu: [], viec: [], gan_day: [] });
+    /* Ổ trả lời chung. Mọi khoá MẢNG mà các tab hay đọc đều phải CÓ MẶT và
+       RỖNG — thiếu một khoá là `undefined.length` nổ trong tab đó, rồi
+       `loi_console` của bàn đo này báo một lỗi KHÔNG CÓ THẬT (đã xảy ra:
+       thiếu `san_pham` làm tab Kho vận in TypeError suốt). Phép đo hỏng chứ
+       không phải mã hỏng — đúng bẫy BH-17. Dùng chung danh sách khoá với
+       `scripts/lib/ban-do-chrome.mjs`. */
+    return traJson({ ok: true, danh_sach: [], danh_ba: [], nhan_su: [], nhan_vien: [],
+      muc_tieu: [], viec: [], gan_day: [], gop_y: [], vai_tro: [], tai_khoan: [],
+      phong_ban: [], chuc_danh: [], don_vi_tinh: [], san_pham: [], kho: [], ton: [],
+      lich_su: [], vinh_danh: [], ca: [], thong_ke: {}, tong_quan: {} });
   }
   const f = join(tam, duong === '/' ? 'index.html' : duong);
   if (!f.startsWith(tam) || !existsSync(f) || statSync(f).isDirectory()) { res.writeHead(404); return res.end('404'); }

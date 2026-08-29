@@ -459,9 +459,11 @@ async function chatDanhSach(req, env) {
   return json({ tin_nhan: tinNhan, con_nua: conNua, toi_id: phien.nhan_su_id });
 }
 
-/* Danh sách người đã từng chat riêng gần đây (2 chiều) — để hiện bong bóng
-   truy cập nhanh cạnh nút chat nổi, khỏi phải vào Danh bạ bấm lại "Chat
-   ngay" mỗi lần (Sếp Ngọc yêu cầu 20/08/2026). Sắp theo tin mới nhất. */
+/* Danh sách hội thoại: kênh chung + những người đã từng chat riêng gần đây
+   (2 chiều), sắp theo tin mới nhất. Dựng thẳng danh sách trong cửa sổ chat,
+   khỏi phải sang Danh bạ bấm lại "Chat ngay" mỗi lần (Sếp Ngọc 20/08/2026).
+   (Cột bong bóng nổi mà bản đầu nuôi bằng chính lượt gọi này đã BỎ HẲN
+   29/08/2026 — nay chỉ còn danh sách trong cửa sổ dùng dữ liệu này.) */
 async function chatGanDay(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
@@ -470,14 +472,28 @@ async function chatGanDay(req, env) {
      thì phải rời cửa sổ, sang tab Danh bạ, tìm người, bấm "Chat ngay" — bốn
      bước cho một việc mà kho vận làm hàng chục lần mỗi ca, trên điện thoại.
      Nay trả kèm TIN CUỐI · GIỜ · SỐ CHƯA ĐỌC để dựng thẳng danh sách.
-     Vẫn ĐÚNG MỘT câu lệnh đọc (không thêm lượt D1 nào so với bản cũ):
-     `tin_cuoi_id` đã có sẵn, chỉ nối thêm một lần JOIN vào chính bảng tin để
-     lấy nội dung dòng cuối, và một COUNT có điều kiện trên cùng phạm vi.
+
+     SỔ SÁCH D1 — NÓI THẲNG (REV-0038 · L4 sửa lại lời khai cũ).
+     Chú thích bản đầu ghi "vẫn ĐÚNG MỘT câu lệnh đọc, không thêm lượt D1 nào
+     so với bản cũ". SAI, và sai hai lần:
+       ① Hàm này nay chạy HAI câu lệnh đọc, không phải một — thêm câu lấy
+         Kênh chung ở dưới.
+       ② Phía giao diện, `/api/chat/gan-day` trước chỉ gọi lúc NẠP TRANG, nay
+         gọi thêm MỖI LẦN MỞ CỬA SỔ CHAT. Kho vận mở chat hàng chục lần một
+         ca → TỔNG lượt đọc TĂNG, không giảm.
+     Bù lại thì bỏ được `taiLanDau()` lúc nạp trang (bớt một lượt
+     `/api/chat/tin-nhan` mỗi lần mở ERP) — đổi ngang, không phải lãi.
+     GỘP được tới đâu thì gộp: hai câu lệnh dưới đây đi CHUNG một `DB.batch()`
+     nên chỉ còn MỘT vòng gọi D1 (batch chạy tuần tự trong một giao dịch, hai
+     câu đều là SELECT nên không có rủi ro ghi). Không gộp được thành một câu
+     SQL: một câu trả nhiều dòng theo người, câu kia trả đúng một dòng tổng.
+     Tất cả đều là ĐỌC — không đụng hạn mức GHI vừa vá hôm nay.
+
      `chua_doc` đếm theo mốc `chat_xem_id` của TÀI KHOẢN — cùng mốc mà huy
      hiệu tổng đang dùng, nên hai con số không bao giờ đá nhau.
      LIMIT nới 6 → 20 = đúng số nhân sự công ty; vẫn là một trang, không phân
      trang, không đẻ thêm lượt ghi. */
-  const { results } = await env.DB.prepare(`
+  const cauRieng = env.DB.prepare(`
     WITH moc AS (SELECT COALESCE(chat_xem_id, 0) AS xem_id FROM tai_khoan WHERE id = ?),
     rieng AS (
       SELECT CASE WHEN nguoi_gui_id = ? THEN nguoi_nhan_id ELSE nguoi_gui_id END AS doi_tac_id,
@@ -498,11 +514,11 @@ async function chatGanDay(req, env) {
      ORDER BY tin_cuoi_id DESC
      LIMIT 20
   `).bind(phien.tai_khoan_id, phien.nhan_su_id, phien.nhan_su_id, phien.nhan_su_id,
-          phien.nhan_su_id).all();
+          phien.nhan_su_id);
 
   // Kênh chung là một "hội thoại" như mọi hội thoại khác — người dùng không
-  // phải học hai chỗ khác nhau. Một câu lệnh nữa, vẫn chỉ đọc.
-  const { results: kc } = await env.DB.prepare(`
+  // phải học hai chỗ khác nhau. Một câu lệnh nữa, vẫn chỉ ĐỌC.
+  const cauKenhChung = env.DB.prepare(`
     SELECT (SELECT noi_dung FROM tin_nhan_chat WHERE nguoi_nhan_id IS NULL ORDER BY id DESC LIMIT 1) AS tin_cuoi,
            (SELECT tep_ten  FROM tin_nhan_chat WHERE nguoi_nhan_id IS NULL ORDER BY id DESC LIMIT 1) AS tep_cuoi,
            (SELECT tao_luc  FROM tin_nhan_chat WHERE nguoi_nhan_id IS NULL ORDER BY id DESC LIMIT 1) AS luc_cuoi,
@@ -510,8 +526,12 @@ async function chatGanDay(req, env) {
            (SELECT COUNT(*) FROM tin_nhan_chat
              WHERE nguoi_nhan_id IS NULL AND nguoi_gui_id != ?
                AND id > (SELECT COALESCE(chat_xem_id, 0) FROM tai_khoan WHERE id = ?)) AS chua_doc
-  `).bind(phien.nhan_su_id, phien.tai_khoan_id).all();
-  return json({ gan_day: results || [], kenh_chung: (kc && kc[0]) || null });
+  `).bind(phien.nhan_su_id, phien.tai_khoan_id);
+
+  // MỘT vòng gọi D1 cho cả hai câu (xem sổ sách ở chú thích trên).
+  const [rieng, chung] = await env.DB.batch([cauRieng, cauKenhChung]);
+  return json({ gan_day: rieng?.results || [],
+                kenh_chung: (chung?.results && chung.results[0]) || null });
 }
 
 /* Đếm tin CHƯA XEM trên TOÀN BỘ các luồng (kênh chung + mọi cuộc chat riêng

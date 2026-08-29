@@ -14,6 +14,34 @@ import { API } from './api.js';
 import { tinhTrangThaiTB, veGiaoDienTB, hoanDuoc } from './tbd-trangthai.js';
 import { nenChayVongLap, nenDongDau } from './nhip-tim-chat.js';
 
+/* ---- GỌI MÓC NỐI GIỮA CÁC MÔ-ĐUN — thay cho `window.CAI_GI_DO?.()` -------
+   BÀI HỌC 29/08/2026 (REV-0038 · L3). `window.moChatVoi?.()` đã biến một
+   mô-đun chat CHẾT thành cú bấm KHÔNG LÀM GÌ CẢ: không lỗi, không chữ, không
+   dấu vết — Sếp Ngọc bấm mãi vào một cái nút đã chết, còn `console` thì im
+   vì `?.` đã nuốt nốt bằng chứng cuối cùng.
+   Nhưng KHÔNG được thay bừa bằng `console.error`: các móc nối này nằm ở
+   mô-đun chỉ nạp KHI CÓ QUYỀN (`TOI.quyen.includes('nhansu')` …). Người
+   không có quyền mà cũng báo lỗi thì là BÁO OAN, và cổng khói sẽ đỏ oan.
+   Nên: có quyền mà móc nối vắng mặt = mô-đun chết lúc khởi động → HÉT LÊN.
+   Không có quyền = mô-đun cố ý không nạp → im lặng là đúng.
+   `quyenCan` = null nghĩa là móc nối này luôn phải có mặt.               */
+function goiMocNoi(ten, quyenCan, ...thamSo) {
+  const f = window[ten];
+  if (typeof f === 'function') return f(...thamSo);
+  /* `TOI` là `let` khai ở giữa file. Đọc nó trước khi nó được gán thì chính
+     dòng này ném TDZ — ĐÚNG lớp lỗi mà cả hàm này sinh ra để bắt. `TOI?.`
+     KHÔNG cứu được TDZ, `typeof TOI` cũng ném. Nên bọc try/catch: không đọc
+     được quyền thì coi như KHÔNG BIẾT, mà không biết thì cứ HÉT — thà báo
+     thừa một dòng còn hơn im lặng thêm một lần nữa. */
+  let coQuyen = true;
+  try { coQuyen = Array.isArray(TOI?.quyen) ? TOI.quyen.includes(quyenCan) : true; }
+  catch { coQuyen = true; }
+  if (quyenCan && !coQuyen) return undefined;
+  console.error(`Móc nối "window.${ten}" không tồn tại — mô-đun` +
+                (quyenCan ? ` "${quyenCan}"` : '') + ' nhiều khả năng đã chết lúc khởi động. Tải lại trang.');
+  return undefined;
+}
+
 /* ---- Danh mục tab -------------------------------------------------------
    "nhom" = nhóm cha hiện trên sidebar, bám theo 4 phòng ban thật của công ty
    (xem docs/ERP_V2_INFORMATION_ARCHITECTURE.md). null = không có nhóm cha,
@@ -113,7 +141,7 @@ async function taiLaiNhanSuQuanTri() {
   // trên — vừa nạp lại xong thì vẽ lại luôn khối Tài khoản, khỏi phải đóng
   // mở lại hộp mới thấy đúng (Employee Profile Phase 1, UI State Consistency
   // — Rule 7 trong ERP-CONSTITUTION.md).
-  window.LAM_MOI_HOSO_NHANSU?.();
+  goiMocNoi('LAM_MOI_HOSO_NHANSU', 'nhansu');
 }
 
 /* ---- Search + Filter: Nhân sự / Tài khoản --------------------------------
@@ -1515,7 +1543,7 @@ $('#thdLuu').addEventListener('click', async () => {
     TOI.trang_thai_ghi_chu = ghiChu || null;
     veThdPill();
     $('#thdPanel').hidden = true;
-    window.LAM_MOI_TRANGTHAI_DANHBA?.(TOI.id, ma, ghiChu || null);
+    goiMocNoi('LAM_MOI_TRANGTHAI_DANHBA', 'danhba', TOI.id, ma, ghiChu || null);
   } catch (err) {
     alert(err.message || 'Không đổi được trạng thái, thử lại nhé.');
   } finally {
@@ -3412,7 +3440,7 @@ async function khoiDongLichSuViec() {
 async function khoiDongChat() {
   const widget = $('#cnbWidget'), nutMo = $('#cnbNut'), popup = $('#cnbPopup'),
         nutDong = $('#cnbDong'), nutLui = $('#cnbLui'), badge = $('#cnbBadge'),
-        dauTen = $('#cnbDauTen'), dauPhu = $('#cnbDauPhu'), ganDayEl = $('#cnbGanDay'),
+        dauTen = $('#cnbDauTen'), dauPhu = $('#cnbDauPhu'),
         dsEl = $('#cnbDs'), nutCuHon = $('#chat-cu-hon'), formNhap = $('#chat-form');
   const khung = $('#chat-khung');
   if (!widget) return;
@@ -3574,7 +3602,7 @@ async function khoiDongChat() {
     man = 'ds';
     nguoiNhanHienTai = null;
     veManHinh();
-    await veGanDay();
+    await taiDanhSachHoiThoai();
   }
 
   function veBadge() {
@@ -3722,7 +3750,7 @@ async function khoiDongChat() {
     try {
       const { so_luong } = await API.chatChuaDoc();   // tổng chưa đọc THẬT (mốc máy chủ)
       if (so_luong > chuaDocTruoc) {
-        veGanDay();          // có thêm tin mới -> làm mới danh sách gần đây
+        taiDanhSachHoiThoai();   // có thêm tin mới -> làm mới danh sách hội thoại
         /* CTL-0014 — số đỏ này vốn nhảy lên HOÀN TOÀN IM LẶNG; đó chính là
            điều chị Lan báo thiếu. Chỉ kêu khi cửa sổ chat ĐANG ĐÓNG (mở thì
            `hoiTinMoi` đã kêu khẽ rồi — không kêu hai lần cho một tin), và chỉ
@@ -3745,34 +3773,19 @@ async function khoiDongChat() {
     } catch { /* mất mạng tạm thời — bỏ qua, đợt hỏi sau tự thử lại */ }
   }
 
-  /* MỘT lượt gọi máy chủ nuôi HAI chỗ: danh sách hội thoại trong cửa sổ và
-     cột bong bóng truy cập nhanh cạnh nút chính. Không tách thành hai lệnh
-     gọi — 20 người × mỗi 6 giây là số đọc D1 thật, không phải lý thuyết.
-     Cột bong bóng CHỈ hiện 3 cái trên cùng: nó là cột `column-reverse` leo dần
-     lên trên, LIMIT nới lên 20 mà vẫn vẽ hết thì cột dài quá nửa màn hình và
-     nằm đè lên chính nội dung trang. Ai cần đủ 20 thì mở cửa sổ ra xem danh
-     sách — ở đó có tên, tin cuối và số chưa đọc, hơn hẳn hai chữ viết tắt. */
-  const BONG_TOI_DA = 3;
-  async function veGanDay() {
+  /* Tải danh sách hội thoại (kênh chung + các chat riêng gần đây) và vẽ vào
+     cửa sổ. Trước 29/08/2026 một lượt gọi này nuôi HAI chỗ — danh sách trong
+     cửa sổ và cột bong bóng nổi cạnh nút chính; cột bong bóng đã BỎ HẲN nên
+     nay chỉ còn một nơi tiêu thụ, tên hàm đổi theo cho khỏi nói dối. */
+  async function taiDanhSachHoiThoai() {
     try {
       const { gan_day, kenh_chung } = await API.chatGanDay();
       veDanhSach(kenh_chung, gan_day);
-      ganDayEl.innerHTML = (gan_day || []).slice(0, BONG_TOI_DA).map(p =>
-        `<button type="button" class="cnb-gd-item" title="${esc(p.ho_ten)}" data-ganday="${esc(p.id)}" data-ten="${esc(p.ho_ten)}" data-vt="${esc(p.viet_tat)}">${esc(p.viet_tat)}</button>`
-      ).join('');
     } catch { /* mất mạng tạm thời — bỏ qua, đợt hỏi sau tự thử lại */ }
   }
-  ganDayEl.addEventListener('click', (e) => {
-    const btn = e.target.closest('[data-ganday]');
-    if (!btn) return;
-    e.stopPropagation();
-    moPopup();
-    moLuong({ id: btn.getAttribute('data-ganday'), ten: btn.getAttribute('data-ten'),
-              viet_tat: btn.getAttribute('data-vt') });
-  });
 
   /* ⚠️ KHÔNG gọi mạng ở chỗ này. Ba lệnh `await` khởi động (taiLanDau /
-     hoiChuaDocToanCuc / veGanDay) đã DỜI XUỐNG CUỐI hàm và bọc try/catch.
+     hoiChuaDocToanCuc / taiDanhSachHoiThoai) đã DỜI XUỐNG CUỐI hàm và bọc try/catch.
      Vì sao: chúng từng đứng đúng đây, TRƯỚC đoạn gắn sự kiện và trước
      `window.moChatVoi = …` ở dưới. Chỉ cần MỘT lượt 500 thoáng qua của
      `/api/chat/tin-nhan` lúc mở trang là `taiLanDau()` ném, cả hàm chết giữa
@@ -3888,7 +3901,13 @@ async function khoiDongChat() {
     } catch { /* mất mạng — dùng tên trong gói tin */ }
     if (!ten) { moPopup(); veDs(); return; }   // không biết là ai thì mở danh sách hội thoại
     if (!vt) vt = ten.split(' ').slice(-2).map(w => w[0]).join('').toUpperCase();
-    window.moChatVoi?.(id, ten, vt);
+    /* REV-0038 · L3 — ĐÂY là chỗ vá nửa lớp lần trước: chỗ "Chat ngay" ở Danh
+       bạ đã bỏ `?.` rồi, còn đường "BẤM THÔNG BÁO ĐẨY" thì vẫn giữ nguyên.
+       Hai đường gọi CÙNG một hàm `window.moChatVoi`; nếu `khoiDongChat()` chết
+       lần nữa thì đường này lại im lặng y hệt lần trước. Móc nối này được gán
+       ở CUỐI `khoiDongChat()`, sau chỗ gắn sự kiện — nên nó vắng mặt là dấu
+       hiệu thật của khởi động hỏng, không phải chuyện thường. */
+    goiMocNoi('moChatVoi', 'chat', id, ten, vt);
   }
 
   /** '/app.html#chat=NS-DUY' → 'NS-DUY'. Dùng cho cả hai đường: tab đang mở
@@ -3980,7 +3999,7 @@ async function khoiDongChat() {
     if (!id || id === TOI.id) return;
     moPopup();
     await moLuong({ id, ten, viet_tat: vietTat });
-    veGanDay();       // đối tác mới lần đầu chat thì cũng cần hiện luôn trong danh sách
+    taiDanhSachHoiThoai();   // đối tác mới lần đầu chat thì cũng cần hiện luôn trong danh sách
     moiBatNeuNen();   // vừa MỞ một cuộc chat riêng — thời điểm hợp lý thứ hai để hỏi quyền
   };
 
@@ -4132,13 +4151,15 @@ async function khoiDongChat() {
 
   /* ==== KHỞI ĐỘNG MẠNG — ĐẶT CUỐI CÙNG, CÓ CHỦ Ý =========================
      Tới dòng này MỌI dây nối đã gắn xong và `window.moChatVoi` đã có mặt, nên
-     một lượt gọi hỏng ở dưới chỉ làm mất huy hiệu/bong bóng — KHÔNG giết cả
-     mô-đun chat như trước (xem ghi chú "DÂY NỐI TRƯỚC, MẠNG SAU" ở trên).
+     một lượt gọi hỏng ở dưới chỉ làm mất huy hiệu / danh sách hội thoại —
+     KHÔNG giết cả mô-đun chat như trước (xem "DÂY NỐI TRƯỚC, MẠNG SAU" ở trên).
      Bỏ hẳn `taiLanDau()` lúc mở trang: popup nay mở ra DANH SÁCH HỘI THOẠI,
-     tin nhắn chỉ tải khi người ta thật sự vào một luồng — bớt một lượt đọc D1
-     cho MỖI lần mở ERP của cả 20 người. */
+     tin nhắn chỉ tải khi người ta thật sự vào một luồng — bớt một lượt đọc
+     `/api/chat/tin-nhan` cho MỖI lần mở ERP của cả 20 người. (Đổi lại
+     `/api/chat/gan-day` nay gọi mỗi lần MỞ CỬA SỔ, không chỉ lúc nạp trang —
+     xem sổ sách đầy đủ ở chú thích `chatGanDay()` trong `src/index.js`.) */
   try { await hoiChuaDocToanCuc(); } catch (e) { console.error('Chat · đếm chưa đọc:', e?.message || e); }
-  try { await veGanDay(); } catch (e) { console.error('Chat · bong bóng gần đây:', e?.message || e); }
+  try { await taiDanhSachHoiThoai(); } catch (e) { console.error('Chat · danh sách hội thoại:', e?.message || e); }
   daKhoiDongNhip = true;
   batNhipTin();                          // tự tắt/bật theo tab ẩn + ngồi không (REV-0031 Việc 2)
   setInterval(hoiChuaDocToanCuc, 6000);  // SELECT thuần — giữ chạy để tab ẩn vẫn báo được

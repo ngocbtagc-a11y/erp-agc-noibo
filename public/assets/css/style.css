@@ -1702,37 +1702,16 @@ tr.canh-bao:hover > td { background: #fbdbd6; }
    dấu vẫn nằm đó, người đang bật thật vẫn thấy 🔕 — báo oan. */
 .cnb-dau-tb[hidden] { display: none; }
 
-/* Bong bóng truy cập nhanh các chat riêng gần đây — xếp dọc ngay trên nút chính */
-.cnb-ganday {
-  position: fixed; right: 28px; bottom: 92px; z-index: 301;
-  display: flex; flex-direction: column-reverse; align-items: center; gap: 10px;
-}
-.cnb-gd-item {
-  position: relative;
-  box-sizing: border-box;
-  /* 40 → 44px: ĐO ĐƯỢC 29/08/2026 ở 375px và 320px ra đúng 40 × 40 — dưới sàn
-     ngón tay 44px (WCAG 2.5.5 / Apple HIG), y hệt ca nút "←"/"✕" đã vá trước
-     đó. Kiểm lại bằng `node scripts/do-chat-noibo.mjs --rong 320`. */
-  width: 44px; height: 44px;
-  border-radius: 50%;
-  background: var(--sage-dark);
-  color: var(--white);
-  border: 2px solid var(--card);
-  cursor: pointer;
-  font-size: 12px; font-weight: 700;
-  display: flex; align-items: center; justify-content: center;
-  box-shadow: var(--shadow-md);
-  transition: transform .12s;
-}
-.cnb-gd-item:hover { transform: translateY(-1px) scale(1.05); }
-/* CỬA SỔ MỞ = GIẤU CỘT BONG BÓNG, ở MỌI bề ngang (không chỉ điện thoại).
-   Ảnh `1440-chat-mo-sau.png` cho thấy cột bong bóng nằm đè lên chính cửa sổ
-   vừa mở — và lúc đó nó đã hoàn toàn thừa: bên trong cửa sổ có danh sách hội
-   thoại đầy đủ tên, tin cuối, số chưa đọc, hơn hẳn hai chữ viết tắt.
-   Đóng cửa sổ là cột về. Không xoá đường vào chat nhanh, chỉ không để nó
-   chồng lên thứ nó vừa mở ra. */
-body.cnb-mo .cnb-ganday { display: none; }
-.cnb-gd-item .tb-badge { top: -3px; right: -3px; }
+/* CỘT BONG BÓNG "chat gần đây" (`.cnb-ganday` / `.cnb-gd-item`) — ĐÃ BỎ HẲN
+   29/08/2026, không phải chỉ giấu. Bản trước giấu bằng `body.cnb-mo
+   .cnb-ganday{display:none}`, tức là chỉ giấu LÚC CỬA SỔ ĐANG MỞ; đóng cửa sổ
+   là cột về chỗ cũ và tiếp tục đè lên nút bấm của trang (đo ở 375px lúc cửa
+   sổ đóng: 1 nút bị đè; ép `display:none`: 0).
+   Bỏ đi KHÔNG mất đường vào nhanh nào — cột bị `BONG_TOI_DA = 3` cắt còn 3
+   chữ viết tắt, trong khi danh sách hội thoại ngay trong cửa sổ hiện 9 dòng
+   có TÊN ĐẦY ĐỦ + TIN CUỐI + GIỜ + SỐ CHƯA ĐỌC. Thứ thay thế hơn hẳn thứ bị bỏ.
+   Thẻ `#cnbGanDay` trong `app.html` và hàm vẽ bong bóng trong `app.js` cũng
+   đã gỡ cùng lượt — bỏ nửa vời (giữ thẻ, giữ CSS) là để lại rác chờ hồi sinh. */
 
 .cnb-popup {
   position: fixed; right: 24px; bottom: 92px; z-index: 300;
@@ -1948,11 +1927,16 @@ body.cnb-mo .cnb-ganday { display: none; }
 }
 .cnb-ds-gio { font-size: 11px; color: var(--text-mute); }
 /* Số chưa đọc: CAM, không phải đỏ. Đỏ trong ERP này chỉ dành cho LỖI
-   (`docs/BANG-MAU.md`); tin chưa đọc không phải lỗi — nó là việc cần làm. */
+   (`docs/BANG-MAU.md`); tin chưa đọc không phải lỗi — nó là việc cần làm.
+   NỀN dùng `--cam-dark`, KHÔNG phải `--cam` — chính luật ở dòng 161-174 file
+   này: "nền cam + chữ trắng → `--cam-dark`". Bản đầu dùng `--cam` cho ra
+   #fffcf4 trên #e8730a = 2.76:1, dưới sàn 4.5 của WCAG AA. Đây là SỐ CHƯA
+   ĐỌC — thứ người ta LIẾC MẮT tìm chứ không ngồi đọc; mờ là mất hẳn tác
+   dụng. `--cam-dark` #b45606 cho 4.91:1. Đo: `node scripts/do-tuong-phan-mau.mjs`. */
 .cnb-ds-dem {
   min-width: 20px; height: 20px; padding: 0 6px;
   border-radius: 999px;
-  background: var(--cam); color: var(--white);
+  background: var(--cam-dark); color: var(--white);
   font-size: 11px; font-weight: 700; line-height: 20px; text-align: center;
 }
 
@@ -2001,7 +1985,6 @@ body.cnb-mo .cnb-ganday { display: none; }
   body.cnb-mo { overflow: hidden; }
 
   .cnb-nut { right: 16px; bottom: 16px; }
-  .cnb-ganday { right: 20px; bottom: 84px; }   /* theo đúng nút chính dời vị trí ở mobile */
 
   /* Chừa lề an toàn dưới (tai thỏ / thanh vuốt iPhone) cho ô nhập tin — thiếu
      nó thì nút Gửi nằm đúng chỗ thanh vuốt, bấm ra… về màn hình chính.
