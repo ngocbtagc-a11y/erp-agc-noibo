@@ -163,11 +163,16 @@ export const API = {
      đó để KHÔNG đẩy thông báo lên điện thoại khi người dùng đang ngồi nhìn
      thẳng vào đúng đoạn chat này (CTL-0014). Ghép vào lệnh gọi 6 giây/lần vốn
      đã chạy — KHÔNG thêm lệnh gọi thứ hai, không tốn thêm lượt Worker. */
-  chatDanhSach: (sauId, voiId, dangMo) => {
+  /* `truocId` = con trỏ LÙI — xin 50 tin CŨ HƠN tin mang id đó ("Xem tin cũ
+     hơn"). Cùng khuôn con trỏ `truoc` của `cvLichSu`/`hoanLichSu`, chỉ gọn hơn
+     vì chat sắp theo `id` nên con trỏ chỉ là MỘT số. Máy chủ trả kèm `con_nua`
+     để giao diện biết có còn phải hiện nút nữa hay không. */
+  chatDanhSach: (sauId, voiId, dangMo, truocId) => {
     const q = new URLSearchParams();
     if (sauId) q.set('sau_id', sauId);
     if (voiId) q.set('voi', voiId);
     if (dangMo) q.set('dang_mo', '1');
+    if (truocId) q.set('truoc_id', truocId);
     const qs = q.toString();
     return goi('/api/chat/tin-nhan' + (qs ? '?' + qs : ''));
   },
