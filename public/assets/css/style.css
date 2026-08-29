@@ -282,7 +282,38 @@ body {
   font-size: 15px;
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
+  /* CHỮ DÀI PHẢI TỰ XUỐNG DÒNG — CHỐT CHẶN TOÀN CỤC
+     ---------------------------------------------------------------------
+     Sếp Ngọc báo 29/08/2026: "tin nhắn dài quá thì xuống dòng, đừng để phải
+     kéo ngang". Đo ra: một chuỗi KHÔNG có dấu cách (link Shopee, mã đơn 19
+     số, dãy 80 chữ số) nhét vào BẤT KỲ khung chữ nào cũng thổi cả trang từ
+     375px ra 654–854px — thanh cuộn ngang mọc trên TOÀN TRANG, không riêng
+     chat. Đo được ở cả 6 tab. Chữ tiếng Việt bình thường không bao giờ dính
+     vì nó luôn có dấu cách để ngắt.
+
+     PHẢI LÀ `anywhere`, KHÔNG PHẢI `break-word` — đã thử `break-word` trước
+     và ĐO RA nó KHÔNG đủ: hai tab Trạm Mục Tiêu và Kho vận vẫn tràn 1071px
+     và 971px. Lý do: `break-word` cho chữ xuống dòng nhưng KHÔNG hạ kích
+     thước min-content, mà bề rộng tối thiểu của một ô flex/grid lấy đúng
+     min-content — nên cái từ dài vẫn banh rộng cả hàng flex ra, chữ bên
+     trong xuống dòng cũng vô ích. `anywhere` hạ min-content nên hàng flex co
+     lại được. (Cách khác là rắc `min-width: 0` khắp mọi ô flex trong 3.400
+     dòng CSS — nhiều chỗ để sót hơn hẳn.)
+
+     Cái giá của `anywhere` là Ô BẢNG cũng co theo và CỘT BẢNG VỠ. Nên ngay
+     dưới đây có một dòng trả `table` về `break-word`: bảng nhiều cột giữ
+     nguyên bề rộng cột và VẪN cuộn ngang trong khung riêng của nó, đúng
+     thiết kế. Ca đối chứng "bảng nhiều cột vẫn cuộn ngang" nằm ở mục E
+     trong `scripts/do-chu-dai-xuong-dong.mjs` — đổi hai dòng này là nó đỏ.
+
+     Kế thừa xuống mọi phần tử con, nên MỌI khung hiện chữ người dùng gõ —
+     kể cả khung viết sau này — được che sẵn, không phải nhớ vá từng chỗ. */
+  overflow-wrap: anywhere;
 }
+/* Bảng ĐƯỢC PHÉP cuộn ngang trong khung riêng — đó là thiết kế đúng cho
+   nhiều cột, không phải bệnh. Trả ô bảng về `break-word` để `anywhere` ở
+   trên không co cột lại làm vỡ bảng. Xem chú thích dài trong `body`. */
+table, table * { overflow-wrap: break-word; }
 
 a { color: inherit; text-decoration: none; }
 button, input, select, textarea { font-family: inherit; font-size: inherit; color: inherit; }
@@ -2140,22 +2171,27 @@ tr.canh-bao:hover > td { background: #fbdbd6; }
 }
 
 .chat-nhap {
-  display: flex; align-items: center; gap: 8px;
+  display: flex; align-items: flex-end; gap: 8px;   /* `flex-end`: ô cao dần thì nút neo đáy */
   padding: 10px 12px;
   border-top: 1px solid var(--line);
   flex-shrink: 0;
 }
-.chat-nhap input[type="text"] {
+.chat-nhap input[type="text"],
+.chat-nhap textarea {
   flex: 1;
   padding: 11px 16px;
   border: 1px solid var(--line);
   border-radius: var(--r-pill);
   background: var(--surface);
 }
-.chat-nhap input[type="text"]:focus {
+.chat-nhap input[type="text"]:focus,
+.chat-nhap textarea:focus {
   outline: none; background: var(--white); border-color: var(--cam);
   box-shadow: 0 0 0 3px rgba(235,124,23,.28);
 }
+/* Ô gõ nhiều dòng đã cao lên thì bo tròn hết cỡ trông như viên thuốc méo —
+   đổi sang bo vừa, giống Messenger khi tin dài. */
+.chat-nhap textarea.dang-cao { border-radius: 18px; }
 /* Ô nhập + hai nút của nó. ĐO ĐƯỢC ở 375px trước bản này: nút 📎 chỉ
    38 × 38px và nút "Gửi" cao 36.8px — cả hai dưới sàn 44px, mà đây là hai nút
    bấm nhiều nhất của cả ERP. `box-sizing: border-box` bắt buộc, thiếu nó thì
@@ -2167,10 +2203,58 @@ tr.canh-bao:hover > td { background: #fbdbd6; }
   min-width: 44px; min-height: 44px;
   display: flex; align-items: center; justify-content: center;
 }
-.chat-nhap input[type="text"] { box-sizing: border-box; min-height: 44px; }
+.chat-nhap input[type="text"],
+.chat-nhap textarea { box-sizing: border-box; min-height: 44px; }
 .chat-nhap .btn-primary {
   box-sizing: border-box;
   min-width: 44px; min-height: 44px; flex-shrink: 0;
+}
+
+/* ==========================================================================
+   Ô GÕ NHIỀU DÒNG — `.o-nhieu-dong`
+   ---------------------------------------------------------------------------
+   VÌ SAO CÓ: Sếp Ngọc 29/08/2026 — "tin nhắn dài quá thì xuống dòng, đừng để
+   phải kéo ngang". Một `<input type="text">` KHÔNG BAO GIỜ xuống dòng được,
+   dù CSS viết gì. Đo ở 375px: gõ 133 ký tự vào thanh chat ra scrollWidth
+   1034px / clientWidth 232px — phải kéo ngang trong ô mới đọc lại được câu
+   mình vừa gõ.
+
+   Cả ERP có 111 ô một dòng cùng bệnh — KHÔNG phải 12 như vòng 1 khai. Vòng 1
+   đếm bằng `maxLength >= 100` nên bỏ sót sạch 99 ô KHÔNG khai `maxlength`,
+   tức nhóm nhận chữ VÔ HẠN (REV-0047/L1, BH-58). Chữa theo hai đường:
+     · 31 ô CHỮ DÀI (tiêu đề, tên hàng, tên NCC, địa chỉ, lý do…) dùng lớp này
+       — `<textarea rows="1">` trông y hệt ô một dòng lúc rỗng, tự cao dần khi
+       chữ dài, chặn trần rồi mới cuộn DỌC (không bao giờ ngang).
+     · 80 ô CHỮ NGẮN (tìm kiếm, SĐT, mã, số lượng…) khai `maxlength` < 100 cho
+       đúng thứ chúng thật sự nhận — trần thấp thì chữ không bao giờ đủ dài để
+       phải kéo ngang.
+
+   Enter vẫn GỬI / vẫn LƯU như trước — `noiDayONhieuDong()` trong app.js giữ
+   nguyên thói quen cũ; Shift+Enter mới là xuống dòng. Đổi khác đi là bắt 20
+   người học lại một phím họ bấm hàng trăm lần mỗi ngày.
+   ========================================================================== */
+.o-nhieu-dong {
+  resize: none;              /* góc kéo của trình duyệt phá vỡ bố cục đã cân */
+  overflow-y: auto;          /* cao tới trần thì cuộn DỌC */
+  overflow-x: hidden;        /* chốt: không bao giờ mọc thanh cuộn NGANG */
+  line-height: 1.45;
+  max-height: 132px;         /* ~6 dòng — quá đó thì cuộn, khỏi nuốt cả màn hình */
+}
+/* `.field textarea` (ở đầu file) đặt `min-height: 90px` cho ô mô tả nhiều
+   dòng. Ô này thay chỗ một `<input>` MỘT DÒNG nên phải gỡ sàn đó ra, không
+   thì mỗi ô vừa đổi phình thêm ~50px và màn 375px mất bớt dòng — đúng
+   thứ bản vá này không được phép làm. Cần cả `.field` lẫn `textarea` trong
+   bộ chọn để thắng độ ưu tiên của luật kia. */
+.field textarea.o-nhieu-dong { min-height: 0; resize: none; }
+/* `min-height: 44px` — REV-0047 ghi nhận ô này cao 34px, dưới sàn chạm 44px.
+   Bản `<input>` cũ còn thấp hơn (32px) nên đây không phải lỗi mới, nhưng đã
+   đụng vào thì nâng nốt cho đủ sàn. `box-sizing` bắt buộc: thiếu nó thì
+   padding cộng thêm ra ngoài 44px và luật F2 ("ô rỗng không quá 48px") đỏ. */
+.thd-panel textarea.o-nhieu-dong {
+  width: 100%; padding: 7px 9px;
+  box-sizing: border-box; min-height: 44px;
+  border: 1px solid var(--line); border-radius: var(--r-sm);
+  font-size: 12.5px; color: var(--ink); background: var(--surface);
 }
 
 /* ==========================================================================
