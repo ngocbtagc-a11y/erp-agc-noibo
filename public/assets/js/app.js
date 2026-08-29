@@ -3474,7 +3474,7 @@ async function khoiDongChat() {
   /* Một dòng hội thoại = một mục bấm được cao TỐI THIỂU 56px (thẻ .cnb-ds-muc
      đặt min-height trong style.css). Kho vận bấm bằng ngón cái khi đang bê
      hàng — dưới 44px là bấm trượt, đây là chỗ bấm nhiều nhất của cả cửa sổ. */
-  function veDanhSach(kenhChung, ganDay) {
+  function veDanhSach(kenhChung, ganDay, cat) {
     const huy = n => (n > 0 ? `<span class="cnb-ds-dem">${n > 99 ? '99+' : n}</span>` : '');
     const dong = (id, vt, ten, phu, gio, chuaDocN) =>
       `<button type="button" class="cnb-ds-muc" data-mo="${esc(id)}" data-ten="${esc(ten)}" data-vt="${esc(vt)}">` +
@@ -3495,6 +3495,19 @@ async function khoiDongChat() {
       dong(p.id, p.viet_tat, p.ho_ten,
         (p.gui_cuoi === TOI.id ? 'Bạn: ' : '') + tomTat(p),
         gioChat(p.luc_cuoi), Number(p.chua_doc || 0))).join('');
+
+    /* Danh sách hội thoại bị cắt thì PHẢI NÓI RA — 23 nhân sự, trần 20, tức
+       vết cắt có thật ngay hôm nay. Không nói ra thì một người từng nhắn cho
+       Sếp biến mất khỏi cửa sổ mà Sếp không biết là mình đang thiếu ai.
+       Dùng đúng dải `.dai-cat` như mọi màn khác, và chỉ ra đường đi tiếp. */
+    if (cat) {
+      const con = Number.isFinite(cat.tong) ? Math.max(0, cat.tong - cat.gioi_han) : null;
+      html += `<p class="dai-cat cnb-ds-cat"><span class="dai-cat-chu">✂️ Đang hiện ` +
+        `<b>${cat.gioi_han}</b> cuộc trò chuyện gần nhất` +
+        (con != null ? ` trong tổng <b>${cat.tong}</b> — còn <b>${con}</b> người nữa chưa hiện` :
+                       ` — danh sách này <b>đã bị cắt bớt</b>, còn nữa`) +
+        `. Tìm người đó trong Danh bạ rồi bấm "Chat ngay".</span></p>`;
+    }
 
     dsEl.innerHTML = html;
   }
@@ -3702,8 +3715,8 @@ async function khoiDongChat() {
      nay chỉ còn một nơi tiêu thụ, tên hàm đổi theo cho khỏi nói dối. */
   async function taiDanhSachHoiThoai() {
     try {
-      const { gan_day, kenh_chung } = await API.chatGanDay();
-      veDanhSach(kenh_chung, gan_day);
+      const { gan_day, kenh_chung, cat } = await API.chatGanDay();
+      veDanhSach(kenh_chung, gan_day, cat);
     } catch { /* mất mạng tạm thời — bỏ qua, đợt hỏi sau tự thử lại */ }
   }
 

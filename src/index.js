@@ -494,8 +494,17 @@ async function chatGanDay(req, env) {
 
      `chua_doc` đếm theo mốc `chat_xem_id` của TÀI KHOẢN — cùng mốc mà huy
      hiệu tổng đang dùng, nên hai con số không bao giờ đá nhau.
-     LIMIT nới 6 → 20 = đúng số nhân sự công ty; vẫn là một trang, không phân
-     trang, không đẻ thêm lượt ghi. */
+     ⚠️ VÁ REV-0040 (lượt gộp) — TRẦN NÀY LÀ CẮT IM LẶNG, `do-cat-im-lang` bắt
+     được ngay sau khi gộp. Lời khai cũ *"LIMIT nới 6 → 20 = đúng số nhân sự
+     công ty"* tự nó là câu chứng minh vết cắt CÓ THẬT: công ty đang 23 nhân sự
+     (10 fulltime + parttime/thời vụ), tức trần 20 cắt được NGAY HÔM NAY, không
+     phải "một ngày nào đó". Mà đây là DANH SÁCH HỘI THOẠI: cắt im lặng ở đây
+     nghĩa là một người từng nhắn cho Sếp **biến mất khỏi cửa sổ chat**, và Sếp
+     không có cách nào biết mình đang thiếu ai.
+     Nay hỏi GH+1 rồi dùng chung `src/cat-danh-sach.js` như mọi màn khác — câu
+     đếm CHỈ chạy khi thật sự chạm trần, nên ca thường ngày tốn thêm 0 câu lệnh
+     và 1 dòng đọc. Vẫn một trang, không phân trang, không đẻ thêm lượt ghi. */
+  const GH_HOI_THOAI = 20;
   const cauRieng = env.DB.prepare(`
     WITH moc AS (SELECT COALESCE(chat_xem_id, 0) AS xem_id FROM tai_khoan WHERE id = ?),
     rieng AS (
@@ -515,7 +524,7 @@ async function chatGanDay(req, env) {
       JOIN nhan_su ns ON ns.id = x.doi_tac_id
      GROUP BY ns.id
      ORDER BY tin_cuoi_id DESC
-     LIMIT 20
+     LIMIT ${GH_HOI_THOAI + 1}
   `).bind(phien.tai_khoan_id, phien.nhan_su_id, phien.nhan_su_id, phien.nhan_su_id,
           phien.nhan_su_id);
 
@@ -533,7 +542,19 @@ async function chatGanDay(req, env) {
 
   // MỘT vòng gọi D1 cho cả hai câu (xem sổ sách ở chú thích trên).
   const [rieng, chung] = await env.DB.batch([cauRieng, cauKenhChung]);
-  return json({ gan_day: rieng?.results || [],
+
+  /* Nói ra vết cắt. Câu đếm là số ĐỐI TÁC chat riêng khác nhau — đúng thứ
+     `LIMIT` đang cắt, không phải số tin nhắn. Chỉ chạy khi chạm trần. */
+  const { ds: ganDay, biCat } = catBot(rieng?.results || [], GH_HOI_THOAI);
+  const cat = await nhanCat(env, biCat, GH_HOI_THOAI, `
+    SELECT COUNT(*) AS n FROM (
+      SELECT DISTINCT CASE WHEN nguoi_gui_id = ? THEN nguoi_nhan_id ELSE nguoi_gui_id END AS doi_tac_id
+        FROM tin_nhan_chat
+       WHERE nguoi_nhan_id IS NOT NULL AND (nguoi_gui_id = ? OR nguoi_nhan_id = ?))`,
+    [phien.nhan_su_id, phien.nhan_su_id, phien.nhan_su_id],
+    'Tìm người đó trong Danh bạ rồi bấm "Chat ngay".');
+
+  return json({ gan_day: ganDay, cat,
                 kenh_chung: (chung?.results && chung.results[0]) || null });
 }
 
