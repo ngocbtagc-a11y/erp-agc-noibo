@@ -2170,10 +2170,25 @@ async function khoiDongVinhDanh() {
     $('#vd-form-body').hidden = !hienForm;
     nutMoVd.textContent = hienForm ? '✕ Đóng' : '+ Khen ai đó';
   }
-  nutMoVd.addEventListener('click', () => dongMoFormVd($('#vd-form-body').hidden));
+  /* ĐANG SỬA lời khen nào (null = đang gửi mới). DÙNG LẠI ĐÚNG FORM NÀY,
+     không dựng hộp thứ hai: form đã có đủ 3 thứ sửa được (người · nội dung ·
+     số sao), mà `vdSua` KHÔNG cho đổi người — nên ở chế độ sửa, ô người bị
+     khoá và có chữ nói rõ vì sao (chọn nhầm người thì phải Gỡ, xem `vdSua`). */
+  let vdDangSuaId = null;
+  function thoatCheDoSua() {
+    vdDangSuaId = null;
+    $('#vd-dang-sua').hidden = true;
+    $('#vd-nguoihienthi').classList.remove('khoa');
+    $('#vd-nut-gui').textContent = 'Vinh danh';
+  }
+  nutMoVd.addEventListener('click', () => {
+    if (vdDangSuaId) { $('#vd-form').reset(); veNguoiVd(); thoatCheDoSua(); }
+    dongMoFormVd($('#vd-form-body').hidden);
+  });
   $('#vd-nut-huy').addEventListener('click', () => {
     $('#vd-form').reset();
     veNguoiVd();
+    thoatCheDoSua();
     dongMoFormVd(false);
   });
 
@@ -2187,11 +2202,29 @@ async function khoiDongVinhDanh() {
      để cộng sao (điều cấm 20). Máy chỉ chỗ, NGƯỜI mới khen. */
   function moFormVinhDanh(nhanSuId, loiKhenNhap) {
     dongMoFormVd(true);
+    thoatCheDoSua();
     chonNguoi.value = nhanSuId;
     veNguoiVd();
     $('#vd-noidung').value = loiKhenNhap || '';
     const oSao = $('#vd-so-sao');
     if (oSao) oSao.value = 3;
+    $('#vd-noidung').focus();
+    $('#vd-form').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  /* Mở CHÍNH form trên ở chế độ SỬA một lời khen đã gửi (REV-0037 · L5). */
+  function moFormSuaKhen(r) {
+    dongMoFormVd(true);
+    vdDangSuaId = r.id;
+    chonNguoi.value = r.nhan_su_id;
+    veNguoiVd();
+    $('#vd-nguoihienthi').classList.add('khoa');
+    $('#vd-dang-sua').hidden = false;
+    $('#vd-dang-sua-ten').textContent = r.nhan_su_ten;
+    $('#vd-noidung').value = r.noi_dung || '';
+    const oSao = $('#vd-so-sao');
+    if (oSao) oSao.value = r.so_sao ?? 1;
+    $('#vd-nut-gui').textContent = 'Lưu lời khen';
     $('#vd-noidung').focus();
     $('#vd-form').scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
@@ -2220,7 +2253,20 @@ async function khoiDongVinhDanh() {
     }
 
     const list = $('#vd-list');
-    list.innerHTML = ds.map(r => `
+    /* Nút Sửa/Gỡ CHỈ hiện trên lời khen của CHÍNH mình và CHỈ trong 24h —
+       `con_sua_duoc` tính ở máy chủ để khỏi lệch múi giờ máy khách. Cửa thật
+       vẫn chốt ở `vdSua`; ẩn nút chỉ để khỏi vẽ thứ bấm vào là báo lỗi. */
+    VD_THEO_ID = {};
+    list.innerHTML = ds.map(r => {
+      VD_THEO_ID[r.id] = r;
+      const cuaToi = kq.toi && r.nguoi_gui_id === kq.toi;
+      const nut = (cuaToi && r.con_sua_duoc)
+        ? `<div class="vd-nut">
+             <button type="button" class="btn-nho" data-vd-sua="${r.id}">Sửa</button>
+             <button type="button" class="btn-nho" data-vd-go="${r.id}">Gỡ</button>
+           </div>`
+        : '';
+      return `
       <div class="vd-item person">
         ${avHtml(r.nhan_su_id, (r.nhan_su_ten || '?').trim().split(/\s+/).slice(-2).map(t => t[0]).join('').toUpperCase(), r.co_anh)}
         <div style="flex:1">
@@ -2229,11 +2275,31 @@ async function khoiDongVinhDanh() {
             ` <span class="tag sage" title="Tổng sao tích luỹ, dùng đổi quà">⭐ ${esc(r.sao ?? 0)} tổng</span></div>
           <div class="vd-noidung">${esc(r.noi_dung)}</div>
           <div class="sm">— ${esc(r.nguoi_gui_ten)} · ${thoiGianTruoc(r.tao_luc)}</div>
+          ${nut}
         </div>
-      </div>
-    `).join('');
+      </div>`;
+    }).join('');
     $('#vd-trong').hidden = ds.length > 0;
   }
+
+  let VD_THEO_ID = {};
+  $('#vd-list').addEventListener('click', async (e) => {
+    const nSua = e.target.closest('[data-vd-sua]');
+    if (nSua) { moFormSuaKhen(VD_THEO_ID[nSua.getAttribute('data-vd-sua')]); return; }
+    const nGo = e.target.closest('[data-vd-go]');
+    if (!nGo) return;
+    const r = VD_THEO_ID[nGo.getAttribute('data-vd-go')];
+    /* NÓI THẲNG HẬU QUẢ TRƯỚC KHI GỠ — người ta ĐÃ ĐỌC lời khen rồi, nên
+       "gỡ" ở đây không phải là xoá cho biến mất mà là gửi một lời đính chính.
+       Giấu điều đó đi là để Sếp bấm nhầm lần thứ hai. */
+    if (!confirm(`Gỡ lời khen gửi ${r.nhan_su_ten}?\n\n`
+      + `· Trừ lại ${r.so_sao ?? 1} ⭐ đã cộng\n`
+      + `· ${r.nhan_su_ten} SẼ NHẬN một thông báo đính chính (bạn ấy đã đọc lời khen rồi)\n`
+      + `· Việc gỡ được ghi vào sổ sửa`)) return;
+    nGo.disabled = true;
+    try { await API.vdSua(r.id, { go: true }); await taiLai(); }
+    catch (err) { alert(err.message || 'Không gỡ được, thử lại nhé.'); nGo.disabled = false; }
+  });
 
   $('#vd-form').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -2241,9 +2307,13 @@ async function khoiDongVinhDanh() {
     const nut = $('#vd-nut-gui');
     nut.disabled = true;
     try {
-      await API.vdGui(chonNguoi.value, $('#vd-noidung').value.trim(), parseInt($('#vd-so-sao').value, 10));
+      const noiDung = $('#vd-noidung').value.trim();
+      const soSao = parseInt($('#vd-so-sao').value, 10);
+      if (vdDangSuaId) await API.vdSua(vdDangSuaId, { noi_dung: noiDung, so_sao: soSao });
+      else await API.vdGui(chonNguoi.value, noiDung, soSao);
       $('#vd-form').reset();
       veNguoiVd();
+      thoatCheDoSua();
       dongMoFormVd(false);
       await taiLai();
     } catch (err) {
@@ -3006,12 +3076,15 @@ async function khoiDongCongViec() {
     // thì vẫn phải sửa được việc.
     const khoi = $('#cv-sua-lichsu-khoi');
     khoi.hidden = true;
+    veDaiCat('#cv-sua-lichsu-cat', null);
     try {
       const ls = await API.suaLichSu('cong_viec', id);
       const ds = ls.ds || [];
       if (ds.length) {
         $('#cv-sua-lichsu').innerHTML = ds.map(d =>
           `<li>${esc(d.cau)} <span class="luc">· ${esc(String(d.luc || '').slice(0, 16))}</span></li>`).join('');
+        // Sổ bằng chứng bị cắt thì nói ra ngay dưới danh sách (REV-0037 · L1).
+        veDaiCat('#cv-sua-lichsu-cat', ls.cat, { don_vi: 'lần sửa' });
         khoi.hidden = false;
       }
     } catch { /* không xem được lịch sử thì thôi, đừng chặn việc sửa */ }

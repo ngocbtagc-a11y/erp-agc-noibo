@@ -183,6 +183,14 @@
         </div>
         <div class="panel-body" id="vd-form-body" hidden>
           <form id="vd-form" class="form-luoi" autocomplete="off">
+            <!-- Chế độ SỬA lời khen đã gửi (REV-0037 · L5). Nói rõ VÌ SAO
+                 không đổi được người: sửa lặng lẽ tên người nhận là chuyển
+                 một lời khen ĐÃ ĐỌC từ người này sang người kia. -->
+            <div class="field field-rong vd-dang-sua" id="vd-dang-sua" hidden>
+              ✏️ Đang sửa lời khen gửi <b id="vd-dang-sua-ten"></b>.
+              Sửa được lời khen và số ⭐. <b>Chọn nhầm người thì phải bấm Gỡ</b>
+              rồi khen lại — bạn ấy đã đọc lời khen này rồi nên sẽ nhận tin đính chính.
+            </div>
             <div class="field field-rong">
               <label>Khen ai *</label>
               <div class="combo1" id="vd-nguoicombo">
@@ -2923,6 +2931,9 @@
     <div class="cv-sua-lichsu" id="cv-sua-lichsu-khoi" hidden>
       <h5>Đã sửa những gì</h5>
       <ul id="cv-sua-lichsu"></ul>
+      <!-- Sổ bằng chứng cắt bớt thì PHẢI nói ra (REV-0037 · L1) — im lặng ở
+           đây là giấu đúng dòng người ta muốn giấu. -->
+      <div class="dai-cat" id="cv-sua-lichsu-cat" hidden></div>
     </div>
   </div>
 </div>

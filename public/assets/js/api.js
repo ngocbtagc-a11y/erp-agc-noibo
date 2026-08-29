@@ -130,6 +130,11 @@ export const API = {
   vdGui: (nhanSuId, noiDung, soSao) => goi('/api/vinh-danh', {
     method: 'POST', body: JSON.stringify({ nhan_su_id: nhanSuId, noi_dung: noiDung, so_sao: soSao })
   }),
+  // Sửa / gỡ lời khen trong 24h (REV-0037 · L5). `than` = { noi_dung, so_sao }
+  // hoặc { go: true }. Máy chủ lùi lại đúng số sao đã cộng và bắn tin đính chính.
+  vdSua: (id, than) => goi('/api/vinh-danh/sua', {
+    method: 'POST', body: JSON.stringify({ id, ...than })
+  }),
 
   /* ---- Trạm Việc: giao việc cho nhân viên ---- */
   cvDanhSach: () => goi('/api/cong-viec/danh-sach'),

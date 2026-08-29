@@ -29,7 +29,10 @@ const CSS = readFileSync(path.join(GOC, 'public/assets/css/style.css'), 'utf8');
 /* Gỡ ĐÚNG khối vá của CTL-0017 → trả CSS về trạng thái trước đợt này. */
 const CSS_CHUA_VA = CSS
   .replace(/\.cv-sua-nut,\s*\n\.btn-nho\.cv-nut-sua \{[^}]*\}/, '')
-  .replace(/\.cv-sua-canhbao input \{[^}]*\}/, '');
+  .replace(/\.cv-sua-canhbao input \{[^}]*\}/, '')
+  // REV-0037 · L5 — nút Sửa/Gỡ lời khen. Bấm nhầm "Gỡ" thay "Sửa" là người
+  // được khen ăn ngay một tin đính chính không đáng có, nên vùng chạm phải đủ.
+  .replace(/\.vd-item \.vd-nut \.btn-nho \{[^}]*\}/, '');
 if (CSS_CHUA_VA === CSS) {
   console.error('LỖI: không gỡ được khối CSS nào — ca đối chứng vô nghĩa, phép đo hỏng.');
   process.exit(1);
@@ -65,6 +68,14 @@ const KHUNG = (css) => `<!doctype html><html lang="vi"><head><meta charset="utf-
     </div>
   </form>
 </div></div>
+<!-- Vinh danh: nút Sửa / Gỡ lời khen (REV-0037 L5) -->
+<div class="vd-item person"><div style="flex:1">
+  <div class="vd-noidung">Dong goi 200 don khong sai don nao</div>
+  <div class="vd-nut">
+    <button type="button" class="btn-nho" data-vd-sua="1">Sửa</button>
+    <button type="button" class="btn-nho" data-vd-go="1">Gỡ</button>
+  </div>
+</div></div>
 </body></html>`;
 
 const TRANG = `<!doctype html><html lang="vi"><head><meta charset="utf-8">
@@ -78,7 +89,9 @@ const NUT = [
   ['Sửa (trong bảng)', '.cv-nut-sua'],
   ['Lưu thay đổi',     '#cv-sua-nut-luu'],
   ['Hủy',              '#cv-sua-nut-huy'],
-  ['ô nhập lý do',     '#cv-sua-ly-do']
+  ['ô nhập lý do',     '#cv-sua-ly-do'],
+  ['Sửa lời khen',     '[data-vd-sua]'],
+  ['Gỡ lời khen',      '[data-vd-go]']
 ];
 function do_(id) {
   const d = document.getElementById(id).contentDocument;
@@ -102,6 +115,11 @@ function veKetQua() {
 addEventListener('load', () => setTimeout(veKetQua, 250));
 </script></body></html>`;
 
+/* Cổng đổi được: `PORT=8913 node scripts/do-nut-sua-44px.mjs`. Cổng 8903 hay
+   bị một `workerd` (wrangler dev) bỏ quên chiếm — và một bàn đo không chạy
+   được vì kẹt cổng là một bàn đo bị bỏ qua trong im lặng. */
+const CONG = parseInt(process.env.PORT || '8903', 10);
+
 createServer((req, res) => {
   const u = new URL(req.url, 'http://127.0.0.1');
   if (u.pathname === '/khung') {
@@ -110,4 +128,4 @@ createServer((req, res) => {
   }
   res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
   res.end(TRANG);
-}).listen(8903, '127.0.0.1', () => console.log('Bàn đo 44px CTL-0017: http://127.0.0.1:8903'));
+}).listen(CONG, '127.0.0.1', () => console.log(`Bàn đo 44px CTL-0017: http://127.0.0.1:${CONG}`));

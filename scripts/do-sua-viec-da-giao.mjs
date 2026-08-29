@@ -101,9 +101,13 @@ function moi(db) {
 }
 
 /* ---- Một vòng đo trên MỘT bản src --------------------------------------- */
-async function dungVong(thuMucSrc) {
+async function dungVong(thuMucSrc, boiCSDL = null) {
   const { db, d1 } = dungDB();
   moi(db);
+  /* `boiCSDL` cho phép LÙI lược đồ về đời cũ — dùng để đo "mã mới chạy trên
+     CSDL chưa nạp migration", đúng cửa sổ mà `deploy.yml` mở ra mỗi lần đẩy
+     `main` (REV-0037 · L2). */
+  if (boiCSDL) boiCSDL(db);
   const env = dungEnv(d1);
   const url = pathToFileURL(path.join(thuMucSrc, 'index.js')).href + `?v=${Math.random()}`;
   const worker = (await import(url)).default;
@@ -120,7 +124,7 @@ async function dungVong(thuMucSrc) {
   const viec = (id) => db.prepare('SELECT * FROM cong_viec WHERE id = ?').all(id)[0];
   const soVet = (bang, id) => db.prepare(
     'SELECT COUNT(*) n FROM lich_su_thay_doi_nen WHERE bang = ? AND ban_ghi_id = ?').all(bang, String(id))[0].n;
-  return { db, env, sua, suaMT, lichSu, tinCua, viec, soVet };
+  return { db, env, worker, phien, sua, suaMT, lichSu, tinCua, viec, soVet };
 }
 
 /* Bẻ gãy ĐÚNG MỘT CHỖ trong một bản sao của `src/` — ca đối chứng. */
@@ -328,9 +332,162 @@ console.log('\n=== ⑥ MỤC TIÊU — trước bản này: sửa được nhưn
 }
 
 /* ---------------------------------------------------------------------------
-   ⑦ CA ĐỐI CHỨNG (BH-16/BH-26)
+   ⑥b HAI LỖI THẤP REV-0037 — L9 (vết đổi mục tiêu) · L10 (409 oan)
    ------------------------------------------------------------------------ */
-console.log('\n=== ⑦ CA ĐỐI CHỨNG — mỗi ca bẻ gãy ĐÚNG một chỗ, phải bị bắt ===\n');
+console.log('\n=== ⑥b ĐỔI MỤC TIÊU CỦA VIỆC + 409 OAN ===\n');
+{
+  const V = await dungVong(path.join(GOC, 'src'));
+  // L9 — người đi tìm "sao mục tiêu quý này hụt một việc?" thì mở MỤC TIÊU,
+  // không mở việc. Vết chỉ nằm ở `bang='cong_viec'` là vết giấu sai chỗ.
+  const r = await V.sua('SEP', { id: 1, muc_tieu_id: '' });   // việc #1 đang treo ở mục tiêu 1
+  ok('gỡ việc khỏi mục tiêu → CHO', r.status === 200, `HTTP ${r.status}`);
+  ok('  → SỔ CỦA MỤC TIÊU VỪA MẤT VIỆC có vết (trước: rỗng)', V.soVet('muc_tieu', 1) === 1,
+     `${V.soVet('muc_tieu', 1)} vết`);
+  const c = (await V.lichSu('SEP', 'muc_tieu', 1)).than.ds[0]?.cau;
+  ok('  → câu đọc được, không phải "đổi viec_gan … → (trống)"',
+     /gỡ việc ".*" khỏi mục tiêu này/.test(c || ''), c);
+
+  const r2 = await V.sua('SEP', { id: 1, muc_tieu_id: 1 });
+  const c2 = (await V.lichSu('SEP', 'muc_tieu', 1)).than.ds[0]?.cau;
+  ok('gắn lại vào mục tiêu → SỔ CỦA MỤC TIÊU VỪA NHẬN VIỆC cũng có vết',
+     r2.status === 200 && V.soVet('muc_tieu', 1) === 2 && /gắn việc ".*" vào mục tiêu này/.test(c2 || ''),
+     `${V.soVet('muc_tieu', 1)} vết — ${c2}`);
+
+  // L10 — gửi lại `han_chot` Y HỆT ở bước `cho_duyet` (việc #3): trường đó
+  // đang bị khoá theo bước, nhưng KHÔNG ĐỔI GÌ thì không được từ chối.
+  const r3 = await V.sua('SEP', { id: 3, tieu_de: 'Bảng lương tháng 08', han_chot: V.viec(3).han_chot });
+  ok('⚠️ `cho_duyet` — gửi hạn chót Y HỆT giá trị cũ → KHÔNG còn 409 oan',
+     r3.status === 200, `HTTP ${r3.status}`);
+  ok('  → mà chiều chặn vẫn nguyên: đổi hạn THẬT ở `cho_duyet` vẫn 409',
+     (await V.sua('SEP', { id: 3, han_chot: '2026-12-01', ly_do: 'xin dời sang tháng 12' })).status === 409);
+}
+
+/* ---------------------------------------------------------------------------
+   ⑦ SỔ BẰNG CHỨNG BỊ CẮT THÌ PHẢI NÓI RA (REV-0037 · L1)
+   ---------------------------------------------------------------------------
+   Vì sao đo riêng: cả CTL-0017 đứng trên lời hứa "sửa được NHƯNG để lại vết".
+   Một sổ vết cắt im lặng ở trần 100 thì lời hứa đó thủng theo đúng cách nguy
+   hiểm nhất — dời hạn thêm 100 lần là lần dời ĐẦU TIÊN rơi khỏi màn hình mà
+   màn hình vẫn khẳng định "đây là tất cả".
+   ------------------------------------------------------------------------ */
+console.log('\n=== ⑦ SỔ SỬA BỊ CẮT — phải NÓI RA là đã cắt ===\n');
+{
+  const V = await dungVong(path.join(GOC, 'src'));
+  const chen = V.db.prepare(`INSERT INTO lich_su_thay_doi_nen
+    (bang, ban_ghi_id, truong, gia_tri_cu, gia_tri_moi, nguoi_id, nguoi_ten, ly_do, luc)
+    VALUES ('cong_viec','1','tieu_de',?,?,'SEP','Bùi Thị Ngọc',NULL,?)`);
+  for (let i = 1; i <= 130; i++) {
+    chen.run(`tên ${i}`, `tên ${i + 1}`, `2026-08-${String(1 + (i % 28)).padStart(2, '0')} 08:00:00`);
+  }
+  const r = await V.lichSu('SEP', 'cong_viec', 1);
+  ok('130 vết / trần 100 → trả về ĐÚNG 100 dòng', r.than.ds.length === 100, `${r.than.ds.length} dòng`);
+  ok('  → CÓ nhãn cắt, không im lặng', !!r.than.cat, JSON.stringify(r.than.cat));
+  ok('  → nhãn nói đúng tổng thật (130)', r.than.cat?.tong === 130, `tổng = ${r.than.cat?.tong}`);
+
+  // Chiều ngược: chưa chạm trần thì KHÔNG được báo cắt oan — một dải luôn
+  // hiện là một dải mắt người học được cách bỏ qua trong đúng một tuần.
+  const r2 = await V.lichSu('SEP', 'cong_viec', 2);
+  ok('  → việc chưa chạm trần: KHÔNG báo cắt oan', r2.than.cat === null, `cat = ${JSON.stringify(r2.than.cat)}`);
+}
+
+/* ---------------------------------------------------------------------------
+   ⑧ MÃ MỚI PHẢI CHỊU ĐƯỢC CSDL CŨ (REV-0037 · L2)
+   ---------------------------------------------------------------------------
+   `deploy.yml` tự deploy khi đẩy `main` và KHÔNG chạy migration. Nên luôn có
+   một khoảng mã mới chạy trên CSDL chưa có cột `ly_do`. Luật phân biệt:
+     · TÍNH NĂNG ĐANG CHẠY (`mtCapNhat`) — PHẢI sống, không được nổ 500.
+     · TÍNH NĂNG MỚI (`cvSua`) — được phép chưa dùng được, nhưng phải hỏng
+       theo CHIỀU AN TOÀN: không sửa gì cả, chứ không phải sửa mà mất vết.
+   ------------------------------------------------------------------------ */
+console.log('\n=== ⑧ CSDL ĐỜI CŨ (chưa nạp migration) — mã mới có sống không ===\n');
+const LUI_CSDL = (db) => {
+  db.exec('DROP TRIGGER IF EXISTS trg_doi_cam_ket_phai_co_ly_do');
+  db.exec('ALTER TABLE lich_su_thay_doi_nen DROP COLUMN ly_do');
+};
+{
+  const V = await dungVong(path.join(GOC, 'src'), LUI_CSDL);
+  const coCot = V.db.prepare("SELECT COUNT(*) n FROM pragma_table_info('lich_su_thay_doi_nen') WHERE name='ly_do'").all()[0].n;
+  ok('bàn đo đã lùi thật: cột `ly_do` KHÔNG còn', coCot === 0, `${coCot} cột`);
+
+  const r = await V.suaMT('SEP', { id: 1, tieu_de: 'Giảm sai sót đóng gói còn dưới 1%' });
+  ok('⚠️ mtCapNhat (tính năng ĐANG CHẠY) trên CSDL cũ → vẫn 200, KHÔNG nổ 500',
+     r.status === 200, `HTTP ${r.status}`);
+  ok('  → và vẫn ghi được vết (mất cột lý do chứ không mất sổ)',
+     V.soVet('muc_tieu', 1) === 1, `${V.soVet('muc_tieu', 1)} vết`);
+
+  const rls = await V.lichSu('SEP', 'muc_tieu', 1);
+  ok('  → đọc sổ trên CSDL cũ vẫn 200 (đọc phòng thủ)', rls.status === 200, `HTTP ${rls.status}`);
+  ok('  → câu tiếng Việt vẫn dựng được', /Bùi Thị Ngọc đổi tên/.test(rls.than.ds[0]?.cau || ''),
+     rls.than.ds[0]?.cau);
+
+  const rcv = await V.sua('SEP', { id: 1, tieu_de: 'Bàn giao Con Dấu (sửa chính tả)' });
+  ok('cvSua (tính năng MỚI) trên CSDL cũ → hỏng theo chiều AN TOÀN: không 200',
+     rcv.status !== 200, `HTTP ${rcv.status}`);
+  ok('  → và việc KHÔNG bị sửa nửa vời (UPDATE lùi cùng batch)',
+     V.viec(1).tieu_de === 'Bàn giao Con Dấu', V.viec(1).tieu_de);
+}
+
+/* ---------------------------------------------------------------------------
+   ⑨ VINH DANH — SỬA / GỠ ĐƯỢC LỜI KHEN (REV-0037 · L5, P1)
+   ---------------------------------------------------------------------------
+   Sếp Ngọc đang TẬP thói quen ghi nhận nhân viên. Khen nhầm tên mà không gỡ
+   được là lời khen quay ra phản tác dụng VĨNH VIỄN: người không làm gì được
+   khen công khai, cộng sai sao, và người làm thật thì không.
+   ------------------------------------------------------------------------ */
+console.log('\n=== ⑨ VINH DANH — sửa/gỡ được lời khen, sao LÙI đúng số ===\n');
+{
+  const V = await dungVong(path.join(GOC, 'src'));
+  const khen = (ai, than) => goiAPI(V.worker, V.env, '/api/vinh-danh', V.phien[ai],
+    { method: 'POST', body: JSON.stringify(than) });
+  const suaKhen = (ai, than) => goiAPI(V.worker, V.env, '/api/vinh-danh/sua', V.phien[ai],
+    { method: 'POST', body: JSON.stringify(than) });
+  const sao = (id) => V.db.prepare('SELECT sao FROM nhan_su WHERE id = ?').all(id)[0].sao;
+  const tinVd = (who) => V.db.prepare(
+    "SELECT noi_dung FROM thong_bao WHERE nguoi_nhan_id = ? AND loai = 'vinh_danh'").all(who).map(r => r.noi_dung);
+
+  const saoTruoc = sao('AN');
+  const r0 = await khen('SEP', { nhan_su_id: 'AN', noi_dung: 'Đóng gói 200 đơn không sai đơn nào', so_sao: 5 });
+  const idKhen = r0.than.id;
+  ok('gửi lời khen 5 ⭐ → cộng đúng 5', sao('AN') === saoTruoc + 5, `${saoTruoc} → ${sao('AN')}`);
+
+  const rs = await suaKhen('SEP', { id: idKhen, noi_dung: 'Đóng gói 200 đơn, không sai đơn nào', so_sao: 3 });
+  ok('người GỬI sửa lời khen → CHO', rs.status === 200, `HTTP ${rs.status}`);
+  ok('  → sao lùi ĐÚNG số (5 → 3), không phải trừ 1',
+     sao('AN') === saoTruoc + 3, `${sao('AN')} (chờ ${saoTruoc + 3})`);
+  ok('  → có ghi vết vào SỔ CHUNG bang=vinh_danh', V.soVet('vinh_danh', idKhen) === 2,
+     `${V.soVet('vinh_danh', idKhen)} vết`);
+  ok('  → người được khen NHẬN tin đính chính (không sửa lặng)',
+     tinVd('AN').some(t => /đã sửa lại lời khen/.test(t)), tinVd('AN').join(' | '));
+
+  const rNgoai = await suaKhen('HANG', { id: idKhen, noi_dung: 'người ngoài sửa lời khen' });
+  ok('người KHÁC sửa lời khen của mình → CHẶN', rNgoai.status === 403, `HTTP ${rNgoai.status}`);
+
+  const rDoiNguoi = await suaKhen('SEP', { id: idKhen, nhan_su_id: 'HANG' });
+  ok('đổi NGƯỜI NHẬN qua cửa sửa → KHÔNG ăn (phải Gỡ rồi khen lại)',
+     V.db.prepare('SELECT nhan_su_id FROM vinh_danh WHERE id = ?').all(idKhen)[0].nhan_su_id === 'AN',
+     `HTTP ${rDoiNguoi.status}`);
+
+  const rGo = await suaKhen('SEP', { id: idKhen, go: true });
+  ok('GỠ lời khen → CHO', rGo.status === 200, `HTTP ${rGo.status}`);
+  ok('  → sao lùi HẾT về mốc ban đầu', sao('AN') === saoTruoc, `${sao('AN')} (chờ ${saoTruoc})`);
+  ok('  → lời khen biến khỏi bảng tin',
+     V.db.prepare('SELECT COUNT(*) n FROM vinh_danh WHERE id = ?').all(idKhen)[0].n === 0);
+  ok('  → nhưng KHÔNG xoá lặng: có vết `go` trong sổ chung',
+     V.db.prepare("SELECT COUNT(*) n FROM lich_su_thay_doi_nen WHERE bang='vinh_danh' AND truong='go'").all()[0].n === 1);
+  ok('  → và người bị khen nhầm NHẬN tin đính chính (đã đọc rồi, không giấu được)',
+     tinVd('AN').some(t => /đã GỠ lời khen gửi nhầm/.test(t)), tinVd('AN').slice(-1)[0]);
+
+  // Quá 24h thì khoá — ghi nhận công khai không phải thứ rút lại lúc nào cũng được.
+  const r2 = await khen('SEP', { nhan_su_id: 'AN', noi_dung: 'Việc hôm kia làm rất gọn', so_sao: 2 });
+  V.db.prepare("UPDATE vinh_danh SET tao_luc = '2026-08-26 09:00:00' WHERE id = ?").run(r2.than.id);
+  const rQua = await suaKhen('SEP', { id: r2.than.id, noi_dung: 'sửa muộn' });
+  ok('quá 24 giờ → KHOÁ (cả phòng đọc rồi, không rút lại được)', rQua.status === 409, `HTTP ${rQua.status}`);
+}
+
+/* ---------------------------------------------------------------------------
+   ⑩ CA ĐỐI CHỨNG (BH-16/BH-26)
+   ------------------------------------------------------------------------ */
+console.log('\n=== ⑩ CA ĐỐI CHỨNG — mỗi ca bẻ gãy ĐÚNG một chỗ, phải bị bắt ===\n');
 
 /* DC-A — bỏ cửa lý do Ở MÁY CHỦ. Vì sao BẮT BUỘC khác: bản thật trả 400 và
    hạn giữ nguyên. Bản gãy phải ra kết quả KHÁC.
@@ -453,6 +610,59 @@ console.log('\n=== ⑦ CA ĐỐI CHỨNG — mỗi ca bẻ gãy ĐÚNG một ch�
   const r = await V.sua('DUY', { id: 1, dau_ra: 'bàn giao miệng cũng được' });
   ok('DC-F · bỏ chặn đầu ra → quản lý hạ chuẩn nghiệm thu cho lính mình',
      r.status === 200, `bản gãy HTTP ${r.status}`);
+}
+
+/* DC-G — gỡ nhãn cắt khỏi sổ sửa. Vì sao BẮT BUỘC khác: bản thật trả 100
+   dòng KÈM `cat` nói rõ còn 30 dòng nữa. Bản gãy trả cũng 100 dòng nhưng
+   `cat` rỗng — màn hình khẳng định "đây là tất cả" trong khi không phải,
+   đúng lớp lỗi `do-cat-im-lang` dựng ra để canh. Ca này chứng minh dòng
+   `nhanCat` đang thật sự gánh việc, không phải trang trí. */
+{
+  const src = banBeGay('dc-g', s => s.replace(
+    "  return json({ ds: ds.map(d => ({ ...d, cau: cauSuaDoc(d) })), cat });",
+    "  return json({ ds: ds.map(d => ({ ...d, cau: cauSuaDoc(d) })), cat: null });"));
+  const V = await dungVong(src);
+  const chen = V.db.prepare(`INSERT INTO lich_su_thay_doi_nen
+    (bang, ban_ghi_id, truong, gia_tri_cu, gia_tri_moi, nguoi_id, nguoi_ten, ly_do, luc)
+    VALUES ('cong_viec','1','tieu_de',?,?,'SEP','Bùi Thị Ngọc',NULL,'2026-08-20 08:00:00')`);
+  for (let i = 1; i <= 130; i++) chen.run(`tên ${i}`, `tên ${i + 1}`);
+  const r = await V.lichSu('SEP', 'cong_viec', 1);
+  ok('DC-G · gỡ nhãn cắt → sổ bằng chứng cắt IM LẶNG (130 dòng, hiện 100, không nói)',
+     r.than.ds.length === 100 && r.than.cat === null, `${r.than.ds.length} dòng, cat = ${JSON.stringify(r.than.cat)}`);
+}
+
+/* DC-H — trả cột `ly_do` VỀ LẠI câu INSERT của `mtCapNhat` (đúng bản trước
+   khi vá L2). Vì sao BẮT BUỘC khác: trên CSDL đời cũ, bản thật trả 200 còn
+   bản gãy phải nổ 500 — tức đúng cái mà một lần deploy-trước-migration sẽ
+   gây ra cho một tính năng ĐANG CHẠY. Không có ca này thì dòng vá L2 chỉ là
+   một lời khai "tôi đã bỏ tên cột đi". */
+{
+  const src = banBeGay('dc-h', s => s.replace(
+    /nguoi_id, nguoi_ten, luc\)(\s*)VALUES \('muc_tieu', \?, \?, \?, \?, \?, \?, datetime/,
+    "nguoi_id, nguoi_ten, ly_do, luc)$1VALUES ('muc_tieu', ?, ?, ?, ?, ?, ?, NULL, datetime"));
+  const V = await dungVong(src, LUI_CSDL);
+  const r = await V.suaMT('SEP', { id: 1, tieu_de: 'Giảm sai sót đóng gói còn dưới 1%' });
+  ok('DC-H · trả `ly_do` vào INSERT → deploy trước migration NỔ 500 cho tính năng đang chạy',
+     r.status === 500, `bản gãy HTTP ${r.status}`);
+}
+
+/* DC-I — gỡ chỗ LÙI SAO khi thu hồi lời khen. Vì sao BẮT BUỘC khác: bản thật
+   trả `sao` về đúng mốc trước khi khen; bản gãy gỡ lời khen xong mà số sao
+   vẫn treo lại trên hồ sơ người bị khen nhầm — tức "gỡ" chỉ là gỡ trên màn
+   hình, còn hồ sơ thì vẫn cộng sai vĩnh viễn. Đúng cái L5 nói tới. */
+{
+  const src = banBeGay('dc-i', s => s.replace(
+    "      env.DB.prepare('UPDATE nhan_su SET sao = MAX(0, sao - ?) WHERE id = ?').bind(saoCu, v.nhan_su_id)",
+    "      env.DB.prepare('SELECT 1').bind()"));
+  const V = await dungVong(src);
+  const khen = (than) => goiAPI(V.worker, V.env, '/api/vinh-danh', V.phien.SEP,
+    { method: 'POST', body: JSON.stringify(than) });
+  const r0 = await khen({ nhan_su_id: 'AN', noi_dung: 'Khen nhầm người', so_sao: 7 });
+  await goiAPI(V.worker, V.env, '/api/vinh-danh/sua', V.phien.SEP,
+    { method: 'POST', body: JSON.stringify({ id: r0.than.id, go: true }) });
+  const sao = V.db.prepare("SELECT sao FROM nhan_su WHERE id = 'AN'").all()[0].sao;
+  ok('DC-I · gỡ chỗ lùi sao → thu hồi lời khen xong mà hồ sơ VẪN cộng 7 ⭐ sai',
+     sao === 7, `bản gãy: sao = ${sao}`);
 }
 
 rmSync(TAM, { recursive: true, force: true });

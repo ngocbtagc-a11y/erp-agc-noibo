@@ -944,6 +944,22 @@ img.av { object-fit: cover; display: block; cursor: default; }
 .vd-item .vd-noidung::after { content: '”'; }
 .vd-item .sm { font-size: 12px; }
 
+/* Sửa / Gỡ lời khen (REV-0037 · L5). Vùng chạm 44px như mọi nút khác trong
+   ERP — đây là nút bấm trên điện thoại, và bấm nhầm "Gỡ" thay vì "Sửa" thì
+   người được khen ăn ngay một tin đính chính không đáng có. */
+.vd-item .vd-nut { display: flex; gap: 8px; margin-top: 6px; }
+.vd-item .vd-nut .btn-nho {
+  min-height: 44px; min-width: 44px;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+/* Ô chọn người bị KHOÁ ở chế độ sửa — `vdSua` không cho đổi người nhận. */
+.combo1-hienthi.khoa { background: #e6e0d6; color: var(--text-mute); pointer-events: none; }
+.vd-dang-sua {
+  font-size: 13px; line-height: 1.5;
+  background: var(--warn-wash); border: 1px solid #ecd9b5;
+  border-radius: var(--r-md); padding: 10px 12px;
+}
+
 .sb-user .meta { min-width: 0; flex: 1; }
 /* REV-0025/G3 đã cảnh báo cái bẫy ở đây: `.sb-user .meta b` đặt chữ TRẮNG,
    mà popover `.thd-panel` nền TRẮNG lại nằm bên trong `.meta` — thẻ <b> nào
