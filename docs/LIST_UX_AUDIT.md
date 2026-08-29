@@ -73,6 +73,51 @@ trừu tượng generic, và Đơn hàng/Đơn hoàn (chỗ thật sự lớn) �
 search+filter+pagination riêng phù hợp với nghiệp vụ, không dùng chung được
 với danh mục nhỏ.
 
+## Đợt 29/08/2026 — quét lớp "danh sách bị cắt mà không nói là đã cắt"
+
+Góp ý gốc: **chị Vũ Lan Hương (HCNS)** — *"không hiển thị hết công việc public
+ở mục 'Việc cần làm' để dễ theo dõi"*. Áp `docs/LUAT-GOP-Y-LA-TRIEU-CHUNG.md`:
+quét cả ERP theo LỚP, không chỉ sửa chỗ được chỉ.
+
+**Số:** quét **27 tệp `src/` + 6 tệp `public/`** → **14 chỗ** thuộc lớp
+→ **5 chỗ sửa ngay** · **9 chỗ vào hàng đợi có lý do** · **0 chỗ còn im lặng**.
+Canh tái phát: `npm run do-cat-im-lang` (tự kiểm bằng 3 mẫu vi phạm giả +
+5 mẫu sạch, và tự báo chết dòng miễn trừ đã hết hiệu lực).
+
+### Đã sửa trong đợt này
+
+| Chỗ | Trần | Vì sao sửa ngay |
+|---|---|---|
+| `cvDanhSach` — Việc cần làm · phối hợp · tôi giao | 300 ×3 | **Đúng chỗ chị Lan Hương báo**, dùng hằng ngày |
+| `cvLichSu` — Lịch sử làm việc | 500 | Là chỗ các dải cắt khác CHỈ NGƯỜI SANG; nó cắt im lặng thì lời chỉ đường thành lời hứa suông |
+| `mtDanhSach` — Trạm Mục Tiêu | 300 | Cùng màn hình chị báo |
+| `hoanLichSu` — Lịch sử đơn hoàn | 500 | **ĐANG mất dữ liệu thật: 523 dòng / trần 500**, mà ô đếm `#ls-dem` in "500/500" — khẳng định sai |
+| Dải **phạm vi** trên `#cvSeg` | — | Nguyên nhân gốc của góp ý: bảng chỉ lọc theo đúng người xem mà màn hình không nói ra |
+
+### Hàng đợi — CÓ LÝ DO, KHÔNG IM LẶNG
+
+Bảng dưới đây là bản người đọc của `MIEN_TRU` trong
+`scripts/do-cat-im-lang.mjs`. Máy quét in đủ 9 dòng này mỗi lần chạy và **báo
+lỗi nếu một dòng không còn che vi phạm thật** — miễn trừ chết là giấy thông
+hành miễn phí cho lỗi sau.
+
+| Chỗ | Trần | Loại | Ghi chú |
+|---|---|---|---|
+| `chatDanhSach` — Chat nội bộ | 50 | **Hàng đợi** | Chưa có nút "xem tin cũ hơn"; cần thiết kế cuộn ngược riêng, không vá bằng một dải chữ |
+| `layThongBao` — Thông báo | 50 | **Hàng đợi** | Chuông chỉ đếm chưa đọc nên chưa lệch nghĩa; cần dải cắt khi bảng lớn lên |
+| `nsLichSu` — Lịch sử 1 hồ sơ nhân sự | 200 | **Hàng đợi** | 23 nhân sự, còn xa ngưỡng |
+| `donHangHuy` — Đơn huỷ trong tháng | 300 | **Hàng đợi** | Chưa chạm trần theo số liệu 28/08/2026 |
+| `danhSach` (`hopdong.js`) | 100 | **Hàng đợi** | Hợp đồng của MỘT người |
+| `danhSach` (`mota-cv.js`) | 200 | **Hàng đợi** | Mô tả công việc của MỘT chức danh |
+| `lichSu` (`kho.js`) | ≤200 | **Hàng đợi** | Giao dịch 1 sản phẩm; cần dải cắt khi kho chạy thật |
+| `kdKhachHoanNhieu` — Chăm sóc KH | 30 | **Có chủ ý** | Bảng XẾP HẠNG, nhãn giao diện đã nói rõ |
+| `vdDanhSach` — Vinh danh 48h | 20 | **Có chủ ý** | Bảng tin theo thời gian, không phải sổ tra cứu |
+
+Ngưỡng soi là `LIMIT ≥ 20`. Dưới ngưỡng là tra một dòng, hoặc lấy vài mục
+"gần đây/top" mà nhãn giao diện đã tự nói — chưa ai tin đó là "tất cả".
+Cron/tác vụ nền cắt lô không tính: không ai đang nhìn một màn hình để mà bị
+nói dối.
+
 ## Khi nào quay lại làm đầy đủ hơn
 
 Nếu Sản phẩm/SKU bắt đầu có dữ liệu thật (hiện 0 dòng) hoặc Nhân sự vượt

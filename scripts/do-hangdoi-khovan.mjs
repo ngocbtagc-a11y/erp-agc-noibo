@@ -220,8 +220,12 @@ async function chay() {
 
   /* --- E · Chỗ đã sửa vòng trước không được lùi ------------------------- */
   console.log('\nE · hoanLichSu (index.js) — chỗ đã sửa ở REV-0031 vẫn đứng');
+  /* Trần 500 nay viết là `LIMIT ${GH + 1}` — hỏi thừa MỘT dòng để biết là có
+     bị cắt rồi nói ra ("đang hiện 500 trong tổng 523"), xem src/cat-danh-sach.js
+     và scripts/do-cat-im-lang.mjs. Dấu nhận dạng đổi theo, KHÔNG phải nới lỏng:
+     vẫn phải bóc ra ĐÚNG MỘT câu, bóc hụt là dừng với mã lỗi 2. */
   const lichSu = [...doc('src/index.js').matchAll(/`\s*\n\s*SELECT[\s\S]*?`/g)]
-    .map(m => m[0]).filter(s => /FROM\s+don_hoan\s+d\b/.test(s) && /\bLIMIT 500\b/.test(s));
+    .map(m => m[0]).filter(s => /FROM\s+don_hoan\s+d\b/.test(s) && /\bLIMIT\s+\$\{\s*GH\s*\+\s*1\s*\}/.test(s));
   if (lichSu.length !== 1) chet(`bóc được ${lichSu.length} câu hoanLichSu (cần đúng 1)`);
   ok('hoanLichSu xếp theo tao_luc_shopee, KHÔNG theo dong_bo_luc',
     /ORDER BY\s+CAST\(d\.tao_luc_shopee/.test(lichSu[0]) &&

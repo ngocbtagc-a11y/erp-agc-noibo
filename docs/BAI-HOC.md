@@ -576,3 +576,31 @@ báo — chỉ thiếu đúng dòng cần nhất.
 bắt mọi chỗ "ORDER BY … dong_bo_luc … LIMIT" (bỏ chú thích, tự kiểm bằng mẫu vi phạm giả)
 — lần sau ai thêm `LIMIT` vào là bàn đo đỏ ngay, không trông vào trí nhớ ai cả.
 
+**BH-47 · MÀN HÌNH CẮT IM LẶNG KHÔNG PHẢI MÀN HÌNH THIẾU DỮ LIỆU — NÓ LÀ MÀN HÌNH NÓI
+DỐI.** Chị Vũ Lan Hương (HCNS) báo *"không hiển thị hết công việc public ở mục Việc cần
+làm"*. Đọc mã thì **nguyên nhân không phải `LIMIT`** mà là **bộ lọc phạm vi**: `cvDanhSach`
+lọc `WHERE nguoi_nhan_id = ?`, còn khối "Tổng quan việc toàn công ty" thì
+`if (!TOI.la_admin) return` — **biến mất sạch, không một dòng chữ**. Chị lại **vốn có
+quyền** xem toàn bộ việc công ty ở tab *Lịch sử làm việc* (mở cho MỌI vai trò, `quyen.js`)
+— chỉ là **không chỗ nào chỉ đường**. ERP không thiếu việc; ERP thiếu **một câu nói**.
+→ Danh sách trống vì lọc quyền thì người dùng còn đoán ra; danh sách **đầy mà bị cắt** thì
+không ai đoán được — vì màn hình đang **khẳng định** "đây là tất cả". Ô đếm `#ls-dem` của
+Lịch sử đơn hoàn in `500/500` trong khi bảng có **523** dòng: mẫu số lấy từ mảng ĐÃ BỊ
+CẮT, nên nó tự làm chứng cho chính lời nói dối của mình. **Mẫu số phải là tổng THẬT,
+không bao giờ là `mảng.length` sau khi cắt.**
+→ Ba quy tắc rút ra: ① **cắt thì phải nói ra** — *"đang hiện 300 trong tổng 523"* + đường
+xem tiếp; ② **lọc theo quyền/phạm vi cũng phải nói ra** — *"bảng này chỉ hiện việc của
+bạn"* + chỉ sang chỗ họ vốn được xem, KHÔNG mở thêm quyền; ③ **đừng bỏ `LIMIT` bừa** —
+đổi một lời nói dối lấy một màn hình treo thì không lời hơn. Cách đếm tốn 0 đồng: hỏi
+`LIMIT trần + 1`, thừa đúng một dòng là biết "còn nữa", **lúc đó** mới chạy `COUNT(*)`.
+→ Bẫy chết người của chính cách vá này: viết `LIMIT ${GH}` thay vì `LIMIT ${GH + 1}` thì
+`biCat` **vĩnh viễn false**, mọi thứ lặng lẽ quay về như cũ — không lỗi, không cảnh báo.
+`scripts/do-cat-im-lang.mjs` §④ canh đúng chỗ đó.
+→ Lưới cả lớp: `npm run do-cat-im-lang` quét `src/` + `public/`, và **bảng MIỄN TRỪ chính
+là hàng đợi** — mỗi dòng bắt buộc có lý do viết ra, và máy **tự báo chết** dòng miễn trừ
+nào không còn che một vi phạm có thật (miễn trừ chết = giấy thông hành miễn phí cho lỗi
+sau). Máy tự kiểm bằng **3 mẫu vi phạm giả + 5 mẫu sạch** trước khi được tin — vòng chạy
+đầu nó tố oan đúng **hai** chỗ: một `LIMIT 300` nằm trong **ghi chú cảnh báo** của
+`shopee.js`, và một `s.slice(0,10).split('-')` cắt **chuỗi ngày**. Máy quét đọc cả ghi
+chú là máy quét sẽ bị người ta tắt đi.
+

@@ -229,6 +229,7 @@
         </div>
         <div class="panel-body" style="padding-top:0">
           <p class="hint" style="margin:0 0 14px">Mục tiêu 3 cấp: Công ty → Phòng ban → Cá nhân. Bấm vào 1 thẻ mục tiêu để xem chi tiết việc gắn vào. Tiến độ tự tính từ việc đã Hoàn thành, không nhập tay.</p>
+          <div class="dai-cat" id="mt-cat" hidden></div>
 
           <div class="mt-nhom-nhan">Cấp công ty</div>
           <div id="mt-congty-list" class="mt-the-grid"></div>
@@ -275,6 +276,19 @@
         </div>
       </div>
 
+      <!-- PHẠM VI — góp ý chị Vũ Lan Hương (HCNS, 28/08/2026): "không hiển thị
+           hết công việc public ở mục Việc cần làm". Ba bảng dưới đây CHỈ lọc
+           theo đúng người đang xem (`WHERE nguoi_nhan_id = ?` — src/index.js
+           cvDanhSach); việc của người khác chưa bao giờ vào đây. Trước đây
+           màn hình KHÔNG NÓI điều đó ra, nên nhìn như hệ thống thiếu việc.
+           Nói rõ phạm vi + chỉ đúng đường sang chỗ xem việc toàn công ty.
+           KHÔNG mở thêm quyền: tab "Lịch sử làm việc" vốn đã mở cho MỌI vai
+           trò (src/quyen.js), đây chỉ là chỉ đường tới chỗ họ vẫn vào được. -->
+      <div class="cv-pham-vi">
+        <span class="cv-pham-vi-chu">Ba bảng dưới đây chỉ hiện <b>việc liên quan trực tiếp tới bạn</b> (bạn nhận · bạn được mời phối hợp · bạn giao). Việc của người khác không nằm ở đây.</span>
+        <button type="button" class="dai-cat-nut" data-dai-cat-tab="lichsuviec">Xem việc toàn công ty</button>
+      </div>
+
       <div class="seg" id="cvSeg">
         <button class="seg-nut active" data-cv="nhan">Việc cần làm</button>
         <button class="seg-nut" data-cv="phoihop">Việc phối hợp</button>
@@ -299,6 +313,7 @@
             </table>
           </div>
           <div class="empty" id="cv-trong-nhan" hidden>Chưa ai giao việc gì cho Sếp/bạn cả.</div>
+          <div class="dai-cat" id="cv-cat-nhan" hidden></div>
         </div>
       </div>
 
@@ -320,6 +335,7 @@
             </table>
           </div>
           <div class="empty" id="cv-trong-phoihop" hidden>Chưa được mời phối hợp việc nào.</div>
+          <div class="dai-cat" id="cv-cat-phoihop" hidden></div>
         </div>
       </div>
 
@@ -341,6 +357,7 @@
             </table>
           </div>
           <div class="empty" id="cv-trong-giao" hidden>Sếp/bạn chưa giao việc nào.</div>
+          <div class="dai-cat" id="cv-cat-giao" hidden></div>
         </div>
       </div>
 
@@ -391,6 +408,7 @@
           </table>
         </div>
         <div class="empty" id="ls-cv-trong" hidden>Không tìm thấy việc nào khớp.</div>
+        <div class="dai-cat" id="ls-cv-cat" hidden></div>
       </div>
     </section>
 
@@ -1559,6 +1577,7 @@
             </table>
           </div>
           <div class="empty" id="ls-trong" hidden>Không tìm thấy đơn hoàn nào khớp.</div>
+          <div class="dai-cat" id="ls-cat" hidden></div>
         </div>
 
       </div>

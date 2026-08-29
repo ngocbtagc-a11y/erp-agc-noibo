@@ -2080,6 +2080,62 @@ tr.kd-chiadoi td {
   font-size: 13.5px;
 }
 
+/* ==========================================================================
+   DẢI "DANH SÁCH NÀY ĐÃ BỊ CẮT" + DẢI PHẠM VI
+   ---------------------------------------------------------------------------
+   Góp ý chị Vũ Lan Hương (HCNS, 28/08/2026). Hai dải cùng một hình thức vì
+   cùng MỘT lời: *"cái bạn đang nhìn không phải toàn bộ — đây là đường đi
+   tiếp"*. Tông `--warn` (cảnh báo nhẹ), KHÔNG dùng `--danger`: danh sách bị
+   cắt là chuyện phải biết, không phải chuyện hỏng.
+
+   Nút ≥44px (WCAG 2.5.5 / Apple HIG) — đo thật bằng
+   `scripts/do-cat-im-lang.mjs`, không phải lời khai suông: commit trước
+   trong chính kho mã này từng tự khai 44px mà đo tay ra 28px (BH-16).
+   ========================================================================== */
+.dai-cat,
+.cv-pham-vi {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--warn-wash);
+  border-left: 3px solid var(--warn);
+  font-size: 13.5px;
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.dai-cat { margin: 10px 0 2px; }
+.cv-pham-vi { margin: 0 0 12px; }
+
+.dai-cat-chu,
+.cv-pham-vi-chu { flex: 1 1 240px; min-width: 0; }
+
+.dai-cat b { color: var(--warn-dark); }
+
+/* Ngưỡng ngón tay CỨNG — nhân viên kho bấm bằng ngón cái khi đang bê hàng. */
+.dai-cat-nut {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 16px;
+  border-radius: 12px;
+  background: var(--card);
+  border: 1px solid var(--warn);
+  color: var(--warn-dark);
+  font-size: 13.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background .14s, border-color .14s;
+}
+
+.dai-cat-nut:hover { background: var(--warn-wash); border-color: var(--warn-dark); }
+
 /* Liên kết gọi / gửi thư trong danh bạ */
 .lnk {
   color: var(--ink-soft);

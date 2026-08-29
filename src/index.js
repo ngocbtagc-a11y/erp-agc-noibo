@@ -36,6 +36,7 @@ import { sinhMa } from './dinh-danh.js';
 import { dayTinNhanChat, donNhatKyCu, kiemTraCaiDatDay, TRAN_NGAY } from './day-thong-bao.js';
 import { khoaVAPID } from './webpush.js';
 import { chotVaCanhBao, demGhi } from './canh-bao-ghi.js';
+import { catBot, nhanCat } from './cat-danh-sach.js';
 
 /* ---- Trả lời dạng JSON -------------------------------------------------- */
 
@@ -1691,7 +1692,11 @@ async function hoanLichSu(req, env) {
   if (l) return l;
   if (!duocXemDonHoan(phien.vai_tro)) return loi('Bạn không có quyền', 403);
   const coTT = await shopee.coCotTinhTrangHang(env);
-  const { results } = await env.DB.prepare(`
+  // 523 dòng / trần 500 — màn này ĐANG cắt mất 23 đơn hoàn và ô đếm `#ls-dem`
+  // lại in "500/500", tức KHẲNG ĐỊNH SAI là đã hiện hết. Giữ trần (bảng còn
+  // tăng), nhưng nói ra con số thật. Xem src/cat-danh-sach.js.
+  const GH = 500;
+  const kqHoan = await env.DB.prepare(`
     SELECT d.return_sn, d.order_sn, d.trang_thai, d.ly_do, d.so_tien, d.tien_te, d.nguoi_mua,
            d.san_pham, d.san_pham_ten, COALESCE(d.san_pham_sku, m.ma_sku) AS san_pham_sku,
            d.so_luong, d.ma_van_don, d.nguon, d.tao_luc_shopee, d.dong_bo_luc,
@@ -1701,9 +1706,11 @@ async function hoanLichSu(req, env) {
            ${coTT ? ', d.tinh_trang_hang, d.tinh_trang_luc, d.tinh_trang_boi' : ''}
       FROM don_hoan d
       LEFT JOIN sku_map m ON m.ten_san_pham = d.san_pham_ten
-     ORDER BY CAST(d.tao_luc_shopee AS INTEGER) DESC, d.return_sn DESC LIMIT 500
+     ORDER BY CAST(d.tao_luc_shopee AS INTEGER) DESC, d.return_sn DESC LIMIT ${GH + 1}
   `).all();
-  return json({ don_hoan: results });
+  const { ds, biCat } = catBot(kqHoan, GH);
+  const cat = await nhanCat(env, biCat, GH, 'SELECT COUNT(*) AS n FROM don_hoan', [], null);
+  return json({ don_hoan: ds, cat });
 }
 
 const TINH_TRANG_HOP_LE = ['con_tot', 'hu_hong', 'thieu_hang', 'sai_hang'];
@@ -2090,11 +2097,16 @@ async function cvDanhSach(req, env) {
   // dòng (audit hiệu năng 21/08/2026, mục P0). Việc cũ/hoàn thành đã bị xếp
   // xuống cuối bởi ORDER BY nên bị cắt bớt trước, không mất việc đang mở —
   // và giờ đã có tab "Lịch sử làm việc" riêng để tra việc cũ đầy đủ.
+  //
+  // GÓP Ý CHỊ VŨ LAN HƯƠNG (28/08/2026) — "không hiển thị hết công việc":
+  // trần vẫn giữ, nhưng từ nay hỏi 301 dòng để BIẾT là đã cắt, rồi NÓI RA
+  // ("đang hiện 300 trong tổng 523") thay vì im lặng. Xem src/cat-danh-sach.js.
+  const GH = 300;
   const [nhan, giao, phoiHop] = await Promise.all([
     env.DB.prepare(
       `SELECT ${CV_COT} FROM ${CV_TU} WHERE c.nguoi_nhan_id = ?
         ORDER BY (c.trang_thai IN ('hoan_thanh','huy')), (c.han_chot IS NULL), c.han_chot ASC, c.id DESC
-        LIMIT 300`
+        LIMIT ${GH + 1}`
     ).bind(phien.nhan_su_id).all(),
     env.DB.prepare(
       // Việc GIAO cho người khác. Todo cá nhân (tự giao cho mình) không tính
@@ -2102,15 +2114,32 @@ async function cvDanhSach(req, env) {
       `SELECT ${CV_COT} FROM ${CV_TU}
          WHERE c.nguoi_giao_id = ? AND c.nguoi_nhan_id <> c.nguoi_giao_id
         ORDER BY (c.trang_thai IN ('hoan_thanh','huy')), c.id DESC
-        LIMIT 300`
+        LIMIT ${GH + 1}`
     ).bind(phien.nhan_su_id).all(),
     env.DB.prepare(
       `SELECT ${CV_COT} FROM ${CV_TU} WHERE c.phoi_hop_ids LIKE '%,' || ? || ',%'
         ORDER BY (c.trang_thai IN ('hoan_thanh','huy')), (c.han_chot IS NULL), c.han_chot ASC, c.id DESC
-        LIMIT 300`
+        LIMIT ${GH + 1}`
     ).bind(phien.nhan_su_id).all()
   ]);
-  return json({ nhan: nhan.results || [], giao: giao.results || [], phoi_hop: phoiHop.results || [] });
+
+  const cNhan = catBot(nhan, GH), cGiao = catBot(giao, GH), cPh = catBot(phoiHop, GH);
+  const XEM_THEM = 'Lịch sử làm việc';
+  const [catNhan, catGiao, catPh] = await Promise.all([
+    nhanCat(env, cNhan.biCat, GH,
+      'SELECT COUNT(*) AS n FROM cong_viec WHERE nguoi_nhan_id = ?', [phien.nhan_su_id], XEM_THEM),
+    nhanCat(env, cGiao.biCat, GH,
+      'SELECT COUNT(*) AS n FROM cong_viec WHERE nguoi_giao_id = ? AND nguoi_nhan_id <> nguoi_giao_id',
+      [phien.nhan_su_id], XEM_THEM),
+    nhanCat(env, cPh.biCat, GH,
+      `SELECT COUNT(*) AS n FROM cong_viec WHERE phoi_hop_ids LIKE '%,' || ? || ',%'`,
+      [phien.nhan_su_id], XEM_THEM)
+  ]);
+
+  return json({
+    nhan: cNhan.ds, giao: cGiao.ds, phoi_hop: cPh.ds,
+    cat_nhan: catNhan, cat_giao: catGiao, cat_phoi_hop: catPh
+  });
 }
 
 /* ==========================================================================
@@ -2445,10 +2474,15 @@ async function cvLichSu(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
   if (!duocXemTab(phien.vai_tro, 'lichsuviec')) return loi('Bạn không có quyền', 403);
-  const { results } = await env.DB.prepare(
-    `SELECT ${CV_COT} FROM ${CV_TU} ORDER BY c.cap_nhat_luc DESC, c.id DESC LIMIT 500`
+  // Đây là màn ta CHỈ NGƯỜI KHÁC sang để "xem việc toàn công ty" — nó mà cắt
+  // im lặng thì lời chỉ đường thành lời hứa suông. Hỏi 501 để biết có cắt.
+  const GH = 500;
+  const kq = await env.DB.prepare(
+    `SELECT ${CV_COT} FROM ${CV_TU} ORDER BY c.cap_nhat_luc DESC, c.id DESC LIMIT ${GH + 1}`
   ).all();
-  return json({ viec: results || [] });
+  const { ds, biCat } = catBot(kq, GH);
+  const cat = await nhanCat(env, biCat, GH, 'SELECT COUNT(*) AS n FROM cong_viec', [], null);
+  return json({ viec: ds, cat });
 }
 
 /* Tổng quan việc TOÀN CÔNG TY — chỉ Admin (Sếp Ngọc/Sếp Phong xem "full
@@ -2592,15 +2626,19 @@ async function mtDanhSach(req, env) {
   // Sắp theo: đang thực hiện lên trước (đã xong/huỷ xuống cuối, frontend tự
   // gấp lại thành khối riêng) → trong nhóm đang thực hiện, hạn gần nhất lên
   // trước (không có hạn thì xuống cuối) → mới tạo trước (giữ thói quen cũ).
-  const { results } = await env.DB.prepare(
+  const GH = 300;
+  const kqMt = await env.DB.prepare(
     `SELECT ${MT_COT} FROM muc_tieu m WHERE nam = ? AND quy = ?
      ORDER BY cap ASC,
               (trang_thai = 'dang_thuc_hien') DESC,
               (han_gan_nhat IS NULL) ASC,
               han_gan_nhat ASC,
               tao_luc DESC
-     LIMIT 300`
+     LIMIT ${GH + 1}`
   ).bind(nam, quy).all();
+  const { ds: results, biCat } = catBot(kqMt, GH);
+  const cat = await nhanCat(env, biCat, GH,
+    'SELECT COUNT(*) AS n FROM muc_tieu WHERE nam = ? AND quy = ?', [nam, quy], null);
 
   // Cấp cá nhân CHỈ hiện mục tiêu của CHÍNH người xem — không công khai toàn
   // công ty như công ty/phòng ban (Sếp Ngọc chốt 25/08/2026, sau khi thấy
@@ -2609,7 +2647,7 @@ async function mtDanhSach(req, env) {
   // với ~20 người, và Lịch sử làm việc (cvLichSu) đã đủ minh bạch xem việc
   // của nhau qua bảng lọc được, không cần lặp lại ở dạng thẻ tại đây).
   return json({
-    nam, quy,
+    nam, quy, cat,
     cong_ty: results.filter(r => r.cap === 'cong_ty'),
     phong_ban: results.filter(r => r.cap === 'phong_ban'),
     ca_nhan: results.filter(r => r.cap === 'ca_nhan' && r.nguoi_tao_id === phien.nhan_su_id)

@@ -1835,6 +1835,44 @@ function veBang(dich, ds, hang) {
 }
 
 /* ==========================================================================
+   DẢI "DANH SÁCH NÀY ĐÃ BỊ CẮT" — dùng chung cho MỌI màn có trần `LIMIT`
+   ---------------------------------------------------------------------------
+   Góp ý chị Vũ Lan Hương (HCNS, 28/08/2026): *"không hiển thị hết công việc
+   public ở mục 'Việc cần làm'"*. LỚP vấn đề: danh sách bị cắt mà giao diện
+   không nói là đã cắt (docs/LUAT-GOP-Y-LA-TRIEU-CHUNG.md).
+
+   Máy chủ trả kèm `cat = { gioi_han, tong }` (null nếu KHÔNG cắt — xem
+   src/cat-danh-sach.js). Ở đây chỉ có một việc: cắt thì NÓI RA, kèm đường đi
+   tiếp. Không cắt thì dải biến mất hẳn — một dải luôn hiện là một dải mắt
+   người học được cách bỏ qua trong đúng một tuần.
+   ========================================================================== */
+function veDaiCat(dich, cat, dat = {}) {
+  const box = $(dich);
+  if (!box) return;
+  if (!cat) { box.hidden = true; box.innerHTML = ''; return; }
+
+  const dv = dat.don_vi || 'mục';
+  const gh = cat.gioi_han;
+  const tong = Number.isFinite(cat.tong) ? cat.tong : null;
+  // Không đếm được tổng (bảng chưa nạp migration…) vẫn PHẢI báo là đã cắt —
+  // im lặng vì thiếu con số là quay lại đúng cái lỗi đang vá.
+  const chu = tong != null
+    ? `Đang hiện <b>${gh}</b> trong tổng <b>${tong}</b> ${esc(dv)} — còn <b>${tong - gh}</b> ${esc(dv)} chưa hiện ở đây.`
+    : `Đang hiện <b>${gh}</b> ${esc(dv)} đầu danh sách — danh sách này <b>đã bị cắt bớt</b>, còn nữa.`;
+  const nut = dat.nut
+    ? `<button type="button" class="dai-cat-nut" data-dai-cat-tab="${esc(dat.nut.tab)}">${esc(dat.nut.chu)}</button>`
+    : '';
+  box.innerHTML = `<span class="dai-cat-chu">✂️ ${chu}${dat.goi_y ? ' ' + esc(dat.goi_y) : ''}</span>${nut}`;
+  box.hidden = false;
+}
+
+/* Một chỗ bắt click cho MỌI dải cắt — thêm dải mới không phải viết lại handler. */
+document.addEventListener('click', (e) => {
+  const nut = e.target.closest('[data-dai-cat-tab]');
+  if (nut) moTab(nut.getAttribute('data-dai-cat-tab'));
+});
+
+/* ==========================================================================
    ĐỔ DỮ LIỆU
    ========================================================================== */
 
@@ -2407,6 +2445,7 @@ async function khoiDongMucTieu() {
   async function taiLaiMucTieu() {
     const kq = await API.mtDanhSach();
     $('#mt-ky-hint').textContent = `Quý ${kq.quy}/${kq.nam}`;
+    veDaiCat('#mt-cat', kq.cat, { don_vi: 'mục tiêu' });
     DS_MT = [...(kq.cong_ty || []), ...(kq.phong_ban || []), ...(kq.ca_nhan || [])];
 
     veNhomMucTieu('congty', kq.cong_ty || []);
@@ -2766,6 +2805,9 @@ async function khoiDongCongViec() {
         `<td style="white-space:nowrap">${nut}</td>`;
     });
     $('#cv-trong-nhan').hidden = (kq.nhan || []).length > 0;
+    veDaiCat('#cv-cat-nhan', kq.cat_nhan, {
+      don_vi: 'việc', nut: { chu: 'Xem đầy đủ ở Lịch sử làm việc', tab: 'lichsuviec' }
+    });
 
     veBang('#cv-bang-giao', kq.giao || [], r => {
       const tt = CV_TRANG_THAI[r.trang_thai] || CV_TRANG_THAI.moi;
@@ -2785,6 +2827,9 @@ async function khoiDongCongViec() {
         `<td style="white-space:nowrap">${nut}</td>`;
     });
     $('#cv-trong-giao').hidden = (kq.giao || []).length > 0;
+    veDaiCat('#cv-cat-giao', kq.cat_giao, {
+      don_vi: 'việc', nut: { chu: 'Xem đầy đủ ở Lịch sử làm việc', tab: 'lichsuviec' }
+    });
 
     // Việc mình được mời PHỐI HỢP — CHỈ THEO DÕI, không báo cáo/chuyển trạng
     // thái thay người chính (Sếp Ngọc chốt 20/08/2026: giữ đúng 1 đầu mối
@@ -2799,6 +2844,9 @@ async function khoiDongCongViec() {
         `<td><span class="tag ${tt.mau}">${tt.chu}</span></td>`;
     });
     $('#cv-trong-phoihop').hidden = (kq.phoi_hop || []).length > 0;
+    veDaiCat('#cv-cat-phoihop', kq.cat_phoi_hop, {
+      don_vi: 'việc', nut: { chu: 'Xem đầy đủ ở Lịch sử làm việc', tab: 'lichsuviec' }
+    });
   }
 
   // UI STATE CONSISTENCY (docs/ERP-CONSTITUTION.md): sau mọi mutation đổi
@@ -2999,8 +3047,11 @@ async function khoiDongLichSuViec() {
 
   async function taiLaiLichSuCv() {
     try {
-      const { viec } = await API.cvLichSu();
-      DS_LSCV = viec || [];
+      const kq = await API.cvLichSu();
+      DS_LSCV = kq.viec || [];
+      // Đây là màn các dải cắt khác CHỈ NGƯỜI SANG. Nó mà cắt im lặng thì lời
+      // chỉ đường thành lời hứa suông.
+      veDaiCat('#ls-cv-cat', kq.cat, { don_vi: 'việc', goi_y: 'Dùng ô tìm kiếm phía trên để lọc đúng việc cần xem.' });
     } catch { /* trống — hiện bảng rỗng, không chặn cả trang */ }
     veBangLsCv();
   }
@@ -8079,6 +8130,7 @@ async function khoiDongDonHoan() {
    không có nút thao tác. -- */
 async function khoiDongLichSuHoan() {
   let DS_LS = [];
+  let CAT_LS = null;   // vết cắt do trần LIMIT — null nghĩa là KHÔNG bị cắt
   const TT_NHAN_LS = {
     con_tot: ['ok', '✓ Còn tốt'], hu_hong: ['danger', '⚠️ Hư hỏng'],
     thieu_hang: ['danger', '⚠️ Thiếu hàng'], sai_hang: ['danger', '⚠️ Sai hàng']
@@ -8140,13 +8192,22 @@ async function khoiDongLichSuHoan() {
       return { html, cls: xl.canhBao ? 'canh-bao' : '' };
     });
     $('#ls-trong').hidden = ds.length > 0;
-    $('#ls-dem').textContent = `${ds.length}/${DS_LS.length} đơn hoàn`;
+    // Ô đếm này TỪNG NÓI DỐI: `DS_LS.length` là 500 dòng đã bị trần cắt, nên
+    // với 523 đơn thật nó in "500/500" — khẳng định đã hiện hết trong khi mất
+    // 23 đơn. Có `CAT_LS` thì mẫu số phải là TỔNG THẬT.
+    const tong = (CAT_LS && Number.isFinite(CAT_LS.tong)) ? CAT_LS.tong : DS_LS.length;
+    $('#ls-dem').textContent = `${ds.length}/${tong} đơn hoàn`;
   }
 
   async function veLichSu() {
     let kq;
     try { kq = await API.hoanLichSu(); } catch { return; }
     DS_LS = kq.don_hoan || [];
+    CAT_LS = kq.cat || null;
+    veDaiCat('#ls-cat', CAT_LS, {
+      don_vi: 'đơn hoàn',
+      goi_y: 'Đang hiện các đơn sàn tạo GẦN NHẤT. Đơn cũ hơn chưa nằm trong bảng này — dùng ô tìm theo mã đơn nếu cần tra đơn cũ.'
+    });
     veBangLS($('#ls-tim').value);
   }
   $('#ls-tim').addEventListener('input', e => veBangLS(e.target.value));
