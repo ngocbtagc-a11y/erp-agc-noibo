@@ -599,13 +599,21 @@
 
       <div class="panel">
         <div class="panel-head"><h4 id="gy-danhsach-tieude">Yêu cầu của tôi</h4></div>
-        <!-- Desktop: bảng 7 cột. Mobile (<720px): CSS ẩn bảng, hiện thẻ —
-             7 cột không vừa 430px, bảng sẽ tràn ngang. -->
+        <!-- Mobile (<720px): CSS ẩn bảng, hiện thẻ — bảng không vừa 430px.
+             THỨ TỰ CỘT KHÔNG ĐƯỢC ĐẢO LẠI (bản vá 29/08/2026, xem chú thích
+             veDongGopY trong app.js): "Trạng thái" và "Đang chờ ai" phải đứng
+             NGAY SAU "Tiêu đề". Khung bảng chỉ rộng ~594px trên máy 900px, mà
+             bảng rộng 932px — cột nào đứng sau mốc đó là cột người gửi KHÔNG
+             NHÌN THẤY nếu không kéo ngang. Đúng thứ Sếp Ngọc báo 29/08/2026:
+             "sao của nhân viên mày không cho người ta nhìn thấy trạng thái".
+             "Người gửi" và "Rủi ro" là cột PHỤ, chỉ hiện khi thật sự có dữ
+             liệu, và luôn đứng sau. -->
         <div class="table-wrap gy-chi-may">
           <table>
             <thead><tr>
-              <th>Mã</th><th>Tiêu đề</th><th id="gy-cot-nguoigui" hidden>Người gửi</th>
-              <th>Ngày gửi</th><th>Rủi ro</th><th>Trạng thái</th><th>Đang chờ ai</th><th></th>
+              <th>Mã</th><th>Tiêu đề</th><th>Trạng thái</th><th>Đang chờ ai</th>
+              <th id="gy-cot-nguoigui" hidden>Người gửi</th><th>Ngày gửi</th>
+              <th id="gy-cot-ruiro" hidden>Rủi ro</th><th></th>
             </tr></thead>
             <tbody id="gy-bang"></tbody>
           </table>

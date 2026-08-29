@@ -66,7 +66,10 @@
     "do-danhsach-hoithoai": "node scripts/do-danhsach-hoithoai.mjs",
     "do-chu-dai": "node scripts/do-chu-dai-xuong-dong.mjs",
     "do-chu-dai-hep": "node scripts/do-chu-dai-xuong-dong.mjs --rong 320",
-    "do-chu-dai-tu-kiem": "node scripts/do-chu-dai-xuong-dong.mjs --tu-kiem"
+    "do-chu-dai-tu-kiem": "node scripts/do-chu-dai-xuong-dong.mjs --tu-kiem",
+    "do-trangthai-nguoigui": "node scripts/do-trangthai-nguoigui.mjs",
+    "do-trangthai-nguoigui-truoc": "node scripts/do-trangthai-nguoigui.mjs --commit 7c4c5c7",
+    "do-trangthai-nguoigui-tu-kiem": "node scripts/do-trangthai-nguoigui.mjs --tu-kiem"
   },
   "devDependencies": {
     "wrangler": "^4.0.0"

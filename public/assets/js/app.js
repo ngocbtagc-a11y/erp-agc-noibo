@@ -5546,6 +5546,15 @@ async function khoiDongGopY() {
      Ẩn nút chỉ để khỏi mời người ta bấm vào một cái 403 — hàng rào thật nằm
      ở máy chủ (src/index.js gopYDuyet), giao diện không giữ được luật nào. */
   let dsGopY = [], laAd = false, coDuyet = false, toiLa = null;
+  /* Hai cột PHỤ của bảng góp ý. Khai Ở ĐÂY, cùng chỗ với `laAd` — khai sau
+     chỗ dùng là đúng cái bẫy đã giết tab Chat một lần (`Cannot access before
+     initialization`). Cả hai do DỮ LIỆU quyết, không do vai trò:
+       · Người gửi — hiện khi trong danh sách có dòng KHÔNG PHẢI của mình
+         (Admin, và cả quản lý cấp 1 đang xem góp ý của nhân viên mình).
+       · Rủi ro   — hiện khi có ít nhất một dòng thật sự CÓ mức rủi ro. Người
+         gửi thường không bao giờ có (máy chủ đã cắt), nên cột đó với họ chỉ là
+         một cột dấu gạch chiếm chỗ và đẩy Trạng thái ra ngoài khung nhìn. */
+  let coCotNguoiGui = false, coCotRuiRo = false;
 
   // Khu vực/module — dùng lại đúng danh sách TAB đã có (Rule 5), khỏi tự
   // chế 1 danh mục song song rồi lệch tên với sidebar thật.
@@ -5812,15 +5821,52 @@ async function khoiDongGopY() {
     return `<span class="tag ${tt.mau}">${esc(tt.chu)}</span>`;
   }
 
+  /* "đã chờ N ngày" — người gửi hỏi ba câu, câu thứ ba là "bao lâu rồi".
+     `so_ngay_cho` do MÁY CHỦ tính (số ngày đứng yên ở chặng hiện tại) và đã
+     trả sẵn cho người gửi từ trước; giao diện chưa bao giờ dùng tới nó.
+     Việc đã đóng thì không còn chờ ai — đừng nói "đã 9 ngày" với một góp ý
+     đã hoàn thành. */
+  function gyDaCho(g) {
+    if (['hoan_thanh', 'da_huy', 'bi_tu_choi'].includes(g.trang_thai)) return '';
+    if (g.next_owner === 'NONE') return '';
+    const n = Number(g.so_ngay_cho);
+    if (!Number.isFinite(n) || n < 0) return '';
+    return `<div class="sm gy-dacho${n >= 3 ? ' tre' : ''}">` +
+           (n === 0 ? 'từ hôm nay' : `đã ${n} ngày`) + `</div>`;
+  }
+
+  /* Lý do — hiện NGAY TRÊN DANH SÁCH, không bắt mở modal mới biết vì sao.
+     `ly_do_tu_choi` là lý do CÔNG KHAI, máy chủ vẫn gửi cho người gửi (nằm
+     ngoài GOPY_RUOT_NOI_BO). Mức rủi ro, link PR, ghi chú riêng của quản lý
+     thì KHÔNG — đã bị cắt ở máy chủ và tuyệt đối không bày ra đây. */
+  function gyLyDo(g) {
+    if (g.trang_thai === 'bi_tu_choi')
+      return `<div class="sm gy-lydo">Chưa duyệt vì: ${esc(g.ly_do_tu_choi || 'chưa ghi lý do — hỏi lại người duyệt giúp')}</div>`;
+    if (g.trang_thai === 'bi_chan')
+      return `<div class="sm gy-lydo">Đang vướng: ${esc(g.ly_do_tu_choi || 'chưa ghi rõ — hỏi lại người phụ trách giúp')}</div>`;
+    return '';
+  }
+
+  /* THỨ TỰ CỘT LÀ MỘT QUYẾT ĐỊNH, KHÔNG PHẢI THÓI QUEN.
+     Bảng này rộng 932px; trên máy 900px khung nhìn của nó chỉ còn 594px (thanh
+     bên chiếm chỗ). Bản cũ xếp Trạng thái ở ô thứ 6 → mép phải 681px → NGƯỜI
+     GỬI KHÔNG THẤY TRẠNG THÁI nếu không kéo ngang, mà thứ họ thấy ngay trước
+     mép lại là cột "Rủi ro" toàn dấu gạch (máy chủ đã cắt `risk` của họ ở
+     REV-0020). Đó đúng là lỗi Sếp Ngọc báo 29/08/2026.
+     Nay: Trạng thái + Đang chờ ai đứng NGAY SAU Tiêu đề (mép phải 475px) —
+     hai cột phụ (Người gửi · Rủi ro) lùi xuống sau và CHỈ HIỆN KHI CÓ DỮ LIỆU
+     THẬT. Sửa thứ tự ở đây phải sửa cả <thead> trong app.html — bàn đo
+     `npm run do-trangthai-nguoigui` đếm ô tiêu đề với ô thân, lệch là đỏ. */
   function veDongGopY(g) {
     return `<tr data-id="${g.id}">` +
       `<td class="sm">${gyMa(g)}</td>` +
-      `<td><div class="nm">${esc(g.tieu_de)}</div>${g.khu_vuc ? `<div class="sm">${esc(gyKhuVuc(g))}</div>` : ''}</td>` +
-      (laAd ? `<td class="sm">${esc(g.nguoi_gui_ten)}<div class="sm">${esc(g.nguoi_gui_bo_phan || '')}</div></td>` : '') +
-      `<td class="sm">${thoiGianTruoc(g.tao_luc)}</td>` +
-      `<td>${gyChipRisk(g) || '<span class="sm">—</span>'}</td>` +
+      `<td><div class="nm">${esc(g.tieu_de)}</div>` +
+        `${g.khu_vuc ? `<div class="sm">${esc(gyKhuVuc(g))}</div>` : ''}${gyLyDo(g)}</td>` +
       `<td>${gyNhanTrangThai(g)} ${gyTickCong(g)}</td>` +
-      `<td class="sm">${esc(gyChoAi(g))}</td>` +
+      `<td class="sm">${esc(gyChoAi(g))}${gyDaCho(g)}</td>` +
+      (coCotNguoiGui ? `<td class="sm">${esc(g.nguoi_gui_ten)}<div class="sm">${esc(g.nguoi_gui_bo_phan || '')}</div></td>` : '') +
+      `<td class="sm">${thoiGianTruoc(g.tao_luc)}</td>` +
+      (coCotRuiRo ? `<td>${gyChipRisk(g) || '<span class="sm">—</span>'}</td>` : '') +
       `<td><button type="button" class="btn-nho" data-gyxem="${g.id}">Xem</button></td></tr>`;
   }
 
@@ -5834,7 +5880,11 @@ async function khoiDongGopY() {
         `<span class="sm">${gyMa(g)}</span>${gyChipRisk(g)}</div>` +
       `<div class="nm gy-the-ten" data-gyxem="${g.id}">${esc(g.tieu_de)}</div>` +
       `<div class="sm">${gyNhanTrangThai(g)} · Chờ: ${esc(gyChoAi(g))} · ${thoiGianTruoc(g.tao_luc)}</div>` +
-      (laAd || coNut ? `<div class="sm">${esc(g.nguoi_gui_ten)}${g.nguoi_gui_bo_phan ? ' — ' + esc(g.nguoi_gui_bo_phan) : ''}</div>` : '') +
+      // Trên điện thoại thẻ này LÀ danh sách — nên nó phải trả lời đủ ba câu
+      // của người gửi (đang ở đâu · ai giữ · bao lâu) và nói luôn lý do nếu
+      // việc bị dừng. Không bắt mở modal mới biết.
+      gyDaCho(g) + gyLyDo(g) +
+      (coCotNguoiGui || coNut ? `<div class="sm">${esc(g.nguoi_gui_ten)}${g.nguoi_gui_bo_phan ? ' — ' + esc(g.nguoi_gui_bo_phan) : ''}</div>` : '') +
       (coNut
         ? `<div class="gy-the-nut">` +
             `<button type="button" class="btn-primary btn-nho" data-gyduyet="${g.id}">Duyệt</button>` +
@@ -5879,7 +5929,12 @@ async function khoiDongGopY() {
     coDuyet = !!kq.duyet_gopy;
     toiLa = kq.toi_la || null;
 
-    $('#gy-cot-nguoigui').hidden = !laAd;
+    /* Bật/tắt hai cột phụ TRƯỚC khi vẽ thân bảng — cùng một biểu thức quyết
+       định cả <th> lẫn <td>, nên tiêu đề và thân không thể lệch nhau. */
+    coCotNguoiGui = laAd || dsGopY.some(g => g.nguoi_gui_id !== toiLa);
+    coCotRuiRo    = dsGopY.some(g => g.risk || g.de_xuat_risk);
+    $('#gy-cot-nguoigui').hidden = !coCotNguoiGui;
+    $('#gy-cot-ruiro').hidden = !coCotRuiRo;
     $('#gy-danhsach-tieude').textContent = laAd ? 'Tất cả góp ý' : 'Yêu cầu của tôi';
 
     // Vừa bấm nhầm? Panel hoàn tác nổi lên trên cùng, không phải đi tìm.

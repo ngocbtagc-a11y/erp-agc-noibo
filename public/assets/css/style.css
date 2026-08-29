@@ -3266,6 +3266,13 @@ tr.kd-chiadoi td {
 .gy-tick { font-size: 11px; opacity: .75; margin-left: 4px; white-space: nowrap; }
 .gy-risk-mo { opacity: .6; }
 
+/* "đã N ngày" + lý do dừng — hai dòng người GỬI cần thấy ngay trên danh sách,
+   không phải mở modal mới biết. Quá 3 ngày thì đổi màu: im lặng lâu là một
+   thông tin, không phải một con số trung tính. */
+.gy-dacho { color: var(--ink-soft); margin-top: 2px; }
+.gy-dacho.tre { color: var(--danger-dark); font-weight: 600; }
+.gy-lydo { color: var(--danger-dark); margin-top: 4px; }
+
 /* ---- Đường tiến độ cho NGƯỜI GỬI --------------------------------------
    Người gửi nhìn nhãn "Chờ duyệt" thì không biết mình đang ở đâu trên đường
    đi, còn bao xa, ai đang giữ. Khối này trả lời đúng ba câu đó.
@@ -3310,11 +3317,27 @@ tr.kd-chiadoi td {
   border-radius: 0 var(--r-md, 10px) var(--r-md, 10px) 0;
 }
 
+/* ---- BẢNG GÓP Ý vs THẺ GÓP Ý — mốc chuyển 1100px, KHÔNG phải 720px ------
+   Lỗi Sếp Ngọc báo 29/08/2026 ("của nhân viên mày không cho người ta nhìn
+   thấy trạng thái") nằm đúng ở khoảng 720–1100px: mốc cũ 720px đã TẮT thẻ,
+   nhưng bảng thì chưa vừa. Đo trên máy 900px: khung bảng chỉ còn 594px (thanh
+   bên ăn mất chỗ) trong khi bảng rộng ~930px — cột Trạng thái nằm ngoài mép
+   phải, người gửi phải kéo ngang mới thấy, và cái họ thấy trước mép lại là
+   cột "Rủi ro" toàn dấu gạch. Không ai kéo ngang một bảng để đi tìm thứ mình
+   không biết là có.
+   Nay: dưới 1100px dùng THẺ — thẻ không có mép phải để rơi ra ngoài, và đã
+   mang đủ trạng thái · ai đang giữ · đã bao lâu · lý do nếu bị dừng.
+   Từ 1100px trở lên mới vẽ bảng, kèm chốt bề ngang cột Tiêu đề bên dưới để
+   bảng không tự phình ra rồi đẩy Trạng thái ra ngoài lần nữa. */
 .gy-chi-dienthoai { display: none; }
-@media (max-width: 720px) {
+@media (max-width: 1100px) {
   .gy-chi-may { display: none; }
   .gy-chi-dienthoai { display: flex; }
 }
+/* Tiêu đề dài không được quyền chiếm hết bảng: chữ dài đã có chốt xuống dòng
+   toàn cục, ở đây chỉ chặn cột khỏi tự nong ra. Thiếu dòng này thì một góp ý
+   tiêu đề dài đẩy Trạng thái ra ngoài khung ngay cả trên màn rộng. */
+#gy-bang td:nth-child(2) { max-width: 280px; }
 
 /* ==========================================================================
    SPEC-0004 — "Việc của tôi hôm nay" · "Ai đang đọng việc" · "Đáng ghi nhận"
