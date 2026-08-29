@@ -48,6 +48,21 @@ function phamVi() {
 /** Đọc git log ra mảng { sha, tieu_de, than }. Dùng ký tự phân tách hiếm
  *  (\x00 giữa các trường, \x01 giữa các commit) để thông điệp commit có xuống
  *  dòng, dấu ngoặc, emoji… cũng không cắt nhầm. */
+/* ⚠️ BẰNG CHỨNG, KHÔNG PHẢI LỜI KHAI (REV-0042 C1). Thông điệp commit là thứ
+   người GÕ — gõ nhầm số, hoặc viết `"REV-0042: soi lại GY-1, chưa sửa gì"` thì
+   bản trước đóng luôn GY-1 và nhắn nhầm người gửi. Danh sách file bị đổi là
+   thứ không gõ nhầm được. Máy chủ mới đòi nó.
+
+   Đọc hỏng thì trả `null` chứ KHÔNG trả `[]`: hai thứ khác hẳn nhau. `[]` là
+   "commit này không đổi file nào"; `null` là "không biết" — và máy chủ xử
+   `null` theo chiều an toàn (dựng cờ cho Sếp, không tự đẩy, không nhắn ai). */
+function docTepCuaCommit(sha) {
+  try {
+    return git('diff-tree', '--no-commit-id', '--name-only', '-r', '-m', sha)
+      .split('\n').map(s => s.trim()).filter(Boolean).slice(0, 300);
+  } catch { return null; }
+}
+
 function docCommit() {
   let raw = '';
   try {
@@ -63,14 +78,22 @@ function docCommit() {
     // mà máy chủ cũng cắt. Mã góp ý luôn nằm ở đầu, không mất.
     return { sha: (sha || '').trim(), tieu_de: (tieu_de || '').trim(),
              than: (than || '').trim().slice(0, 2000) };
-  }).filter(c => /^[0-9a-f]{7,40}$/i.test(c.sha));
+  }).filter(c => /^[0-9a-f]{7,40}$/i.test(c.sha))
+    .map(c => ({ ...c, cac_tep: docTepCuaCommit(c.sha) }));
 }
 
 async function main() {
+  /* ⚠️ THIẾU KHOÁ PHÍA GITHUB THÌ PHẢI KÊU (REV-0042 mục 3). Bản trước in
+     `console.log` thường rồi `return` — job Actions vẫn XANH, ERP không nhận
+     được một tiếng nào, và cả đường "báo người gửi" TẮT HẲN mà không ai biết.
+     Giờ: `::warning::` cho Actions, VÀ vẫn gõ cửa ERP một tiếng không chữ ký
+     để ERP kêu bằng Telegram (nó trả 401 và bắn 1 tin/ngày). */
   if (!KHOA && !THU) {
-    console.log('Chưa đặt secret DEPLOY_CHOT_KHOA — bỏ qua, KHÔNG đổi góp ý nào.');
+    console.log('::warning::Chưa đặt secret DEPLOY_CHOT_KHOA phía GitHub — KHÔNG góp ý nào ' +
+                'được chốt, KHÔNG người báo lỗi nào được báo.');
     console.log('Cách bật: thêm secret cùng tên ở GitHub Settings → Secrets, VÀ ở két');
     console.log('          Cloudflare (npx wrangler secret put DEPLOY_CHOT_KHOA). Hai bên giống hệt nhau.');
+    await chaoHoi(null);
     return;
   }
 
@@ -89,16 +112,27 @@ async function main() {
   console.log(ma.length ? `Mã góp ý đọc được: ${ma.join(', ')}` : 'Không commit nào nhắc mã góp ý — không có gì để chốt.');
 
   if (THU) { console.log(banTin); return; }
-  if (!ma.length) return;   // 0 mã → 0 lượt gọi, 0 câu ghi D1
 
-  const chuKy = createHmac('sha256', KHOA).update(banTin).digest('hex');
+  /* 0 mã: vẫn gõ cửa MỘT tiếng (bản tin rỗng) thay vì im.
+     REV-0042 mục 3: bản trước `return` thẳng ở đây, nên một lượt đẩy không
+     nhắc mã nào là khoá lệch KHÔNG BAO GIỜ lộ ra — tới hôm có góp ý thật thì
+     nó đã hỏng từ lâu. Bản tin rỗng: máy chủ xác thực chữ ký rồi trả ngay ở
+     `khong_co_commit`, KHÔNG đọc, KHÔNG ghi một câu D1 nào. */
+  const than = ma.length ? banTin
+    : JSON.stringify({ luc: new Date().toISOString(), cac_commit: [], chao_hoi: true });
+  await chaoHoi(than);
+}
+
+/** Gọi ERP một tiếng. `than = null` nghĩa là KHÔNG có khoá — cố tình gửi
+ *  không chữ ký để ERP biết đường mà kêu (401 + 1 tin Telegram/ngày). */
+async function chaoHoi(than) {
+  const body = than || JSON.stringify({ luc: new Date().toISOString(), cac_commit: [], chao_hoi: true });
+  const headers = { 'content-type': 'application/json' };
+  if (than && KHOA) headers['x-erp-chu-ky'] = `sha256=${createHmac('sha256', KHOA).update(body).digest('hex')}`;
+
   let tl;
   try {
-    tl = await fetch(`${ERP}/api/gop-y/da-len-that`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-erp-chu-ky': `sha256=${chuKy}` },
-      body: banTin
-    });
+    tl = await fetch(`${ERP}/api/gop-y/da-len-that`, { method: 'POST', headers, body });
   } catch (e) {
     console.log(`::warning::Không gọi được ERP (${e.message}). Deploy VẪN THÀNH CÔNG; không góp ý nào bị đổi.`);
     return;
@@ -107,8 +141,12 @@ async function main() {
   const chu = await tl.text();
   console.log(`ERP trả mã ${tl.status}: ${chu.slice(0, 2000)}`);
   if (tl.status === 503)
-    console.log('::warning::ERP chưa sẵn sàng chốt góp ý (thiếu khoá hoặc chưa nạp ' +
+    console.log('::warning::ERP chưa sẵn sàng chốt góp ý (thiếu khoá phía Cloudflare hoặc chưa nạp ' +
                 'migrations/them-gopy-da-len-that.sql). Không góp ý nào bị đổi.');
+  else if (tl.status === 401)
+    console.log('::warning::ERP TỪ CHỐI CHỮ KÝ — khoá DEPLOY_CHOT_KHOA ở GitHub và ở Cloudflare ' +
+                'đang KHÁC NHAU (hoặc thiếu một bên). Đặt lại GIỐNG HỆT ở cả hai nơi. ' +
+                'Từ giờ tới lúc sửa: không góp ý nào được chốt, không ai được báo.');
   else if (!tl.ok)
     console.log('::warning::ERP từ chối bản tin chốt góp ý. Không góp ý nào bị đổi.');
 }

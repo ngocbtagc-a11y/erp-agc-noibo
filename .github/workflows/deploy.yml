@@ -41,13 +41,24 @@ jobs:
       # RỒI HẾT. Không ai quay lại đổi trạng thái góp ý, nên người báo lỗi
       # không bao giờ biết lỗi của mình đã được sửa.
       #
-      # SỢI DÂY: mã góp ý trong THÔNG ĐIỆP COMMIT (`GY-12`). Bước này đọc mọi
-      # commit vừa lên, gói lại, ký HMAC rồi POST về chính ERP vừa deploy.
+      # SỢI DÂY: mã góp ý trong THÔNG ĐIỆP COMMIT (`GY-12`) + DANH SÁCH FILE
+      # commit đó đổi thật. Bước này đọc mọi commit vừa lên, gói lại, ký HMAC
+      # rồi POST về chính ERP vừa deploy. Thông điệp commit là lời khai, danh
+      # sách file là bằng chứng — máy chủ đòi cả hai (REV-0042 C1).
       # Không dịch vụ mới, không cron mới, không khoá của bên thứ ba, chi phí 0.
       #
       # ⚠️ KHÔNG ĐƯỢC LÀM HỎNG DEPLOY. Deploy đã xong ở bước trên; đây chỉ là
       # báo tin. `continue-on-error` để một lần mạng lỗi không nhuộm đỏ một bản
       # deploy đã thành công.
+      #
+      # ⚠️ NHƯNG JOB XANH KHÔNG CÓ NGHĨA LÀ ĐƯỜNG NÀY CHẠY (REV-0042 mục 3).
+      # Vì `continue-on-error`, bước này hỏng thì job vẫn xanh — mà không ai
+      # đọc nhật ký Actions mỗi ngày. Nên chuông thật KHÔNG nằm ở màu job:
+      #   ① bước này in `::warning::` (hiện ngay đầu trang Actions), VÀ
+      #   ② nó gõ cửa ERP MỖI LƯỢT DEPLOY — kể cả lượt không commit nào nhắc
+      #      mã góp ý — nên khoá lệch/thiếu làm ERP bắn Telegram cho Sếp
+      #      (tối đa 1 tin/ngày). Lệch khoá lộ ra NGAY HÔM NÓ LỆCH, không đợi
+      #      tới hôm có góp ý thật bị bỏ rơi.
       # ====================================================================
       - name: Báo ERP những góp ý vừa lên hệ thống
         continue-on-error: true
@@ -55,8 +66,8 @@ jobs:
           ERP_URL: https://erp-agc.noiboagc.workers.dev
           # Khoá chung với két Cloudflare:
           #   npx wrangler secret put DEPLOY_CHOT_KHOA
-          # Hai bên phải GIỐNG HỆT NHAU. Thiếu một bên thì bước này bỏ qua êm
-          # và KHÔNG góp ý nào bị đổi.
+          # Hai bên phải GIỐNG HỆT NHAU. Thiếu/lệch một bên thì KHÔNG góp ý nào
+          # bị đổi, và Sếp nhận Telegram báo đường này đang hỏng.
           DEPLOY_CHOT_KHOA: ${{ secrets.DEPLOY_CHOT_KHOA }}
           DEPLOY_TRUOC: ${{ github.event.before }}
           DEPLOY_NAY: ${{ github.sha }}

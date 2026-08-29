@@ -221,8 +221,12 @@ npm run nap-dalenthat
 | GitHub | Settings → Secrets and variables → Actions → New secret, tên `DEPLOY_CHOT_KHOA` |
 | Cloudflare | `npx wrangler secret put DEPLOY_CHOT_KHOA` |
 
-Hai bên phải **giống hệt nhau**. Thiếu một bên thì bước báo tin bỏ qua êm và
-**không góp ý nào bị đổi** — deploy vẫn chạy bình thường.
+Hai bên phải **giống hệt nhau**. Thiếu hoặc lệch một bên thì **không góp ý nào
+bị đổi** — deploy vẫn chạy bình thường, nhưng **Sếp nhận Telegram** báo đường
+này đang hỏng (tối đa 1 tin/ngày) và tab Actions in `::warning::`.
+Mỗi lượt deploy đều gõ cửa ERP một tiếng, **kể cả khi không commit nào nhắc mã
+góp ý** — nên khoá lệch lộ ra ngay hôm nó lệch, không đợi tới hôm có góp ý
+thật bị bỏ rơi (REV-0042 mục 3).
 
 ### Từ đó về sau: viết mã góp ý vào thông điệp commit
 
@@ -233,19 +237,34 @@ git commit -m "GY-12: gộp thông báo tin nhắn, không rung 5 lần nữa"
 Chấp nhận `GY-12`, `gy 12`, `GY_12`. **Không** chấp nhận `GY12` (dính liền) —
 cố ý chặt tay để không bắt nhầm một con số nào trong câu tiếng Anh.
 
+**Mã thôi thì chưa đủ.** Máy còn đọc **commit đó đổi những file nào**, và chỉ
+tin khi có file trong `src/` · `public/` · `migrations/`. Một commit chỉ sửa
+tài liệu (`docs/`, `*.md`) mà nhắc mã góp ý thì **không đóng gì cả** — vì
+thông điệp commit là lời khai, danh sách file mới là bằng chứng. Commit
+`Revert "…"` cũng bị loại: bản vá vừa bị **gỡ** thì không có gì "đã xong".
+
 ### Máy làm gì với góp ý đó
 
 | Góp ý đang ở | Máy làm | Ai nhận tin |
 |---|---|---|
-| Sẵn sàng phát hành | → **Hoàn thành** | người gửi, đúng 1 tin |
-| Đang làm / kiểm tra / cần chỉnh sửa | → **Chờ nghiệm thu** | người gửi, đúng 1 tin |
-| Chưa qua cổng duyệt, hoặc đang bị chặn | **KHÔNG đổi gì** — dựng cờ chờ Sếp | Sếp (Telegram) |
-| Đã hoàn thành / huỷ / từ chối | không đụng | không ai |
+| Sẵn sàng phát hành | → **Hoàn thành** | người gửi: *"đã sửa xong"* |
+| Đang làm / kiểm tra / cần chỉnh sửa | → **Chờ nghiệm thu** | người gửi: *"đã sửa xong"* |
+| **Đã duyệt — chờ phân tích** | → **Chờ nghiệm thu** | người gửi + Sếp (Telegram) |
+| Mới / đang phân tích / chờ quyết định / bị chặn | **KHÔNG đổi gì** — dựng cờ chờ Sếp | người gửi: *"đã có bản sửa, đang chờ Sếp xác nhận"* + Sếp |
+| Đã hoàn thành / huỷ / từ chối | không đụng | không ai (trừ commit `Revert` → kêu cho Sếp) |
 
-Máy **không bao giờ** tự đưa một góp ý chưa qua cổng duyệt sang "đã xong".
-Báo xong mà chưa xong là mất lòng tin của người báo — họ sẽ thôi báo, và đó là
-mất mát lớn nhất. Cái Sếp cần bấm nằm ở panel **"Đã lên hệ thống — chờ xác
-nhận"** trên màn Góp ý: *Đúng, đã xong* / *Không phải góp ý này*.
+Máy **không bao giờ** tự đưa một góp ý sang "đã xong" khi chưa ai nghiệm thu —
+xa nhất nó đẩy tới **Chờ nghiệm thu**. Báo xong mà chưa xong là mất lòng tin
+của người báo, họ sẽ thôi báo, và đó là mất mát lớn nhất.
+
+Nhưng **im cũng là hỏng**: nỗi đau gốc là *người báo không biết*. Nên góp ý
+chưa qua cổng vẫn được báo — báo đúng thứ máy biết chắc: *đã có bản sửa lên hệ
+thống, đang chờ Sếp xác nhận*. Không bao giờ là "đã xong".
+
+Cái Sếp cần bấm nằm ở panel **"Đã lên hệ thống — chờ xác nhận"** trên màn Góp
+ý: *Đúng, đã xong* / *Không phải góp ý này*. Panel hiện **cả** những góp ý máy
+đã tự đẩy đi, không chỉ những cái nó dựng cờ — nên **mọi thứ máy đụng vào đều
+gỡ lại được**, và *Không phải góp ý này* trả trạng thái về **đúng chỗ cũ**.
 
 ### Góp ý không sửa bằng code thì đóng thế nào
 

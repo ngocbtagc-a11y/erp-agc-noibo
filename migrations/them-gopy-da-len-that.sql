@@ -28,9 +28,11 @@ ALTER TABLE gop_y ADD COLUMN deploy_cho_xac_nhan INTEGER NOT NULL DEFAULT 0;
 -- và hiện trên màn hình. Không bắt ai phải mở GitHub mới hiểu.
 ALTER TABLE gop_y ADD COLUMN deploy_tom_tat TEXT;
 
--- 🔒 CHỐT "ĐÚNG MỘT TIN". Đã báo cho người gửi lúc nào. Mỗi lần đẩy lên main
--- là một lần deploy; không có cột này thì cùng một góp ý bị nhắn lại mỗi lượt.
--- Có cột này thì báo đúng 1 lần, dù deploy chạy lại bao nhiêu lần.
+-- 🔒 CHỐT "ĐÚNG MỘT TIN CHO MỖI BẢN VÁ". Đã báo cho người gửi lúc nào. Đọc
+-- KÈM `deploy_sha`: cùng một commit thì không nhắn lại lần hai, commit KHÁC
+-- (đợt vá tiếp theo, vòng nghiệm thu thứ hai) thì đáng một tin mới.
+-- REV-0042 C4: bản đầu đóng dấu VĨNH VIỄN theo góp ý, nên một lần nhắn nhầm là
+-- người gửi không bao giờ được báo nữa, và vòng nghiệm thu thứ 2 câm.
 ALTER TABLE gop_y ADD COLUMN bao_da_len_luc TEXT;
 
 -- Cách góp ý này được đóng: 'code' (có bản vá) · 'huong_dan' (trả lời bằng
@@ -39,5 +41,15 @@ ALTER TABLE gop_y ADD COLUMN bao_da_len_luc TEXT;
 -- là không cần một dòng code nào.
 ALTER TABLE gop_y ADD COLUMN dong_kieu TEXT;
 
+-- ⚠️ ĐƯỜNG LÙI CHO MỌI CA MÁY ĐỤNG VÀO (REV-0042 C3). Trạng thái NGAY TRƯỚC
+-- lúc máy đổi. Bản đầu chỉ cho gỡ những ca máy DỰNG CỜ; đúng những ca máy tự
+-- ĐẨY ĐI thì /xac-nhan-da-len trả 400 và panel của Sếp không hiện chúng — máy
+-- đẩy nhầm mà không nút nào gỡ được. Có cột này thì "Không phải góp ý này" trả
+-- được về đúng chỗ cũ.
+-- Nó cũng là dấu "MÁY ĐỤNG VÀO, SẾP CHƯA NGÓ": về NULL ngay khi Sếp gật hoặc
+-- lắc, nên panel không phình mãi.
+ALTER TABLE gop_y ADD COLUMN deploy_tt_cu TEXT;
+
 -- Panel "Đã lên hệ thống — chờ Sếp xác nhận" đọc bằng chỉ mục này.
 CREATE INDEX IF NOT EXISTS idx_gopy_choxacnhan ON gop_y (deploy_cho_xac_nhan);
+CREATE INDEX IF NOT EXISTS idx_gopy_deploy_ttcu ON gop_y (deploy_tt_cu);

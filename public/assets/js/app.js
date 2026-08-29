@@ -5356,6 +5356,11 @@ async function khoiDongGopY() {
       `<div class="sm">Người gửi: ${esc(g.nguoi_gui_ten || '—')}` +
         (g.deploy_luc ? ` · lên hệ thống ${thoiGianTruoc(g.deploy_luc)}` : '') + '</div>' +
       (g.deploy_tom_tat ? `<div class="sm">Máy đọc được: <b>${esc(g.deploy_tom_tat)}</b></div>` : '') +
+      /* Máy đã tự đẩy trạng thái thì NÓI RA nó đẩy từ đâu — Sếp phải thấy cái
+         máy đã làm mới quyết được có gỡ hay không. */
+      (g.deploy_tt_cu && g.deploy_tt_cu !== g.trang_thai
+        ? `<div class="sm">Máy đã đẩy: ${esc((GOPY_TRANG_THAI[g.deploy_tt_cu] || {}).chu || g.deploy_tt_cu)} → ` +
+          `<b>${esc((GOPY_TRANG_THAI[g.trang_thai] || {}).chu || g.trang_thai)}</b></div>` : '') +
       `<div class="gy-the-nut">` +
         `<button type="button" class="btn-primary btn-nho" data-gydalen-co="${g.id}">Đúng, đã xong</button>` +
         `<button type="button" class="btn-phu btn-nho" data-gydalen-khong="${g.id}">Không phải góp ý này</button>` +
@@ -5410,7 +5415,11 @@ async function khoiDongGopY() {
 
     /* ĐÃ LÊN HỆ THỐNG — CHỜ XÁC NHẬN. Chỉ Sếp (cờ duyệt) mới chốt được, nên
        chỉ Sếp thấy panel: người khác bấm cũng 403, vẽ nút ra là bẫy tay. */
-    const daLen = coDuyet ? dsGopY.filter(g => g.deploy_cho_xac_nhan) : [];
+    /* Hiện CẢ HAI loại (REV-0042 C3): góp ý máy DỰNG CỜ, và góp ý máy đã tự
+       ĐẨY ĐI mà Sếp chưa ngó (`deploy_tt_cu` còn nguyên). Bản trước chỉ hiện
+       loại đầu, nên đúng những ca máy đẩy nhầm thì Sếp không thấy để gỡ. */
+    const daLen = coDuyet
+      ? dsGopY.filter(g => g.deploy_cho_xac_nhan || g.deploy_tt_cu) : [];
     $('#gy-dalen-panel').hidden = daLen.length === 0;
     $('#gy-dalen-tieude').textContent = `Đã lên hệ thống — chờ xác nhận (${daLen.length})`;
     $('#gy-dalen-ds').innerHTML = daLen.map(veTheDaLen).join('');

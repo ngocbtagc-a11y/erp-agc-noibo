@@ -4438,7 +4438,7 @@ async function gopYDanhSach(req, env) {
      là CẢ MÀN GÓP Ý trả 500 — hỏng nặng hơn nhiều so với việc thiếu tính năng
      mới. Thiếu cột → tự lùi về câu cũ, kèm console.warn. */
   const COT_DEPLOY = `g.deploy_sha, g.deploy_luc, g.deploy_tom_tat,
-           g.deploy_cho_xac_nhan, g.bao_da_len_luc, g.dong_kieu,`;
+           g.deploy_cho_xac_nhan, g.bao_da_len_luc, g.dong_kieu, g.deploy_tt_cu,`;
   const cauSQL = (cotDeploy) => `
     SELECT ${cotDeploy}
            g.id, g.tieu_de, g.boi_canh, g.vuong_o_dau, g.mong_muon, g.tan_suat, g.khu_vuc,
@@ -5203,12 +5203,37 @@ async function kyHMAC(khoa, chu) {
    đường máy tự chốt và đường Sếp xác nhận tay, để hai đường không bao giờ
    nói hai kiểu khác nhau (Rule 1). Đẩy tới máy người dùng bằng ĐÚNG đường
    thông báo đã có (`src/day-thong-bao.js`), không đẻ cơ chế gửi thứ hai. */
-async function gopYBaoDaXong(env, g, tomTat, conChoThu) {
-  const tin = `Góp ý "${g.tieu_de}" của bạn đã được sửa xong và đã lên hệ thống` +
-    (tomTat ? ` — ${tomTat}` : '') +
-    (conChoThu ? '. Mời bạn dùng thử và xác nhận đã hết vướng nhé.' : '.');
+async function gopYBaoDaXong(env, g, tomTat, conChoThu, kieuTin = 'da_xong') {
+  /* ⚠️ HAI CÂU KHÁC NHAU, VÌ HAI SỰ THẬT KHÁC NHAU (Gạo chốt 29/08, mục 2a).
+     Góp ý còn trong rổ an toàn thì máy KHÔNG được nói "đã sửa xong" — nó chưa
+     qua cổng duyệt của Sếp. Nhưng cũng KHÔNG được im: nỗi đau gốc của Sếp là
+     "người báo không biết", và cái đó giải được NGAY, không cần đợi ai bấm nút.
+     Nên nói đúng thứ máy biết chắc: đã có bản sửa lên hệ thống, đang chờ Sếp. */
+  const tin = kieuTin === 'cho_sep_xac_nhan'
+    ? `Đã có bản sửa cho góp ý "${g.tieu_de}" của bạn lên hệ thống` +
+      (tomTat ? ` — ${tomTat}` : '') + ', đang chờ Sếp xác nhận. Bạn dùng thử giúp nhé.'
+    : `Góp ý "${g.tieu_de}" của bạn đã được sửa xong và đã lên hệ thống` +
+      (tomTat ? ` — ${tomTat}` : '') +
+      (conChoThu ? '. Mời bạn dùng thử và xác nhận đã hết vướng nhé.' : '.');
   await guiThongBao(env, null, tin, 'gop_y_cap_nhat', String(g.id), g.nguoi_gui_id);
   try { await dayToiNguoi(env, g.nguoi_gui_id, tin, new Date(), { guiTelegram }); } catch { /* đẩy hỏng không được chặn việc chốt */ }
+}
+
+/* ⚠️ KHOÁ LỆCH THÌ PHẢI KÊU (REV-0042 mục 3). Hai nơi giữ `DEPLOY_CHOT_KHOA`
+   — GitHub Secrets và két Cloudflare — là chỗ CHẮC CHẮN sẽ lệch một ngày nào
+   đó. Bản trước im hoàn toàn: job Actions vẫn XANH (`continue-on-error`), và
+   lượt đẩy không có mã góp ý thì script còn không gọi ERP, nên lệch khoá
+   không bao giờ lộ ra cho tới hôm có góp ý thật bị bỏ rơi.
+   Giờ mỗi lượt deploy đều "chào hỏi" một tiếng, và chào hỏi hỏng thì Telegram
+   kêu — tối đa 1 tin/ngày, dùng lại đúng `canhBaoMotLanMoiNgay` đã có. */
+function canhBaoKhoaDeployLech(env, viec, mo) {
+  return canhBaoMotLanMoiNgay(env, viec,
+    '🔴 [ERP] ĐƯỜNG BÁO "GÓP Ý ĐÃ LÊN HỆ THỐNG" ĐANG HỎNG.\n\n' + mo + '\n\n' +
+    'Hệ quả: deploy vẫn chạy bình thường, nhưng KHÔNG góp ý nào được chốt và ' +
+    'KHÔNG người báo lỗi nào được báo — im lặng, không ai biết.\n\n' +
+    'Cách sửa: đặt secret DEPLOY_CHOT_KHOA GIỐNG HỆT ở CẢ HAI NƠI —\n' +
+    '  ① GitHub → Settings → Secrets and variables → Actions\n' +
+    '  ② npx wrangler secret put DEPLOY_CHOT_KHOA');
 }
 
 async function gopYDaLenThat(req, env) {
@@ -5218,22 +5243,36 @@ async function gopYDaLenThat(req, env) {
     // đường "báo xong" mà không ai biết nó đang tắt.
     console.warn('[ERP] Thiếu DEPLOY_CHOT_KHOA — bỏ qua chốt góp ý sau deploy. ' +
                  'Đặt bằng: npx wrangler secret put DEPLOY_CHOT_KHOA');
+    await canhBaoKhoaDeployLech(env, 'deploy-thieu-khoa-erp',
+      'Phía Cloudflare CHƯA ĐẶT secret DEPLOY_CHOT_KHOA, nên ERP từ chối mọi bản tin deploy (503).');
     return json({ ok: false, ly_do: 'chua_dat_khoa', da_doi: 0 }, 503);
   }
 
   const nguyenVan = await req.text();
   const chuKy = hexRaByte(String(req.headers.get('x-erp-chu-ky') || '').replace(/^sha256=/, '').toLowerCase());
-  if (!chuKy || !bangNhauAnToan(chuKy, await kyHMAC(khoa, nguyenVan)))
+  if (!chuKy || !bangNhauAnToan(chuKy, await kyHMAC(khoa, nguyenVan))) {
+    await canhBaoKhoaDeployLech(env, 'deploy-khoa-lech',
+      chuKy ? 'Một bản tin deploy đến với chữ ký KHÔNG KHỚP — khoá ở GitHub và khoá ở ' +
+              'Cloudflare đang KHÁC NHAU.'
+            : 'Một bản tin deploy đến mà KHÔNG CÓ chữ ký — nhiều khả năng phía GitHub ' +
+              'chưa đặt secret DEPLOY_CHOT_KHOA.');
     return loi('Chữ ký không hợp lệ', 401);
+  }
 
   let b; try { b = JSON.parse(nguyenVan); } catch { return loi('Dữ liệu gửi lên không hợp lệ', 400); }
 
   const lech = Math.abs(Date.now() - Date.parse(b.luc || '')) / 60000;
   if (!(lech <= DEPLOY_HAN_PHUT)) return loi('Bản tin deploy quá cũ hoặc thiếu mốc thời gian', 401);
 
+  /* `cac_tep` = danh sách file commit đó ĐỔI THẬT. Đây là bằng chứng; thông
+     điệp commit chỉ là lời khai (REV-0042 C1). Thiếu hẳn trường này (script
+     cũ, hoặc git không đọc được) → để `null`, KHÔNG phải `[]`: hai thứ khác
+     nhau hoàn toàn, `[]` nghĩa là "không đổi file nào". */
   const cacCommit = (Array.isArray(b.cac_commit) ? b.cac_commit : []).slice(0, 200)
     .map(c => ({ sha: String(c.sha || '').trim(), tieu_de: String(c.tieu_de || '').slice(0, 300),
-                 than: String(c.than || '').slice(0, 2000) }))
+                 than: String(c.than || '').slice(0, 2000),
+                 cac_tep: Array.isArray(c.cac_tep)
+                   ? c.cac_tep.slice(0, 300).map(t => String(t || '').slice(0, 400)) : null }))
     .filter(c => /^[0-9a-f]{7,40}$/i.test(c.sha));
   if (!cacCommit.length) return json({ ok: true, da_doi: 0, chi_tiet: [], ly_do: 'khong_co_commit' });
 
@@ -5266,16 +5305,47 @@ async function gopYDaLenThat(req, env) {
   }
 
   const dsCoLink = [...theoSha.values()];
-  const quyet = chotCaLuot(cacCommit, id => theoId.get(id) || null, () => dsCoLink)
-    .slice(0, DEPLOY_TOI_DA_MOI_LUOT);
+  const tatCa = chotCaLuot(cacCommit, id => theoId.get(id) || null, () => dsCoLink);
+  const quyet = tatCa.slice(0, DEPLOY_TOI_DA_MOI_LUOT);
+  // T1 (luật ab92afc — "danh sách bị cắt PHẢI NÓI RA"): trần 30 cắt im lặng là
+  // đúng thứ luật đó cấm. Nói thẳng trong thân trả về, và kêu cho Sếp.
+  const biCat = tatCa.length - quyet.length;
+  if (biCat > 0)
+    guiTelegram(env, `[Góp ý ERP] Lượt deploy này nhắc tới ${tatCa.length} góp ý — ` +
+      `máy chỉ xử ${quyet.length} cái đầu (trần ${DEPLOY_TOI_DA_MOI_LUOT}/lượt), ` +
+      `CÒN ${biCat} CÁI CHƯA XỬ. Đẩy thêm một lượt nữa hoặc chạy scripts/dong-lui-gop-y.mjs.`)
+      .catch(() => {});
 
   const chiTiet = [];
   for (const q of quyet) {
     const g = theoId.get(q.gop_y_id) || theoSha.get(q.gop_y_id);
     if (!g || q.hanh_dong === 'bo_qua') { chiTiet.push(q); continue; }
 
+    /* Commit GỠ bản vá trên một góp ý đang mang nhãn đã đóng: KHÔNG đụng một
+       cột nào của gop_y (mở lại là quyết định của người), chỉ ghi lịch sử +
+       kêu cho Sếp. Nhãn "Hoàn thành" nói dối là việc Sếp phải biết. */
+    if (q.hanh_dong === 'canh_bao_lui') {
+      await gopYGhiLichSu(env, q.gop_y_id, g.trang_thai, g.trang_thai, {
+        tacNhan: 'DEPLOY', loai: 'he_thong', jobId: q.sha.slice(0, 12),
+        ghiChu: `Commit ${q.sha.slice(0, 7)} GỠ bản vá (revert) của góp ý này. ${q.mo_ta}`
+      });
+      guiTelegram(env, `[Góp ý ERP] ⚠️ Commit ${q.sha.slice(0, 7)} vừa GỠ bản vá của ` +
+        `GY-${q.gop_y_id} ("${g.tieu_de}"), nhưng góp ý vẫn đang mang nhãn ` +
+        `"${GOPY_TRANG_THAI_NHAN[g.trang_thai] || g.trang_thai}". Nhãn đang nói dối — ` +
+        'máy không tự mở lại, Sếp xem giúp.').catch(() => {});
+      chiTiet.push(q);
+      continue;
+    }
+
     const gan = ['deploy_sha = ?', "deploy_luc = datetime('now', '+7 hours')", 'deploy_tom_tat = ?'];
     const gia = [q.sha, q.tom_tat || null];
+
+    /* 🔙 CẤT CHỖ CŨ TRƯỚC KHI ĐỔI (C3) — để "Không phải góp ý này" trả về
+       được. Cất cho CẢ hai đường (dựng cờ lẫn tự đẩy): bản trước chỉ có đường
+       lùi cho rổ an toàn, mà đúng những ca máy ĐẨY NHẦM thì lại không gỡ được.
+       Không ghi đè chỗ cũ đã cất mà Sếp chưa ngó — chỗ cũ NHẤT mới là chỗ đúng. */
+    gan.push('deploy_tt_cu = COALESCE(deploy_tt_cu, ?)');
+    gia.push(g.trang_thai);
 
     if (q.hanh_dong === 'cho_xac_nhan') {
       gan.push('deploy_cho_xac_nhan = 1');
@@ -5291,9 +5361,14 @@ async function gopYDaLenThat(req, env) {
       }
       if (q.trang_thai_moi === 'hoan_thanh') gan.push('can_xac_minh_lai = 0', "dong_kieu = 'code'");
     }
-    // 🔒 ĐÚNG MỘT TIN cho mỗi góp ý: đóng dấu ngay trong chính câu UPDATE này,
-    // nên deploy chạy lại bao nhiêu lần cũng không nhắn lại lần thứ hai.
-    if (q.bao_nguoi_gui) gan.push("bao_da_len_luc = datetime('now', '+7 hours')");
+    /* 🔒 ĐÚNG MỘT TIN "ĐÃ XONG" cho mỗi bản vá: đóng dấu ngay trong chính câu
+       UPDATE này, nên deploy chạy lại bao nhiêu lần cũng không nhắn lại.
+       CHỈ đóng dấu cho tin "đã xong". Tin "đang chờ Sếp xác nhận" KHÔNG đóng
+       dấu — nếu không thì lúc Sếp gật thật, người gửi chỉ nhận được câu "đang
+       chờ" rồi im mãi, không bao giờ nghe "xong rồi". Lượt deploy sau cùng
+       commit đó đã bị chặn ở `da_dong_dau`, nên không sinh tin lặp. */
+    if (q.bao_nguoi_gui && q.kieu_tin !== 'cho_sep_xac_nhan')
+      gan.push("bao_da_len_luc = datetime('now', '+7 hours')");
     gan.push("cap_nhat_luc = datetime('now', '+7 hours')");
     gia.push(q.gop_y_id);
 
@@ -5309,16 +5384,20 @@ async function gopYDaLenThat(req, env) {
     });
 
     if (q.bao_nguoi_gui)
-      await gopYBaoDaXong(env, g, q.tom_tat, q.trang_thai_moi !== 'hoan_thanh');
+      await gopYBaoDaXong(env, g, q.tom_tat, q.trang_thai_moi !== 'hoan_thanh', q.kieu_tin);
     if (q.bao_sep)
       guiTelegram(env, `[Góp ý ERP] Commit ${q.sha.slice(0, 7)} khai đã sửa GY-${q.gop_y_id} ` +
-        `("${g.tieu_de}") nhưng góp ý đang ở "${GOPY_TRANG_THAI_NHAN[g.trang_thai] || g.trang_thai}" — ` +
-        'máy KHÔNG tự đánh dấu xong. Vào ERP xác nhận giúp Sếp nhé.').catch(() => {});
+        `("${g.tieu_de}"), góp ý đang ở "${GOPY_TRANG_THAI_NHAN[g.trang_thai] || g.trang_thai}" — ` +
+        (q.trang_thai_moi
+          ? `máy đẩy sang "${GOPY_TRANG_THAI_NHAN[q.trang_thai_moi] || q.trang_thai_moi}" chờ Sếp nghiệm thu. ` +
+            'Không đúng thì vào ERP bấm "Không phải góp ý này" để trả về chỗ cũ.'
+          : 'máy KHÔNG tự đánh dấu xong. Vào ERP xác nhận giúp Sếp nhé.')).catch(() => {});
 
     chiTiet.push(q);
   }
 
-  return json({ ok: true, da_doi: chiTiet.filter(q => q.hanh_dong !== 'bo_qua').length, chi_tiet: chiTiet });
+  return json({ ok: true, da_doi: chiTiet.filter(q => q.hanh_dong !== 'bo_qua').length,
+                bi_cat: biCat, tong_nhac_toi: tatCa.length, chi_tiet: chiTiet });
 }
 
 /* ---- ĐƯỜNG SỬA TAY ① — Sếp chốt hoặc gỡ cái máy đoán --------------------
@@ -5339,27 +5418,55 @@ async function gopYXacNhanDaLen(req, env) {
 
   const g = await env.DB.prepare(
     `SELECT id, tieu_de, trang_thai, nguoi_gui_id, deploy_sha, deploy_tom_tat,
-            deploy_cho_xac_nhan, bang_chung_url, bao_da_len_luc
+            deploy_cho_xac_nhan, deploy_tt_cu, bang_chung_url, bao_da_len_luc
        FROM gop_y WHERE id = ?`).bind(id).first();
   if (!g) return loi('Không tìm thấy góp ý này', 404);
-  if (!g.deploy_cho_xac_nhan) return loi('Góp ý này không có gì đang chờ xác nhận', 400);
+
+  /* ⚠️ CỬA VÀO CỦA ĐƯỜNG LÙI (REV-0042 C3). Bản trước chỉ mở cho rổ an toàn
+     (`deploy_cho_xac_nhan = 1`), nên ĐÚNG NHỮNG CA MÁY ĐẨY NHẦM lại trả 400 —
+     máy gõ nhầm mã, đẩy góp ý vô can đi, nhắn nhầm người gửi, và không nút nào
+     gỡ được. Từ bản này: MỌI góp ý máy đụng vào đều lùi được.
+     `deploy_tt_cu` là dấu "máy đụng vào, Sếp chưa ngó"; nó về NULL ngay khi
+     Sếp gật hoặc lắc, nên cửa này không mở vô hạn. */
+  const mayDungVao = !!(g.deploy_cho_xac_nhan || g.deploy_tt_cu);
+  if (!mayDungVao) return loi('Góp ý này không có gì đang chờ xác nhận', 400);
 
   if (!dongY) {
-    // Máy đoán sai (commit gõ nhầm số chẳng hạn) — gỡ sạch dấu vết deploy,
-    // KHÔNG đụng trạng thái, và để lại vết là đã gỡ.
-    await env.DB.prepare(
-      `UPDATE gop_y SET deploy_cho_xac_nhan = 0, deploy_sha = NULL, deploy_tom_tat = NULL,
-                        deploy_luc = NULL, cap_nhat_luc = datetime('now', '+7 hours')
-        WHERE id = ?`).bind(id).run();
-    await gopYGhiLichSu(env, id, g.trang_thai, g.trang_thai, {
+    /* Máy đoán sai (commit gõ nhầm số chẳng hạn) — gỡ sạch dấu vết deploy VÀ
+       trả trạng thái về đúng chỗ cũ.
+       CHỈ trả về khi trạng thái hiện tại đúng là thứ MÁY viết ra. Người đã
+       chuyển nó đi chỗ khác sau đó thì quyết định của người thắng — chỉ gỡ
+       dấu, không giật trạng thái khỏi tay người. */
+    const MAY_VIET_RA = ['cho_nghiem_thu', 'hoan_thanh'];
+    const traVe = g.deploy_tt_cu && g.deploy_tt_cu !== g.trang_thai &&
+                  MAY_VIET_RA.includes(g.trang_thai) ? g.deploy_tt_cu : null;
+
+    const gan = ['deploy_cho_xac_nhan = 0', 'deploy_sha = NULL', 'deploy_tom_tat = NULL',
+                 'deploy_luc = NULL', 'deploy_tt_cu = NULL',
+                 // Gỡ luôn dấu "đã báo": lần sửa THẬT sau đó phải gửi được tin.
+                 'bao_da_len_luc = NULL',
+                 "cap_nhat_luc = datetime('now', '+7 hours')"];
+    const gia = [];
+    if (traVe) {
+      const [cur, nxt] = GOPY_OWNER_THEO_TT[traVe] || ['OWNER', 'OWNER'];
+      gan.push('trang_thai = ?', 'current_owner = ?', 'next_owner = ?');
+      gia.push(traVe, cur, nxt);
+    }
+    gia.push(id);
+    await env.DB.prepare(`UPDATE gop_y SET ${gan.join(', ')} WHERE id = ?`).bind(...gia).run();
+
+    await gopYGhiLichSu(env, id, g.trang_thai, traVe || g.trang_thai, {
       nguoiDoiId: phien.nhan_su_id,
-      ghiChu: `Không phải góp ý này — gỡ dấu commit ${String(g.deploy_sha || '').slice(0, 7)} máy gắn nhầm`
+      ghiChu: `Không phải góp ý này — gỡ dấu commit ${String(g.deploy_sha || '').slice(0, 7)} máy gắn nhầm` +
+              (traVe ? `, trả trạng thái về "${traVe}"` : '')
     });
-    return json({ ok: true, trang_thai: g.trang_thai });
+    return json({ ok: true, trang_thai: traVe || g.trang_thai, da_tra_ve: !!traVe });
   }
 
   const gan = ["trang_thai = 'hoan_thanh'", "current_owner = 'NONE'", "next_owner = 'NONE'",
                'deploy_cho_xac_nhan = 0', 'can_xac_minh_lai = 0', "dong_kieu = 'code'",
+               // Sếp đã ngó rồi → gỡ dấu "chờ Sếp", panel không giữ lại nữa.
+               'deploy_tt_cu = NULL',
                "cap_nhat_luc = datetime('now', '+7 hours')"];
   const gia = [];
   if (!g.bang_chung_url && g.deploy_sha) { gan.push('bang_chung_url = ?'); gia.push(g.deploy_sha); }
@@ -5415,7 +5522,7 @@ async function gopYDongKhongCode(req, env) {
   const [cur, nxt] = GOPY_OWNER_THEO_TT[dich] || ['NONE', 'NONE'];
   await env.DB.prepare(
     `UPDATE gop_y SET trang_thai = ?, current_owner = ?, next_owner = ?, dong_kieu = ?,
-                      can_xac_minh_lai = 0, deploy_cho_xac_nhan = 0,
+                      can_xac_minh_lai = 0, deploy_cho_xac_nhan = 0, deploy_tt_cu = NULL,
                       bao_da_len_luc = COALESCE(bao_da_len_luc, datetime('now', '+7 hours')),
                       cap_nhat_luc = datetime('now', '+7 hours')
       WHERE id = ?`).bind(dich, cur, nxt, kieu, id).run();

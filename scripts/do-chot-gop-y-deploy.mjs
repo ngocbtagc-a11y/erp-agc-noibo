@@ -63,7 +63,9 @@ const MIGRATIONS = [
   'them-thong-bao.sql', 'them-thongbao-canhan.sql',
   'them-gopy.sql', 'them-gopy-tudong.sql', 'them-gopy-congduyet.sql',
   'them-gopy-lichsu-tacnhan.sql', 'them-gopy-cho-duyet-tu-luc.sql',
-  'them-day-thongbao.sql',
+  'them-day-thongbao.sql', 'them-quyen-duyet-gopy.sql',
+  'them-danhmuc-nen.sql',              // nhan_su.phong_ban_id — docPhien() đọc
+  'them-sao-luu.sql',                  // bảng sao_luu_canh_bao — chốt 1 tin/ngày
   'them-gopy-da-len-that.sql'          // ← file của đợt này
 ];
 
@@ -123,17 +125,30 @@ const xem = (db, id) => db.prepare('SELECT * FROM gop_y WHERE id = ?').get(id);
 const demTin = (db, ns) =>
   db.prepare("SELECT COUNT(*) n FROM thong_bao WHERE nguoi_nhan_id = ? AND loai = 'gop_y_cap_nhat'").get(ns).n;
 const anhChup = (db) =>
-  JSON.stringify(db.prepare('SELECT id, trang_thai, deploy_sha, deploy_cho_xac_nhan, bao_da_len_luc FROM gop_y ORDER BY id').all());
+  JSON.stringify(db.prepare('SELECT id, trang_thai, deploy_sha, deploy_cho_xac_nhan, bao_da_len_luc, deploy_tt_cu FROM gop_y ORDER BY id').all());
+const demLichSu = (db, id) =>
+  db.prepare('SELECT COUNT(*) n FROM gop_y_lich_su WHERE gop_y_id = ?').get(id).n;
+/* Đọc ĐÚNG câu đến tay người gửi — REV-0042 mục 2a đòi hai câu KHÁC NHAU cho
+   hai sự thật khác nhau ("đã xong" ≠ "đã có bản sửa, chờ Sếp xác nhận"). */
+const cacTin = (db, ns) =>
+  db.prepare("SELECT noi_dung FROM thong_bao WHERE nguoi_nhan_id = ? AND loai = 'gop_y_cap_nhat' ORDER BY id").all(ns)
+    .map(r => r.noi_dung);
 
 /* ---- Gọi ĐÚNG cửa HTTP thật của Worker ---------------------------------- */
-async function goiDeploy(worker, db, cacCommit, { khoa = KHOA, kyBang = KHOA, luc = new Date().toISOString() } = {}) {
-  const than = JSON.stringify({ luc, cac_commit: cacCommit });
+async function goiDeploy(worker, db, cacCommit, { khoa = KHOA, kyBang = KHOA, luc = new Date().toISOString(),
+                                                  env = {} } = {}) {
+  /* Từ REV-0042, bản tin mang thêm DANH SÁCH FILE BỊ ĐỔI — máy chủ đòi bằng
+     chứng chứ không tin lời khai trong thông điệp commit. Ca nào không nói rõ
+     thì mặc định là một bản vá code thật, để mọi phép đo cũ vẫn đo đúng thứ nó
+     định đo; ca nào cần soi chốt bằng chứng thì khai `cac_tep` tường minh. */
+  const than = JSON.stringify({ luc, cac_commit: cacCommit.map(c =>
+    ('cac_tep' in c ? c : { ...c, cac_tep: ['src/index.js'] })) });
   const req = new Request('https://x/api/gop-y/da-len-that', {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-erp-chu-ky': 'sha256=' + createHmac('sha256', kyBang).update(than).digest('hex') },
     body: than
   });
-  const tl = await worker.fetch(req, { DB: voD1(db), DEPLOY_CHOT_KHOA: khoa });
+  const tl = await worker.fetch(req, { DB: voD1(db), DEPLOY_CHOT_KHOA: khoa, ...env });
   return { ma: tl.status, than: await tl.json().catch(() => ({})) };
 }
 
@@ -228,13 +243,23 @@ async function main() {
     await goiDeploy(worker, db, banTin);
     await goiDeploy(worker, db, banTin);
     ok('chạy lại 2 lần nữa → VẪN 1 tin', demTin(db, 'ns_lan') === 1, demTin(db, 'ns_lan') + ' tin');
-    // Commit KHÁC nhắc lại cùng mã (đợt vá tiếp theo) — vẫn không nhắn lần hai.
-    await goiDeploy(worker, db, [{ sha: '2'.repeat(39) + 'b', tieu_de: `GY-${A} vá tiếp`, than: '' }]);
-    ok('commit khác nhắc lại cùng mã → VẪN 1 tin', demTin(db, 'ns_lan') === 1, demTin(db, 'ns_lan') + ' tin');
-    // ĐỐI CHỨNG: một góp ý KHÁC của cùng người → phải có tin thứ hai.
+    ok('  và chỉ 1 dòng lịch sử (T3 — phát lại không đẻ lịch sử)', demLichSu(db, A) === 1, demLichSu(db, A) + ' dòng');
+
+    /* ⚠️ ĐỔI SO VỚI BẢN TRƯỚC — REV-0042 C4. Bản trước đóng dấu "đã báo" VĨNH
+       VIỄN theo góp ý, nên vòng nghiệm thu thứ 2 CÂM: sửa lại, deploy lại, và
+       người gửi không bao giờ nghe gì nữa. Chốt đúng phải là (góp ý, commit):
+       commit KHÁC = đợt vá khác = đáng một tin. */
+    await goiDeploy(worker, db, [{ sha: '2'.repeat(39) + 'b', tieu_de: `GY-${A} vá tiếp vòng 2`, than: '' }]);
+    ok('C4: đợt vá SAU (commit khác) → người gửi ĐƯỢC báo tiếp',
+      demTin(db, 'ns_lan') === 2, demTin(db, 'ns_lan') + ' tin');
+    // ĐỐI CHỨNG CẮT QUÁ TAY: đúng commit ấy phát lại → KHÔNG được thành tin 3.
+    await goiDeploy(worker, db, [{ sha: '2'.repeat(39) + 'b', tieu_de: `GY-${A} vá tiếp vòng 2`, than: '' }]);
+    ok('ĐỐI CHỨNG cùng commit phát lại → VẪN 2 tin, không nhắn thừa',
+      demTin(db, 'ns_lan') === 2, demTin(db, 'ns_lan') + ' tin');
+    // ĐỐI CHỨNG: một góp ý KHÁC của cùng người → phải có tin riêng.
     const B = themGopY(db, { trang_thai: 'dang_lam' });
     await goiDeploy(worker, db, [{ sha: '3'.repeat(39) + 'c', tieu_de: `GY-${B} vá cái khác`, than: '' }]);
-    ok('ĐỐI CHỨNG góp ý khác → có tin thứ 2', demTin(db, 'ns_lan') === 2, demTin(db, 'ns_lan') + ' tin');
+    ok('ĐỐI CHỨNG góp ý khác → có tin riêng', demTin(db, 'ns_lan') === 3, demTin(db, 'ns_lan') + ' tin');
   }
 
   /* ── ⑤ ⚠️ CA ĐÓNG NHẦM — ca quan trọng nhất ─────────────────────────── */
@@ -242,7 +267,7 @@ async function main() {
   {
     const db = dungDB(); idTiep = 1;
     const cac = {};
-    for (const tt of ['moi', 'cho_phan_tich', 'dang_phan_tich', 'cho_quyet_dinh', 'bi_chan'])
+    for (const tt of ['moi', 'dang_phan_tich', 'cho_quyet_dinh', 'bi_chan'])
       cac[tt] = themGopY(db, { trang_thai: tt, tieu_de: `Đang ở ${tt}` });
     const kq = await goiDeploy(worker, db, Object.values(cac).map((id, i) => ({
       sha: String(i) + 'a'.repeat(39), tieu_de: `GY-${id}: khai là đã sửa xong rồi`, than: ''
@@ -253,27 +278,66 @@ async function main() {
       ok(`"${tt}" KHÔNG bị đẩy sang xong`, g.trang_thai === tt, `vẫn "${g.trang_thai}"`);
       ok(`  "${tt}" dựng cờ chờ Sếp xác nhận`, g.deploy_cho_xac_nhan === 1);
     }
-    ok('người gửi KHÔNG nhận tin "đã xong" nào', demTin(db, 'ns_lan') === 0, demTin(db, 'ns_lan') + ' tin');
+    /* ⚠️ ĐỔI SO VỚI BẢN TRƯỚC — Gạo chốt 29/08 mục 2a: rổ an toàn giữ nguyên
+       nguyên tắc (máy KHÔNG tự đóng), nhưng KHÔNG ĐƯỢC IM. Nỗi đau gốc của Sếp
+       là "người báo không biết" — cái đó giải được ngay, không cần đợi ai bấm
+       nút. Câu gửi đi phải là "đang chờ Sếp xác nhận", TUYỆT ĐỐI không phải
+       "đã sửa xong". */
+    const tin = cacTin(db, 'ns_lan');
+    ok('người gửi ĐƯỢC báo (không im nữa)', tin.length === 4, tin.length + ' tin');
+    ok('  và câu đó nói ĐÚNG SỰ THẬT — "chờ Sếp xác nhận", KHÔNG nói "đã xong"',
+      tin.every(t => /đang chờ Sếp xác nhận/.test(t) && !/đã được sửa xong/.test(t)),
+      JSON.stringify(tin[0] || ''));
+    ok('  KHÔNG đóng dấu "đã báo xong" (để lúc Sếp gật còn báo được tin thật)',
+      Object.values(cac).every(id => !xem(db, id).bao_da_len_luc));
     ok('lịch sử ghi tác nhân DEPLOY, KHÔNG mạo danh ai',
-      db.prepare("SELECT COUNT(*) n FROM gop_y_lich_su WHERE tac_nhan='DEPLOY' AND nguoi_doi_id IS NULL").get().n === 5);
+      db.prepare("SELECT COUNT(*) n FROM gop_y_lich_su WHERE tac_nhan='DEPLOY' AND nguoi_doi_id IS NULL").get().n === 4);
 
     /* ĐỐI CHỨNG CƠ HỌC (BH-16/BH-26) — bản sao module với rổ an toàn BỊ GỠ.
-       Ca này ta BIẾT CHẮC phải ra khác: bỏ 'cho_phan_tich' khỏi TT_CHUA_QUA_CONG
-       và nhét sang TT_DANG_XAY thì máy sẽ đẩy nó đi. Phép đo phải thấy được
-       sự khác biệt đó — không thấy nghĩa là phép đo hỏng. */
+       Ca này ta BIẾT CHẮC phải ra khác: nhét 'bi_chan' sang TT_DANG_XAY thì máy
+       sẽ đẩy nó đi. Phép đo phải thấy được sự khác biệt đó — không thấy nghĩa
+       là phép đo hỏng, không phải code đúng. */
+    const CM = { sha: 'a'.repeat(40), tieu_de: 'x', cac_tep: ['src/index.js'] };
     const nguon = doc('src/chot-gop-y-deploy.js')
-      .replace("export const TT_DANG_XAY = ['da_duyet'", "export const TT_DANG_XAY = ['cho_phan_tich', 'da_duyet'")
-      .replace("export const TT_CHUA_QUA_CONG = ['moi', 'cho_phan_tich',", "export const TT_CHUA_QUA_CONG = ['moi',");
+      .replace("export const TT_DANG_XAY = ['da_duyet'", "export const TT_DANG_XAY = ['bi_chan', 'da_duyet'")
+      .replace("export const TT_CHUA_QUA_CONG = ['moi', 'dang_phan_tich',", "export const TT_CHUA_QUA_CONG = ['moi',");
     const thuMuc = mkdtempSync(path.join(tmpdir(), 'doichung-'));
     const f = path.join(thuMuc, 'hong.mjs');
     writeFileSync(f, nguon, 'utf8');
     const hong = await import('file://' + f.replace(/\\/g, '/'));
-    const qd = hong.quyetDinhChot({ id: 9, trang_thai: 'cho_phan_tich' }, { sha: 'a'.repeat(40), tieu_de: 'x' });
     ok('ĐỐI CHỨNG bản GỠ CHỐT thì ĐẨY ĐI THẬT (phép đo đủ nhạy)',
-      qd.hanh_dong === 'day_sang_nghiem_thu', qd.hanh_dong);
-    const that = (await import('file://' + path.join(GOC, 'src/chot-gop-y-deploy.js').replace(/\\/g, '/')))
-      .quyetDinhChot({ id: 9, trang_thai: 'cho_phan_tich' }, { sha: 'a'.repeat(40), tieu_de: 'x' });
-    ok('bản THẬT đứng lại ở "chờ xác nhận"', that.hanh_dong === 'cho_xac_nhan', that.hanh_dong);
+      hong.quyetDinhChot({ id: 9, trang_thai: 'bi_chan' }, CM).hanh_dong === 'day_sang_nghiem_thu');
+    const THAT = await import('file://' + path.join(GOC, 'src/chot-gop-y-deploy.js').replace(/\\/g, '/'));
+    ok('bản THẬT đứng lại ở "chờ xác nhận"',
+      THAT.quyetDinhChot({ id: 9, trang_thai: 'bi_chan' }, CM).hanh_dong === 'cho_xac_nhan');
+  }
+
+  /* ── ⑤b QUY TRÌNH HỤT: `cho_phan_tich` + code đã lên thật ────────────────
+     Gạo chốt 29/08 mục 2b. Hồ Ly đọc DB thật: 4/4 góp ý đang mở đều ở
+     `cho_phan_tich`, nên bản trước đóng ĐÚNG 0 GÓP Ý — "dời việc, không bớt
+     việc". Nhưng cả 4 đã sửa xong và lên thật từ lâu: ở repo này
+     `cho_phan_tich` là bằng chứng QUY TRÌNH HỤT, không phải bằng chứng chưa
+     làm. Đẩy sang CHỜ NGHIỆM THU — không bao giờ sang "hoàn thành". */
+  console.log('\n⑤b Quy trình hụt: "cho_phan_tich" + commit đụng code thật');
+  {
+    const db = dungDB(); idTiep = 1;
+    const A = themGopY(db, { trang_thai: 'cho_phan_tich', tieu_de: 'Không hiện thông báo khi có tin nhắn đến' });
+    await goiDeploy(worker, db, [{ sha: 'a'.repeat(40), tieu_de: `GY-${A}: gộp thông báo tin nhắn`,
+                                   than: '', cac_tep: ['src/index.js', 'public/assets/js/app.js'] }]);
+    const g = xem(db, A);
+    ok('→ "cho_nghiem_thu" (chờ Sếp nghiệm thu)', g.trang_thai === 'cho_nghiem_thu', g.trang_thai);
+    ok('  KHÔNG bao giờ tự sang "hoan_thanh"', g.trang_thai !== 'hoan_thanh');
+    ok('  người gửi được báo', demTin(db, 'ns_lan') === 1, demTin(db, 'ns_lan') + ' tin');
+    ok('  cất được chỗ cũ để lùi (deploy_tt_cu)', g.deploy_tt_cu === 'cho_phan_tich', String(g.deploy_tt_cu));
+
+    // ĐỐI CHỨNG CẮT QUÁ TAY: đúng góp ý đó, nhưng commit CHỈ sửa tài liệu.
+    const db2 = dungDB(); idTiep = 1;
+    const A2 = themGopY(db2, { trang_thai: 'cho_phan_tich' });
+    await goiDeploy(worker, db2, [{ sha: 'b'.repeat(40), tieu_de: `GY-${A2}: ghi chép lại`,
+                                    than: '', cac_tep: ['docs/reviews/REV-0042.md'] }]);
+    ok('ĐỐI CHỨNG commit chỉ sửa tài liệu → KHÔNG đẩy, 0 tin',
+      xem(db2, A2).trang_thai === 'cho_phan_tich' && demTin(db2, 'ns_lan') === 0,
+      xem(db2, A2).trang_thai);
   }
 
   /* ── ⑥ Chữ ký sai / bản tin cũ / thiếu khoá ──────────────────────────── */
@@ -391,6 +455,432 @@ async function main() {
     ok('nút mới KHÔNG tự bịa màu (chỉ btn-primary / btn-phu)',
       !/style="[^"]*(color|background)/i.test(the) &&
       /btn-primary/.test(the) && /btn-phu/.test(the));
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════
+     ⑨ BÀN ĐỐI KHÁNG REV-0042 — DỰNG LẠI ĐỦ 9 CA CỦA HỒ LY
+     ----------------------------------------------------------------------
+     Bàn thử bản trước 59 đạt / 0 trượt mà KHÔNG CÓ MỘT CA GÕ NHẦM MÃ NÀO.
+     Hồ Ly dựng riêng bàn đối kháng: 22 đạt / 10 trượt, thủng 6/9.
+     Dựng lại nguyên văn 9 ca đó ở đây để lần sau không ai phải dựng lại.
+     ════════════════════════════════════════════════════════════════════ */
+  console.log('\n⑨ BÀN ĐỐI KHÁNG REV-0042 — 9 ca đóng nhầm của Hồ Ly');
+  {
+    // Ca 1 — GÕ NHẦM MÃ. Commit ghi GY-1 mà định GY-2.
+    {
+      const db = dungDB(); idTiep = 1;
+      const VOCAN = themGopY(db, { trang_thai: 'da_duyet', nguoi: 'ns_lan',
+                                   tieu_de: 'Góp ý chả liên quan của chị Lan' });
+      themGopY(db, { trang_thai: 'da_duyet', nguoi: 'ns_huong', tieu_de: 'Cái đáng lẽ phải sửa' });
+      await goiDeploy(worker, db, [{ sha: 'a'.repeat(40), tieu_de: `GY-${VOCAN}: vá lỗi X`,
+                                     than: '', cac_tep: ['src/index.js'] }]);
+      const g = xem(db, VOCAN);
+      /* Gõ nhầm số thì máy KHÔNG cách nào biết — nó vẫn đẩy. Cái phải kín là:
+         Sếp NHÌN THẤY và GỠ ĐƯỢC (C3), và người gửi nhận câu đúng mức độ. */
+      ok('ca 1 gõ nhầm mã: máy có cất chỗ cũ để lùi được', g.deploy_tt_cu === 'da_duyet', String(g.deploy_tt_cu));
+      ok('  và hiện lên panel của Sếp (deploy_tt_cu ≠ NULL)', !!g.deploy_tt_cu);
+    }
+
+    // Ca 2 — LƯỢT ĐẨY CHỈ CÓ COMMIT REVERT. Bản vá vừa bị GỠ.
+    {
+      const db = dungDB(); idTiep = 1;
+      const A = themGopY(db, { trang_thai: 'da_duyet' });
+      const truoc = anhChup(db);
+      const kq = await goiDeploy(worker, db, [{ sha: 'b'.repeat(40),
+        tieu_de: `Revert "GY-${A} sửa lỗi X"`, than: `This reverts commit ${'a'.repeat(40)}.`,
+        cac_tep: ['src/index.js'] }]);
+      ok('ca 2 revert: 0 góp ý bị đổi', anhChup(db) === truoc, kq.than.da_doi + ' đổi');
+      ok('  0 tin cho người gửi', demTin(db, 'ns_lan') === 0, demTin(db, 'ns_lan') + ' tin');
+      ok('  lý do ghi rõ là commit lùi',
+        (kq.than.chi_tiet || []).some(q => q.ly_do === 'commit_lui'),
+        JSON.stringify((kq.than.chi_tiet || []).map(q => q.ly_do)));
+    }
+
+    // Ca 3 — REVERT SAU KHI GÓP Ý ĐÃ `hoan_thanh`. Nhãn nói dối.
+    {
+      const db = dungDB(); idTiep = 1;
+      const A = themGopY(db, { trang_thai: 'hoan_thanh' });
+      const kq = await goiDeploy(worker, db, [{ sha: 'c'.repeat(40),
+        tieu_de: `Revert "GY-${A} sửa lỗi X"`, than: '', cac_tep: ['src/index.js'] }]);
+      ok('ca 3 revert sau khi đã đóng: KHÔNG tự mở lại (quyết định của người)',
+        xem(db, A).trang_thai === 'hoan_thanh');
+      ok('  nhưng KÊU cho Sếp thay vì im',
+        (kq.than.chi_tiet || []).some(q => q.hanh_dong === 'canh_bao_lui' && q.bao_sep),
+        JSON.stringify((kq.than.chi_tiet || []).map(q => q.hanh_dong)));
+      ok('  và để lại vết trong lịch sử', demLichSu(db, A) === 1, demLichSu(db, A) + ' dòng');
+      ok('  0 tin "đã xong" cho người gửi', demTin(db, 'ns_lan') === 0);
+    }
+
+    // Ca 4 — GỘP NHÁNH CŨ BỎ DỞ (góp ý đang `can_chinh_sua`).
+    {
+      const db = dungDB(); idTiep = 1;
+      const A = themGopY(db, { trang_thai: 'can_chinh_sua' });
+      await goiDeploy(worker, db, [{ sha: 'd'.repeat(40), tieu_de: `GY-${A} làm dở`,
+                                     than: '', cac_tep: ['src/index.js'] }]);
+      /* Code CÓ lên thật — đẩy sang chờ nghiệm thu là đúng phần cơ học của
+         máy. Cái bản trước thiếu là ĐƯỜNG LÙI; giờ có. */
+      ok('ca 4 gộp nhánh bỏ dở: lùi được (chỗ cũ đã cất)',
+        xem(db, A).deploy_tt_cu === 'can_chinh_sua', String(xem(db, A).deploy_tt_cu));
+      ok('  KHÔNG bao giờ nhảy thẳng "hoan_thanh"', xem(db, A).trang_thai === 'cho_nghiem_thu');
+    }
+
+    // Ca 5 — gộp nhánh chứa mã của góp ý ĐÃ ĐÓNG (Hồ Ly đo: đã kín).
+    {
+      const db = dungDB(); idTiep = 1;
+      const A = themGopY(db, { trang_thai: 'hoan_thanh' });
+      const truoc = anhChup(db);
+      await goiDeploy(worker, db, [{ sha: 'e'.repeat(40), tieu_de: `GY-${A} vá lại`, than: '' }]);
+      ok('ca 5 mã của góp ý đã đóng → 0 đổi, 0 tin',
+        anhChup(db) === truoc && demTin(db, 'ns_lan') === 0);
+    }
+
+    // Ca 6 — deploy hỏng giữa chừng: bước chốt không chạy (đo ở YAML, câu ⑩).
+    // Ca 7 — hai mã trong một commit, mỗi mã xử đúng rổ riêng.
+    {
+      const db = dungDB(); idTiep = 1;
+      const A = themGopY(db, { trang_thai: 'san_sang_phat_hanh' });
+      const B = themGopY(db, { trang_thai: 'bi_chan', nguoi: 'ns_huong' });
+      await goiDeploy(worker, db, [{ sha: 'f'.repeat(40), tieu_de: `GY-${A} vá xong`,
+                                     than: `Kèm cả GY-${B}`, cac_tep: ['src/index.js'] }]);
+      ok('ca 7 hai mã một commit: mỗi mã đúng rổ riêng',
+        xem(db, A).trang_thai === 'hoan_thanh' && xem(db, B).trang_thai === 'bi_chan',
+        `${xem(db, A).trang_thai} · ${xem(db, B).trang_thai}`);
+    }
+
+    // Ca 8 — COMMIT CHỈ SỬA TÀI LIỆU. Máy đọc thông điệp, không đọc file.
+    {
+      const db = dungDB(); idTiep = 1;
+      const A = themGopY(db, { trang_thai: 'da_duyet' });
+      const truoc = anhChup(db);
+      const kq = await goiDeploy(worker, db, [{ sha: '1'.repeat(40),
+        tieu_de: `REV-0042: soi lại GY-${A}, chưa sửa gì`, than: '',
+        cac_tep: ['docs/reviews/REV-0042-gopy-tu-dong-xong.md', 'HUONG-DAN-DEPLOY.md'] }]);
+      ok('ca 8 commit chỉ sửa tài liệu: 0 góp ý bị đổi', anhChup(db) === truoc, kq.than.da_doi + ' đổi');
+      ok('  0 tin cho người gửi', demTin(db, 'ns_lan') === 0, demTin(db, 'ns_lan') + ' tin');
+      ok('  lý do ghi rõ', (kq.than.chi_tiet || []).some(q => q.ly_do === 'chi_sua_tai_lieu'));
+
+      // ĐỐI CHỨNG CẮT QUÁ TAY (BH-16): cùng commit ấy nhưng CÓ đụng src/ →
+      // phải đẩy. Chốt chặt tới mức chặn cả bản vá thật là hỏng kiểu khác.
+      const db2 = dungDB(); idTiep = 1;
+      const A2 = themGopY(db2, { trang_thai: 'da_duyet' });
+      await goiDeploy(worker, db2, [{ sha: '2'.repeat(40), tieu_de: `GY-${A2}: vá thật kèm ghi chép`,
+        than: '', cac_tep: ['docs/reviews/REV-0042.md', 'src/index.js'] }]);
+      ok('ĐỐI CHỨNG tài liệu + src/ → VẪN đẩy (không cắt quá tay)',
+        xem(db2, A2).trang_thai === 'cho_nghiem_thu', xem(db2, A2).trang_thai);
+      // Và migrations/ cũng là code lên thật.
+      const db3 = dungDB(); idTiep = 1;
+      const A3 = themGopY(db3, { trang_thai: 'da_duyet' });
+      await goiDeploy(worker, db3, [{ sha: '3'.repeat(40), tieu_de: `GY-${A3}: thêm cột`,
+        than: '', cac_tep: ['migrations/them-abc.sql'] }]);
+      ok('ĐỐI CHỨNG chỉ migrations/ → VẪN đẩy (đó cũng là code lên thật)',
+        xem(db3, A3).trang_thai === 'cho_nghiem_thu', xem(db3, A3).trang_thai);
+    }
+
+    // Ca 9 — ĐƯỜNG PHỤ `bang_chung_url` KHÔNG có mã GY- nào. Người gửi dán
+    // chính link COMMIT GÂY RA LỖI làm bằng chứng.
+    {
+      const db = dungDB(); idTiep = 1;
+      // SHA phải có chữ a-f: `docShaTrongLink` cố tình bỏ số thuần, không thì
+      // mọi số hiệu PR dài (`/pull/1234567`) đều thành "SHA" và khớp bừa.
+      const SHA = 'abc4d5e' + '4'.repeat(33);
+      const A = themGopY(db, { trang_thai: 'da_duyet',
+                               bang_chung: `https://github.com/agc/erp/commit/${SHA}` });
+      const kq = await goiDeploy(worker, db, [{ sha: SHA, tieu_de: 'Dọn dẹp, không nhắc mã nào',
+                                                than: '', cac_tep: ['src/index.js'] }]);
+      ok('ca 9 đường phụ bang_chung_url: KHÔNG đổi trạng thái',
+        xem(db, A).trang_thai === 'da_duyet', xem(db, A).trang_thai);
+      ok('  KHÔNG nhắn người gửi (bằng chứng yếu, thà im còn hơn báo sai)',
+        demTin(db, 'ns_lan') === 0, demTin(db, 'ns_lan') + ' tin');
+      ok('  chỉ dựng cờ cho Sếp', xem(db, A).deploy_cho_xac_nhan === 1);
+      ok('  lý do ghi rõ', (kq.than.chi_tiet || []).some(q => q.ly_do === 'chi_co_link_bang_chung'));
+    }
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════
+     ⑩ BA CA TỰ NGHĨ THÊM — những chỗ Hồ Ly chưa đụng tới
+     ════════════════════════════════════════════════════════════════════ */
+  console.log('\n⑩ Ca tự nghĩ thêm: cherry-pick · nhiều commit nhiều mã · mã trong tên nhánh · force-push');
+  {
+    // T-1 CHERRY-PICK: cùng nội dung, SHA MỚI. Bản vá lên thật lần thứ hai.
+    {
+      const db = dungDB(); idTiep = 1;
+      const A = themGopY(db, { trang_thai: 'da_duyet' });
+      await goiDeploy(worker, db, [{ sha: 'a'.repeat(40), tieu_de: `GY-${A} vá lỗi` }]);
+      const sha1 = xem(db, A).deploy_sha;
+      await goiDeploy(worker, db, [{ sha: 'b'.repeat(40),
+        tieu_de: `GY-${A} vá lỗi`, than: `(cherry picked from commit ${'a'.repeat(40)})` }]);
+      ok('T-1 cherry-pick: dấu commit cập nhật sang SHA mới',
+        xem(db, A).deploy_sha === 'b'.repeat(40), `${String(sha1).slice(0, 7)} → ${String(xem(db, A).deploy_sha).slice(0, 7)}`);
+      ok('  KHÔNG đẻ thêm dòng lịch sử vô nghĩa (≤ 2)', demLichSu(db, A) <= 2, demLichSu(db, A) + ' dòng');
+    }
+
+    // T-2 MỘT LƯỢT ĐẨY NHIỀU COMMIT NHIỀU MÃ, có cả tài liệu lẫn revert lẫn
+    // vá thật — và MỘT GÓP Ý bị hai commit nhắc (một ghi chép, một vá thật).
+    {
+      const db = dungDB(); idTiep = 1;
+      const A = themGopY(db, { trang_thai: 'da_duyet', tieu_de: 'A' });
+      const B = themGopY(db, { trang_thai: 'da_duyet', tieu_de: 'B', nguoi: 'ns_huong' });
+      const C = themGopY(db, { trang_thai: 'da_duyet', tieu_de: 'C' });
+      await goiDeploy(worker, db, [
+        { sha: '1'.repeat(40), tieu_de: `GY-${A}: ghi chép trước đã`, cac_tep: ['docs/x.md'] },
+        { sha: '2'.repeat(40), tieu_de: `GY-${A}: vá thật`,           cac_tep: ['src/index.js'] },
+        { sha: '3'.repeat(40), tieu_de: `Revert "GY-${B} vá lỗi"`,    cac_tep: ['src/index.js'] },
+        { sha: '4'.repeat(40), tieu_de: `GY-${C}: vá thật`,           cac_tep: ['public/app.html'] }
+      ]);
+      ok('T-2 ghi chép đứng TRƯỚC bản vá thật → bản vá vẫn thắng',
+        xem(db, A).trang_thai === 'cho_nghiem_thu', xem(db, A).trang_thai);
+      ok('  commit revert trong cùng lượt → B đứng yên',
+        xem(db, B).trang_thai === 'da_duyet', xem(db, B).trang_thai);
+      ok('  C vá thật → đẩy đúng', xem(db, C).trang_thai === 'cho_nghiem_thu');
+      ok('  chị Hương (người gửi B) nhận 0 tin', demTin(db, 'ns_huong') === 0);
+    }
+
+    /* T-3 MÃ TRONG TÊN NHÁNH (`feature/gy-1-sua-thong-bao`). ĐO ĐƯỢC: máy CÓ
+       bắt — `gy-1` trong tên nhánh khớp đúng khuôn mã. Cân nhắc rồi GIỮ, không
+       chặn: tên nhánh đó là một tham chiếu do NGƯỜI gõ ra, và commit có đụng
+       code thật. Chặn nó mới là cắt quá tay. Cái phải kín là hệ quả: chờ
+       nghiệm thu (không phải "hoàn thành"), câu nhắn không nói dối, và lùi
+       được. Đo cả ba. */
+    {
+      const db = dungDB(); idTiep = 1;
+      const A = themGopY(db, { trang_thai: 'da_duyet' });
+      await goiDeploy(worker, db, [{ sha: '5'.repeat(40),
+        tieu_de: 'Merge branch feature/gy-1-sua-thong-bao', than: '', cac_tep: ['src/index.js'] }]);
+      const g = xem(db, A);
+      ok('T-3 mã trong tên nhánh: bắt được, nhưng chỉ tới CHỜ NGHIỆM THU',
+        g.trang_thai === 'cho_nghiem_thu', g.trang_thai);
+      ok('  và lùi được nếu Sếp thấy sai', g.deploy_tt_cu === 'da_duyet', String(g.deploy_tt_cu));
+      // ĐỐI CHỨNG: tên nhánh KHÔNG có mã → không bắt gì cả.
+      const db2 = dungDB(); idTiep = 1;
+      const A2 = themGopY(db2, { trang_thai: 'da_duyet' });
+      const truoc = anhChup(db2);
+      await goiDeploy(worker, db2, [{ sha: '6'.repeat(40),
+        tieu_de: 'Merge branch feature/sua-thong-bao', than: '', cac_tep: ['src/index.js'] }]);
+      ok('  ĐỐI CHỨNG tên nhánh không mã → 0 đổi', anhChup(db2) === truoc,
+        `GY-${A2} vẫn "${xem(db2, A2).trang_thai}"`);
+    }
+
+    // T-4 FORCE-PUSH: commit cũ biến mất, lượt sau là SHA hoàn toàn khác cho
+    // cùng góp ý ĐÃ ĐÓNG rồi. Không được mở lại, không được nhắn lại.
+    {
+      const db = dungDB(); idTiep = 1;
+      const A = themGopY(db, { trang_thai: 'san_sang_phat_hanh' });
+      await goiDeploy(worker, db, [{ sha: '6'.repeat(40), tieu_de: `GY-${A} phát hành` }]);
+      ok('T-4 lượt 1: đóng + 1 tin',
+        xem(db, A).trang_thai === 'hoan_thanh' && demTin(db, 'ns_lan') === 1);
+      await goiDeploy(worker, db, [{ sha: '7'.repeat(40), tieu_de: `GY-${A} phát hành (viết lại lịch sử)` }]);
+      ok('  lượt 2 sau force-push: KHÔNG mở lại, VẪN 1 tin',
+        xem(db, A).trang_thai === 'hoan_thanh' && demTin(db, 'ns_lan') === 1, demTin(db, 'ns_lan') + ' tin');
+    }
+
+    // T-5 SCRIPT KHÔNG GỬI `cac_tep` (bản cũ, hoặc git đọc hỏng) → không đủ
+    // bằng chứng: dựng cờ, KHÔNG đẩy, KHÔNG nhắn người gửi.
+    {
+      const db = dungDB(); idTiep = 1;
+      const A = themGopY(db, { trang_thai: 'da_duyet' });
+      const kq = await goiDeploy(worker, db, [{ sha: '8'.repeat(40), tieu_de: `GY-${A} vá thật`,
+                                               than: '', cac_tep: null }]);
+      ok('T-5 không đọc được danh sách file → KHÔNG đẩy', xem(db, A).trang_thai === 'da_duyet',
+        xem(db, A).trang_thai);
+      ok('  chỉ dựng cờ, 0 tin cho người gửi',
+        xem(db, A).deploy_cho_xac_nhan === 1 && demTin(db, 'ns_lan') === 0);
+      ok('  lý do ghi rõ',
+        (kq.than.chi_tiet || []).some(q => q.ly_do === 'khong_doc_duoc_danh_sach_tep'));
+    }
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════
+     ⑪ ĐƯỜNG LÙI (C3 + C4) — đo bằng PHIÊN SẾP THẬT
+     ════════════════════════════════════════════════════════════════════ */
+  console.log('\n⑪ Đường lùi: MỌI ca máy đụng vào đều gỡ được');
+  {
+    const { taoPhien, TEN_COOKIE } = await import('file://' + path.join(GOC, 'src/auth.js').replace(/\\/g, '/'));
+
+    const dungSep = async (db) => {
+      db.exec(`INSERT INTO tai_khoan (id, nhan_su_id, ten_dang_nhap, mat_khau_hash, vai_tro,
+                                      kich_hoat, phai_doi_mk, duyet_gopy)
+               VALUES (1, 'ns_sep', 'sep', 'pbkdf2$1$x$x', 'admin', 1, 0, 1)`);
+      const env = { DB: voD1(db), DEPLOY_CHOT_KHOA: KHOA };
+      const { token } = await taoPhien(env.DB, 1);
+      return { env, token };
+    };
+    const gapSep = async (worker, env, token, than) => {
+      const res = await worker.fetch(new Request('https://x/api/gop-y/xac-nhan-da-len', {
+        method: 'POST', headers: { 'content-type': 'application/json', Cookie: `${TEN_COOKIE}=${token}` },
+        body: JSON.stringify(than)
+      }), env);
+      return { ma: res.status, than: await res.json().catch(() => ({})) };
+    };
+
+    /* ⚠️ ĐÚNG CA HỒ LY ĐO ĐƯỢC 400: máy ĐẨY NHẦM một góp ý vô can. */
+    {
+      const db = dungDB(); idTiep = 1;
+      const VOCAN = themGopY(db, { trang_thai: 'da_duyet', tieu_de: 'Góp ý vô can' });
+      const { env, token } = await dungSep(db);
+      await goiDeploy(worker, db, [{ sha: 'a'.repeat(40), tieu_de: `GY-${VOCAN}: vá lỗi X` }]);
+      ok('máy đã đẩy đi (đúng ca Hồ Ly)', xem(db, VOCAN).trang_thai === 'cho_nghiem_thu');
+      const r = await gapSep(worker, env, token, { id: VOCAN, dong_y: false });
+      ok('C3: "Không phải góp ý này" → 200 (bản trước: 400)', r.ma === 200, `mã ${r.ma}`);
+      ok('  trả trạng thái về ĐÚNG CHỖ CŨ', xem(db, VOCAN).trang_thai === 'da_duyet',
+        xem(db, VOCAN).trang_thai);
+      ok('  gỡ sạch dấu deploy', !xem(db, VOCAN).deploy_sha && !xem(db, VOCAN).deploy_tt_cu);
+
+      /* C4 — CHỐT QUAN TRỌNG NHẤT: sau khi gỡ, lần sửa THẬT sau đó phải gửi
+         được tin. Bản trước đốt `bao_da_len_luc` vĩnh viễn → gửi 0 tin. */
+      const tinTruoc = demTin(db, 'ns_lan');
+      await goiDeploy(worker, db, [{ sha: 'b'.repeat(40), tieu_de: `GY-${VOCAN}: LẦN NÀY sửa thật` }]);
+      ok('C4: sau khi gỡ nhầm, lần sửa THẬT VẪN gửi được tin',
+        demTin(db, 'ns_lan') === tinTruoc + 1, `${tinTruoc} → ${demTin(db, 'ns_lan')} tin`);
+    }
+
+    /* Ca rổ an toàn vẫn gỡ được như cũ (không hồi quy). */
+    {
+      const db = dungDB(); idTiep = 1;
+      const A = themGopY(db, { trang_thai: 'bi_chan' });
+      const { env, token } = await dungSep(db);
+      await goiDeploy(worker, db, [{ sha: 'c'.repeat(40), tieu_de: `GY-${A}: vá` }]);
+      const r = await gapSep(worker, env, token, { id: A, dong_y: false });
+      ok('rổ an toàn vẫn gỡ được (không hồi quy)', r.ma === 200 && xem(db, A).trang_thai === 'bi_chan');
+    }
+
+    /* Sếp GẬT trên ca rổ an toàn → đóng + người gửi nghe được câu "đã xong",
+       chứ không kẹt mãi ở câu "đang chờ Sếp xác nhận". */
+    {
+      const db = dungDB(); idTiep = 1;
+      const A = themGopY(db, { trang_thai: 'bi_chan' });
+      const { env, token } = await dungSep(db);
+      await goiDeploy(worker, db, [{ sha: 'd'.repeat(40), tieu_de: `GY-${A}: vá` }]);
+      ok('người gửi mới chỉ nghe "đang chờ Sếp xác nhận"',
+        cacTin(db, 'ns_lan').length === 1 && /đang chờ Sếp xác nhận/.test(cacTin(db, 'ns_lan')[0]));
+      const r = await gapSep(worker, env, token, { id: A, dong_y: true });
+      const tin = cacTin(db, 'ns_lan');
+      ok('Sếp gật → hoan_thanh', r.ma === 200 && xem(db, A).trang_thai === 'hoan_thanh');
+      ok('  và người gửi NGHE ĐƯỢC câu "đã xong" (không kẹt ở câu chờ)',
+        tin.length === 2 && /đã được sửa xong/.test(tin[1]), JSON.stringify(tin));
+      ok('  panel không giữ lại nữa (deploy_tt_cu = NULL)', !xem(db, A).deploy_tt_cu);
+    }
+
+    /* ĐỐI CHỨNG CẮT QUÁ TAY: góp ý máy CHƯA HỀ đụng vào → vẫn phải 400. */
+    {
+      const db = dungDB(); idTiep = 1;
+      const A = themGopY(db, { trang_thai: 'da_duyet' });
+      const { env, token } = await dungSep(db);
+      const r = await gapSep(worker, env, token, { id: A, dong_y: false });
+      ok('ĐỐI CHỨNG máy chưa đụng vào → vẫn 400, không mở cửa bừa', r.ma === 400, `mã ${r.ma}`);
+    }
+
+    /* ĐỐI CHỨNG: người đã chuyển góp ý đi chỗ khác sau khi máy đẩy → gỡ dấu
+       nhưng KHÔNG giật trạng thái khỏi tay người. */
+    {
+      const db = dungDB(); idTiep = 1;
+      const A = themGopY(db, { trang_thai: 'da_duyet' });
+      const { env, token } = await dungSep(db);
+      await goiDeploy(worker, db, [{ sha: 'e'.repeat(40), tieu_de: `GY-${A}: vá` }]);
+      db.prepare("UPDATE gop_y SET trang_thai = 'san_sang_phat_hanh' WHERE id = ?").run(A);
+      const r = await gapSep(worker, env, token, { id: A, dong_y: false });
+      ok('ĐỐI CHỨNG người đã chuyển đi chỗ khác → KHÔNG giật lại',
+        r.ma === 200 && xem(db, A).trang_thai === 'san_sang_phat_hanh', xem(db, A).trang_thai);
+    }
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════
+     ⑫ KHOÁ LỆCH THÌ PHẢI KÊU (mục 3)
+     ════════════════════════════════════════════════════════════════════ */
+  console.log('\n⑫ Khoá lệch giữa GitHub và Cloudflare');
+  {
+    const bat = () => { const g = []; return { g, fn: (...a) => { g.push(a); return Promise.resolve(); } }; };
+
+    // Khoá LỆCH → 401 VÀ kêu Telegram.
+    {
+      const db = dungDB(); idTiep = 1;
+      themGopY(db, { trang_thai: 'da_duyet' });
+      const t = bat();
+      const kq = await goiDeploy(worker, db, [{ sha: 'a'.repeat(40), tieu_de: 'GY-1 vá' }],
+        { kyBang: 'khoa-khac-han', env: { TELEGRAM_BOT_TOKEN: 'x', TELEGRAM_CHAT_ID: 'y', __guiTelegram: t.fn } });
+      ok('khoá lệch → 401', kq.ma === 401, `mã ${kq.ma}`);
+      const kh = db.prepare("SELECT khoa FROM sao_luu_canh_bao WHERE khoa LIKE 'deploy-khoa-lech%'").all();
+      ok('  CÓ KÊU (dựng chốt cảnh báo 1 tin/ngày)', kh.length === 1, JSON.stringify(kh));
+      // Gọi lại 2 lần nữa → vẫn đúng 1 tin/ngày, không spam.
+      await goiDeploy(worker, db, [{ sha: 'a'.repeat(40), tieu_de: 'GY-1 vá' }], { kyBang: 'khoa-khac-han' });
+      await goiDeploy(worker, db, [{ sha: 'a'.repeat(40), tieu_de: 'GY-1 vá' }], { kyBang: 'khoa-khac-han' });
+      ok('  và tối đa 1 tin/ngày, không spam',
+        db.prepare("SELECT COUNT(*) n FROM sao_luu_canh_bao WHERE khoa LIKE 'deploy-khoa-lech%'").get().n === 1);
+    }
+
+    // Thiếu khoá phía Cloudflare → 503 VÀ kêu.
+    {
+      const db = dungDB(); idTiep = 1;
+      const kq = await goiDeploy(worker, db, [{ sha: 'b'.repeat(40), tieu_de: 'GY-1 vá' }], { khoa: '' });
+      ok('thiếu khoá phía Cloudflare → 503', kq.ma === 503, `mã ${kq.ma}`);
+      ok('  CÓ KÊU',
+        db.prepare("SELECT COUNT(*) n FROM sao_luu_canh_bao WHERE khoa LIKE 'deploy-thieu-khoa-erp%'").get().n === 1);
+    }
+
+    // ĐỐI CHỨNG KHÔNG KÊU OAN: khoá KHỚP → 200, 0 cảnh báo.
+    {
+      const db = dungDB(); idTiep = 1;
+      themGopY(db, { trang_thai: 'da_duyet' });
+      const kq = await goiDeploy(worker, db, [{ sha: 'c'.repeat(40), tieu_de: 'GY-1 vá' }]);
+      ok('ĐỐI CHỨNG khoá khớp → 200 và KHÔNG kêu oan',
+        kq.ma === 200 && db.prepare("SELECT COUNT(*) n FROM sao_luu_canh_bao WHERE khoa LIKE 'deploy-%'").get().n === 0);
+    }
+
+    // Bản tin "chào hỏi" rỗng (lượt đẩy không có mã nào): khoá khớp → 200,
+    // 0 câu ghi. Đây là thứ làm khoá lệch lộ ra NGAY, không đợi tới hôm có
+    // góp ý thật bị bỏ rơi.
+    {
+      const db = dungDB(); idTiep = 1;
+      themGopY(db, { trang_thai: 'da_duyet' });
+      const truoc = anhChup(db);
+      const kq = await goiDeploy(worker, db, []);
+      ok('chào hỏi rỗng + khoá khớp → 200, 0 đổi',
+        kq.ma === 200 && kq.than.ly_do === 'khong_co_commit' && anhChup(db) === truoc);
+      const kq2 = await goiDeploy(worker, db, [], { kyBang: 'khoa-khac-han' });
+      ok('chào hỏi rỗng + khoá LỆCH → 401 và KÊU (lệch lộ ra ngay)',
+        kq2.ma === 401 &&
+        db.prepare("SELECT COUNT(*) n FROM sao_luu_canh_bao WHERE khoa LIKE 'deploy-khoa-lech%'").get().n === 1);
+    }
+
+    // Script: bước YAML vẫn không nhuộm đỏ deploy, nhưng phải in ::warning::
+    const script = doc('scripts/bao-deploy-len-erp.mjs');
+    ok('script: thiếu khoá phía GitHub → in ::warning:: (bản trước: console.log thường)',
+      /::warning::Chưa đặt secret DEPLOY_CHOT_KHOA phía GitHub/.test(script));
+    ok('script: 401 → nói thẳng "hai khoá KHÁC NHAU"',
+      /tl\.status === 401/.test(script) && /KHÁC NHAU/.test(script));
+    ok('script: 0 mã vẫn gõ cửa một tiếng (không return im lặng)',
+      !/if \(!ma\.length\) return;/.test(script) && /chao_hoi: true/.test(script));
+    ok('script: gửi kèm DANH SÁCH FILE bị đổi', /cac_tep: docTepCuaCommit/.test(script));
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════
+     ⑬ ĐO TRÊN 4 GÓP Ý THẬT — tính năng đóng được bao nhiêu cái?
+     ----------------------------------------------------------------------
+     Hồ Ly đọc DB thật sáng 29/08: 4 góp ý đang mở, TẤT CẢ ở `cho_phan_tich`.
+     Bản trước đẩy 0 cái, báo 0 người. Dựng lại đúng bốn cái đó và ĐẾM.
+     ════════════════════════════════════════════════════════════════════ */
+  console.log('\n⑬ Đo trên 4 góp ý THẬT đang mở (đều ở cho_phan_tich)');
+  {
+    const db = dungDB(); idTiep = 1;
+    const THAT = [
+      ['Không hiện thông báo khi có tin nhắn đến', 'ns_lan',   '7bf0e58'],
+      ['Lỗi số năm chỗ ngày sinh',                 'ns_huong', 'cc13f89'],
+      ['không hiển thị hết công việc public ở mục Việc cần làm', 'ns_huong', '0d153b5'],
+      ['Danh sách bị cắt mà không nói ra',          'ns_lan',   'ab92afc']
+    ].map(([tieu_de, nguoi]) => themGopY(db, { trang_thai: 'cho_phan_tich', nguoi, tieu_de }));
+
+    const kq = await goiDeploy(worker, db, THAT.map((id, i) => ({
+      sha: String(i + 1).repeat(40), tieu_de: `GY-${id}: vá thật`, than: '',
+      cac_tep: ['src/index.js', 'public/assets/js/app.js']
+    })));
+    const dayDuoc = THAT.filter(id => xem(db, id).trang_thai === 'cho_nghiem_thu').length;
+    const nguoiDuocBao = demTin(db, 'ns_lan') + demTin(db, 'ns_huong');
+    console.log(`     ⇒ ĐẨY ĐƯỢC ${dayDuoc}/4 góp ý · BÁO ĐƯỢC ${nguoiDuocBao}/4 người gửi ` +
+                `(bản trước: 0/4 và 0/4)`);
+    ok('mục 2b: 4/4 góp ý thật được đẩy sang chờ nghiệm thu', dayDuoc === 4 && kq.ma === 200, `${dayDuoc}/4`);
+    ok('mục 2a: 4/4 người gửi được báo', nguoiDuocBao === 4, `${nguoiDuocBao}/4`);
+    ok('  KHÔNG cái nào bị máy tự đưa sang "hoan_thanh"',
+      THAT.every(id => xem(db, id).trang_thai !== 'hoan_thanh'));
+    ok('  cả 4 đều lùi được nếu máy sai', THAT.every(id => !!xem(db, id).deploy_tt_cu));
   }
 
   console.log(`\n═══ ${dat} đạt · ${truot} trượt ═══\n`);
