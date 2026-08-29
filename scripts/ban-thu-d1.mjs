@@ -97,7 +97,25 @@ class D1Cau {
 class D1 {
   constructor(db) { this.db = db; }
   prepare(sql) { return new D1Cau(this.db, sql); }
-  async batch(cacCau) { const kq = []; for (const c of cacCau) kq.push(await c.run()); return kq; }
+  /* `batch()` của D1 THẬT chạy trong MỘT giao dịch ngầm: một câu hỏng thì cả
+     lô bị lùi, không câu nào ăn. Bản cũ ở đây chạy tuần tự KHÔNG giao dịch —
+     nên nó dựng ra một thế giới KHÔNG có thật: câu 1 ăn, câu 2 hỏng, dữ liệu
+     nằm nửa vời. Bắt được khi đo CTL-0017 (ca DC-A): trigger CSDL chặn dòng
+     "dời hạn không lý do", đáng lẽ cả lượt phải bị lùi và hạn chót giữ
+     nguyên — nhưng bàn đo cho hạn chót đổi thật. Bàn đo sai, không phải mã
+     sản phẩm sai (BH-17). Bọc giao dịch cho đúng D1. */
+  async batch(cacCau) {
+    this.db.exec('BEGIN');
+    try {
+      const kq = [];
+      for (const c of cacCau) kq.push(await c.run());
+      this.db.exec('COMMIT');
+      return kq;
+    } catch (e) {
+      try { this.db.exec('ROLLBACK'); } catch { /* đã tự lùi rồi */ }
+      throw e;
+    }
+  }
   async exec(sql) { this.db.exec(thayDongHo(sql)); return { count: 0, duration: 0 }; }
 }
 

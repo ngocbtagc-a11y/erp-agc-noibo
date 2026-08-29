@@ -141,6 +141,16 @@ export const API = {
   cvCapNhat: (id, trangThai, ketQua) => goi('/api/cong-viec/cap-nhat', {
     method: 'POST', body: JSON.stringify({ id, trang_thai: trangThai, ket_qua: ketQua })
   }),
+  /* CTL-0017 — sửa NỘI DUNG việc đã giao. Cửa RIÊNG, không dùng chung với
+     `cvCapNhat` (đổi trạng thái): hai luật khác hẳn nhau.
+     `truong` chỉ chứa những trường THẬT SỰ muốn đổi — trường không gửi thì
+     máy chủ không đụng tới, nên sửa mỗi tiêu đề sẽ không xoá trắng mô tả. */
+  cvSua: (id, truong) => goi('/api/cong-viec/sua', {
+    method: 'POST', body: JSON.stringify({ id, ...truong })
+  }),
+  /* Sổ sửa dùng chung cho cả lớp — bang = 'cong_viec' | 'muc_tieu'. Mỗi dòng
+     đã kèm `cau` tiếng Việt dựng sẵn ở máy chủ, giao diện chỉ việc in ra. */
+  suaLichSu: (bang, id) => goi(`/api/sua/lich-su?bang=${bang}&id=${id}`),
   /* `truoc` = con trỏ `cap_nhat_luc|id` của dòng cuối đã tải → máy chủ trả tiếp
      500 việc CŨ HƠN. Đây là ĐƯỜNG ĐI TIẾP CÓ THẬT của dải cắt (REV-0034 · L2):
      ô tìm kiếm ở màn đó lọc phía trình duyệt nên không với tới phần bị cắt. */
