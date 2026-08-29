@@ -1460,11 +1460,72 @@ img.av { object-fit: cover; display: block; cursor: default; }
 }
 .table-wrap::-webkit-scrollbar-thumb:hover, .table-wrap-cuon::-webkit-scrollbar-thumb:hover { background: var(--sage); }
 
+/* ==========================================================================
+   BẢNG PHẢI VỪA MÀN — Sếp Ngọc 29/08/2026: "ưu tiên hiển thị trên 1 trang,
+   hạn chế kéo trang như này". Hai chốt dưới đây, và KHÔNG chốt nào bóp cỡ
+   chữ hay ăn bớt số dòng — Sếp dặn thẳng: bỏ bớt CỘT, không thu nhỏ CHỮ.
+   Số đo trước/sau: `npm run do-bang-vua-man -- --bang-ke`.
+   ========================================================================== */
+
+/* ① SÀN 560px LÀ THỦ PHẠM TOÀN CỤC.
+   `min-width: 560px` bắt MỌI bảng rộng tối thiểu 560px. Trên điện thoại
+   375px khung bảng chỉ còn 341px → kéo ngang là CHẮC CHẮN, kể cả bảng 3 cột:
+   đo thật, `kvModalLo` (3 cột) tràn +265px chỉ vì cái sàn này, không phải vì
+   nội dung. Sàn đó chỉ có nghĩa trên màn rộng, nơi nó giữ bảng ít cột khỏi
+   trông thưa thớt. Từ 900px trở xuống BỎ SÀN — để bảng co đúng bằng nội dung
+   thật của nó. */
 table { width: 100%; border-collapse: collapse; min-width: 560px; }
+@media (max-width: 900px) { table { min-width: 0; } }
+/* Bảng trong cửa sổ bật lên KHÔNG BAO GIỜ được nhận sàn 560px: cửa sổ chỉ
+   rộng ~588px trên máy và ~295px trên điện thoại, nên cái sàn đó bắt bảng
+   6 cột hợp đồng tràn +78px ngay cả trên màn 1440px. */
+.modal table { min-width: 0; }
+/* Trong cửa sổ bật lên, tiêu đề cột được xuống dòng ở MỌI bề ngang — cửa sổ
+   chỉ rộng 588px nên "Người thực hiện" nằm một dòng là ăn hết chỗ của cột
+   thao tác. Cỡ chữ không đổi; tiêu đề cao thêm một lần cho cả bảng, không
+   phải mỗi dòng. */
+.modal thead th { white-space: normal; }
+
+/* ② ĐỆM NGANG 20px × 2 MỖI CỘT = 40px/cột KHÔNG CHỞ THÔNG TIN NÀO.
+   Bảng Lịch sử đơn hoàn 12 cột đang tiêu 480px chỉ để làm đệm — nhiều hơn cả
+   một khung nhìn điện thoại. Thu đệm NGANG lại ở màn hẹp là lấy về chỗ cho
+   CHỮ, ngược hẳn với thu nhỏ chữ.
+   ĐỆM DỌC GIỮ NGUYÊN (11px/13px) — đây là chốt chống sửa quá tay: động vào
+   đệm dọc là chiều cao dòng đổi, là số dòng thấy được đổi. Cỡ chữ cũng giữ
+   nguyên tuyệt đối (11px tiêu đề / 13.5px ô). */
+@media (max-width: 1100px) {
+  thead th, tbody td { padding-left: 10px; padding-right: 10px; }
+  /* Tiêu đề cột được xuống dòng ở màn hẹp. Đây KHÔNG phải bóp chữ: cỡ chữ
+     giữ nguyên 11px, và tiêu đề cao thêm một lần cho cả bảng — khác hẳn việc
+     cho Ô xuống dòng, thứ sẽ làm MỌI dòng cao lên và ăn mất số dòng thấy
+     được. Ô vẫn `nowrap`, đúng luật cũ. */
+  thead th { white-space: normal; }
+}
+/* Dưới 780px đệm ngang còn 8px — luật nằm trong khối @media 780px ở cuối tệp,
+   vì khối đó dùng shorthand `padding` và sẽ đè bất kỳ luật longhand nào đặt
+   ở đây. Đừng thêm luật thứ hai ở đây, sửa thẳng khối kia. */
+
+/* ③ NÓI RÕ LÀ CÒN CỘT BÊN PHẢI.
+   Bảng đối chiếu (đối soát sàn, đơn hoàn, lịch sử, ma trận xếp ca) KHÔNG ép
+   vừa màn được — bỏ cột là hỏng việc đọc theo hàng ngang. Chúng được phép
+   cuộn, nhưng khi ấy phải NÓI RA, đừng để người dùng tưởng đã thấy hết. Dải
+   này do `ganBaoCuonNgang()` trong app.js gắn, chỉ hiện khi bảng THẬT SỰ còn
+   cột chưa thấy, và tự tắt khi đã kéo tới cuối. */
+.cuon-bao { display: none; }
+.table-wrap.co-cuon + .cuon-bao,
+.table-wrap-cuon.co-cuon + .cuon-bao { display: flex; }
+.table-wrap.co-cuon.het-cuon + .cuon-bao,
+.table-wrap-cuon.co-cuon.het-cuon + .cuon-bao { display: none; }
+.cuon-bao {
+  align-items: center; gap: 6px; justify-content: flex-end;
+  margin: 4px 0 0; padding: 4px 10px;
+  font-size: 12px; color: var(--text-mute);
+}
+.cuon-bao b { color: var(--ink); font-weight: 600; }
 
 thead th {
   text-align: left;
-  padding: 11px 20px;
+  padding: 11px 16px;
   font-size: 11px;
   font-weight: 600;
   color: var(--text-mute);
@@ -1476,7 +1537,7 @@ thead th {
 }
 
 tbody td {
-  padding: 13px 20px;
+  padding: 13px 16px;
   border-bottom: 1px solid var(--line);
   font-size: 13.5px;
   vertical-align: middle;
@@ -2668,8 +2729,13 @@ tr.kd-chiadoi td {
   .stat .v { font-size: 23px; }
   .stat .k { font-size: 10.5px; }
   .panel-head, .panel-body { padding: 14px 16px; }
-  thead th { padding: 10px 16px; }
-  tbody td { padding: 11px 16px; }
+  /* Đệm NGANG 8px (đệm DỌC giữ nguyên 10/11px như trước, không đụng vào →
+     chiều cao dòng không đổi → số dòng thấy được không đổi). Khối này nằm SAU
+     chốt "bảng phải vừa màn" ở trên và dùng shorthand `padding`, nên nếu để
+     16px thì nó ĐÈ mất chốt kia ở đúng khoảng màn hẹp nhất — chỗ cần nhất.
+     Sửa tại đây thay vì thêm một luật thứ hai chọi nhau. */
+  thead th { padding: 10px 8px; }
+  tbody td { padding: 11px 8px; }
   .chart { height: 140px; gap: 6px; }
 }
 

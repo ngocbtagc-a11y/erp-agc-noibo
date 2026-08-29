@@ -2796,7 +2796,12 @@
     <div class="kv-md-muc">Hợp đồng lao động</div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Loại</th><th>Từ ngày</th><th>Hết hạn</th><th>Lần</th><th>Số HĐ</th><th></th></tr></thead>
+        <!-- 6 cột → 4: "Lần" và "Số HĐ" gộp xuống DÒNG PHỤ dưới "Loại"
+             (Sếp Ngọc 29/08/2026, cách chữa số 3). Hai cột đó mỗi ô chỉ chứa
+             một con số hoặc một dấu gạch nhưng vẫn tiêu trọn phần đệm của một
+             cột — trong cửa sổ rộng 588px, đó đúng là chỗ đẩy cột nút ra
+             ngoài. Không mất dữ liệu nào, chỉ đổi chỗ đặt. -->
+        <thead><tr><th>Loại</th><th>Từ ngày</th><th>Hết hạn</th><th></th></tr></thead>
         <tbody id="nsSua-hopdong"></tbody>
       </table>
     </div>

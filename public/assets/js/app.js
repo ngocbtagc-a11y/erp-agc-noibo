@@ -5241,11 +5241,18 @@ if (TOI.quyen.includes('nhansu')) {
         let nhanHan = esc(han);
         if (con !== null && con < 0) nhanHan += ` <span class="tag danger">quá hạn</span>`;
         else if (con !== null && con <= 45) nhanHan += ` <span class="tag warn">còn ${con} ngày</span>`;
-        return `<td class="sm">${esc(LOAI_HD_CHU[h.loai] || h.loai)}${an ? ' <span class="tag mute">đã ẩn</span>' : ''}</td>` +
+        /* "Lần" và "Số HĐ" xuống DÒNG PHỤ dưới "Loại" — 6 cột còn 4, đủ chỗ
+           cho cột nút trong cửa sổ 588px. Dữ liệu KHÔNG mất: "lần thứ 2" là
+           thông tin pháp lý (BLLĐ 2019 Đ.20) nên phải viết rõ chữ, không để
+           trần một con số như cột cũ. */
+        const phu = [
+          h.loai === 'xac_dinh_th' ? `lần thứ ${esc(String(h.lan_thu || 1))}` : '',
+          h.so_hd ? `số ${esc(h.so_hd)}` : ''
+        ].filter(Boolean).join(' · ');
+        return `<td class="sm">${esc(LOAI_HD_CHU[h.loai] || h.loai)}${an ? ' <span class="tag mute">đã ẩn</span>' : ''}` +
+            (phu ? `<div class="sm">${phu}</div>` : '') + `</td>` +
           `<td class="sm">${esc(ngayIsoVN(h.ngay_bat_dau))}</td>` +
           `<td class="sm">${nhanHan}</td>` +
-          `<td class="sm">${h.loai === 'xac_dinh_th' ? esc(String(h.lan_thu || 1)) : '—'}</td>` +
-          `<td class="sm">${esc(h.so_hd || '—')}</td>` +
           `<td class="sm"><button type="button" class="btn-nho" data-hd-sua="${h.id}">Sửa</button> ` +
             `<button type="button" class="btn-nho btn-phu" data-hd-an="${h.id}" data-hd-hieuluc="${h.hieu_luc}">${an ? 'Dùng lại' : 'Ẩn'}</button></td>`;
       });
@@ -9818,6 +9825,55 @@ async function khoiDongKhoTaiLieu() {
 
   await nap();
 }
+
+/* ==========================================================================
+   BÁO "CÒN CỘT BÊN PHẢI" — Sếp Ngọc 29/08/2026
+   ---------------------------------------------------------------------------
+   Bảng đối chiếu (đối soát sàn · đơn hoàn · lịch sử đơn hoàn · ma trận xếp
+   ca) không ép vừa màn được: bỏ cột là hỏng việc đọc theo hàng ngang. Chúng
+   được phép cuộn — nhưng cuộn IM LẶNG mới là lỗi. Người dùng nhìn một bảng
+   trông như đã hết, không ai đoán được bên phải còn "Số tiền" với "Kho nhận".
+
+   Dải này CHỈ hiện khi bảng THẬT SỰ còn cột chưa thấy, và tự tắt khi đã kéo
+   tới cuối — không phải nhãn trang trí dán sẵn, mà là phép đo tại chỗ. Gắn
+   cho MỌI `.table-wrap`/`.table-wrap-cuon` trong ERP, không chép tay từng
+   bảng. Bàn đo: `npm run do-bang-vua-man`.
+   ========================================================================== */
+function ganBaoCuonNgang() {
+  const capNhat = (w) => {
+    const coCuon = w.scrollWidth > w.clientWidth + 1;
+    w.classList.toggle('co-cuon', coCuon);
+    // "hết cuộn" = đã kéo tới mép phải; +2px cho sai số làm tròn của trình duyệt.
+    w.classList.toggle('het-cuon', w.scrollWidth - w.clientWidth - w.scrollLeft <= 2);
+    if (coCuon && !(w.nextElementSibling && w.nextElementSibling.classList.contains('cuon-bao'))) {
+      const bao = document.createElement('div');
+      bao.className = 'cuon-bao';
+      bao.innerHTML = '<b>Còn cột bên phải</b> — kéo ngang để xem tiếp →';
+      w.after(bao);
+    }
+  };
+  let hen = 0;
+  const quetHet = () => {
+    cancelAnimationFrame(hen);
+    hen = requestAnimationFrame(() => {
+      document.querySelectorAll('.table-wrap, .table-wrap-cuon').forEach(w => {
+        if (!w.dataset.baoCuon) {
+          w.dataset.baoCuon = '1';
+          w.addEventListener('scroll', () => capNhat(w), { passive: true });
+          if (window.ResizeObserver) new ResizeObserver(() => capNhat(w)).observe(w);
+        }
+        capNhat(w);
+      });
+    });
+  };
+  quetHet();
+  window.addEventListener('resize', quetHet, { passive: true });
+  /* Bảng được vẽ lại liên tục (veBang thay innerHTML của tbody) nên phải theo
+     dõi childList. CHỈ childList — `capNhat` chỉ đổi class và chèn thẻ NGOÀI
+     khung bảng, nên không tự kích lại chính mình thành vòng lặp. */
+  new MutationObserver(quetHet).observe(document.body, { childList: true, subtree: true });
+}
+ganBaoCuonNgang();
 
 /* ---- Mở tab đầu tiên người dùng được xem -------------------------------- */
 moTab(TOI.quyen[0]);
