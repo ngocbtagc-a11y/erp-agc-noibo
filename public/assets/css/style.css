@@ -3701,3 +3701,38 @@ textarea.tlq-o { padding: 10px 12px; }
 @media (max-width: 640px) {
   .cv-sua-nut { width: 100%; flex: 1 1 100%; }
 }
+
+/* ==========================================================================
+   HỘP SỬA MỤC TIÊU — bảy ô, bốn mức nặng (Sếp Ngọc nhắc LẦN THỨ BA).
+   --------------------------------------------------------------------------
+   MÀU: hộp lý do dùng lại `.cv-sua-canhbao` (vàng nâu) — CÙNG MỘT LUẬT thì
+   phải CÙNG MỘT MÀU, người dùng học một lần dùng được cả hai chỗ. Riêng dải
+   "N việc đang gắn vào" dùng `--danger-wash`: đây không phải "cẩn thận đấy",
+   đây là HẬU QUẢ ĐÃ CHẮC CHẮN — thẻ mục tiêu sẽ rời khỏi Trạm Mục Tiêu của
+   người khác trong khi N việc vẫn chạy dưới nó. Đúng chỗ để tiêu một lần đỏ
+   (BANG-MAU.md: đỏ dành cho lỗi và hậu quả thật, không rắc bừa).
+   44px LÀ NGƯỠNG NGÓN TAY — ô chọn/ô nhập cũng là chỗ chạm, không riêng nút.
+   ⚠️ NÓI THẲNG CHO ĐÚNG CÔNG: ĐO THẬT ở 375px (`do-hop-sua-muctieu.mjs`) thì
+   kiểu chữ + padding SẴN CÓ của form đã cho 44–47px rồi — gỡ hẳn khối
+   `min-height` dưới đây đi thì phép đo VẪN XANH. Nên khối này là DÂY BẢO
+   HIỂM cho lần ai đó chỉnh padding chung, KHÔNG phải thứ đang gánh 44px.
+   Ghi ra đây vì một dòng CSS tự nhận công nó không làm là thứ khiến người
+   sau tưởng đã có chốt, rồi bỏ chốt thật đi.
+   ========================================================================== */
+.mt-canh-bao {
+  background: var(--danger-wash);
+  border: 1px solid var(--danger);
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--danger-dark);
+}
+.mt-canh-bao b { color: var(--danger-dark); }
+#mt-form select,
+#mt-form input[type="number"],
+#mt-form input[type="text"],
+.cv-sua-canhbao textarea {
+  box-sizing: border-box;
+  min-height: 44px;
+}
