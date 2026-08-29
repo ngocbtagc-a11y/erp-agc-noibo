@@ -3612,11 +3612,21 @@ async function khoiDongLichSuViec() {
          "— (của tôi)" ở cột Người giao như bảng "Việc cần làm" cũ. */
       const laTodo = r.nguoi_giao_id === TOI.id && r.nguoi_nhan_id === TOI.id;
       const nut = (kieuNut && typeof veNut === 'function') ? veNut(r, kieuNut) : '';
+      /* ĐẦU RA = CỘT RIÊNG (29/08/2026). Bản gộp đầu tiên chôn `dau_ra` thành
+         một dòng chữ nhỏ trong ô "Việc"; sai tinh thần MBOs — đầu ra là THƯỚC
+         ĐO, phải rà được cả cột bằng mắt chứ không phải đọc từng ô đi tìm.
+         Vẽ ĐÚNG MỘT LẦN ở hai chỗ, CSS chọn chỗ nào hiện theo bề ngang:
+           · ≥980px → `<td class="cot-daura">` hiện, `.daura-hep` ẩn
+           · ≤979px → ngược lại (màn hẹp không đủ chỗ cho 9 cột)
+         Không dùng JS đo bề ngang rồi vẽ hai kiểu: thế là hai đường mã cho một
+         sự thật, và là chỗ để chúng lệch nhau. */
+      const oDauRa = r.dau_ra ? dg(r.dau_ra) : '';
       return `<td><div class="nm">${esc(r.tieu_de)}${laTodo ? ' <span class="tag sage">🙋 Việc của tôi</span>' : ''}</div>` +
-          `${r.dau_ra ? `<div class="sm">${dg(r.dau_ra)}</div>` : ''}` +
+          `${oDauRa ? `<div class="sm daura-hep">${oDauRa}</div>` : ''}` +
           `${r.mo_ta ? `<div class="sm">${dg(r.mo_ta)}</div>` : ''}` +
           `${r.phoi_hop_ten ? `<div class="sm">🤝 Phối hợp: ${esc(r.phoi_hop_ten)}</div>` : ''}` +
           `${r.ket_qua ? `<div class="sm"><b>Kết quả:</b> ${dg(r.ket_qua)}</div>` : ''}</td>` +
+        `<td class="sm cot-daura">${oDauRa || '—'}</td>` +
         `<td class="sm">${esc(r.nguoi_nhan_ten)}</td>` +
         `<td class="sm">${laTodo ? '— (của tôi)' : esc(r.nguoi_giao_ten)}</td>` +
         `<td class="sm">${esc(r.muc_tieu_ten || '—')}</td>` +
@@ -3626,11 +3636,47 @@ async function khoiDongLichSuViec() {
         `<td style="white-space:nowrap">${nut}</td>`;
     });
     const oTrong = $('#ls-cv-trong');
-    // Rỗng vì LỌC khác rỗng vì CHƯA CÓ GÌ — nói đúng cái nào, đừng nói chung.
-    oTrong.textContent = (k || locTt) ? 'Không tìm thấy việc nào khớp.' : NHAN_LOC[LOC_LSV].trong;
+    /* BA LÝ DO KHÁC NHAU, BA CÂU KHÁC NHAU. Nói chung một câu là cách chắc
+       chắn để Sếp tưởng mất dữ liệu (REV-0048 lỗi #3) hoặc tưởng "chưa ai giao
+       việc gì" trong khi thật ra mô-đun Trạm Mục Tiêu vừa chết (lỗi #4 — đúng
+       kiểu im lặng REV-0038 đi vá).
+       ① MÔ-ĐUN HỎNG: có quyền `congviec` mà `khoiDongCongViec` ném lỗi thì
+          `window.CV_DU_LIEU_CUA_TOI` không bao giờ được đặt (nó chỉ gán ở cuối
+          `taiLai()` khi đã gọi API xong). Ba phạm vi CỦA TÔI khi đó rỗng vì
+          HỎNG, không phải vì trống. Vai KHÔNG có quyền `congviec` cũng rỗng —
+          nhưng đó là đúng quyền họ có, nên không báo lỗi cho họ.
+       ② CÒN BỘ LỌC: nói THẲNG bộ lọc nào đang bật + nút xoá ngay tại chỗ.
+          Đổi phạm vi KHÔNG tự xoá bộ lọc (bộ lọc do người dùng chủ động đặt,
+          tự xoá là cướp thao tác của họ) — nhưng phải nói ra, không để im.
+       ③ Trống thật. */
+    const moDunHong = LOC_LSV !== 'congty' &&
+                      TOI.quyen.includes('congviec') && !window.CV_DU_LIEU_CUA_TOI;
+    if (moDunHong) {
+      oTrong.innerHTML = '<b>Không tải được việc của bạn — đây là LỖI, không phải "chưa ai giao việc gì".</b>' +
+        ' Tải lại trang một lần; còn nữa thì báo bộ phận Công nghệ kèm giờ gặp lỗi.';
+    } else if (k || locTt) {
+      const dangDat = [];
+      if (locTt) dangDat.push('Trạng thái: ' + ((CV_TRANG_THAI[locTt] || {}).chu || locTt));
+      if (k) dangDat.push('Tìm: "' + ($('#ls-cv-tim').value || '').trim() + '"');
+      oTrong.innerHTML = 'Không có việc nào khớp <b>bộ lọc đang đặt</b> (' + esc(dangDat.join(' · ')) +
+        '). Dữ liệu vẫn còn nguyên. ' +
+        '<button type="button" class="dai-cat-nut" data-lscv-xoaloc>Xoá bộ lọc</button>';
+    } else {
+      oTrong.textContent = NHAN_LOC[LOC_LSV].trong;
+    }
     oTrong.hidden = ds.length > 0;
     veDaiCatLsCv();
   }
+
+  /* Nút "Xoá bộ lọc" của câu ② ở trên. Uỷ quyền trên vùng cha vì `oTrong` bị
+     vẽ lại mỗi lần lọc — gắn thẳng vào nút là gắn vào phần tử sắp bị thay. */
+  $('#ls-cv-trong').addEventListener('click', (e) => {
+    if (!e.target.closest('[data-lscv-xoaloc]')) return;
+    const oTim = $('#ls-cv-tim'), oLoc = $('#ls-cv-loctt');
+    if (oLoc) oLoc.value = '';
+    if (oTim) oTim.value = '';
+    veBangLsCv();
+  });
 
   /* CON TRỎ trang — chuỗi `cap_nhat_luc|id` của dòng cuối đã tải. `null` =
      không còn gì cũ hơn. Xem src/index.js cvLichSu. */

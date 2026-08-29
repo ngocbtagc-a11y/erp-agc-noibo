@@ -141,7 +141,17 @@ const DOI_CHUNG = [
   { ma: 'DC-E', chu: 'cho phạm vi "Tôi phối hợp" mọc nút thao tác',
     phai_do: ['phoihop.chi_theo_doi'],
     be: s => s.replace("phoihop: { trong: 'Chưa được mời phối hợp việc nào.',        nut: null }",
-                       "phoihop: { trong: 'Chưa được mời phối hợp việc nào.',        nut: 'toi' }") }
+                       "phoihop: { trong: 'Chưa được mời phối hợp việc nào.',        nut: 'toi' }") },
+  /* ---- Ba ca cho bản vá vòng 2 (REV-0048 lỗi #2 · #3 · #4) --------------- */
+  { ma: 'DC-F', chu: 'đầu ra tụt lại thành chữ nhỏ trong ô "Việc" (bỏ ô cột riêng)',
+    phai_do: ['daura.co_o', 'daura.co_chu'],
+    be: s => s.replace('<td class="sm cot-daura">', '<td class="sm">') },
+  { ma: 'DC-G', chu: 'mô-đun việc hỏng lại nói dối là "chưa ai giao việc gì"',
+    phai_do: ['hong.khong_noi_doi_la_trong'],
+    be: s => s.replace('if (moDunHong) {', 'if (false) {') },
+  { ma: 'DC-H', chu: 'lọc ra 0 dòng lại nói câu chung, không nhắc bộ lọc còn bật',
+    phai_do: ['loc.noi_ro_con_loc', 'loc.co_nut_xoa_loc', 'loc.nut_xoa_44px', 'loc.xoa_loc_an_duoc'],
+    be: s => s.replace('} else if (k || locTt) {', '} else if (false) {') }
 ];
 
 /* ---- MỘT VÒNG ĐO -------------------------------------------------------- */
@@ -255,6 +265,79 @@ async function doMotVong({ commit = null, be = null, rong = 1440 }) {
       await chay(`(() => { const o = document.querySelector('#ls-cv-tim'); o.value = '';
         o.dispatchEvent(new Event('input', { bubbles: true })); return 1; })()`);
       await NGU(250);
+
+      /* -- CỘT "ĐẦU RA CẦN ĐẠT" (REV-0048 lỗi #2) --------------------------
+         Công ty chạy MBOs: đầu ra là THƯỚC ĐO, phải là CỘT rà được bằng mắt,
+         không phải chữ nhỏ chôn dưới tên việc. Đo cả hai vế của ngưỡng 980px
+         trong CÙNG một vòng — đo mỗi vế một bề ngang thì không ai chứng minh
+         được là chúng loại trừ nhau. `getBoundingClientRect().width > 0` chứ
+         không phải `!!querySelector`: phần tử vẫn nằm trong DOM ở cả hai bên,
+         thứ đổi là CSS có cho nó chiếm chỗ hay không. */
+      Object.assign(kq.chuc_nang, await chay(`(() => {
+        const th = [...document.querySelectorAll('#ls-cv-tbl thead th')]
+                     .find(t => /Đầu ra cần đạt/.test(t.textContent));
+        const td = document.querySelector('#ls-cv-bang td.cot-daura');
+        const hep = document.querySelector('#ls-cv-bang .daura-hep');
+        const rongCot = th ? th.getBoundingClientRect().width : 0;
+        const rongHep = hep ? hep.getBoundingClientRect().width : 0;
+        const rong = window.innerWidth;
+        return {
+          // Tiêu đề cột phải CÓ ở mọi bề ngang (chỉ CSS giấu, không xoá khỏi DOM)
+          'daura.co_tieu_de': !!th,
+          'daura.co_o': !!td,
+          // ≥980px: cột riêng chiếm chỗ · dòng phụ trong ô "Việc" bị ẩn
+          'daura.cot_rieng_khi_rong': rong < 980 || (rongCot > 0 && rongHep === 0),
+          // ≤979px: ngược lại — không được hiện CẢ HAI (đó là chép đôi trước mắt Sếp)
+          'daura.gop_dong_phu_khi_hep': rong >= 980 || (rongCot === 0 && rongHep > 0),
+          'daura.co_chu': !!td && /Bảng khớp/.test(
+            rong >= 980 ? td.textContent : (hep ? hep.textContent : ''))
+        };
+      })()`));
+
+      /* -- BỘ LỌC CÒN SÓT KHI ĐỔI PHẠM VI (REV-0048 lỗi #3) ----------------
+         Lọc ra 0 dòng thì màn PHẢI nói rõ "còn bộ lọc đang đặt" + cho xoá tại
+         chỗ, thay vì một câu chung khiến Sếp tưởng mất dữ liệu. 'huy' không có
+         dòng nào ở phạm vi "Việc của tôi" nên chắc chắn ra rỗng. */
+      await chay(`(() => { const s = document.querySelector('#ls-cv-loctt'); s.value = 'huy';
+        s.dispatchEvent(new Event('change', { bubbles: true })); return 1; })()`);
+      await NGU(300);
+      Object.assign(kq.chuc_nang, await chay(`(() => {
+        const o = document.querySelector('#ls-cv-trong');
+        const n = o.querySelector('[data-lscv-xoaloc]');
+        return {
+          'loc.noi_ro_con_loc': !o.hidden && /bộ lọc đang đặt/.test(o.textContent) &&
+                                /Đã huỷ/.test(o.textContent),
+          'loc.co_nut_xoa_loc': !!n,
+          /* Nút mới cũng phải qua ngưỡng ngón tay 44px (WCAG 2.5.5) — nhân viên
+             kho bấm bằng một tay. Đo tại chỗ chứ không tin lớp CSS mượn được. */
+          'loc.nut_xoa_44px': !!n && n.getBoundingClientRect().height >= 44
+        };
+      })()`));
+      await chay(`(() => { const b = document.querySelector('#ls-cv-trong [data-lscv-xoaloc]');
+        if (b) b.click(); return 1; })()`);
+      await NGU(300);
+      kq.chuc_nang['loc.xoa_loc_an_duoc'] = await chay(
+        `document.querySelector('#ls-cv-loctt').value === '' &&
+         document.querySelectorAll('#ls-cv-bang tr').length > 0`);
+
+      /* -- MÔ-ĐUN HỎNG ≠ CHƯA AI GIAO VIỆC (REV-0048 lỗi #4) ---------------
+         `khoiDongCongViec` ném lỗi thì `window.CV_DU_LIEU_CUA_TOI` không bao
+         giờ được đặt. Bản cũ khi đó nói "Chưa ai giao việc gì cho Sếp/bạn cả."
+         — một lời nói dối êm ru, đúng kiểu im lặng REV-0038 đi vá. Ở đây dựng
+         lại ĐÚNG trạng thái đó bằng cách xoá biến rồi vẽ lại qua móc nối thật
+         `LAM_MOI_LICHSU_VIEC`, không chép lại luật. */
+      const noiHong = await chay(`(async () => {
+        const luu = window.CV_DU_LIEU_CUA_TOI;
+        delete window.CV_DU_LIEU_CUA_TOI;
+        await window.LAM_MOI_LICHSU_VIEC();
+        const chu = document.querySelector('#ls-cv-trong').textContent;
+        window.CV_DU_LIEU_CUA_TOI = luu;
+        await window.LAM_MOI_LICHSU_VIEC();
+        return chu;
+      })()`);
+      kq.chuc_nang['hong.khong_noi_doi_la_trong'] =
+        /LỖI/.test(String(noiHong)) && !/Chưa ai giao việc gì/.test(String(noiHong));
+      await NGU(400);
 
       // -- bấm THẬT "Bắt đầu làm": hộp/API giả trả ok, dòng phải chạy lại
       kq.chuc_nang['toi.bam_that'] = await chay(`(() => {
@@ -379,6 +462,15 @@ for (const rong of CAC_RONG) {
                     sau.so_dong['gop.congty'] >= truoc.so_dong.lichsu;
   console.log(`  Số dòng KHÔNG giảm : ${khongGiam ? 'ĐẠT' : '❌ HỎNG'}`);
   console.log(`  Nút bộ lọc ≥44px   : ${sau.nut.dat_44 ? 'ĐẠT' : '❌ HỎNG'}  (${(sau.nut.cao_nut_loc || []).join(' · ')} px)`);
+  /* Cột "Đầu ra cần đạt" đo ở CẢ HAI bề ngang, không chỉ ở bề ngang đầu tiên.
+     Bảng đối chiếu ① bên dưới chỉ đọc `CAC_RONG[0]`, mà đây đúng là thứ đổi
+     theo bề ngang (ngưỡng 980px) — bỏ vòng này là chỉ đo được một nửa luật. */
+  const DAU_RA = ['daura.co_tieu_de', 'daura.co_o', 'daura.co_chu',
+                  'daura.cot_rieng_khi_rong', 'daura.gop_dong_phu_khi_hep'];
+  const daura = DAU_RA.filter(m => sau.chuc_nang[m] !== true);
+  console.log(`  Cột "Đầu ra cần đạt": ${daura.length ? '❌ ' + daura.join(', ')
+    : (rong >= 980 ? 'ĐẠT — cột riêng' : 'ĐẠT — gộp xuống dòng phụ (ngưỡng 980px)')}`);
+  for (const m of daura) bao.truot.push(`${rong}px: ${m}`);
   if (!khongGiam) bao.truot.push(`${rong}px: số dòng bị giảm`);
   if (!sau.nut.dat_44) bao.truot.push(`${rong}px: nút bộ lọc <44px`);
   if (sau.loi_console.length) bao.truot.push(`${rong}px: ${sau.loi_console.length} dòng console.error`);
@@ -415,7 +507,18 @@ const NHAN_CN = {
   'duongcu.giao': 'Đường cũ MO_DEN_VIEC_CUA_TOI → đúng phạm vi',
   'duongcu.sang_dong': 'Đường cũ → tới đúng dòng',
   'duongcu.dung_tab': 'Đường cũ → đúng tab, không trang trắng',
-  'duongcu.lichsu_tim': 'Đường cũ MO_DEN_LICHSU_TIM → Toàn công ty'
+  'duongcu.lichsu_tim': 'Đường cũ MO_DEN_LICHSU_TIM → Toàn công ty',
+  // REV-0048 vá vòng 2 — ba lỗi Thấp
+  'daura.co_tieu_de': 'Cột "Đầu ra cần đạt" — có tiêu đề cột (MBOs)',
+  'daura.co_o': 'Cột "Đầu ra cần đạt" — có ô trên từng dòng',
+  'daura.co_chu': 'Cột "Đầu ra cần đạt" — có chữ đầu ra thật',
+  'daura.cot_rieng_khi_rong': '≥980px: đầu ra là CỘT RIÊNG (dòng phụ tắt)',
+  'daura.gop_dong_phu_khi_hep': '≤979px: đầu ra gộp xuống dòng phụ (cột tắt)',
+  'loc.noi_ro_con_loc': 'Lọc ra 0 dòng → nói rõ "còn bộ lọc đang đặt"',
+  'loc.co_nut_xoa_loc': 'Lọc ra 0 dòng → có nút "Xoá bộ lọc" tại chỗ',
+  'loc.nut_xoa_44px': 'Nút "Xoá bộ lọc" ≥44px (ngưỡng ngón tay)',
+  'loc.xoa_loc_an_duoc': 'Bấm "Xoá bộ lọc" → dữ liệu trở lại',
+  'hong.khong_noi_doi_la_trong': 'Mô-đun việc hỏng → báo LỖI, KHÔNG nói "chưa ai giao"'
 };
 console.log('\n--- ① ĐỐI CHIẾU CHỨC NĂNG (ba tab cũ → màn gộp) ---------------');
 let thieu = 0;

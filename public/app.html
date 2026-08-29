@@ -373,8 +373,16 @@
         <div class="table-wrap">
           <table id="ls-cv-tbl">
             <thead>
+              <!-- "Đầu ra cần đạt" là CỘT RIÊNG, không phải dòng phụ chữ nhỏ.
+                   Công ty chạy MBOs: câu hỏi kỷ luật là "đầu ra cụ thể là gì?",
+                   nên Sếp phải rà được CẢ MỘT CỘT bằng mắt, thay vì đọc từng ô
+                   "Việc" đi tìm. Ngang hàng với tên việc, không phải chú thích.
+                   Ở màn hẹp (≤979px) cột này tụt xuống dòng phụ trong ô "Việc"
+                   — chỉ khi đó, và bằng CSS thuần (`.cot-daura`/`.daura-hep`
+                   trong style.css), không phải bằng JS vẽ hai kiểu. -->
               <tr>
                 <th>Việc</th>
+                <th class="cot-daura">Đầu ra cần đạt</th>
                 <th>Người nhận</th>
                 <th>Người giao</th>
                 <th>Mục tiêu</th>

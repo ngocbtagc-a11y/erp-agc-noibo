@@ -2799,6 +2799,31 @@ tr.kd-chiadoi td {
    Đo thật: npm run do-nut-dai-cat. */
 .seg-loc .seg-nut { min-height: 44px; }
 
+/* CỘT "ĐẦU RA CẦN ĐẠT" ở màn gộp — REV-0048 lỗi #2 (29/08/2026).
+   Bản gộp đầu chôn `dau_ra` thành dòng chữ nhỏ dưới tên việc. Công ty chạy
+   MBOs: "đầu ra cụ thể là gì?" là kỷ luật cốt lõi, Sếp phải rà được CẢ MỘT
+   CỘT bằng mắt. Nên nó đứng NGANG HÀNG với tên việc, không phải chú thích.
+
+   NGƯỠNG ĐỔI BỐ CỤC: 980px (dùng lại đúng ngưỡng đã có sẵn trong file này,
+   không đẻ thêm mốc thứ n).
+     · ≥ 980px  → cột riêng `.cot-daura` hiện · `.daura-hep` ẩn
+     · ≤ 979px  → cột riêng ẩn · `.daura-hep` (dòng phụ trong ô "Việc") hiện,
+                  ĐÚNG y bố cục 375px đang chạy. Màn hẹp bảng đã 8 cột phải
+                  cuộn ngang; cột thứ chín chỉ đẩy đầu ra ra xa tầm mắt hơn.
+   `display:none` ở đây KHÔNG dính bẫy `[hidden]` đầu file: nó nhằm ẨN, không
+   nhằm làm HIỆN một phần tử đang mang `hidden`. */
+.daura-hep { display: none; }
+/* `min-width` KHÔNG phải thẩm mỹ, nó giữ SỐ DÒNG. Để cột tự co, bố cục bảng
+   chỉ cấp cho nó 147px: câu đầu ra gãy làm 3 dòng, chiều cao mỗi dòng bảng
+   nhảy 66px → 88px, và màn 1440 tụt từ 11 dòng xuống 9. Với 220px câu đầu ra
+   vừa một dòng nên số dòng thấy được không giảm. Đo thật: npm run do-gop-viec
+   (ràng buộc "số dòng KHÔNG ĐƯỢC GIẢM" nằm ngay trong bàn đo đó). */
+#ls-cv-tbl .cot-daura { min-width: 220px; max-width: 320px; }
+@media (max-width: 979px) {
+  #ls-cv-tbl .cot-daura { display: none; }
+  .daura-hep { display: block; }
+}
+
 /* Ô form chiếm cả hàng trong lưới .form-luoi */
 .field-rong { grid-column: 1 / -1; }
 
