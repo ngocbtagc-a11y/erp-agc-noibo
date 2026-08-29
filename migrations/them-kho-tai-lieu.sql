@@ -11,8 +11,11 @@
 --   · MỘT lượt quét = ĐÚNG 1 dòng INSERT vào `tai_lieu`. Không bảng trang,
 --     không bảng tiến độ tải lên — bản nháp nằm ở ĐIỆN THOẠI (localStorage),
 --     nên gửi hụt lúc sóng yếu vẫn gửi lại được mà D1 không ghi gì thêm.
---   · Nhật ký truy cập chỉ ghi cho giấy tờ NHẠY CẢM, và khoá chính gộp theo
---     NGÀY nên mở lại 20 lần trong ngày vẫn chỉ 1 dòng.
+--   · Nhật ký truy cập chỉ ghi cho giấy tờ NHẠY CẢM, khoá chính gộp theo NGÀY:
+--     mở lại 10 lần trong ngày = 1 dòng VÀ 1 lượt ghi (mã nguồn ĐỌC TRƯỚC rồi
+--     mới ghi — xem `ghiNhatKy()` trong src/tai-lieu.js). Chú thích cũ ở đây
+--     ghi "INSERT OR IGNORE" trong khi mã nguồn làm "DO UPDATE SET so_lan+1",
+--     tức 10 lượt GHI: hai bản lệch nhau đúng chỗ tốn hạn mức (REV-0036 #3).
 --
 -- ⚠️ LUẬT — xây vào sản phẩm, không nhắc miệng:
 --   · Luật Giao dịch điện tử 2023 (hiệu lực 01/7/2024): bản số hoá chỉ có giá
@@ -91,18 +94,25 @@ CREATE INDEX IF NOT EXISTS idx_tai_lieu_het_han  ON tai_lieu (ngay_het_han) WHER
 -- --------------------------------------------------------------------------
 -- NHẬT KÝ TRUY CẬP — chỉ cho giấy tờ NHẠY CẢM
 -- --------------------------------------------------------------------------
--- Khoá chính là `<tài liệu>|<người>|<ngày VN>` nên INSERT OR IGNORE làm cho
--- 20 lượt mở trong cùng một ngày chỉ tốn ĐÚNG 1 lượt ghi. Đây là cùng một
--- mẹo `push_nhat_ky` đang dùng (src/day-thong-bao.js) — không phát minh
--- cơ chế thứ hai.
+-- Khoá chính là `<tài liệu>|<người>|<ngày VN>|<hành động>`, và `ghiNhatKy()`
+-- ĐỌC TRƯỚC KHI GHI nên 10 lượt mở trong cùng một ngày tốn ĐÚNG 1 lượt ghi
+-- (+9 lượt đọc, rẻ hơn một bậc). Đây là cùng một mẹo `push_nhat_ky` đang dùng
+-- (src/day-thong-bao.js) — không phát minh cơ chế thứ hai.
+--
+-- NHẬT KÝ NÀY TRẢ LỜI ĐƯỢC GÌ: "NGÀY NÀO ai đã mở tài liệu nào" — đủ cho
+-- nghĩa vụ chứng minh tiếp cận dữ liệu cá nhân của Luật BVDLCN 91/2025/QH15.
+-- Nó KHÔNG trả lời "mở bao nhiêu lần trong ngày": đếm từng lượt thì mỗi lượt
+-- mở là một lượt ghi D1, đúng thứ REV-0031/0033 vừa phải đi vá.
 CREATE TABLE IF NOT EXISTS tai_lieu_nhat_ky (
   khoa        TEXT PRIMARY KEY,
   tai_lieu_id TEXT NOT NULL,
   nhan_su_id  TEXT NOT NULL,
   ngay        TEXT NOT NULL,
   hanh_dong   TEXT NOT NULL,        -- 'mo' | 'tai'
-  so_lan      INTEGER NOT NULL DEFAULT 1,
-  luc         TEXT NOT NULL
+  so_lan      INTEGER NOT NULL DEFAULT 1,   -- LUÔN = 1 (gộp theo ngày). Giữ cột
+                                            -- để ngày nào cần đếm từng lượt thì
+                                            -- có sẵn chỗ, không phải đổi lược đồ.
+  luc         TEXT NOT NULL         -- giờ mở ĐẦU TIÊN trong ngày, không phải gần nhất
 );
 
 CREATE INDEX IF NOT EXISTS idx_tai_lieu_nhat_ky_tl ON tai_lieu_nhat_ky (tai_lieu_id, ngay DESC);

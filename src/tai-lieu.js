@@ -29,8 +29,12 @@
    HẠN MỨC GHI D1 (REV-0031 vừa vá) — một lượt quét tốn ĐÚNG 1 lượt ghi:
      1 × INSERT INTO tai_lieu.  Không hơn.
    Bản nháp nhiều trang nằm ở ĐIỆN THOẠI, nên sóng yếu gửi hụt rồi gửi lại
-   cũng không sinh thêm lượt ghi nào. Nhật ký truy cập chỉ ghi cho giấy tờ
-   nhạy cảm và gộp theo NGÀY (INSERT OR IGNORE) — mở 20 lần vẫn 1 lượt ghi.
+   cũng không sinh thêm lượt ghi nào.
+   Nhật ký truy cập chỉ ghi cho giấy tờ NHẠY CẢM và gộp thật theo NGÀY: đọc
+   trước, đã có dòng hôm nay thì KHÔNG ghi nữa → mở 10 lần = 1 lượt ghi + 9
+   lượt đọc. (Trước REV-0036 chỗ này là `DO UPDATE SET so_lan = so_lan+1`,
+   tức 10 lượt GHI trong khi vẫn khai là 1 — đó là lời khai sai, không phải
+   chú thích lỗi thời.)
    ========================================================================== */
 
 import {
@@ -39,7 +43,7 @@ import {
   nhomTaiLieuXemDuoc, nhomTaiLieuLuuDuoc, nhomTaiLieuNhayCam,
   laAdmin
 } from './quyen.js';
-import { luuFile, layFile, timHoacTaoThuMuc, daCauHinh, duongDanTep } from './kho-file.js';
+import { luuFile, layFile, xoaFile, timHoacTaoThuMuc, daCauHinh, duongDanTep } from './kho-file.js';
 import { gioVN, ngayVN, duocGuiNhac } from './nhac-nhan-su.js';
 
 /** Câu phải xuất hiện ở mọi cửa. Đặt ở ĐÚNG MỘT chỗ để không có hai bản
@@ -63,7 +67,54 @@ const TRAN_SO_TRANG   = 12;
    biết phần chữ mình đang tìm có được bóc hay không — KHÔNG im lặng. */
 const TRAN_TRANG_BOC_CHU = 3;
 
-const MO_HINH_DOC_ANH = '@cf/meta/llama-3.2-11b-vision-instruct';
+/* ⚠️ MÔ HÌNH ĐỌC ẢNH — ĐO THẬT NGÀY 29/08/2026, ĐỌC KỸ TRƯỚC KHI ĐỔI
+   ---------------------------------------------------------------------------
+   Gọi thật bằng chính tài khoản Cloudflare của công ty (Worker tạm, không đụng
+   ERP đang chạy). Cổng Workers AI khoá theo TỪNG MÔ HÌNH, không phải cả tài
+   khoản:
+
+     @cf/meta/llama-3.2-11b-vision-instruct  → lỗi 5016, đòi ký Llama Community
+                                               License + AUP trước khi dùng
+     @cf/meta/llama-4-scout-17b-16e-instruct → CHẠY ĐƯỢC NGAY, không phải ký gì
+     @cf/mistralai/mistral-small-3.1-24b-…   → CHẠY ĐƯỢC NGAY (đường lui)
+
+   → Dùng mô hình KHÔNG CẦN KÝ. Bắt Sếp đi ký một thoả thuận pháp lý với Meta
+     để lấy thứ đã có sẵn miễn phí là đẩy việc lên bàn Sếp vô cớ.
+   → `src/nhansu.js` (đọc ảnh CCCD) import ĐÚNG hằng số này — một chỗ sửa, hai
+     đường cùng sống. Trước đây hai file chép tay cùng một chuỗi, nên đường đọc
+     CCCD chết âm thầm 11 ngày (18/08 → 29/08) mà không ai biết. */
+export const MO_HINH_DOC_ANH = '@cf/meta/llama-4-scout-17b-16e-instruct';
+
+/* ⚠️ ĐỊNH DẠNG ĐẦU VÀO — ĐO NGÀY 29/08/2026. ĐÂY LÀ CHỖ ĐÃ LÀM HỎNG CẢ TÍNH NĂNG
+   ---------------------------------------------------------------------------
+   Cùng một mô hình, cùng một tấm ảnh, hai định dạng, hai kết quả khác hẳn:
+
+     { image: [...bytes], prompt }   → 0/4 mốc. Mô hình KHÔNG BÁO LỖI, nó bịa
+                                       ra một công văn của Bộ Giáo dục.
+     { messages: [ text + image_url ] } → 4/4 mốc, 8,8 giây. Đọc đúng tờ giấy.
+
+   Khuôn `{image, prompt}` là khuôn cũ của llama-3.2-vision. Mô hình đời mới
+   (llama-4, mistral-small-3.1, gemma-3) nhận ảnh qua `messages` kiểu OpenAI;
+   đưa sai khuôn thì trường `image` bị BỎ QUA LẶNG LẼ và mô hình chỉ trả lời
+   riêng câu nhắc — nghe rất xuôi tai, và sai hoàn toàn.
+
+   Đo thêm cho khỏi phải thử lại: `@cf/mistralai/mistral-small-3.1-24b-instruct`
+   cũng 4/4 (9,3 giây) nhưng dấu tiếng Việt kém hơn — để làm đường lui.
+   `@cf/llava-hf/llava-1.5-7b-hf` 0/4: nó chép lại câu nhắc, không đọc giấy.
+   `@cf/unum/uform-gen2-qwen-500m` đã bị Cloudflare gỡ từ 30/05/2026. */
+export function khuonDocAnh(anhBase64, nhac) {
+  const sach = String(anhBase64 || '').replace(/^data:[^,]*,/, '');
+  return {
+    messages: [{
+      role: 'user',
+      content: [
+        { type: 'text', text: nhac },
+        { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,' + sach } }
+      ]
+    }],
+    max_tokens: 1024
+  };
+}
 
 function json(d, status = 200) {
   return new Response(JSON.stringify(d), {
@@ -144,29 +195,24 @@ function nowVN() {
    vẫn vào kho, chỉ là tra bằng tiêu đề thay vì tra bằng nội dung. Mất chữ còn
    hơn mất cả tài liệu.
    ========================================================================== */
-/* ⚠️ ĐO ĐƯỢC NGÀY 29/08/2026 — ĐỌC KỸ TRƯỚC KHI SỬA
+/* ⚠️ CÂU CHỈ ĐƯỜNG PHẢI ĐÚNG — REV-0036 lỗi #1
    ---------------------------------------------------------------------------
-   Gọi thật mô hình này bằng chính tài khoản Cloudflare của công ty
-   (ngocbt.agc@gmail.com) thì Workers AI trả về:
+   Bản trước bảo Sếp "chấp nhận điều khoản ở Dashboard → AI → Workers AI".
+   KHÔNG có cái nút đó. Chính câu lỗi 5016 nói cách thật: gửi MỘT lượt suy luận
+   với `prompt: 'agree'` tới đúng mô hình bị khoá — một cú gọi API, không phải
+   một cái nút. Chỉ đường sai thì Sếp đi tìm nút không tồn tại rồi quay lại hỏi.
 
-     5016: Prior to using this model, you must submit the prompt 'agree'…
-           (Llama Community License + Acceptable Use Policy)
-
-   Nghĩa là mô hình đọc ảnh CHƯA được kích hoạt trên tài khoản: phải có người
-   CHẤP NHẬN ĐIỀU KHOẢN một lần duy nhất. Đây là việc của chủ tài khoản, không
-   phải việc của mã nguồn — và nó cũng đang làm ĐƯỜNG ĐỌC ẢNH CCCD sẵn có
-   (`src/nhansu.js` → `docCCCD`) không chạy được, dù phiếu CTL-0026 Mục 3 ③
-   ghi là "đã chứng minh chạy được".
-
-   Nên chỗ này KHÔNG ném nguyên câu tiếng Anh ra cho người dùng: dịch thành
-   một câu nói rõ PHẢI LÀM GÌ. Tài liệu vẫn vào kho bình thường; chỉ là tra
-   bằng tên thay vì tra bằng nội dung, cho tới khi ai đó bấm đồng ý. */
+   Từ 29/08/2026 `MO_HINH_DOC_ANH` đã đổi sang mô hình KHÔNG CẦN KÝ, nên nhánh
+   này gần như không còn nổ. Giữ lại để nếu ngày nào có người đổi về mô hình
+   Meta thì câu hiện ra vẫn là câu ĐÚNG. */
 function dichLoiAI(e) {
   const m = String((e && e.message) || '');
   if (/5016|must submit the prompt/i.test(m)) {
-    return 'Mô hình đọc ảnh chưa được kích hoạt trên tài khoản Cloudflare: cần ' +
-           'chủ tài khoản chấp nhận điều khoản Llama một lần ở Dashboard → AI → ' +
-           'Workers AI. Tài liệu ĐÃ LƯU an toàn, chỉ là chưa bóc được chữ.';
+    return `Mô hình "${MO_HINH_DOC_ANH}" đòi chủ tài khoản ký thoả thuận Meta ` +
+           'trước khi dùng (KHÔNG có nút nào trong Dashboard — cách duy nhất là ' +
+           "gửi một lượt suy luận với prompt 'agree'). Đường vòng không phải ký " +
+           'gì: đổi MO_HINH_DOC_ANH sang @cf/meta/llama-4-scout-17b-16e-instruct. ' +
+           'Tài liệu ĐÃ LƯU an toàn, chỉ là chưa bóc được chữ.';
   }
   if (/429|rate limit|capacity/i.test(m)) {
     return 'Workers AI đang quá tải, chưa bóc được chữ lần này. Tài liệu đã lưu.';
@@ -174,7 +220,47 @@ function dichLoiAI(e) {
   return 'AI đọc ảnh lỗi: ' + m.slice(0, 140);
 }
 
-async function bocChu(env, dsAnhOCR) {
+/* ==========================================================================
+   CHỮ BỊA — mối nguy lớn hơn chữ thiếu.  ĐO NGÀY 29/08/2026
+   ---------------------------------------------------------------------------
+   Đưa đúng một tờ Giấy chứng nhận ATTP của công ty (đã qua đúng đường nén của
+   sản phẩm) cho mô hình đọc ảnh, mô hình trả về một văn bản đọc rất xuôi tai:
+
+     "Số: 2345/KH-UBND … Bộ Giáo dục và Đào tạo … tỉnh Quảng Ngãi"
+
+   Không một chữ nào có trên tờ giấy. 0/8 trường then chốt đúng, cả ba tấm ảnh
+   (nét / mờ / nén tệ) đều ra một tờ giấy tưởng tượng KHÁC NHAU. Mô hình KHÔNG
+   báo lỗi — nó chỉ đơn giản không nhìn thấy ảnh và trả lời riêng câu nhắc.
+
+   Chữ bịa đi thẳng vào cột `noi_dung` và `tim_kiem` thì kho giấy tờ pháp lý
+   có nội dung giả: Sếp bấm "Xem chữ đã bóc" trên tờ ATTP và đọc được một
+   công văn của Bộ Giáo dục. THÀ KHÔNG CÓ CHỮ CÒN HƠN CÓ CHỮ BỊA — không bóc
+   được thì màn hình đã nói sẵn "tra bằng tên", còn bịa thì không ai biết.
+
+   Nên: `so_hieu` do người quét TỰ GÕ khi nhìn vào tờ giấy là mẩu sự thật duy
+   nhất máy chủ có. Chữ bóc được mà KHÔNG chứa số hiệu đó thì gần như chắc
+   chắn không phải chữ của tờ giấy này → vứt, và nói rõ vì sao vứt.
+   Chốt này chỉ chạy khi người dùng có gõ `so_hieu` — nói thẳng giới hạn đó,
+   đừng để ai tưởng nó bắt được mọi ca bịa.
+   ========================================================================== */
+function chuCoThatKhong(chu, soHieu) {
+  if (!chu || !soHieu) return { that: true, viSao: null };
+  /* So sau khi bỏ dấu VÀ bỏ mọi ký tự không phải chữ-số: mô hình hay đọc
+     "124/2026/GCN-ATTP" thành "124 / 2026 / GCN – ATTP". Khác dấu gạch thì
+     vẫn là cùng một số hiệu, đừng vứt oan chữ đọc đúng. */
+  const gon = (s) => boDau(s).replace(/[^a-z0-9]/g, '');
+  const ma = gon(soHieu);
+  if (ma.length < 4) return { that: true, viSao: null };   // số hiệu quá ngắn, không đủ để kết luận
+  if (gon(chu).includes(ma)) return { that: true, viSao: null };
+  return {
+    that: false,
+    viSao: `Chữ AI đọc được KHÔNG chứa số hiệu "${soHieu}" bạn vừa gõ — nhiều ` +
+           'khả năng AI không nhìn thấy ảnh mà tự bịa ra nội dung, nên đã bỏ đi. ' +
+           'Tài liệu vẫn lưu bình thường, tra bằng tên và số hiệu.'
+  };
+}
+
+async function bocChu(env, dsAnhOCR, soHieu = null) {
   if (!env.AI) return { chu: '', soTrang: 0, ghiChu: 'Máy chủ chưa bật AI đọc ảnh' };
   if (!dsAnhOCR.length) return { chu: '', soTrang: 0, ghiChu: 'Không có ảnh để bóc chữ' };
 
@@ -191,19 +277,19 @@ async function bocChu(env, dsAnhOCR) {
     try {
       const bytes = base64ToBytes(dsAnhOCR[i]);
       if (bytes.length < 100) { hong = hong || 'Ảnh bóc chữ quá nhỏ'; continue; }
-      const kq = await env.AI.run(MO_HINH_DOC_ANH, {
-        image: Array.from(bytes),
-        prompt: nhac,
-        max_tokens: 1024
-      });
-      const chu = String(kq?.response ?? kq?.description ?? kq?.text ?? '').trim();
+      const kq = await env.AI.run(MO_HINH_DOC_ANH, khuonDocAnh(dsAnhOCR[i], nhac));
+      const chu = String(kq?.response ?? kq?.description ?? kq?.text ??
+                         kq?.choices?.[0]?.message?.content ?? '').trim();
       if (chu) phan.push(`--- Trang ${i + 1} ---\n${chu}`);
     } catch (e) {
       hong = hong || dichLoiAI(e);
     }
   }
+  const chuGop = phan.join('\n\n').slice(0, 60000);
+  const that = chuCoThatKhong(chuGop, soHieu);
+  if (!that.that) return { chu: '', soTrang: 0, ghiChu: that.viSao };
   return {
-    chu: phan.join('\n\n').slice(0, 60000),
+    chu: chuGop,
     soTrang: phan.length,
     ghiChu: phan.length ? null : (hong || 'Không đọc được chữ nào')
   };
@@ -286,7 +372,9 @@ export async function luuTaiLieu(env, phien, body) {
      Cố ý: nếu AI treo thì ta chưa đẩy gì lên Drive, không để lại file mồ côi.
      `bocChu` tự nuốt mọi lỗi nên nó không bao giờ chặn luồng. */
   const dsOCR = Array.isArray(body.anh_boc_chu) ? body.anh_boc_chu.slice(0, TRAN_TRANG_BOC_CHU) : [];
-  const boc = await bocChu(env, dsOCR);
+  /* Đưa `so_hieu` người dùng vừa gõ xuống làm mốc đối chiếu chữ bịa — xem
+     `chuCoThatKhong()`. Đây là mẩu sự thật duy nhất máy chủ có về tờ giấy. */
+  const boc = await bocChu(env, dsOCR, chuoi(body.so_hieu, 120));
 
   /* ---- Lưu lên Drive ---------------------------------------------------
      Đi qua `src/kho-file.js` — MỘT CỬA DUY NHẤT ra kho ngoài (SPEC-0005 5.1).
@@ -343,22 +431,60 @@ export async function luuTaiLieu(env, phien, body) {
   });
 
   /* ĐÚNG MỘT LƯỢT GHI D1 cho cả một lượt quét. */
-  await env.DB.prepare(`
-    INSERT INTO tai_lieu
-      (id, ma_gui, nhom, loai, tieu_de, so_hieu, tim_kiem,
-       ngay_ban_hanh, ngay_het_han, han_luu, cua_vao, gan_id, so_trang,
-       kho_nha, kho_khoa, co_byte, noi_dung, ocr_so_trang, ocr_ghi_chu,
-       nhay_cam, dong_y_boi, dong_y_luc, dong_y_muc_dich, nguoi_tao, tao_luc)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-  `).bind(
-    banGhi.id, banGhi.ma_gui, banGhi.nhom, banGhi.loai, banGhi.tieu_de,
-    banGhi.so_hieu, banGhi.tim_kiem, banGhi.ngay_ban_hanh, banGhi.ngay_het_han,
-    banGhi.han_luu, banGhi.cua_vao, banGhi.gan_id, banGhi.so_trang,
-    banGhi.kho_nha, banGhi.kho_khoa, banGhi.co_byte, banGhi.noi_dung,
-    banGhi.ocr_so_trang, banGhi.ocr_ghi_chu, banGhi.nhay_cam,
-    banGhi.dong_y_boi, banGhi.dong_y_luc, banGhi.dong_y_muc_dich,
-    banGhi.nguoi_tao, banGhi.tao_luc
-  ).run();
+  try {
+    await env.DB.prepare(`
+      INSERT INTO tai_lieu
+        (id, ma_gui, nhom, loai, tieu_de, so_hieu, tim_kiem,
+         ngay_ban_hanh, ngay_het_han, han_luu, cua_vao, gan_id, so_trang,
+         kho_nha, kho_khoa, co_byte, noi_dung, ocr_so_trang, ocr_ghi_chu,
+         nhay_cam, dong_y_boi, dong_y_luc, dong_y_muc_dich, nguoi_tao, tao_luc)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    `).bind(
+      banGhi.id, banGhi.ma_gui, banGhi.nhom, banGhi.loai, banGhi.tieu_de,
+      banGhi.so_hieu, banGhi.tim_kiem, banGhi.ngay_ban_hanh, banGhi.ngay_het_han,
+      banGhi.han_luu, banGhi.cua_vao, banGhi.gan_id, banGhi.so_trang,
+      banGhi.kho_nha, banGhi.kho_khoa, banGhi.co_byte, banGhi.noi_dung,
+      banGhi.ocr_so_trang, banGhi.ocr_ghi_chu, banGhi.nhay_cam,
+      banGhi.dong_y_boi, banGhi.dong_y_luc, banGhi.dong_y_muc_dich,
+      banGhi.nguoi_tao, banGhi.tao_luc
+    ).run();
+  } catch (e) {
+    /* ---- BẤM "GỬI LẠI" KHI LẦN 1 CÒN ĐANG BAY — REV-0036 lỗi #4 -----------
+       Chốt `ma_gui` ở trên chỉ bắt được lần gửi ĐÃ XONG. Hai yêu cầu chồng
+       nhau (hai tab, hoặc tải lại trang giữa lúc đang gửi trên 3G ~16 giây)
+       thì cả hai cùng thấy `SELECT ma_gui` rỗng, cả hai cùng đẩy file lên
+       Drive, rồi `UNIQUE(ma_gui)` mới chặn ở đây. Trước bản này lỗi đó BAY
+       THẲNG ra ngoài: người dùng thấy báo lỗi dù tài liệu đã lưu xong, và
+       Drive giữ một file MỒ CÔI không dòng nào trỏ tới — không ai dọn, không
+       ai biết nó là gì (tên file mang `id` mà D1 không hề có).
+
+       `UNIQUE` ở đây KHÔNG phải sự cố, nó là câu "đã có rồi": dọn đúng file
+       mình vừa đẩy lên rồi trả về bản đã lưu, y như đường gửi lại bình thường. */
+    const m = String((e && e.message) || '');
+    if (!/UNIQUE constraint failed/i.test(m) || !maGui) throw e;
+
+    let donDuoc = false;
+    try {
+      await xoaFile(env, { nha: luuXong.nha, khoa: luuXong.khoa });
+      donDuoc = true;
+    } catch (e2) {
+      /* Dọn hụt thì KHÔNG được nuốt im: file mồ côi vẫn nằm trên Drive, phải
+         để lại đúng mã file trong log để dọn tay được. */
+      console.error(`Tài liệu ${maGui}: file mồ côi trên Drive chưa dọn được ` +
+                    `(kho_khoa=${luuXong.khoa}): ${e2.message}`);
+    }
+
+    const cu = await env.DB.prepare(
+      'SELECT id, kho_khoa, so_trang FROM tai_lieu WHERE ma_gui = ?').bind(maGui).first();
+    if (!cu) throw e;          // UNIQUE vì lý do khác → không che, ném tiếp
+
+    return json({
+      ok: true, id: cu.id, da_co_san: true, so_trang: cu.so_trang,
+      duong_dan: cu.kho_khoa ? duongDanTep(cu.kho_khoa) : null,
+      da_don_ban_thua: donDuoc,
+      canh_bao: CANH_BAO_PHAP_LY + (nhayCam ? ' ' + CANH_BAO_TRA_GIAY : '')
+    });
+  }
 
   return json({
     ok: true,
@@ -412,10 +538,21 @@ export async function danhSachTaiLieu(env, phien, thamSo) {
   if (sapHet) dieuKien.push(`ngay_het_han IS NOT NULL AND ngay_het_han <= date('now','+7 hours','+60 days')`);
 
   const TRAN = 50;
+  /* ⚠️ `trich` CẮT Ở MÁY CHỦ CHO GIẤY TỜ NHẠY CẢM — REV-0036 lỗi #5.
+     180 ký tự đầu của chữ đã bóc từ một tờ CCCD hay hợp đồng lao động là RUỘT
+     của giấy tờ đó: họ tên, số CCCD, mức lương thường nằm ngay mấy dòng đầu.
+     Mà đường danh sách KHÔNG ghi nhật ký (nó không mở một tài liệu cụ thể nào),
+     nên ai đó đọc được ruột giấy tờ nhạy cảm mà không để lại vết — đúng thứ
+     Luật BVDLCN 91/2025/QH15 bắt phải ghi lại.
+     Muốn đọc nội dung giấy tờ nhạy cảm thì phải MỞ nó ra (`/api/tai-lieu/mo`),
+     và mở là có nhật ký. Cắt bằng CASE trong SQL, không lọc trong JS: dữ liệu
+     không rời máy chủ thì không có chỗ nào quên lọc.
+     Danh sách vẫn còn tiêu đề, số hiệu, ngày hết hạn — đủ để tra cứu. */
   const { results } = await env.DB.prepare(`
     SELECT id, nhom, loai, tieu_de, so_hieu, ngay_ban_hanh, ngay_het_han,
            han_luu, so_trang, co_byte, ocr_so_trang, nhay_cam, nguoi_tao, tao_luc,
-           substr(COALESCE(noi_dung,''), 1, 180) AS trich
+           CASE WHEN nhay_cam = 1 THEN NULL
+                ELSE substr(COALESCE(noi_dung,''), 1, 180) END AS trich
       FROM tai_lieu
      WHERE ${dieuKien.join(' AND ')}
      ORDER BY (ngay_het_han IS NULL), ngay_het_han, tao_luc DESC
@@ -457,20 +594,42 @@ async function layVaKiemQuyen(env, phien, id) {
   return { tl };
 }
 
-/** Ghi nhật ký truy cập — CHỈ giấy tờ nhạy cảm, và gộp theo NGÀY.
- *  20 lượt mở trong ngày = ĐÚNG 1 lượt ghi D1 (khoá chính chặn trùng). */
+/** Ghi nhật ký truy cập — CHỈ giấy tờ nhạy cảm, GỘP THẬT theo NGÀY.
+ *
+ *  ⚠️ REV-0036 lỗi #3 — bản trước KHAI SAI. Nó viết `ON CONFLICT DO UPDATE SET
+ *  so_lan = so_lan + 1`, tức là mở 10 lần = 1 DÒNG nhưng **10 LƯỢT GHI** D1,
+ *  trong khi cả file lại khai "1 lượt ghi/người/ngày". Hạn mức ghi D1 mới vá
+ *  xong (REV-0031/0033) nên con số đó không phải chuyện chữ nghĩa.
+ *
+ *  Sửa: ĐỌC TRƯỚC — đã có dòng của hôm nay thì thôi, KHÔNG ghi gì nữa. Lượt
+ *  đọc D1 rẻ hơn lượt ghi cả một bậc, và đây là đường đọc (mở tài liệu) nên
+ *  thêm một lượt đọc là đúng chỗ.
+ *
+ *  ĐÁNH ĐỔI — nói thẳng, đừng để người sau tưởng nhật ký đếm từng lượt:
+ *  nhật ký giờ trả lời "NGÀY NÀO ai đã mở tài liệu nào", KHÔNG trả lời "mở
+ *  bao nhiêu lần trong ngày". Với nghĩa vụ Luật BVDLCN 91/2025/QH15 (chứng
+ *  minh được ai đã tiếp cận dữ liệu cá nhân, khi nào) thì mốc NGÀY là đủ.
+ *  Cột `so_lan` vì thế luôn = 1 và `luc` là giờ mở ĐẦU TIÊN trong ngày —
+ *  đúng như nhãn ghi ở màn nhật ký, không còn chỗ hiểu nhầm.
+ *
+ *  Trả về SỐ LƯỢT GHI D1 thật sự tốn (0 hoặc 1) — bàn đo đếm bằng con số này. */
 async function ghiNhatKy(env, tl, phien, hanhDong) {
   if (!tl.nhay_cam) return 0;
   const nguoi = phien.nhan_su_id || phien.id || 'khong_ro';
   const homNay = ngayVN(gioVN());
   const khoa = `${tl.id}|${nguoi}|${homNay}|${hanhDong}`;
   try {
-    const r = await env.DB.prepare(
+    const daCo = await env.DB.prepare(
+      'SELECT 1 AS co FROM tai_lieu_nhat_ky WHERE khoa = ?').bind(khoa).first();
+    if (daCo) return 0;                       // lượt mở thứ 2..N trong ngày: 0 ghi
+    /* `DO NOTHING` chứ không `DO UPDATE`: hai lượt mở đúng cùng một khoảnh khắc
+       thì lượt sau im lặng đi qua, không ném lỗi ra giữa đường đọc tài liệu. */
+    await env.DB.prepare(
       `INSERT INTO tai_lieu_nhat_ky (khoa, tai_lieu_id, nhan_su_id, ngay, hanh_dong, so_lan, luc)
        VALUES (?,?,?,?,?,1,?)
-       ON CONFLICT(khoa) DO UPDATE SET so_lan = so_lan + 1`
+       ON CONFLICT(khoa) DO NOTHING`
     ).bind(khoa, tl.id, nguoi, homNay, hanhDong, nowVN()).run();
-    return r.meta?.changes || 0;
+    return 1;
   } catch (e) {
     /* Nhật ký hỏng KHÔNG được chặn người ta đọc giấy tờ của chính công ty
        mình — nhưng phải kêu lên log để còn biết mà sửa. */
@@ -523,8 +682,11 @@ export async function tepTaiLieu(env, phien, id) {
 export async function nhatKyTaiLieu(env, phien, id) {
   if (!laAdmin(phien.vai_tro)) return loi('Chỉ Admin xem được nhật ký truy cập', 403);
   if (!id) return loi('Thiếu mã tài liệu');
+  /* `k.luc` là giờ mở ĐẦU TIÊN trong ngày — nhật ký gộp theo ngày, xem
+     `ghiNhatKy()`. Đặt tên cột trả về cho đúng nghĩa để màn hình không lỡ
+     hiển thị "lúc 9:05" như thể đó là lượt mở gần nhất. */
   const { results } = await env.DB.prepare(`
-    SELECT k.ngay, k.hanh_dong, k.so_lan, k.luc, k.nhan_su_id,
+    SELECT k.ngay, k.hanh_dong, k.luc AS lan_dau_luc, k.nhan_su_id,
            COALESCE(n.ho_ten, k.nhan_su_id) AS ho_ten
       FROM tai_lieu_nhat_ky k
       LEFT JOIN nhan_su n ON n.id = k.nhan_su_id

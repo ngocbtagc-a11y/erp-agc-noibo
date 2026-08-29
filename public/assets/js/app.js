@@ -8685,7 +8685,15 @@ async function khoiDongKhoTaiLieu() {
           ${t.ocr_so_trang ? `· đã bóc chữ ${Number(t.ocr_so_trang)||0} trang`
             : '· <i>chưa bóc được chữ — tra bằng tên</i>'}
         </div>
-        ${t.trich ? `<p class="tl-trich">${esc(t.trich)}…</p>` : ''}
+        ${t.trich ? `<p class="tl-trich">${esc(t.trich)}…</p>`
+          /* Giấy tờ nhạy cảm KHÔNG có trích đoạn ở danh sách — máy chủ cắt sẵn,
+             vì đường danh sách không ghi nhật ký (REV-0036 #5). Phải NÓI RA chỗ
+             bị cắt, đừng để trống lặng lẽ: người ta sẽ tưởng tài liệu chưa bóc
+             được chữ rồi đi quét lại thêm một lần nữa. */
+          : (t.nhay_cam && t.ocr_so_trang
+              ? '<p class="tl-trich"><i>Giấy tờ nhạy cảm — nội dung chỉ hiện khi bấm ' +
+                '"Xem chữ đã bóc", và mỗi lượt xem đều được ghi nhật ký.</i></p>'
+              : '')}
         <div class="tl-the-nut">
           <a class="tl-nut-mo" href="/api/tai-lieu/tep?id=${encodeURIComponent(t.id)}" target="_blank" rel="noopener">Mở bản quét</a>
           <button type="button" class="tl-nut-mo tl-nut-chu" data-xem="${t.id}">Xem chữ đã bóc</button>

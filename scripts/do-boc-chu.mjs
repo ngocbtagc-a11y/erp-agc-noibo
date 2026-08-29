@@ -86,7 +86,10 @@ const TRUONG = [
 ];
 
 /* ---- Bỏ dấu: DÙNG LẠI đúng hàm của sản phẩm, không viết bản thứ hai ----- */
-const { boDau } = await import(new URL('../src/tai-lieu.js', import.meta.url).href);
+/* Lấy CẢ mô hình từ sản phẩm: đo một mô hình khác với mô hình ERP đang chạy
+   thì con số đẹp mấy cũng vô nghĩa. */
+const { boDau, MO_HINH_DOC_ANH, khuonDocAnh } =
+  await import(new URL('../src/tai-lieu.js', import.meta.url).href);
 
 /* ---- Khoảng cách Levenshtein, hai hàng bộ nhớ (chuỗi vài nghìn ký tự) --- */
 function khoangCach(a, b) {
@@ -118,20 +121,21 @@ const NHAC =
   'Chỗ nào mờ không đọc được thì ghi [không rõ].';
 
 mkdirSync(TAM, { recursive: true });
+/* Worker tạm nhận thẳng KHUÔN ĐẦU VÀO do sản phẩm dựng (`khuonDocAnh`). Tự
+   dựng khuôn riêng ở đây là đo một đường khác với đường ERP chạy — và đó đúng
+   là cách bàn đo này từng cho ra 0/8 mà không ai biết vì sao (khuôn cũ
+   `{image, prompt}` bị mô hình bỏ qua lặng lẽ, xem `khuonDocAnh()`). */
 writeFileSync(path.join(TAM, 'worker-boc-chu.js'), `
 export default {
   async fetch(req, env) {
     if (req.method !== 'POST') return new Response('POST đi', { status: 405 });
-    const { anh, nhac, mo } = await req.json();
-    const bin = atob(anh);
-    const u8 = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+    const { mo, khuon } = await req.json();
     const t0 = Date.now();
     try {
-      const kq = await env.AI.run(mo || '@cf/meta/llama-3.2-11b-vision-instruct', {
-        image: Array.from(u8), prompt: nhac, max_tokens: 1024
-      });
-      return Response.json({ ok: true, chu: kq?.response ?? kq?.description ?? kq?.text ?? '', ms: Date.now() - t0 });
+      const kq = await env.AI.run(mo, khuon);
+      const chu = kq?.response ?? kq?.description ?? kq?.text ??
+                  kq?.choices?.[0]?.message?.content ?? '';
+      return Response.json({ ok: true, chu: typeof chu === 'string' ? chu : JSON.stringify(chu), ms: Date.now() - t0 });
     } catch (e) {
       return Response.json({ ok: false, loi: String(e && e.message), ms: Date.now() - t0 });
     }
@@ -180,7 +184,7 @@ for (const ten of ANH) {
   try {
     const r = await fetch(`http://127.0.0.1:${CONG}/`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ anh: b64, nhac: NHAC })
+      body: JSON.stringify({ mo: MO_HINH_DOC_ANH, khuon: khuonDocAnh(b64, NHAC) })
     });
     j = await r.json();
   } catch (e) { j = { ok: false, loi: e.message, ms: 0 }; }
@@ -226,7 +230,7 @@ for (const ten of ANH) {
 
 wr.kill();
 
-console.log('\n═══ ĐỘ CHÍNH XÁC BÓC CHỮ — @cf/meta/llama-3.2-11b-vision-instruct ═══');
+console.log(`\n═══ ĐỘ CHÍNH XÁC BÓC CHỮ — ${MO_HINH_DOC_ANH} ═══`);
 for (const k of ketQua) {
   if (k.hong) { console.log(`\n${k.ten}: ✗ HỎNG — ${k.hong}`); continue; }
   console.log(`\n${k.ten}  (${k.ms} ms)`);
@@ -243,10 +247,24 @@ const te = ketQua.find(k => k.ten === 'anh-thu-te');
 console.log('\n─── CA ĐỐI CHỨNG (BH-16) ───');
 if (net && mo && !net.hong && !mo.hong) {
   const batDuoc = net.dungTruong > mo.dungTruong || net.giong > mo.giong + 2;
+  const kichTran = net.dungTruong === TRUONG.length && mo.dungTruong === TRUONG.length;
   console.log(`  Ảnh NÉT ${net.dungTruong}/${TRUONG.length} trường (${net.giong.toFixed(1)}% ký tự) · ` +
               `ảnh MỜ ${mo.dungTruong}/${TRUONG.length} (${mo.giong.toFixed(1)}%)`);
-  console.log(`  ${batDuoc ? 'BẮT ĐƯỢC' : '✗ PHÉP ĐO ĐÁNG NGỜ'} — ảnh mờ phải kém hơn ảnh nét. ` +
-    `${batDuoc ? '' : 'Bằng nhau nghĩa là phép đo không nhạy với chất lượng ảnh.'}`);
+  if (batDuoc) {
+    console.log('  BẮT ĐƯỢC — ảnh mờ kém hơn ảnh nét, phép đo nhạy với chất lượng ảnh.');
+  } else if (kichTran) {
+    /* Nói THẲNG là ca đối chứng này KHÔNG còn phân biệt được, và vì sao. Ghi
+       "ĐẠT" ở đây là tự lừa: bằng nhau vì cả hai đều KỊCH TRẦN 8/8, chứ không
+       phải vì phép đo tinh. Muốn thấy chỗ gãy phải hạ ảnh xuống dưới ngưỡng
+       74–93 dpi (REV-0036 đo riêng) — ở mức nén của sản phẩm thì không tới. */
+    console.log('  ⚠ CA ĐỐI CHỨNG NÀY KHÔNG CÒN PHÂN BIỆT ĐƯỢC — cả hai đều kịch trần');
+    console.log(`  ${TRUONG.length}/${TRUONG.length} trường, nên không nói lên điều gì về độ nhạy.`);
+    console.log('  Mờ 6px vẫn chưa đủ hạ mô hình; chỗ gãy nằm dưới ngưỡng 74–93 dpi.');
+    console.log('  Bằng chứng mô hình ĐỌC THẬT chứ không đoán: bản mờ chép sai đúng chỗ khó');
+    console.log('  ("phường Yên Hoà" → "Xuân Höa") — bịa thì sai cả trang, không sai một chữ.');
+  } else {
+    console.log('  ✗ PHÉP ĐO ĐÁNG NGỜ — ảnh mờ phải kém hơn ảnh nét mà lại không kém.');
+  }
 }
 if (net && te && !net.hong && !te.hong) {
   console.log(`  Nén tệ (700px · 0.40): ${te.dungTruong}/${TRUONG.length} trường (${te.giong.toFixed(1)}%) — ` +

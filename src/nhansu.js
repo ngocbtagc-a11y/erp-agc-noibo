@@ -12,6 +12,11 @@
    ========================================================================== */
 
 import { duocThemNhanSu, laAdmin } from './quyen.js';
+/* MỘT chỗ khai mô hình đọc ảnh cho CẢ ERP (`src/tai-lieu.js`). Chép tay chuỗi
+   mô hình sang đây chính là cách đường đọc CCCD chết âm thầm 11 ngày kể từ
+   18/08/2026: kho tài liệu đo ra lỗi 5016 rồi vá, còn đường này không ai chạm
+   tới vì nó là một chuỗi khác nằm ở một file khác. */
+import { MO_HINH_DOC_ANH, khuonDocAnh } from './tai-lieu.js';
 
 function json(d, status = 200) {
   return new Response(JSON.stringify(d), {
@@ -66,12 +71,13 @@ export async function docCCCD(env, phien, body) {
     'que_quan, noi_thuong_tru. Trường nào không đọc được thì để chuỗi rỗng.';
 
   try {
-    const kq = await env.AI.run('@cf/meta/llama-3.2-11b-vision-instruct', {
-      image: Array.from(bytes),
-      prompt,
-      max_tokens: 512
-    });
-    const data = rutJSON(kq && (kq.response ?? kq.description ?? kq.text)) || {};
+    /* ⚠️ Khuôn `{image, prompt}` cũ KHÔNG dùng được nữa: mô hình đời mới bỏ
+       qua trường `image` mà không báo lỗi, rồi bịa ra một tấm CCCD tưởng
+       tượng — HR sẽ điền sẵn một họ tên và số CCCD KHÔNG CÓ THẬT vào hồ sơ
+       lao động. Đo ngày 29/08/2026, xem `khuonDocAnh()` trong tai-lieu.js. */
+    const kq = await env.AI.run(MO_HINH_DOC_ANH, khuonDocAnh(anh, prompt));
+    const data = rutJSON(kq && (kq.response ?? kq.description ?? kq.text ??
+                                kq.choices?.[0]?.message?.content)) || {};
     return json({
       ok: true,
       thong_tin: {

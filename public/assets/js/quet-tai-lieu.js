@@ -426,6 +426,12 @@ export function moQuetTaiLieu(t) {
      6. Gửi
      ====================================================================== */
   async function gui() {
+    /* CHỐT ĐẦU HÀM — REV-0036 lỗi #4. Nút có `disabled` khi đang gửi, nhưng
+       `disabled` chỉ chặn con chuột: phím Enter trong ô nhập, hay `form.submit`
+       gọi lại lúc màn hình đang vẽ dở, vẫn lọt vào đây. Hai lượt gửi chồng nhau
+       là hai file trên Drive (một mồ côi) + một lỗi UNIQUE. Chặn ở chỗ RẺ nhất
+       trước; máy chủ vẫn có lưới thứ hai cho ca hai tab. */
+    if (dangGui) return;
     thu();
     if (!hs.tieuDe || hs.tieuDe.length < 3) { alert('Đặt tên cho tài liệu đã nhé.'); return; }
     if (!hs.trang.length) { alert('Chưa có trang nào.'); return; }
