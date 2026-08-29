@@ -563,13 +563,39 @@ export async function luuTaiLieu(env, phien, body) {
   if (!CUA_VAO_HOP_LE.includes(cuaVao)) {
     return loi(`Cửa vào "${cuaVao}" không có thật`, 400);
   }
-  /* `gan_id` chỉ có nghĩa ở cửa hồ sơ. Cửa kho chung mà gửi kèm thì VỨT, đừng
-     lưu: một dòng `cua_vao='kho_chung'` mang `gan_id` là dòng không cửa nào tra
-     ra — kho chung không lọc theo nó, hồ sơ thì không nhận nó. */
-  const ganId = cuaVao === 'nhan_su' ? chuoi(body.gan_id, 64) : null;
-
   const nhom = cuaVao === 'nhan_su' ? NHOM_CUA_NHAN_SU : chuoi(body.nhom, 40);
   if (!nhom || !NHOM_TAI_LIEU[nhom]) return loi('Chưa chọn nhóm giấy tờ');
+
+  /* ---- GIẤY NHÂN SỰ LUÔN THUỘC VỀ MỘT NGƯỜI  ·  REV-0046 lỗi #2 ---------
+     Sếp Ngọc nói nguyên văn: "lưu vào đây luôn THÀNH 1 BỘ là đẹp".
+
+     Lỗ cũ: HCNS đứng ở tab Kho tài liệu (cửa `kho_chung`) chọn nhóm "Nhân sự"
+     → `gan_id` bị vứt vì cửa không phải `nhan_su` → dòng có `gan_id` NULL ⇒
+     KHÔNG BAO GIỜ nằm trong bộ của ai. Mở hồ sơ Phạm Khương Duy vẫn thiếu tờ
+     đó, dù nó nằm ngay trong kho.
+
+     Vá theo hướng BẮT CHỌN NGƯỜI, không theo hướng "gắn vào hồ sơ sau":
+       · Gắn sau để tờ giấy mồ côi một quãng dài vô hạn — lỗ vẫn nguyên, chỉ
+         đổi tên thành "chưa gắn", mà ai quên gắn thì không ai biết.
+       · Gắn sau còn cần một đường UPDATE mới trên `tai_lieu`, phá đúng ràng
+         buộc hạn mức ghi D1 mà migration ghi ở đầu file: "MỘT lượt quét =
+         ĐÚNG 1 dòng INSERT. Không hơn."
+       · Bắt chọn ngay thì dùng lại NGUYÊN máy móc đã dựng cho cửa hồ sơ (kiểm
+         nhân sự có thật, ngay dưới đây), tốn thêm 0 lượt ghi, và bất biến
+         phát biểu được thành MỘT câu kiểm được: nhóm `nhan_su` ⇒ LUÔN có
+         `gan_id`, quét ở cửa nào cũng vậy.
+
+     Nên `gan_id` đọc theo NHÓM chứ không theo CỬA, và giấy nhân sự quét ở kho
+     chung được ghi thẳng `cua_vao='nhan_su'` — cùng một tờ giấy thì cùng một
+     dòng. Kho chung VẪN thấy nó (cửa nhìn kho chung không lọc `cua_vao` —
+     xem `danhSachTaiLieu`), nên "một kho hai cửa nhìn" giữ nguyên, chỉ hết
+     chỗ rơi.
+
+     Nhóm KHÁC mà gửi kèm `gan_id` thì vẫn VỨT như cũ: một dòng
+     `cua_vao='kho_chung'` mang `gan_id` là dòng không cửa nào tra ra. */
+  const laGiayNhanSu = nhom === NHOM_CUA_NHAN_SU;
+  const ganId = laGiayNhanSu ? chuoi(body.gan_id, 64) : null;
+  const cuaGhi = laGiayNhanSu ? 'nhan_su' : cuaVao;
 
   /* ⚠️ CẮT Ở MÁY CHỦ. Đây là chỗ chặn thật — giao diện có ẩn nút hay không
      cũng không liên quan. Gọi thẳng API bằng tư cách kế toán để lưu vào nhóm
@@ -585,14 +611,15 @@ export async function luuTaiLieu(env, phien, body) {
   if (soTrang < 1) return loi('Chưa có trang nào');
   if (soTrang > TRAN_SO_TRANG) return loi(`Một tài liệu tối đa ${TRAN_SO_TRANG} trang`);
 
-  /* ---- CỬA HỒ SƠ NHÂN SỰ: phải gắn vào một người CÓ THẬT ----------------
+  /* ---- GIẤY NHÂN SỰ: phải gắn vào một người CÓ THẬT ---------------------
      Một lượt ĐỌC D1 để đổi lấy việc không bao giờ có tài liệu mồ côi trong
      bảng. Gắn nhầm `gan_id` thì tờ giấy biến mất khỏi mọi hồ sơ mà vẫn nằm
      trong kho — không ai đi tìm, không ai biết nó của ai. Lượt đọc rẻ hơn lượt
-     ghi cả một bậc, và đây là đường ghi (mỗi lượt quét đúng một lần). */
+     ghi cả một bậc, và đây là đường ghi (mỗi lượt quét đúng một lần).
+     Điều kiện là NHÓM chứ không phải CỬA — xem lý do ở khối REV-0046 #2 trên. */
   let tenNguoi = null;
-  if (cuaVao === 'nhan_su') {
-    if (!ganId) return loi('Quét vào hồ sơ nhân sự thì phải kèm mã nhân sự');
+  if (laGiayNhanSu) {
+    if (!ganId) return loi('Giấy tờ nhân sự phải nằm trong hồ sơ của một người — hãy chọn nhân sự.');
     const ns = await env.DB.prepare(
       'SELECT id, ho_ten FROM nhan_su WHERE id = ?').bind(ganId).first();
     if (!ns) return loi('Không có nhân sự nào mang mã này', 404);
@@ -702,7 +729,7 @@ export async function luuTaiLieu(env, phien, body) {
     ngay_ban_hanh: ngay(body.ngay_ban_hanh),
     ngay_het_han: ngay(body.ngay_het_han),
     han_luu: NHOM_TAI_LIEU[nhom].han_luu,
-    cua_vao: cuaVao,
+    cua_vao: cuaGhi,
     gan_id: ganId,
     so_trang: soTrang,
     kho_nha: luuXong.nha,
@@ -789,7 +816,7 @@ export async function luuTaiLieu(env, phien, body) {
   return json({
     ok: true,
     id,
-    cua_vao: cuaVao,
+    cua_vao: cuaGhi,
     gan_id: ganId,
     gan_ten: tenNguoi,
     so_trang: soTrang,

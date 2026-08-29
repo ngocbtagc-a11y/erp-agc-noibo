@@ -1695,7 +1695,7 @@ tr.canh-bao:hover > td { background: #fbdbd6; }
   background: var(--white); border: 2px solid var(--line);
   font-size: 11px; line-height: 1;
   display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 1px 4px rgba(0,0,0,.18);
+  box-shadow: 0 1px 4px rgba(44,33,23,.22);
 }
 .cnb-dau-tb.tbd-dau-canhbao { border-color: #e67e22; background: #fff3e0; }
 /* Cùng lỗi ADR-0008 với .tb-badge: thiếu dòng này thì `hidden = true` chạy mà
@@ -1818,7 +1818,7 @@ tr.canh-bao:hover > td { background: #fbdbd6; }
   display: inline-flex; align-items: center; justify-content: center;
 }
 .tbd-nut:hover { background: var(--surface-2); }
-.tbd-nut-chinh { background: var(--sage); border-color: var(--sage); color: #fff; }
+.tbd-nut-chinh { background: var(--sage); border-color: var(--sage); color: var(--white); }
 .tbd-nut-chinh:hover { background: var(--sage-dark); }
 
 .tbd-caidat {
@@ -3116,8 +3116,8 @@ tr.kd-chiadoi td {
    việc rủi ro thấp. */
 .gy-the-ds { display: flex; flex-direction: column; gap: 8px; }
 .gy-the {
-  border: 1px solid var(--vien, #e3e3e0); border-radius: var(--r-md, 10px);
-  padding: 10px 12px; background: var(--nen-2, #fff);
+  border: 1px solid var(--line); border-radius: var(--r-md);
+  padding: 10px 12px; background: var(--card);
 }
 .gy-the-dau { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; flex-wrap: wrap; }
 /* NGƯỠNG NGÓN TAY 44px — Sếp Ngọc là NGƯỜI DUY NHẤT duyệt góp ý ở cấp cuối
@@ -3167,33 +3167,33 @@ tr.kd-chiadoi td {
 /* Vạch nối vẽ bằng ::before, đặt tuyệt đối — không chiếm chỗ, không giãn hộp */
 .gy-td-chang::before {
   content: ''; position: absolute; top: 6px; height: 2px;
-  left: -50%; right: 50%; background: var(--vien, #e3e3e0);
+  left: -50%; right: 50%; background: var(--line);
 }
 .gy-td-chang:first-child::before { display: none; }
-.gy-td-chang.qua::before, .gy-td-chang.day::before { background: var(--ok, #3f8f5f); }
+.gy-td-chang.qua::before, .gy-td-chang.day::before { background: var(--ok); }
 .gy-td-cham {
   width: 14px; height: 14px; border-radius: 50%; position: relative; z-index: 1;
-  background: var(--nen-2, #fff); border: 2px solid var(--vien, #e3e3e0); box-sizing: border-box;
+  background: var(--card); border: 2px solid var(--line); box-sizing: border-box;
 }
-.gy-td-chang.qua .gy-td-cham { background: var(--ok, #3f8f5f); border-color: var(--ok, #3f8f5f); }
+.gy-td-chang.qua .gy-td-cham { background: var(--ok); border-color: var(--ok); }
 .gy-td-chang.day .gy-td-cham {
-  border-color: var(--ok, #3f8f5f); border-width: 4px;
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok, #3f8f5f) 22%, transparent);
+  border-color: var(--ok); border-width: 4px;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 22%, transparent);
 }
-.gy-td-chang.hong .gy-td-cham { background: var(--danger, #c0392b); border-color: var(--danger, #c0392b); }
-.gy-td-chang.hong::before { background: var(--danger, #c0392b); }
+.gy-td-chang.hong .gy-td-cham { background: var(--danger); border-color: var(--danger); }
+.gy-td-chang.hong::before { background: var(--danger); }
 .gy-td-ten {
   font-size: 11px; line-height: 1.25; margin-top: 5px;
-  color: var(--chu-mo, #6b6b66); overflow-wrap: anywhere;
+  color: var(--text-mute); overflow-wrap: anywhere;
 }
-.gy-td-chang.day .gy-td-ten { font-weight: 700; color: var(--chu, #26261f); }
-.gy-td-chang.hong .gy-td-ten { font-weight: 700; color: var(--danger, #c0392b); }
+.gy-td-chang.day .gy-td-ten { font-weight: 700; color: var(--ink); }
+.gy-td-chang.hong .gy-td-ten { font-weight: 700; color: var(--danger); }
 /* Câu trả lời "ai đang giữ · bao lâu rồi", ngay dưới đường tiến độ */
 .gy-td-chu { font-size: 13px; line-height: 1.45; }
 .gy-td-canh {
-  border-left: 3px solid var(--danger, #c0392b); padding: 6px 10px; margin-top: 8px;
-  background: color-mix(in srgb, var(--danger, #c0392b) 7%, transparent);
-  border-radius: 0 var(--r-md, 10px) var(--r-md, 10px) 0;
+  border-left: 3px solid var(--danger); padding: 6px 10px; margin-top: 8px;
+  background: color-mix(in srgb, var(--danger) 7%, transparent);
+  border-radius: 0 var(--r-md) var(--r-md) 0;
 }
 
 .gy-chi-dienthoai { display: none; }

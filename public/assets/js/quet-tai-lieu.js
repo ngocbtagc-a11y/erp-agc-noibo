@@ -120,6 +120,12 @@ function congNam(n) {
    @param {Array}  t.nhom         [{ma, ten, vi_du, han_luu, nhay_cam}] — CHỈ
                                   các nhóm người này được LƯU (máy chủ vẫn
                                   kiểm lại, đây chỉ là bớt chỗ bấm nhầm)
+   @param {Function} [t.timNguoi] async () => [{id, ho_ten}] — CHỈ cửa KHO
+                                  CHUNG truyền. Nhóm "Nhân sự" chọn ở cửa kho
+                                  chung BẮT BUỘC phải chọn người trước khi lưu
+                                  (REV-0046 #2 — Sếp Ngọc: "thành 1 bộ là
+                                  đẹp"). Danh sách lấy từ MÁY CHỦ lúc cần,
+                                  không chép sẵn vào đây.
    @param {string} [t.tenGoiY]    điền sẵn tiêu đề (Đợt 2: tên nhân viên)
    @param {string} [t.dongYGoiY]  điền sẵn ô "ai đồng ý" (Đợt 2: tên nhân viên
                                   — người có giấy tờ CHÍNH LÀ người đó)
@@ -150,15 +156,29 @@ export function moQuetTaiLieu(t) {
      chung mà không hiểu vì sao. */
   const boQuaChonNhom = t.boQuaChonNhom === true && dsNhom.length === 1;
   let hs = docNhap(cuaVao, ganId) || moiBo();
-  let manHinh = (hs.trang.length || boQuaChonNhom) ? 'trang' : 'chon-nhom';
   let dangGui = false;
   let loiGui = null;
   let nhapKhongLuuDuoc = false;                       // localStorage không ghi được
+
+  /* ---- NHÓM NHÂN SỰ PHẢI CÓ CHỦ  ·  REV-0046 #2 ------------------------
+     Máy chủ đã chặn cứng (giấy nhóm `nhan_su` không có `gan_id` → 400). Màn
+     này chỉ để người ta không đi hết 12 chạm rồi mới bị chặn. Cửa hồ sơ đã có
+     `ganId` sẵn nên không bao giờ vào màn này. */
+  const timNguoi = typeof t.timNguoi === 'function' ? t.timNguoi : null;
+  let dsNguoi = null;                 // null = chưa nạp
+  let loiNguoi = null;
+  const canChonNguoi = () => hs.nhom === 'nhan_su' && !ganId && !hs.ganId;
+
+  let manHinh = hs.trang.length ? 'trang' : boQuaChonNhom ? 'trang' : 'chon-nhom';
 
   function moiBo() {
     return {
       maGui: (crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random())).slice(0, 40),
       nhom: dsNhom.length === 1 ? dsNhom[0].ma : '',
+      /* Người được gắn khi quét ở cửa KHO CHUNG mà chọn nhóm Nhân sự. Nằm
+         trong bản nháp để tắt máy giữa chừng mở lại vẫn còn — mất nó là người
+         ta phải chọn lại người cho một xấp ảnh đã chụp xong. */
+      ganId: '', ganTen: '',
       trang: [], tieuDe: t.tenGoiY || '', loai: '', soHieu: '',
       ngayBanHanh: '', ngayHetHan: '',
       /* Điền sẵn TÊN người, KHÔNG điền sẵn mục đích: "ai đồng ý" là chuyện xác
@@ -272,6 +292,7 @@ export function moQuetTaiLieu(t) {
     tam.innerHTML =
       dauTrang() +
       (manHinh === 'chon-nhom' ? veChonNhom()
+        : manHinh === 'chon-nguoi' ? veChonNguoi()
         : manHinh === 'thong-tin' ? veThongTin()
         : veTrang());
     noiSuKien();
@@ -281,9 +302,10 @@ export function moQuetTaiLieu(t) {
 
   function dauTrang() {
     const n = nhomDangChon();
+    const cua = hs.ganTen ? ' · ' + esc(hs.ganTen) : '';
     return `
       <div class="tlq-dau">
-        <b>Quét tài liệu${n ? ' · ' + esc(n.ten) : ''}</b>
+        <b>Quét tài liệu${n ? ' · ' + esc(n.ten) : ''}${cua}</b>
         <button type="button" class="tlq-x" data-viec="dong" aria-label="Đóng">✕</button>
       </div>
       <div class="tlq-luat">
@@ -310,6 +332,73 @@ export function moQuetTaiLieu(t) {
             </button>`).join('')}
         </div>
       </div>`;
+  }
+
+  /* ---- MÀN CHỌN NGƯỜI  ·  REV-0046 #2 ---------------------------------
+     Chỉ hiện ở cửa KHO CHUNG khi nhóm đang chọn là "Nhân sự". Không có màn
+     này thì tờ giấy nhân sự quét ở kho chung nằm ngoài bộ của mọi người —
+     đúng thứ Sếp Ngọc gọi là không "thành 1 bộ". */
+  function veChonNguoi() {
+    if (loiNguoi) {
+      return `<div class="tlq-than">
+        <p class="tlq-loi">Không lấy được danh sách nhân sự: ${esc(loiNguoi)}</p>
+        <button type="button" class="tlq-nut-chinh" data-viec="tai-lai-nguoi">↻ Thử lại</button>
+        <button type="button" class="tlq-nut-nhi" data-viec="doi-nhom">← Chọn nhóm giấy khác</button>
+      </div>`;
+    }
+    if (dsNguoi === null) {
+      return `<div class="tlq-than"><p class="tlq-huong">Đang lấy danh sách nhân sự…</p></div>`;
+    }
+    if (!dsNguoi.length) {
+      return `<div class="tlq-than">
+        <p class="tlq-canh">Chưa có nhân sự nào đang làm việc để gắn giấy tờ vào.</p>
+        <button type="button" class="tlq-nut-nhi" data-viec="doi-nhom">← Chọn nhóm giấy khác</button>
+      </div>`;
+    }
+    return `
+      <div class="tlq-than">
+        <p class="tlq-huong">Giấy tờ nhân sự phải nằm <b>trong hồ sơ của một người</b> —
+          chọn người trước, để mở hồ sơ ra là thấy đủ <b>một bộ</b>.</p>
+        <input class="tlq-o" id="tlqTimNguoi" data-tu-focus maxlength="60"
+               placeholder="Gõ tên để lọc — VD: Phạm Khương Duy">
+        <div class="tlq-nhom" id="tlqDsNguoi">${veODsNguoi('')}</div>
+        <button type="button" class="tlq-nut-nhi" data-viec="doi-nhom">← Chọn nhóm giấy khác</button>
+      </div>`;
+  }
+
+  /** Bỏ dấu + hạ chữ thường, để gõ "duy" ra "Phạm Khương Duy". Cùng luật với
+   *  ô tìm ở máy chủ, nhưng đây chỉ lọc TẠI CHỖ, không gọi thêm lượt nào. */
+  function khongDau(s) {
+    return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase();
+  }
+
+  function veODsNguoi(tu) {
+    const k = khongDau(tu).trim();
+    /* KHÔNG cắt danh sách. Cắt im lặng ở đây nghĩa là người quét gõ đúng tên
+       mà không thấy ai, rồi tưởng người đó chưa có trong ERP (đúng thứ
+       `do-cat-im-lang` sinh ra để bắt). Danh sách đã lọc "đang làm việc" nên
+       cỡ vài chục dòng — vẽ hết là đúng và vẫn nhanh. */
+    const ds = (dsNguoi || []).filter(n => !k || khongDau(n.ho_ten).includes(k));
+    if (!ds.length) return `<p class="tlq-huong">Không có ai khớp "${esc(tu)}".</p>`;
+    return ds.map(n => `
+      <button type="button" class="tlq-o-nhom" data-viec="chon-nguoi"
+              data-id="${esc(n.id)}" data-ten="${esc(n.ho_ten || '')}">
+        <b>${esc(n.ho_ten || '(chưa có tên)')}</b>
+        <span>${esc(n.chuc_danh || n.vi_tri || '')}</span>
+      </button>`).join('');
+  }
+
+  async function napNguoi() {
+    if (!timNguoi) { loiNguoi = 'màn này chưa được nối danh sách nhân sự'; ve(); return; }
+    dsNguoi = null; loiNguoi = null; ve();
+    try {
+      const ds = await timNguoi();
+      dsNguoi = (Array.isArray(ds) ? ds : []).filter(n => n && n.id);
+    } catch (e) {
+      loiNguoi = e.message || 'không rõ lý do';
+    }
+    ve();
   }
 
   function veTrang() {
@@ -424,12 +513,31 @@ export function moQuetTaiLieu(t) {
         if (v === 'dong') return hoiThoat();
         if (v === 'chon-nhom') {
           hs.nhom = el.dataset.ma;
+          hs.ganId = ''; hs.ganTen = '';     // đổi nhóm là bỏ người đã chọn
           luuNhap();
+          /* Nhóm Nhân sự ở cửa kho chung: chọn NGƯỜI trước rồi mới mở máy ảnh
+             (REV-0046 #2). Nhóm khác thì máy ảnh bật luôn như cũ. */
+          if (canChonNguoi()) { manHinh = 'chon-nguoi'; napNguoi(); return; }
           manHinh = 'trang';
           ve();
           moMayAnh(-1);                      // chọn nhóm xong máy ảnh bật LUÔN
           return;
         }
+        if (v === 'chon-nguoi') {
+          hs.ganId = el.dataset.id || '';
+          hs.ganTen = el.dataset.ten || '';
+          /* Giấy của ai thì người đó là người đồng ý — điền sẵn ĐÚNG một ô, y
+             như cửa hồ sơ đang làm. "Đồng ý cho mục đích gì" vẫn phải gõ tay. */
+          if (!hs.dongYBoi) hs.dongYBoi = hs.ganTen;
+          if (!hs.tieuDe && hs.ganTen) hs.tieuDe = hs.ganTen + ' — ';
+          luuNhap();
+          manHinh = 'trang';
+          ve();
+          if (!hs.trang.length) moMayAnh(-1);
+          return;
+        }
+        if (v === 'tai-lai-nguoi') { napNguoi(); return; }
+        if (v === 'doi-nhom') { manHinh = 'chon-nhom'; ve(); return; }
         if (v === 'chup-tiep') return moMayAnh(-1);
         if (v === 'chup-lai') return moMayAnh(parseInt(el.dataset.i, 10));
         if (v === 'xoa-trang') {
@@ -460,6 +568,25 @@ export function moQuetTaiLieu(t) {
 
     const form = tam.querySelector('#tlqForm');
     if (form) form.addEventListener('submit', (e) => { e.preventDefault(); gui(); });
+
+    /* Ô lọc tên: vẽ lại RIÊNG danh sách, không vẽ lại cả màn — vẽ cả màn là
+       ô nhập bị dựng lại và mất con trỏ sau mỗi chữ. */
+    const oTim = tam.querySelector('#tlqTimNguoi');
+    if (oTim) oTim.addEventListener('input', () => {
+      const o = tam.querySelector('#tlqDsNguoi');
+      if (!o) return;
+      o.innerHTML = veODsNguoi(oTim.value);
+      o.querySelectorAll('[data-viec="chon-nguoi"]').forEach(b => b.addEventListener('click', () => {
+        hs.ganId = b.dataset.id || '';
+        hs.ganTen = b.dataset.ten || '';
+        if (!hs.dongYBoi) hs.dongYBoi = hs.ganTen;
+        if (!hs.tieuDe && hs.ganTen) hs.tieuDe = hs.ganTen + ' — ';
+        luuNhap();
+        manHinh = 'trang';
+        ve();
+        if (!hs.trang.length) moMayAnh(-1);
+      }));
+    });
   }
 
   /** Thu các ô đang gõ dở về `hs` — không thu là chuyển màn một cái mất sạch. */
@@ -490,6 +617,10 @@ export function moQuetTaiLieu(t) {
     thu();
     if (!hs.tieuDe || hs.tieuDe.length < 3) { alert('Đặt tên cho tài liệu đã nhé.'); return; }
     if (!hs.trang.length) { alert('Chưa có trang nào.'); return; }
+    /* Bản nháp cũ (lưu trước bản vá REV-0046 #2) có thể đã có đủ trang mà chưa
+       có người. Máy chủ chặn thật; ở đây đưa người ta về đúng màn để chọn, chứ
+       đừng để họ bấm Lưu rồi ăn một câu lỗi. */
+    if (canChonNguoi()) { manHinh = 'chon-nguoi'; napNguoi(); return; }
     const n = nhomDangChon();
     if (n && n.nhay_cam && (!hs.dongYBoi || !hs.dongYMucDich)) {
       alert('Giấy tờ cá nhân: phải ghi rõ AI đồng ý và đồng ý cho MỤC ĐÍCH GÌ.');
@@ -516,7 +647,10 @@ export function moQuetTaiLieu(t) {
       const kq = await API.tlLuu({
         ma_gui: hs.maGui,                    // GIỮ NGUYÊN qua mọi lần gửi lại
         cua_vao: cuaVao,
-        gan_id: ganId,
+        /* Cửa hồ sơ đã có `ganId`; cửa kho chung lấy người vừa chọn ở màn
+           `chon-nguoi` (REV-0046 #2). Máy chủ ghi `cua_vao='nhan_su'` cho mọi
+           giấy nhóm nhân sự, nên hai đường về cùng MỘT dạng dòng. */
+        gan_id: ganId || hs.ganId || null,
         nhom: hs.nhom,
         tieu_de: hs.tieuDe,
         loai: hs.loai || null,

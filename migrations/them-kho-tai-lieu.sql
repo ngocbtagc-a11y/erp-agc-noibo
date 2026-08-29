@@ -71,12 +71,13 @@ CREATE TABLE IF NOT EXISTS tai_lieu (
 
   noi_dung       TEXT,                   -- chữ AI bóc được, CÓ dấu — để đọc
   ocr_so_trang   INTEGER NOT NULL DEFAULT 0,      -- đã bóc chữ mấy trang
-  -- Trong số đó, mấy trang ĐỐI CHIẾU ĐƯỢC với một mỏ neo MẠNH (số hiệu người
-  -- gõ · tên công ty · cụm chữ bắt buộc của loại giấy). Xem `docTinChu()` trong
-  -- src/tai-lieu.js. Mỏ neo KHÔNG dùng để vứt chữ — chữ LUÔN được lưu; con số
-  -- này chỉ nói phần chữ ấy tin được tới đâu, và chỉ trang đã đối chiếu mới
-  -- được phép vào cột `tim_kiem`.
-  ocr_so_trang_neo INTEGER NOT NULL DEFAULT 0,
+  -- ⚠️ CỘT `ocr_so_trang_neo` KHÔNG nằm ở đây — nó ở file RIÊNG
+  -- `them-kho-tai-lieu-cot-ocr-neo.sql`. Lý do (REV-0046 lỗi #1): thêm cột vào giữa
+  -- `CREATE TABLE IF NOT EXISTS` thì máy nào ĐÃ có bảng `tai_lieu` sẽ chạy
+  -- lại file này mà KHÔNG có gì xảy ra — cột vĩnh viễn không sinh ra, và mọi
+  -- lượt quét chết vì `INSERT` liệt kê cột đó. Cột mới của một bảng đã phát
+  -- hành thì PHẢI đi bằng `ALTER TABLE` ở file riêng, đúng nếp
+  -- `them-canhbao-kho.sql`. Đừng nhét cột mới vào đây nữa.
   ocr_ghi_chu    TEXT,                   -- trang nào chưa đối chiếu được, vì sao
 
   -- Luật BVDLCN: ghi nhận đồng ý. Bắt buộc với nhóm nhạy cảm (nhan_su).

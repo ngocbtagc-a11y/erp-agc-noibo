@@ -59,6 +59,8 @@
     "do-duong-di-tiep": "node scripts/do-duong-di-tiep.mjs",
     "nap-khotailieu-may": "node scripts/chay-migration.mjs them-kho-tai-lieu.sql",
     "nap-khotailieu": "node scripts/chay-migration.mjs them-kho-tai-lieu.sql --remote",
+    "nap-cotocrneo-may": "node scripts/chay-migration.mjs them-kho-tai-lieu-cot-ocr-neo.sql",
+    "nap-cotocrneo": "node scripts/chay-migration.mjs them-kho-tai-lieu-cot-ocr-neo.sql --remote",
     "do-kho-tai-lieu": "node scripts/do-kho-tai-lieu.mjs",
     "ban-kho-tai-lieu": "node scripts/ban-quet-tai-lieu.mjs",
     "do-quet-375": "node scripts/ban-quet-tai-lieu.mjs --tu-dong",

@@ -428,10 +428,15 @@ muc('⑥ CÂU "KHÔNG THAY BẢN GIẤY" — có mặt ở cả ba nơi');
   const r = await doc(await tailieu.danhSachTaiLieu(env, phienCua('admin'), new URLSearchParams()));
   dat(String(r.canh_bao || '').includes(cauGoc), 'Máy chủ đính câu đó vào mỗi lượt trả danh sách');
 
-  /* Nhóm nhân sự phải bắt ghi nhận ĐỒNG Ý (Luật BVDLCN 91/2025/QH15). */
-  const { env: e2 } = envGia({ first: () => null });
+  /* Nhóm nhân sự phải bắt ghi nhận ĐỒNG Ý (Luật BVDLCN 91/2025/QH15).
+     Đo trên SQLite thật vì từ REV-0046 #2 giấy nhân sự phải gắn được vào một
+     người CÓ THẬT trước đã — cửa "chọn người" đứng TRƯỚC cửa "đồng ý", nên
+     D1 giả phải trả về một người thật cho đúng câu tra `nhan_su`. */
+  const { env: e2 } = envGia({
+    first: (sql) => /FROM nhan_su/.test(sql) ? { id: 'ns_duy', ho_ten: 'Phạm Khương Duy' } : null
+  });
   const thieu = await tailieu.luuTaiLieu(e2, phienCua('hcns'), {
-    nhom: 'nhan_su', tieu_de: 'CCCD anh Duy', so_trang: 1, tep: 'AAAA'
+    nhom: 'nhan_su', gan_id: 'ns_duy', tieu_de: 'CCCD anh Duy', so_trang: 1, tep: 'AAAA'
   });
   dat(thieu.status === 400 && String((await doc(thieu)).loi).includes('đồng ý'),
     'Thiếu dấu ĐỒNG Ý → chặn ngay, không lưu', `→ HTTP ${thieu.status}`);
@@ -485,9 +490,14 @@ muc('⑦ NGƯỠNG NGÓN TAY 44px trong CSS thật');
    ========================================================================== */
 const { DatabaseSync } = await import('node:sqlite');
 
+/* Toàn bộ migration của Kho tài liệu, ĐÚNG THỨ TỰ phải chạy trên máy thật:
+   bảng trước, rồi cột thêm sau. Đọc thẳng từ ổ đĩa — thiếu một file là bàn đo
+   gãy ngay chứ không âm thầm chạy trên một lược đồ khác lược đồ sản phẩm. */
+const MIGRATION_KHO = ['them-kho-tai-lieu.sql', 'them-kho-tai-lieu-cot-ocr-neo.sql'];
+
 function d1SQLite() {
   const kho = new DatabaseSync(':memory:');
-  kho.exec(readFileSync(path.join(GOC, 'migrations/them-kho-tai-lieu.sql'), 'utf8'));
+  for (const f of MIGRATION_KHO) kho.exec(readFileSync(path.join(GOC, 'migrations', f), 'utf8'));
   kho.exec('CREATE TABLE IF NOT EXISTS nhan_su (id TEXT PRIMARY KEY, ho_ten TEXT)');
   /* `src/kho-file.js` ghi nhớ thư mục Drive ở đây. Nạp sẵn hai dòng = trạng
      thái BÌNH THƯỜNG sau tài liệu đầu tiên của mỗi nhóm (≤8 dòng cả đời), để
@@ -1497,25 +1507,52 @@ muc('⑨d "THÀNH 1 BỘ" — nhưng vẫn MỘT KHO, không phải hai kho');
     'Kho chung nói rõ tờ giấy này thuộc hồ sơ AI',
     `→ ${(cuaKho.ds.find(x => x.id === id) || {}).gan_ten}`);
 
-  /* Chiều ngược lại: giấy quét ở KHO CHUNG (không gắn ai) KHÔNG được lọt vào bộ
-     giấy của một người — "thành 1 bộ" là bộ của ĐÚNG người đó. */
+  /* ---- "THÀNH 1 BỘ" — VÁ REV-0046 #2 ----------------------------------
+     Sếp Ngọc: "lưu vào đây luôn THÀNH 1 BỘ là đẹp". Giấy nhóm `nhan_su` quét
+     ở cửa KHO CHUNG trước đây bị vứt `gan_id` ⇒ không nằm trong bộ của ai.
+     Nay nhóm `nhan_su` LUÔN gắn người, quét ở cửa nào cũng vậy. */
   const { kho: k2, env: e2 } = khoCoNguoi();
   await tailieu.luuTaiLieu(e2, phienCua('hcns', 'ns_huong'), {
     ma_gui: 'mg-chung-1', cua_vao: 'kho_chung', nhom: 'nhan_su', gan_id: 'ns_huyen',
-    tieu_de: 'Mẫu hợp đồng lao động trắng', so_trang: 1,
+    tieu_de: 'Hợp đồng lao động — Nguyễn Thị Huyền', so_trang: 1,
     tep: pdfDo.toString('base64'),
-    dong_y_boi: 'Ban giám đốc', dong_y_muc_dich: 'Mẫu biểu nội bộ'
+    dong_y_boi: 'Nguyễn Thị Huyền', dong_y_muc_dich: 'Quản lý hồ sơ lao động'
   });
   const boCuaNguoi = await doc(await tailieu.danhSachTaiLieu(e2, phienCua('hcns', 'ns_huong'),
     new URLSearchParams({ gan_id: 'ns_huyen' })));
   const khoChung2 = await doc(await tailieu.danhSachTaiLieu(e2, phienCua('hcns', 'ns_huong'),
     new URLSearchParams()));
-  dat((boCuaNguoi.ds || []).length === 0,
-    'Giấy quét ở kho chung KHÔNG lọt vào bộ giấy của một người',
+  dat((boCuaNguoi.ds || []).length === 1,
+    'Quét ở KHO CHUNG, nhóm Nhân sự, chọn người → VÀO ĐÚNG bộ của người đó',
     `→ ${(boCuaNguoi.ds || []).length} giấy`);
   dat((khoChung2.ds || []).length === 1, 'Giấy đó vẫn nằm trong kho chung', `→ ${khoChung2.ds.length}`);
-  dat(k2.prepare(`SELECT COUNT(*) AS n FROM tai_lieu WHERE gan_id IS NOT NULL`).get().n === 0,
-    'Cửa kho chung gửi kèm `gan_id` cũng bị VỨT (không có dòng mồ côi)');
+  dat(k2.prepare(`SELECT cua_vao, gan_id FROM tai_lieu`).get().cua_vao === 'nhan_su',
+    'Giấy nhân sự quét ở kho chung được ghi `cua_vao=nhan_su` — MỘT dạng dòng duy nhất');
+
+  /* Chọn nhóm Nhân sự mà KHÔNG chọn người → chặn ở máy chủ, không đẻ dòng nào. */
+  const { kho: k3, env: e3 } = khoCoNguoi();
+  const khongChon = await tailieu.luuTaiLieu(e3, phienCua('hcns', 'ns_huong'), {
+    ma_gui: 'mg-chung-2', cua_vao: 'kho_chung', nhom: 'nhan_su',
+    tieu_de: 'Quyết định bổ nhiệm không rõ của ai', so_trang: 1,
+    tep: pdfDo.toString('base64'),
+    dong_y_boi: 'Ban giám đốc', dong_y_muc_dich: 'Quản lý hồ sơ lao động'
+  });
+  dat(khongChon.status === 400 && /hồ sơ của một người/.test(String((await doc(khongChon)).loi)),
+    'Nhóm Nhân sự mà KHÔNG chọn người → 400 nói thẳng', `→ HTTP ${khongChon.status}`);
+  dat(k3.prepare('SELECT COUNT(*) AS n FROM tai_lieu').get().n === 0,
+    'Và không đẻ dòng nào (không có giấy nhân sự mồ côi)');
+
+  /* Nhóm KHÁC gửi kèm `gan_id` thì vẫn VỨT như cũ: một dòng `kho_chung` mang
+     `gan_id` là dòng không cửa nào tra ra. Ranh giới này KHÔNG được nới. */
+  const { kho: k4, env: e4 } = khoCoNguoi();
+  await tailieu.luuTaiLieu(e4, phienCua('hcns', 'ns_huong'), {
+    ma_gui: 'mg-chung-3', cua_vao: 'kho_chung', nhom: 'noi_bo', gan_id: 'ns_huyen',
+    tieu_de: 'Quy trình đóng gói hàng khô', so_trang: 1, tep: pdfDo.toString('base64')
+  });
+  const d4 = k4.prepare('SELECT cua_vao, gan_id FROM tai_lieu').get();
+  dat(d4 && d4.gan_id === null && d4.cua_vao === 'kho_chung',
+    'Nhóm KHÁC gửi kèm `gan_id` vẫn bị VỨT (không có dòng mồ côi)',
+    `→ cua_vao=${d4 && d4.cua_vao}, gan_id=${d4 && d4.gan_id}`);
 
   const boDuy = await doc(await tailieu.danhSachTaiLieu(env, phienCua('hcns', 'ns_huong'),
     new URLSearchParams({ gan_id: 'ns_duy' })));
@@ -1683,6 +1720,108 @@ muc('⑪ NHÃN "CHƯA KIỂM" PHẢI SỐNG QUA BẢN SAO LƯU CSV (REV-0044 · 
   /* Dòng nhạy cảm vẫn che như cũ — không nới tay nhân đây. */
   const kin = saoLuu2.cheDongNhayCam('tai_lieu', { ...dong, nhay_cam: 1 });
   dat(kin.noi_dung === saoLuu2.O_DA_CHE, 'Dòng nhạy cảm vẫn bị che nguyên như cũ');
+}
+
+/* ==========================================================================
+   ⑫ MIGRATION PHẢI TỚI ĐƯỢC MÁY ĐÃ CÓ BẢNG  (REV-0046 lỗi #1 — CHẶN PHÁT HÀNH)
+   ---------------------------------------------------------------------------
+   Lỗi đã xảy ra: cột `ocr_so_trang_neo` được thêm vào GIỮA câu `CREATE TABLE
+   IF NOT EXISTS tai_lieu`. Máy trắng thì đúng; máy đã chạy bản 1 thì `IF NOT
+   EXISTS` bỏ qua cả câu ⇒ cột KHÔNG BAO GIỜ sinh ra ⇒ mọi lượt quét chết vì
+   `INSERT` liệt kê cột đó. Nạp lại bao nhiêu lần cũng báo "xong".
+
+   Đo bằng `node:sqlite` THẬT, chạy đúng file .sql trên ổ đĩa. Ca cuối là ca
+   TỔNG QUÁT: so cột trong câu `INSERT` của src/tai-lieu.js với cột thật sự
+   có trong lược đồ — nó bắt được lỗi NÀY và cả lần sau, không cần ai nhớ tên
+   cột nào vừa thêm.
+   ========================================================================== */
+muc('⑫ CỘT MỚI PHẢI TỚI ĐƯỢC MÁY ĐÃ CÓ BẢNG (REV-0046 lỗi #1)');
+{
+  const doc = f => readFileSync(path.join(GOC, 'migrations', f), 'utf8');
+  /** Nạp lần lượt các file .sql vào một CSDL trắng, trả về tập tên cột `tai_lieu`. */
+  const cotSauKhiNap = (...ds) => {
+    const kho = new DatabaseSync(':memory:');
+    for (const f of ds) kho.exec(doc(f));
+    const cot = kho.prepare("SELECT name FROM pragma_table_info('tai_lieu')").all().map(r => r.name);
+    kho.close();
+    return cot;
+  };
+
+  /* Ca A — MÁY CŨ. Bảng đã có sẵn từ bản 1 (chính là `them-kho-tai-lieu.sql`
+     hôm nay, vì cột đã được gỡ khỏi CREATE TABLE), nạp lại lần nữa cho giống
+     đúng thao tác `npm run nap-khotailieu-may` của người thật. */
+  const mayCu = new DatabaseSync(':memory:');
+  mayCu.exec(doc('them-kho-tai-lieu.sql'));
+  mayCu.exec(doc('them-kho-tai-lieu.sql'));          // nạp lại — không đổi gì
+  const truoc = mayCu.prepare("SELECT name FROM pragma_table_info('tai_lieu')").all().map(r => r.name);
+  dat(!truoc.includes('ocr_so_trang_neo'),
+    'MÁY CŨ: nạp lại `them-kho-tai-lieu.sql` KHÔNG tự sinh cột (đúng bản chất lỗi)');
+  mayCu.exec(doc('them-kho-tai-lieu-cot-ocr-neo.sql'));
+  const sau = mayCu.prepare("SELECT name FROM pragma_table_info('tai_lieu')").all().map(r => r.name);
+  dat(sau.includes('ocr_so_trang_neo'),
+    'MÁY CŨ: nạp `them-kho-tai-lieu-cot-ocr-neo.sql` → cột CÓ');
+  mayCu.close();
+
+  /* Ca B — MÁY TRẮNG. Nạp cả bộ theo đúng thứ tự, không được vấp câu nào. */
+  let loiTrang = null;
+  let cotTrang = [];
+  try { cotTrang = cotSauKhiNap(...MIGRATION_KHO); } catch (e) { loiTrang = e; }
+  dat(!loiTrang && cotTrang.includes('ocr_so_trang_neo'),
+    'MÁY TRẮNG: nạp cả bộ theo thứ tự → cột CÓ, không câu nào vấp',
+    loiTrang ? `→ ${loiTrang.message}` : '');
+
+  /* Ca B2 — THỨ TỰ NẠP phải TỰ đúng, không dựa vào ai nhớ. Cơ chế tự nạp CSDL
+     sắp file theo tên ĐÃ BỎ ĐUÔI `.sql`. Đặt tên sai (bản nháp từng tên là
+     `them-cot-ocr-neo.sql`) thì ALTER chạy TRƯỚC CREATE TABLE và máy trắng
+     chết `no such table: tai_lieu`. */
+  const boDuoi = s => s.replace(/\.sql$/i, '');
+  const tuSap = [...MIGRATION_KHO].sort((a, b) =>
+    boDuoi(a) < boDuoi(b) ? -1 : boDuoi(a) > boDuoi(b) ? 1 : 0);
+  dat(tuSap.join(' → ') === MIGRATION_KHO.join(' → '),
+    'Tên file TỰ xếp đúng thứ tự nạp (bảng trước, cột vá sau)',
+    `→ ${tuSap.join(' → ')}`);
+
+  /* Ca C — ĐỐI CHỨNG (BH-16): bỏ file mới ra khỏi kế hoạch nạp thì cột PHẢI
+     mất trở lại. Không mất tức là phép đo đang đo nhầm chỗ — cột chui vào từ
+     đường khác, và ca A/B ở trên không chứng minh được gì. */
+  dat(!cotSauKhiNap('them-kho-tai-lieu.sql').includes('ocr_so_trang_neo'),
+    'ĐỐI CHỨNG: bỏ `them-kho-tai-lieu-cot-ocr-neo.sql` → cột phải MẤT trở lại');
+
+  /* Ca D — câu `CREATE TABLE` không được khai lại cột đó. Khai lại = máy
+     TRẮNG vấp `duplicate column name` ở file thứ hai và dừng giữa chừng.
+     Chỉ soi RUỘT câu CREATE TABLE và đã bỏ ghi chú `--` (ghi chú giải thích
+     vì sao cột không nằm ở đó có quyền nhắc tên cột).
+     ⚠️ Regex bỏ ghi chú dùng `[^\n\r]*` chứ KHÔNG dùng `.*$`: file trên máy
+     Windows này là CRLF, mà `.` không khớp `\r` nên `$` không bao giờ tới —
+     `.*$` lặng lẽ không xoá gì và phép đo hoá ra luôn "đạt". */
+  const boGhiChu = s => s.replace(/--[^\n\r]*/g, '');
+  const mBang = doc('them-kho-tai-lieu.sql')
+    .match(/CREATE TABLE IF NOT EXISTS tai_lieu\s*\(([\s\S]*?)\n\);/);
+  dat(!!mBang && !/ocr_so_trang_neo/.test(boGhiChu(mBang[1])),
+    'Câu CREATE TABLE không khai lại cột đó (cột chỉ khai ĐÚNG MỘT chỗ)');
+  /* ĐỐI CHỨNG cho chính ca D: `ocr_so_trang` (cột thật, có khai) PHẢI thấy —
+     nếu không thấy thì regex bóc nhầm chỗ và ca D ở trên vô nghĩa. */
+  dat(!!mBang && /ocr_so_trang\s+INTEGER/.test(boGhiChu(mBang[1])),
+    'ĐỐI CHỨNG: vẫn đọc thấy cột `ocr_so_trang` thật trong ruột câu CREATE TABLE');
+
+  /* Ca E — CA TỔNG QUÁT, thứ đáng giữ nhất ở mục này.
+     Mọi cột mà câu `INSERT INTO tai_lieu` của src/tai-lieu.js liệt kê đều
+     phải có thật trong lược đồ do MIGRATION_KHO dựng nên. Lần sau ai thêm cột
+     mà quên viết `ALTER TABLE` thì gãy ngay tại đây, không phải chờ Hồ Ly. */
+  const nguon = docNguon('src/tai-lieu.js');
+  const mInsert = nguon.match(/INSERT INTO tai_lieu\s*\(([\s\S]*?)\)\s*VALUES/);
+  if (!mInsert) {
+    dat(false, 'Tìm được câu INSERT INTO tai_lieu để soi', '→ đã đổi mã, sửa lại bàn đo!');
+  } else {
+    const cotInsert = mInsert[1].split(',').map(s => s.trim()).filter(Boolean);
+    const thieu = cotInsert.filter(c => !cotTrang.includes(c));
+    dat(cotInsert.length >= 20 && thieu.length === 0,
+      `Cả ${cotInsert.length} cột trong INSERT đều CÓ trong lược đồ migration`,
+      thieu.length ? `→ THIẾU: ${thieu.join(', ')}` : '');
+    /* ĐỐI CHỨNG cho chính ca E: bịa một cột không tồn tại → phải bắt được. */
+    dat([...cotInsert, 'cot_bia_dat'].filter(c => !cotTrang.includes(c)).length === 1,
+      'ĐỐI CHỨNG: thêm một cột bịa vào danh sách → phép so bắt được');
+  }
 }
 
 console.log('\n───────────────────────────────────────────────────────────');

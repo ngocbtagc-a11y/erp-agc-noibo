@@ -4943,7 +4943,13 @@ if (TOI.quyen.includes('nhansu')) {
           <div class="tl-the-nut">
             <a class="tl-nut-mo" href="/api/tai-lieu/tep?id=${encodeURIComponent(t.id)}"
                target="_blank" rel="noopener">Mở bản quét</a>
+            ${/* Vá REV-0046 #4. Nhãn "n trang chữ CHƯA KIỂM" ngay phía trên chỉ
+                  có nghĩa khi MỞ RA KIỂM ĐƯỢC — mà người vừa quét, đứng ngay ở
+                  màn này, là người DUY NHẤT còn cầm tờ giấy để đối chiếu.
+                  Dùng CHUNG hàm với tab Kho tài liệu, không chép bản hai. */''}
+            ${nutXemChuTaiLieu(t.id)}
           </div>
+          ${oChuTaiLieu(t.id)}
         </article>`;
     }
 
@@ -4979,6 +4985,9 @@ if (TOI.quyen.includes('nhansu')) {
 
       const ds = kq.ds || [];
       oDs.innerHTML = ds.map(nsGtMotThe).join('');
+      /* Cùng MỘT hàm bắt sự kiện với tab Kho tài liệu (vá REV-0046 #4) — hai
+         cửa nhìn, một cỗ máy. */
+      noiNutXemChu(oDs);
       oDem.textContent = ds.length
         ? `${ds.length} giấy tờ trong bộ${kq.bi_cat ? ' (đã cắt bớt)' : ''}`
         : '';
@@ -9009,6 +9018,73 @@ function cauSauKhiQuet(kq) {
 }
 
 /* ==========================================================================
+   "XEM CHỮ ĐÃ BÓC" — MỘT HÀM, HAI CỬA  ·  vá REV-0046 lỗi #4
+   ---------------------------------------------------------------------------
+   Thẻ giấy tờ ở khối HỒ SƠ NHÂN SỰ trước đây không có nút này, nên người vừa
+   quét — người DUY NHẤT còn cầm tờ giấy trên tay — không xem lại được chữ AI
+   đọc. Cả cơ chế "CHƯA KIỂM" chỉ có nghĩa khi người ta MỞ RA KIỂM ĐƯỢC; nhãn
+   không kiểm được là nhãn trang trí.
+
+   Đặt ở ĐÚNG MỘT chỗ, đúng nếp `cauSauKhiQuet` ở trên: hai cửa gọi chung một
+   hàm vẽ và một hàm bắt sự kiện. Chép bản thứ hai là chỗ để lần sau một cửa
+   quên mất câu "AI đọc — CHƯA KIỂM".
+   ⚠️ Mỗi lượt bấm gọi `API.tlMo` — với giấy NHẠY CẢM đó là một lượt GHI nhật
+   ký (gộp theo ngày, xem `ghiNhatKy()`), đúng thứ Luật BVDLCN bắt phải có.
+   ========================================================================== */
+
+/** Bôi vàng đúng những cụm số do AI đọc. Vị trí cụm do MÁY CHỦ tính
+ *  (`so_ai`, src/so-ai.js) — trình duyệt KHÔNG giữ bản dò số thứ hai. */
+function veChuCoSo(chu, viTri) {
+  const s = String(chu || '');
+  if (!Array.isArray(viTri) || !viTri.length) return esc(s);
+  let ra = '', xong = 0;
+  for (const [i, dai] of viTri) {
+    if (!Number.isFinite(i) || !Number.isFinite(dai) || i < xong) continue;
+    ra += esc(s.slice(xong, i));
+    ra += `<mark class="so-ai" title="AI đọc — CHƯA KIỂM">${esc(s.slice(i, i + dai))}</mark>`;
+    xong = i + dai;
+  }
+  return ra + esc(s.slice(xong));
+}
+
+/** Ô chữ + nút, dán vào thẻ giấy tờ ở cả hai cửa. */
+function nutXemChuTaiLieu(id) {
+  return `<button type="button" class="tl-nut-mo tl-nut-chu" data-xem="${esc(id)}">Xem chữ đã bóc</button>`;
+}
+function oChuTaiLieu(id) {
+  return `<div class="tl-chu" id="tl-chu-${esc(id)}" hidden></div>`;
+}
+
+/** Nối nút "Xem chữ đã bóc" cho mọi thẻ nằm trong `goc`. */
+function noiNutXemChu(goc) {
+  if (!goc) return;
+  goc.querySelectorAll('[data-xem]').forEach(b => b.addEventListener('click', async () => {
+    const o = document.getElementById('tl-chu-' + b.dataset.xem);
+    if (!o) return;
+    if (!o.hidden) { o.hidden = true; return; }
+    o.textContent = 'Đang mở…'; o.hidden = false;
+    try {
+      const r = await API.tlMo(b.dataset.xem);
+      const tl = r.tai_lieu || {};
+      if (!tl.noi_dung) {
+        o.textContent = 'Chưa bóc được chữ từ tài liệu này' +
+          (tl.ocr_ghi_chu ? ' — ' + tl.ocr_ghi_chu : '') + '.';
+        return;
+      }
+      /* Câu nhắc đứng TRƯỚC đoạn chữ, không phải chú thích cuối trang: người
+         đọc phải biết đây là chữ máy đọc TRƯỚC khi đọc con số. */
+      o.innerHTML =
+        '<p class="tl-so-ai-nhac">⚠️ <b>AI đọc — CHƯA KIỂM.</b> Con số được bôi ' +
+        'là do AI đọc từ ảnh. AI có thể đọc đúng tờ giấy mà vẫn chép sai vài ' +
+        'chữ số — đối chiếu bản giấy trước khi dùng bất kỳ con số nào vào giấy ' +
+        'tờ, tờ khai hay hồ sơ.</p>' +
+        `<pre class="tl-chu-van">${veChuCoSo(tl.noi_dung, tl.so_ai)}</pre>` +
+        (tl.ocr_ghi_chu ? `<p class="tl-so-ai-nhac">${esc(tl.ocr_ghi_chu)}</p>` : '');
+    } catch (e) { o.textContent = e.message; }
+  }));
+}
+
+/* ==========================================================================
    KHO TÀI LIỆU QUẢN TRỊ  ·  CTL-0026 Đợt 1 — cửa vào KHO CHUNG
    ---------------------------------------------------------------------------
    Màn này CHỈ làm ba việc: bày danh sách, tìm, và mở màn quét. Toàn bộ lõi
@@ -9109,7 +9185,7 @@ async function khoiDongKhoTaiLieu() {
               : '')}
         <div class="tl-the-nut">
           <a class="tl-nut-mo" href="/api/tai-lieu/tep?id=${encodeURIComponent(t.id)}" target="_blank" rel="noopener">Mở bản quét</a>
-          <button type="button" class="tl-nut-mo tl-nut-chu" data-xem="${t.id}">Xem chữ đã bóc</button>
+          ${nutXemChuTaiLieu(t.id)}
           ${/* ⚠️ VÁ REV-0040 · LỖI #7 — NHẬT KÝ GHI MÀ KHÔNG AI XEM ĐƯỢC.
                 `API.tlNhatKy` có sẵn từ đợt trước nhưng KHÔNG chỗ nào gọi. Nhật
                 ký tồn tại để trả lời "ai đã tiếp cận dữ liệu cá nhân này, ngày
@@ -9120,7 +9196,7 @@ async function khoiDongKhoTaiLieu() {
           ${laAdminTL && t.nhay_cam
             ? `<button type="button" class="tl-nut-mo tl-nut-nk" data-nk="${t.id}">Nhật ký truy cập</button>` : ''}
         </div>
-        <div class="tl-chu" id="tl-chu-${t.id}" hidden></div>
+        ${oChuTaiLieu(t.id)}
         <div class="tl-chu tl-nk" id="tl-nk-${t.id}" hidden></div>
       </article>`;
   }
@@ -9133,19 +9209,6 @@ async function khoiDongKhoTaiLieu() {
      Vị trí cụm số do MÁY CHỦ tính (`so_ai`, src/so-ai.js) — trình duyệt không
      giữ bản dò số thứ hai, vì hai bản chép tay của cùng một định nghĩa chính
      là cách đường đọc CCCD chết âm thầm 11 ngày. */
-  function veChuCoSo(chu, viTri) {
-    const s = String(chu || '');
-    if (!Array.isArray(viTri) || !viTri.length) return esc(s);
-    let ra = '', xong = 0;
-    for (const [i, dai] of viTri) {
-      if (!Number.isFinite(i) || !Number.isFinite(dai) || i < xong) continue;
-      ra += esc(s.slice(xong, i));
-      ra += `<mark class="so-ai" title="AI đọc — CHƯA KIỂM">${esc(s.slice(i, i + dai))}</mark>`;
-      xong = i + dai;
-    }
-    return ra + esc(s.slice(xong));
-  }
-
   async function nap() {
     try {
       const kq = await API.tlDanhSach({
@@ -9169,30 +9232,9 @@ async function khoiDongKhoTaiLieu() {
         goi_y: 'Gõ vào ô tìm hoặc chọn một nhóm để thu hẹp lại.'
       });
 
-      oDanhSach.querySelectorAll('[data-xem]').forEach(b => b.addEventListener('click', async () => {
-        const o = document.getElementById('tl-chu-' + b.dataset.xem);
-        if (!o) return;
-        if (!o.hidden) { o.hidden = true; return; }
-        o.textContent = 'Đang mở…'; o.hidden = false;
-        try {
-          const r = await API.tlMo(b.dataset.xem);
-          const tl = r.tai_lieu || {};
-          if (!tl.noi_dung) {
-            o.textContent = 'Chưa bóc được chữ từ tài liệu này' +
-              (tl.ocr_ghi_chu ? ' — ' + tl.ocr_ghi_chu : '') + '.';
-            return;
-          }
-          /* Câu nhắc đứng TRƯỚC đoạn chữ, không phải chú thích cuối trang:
-             người đọc phải biết đây là chữ máy đọc TRƯỚC khi đọc con số. */
-          o.innerHTML =
-            '<p class="tl-so-ai-nhac">⚠️ <b>AI đọc — CHƯA KIỂM.</b> Con số được bôi ' +
-            'là do AI đọc từ ảnh. AI có thể đọc đúng tờ giấy mà vẫn chép sai vài ' +
-            'chữ số — đối chiếu bản giấy trước khi dùng bất kỳ con số nào vào giấy ' +
-            'tờ, tờ khai hay hồ sơ.</p>' +
-            `<pre class="tl-chu-van">${veChuCoSo(tl.noi_dung, tl.so_ai)}</pre>` +
-            (tl.ocr_ghi_chu ? `<p class="tl-so-ai-nhac">${esc(tl.ocr_ghi_chu)}</p>` : '');
-        } catch (e) { o.textContent = e.message; }
-      }));
+      /* MỘT hàm cho cả hai cửa (kho chung + hồ sơ nhân sự) — xem
+         `noiNutXemChu` ở đầu mục. */
+      noiNutXemChu(oDanhSach);
 
       /* Nhật ký truy cập — chỉ Admin, chỉ giấy tờ nhạy cảm (vá REV-0040 #7). */
       oDanhSach.querySelectorAll('[data-nk]').forEach(b => b.addEventListener('click', async () => {
@@ -9236,6 +9278,18 @@ async function khoiDongKhoTaiLieu() {
     moQuetTaiLieu({
       cuaVao: 'kho_chung',
       nhom: dsNhom.filter(n => nhomLuuDuoc.includes(n.ma)),
+      /* REV-0046 #2 — Sếp Ngọc: "lưu vào đây luôn THÀNH 1 BỘ là đẹp".
+         Chọn nhóm "Nhân sự" ở cửa kho chung thì phải chọn NGƯỜI, không thì tờ
+         giấy mang `gan_id` NULL và không bao giờ nằm trong bộ của ai — mở hồ
+         sơ ra vẫn thiếu. Danh sách lấy từ MÁY CHỦ ngay lúc cần: không giữ bản
+         chép sẵn ở tab này, vì `DS_NHAN_SU_QT` chỉ có khi người dùng đã mở tab
+         Nhân sự, mà HCNS hoàn toàn có thể vào thẳng tab Kho tài liệu. */
+      timNguoi: async () => {
+        const kq = await API.nhanSu();
+        return (kq.nhan_su || [])
+          .filter(n => n && n.id && n.dang_lam !== 0)
+          .map(n => ({ id: n.id, ho_ten: n.ho_ten, chuc_danh: n.chuc_danh || n.vi_tri || '' }));
+      },
       khiXong: (kq) => {
         nap();
         alert(cauSauKhiQuet(kq) + '\n\n⚠️ Đây là bản dự phòng. ĐỪNG huỷ bản giấy gốc.');

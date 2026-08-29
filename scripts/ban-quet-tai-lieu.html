@@ -494,10 +494,99 @@ try {
       `Bỏ được màn chọn nhóm → 7 chạm ERP (cùng việc ở kho chung là 8)`);
 
   const lgHoSo = await (await fetch('/lan-gui-cuoi')).json();
+  const xongHoSo = xongRoi;
+
+  /* ======================================================================
+     ⑦ CỬA KHO CHUNG + NHÓM NHÂN SỰ  ·  vá REV-0046 lỗi #2
+     ---------------------------------------------------------------------
+     Sếp Ngọc: "lưu vào đây luôn THÀNH 1 BỘ là đẹp".
+     TRƯỚC bản vá: HCNS đứng ở tab Kho tài liệu chọn nhóm "Nhân sự" thì máy
+     ảnh mở luôn, `gan_id` bị vứt, tờ giấy KHÔNG nằm trong bộ của ai.
+     NAY: phải hiện màn CHỌN NGƯỜI trước, và thân yêu cầu gửi đi phải mang
+     `gan_id` của đúng người đã chọn — đọc THÂN GỬI THẬT bằng cách bọc
+     `window.fetch`, không đọc mã nguồn rồi đoán.
+     ====================================================================== */
+  ghi('\n─── ⑦ KHO CHUNG + NHÓM NHÂN SỰ: bắt chọn người (REV-0046 #2) ───');
+  localStorage.removeItem('tl_nhap_v1_kho_chung_chung');
+  xongRoi = false;
+  let thanGui2 = null;
+  const fetchGoc = window.fetch.bind(window);
+  window.fetch = async (u, o) => {
+    if (String(u).includes('/api/tai-lieu/luu') && o && o.body) {
+      try { thanGui2 = JSON.parse(o.body); } catch { /* thân hỏng — kệ */ }
+    }
+    return fetchGoc(u, o);
+  };
+
+  const nutKC = document.createElement('button');
+  nutKC.className = 'btn-primary tl-nut-quet';
+  nutKC.textContent = '📷 Quét tài liệu mới';
+  document.body.appendChild(nutKC);
+  let goiTimNguoi = 0;
+  nutKC.addEventListener('click', () => moQuetTaiLieu({
+    cuaVao: 'kho_chung',
+    nhom: [
+      { ma: 'attp', ten: 'An toàn thực phẩm', vi_du: 'Giấy ATTP', han_luu: '5 năm', nhay_cam: 0 },
+      { ma: 'nhan_su', ten: 'Nhân sự', vi_du: 'HĐLĐ, quyết định, CCCD',
+        han_luu: 'HĐLĐ 10 năm sau chấm dứt', nhay_cam: 1 }
+    ],
+    timNguoi: async () => {
+      goiTimNguoi++;
+      return [{ id: 'ns_duy', ho_ten: 'Phạm Khương Duy', chuc_danh: 'Quản lý kho' },
+              { id: 'ns_huyen', ho_ten: 'Nguyễn Thị Huyền', chuc_danh: 'Vận hành sàn' }];
+    },
+    khiXong: () => { xongRoi = true; }
+  }));
+
+  nutKC.click();
+  (await doi('[data-viec="chon-nhom"][data-ma="nhan_su"]')).click();
+  let oChonNguoi = null;
+  try { oChonNguoi = await doi('[data-viec="chon-nguoi"]'); } catch { oChonNguoi = null; }
+  ghi(`  ${oChonNguoi ? 'ĐẠT ' : '✗ HỎNG'}  Chọn nhóm Nhân sự ở kho chung → HIỆN màn chọn người`);
+  ghi(`  ${goiTimNguoi === 1 ? 'ĐẠT ' : '✗ HỎNG'}  Danh sách người lấy từ máy chủ đúng 1 lượt` +
+      `   → ${goiTimNguoi} lượt`);
+  /* ĐỐI CHỨNG: máy ảnh KHÔNG được mở trước khi chọn người — mở trước là người
+     ta chụp xong cả xấp rồi mới biết còn phải chọn người. */
+  ghi(`  ${document.querySelectorAll('.tlq-the').length === 0 ? 'ĐẠT ' : '✗ HỎNG'}  ` +
+      `ĐỐI CHỨNG: chưa chọn người thì CHƯA mở máy ảnh`);
+  /* Ô lọc tên phải lọc được — không lọc thì 20 người còn xem được, 200 thì không. */
+  const oLoc = document.querySelector('#tlqTimNguoi');
+  if (oLoc) {
+    oLoc.value = 'duy';
+    oLoc.dispatchEvent(new Event('input', { bubbles: true }));
+    await cho(60);
+  }
+  const conLai = document.querySelectorAll('[data-viec="chon-nguoi"]').length;
+  ghi(`  ${conLai === 1 ? 'ĐẠT ' : '✗ HỎNG'}  Gõ "duy" (không dấu) lọc đúng 1 người   → ${conLai}`);
+
+  document.querySelector('[data-viec="chon-nguoi"][data-id="ns_duy"]').click();
+  await doi('.tlq-the');                     // chọn người xong máy ảnh mới mở
+  ep375();
+  (await doi('[data-viec="sang-thong-tin"]')).click();
+  const oTenKC = await doi('#tlqTieuDe');
+  const dongYSan = (document.querySelector('#tlqDongYBoi') || {}).value || '';
+  oTenKC.value = 'Phạm Khương Duy — Hợp đồng lao động';
+  const oMdKC = await doi('#tlqMucDich');
+  oMdKC.value = 'Quản lý hồ sơ lao động, đóng BHXH';
+  document.querySelector('#tlqForm button[type="submit"]').click();
+  const t7 = Date.now();
+  while (!xongRoi && Date.now() - t7 < 10000) await cho(60);
+  window.fetch = fetchGoc;
+
+  ghi(`  ${xongRoi ? 'ĐẠT ' : '✗ HỎNG'}  Lưu xong ở cửa kho chung`);
+  ghi(`  ${thanGui2 && thanGui2.gan_id === 'ns_duy' ? 'ĐẠT ' : '✗ HỎNG'}  ` +
+      `Thân gửi đi mang gan_id của ĐÚNG người đã chọn   → gan_id=${thanGui2 && thanGui2.gan_id}`);
+  ghi(`  ${thanGui2 && thanGui2.nhom === 'nhan_su' ? 'ĐẠT ' : '✗ HỎNG'}  ` +
+      `và nhóm vẫn là nhan_su   → nhom=${thanGui2 && thanGui2.nhom}`);
+  ghi(`  ${dongYSan === 'Phạm Khương Duy' ? 'ĐẠT ' : '✗ HỎNG'}  ` +
+      `Ô "ai đồng ý" điền sẵn tên người vừa chọn → "${dongYSan}"`);
+  ghi(`KET_LUAN_KHOCHUNG_NS man_chon_nguoi=${!!oChonNguoi} loc_ten=${conLai === 1} ` +
+      `gan_id=${thanGui2 && thanGui2.gan_id} nhom=${thanGui2 && thanGui2.nhom} ` +
+      `dong_y_dien_san=${dongYSan === 'Phạm Khương Duy'} luu_xong=${xongRoi}`);
 
   ghi('\n───────────────────────────────────────────────────────────');
   ghi(`KET_LUAN_HOSO cham_erp=${chamErpHoSo} cham_may_anh=${camHoSo} ` +
-      `tong_tu_ho_so=${chamErpHoSo + camHoSo + 1} luu_xong=${xongRoi} ` +
+      `tong_tu_ho_so=${chamErpHoSo + camHoSo + 1} luu_xong=${xongHoSo} ` +
       `dong_y_dien_san=${dongYDaDien === 'Nguyễn Thị Huyền'} chip_loai=${loaiSauChip === 'Quyết định'} ` +
       `nut_quet_px=${caoNutQuetHoSo} chip_px=${caoChip} than_gui=${lgHoSo.co_byte_than || 0}`);
   ghi(`KET_LUAN cham_erp=${chamErpBo3} cham_may_anh=${chamCamBo3} tong=${chamErpBo3 + chamCamBo3} ` +
