@@ -97,19 +97,34 @@ class D1Cau {
 class D1 {
   constructor(db) { this.db = db; }
   prepare(sql) { return new D1Cau(this.db, sql); }
-  /* D1 THẬT trả một `D1Result` cho MỖI câu trong batch, và câu ĐỌC có kèm
-     `results` (các dòng). Vỏ cũ ở đây chỉ gọi `run()`, nên một câu SELECT đi
-     qua `batch()` trên bàn thử ra RỖNG trong khi bản thật ra đủ dòng — bàn
-     thử nói dối NGƯỢC CHIỀU: mã đúng mà bàn thử báo sai. Sửa 29/08/2026 khi
-     `chatGanDay()` gộp 2 câu đọc vào một `batch()` (REV-0038 · L4).
-     Câu GHI vẫn đi `run()` để giữ nguyên `meta.changes` / `last_row_id`. */
+  /* HAI lỗi khác nhau của cùng một hàm, phát hiện ở hai nhánh, GIỮ CẢ HAI.
+     Bỏ một cái là mở lại một lỗi.
+
+     ① D1 THẬT trả một `D1Result` cho MỖI câu, và câu ĐỌC có kèm `results`.
+        Vỏ cũ chỉ gọi `run()`, nên câu SELECT đi qua `batch()` ra RỖNG trong
+        khi bản thật ra đủ dòng — bàn thử nói dối NGƯỢC CHIỀU: mã đúng mà báo
+        sai. Bắt được khi `chatGanDay()` gộp 2 câu đọc (REV-0038 · L4).
+        Câu GHI vẫn đi `run()` để giữ `meta.changes` / `last_row_id`.
+
+     ② `batch()` của D1 THẬT chạy trong MỘT giao dịch ngầm: một câu hỏng thì
+        cả lô bị lùi. Bản cũ chạy tuần tự KHÔNG giao dịch — dựng ra một thế
+        giới KHÔNG có thật: câu 1 ăn, câu 2 hỏng, dữ liệu nằm nửa vời. Bắt
+        được khi đo CTL-0017 (ca DC-A): trigger chặn "dời hạn không lý do",
+        đáng lẽ cả lượt phải lùi, nhưng bàn đo cho hạn chót đổi thật (BH-17). */
   async batch(cacCau) {
-    const kq = [];
-    for (const c of cacCau) {
-      const laDoc = /^\s*(WITH|SELECT)\b/i.test(c.sql);
-      kq.push(laDoc ? await c.all() : await c.run());
+    this.db.exec('BEGIN');
+    try {
+      const kq = [];
+      for (const c of cacCau) {
+        const laDoc = /^\s*(WITH|SELECT)\b/i.test(c.sql);
+        kq.push(laDoc ? await c.all() : await c.run());
+      }
+      this.db.exec('COMMIT');
+      return kq;
+    } catch (e) {
+      try { this.db.exec('ROLLBACK'); } catch { /* đã tự lùi rồi */ }
+      throw e;
     }
-    return kq;
   }
   async exec(sql) { this.db.exec(thayDongHo(sql)); return { count: 0, duration: 0 }; }
 }

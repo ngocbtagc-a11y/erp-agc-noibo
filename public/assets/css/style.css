@@ -282,7 +282,38 @@ body {
   font-size: 15px;
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
+  /* CHỮ DÀI PHẢI TỰ XUỐNG DÒNG — CHỐT CHẶN TOÀN CỤC
+     ---------------------------------------------------------------------
+     Sếp Ngọc báo 29/08/2026: "tin nhắn dài quá thì xuống dòng, đừng để phải
+     kéo ngang". Đo ra: một chuỗi KHÔNG có dấu cách (link Shopee, mã đơn 19
+     số, dãy 80 chữ số) nhét vào BẤT KỲ khung chữ nào cũng thổi cả trang từ
+     375px ra 654–854px — thanh cuộn ngang mọc trên TOÀN TRANG, không riêng
+     chat. Đo được ở cả 6 tab. Chữ tiếng Việt bình thường không bao giờ dính
+     vì nó luôn có dấu cách để ngắt.
+
+     PHẢI LÀ `anywhere`, KHÔNG PHẢI `break-word` — đã thử `break-word` trước
+     và ĐO RA nó KHÔNG đủ: hai tab Trạm Mục Tiêu và Kho vận vẫn tràn 1071px
+     và 971px. Lý do: `break-word` cho chữ xuống dòng nhưng KHÔNG hạ kích
+     thước min-content, mà bề rộng tối thiểu của một ô flex/grid lấy đúng
+     min-content — nên cái từ dài vẫn banh rộng cả hàng flex ra, chữ bên
+     trong xuống dòng cũng vô ích. `anywhere` hạ min-content nên hàng flex co
+     lại được. (Cách khác là rắc `min-width: 0` khắp mọi ô flex trong 3.400
+     dòng CSS — nhiều chỗ để sót hơn hẳn.)
+
+     Cái giá của `anywhere` là Ô BẢNG cũng co theo và CỘT BẢNG VỠ. Nên ngay
+     dưới đây có một dòng trả `table` về `break-word`: bảng nhiều cột giữ
+     nguyên bề rộng cột và VẪN cuộn ngang trong khung riêng của nó, đúng
+     thiết kế. Ca đối chứng "bảng nhiều cột vẫn cuộn ngang" nằm ở mục E
+     trong `scripts/do-chu-dai-xuong-dong.mjs` — đổi hai dòng này là nó đỏ.
+
+     Kế thừa xuống mọi phần tử con, nên MỌI khung hiện chữ người dùng gõ —
+     kể cả khung viết sau này — được che sẵn, không phải nhớ vá từng chỗ. */
+  overflow-wrap: anywhere;
 }
+/* Bảng ĐƯỢC PHÉP cuộn ngang trong khung riêng — đó là thiết kế đúng cho
+   nhiều cột, không phải bệnh. Trả ô bảng về `break-word` để `anywhere` ở
+   trên không co cột lại làm vỡ bảng. Xem chú thích dài trong `body`. */
+table, table * { overflow-wrap: break-word; }
 
 a { color: inherit; text-decoration: none; }
 button, input, select, textarea { font-family: inherit; font-size: inherit; color: inherit; }
@@ -943,6 +974,22 @@ img.av { object-fit: cover; display: block; cursor: default; }
 .vd-item .vd-noidung::before { content: '“'; }
 .vd-item .vd-noidung::after { content: '”'; }
 .vd-item .sm { font-size: 12px; }
+
+/* Sửa / Gỡ lời khen (REV-0037 · L5). Vùng chạm 44px như mọi nút khác trong
+   ERP — đây là nút bấm trên điện thoại, và bấm nhầm "Gỡ" thay vì "Sửa" thì
+   người được khen ăn ngay một tin đính chính không đáng có. */
+.vd-item .vd-nut { display: flex; gap: 8px; margin-top: 6px; }
+.vd-item .vd-nut .btn-nho {
+  min-height: 44px; min-width: 44px;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+/* Ô chọn người bị KHOÁ ở chế độ sửa — `vdSua` không cho đổi người nhận. */
+.combo1-hienthi.khoa { background: #e6e0d6; color: var(--text-mute); pointer-events: none; }
+.vd-dang-sua {
+  font-size: 13px; line-height: 1.5;
+  background: var(--warn-wash); border: 1px solid #ecd9b5;
+  border-radius: var(--r-md); padding: 10px 12px;
+}
 
 .sb-user .meta { min-width: 0; flex: 1; }
 /* REV-0025/G3 đã cảnh báo cái bẫy ở đây: `.sb-user .meta b` đặt chữ TRẮNG,
@@ -1795,6 +1842,20 @@ tr.canh-bao:hover > td { background: #fbdbd6; }
 /* Dải trạng thái khi đang điếc: nền cảnh báo, khác hẳn nền mời xanh nhạt. */
 .tbd-moi.tbd-moi-canhbao { background: #fdf1e6; }
 
+/* Dải nhắc CÀI ERP LÊN MÁY — mỏng, một dòng, không chiếm chỗ của công việc.
+   Nút dùng lại đúng lớp `.tbd-nut` (đã đủ 44px cho ngón tay, đã đo). */
+.dai-cai-may {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  margin: 12px 16px 0;
+  padding: 10px 14px;
+  background: var(--sage-wash);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.dai-cai-may[hidden] { display: none; }
+.dai-cai-may-chu { flex: 1 1 260px; font-size: 13px; line-height: 1.45; color: var(--ink); }
+.dai-cai-may-nut { display: flex; gap: 8px; flex-wrap: wrap; }
+
 .tbd-moi {
   flex-shrink: 0;
   padding: 12px 16px;
@@ -2110,22 +2171,27 @@ tr.canh-bao:hover > td { background: #fbdbd6; }
 }
 
 .chat-nhap {
-  display: flex; align-items: center; gap: 8px;
+  display: flex; align-items: flex-end; gap: 8px;   /* `flex-end`: ô cao dần thì nút neo đáy */
   padding: 10px 12px;
   border-top: 1px solid var(--line);
   flex-shrink: 0;
 }
-.chat-nhap input[type="text"] {
+.chat-nhap input[type="text"],
+.chat-nhap textarea {
   flex: 1;
   padding: 11px 16px;
   border: 1px solid var(--line);
   border-radius: var(--r-pill);
   background: var(--surface);
 }
-.chat-nhap input[type="text"]:focus {
+.chat-nhap input[type="text"]:focus,
+.chat-nhap textarea:focus {
   outline: none; background: var(--white); border-color: var(--cam);
   box-shadow: 0 0 0 3px rgba(235,124,23,.28);
 }
+/* Ô gõ nhiều dòng đã cao lên thì bo tròn hết cỡ trông như viên thuốc méo —
+   đổi sang bo vừa, giống Messenger khi tin dài. */
+.chat-nhap textarea.dang-cao { border-radius: 18px; }
 /* Ô nhập + hai nút của nó. ĐO ĐƯỢC ở 375px trước bản này: nút 📎 chỉ
    38 × 38px và nút "Gửi" cao 36.8px — cả hai dưới sàn 44px, mà đây là hai nút
    bấm nhiều nhất của cả ERP. `box-sizing: border-box` bắt buộc, thiếu nó thì
@@ -2137,10 +2203,58 @@ tr.canh-bao:hover > td { background: #fbdbd6; }
   min-width: 44px; min-height: 44px;
   display: flex; align-items: center; justify-content: center;
 }
-.chat-nhap input[type="text"] { box-sizing: border-box; min-height: 44px; }
+.chat-nhap input[type="text"],
+.chat-nhap textarea { box-sizing: border-box; min-height: 44px; }
 .chat-nhap .btn-primary {
   box-sizing: border-box;
   min-width: 44px; min-height: 44px; flex-shrink: 0;
+}
+
+/* ==========================================================================
+   Ô GÕ NHIỀU DÒNG — `.o-nhieu-dong`
+   ---------------------------------------------------------------------------
+   VÌ SAO CÓ: Sếp Ngọc 29/08/2026 — "tin nhắn dài quá thì xuống dòng, đừng để
+   phải kéo ngang". Một `<input type="text">` KHÔNG BAO GIỜ xuống dòng được,
+   dù CSS viết gì. Đo ở 375px: gõ 133 ký tự vào thanh chat ra scrollWidth
+   1034px / clientWidth 232px — phải kéo ngang trong ô mới đọc lại được câu
+   mình vừa gõ.
+
+   Cả ERP có 111 ô một dòng cùng bệnh — KHÔNG phải 12 như vòng 1 khai. Vòng 1
+   đếm bằng `maxLength >= 100` nên bỏ sót sạch 99 ô KHÔNG khai `maxlength`,
+   tức nhóm nhận chữ VÔ HẠN (REV-0047/L1, BH-58). Chữa theo hai đường:
+     · 31 ô CHỮ DÀI (tiêu đề, tên hàng, tên NCC, địa chỉ, lý do…) dùng lớp này
+       — `<textarea rows="1">` trông y hệt ô một dòng lúc rỗng, tự cao dần khi
+       chữ dài, chặn trần rồi mới cuộn DỌC (không bao giờ ngang).
+     · 80 ô CHỮ NGẮN (tìm kiếm, SĐT, mã, số lượng…) khai `maxlength` < 100 cho
+       đúng thứ chúng thật sự nhận — trần thấp thì chữ không bao giờ đủ dài để
+       phải kéo ngang.
+
+   Enter vẫn GỬI / vẫn LƯU như trước — `noiDayONhieuDong()` trong app.js giữ
+   nguyên thói quen cũ; Shift+Enter mới là xuống dòng. Đổi khác đi là bắt 20
+   người học lại một phím họ bấm hàng trăm lần mỗi ngày.
+   ========================================================================== */
+.o-nhieu-dong {
+  resize: none;              /* góc kéo của trình duyệt phá vỡ bố cục đã cân */
+  overflow-y: auto;          /* cao tới trần thì cuộn DỌC */
+  overflow-x: hidden;        /* chốt: không bao giờ mọc thanh cuộn NGANG */
+  line-height: 1.45;
+  max-height: 132px;         /* ~6 dòng — quá đó thì cuộn, khỏi nuốt cả màn hình */
+}
+/* `.field textarea` (ở đầu file) đặt `min-height: 90px` cho ô mô tả nhiều
+   dòng. Ô này thay chỗ một `<input>` MỘT DÒNG nên phải gỡ sàn đó ra, không
+   thì mỗi ô vừa đổi phình thêm ~50px và màn 375px mất bớt dòng — đúng
+   thứ bản vá này không được phép làm. Cần cả `.field` lẫn `textarea` trong
+   bộ chọn để thắng độ ưu tiên của luật kia. */
+.field textarea.o-nhieu-dong { min-height: 0; resize: none; }
+/* `min-height: 44px` — REV-0047 ghi nhận ô này cao 34px, dưới sàn chạm 44px.
+   Bản `<input>` cũ còn thấp hơn (32px) nên đây không phải lỗi mới, nhưng đã
+   đụng vào thì nâng nốt cho đủ sàn. `box-sizing` bắt buộc: thiếu nó thì
+   padding cộng thêm ra ngoài 44px và luật F2 ("ô rỗng không quá 48px") đỏ. */
+.thd-panel textarea.o-nhieu-dong {
+  width: 100%; padding: 7px 9px;
+  box-sizing: border-box; min-height: 44px;
+  border: 1px solid var(--line); border-radius: var(--r-sm);
+  font-size: 12.5px; color: var(--ink); background: var(--surface);
 }
 
 /* ==========================================================================
@@ -3506,3 +3620,75 @@ tr.kd-chiadoi td {
 }
 .tlq-dongy > b { color: var(--cam-text); font-size: 14px; }
 .tlq-dongy > p { margin: 4px 0 0; font-size: 12px; color: var(--text-mute); }
+
+/* ==========================================================================
+   CTL-0017 — SỬA VIỆC ĐÃ GIAO
+   --------------------------------------------------------------------------
+   LUẬT BA MÀU (docs/BANG-MAU.md): không thêm màu thứ tư ở đây.
+     · nền/chữ  → họ NÂU (--surface-2 / --line / --ink / --text-mute)
+     · hộp lý do → --warn (vàng nâu) — NẰM TRONG họ nâu–cam, KHÔNG tính là
+       màu thứ tư. Cố ý KHÔNG dùng đỏ: dời hạn có lý do là việc hợp lệ, không
+       phải lỗi. Đỏ để dành đúng cho lỗi/quá hạn — rắc đỏ vào đây là làm loãng
+       chính cái đỏ mà kho vận đang dựa vào để bắt đơn hoàn quá hạn.
+     · một điểm nhấn cam duy nhất trong hộp: nút "Lưu thay đổi" (.btn-primary).
+       Nút "Sửa" ngoài bảng cố ý ĐỂ NÂU, không cam — hai chỗ cam cùng lúc thì
+       người dùng hết biết bấm cái nào (luật ③).
+
+   44px LÀ NGƯỠNG NGÓN TAY, ĐO THẬT (scripts/do-nut-sua-44px.mjs).
+   `.btn-nho` gốc chỉ cao ~29px (padding 6px + font 12.5px) — nhân viên kho
+   bấm bằng ngón cái khi đang bê hàng thì trượt. Nút của đợt này đặt
+   min-height CỨNG, kèm `box-sizing: border-box` (thiếu nó thì padding cộng
+   ra ngoài và số đo thật lệch khỏi số khai trong CSS).
+   ========================================================================== */
+.cv-sua-nut,
+.btn-nho.cv-nut-sua {
+  box-sizing: border-box;
+  min-height: 44px;
+  min-width: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Hộp "vì sao dời hạn" — vàng nâu, đủ nổi để không bấm nhầm cho qua, không
+   đỏ để khỏi trông như đang báo lỗi. */
+.cv-sua-canhbao {
+  background: var(--warn-wash);
+  border: 1px solid var(--warn);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+.cv-sua-canhbao label { color: var(--warn-dark); }
+.cv-sua-canhbao input {
+  box-sizing: border-box;
+  min-height: 44px;      /* ô nhập cũng là chỗ chạm — cùng ngưỡng ngón tay */
+}
+
+/* Lịch sử sửa — tách bằng ĐƯỜNG KẺ MẢNH, không bằng mảng nền xám (luật ④). */
+.cv-sua-lichsu {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.cv-sua-lichsu h5 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--text-mute);
+  font-weight: 600;
+}
+.cv-sua-lichsu ul { margin: 0; padding: 0; list-style: none; }
+.cv-sua-lichsu li {
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--ink);
+  padding: 7px 0;
+  border-bottom: 1px solid var(--line);
+}
+.cv-sua-lichsu li:last-child { border-bottom: 0; }
+.cv-sua-lichsu .luc { color: var(--text-mute); font-size: 11.5px; }
+
+/* ĐIỆN THOẠI LÀ ĐƯỜNG CHÍNH — Sếp và nhân viên kho sửa trên điện thoại.
+   Hai nút xuống hàng và chiếm hết bề ngang, khỏi phải nhắm. */
+@media (max-width: 640px) {
+  .cv-sua-nut { width: 100%; flex: 1 1 100%; }
+}
