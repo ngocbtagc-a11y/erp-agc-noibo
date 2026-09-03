@@ -705,7 +705,7 @@ UPDATE gop_y SET can_xac_minh_lai = 1
  WHERE trang_thai = 'hoan_thanh' AND (bang_chung_url IS NULL OR bang_chung_url = '');
 ```
 
-**Rollback**: `migrations/lui-gopy-congduyet.sql`. SQLite/D1 hỗ trợ
+**Rollback**: `migrations/lui/lui-gopy-congduyet.sql`. SQLite/D1 hỗ trợ
 `ALTER TABLE ... DROP COLUMN` từ 3.35, nhưng an toàn hơn là **không drop**:
 lùi bằng cách deploy lại code cũ (cột thừa nằm im, code cũ không đọc tới) —
 đúng nguyên tắc "migration phải lùi được, không phá dữ liệu".
