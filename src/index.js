@@ -6381,11 +6381,63 @@ async function tlDanhSach(req, env) {
   if (l) return l;
   return tailieu.danhSachTaiLieu(env, phien, new URL(req.url).searchParams);
 }
+/* ⚠️ HAI KHUÔN THÂN GỬI LÊN — VÁ REV-0054 · LỖI #2 (trần 25 MB chỉ đủ MỘT lượt)
+   ---------------------------------------------------------------------------
+   Bộ nhớ 128 MB của Workers là của cả ISOLATE, không phải của một yêu cầu. Gửi
+   file dưới dạng base64 trong JSON thì mỗi file tồn tại ~3,7 bản cùng lúc
+   trong Worker, nên HAI người cùng tải 25 MB = 185 MB ⇒ chết isolate, kéo theo
+   mọi yêu cầu đang bay của người khác.
+
+   Khuôn BYTE THẲNG bỏ hẳn ba bản trung gian đó. Khung cố ý làm đơn giản —
+   `multipart/form-data` phải dò chuỗi biên và quét lại cả thân, tức là lại
+   thêm một bản chép nữa:
+
+       [4 byte, big-endian: độ dài phần mô tả] [JSON mô tả, UTF-8] [byte file]
+
+   `arrayBuffer()` cho ĐÚNG MỘT bản; `subarray` là cửa sổ nhìn vào chính vùng
+   nhớ đó, không chép. Hai lượt 25 MB trùng giờ ≈ 50 MB — còn rộng, và KHÔNG
+   phải hạ trần xuống 15 MB, tức không phải bắt Sếp tách đôi bản scan.
+
+   Đường JSON GIỮ NGUYÊN: đường ảnh (trần 6 MB) không có vấn đề gì, và trình
+   duyệt còn nhớ bản cũ vẫn phải chạy được. Máy chủ KHÔNG có đường xử lý thứ
+   hai — cả hai khuôn cùng đổ vào `tailieu.luuTaiLieu`. */
 async function tlLuu(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
+  const kieu = String(req.headers.get('Content-Type') || '').toLowerCase();
+  if (kieu.includes('application/octet-stream')) {
+    let khung;
+    try { khung = new Uint8Array(await req.arrayBuffer()); }
+    catch { return loi('Không nhận được file gửi lên. Chọn lại file rồi gửi lần nữa.'); }
+    if (khung.length < 5) return loi('Dữ liệu gửi lên không hợp lệ');
+    const dai = ((khung[0] << 24) | (khung[1] << 16) | (khung[2] << 8) | khung[3]) >>> 0;
+    /* Trần 1 MB cho phần mô tả: nó chỉ đựng tên, nhóm, ngày. Một con số dài
+       bất thường ở đây là khung hỏng hoặc ai đó đang dò, không phải dữ liệu. */
+    if (dai < 2 || dai > 1048576 || 4 + dai > khung.length) {
+      return loi('Dữ liệu gửi lên không hợp lệ');
+    }
+    let b;
+    try { b = JSON.parse(new TextDecoder().decode(khung.subarray(4, 4 + dai))); }
+    catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+    if (!b || typeof b !== 'object') return loi('Dữ liệu gửi lên không hợp lệ');
+    b.tep_byte = khung.subarray(4 + dai);
+    return tailieu.luuTaiLieu(env, phien, b);
+  }
   let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
   return tailieu.luuTaiLieu(env, phien, b);
+}
+/* Sửa SỐ HIỆU + TÊN tài liệu — Sếp Ngọc 03/09/2026. Quyền cắt ở
+   `tailieu.suaTaiLieu` theo NHÓM giấy tờ, không cắt ở đây. */
+async function tlSua(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return tailieu.suaTaiLieu(env, phien, b);
+}
+async function tlLichSu(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  return tailieu.lichSuTaiLieu(env, phien, new URL(req.url).searchParams.get('id'));
 }
 async function tlMo(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
@@ -6599,6 +6651,8 @@ const DUONG_DAN = {
   'GET  /api/tai-lieu/mo':       tlMo,
   'GET  /api/tai-lieu/tep':      tlTep,
   'GET  /api/tai-lieu/nhat-ky':  tlNhatKy,
+  'GET  /api/tai-lieu/lich-su':  tlLichSu,
+  'POST /api/tai-lieu/sua':      tlSua,
   'POST /api/tai-lieu/an':       tlAn
 };
 

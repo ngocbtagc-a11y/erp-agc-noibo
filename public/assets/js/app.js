@@ -5568,8 +5568,12 @@ if (TOI.quyen.includes('nhansu')) {
                   màn này, là người DUY NHẤT còn cầm tờ giấy để đối chiếu.
                   Dùng CHUNG hàm với tab Kho tài liệu, không chép bản hai. */''}
             ${nutXemChuTaiLieu(t.id)}
+            ${/* Sửa số hiệu + tên SAU khi đã lưu — Sếp Ngọc 03/09/2026. Cùng
+                  một hàm với tab Kho tài liệu, không chép bản hai. */''}
+            ${nutSuaTaiLieu(t)}
           </div>
           ${oChuTaiLieu(t.id)}
+          ${oSuaTaiLieu(t)}
         </article>`;
     }
 
@@ -5602,12 +5606,16 @@ if (TOI.quyen.includes('nhansu')) {
       NS_GT_LOAI_GOI_Y = kq.loai_goi_y || [];
       NS_GT_QUET_DUOC = kq.duoc_quet_nhan_su === true;
       oNut.hidden = !NS_GT_QUET_DUOC;
+      /* Nhóm LƯU được do máy chủ trả — quyết định có bày nút "Sửa số & tên"
+         hay không. Giao diện không tự đoán, máy chủ vẫn chặn lại lần nữa. */
+      TL_NHOM_LUU_DUOC = kq.nhom_luu_duoc || [];
 
       const ds = kq.ds || [];
       oDs.innerHTML = ds.map(nsGtMotThe).join('');
       /* Cùng MỘT hàm bắt sự kiện với tab Kho tài liệu (vá REV-0046 #4) — hai
          cửa nhìn, một cỗ máy. */
       noiNutXemChu(oDs);
+      noiNutSuaTaiLieu(oDs, () => veGiayToHoSo(n));
       oDem.textContent = ds.length
         ? `${ds.length} giấy tờ trong bộ${kq.bi_cat ? ' (đã cắt bớt)' : ''}`
         : '';
@@ -9686,10 +9694,28 @@ function cauSauKhiQuet(kq) {
     ? `Đã lưu file "${kq.ten_tep_goc}" (${kq.so_trang} trang) — LƯU NGUYÊN BẢN, không bọc lại.`
     : `Đã lưu ${kq.so_trang} trang.`];
 
+  /* CẢ MỘT LOẠT NHIỀU FILE PDF (CTL-0026 vòng 7). Báo mỗi file cuối rồi im về
+     những file trước là để Sếp không biết cả xấp đã vào kho hay chưa. */
+  if (Array.isArray(kq.loat) && kq.loat.length > 1) {
+    dong.unshift(`Đã lưu xong ${kq.loat.length} tài liệu của loạt vừa chọn:\n` +
+      kq.loat.map((x, i) => `${i + 1}. ${x.tieu_de}`).join('\n'));
+  }
+
+  /* ⚠️ CHỮ TỪ ĐÂU RA THÌ NÓI ĐÚNG CHỖ ĐÓ. Chữ có sẵn trong file PDF (máy scan
+     nhận dạng) và chữ AI đọc từ ảnh chụp tin được tới mức khác nhau — dán
+     chung một nhãn là nói dối một nửa. Cả hai vẫn là chữ MÁY ĐỌC, nên con số
+     vẫn phải đối chiếu bản giấy: đó là chỗ hai đường giống nhau. */
   if (!n) {
-    /* Với PDF có sẵn thì `ocr_ghi_chu` ngay dưới nói đủ và nói ĐÚNG lý do —
-       in thêm câu chung chung này là nói hai lần, lần sau nhẹ hơn lần trước. */
+    /* Với PDF có sẵn thì `ocr_ghi_chu` ngay dưới nói đủ và nói ĐÚNG bệnh (chỉ
+       có ảnh · có mật khẩu · đọc không đủ rõ) — in thêm câu chung chung này là
+       nói hai lần, lần sau nhẹ hơn lần trước. */
     if (!kq.la_tep_goc) dong.push('Chưa bóc được chữ — vẫn tra được bằng tên.');
+  } else if (kq.chu_nguon === 'pdf_lop_chu') {
+    dong.push(`Máy scan đã nhận dạng chữ sẵn trong file này — lấy được chữ của ${n} ` +
+              `trang, trong đó ${neo} trang đối chiếu được với thứ bạn vừa gõ. ` +
+              'Tài liệu này TÌM ĐƯỢC theo nội dung bên trong.');
+    dong.push('⚠️ Con số trong phần chữ là do MÁY đọc, không phải người nhập — máy ' +
+              'scan vẫn đọc nhầm chữ số. Đối chiếu bản giấy trước khi dùng.');
   } else {
     dong.push(`Bóc chữ được ${n} trang, trong đó ${neo} trang đối chiếu được với ` +
               'thứ bạn vừa gõ.');
@@ -9729,6 +9755,118 @@ function veChuCoSo(chu, viTri) {
     xong = i + dai;
   }
   return ra + esc(s.slice(xong));
+}
+
+/* ==========================================================================
+   SỬA SỐ HIỆU + TÊN TÀI LIỆU SAU KHI ĐÃ LƯU — MỘT HÀM, HAI CỬA
+   ---------------------------------------------------------------------------
+   Sếp Ngọc 03/09/2026: *"trước khi thêm tài liệu hoặc khi đã upload tài liệu
+   lên thì để cho đổi tên số tài liệu và tên tài liệu nhé"*.
+
+   TRƯỚC KHI LƯU đã sửa được từ đầu (hai ô trên màn quét). Đây là chiều còn
+   lại. Đặt ở ĐÚNG MỘT chỗ như `noiNutXemChu` — kho chung và hồ sơ nhân sự gọi
+   chung một hàm vẽ, một hàm bắt sự kiện. Chép bản thứ hai là chỗ để lần sau
+   một cửa quên mất câu nhắc về mỏ neo.
+
+   ⚠️ KHÔNG BẮT GHI LÝ DO. Đây là sửa chính tả, không phải đổi cam kết (chốt
+   `trg_doi_cam_ket_phai_co_ly_do` chỉ đòi lý do cho hạn chót và người nhận).
+   Bắt ghi lý do cho một lỗi đánh máy thì người ta quay về thói xoá đi quét
+   lại — mà quét lại nghĩa là đi tìm lại TỜ GIẤY THẬT.
+
+   ⚠️ KHÔNG SỬA ĐƯỢC ở đây: file đã lưu, và NHÓM giấy tờ (đổi nhóm là đổi ai
+   được xem — một quyết định về quyền, không phải sửa chính tả).
+   ========================================================================== */
+
+/** Nhóm giấy tờ người này LƯU được — máy chủ trả (`nhom_luu_duoc`), giao diện
+ *  không tự đoán. Cả hai cửa cùng ghi vào đây sau mỗi lượt nạp.
+ *  Ẩn nút khi không sửa được là để KHÔNG HỨA SUÔNG (bài học REV-0040 #8): máy
+ *  chủ vẫn chặn 403 thật, nhưng bày một cái nút bấm vào là ăn lỗi thì tệ. */
+let TL_NHOM_LUU_DUOC = [];
+
+function nutSuaTaiLieu(t) {
+  if (!TL_NHOM_LUU_DUOC.includes(t.nhom)) return '';
+  return `<button type="button" class="tl-nut-mo tl-nut-sua" data-sua="${esc(t.id)}">Sửa số &amp; tên</button>`;
+}
+
+function oSuaTaiLieu(t) {
+  return `<div class="tl-chu tl-sua" id="tl-sua-${esc(t.id)}" hidden
+               data-ten="${esc(t.tieu_de || '')}" data-so="${esc(t.so_hieu || '')}"></div>`;
+}
+
+/** Nối nút "Sửa số & tên" cho mọi thẻ trong `goc`. `khiXong` để cửa gọi nạp lại
+ *  danh sách — không tự gọi hàm nạp của một cửa cụ thể, vì có hai cửa. */
+function noiNutSuaTaiLieu(goc, khiXong) {
+  if (!goc) return;
+  goc.querySelectorAll('[data-sua]').forEach(b => b.addEventListener('click', () => {
+    const id = b.dataset.sua;
+    const o = document.getElementById('tl-sua-' + id);
+    if (!o) return;
+    if (!o.hidden) { o.hidden = true; return; }
+    o.hidden = false;
+    o.innerHTML = `
+      <p class="tl-so-ai-nhac">Sửa gõ nhầm thì cứ sửa, <b>không phải ghi lý do</b> —
+        nhưng máy vẫn ghi lại ai sửa, lúc nào, cũ → mới.</p>
+      <label class="tl-sua-o">Tên tài liệu
+        <input type="text" id="tl-sua-ten-${esc(id)}" maxlength="200" value="${esc(o.dataset.ten)}">
+      </label>
+      <label class="tl-sua-o">Số hiệu
+        <input type="text" id="tl-sua-so-${esc(id)}" maxlength="120" value="${esc(o.dataset.so)}">
+      </label>
+      ${/* ⚠️ NÓI TRƯỚC chuyện mỏ neo. Người sửa số hiệu cần biết nhãn tin cậy
+            của phần chữ sẽ được tính lại — nếu không, họ sửa số rồi ngạc nhiên
+            vì "đã đối chiếu" biến mất, và tưởng ERP làm hỏng dữ liệu. */''}
+      <p class="tl-so-ai-nhac">Đổi <b>số hiệu</b> thì máy sẽ <b>đối chiếu lại</b> phần chữ
+        đã bóc với số mới — nhãn "đã đối chiếu" có thể đổi theo. Đó là đúng: giữ
+        một nhãn tính bằng số cũ là giữ một kết luận đã hết hiệu lực.</p>
+      <div class="tl-the-nut">
+        <button type="button" class="tl-nut-mo tl-nut-luu-sua" data-luu="${esc(id)}">Lưu</button>
+        <button type="button" class="tl-nut-mo" data-huy="${esc(id)}">Huỷ</button>
+        <button type="button" class="tl-nut-mo" data-ls="${esc(id)}">Xem lịch sử sửa</button>
+      </div>
+      <div class="tl-chu" id="tl-ls-${esc(id)}" hidden></div>`;
+
+    o.querySelector('[data-huy]').addEventListener('click', () => { o.hidden = true; });
+
+    o.querySelector('[data-ls]').addEventListener('click', async () => {
+      const ols = document.getElementById('tl-ls-' + id);
+      if (!ols.hidden) { ols.hidden = true; return; }
+      ols.textContent = 'Đang mở…'; ols.hidden = false;
+      try {
+        const r = await API.tlLichSu(id);
+        const d = r.ds || [];
+        if (!d.length) { ols.textContent = 'Chưa ai sửa tài liệu này.'; return; }
+        const ten = { tieu_de: 'tên tài liệu', so_hieu: 'số hiệu' };
+        ols.innerHTML = '<ul class="tl-nk-ds">' + d.map(k =>
+          `<li><b>${esc(k.nguoi_ten || '—')}</b> đổi ${esc(ten[k.truong] || k.truong)}: ` +
+          `"${esc(k.gia_tri_cu || '(trống)')}" → "${esc(k.gia_tri_moi || '(trống)')}" ` +
+          `lúc ${esc(String(k.luc || '').slice(0, 16))}</li>`).join('') + '</ul>';
+      } catch (e) { ols.textContent = e.message; }
+    });
+
+    const nutLuu = o.querySelector('[data-luu]');
+    nutLuu.addEventListener('click', async () => {
+      if (nutLuu.disabled) return;                 // chặn hai lượt bấm chồng nhau
+      nutLuu.disabled = true;
+      const tenMoi = document.getElementById('tl-sua-ten-' + id).value.trim();
+      const soMoi = document.getElementById('tl-sua-so-' + id).value.trim();
+      try {
+        const r = await API.tlSua({ id, tieu_de: tenMoi, so_hieu: soMoi });
+        o.hidden = true;
+        if (r.khong_doi) { alert('Bạn chưa đổi gì cả — không có gì để lưu.'); }
+        else {
+          alert('Đã sửa xong.' +
+            (r.neo_tinh_lai
+              ? '\n\nSố hiệu đổi nên máy vừa đối chiếu lại phần chữ đã bóc.' +
+                (r.ocr_ghi_chu ? '\n⚠️ ' + r.ocr_ghi_chu : '')
+              : ''));
+        }
+        if (typeof khiXong === 'function') khiXong();
+      } catch (e) {
+        alert(e.message);
+        nutLuu.disabled = false;
+      }
+    });
+  }));
 }
 
 /** Ô chữ + nút, dán vào thẻ giấy tờ ở cả hai cửa. */
@@ -9851,12 +9989,17 @@ async function khoiDongKhoTaiLieu() {
                 cả hai con số: "đã bóc chữ 3 trang" trơn làm người đọc tưởng cả
                 ba trang đều đã được kiểm (REV-0044 · L2 — chữ bịa được bảo
                 lãnh). Chưa đối chiếu được thì nói thẳng ra ngay ở danh sách. */''}
+          ${/* ⚠️ HAI LOẠI PDF PHẢI NHÌN RA ĐƯỢC NGAY TỪ DANH SÁCH (CTL-0026
+                vòng 7). "Tìm được theo nội dung" và "chỉ xem được" là khác biệt
+                quyết định việc Sếp có phải đi chỉnh máy scan hay không — giấu
+                nó sau một cú bấm là để không ai bao giờ thấy. */''}
           ${t.ocr_so_trang
-            ? `· bóc chữ ${Number(t.ocr_so_trang) || 0} trang` +
+            ? `· ${t.chu_nguon === 'pdf_lop_chu' ? 'chữ có sẵn trong file' : 'bóc chữ'} ` +
+              `${Number(t.ocr_so_trang) || 0} trang` +
               (Number(t.ocr_so_trang_neo) >= Number(t.ocr_so_trang)
                 ? ' <span class="tl-dai tl-dai-neo">đã đối chiếu</span>'
                 : ` <span class="tl-dai tl-dai-sap">${Number(t.ocr_so_trang) - (Number(t.ocr_so_trang_neo) || 0)} trang CHƯA KIỂM</span>`)
-            : '· <i>chưa bóc được chữ — tra bằng tên</i>'}
+            : '· <i>chỉ xem được — tìm bằng tên, số hiệu, loại giấy</i>'}
         </div>
         ${t.trich ? `<p class="tl-trich">${esc(t.trich)}…</p>`
           /* Giấy tờ nhạy cảm KHÔNG có trích đoạn ở danh sách — máy chủ cắt sẵn,
@@ -9879,8 +10022,11 @@ async function khoiDongKhoTaiLieu() {
                 Chỉ hiện ở giấy tờ NHẠY CẢM vì chỉ nhóm đó mới có nhật ký. */''}
           ${laAdminTL && t.nhay_cam
             ? `<button type="button" class="tl-nut-mo tl-nut-nk" data-nk="${t.id}">Nhật ký truy cập</button>` : ''}
+          ${/* Sửa số hiệu + tên SAU khi đã lưu — Sếp Ngọc 03/09/2026. */''}
+          ${nutSuaTaiLieu(t)}
         </div>
         ${oChuTaiLieu(t.id)}
+        ${oSuaTaiLieu(t)}
         <div class="tl-chu tl-nk" id="tl-nk-${t.id}" hidden></div>
       </article>`;
   }
@@ -9903,11 +10049,35 @@ async function khoiDongKhoTaiLieu() {
       if (kq.nhom && kq.nhom.length !== dsNhom.length) { dsNhom = kq.nhom; veLoc(); }
       else if (!dsNhom.length) { dsNhom = kq.nhom || []; veLoc(); }
       nhomLuuDuoc = kq.nhom_luu_duoc || [];
+      TL_NHOM_LUU_DUOC = nhomLuuDuoc;
       veNutQuet();
 
       const ds = kq.ds || [];
       oDanhSach.innerHTML = ds.map(veMot).join('');
       oTrong.hidden = ds.length > 0;
+
+      /* ---- TỈ LỆ TRA CỨU ĐƯỢC / CHỈ XEM ĐƯỢC  ·  CTL-0026 vòng 7 --------
+         Sếp Ngọc cần con số này để biết có phải đi chỉnh máy scan hay không.
+         Nhìn từng thẻ một thì không bao giờ thấy ra được tỉ lệ. Đếm do MÁY CHỦ
+         làm trên đúng bộ lọc đang hiện, nên lọc theo nhóm thì con số đổi theo —
+         một con số đứng yên khi bộ lọc đổi là một con số nói dối.
+         Đếm hụt (`dem_chu` = null) thì IM LẶNG bỏ dải, không in số 0 trông như
+         đã đếm. */
+      const oDem = $('#tl-dem-chu');
+      if (oDem) {
+        const d = kq.dem_chu;
+        const tong = d ? d.tra_cuu_duoc + d.chi_xem_duoc : 0;
+        oDem.hidden = !d || !tong;
+        if (d && tong) {
+          oDem.innerHTML =
+            `<b>${d.tra_cuu_duoc}</b> tài liệu tìm được theo nội dung bên trong · ` +
+            `<b>${d.chi_xem_duoc}</b> chỉ xem được (tìm bằng tên, số hiệu, loại giấy)` +
+            (d.chi_xem_duoc
+              ? ' — muốn tìm được cả nội dung thì chỉnh máy scan sang chế độ nhận ' +
+                'dạng chữ rồi quét lại những tờ hay phải tra.'
+              : '');
+        }
+      }
       /* Bị cắt thì nói ra bằng lời, kèm cách thu hẹp — không im lặng cắt. Dùng
          CHUNG `veDaiCat` như mọi màn khác: bản tự viết cũ ở đây in "đang hiện
          50" mà không có tổng thật, tức là vẫn giấu mất con số người ta cần. */
@@ -9919,6 +10089,7 @@ async function khoiDongKhoTaiLieu() {
       /* MỘT hàm cho cả hai cửa (kho chung + hồ sơ nhân sự) — xem
          `noiNutXemChu` ở đầu mục. */
       noiNutXemChu(oDanhSach);
+      noiNutSuaTaiLieu(oDanhSach, nap);
 
       /* Nhật ký truy cập — chỉ Admin, chỉ giấy tờ nhạy cảm (vá REV-0040 #7). */
       oDanhSach.querySelectorAll('[data-nk]').forEach(b => b.addEventListener('click', async () => {

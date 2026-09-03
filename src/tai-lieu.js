@@ -47,6 +47,10 @@ import { luuFile, layFile, xoaFile, timHoacTaoThuMuc, daCauHinh, duongDanTep } f
 import { gioVN, ngayVN, duocGuiNhac } from './nhac-nhan-su.js';
 import { catBot, nhanCat } from './cat-danh-sach.js';
 import { NHAN_SO_AI, viTriSoAI, soCCCD } from './so-ai.js';
+/* Dò chữ ký `%PDF-` + đọc chữ nằm sẵn trong PDF. Khai ĐÚNG MỘT chỗ
+   (`src/pdf-chu.js`) — hai bản chép tay của cùng một định nghĩa chính là cách
+   đường đọc CCCD từng chết âm thầm 11 ngày. */
+import { laByteCuaPDF, docChuTuPDF, LOAI_PDF } from './pdf-chu.js';
 
 /** Câu phải xuất hiện ở mọi cửa. Đặt ở ĐÚNG MỘT chỗ để không có hai bản
  *  lệch nhau, và để phép kiểm tự động soi được một chuỗi duy nhất. */
@@ -155,31 +159,29 @@ const TRAN_BYTE_PDF_GOC = 25 * 1024 * 1024;
 const TRAN_SO_TRANG_PDF_GOC = 200;
 
 /** ⚠️ CÂU PHẢI GHI VÀO CỘT, KHÔNG PHẢI CHỈ HIỆN MỘT LẦN RỒI BAY.
- *  Đường bóc chữ của ERP đọc ẢNH (Workers AI). Bóc chữ trong PDF đòi render
- *  PDF ra ảnh trước, tức đòi thư viện đọc PDF — ERP KHÔNG có, và ràng buộc
- *  chi phí 0 cấm thêm dịch vụ. Nói thẳng là giới hạn thật, đừng để `ocr_ghi_chu`
- *  rỗng: rỗng thì người ta gõ một cụm chữ trong hợp đồng, không thấy gì, và
- *  kết luận SAI rằng hợp đồng chưa được lưu.
- *  Ghi vào CỘT nên câu này còn nguyên ở màn xem chữ, ở bản sao lưu CSV, ở bản
- *  khôi phục — đúng bài học REV-0044 · L3 (nhãn chỉ sống trong một màn thì ra
- *  tới Excel là trần trụi). */
-export const GHI_CHU_PDF_CHUA_BOC =
-  'File PDF lưu NGUYÊN BẢN. ERP chưa bóc được chữ bên trong PDF để tra cứu — ' +
-  'đường bóc chữ chỉ đọc được ảnh, mà đọc PDF cần thư viện ERP không có ' +
-  '(ràng buộc chi phí 0). Tài liệu này tra được bằng TÊN, số hiệu, loại giấy ' +
-  'và nhóm; KHÔNG tra được bằng chữ bên trong. Cần tra bằng nội dung thì quét ' +
-  'lại bằng máy ảnh.';
-
-/** Đúng là file PDF không — soi CHỮ KÝ `%PDF-`, 5 byte đầu.
  *
- *  ⚠️ SOI CHO CẢ HAI ĐƯỜNG, không riêng đường file có sẵn. Trước bản này máy
- *  chủ nhận bất cứ khối byte nào rồi đẩy lên Drive với `kieu:'application/pdf'`
- *  và đuôi `.pdf` — tức là ai gọi thẳng API cũng gửi được một file bất kỳ vào
- *  kho giấy tờ pháp lý dưới lốt PDF. Năm byte này đóng đúng chỗ đó. */
-function laByteCuaPDF(b) {
-  return !!b && b.length > 5 &&
-    b[0] === 0x25 && b[1] === 0x50 && b[2] === 0x44 && b[3] === 0x46 && b[4] === 0x2D;
-}
+ *  Từ CTL-0026 vòng 7, PDF CÓ LỚP CHỮ được bóc chữ thật (`src/pdf-chu.js`), nên
+ *  câu này chỉ còn dùng cho ca ĐỌC HỤT ngoài dự kiến. Ba ca thường gặp — chỉ có
+ *  ảnh, có mật khẩu, đọc không đủ rõ — có câu riêng, đúng bệnh, ở `CAU_LOAI`.
+ *  Đừng để `ocr_ghi_chu` rỗng: rỗng thì người ta gõ một cụm chữ trong hợp đồng,
+ *  không thấy gì, và kết luận SAI rằng hợp đồng chưa được lưu.
+ *  Ghi vào CỘT nên câu còn nguyên ở màn xem chữ, ở bản sao lưu CSV, ở bản khôi
+ *  phục — bài học REV-0044 · L3 (nhãn sống trong một màn thì ra tới Excel là
+ *  trần trụi). */
+export const GHI_CHU_PDF_CHUA_BOC =
+  'Không lấy được chữ trong file PDF này. Tài liệu vẫn lưu nguyên bản và mở xem ' +
+  'được bình thường, vẫn tra được bằng tên, số hiệu, loại giấy và nhóm — chỉ là ' +
+  'không tìm được theo chữ bên trong.';
+
+/** Chữ bóc từ lớp chữ của PDF vẫn là chữ MÁY ĐỌC (máy scan nhận dạng), nên vẫn
+ *  đeo nhãn CHƯA KIỂM như chữ AI đọc ảnh. Nó ĐÁNG TIN HƠN — chữ nằm sẵn trong
+ *  file chứ không do mô hình sinh ra, nên không có chuyện "bịa cả tờ giấy" —
+ *  nhưng máy scan vẫn đọc nhầm chữ số, và nó KHÔNG PHẢI người xác nhận. */
+export const NGUON_CHU = {
+  anh_ai:      'anh_ai',        // Workers AI đọc ảnh chụp
+  pdf_lop_chu: 'pdf_lop_chu',   // lớp chữ có sẵn trong PDF
+  khong:       'khong'          // không có chữ
+};
 /* Bóc chữ tối đa 3 trang: trang đầu luôn là trang có tiêu đề, số hiệu, ngày —
    đủ để tra cứu. Bóc cả 12 trang thì mỗi lượt quét gọi AI 12 lần, chờ rất lâu
    mà giá trị tra cứu tăng không đáng kể. Nêu rõ ở `ocr_so_trang` để người đọc
@@ -590,12 +592,26 @@ async function bocChu(env, dsAnhOCR, moc = {}) {
   }
 
   if (!trang.length) return rong(hong || 'Không đọc được chữ nào');
+  return gopChuDaBoc(trang, { hong, nguonChu: NGUON_CHU.anh_ai });
+}
 
+/** Nhãn cho chữ lấy từ LỚP CHỮ có sẵn trong PDF.
+ *  Khác nhãn AI đọc ảnh vì hai thứ khác nhau về độ tin: chữ này KHÔNG do mô
+ *  hình sinh ra nên không có chuyện bịa cả một tờ giấy khác. Nhưng nó vẫn là
+ *  chữ MÁY ĐỌC — máy scan nhận dạng nhầm chữ số là chuyện thường — và nó
+ *  KHÔNG PHẢI người xác nhận. Nên vẫn qua chốt mỏ neo như mọi chữ máy đọc. */
+export const NHAN_CHU_PDF = 'Chữ có sẵn trong file PDF — CHƯA KIỂM';
+
+/** GỘP CHỮ ĐÃ BÓC THEO TRANG — dùng chung cho cả ba đường: AI đọc ảnh, đọc lớp
+ *  chữ PDF, và TÍNH LẠI mỏ neo khi số hiệu đổi (`suaTaiLieu`). Một chỗ khai
+ *  luật ①②③, không ba bản chép tay lệch nhau. */
+function gopChuDaBoc(trang, { hong = null, nguonChu = NGUON_CHU.anh_ai, themGhiChu = null } = {}) {
+  const nhan = nguonChu === NGUON_CHU.pdf_lop_chu ? NHAN_CHU_PDF : NHAN_SO_AI;
   /* Nhãn đi THEO TỪNG TRANG ngay trong chính chuỗi `noi_dung`, nên nó còn
      nguyên ở mọi nơi chuỗi đó đi tới — màn xem chữ, bản sao lưu CSV, bản khôi
      phục. Nhãn chỉ sống trong một màn thì ra tới Excel là trần trụi (L3). */
   const chuGop = trang.map(t =>
-    `--- Trang ${t.so} · ${MUC_TIN[t.tin.muc]} · ${NHAN_SO_AI} ---\n${t.chu}`
+    `--- Trang ${t.so} · ${MUC_TIN[t.tin.muc]} · ${nhan} ---\n${t.chu}`
   ).join('\n\n').slice(0, 60000);
 
   const daNeo = trang.filter(t => t.tin.muc === 'da_neo');
@@ -617,9 +633,73 @@ async function bocChu(env, dsAnhOCR, moc = {}) {
     chuTim: chuChoOTim(daNeo.map(t => t.chu).join(' ')),
     soTrang: trang.length,
     soTrangNeo: daNeo.length,
-    ghiChu: ghiChu || (hong || null),
+    nguonChu,
+    ghiChu: [themGhiChu, ghiChu || hong || null].filter(Boolean).join(' ') || null,
     trang: trang.map(t => ({ so: t.so, muc: t.tin.muc, neo: t.tin.neo }))
   };
+}
+
+/** TÁCH NGƯỢC `noi_dung` ĐÃ LƯU RA TỪNG TRANG.
+ *  Cần cho `suaTaiLieu`: đổi số hiệu là đổi MỎ NEO, mà mỏ neo chạy TỪNG TRANG
+ *  (luật ④). Không tách lại được thì KHÔNG được đoán — hạ hết về "chưa kiểm".
+ *  Trả `[]` khi chuỗi không mang dấu trang (dòng lưu trước bản này). */
+export function tachTrangDaLuu(noiDung) {
+  const s = String(noiDung || '');
+  if (!s) return [];
+  const re = /^--- Trang (\d+) · [^\n]*---$/gm;
+  const moc = [...s.matchAll(re)];
+  if (!moc.length) return [];
+  const ra = [];
+  for (let i = 0; i < moc.length; i++) {
+    const dau = moc[i].index + moc[i][0].length;
+    const het = i + 1 < moc.length ? moc[i + 1].index : s.length;
+    const chu = s.slice(dau, het).trim();
+    if (chu) ra.push({ so: parseInt(moc[i][1], 10) || (i + 1), chu });
+  }
+  return ra;
+}
+
+/* ==========================================================================
+   3b. ĐỌC CHỮ NẰM SẴN TRONG PDF  ·  CTL-0026 vòng 7
+   ---------------------------------------------------------------------------
+   Sếp Ngọc 03/09/2026: *"định dạng file sẽ là scan pdf"* — nên đây là ĐƯỜNG
+   CHÍNH, không phải đường phụ.
+
+   ⚠️ CHỮ NÀY CŨNG PHẢI QUA CHỐT MỎ NEO, KHÔNG CÓ NGOẠI LỆ.
+   Nó đáng tin hơn chữ AI đọc ảnh (không do mô hình sinh ra, nên không bịa nổi
+   một tờ giấy khác), NHƯNG vẫn là chữ MÁY ĐỌC và vẫn KHÔNG PHẢI người xác
+   nhận: máy scan đọc nhầm `0` thành `8` là chuyện xảy ra hằng ngày, và một số
+   sai lọt vào ô tìm thì người gõ đúng số sai ấy sẽ tự xác nhận nó là đúng.
+   Nên: cùng `docTinChu()`, cùng `chuChoOTim()`, cùng luật ①②③④.
+
+   Hàm này KHÔNG BAO GIỜ ném lỗi ra ngoài — hỏng thì tài liệu vẫn lưu, chỉ là
+   tra bằng tên. Mất chữ còn hơn mất cả tài liệu (luật ①).
+   ========================================================================== */
+async function bocChuTrongPDF(bytes, moc) {
+  const rong = (ghiChu, nguon = NGUON_CHU.khong) => ({
+    chu: '', chuTim: '', soTrang: 0, soTrangNeo: 0, nguonChu: nguon, ghiChu, trang: []
+  });
+  let kq;
+  try {
+    kq = await docChuTuPDF(bytes);
+  } catch (e) {
+    console.error('Đọc chữ trong PDF:', (e && e.message) || e);
+    return rong(GHI_CHU_PDF_CHUA_BOC);
+  }
+  if (kq.loai !== LOAI_PDF.co_lop_chu || !kq.trang.length) {
+    /* KHÔNG có lớp chữ. Câu ở `src/pdf-chu.js` đã viết bằng tiếng người và nói
+       đúng bệnh (chỉ ảnh · có mật khẩu · đọc không đủ rõ) — dùng nguyên. */
+    return rong(kq.ghi_chu || GHI_CHU_PDF_CHUA_BOC);
+  }
+  const trang = kq.trang.map(t => ({ so: t.so, chu: t.chu, tin: docTinChu(t.chu, moc) }));
+  const dau = kq.co_dau ? '' : ' Lưu ý: chữ đọc ra không có dấu tiếng Việt — ' +
+    'tra cứu bằng chữ không dấu vẫn ra, nhưng đọc lại sẽ hơi khó.';
+  return gopChuDaBoc(trang, {
+    nguonChu: NGUON_CHU.pdf_lop_chu,
+    themGhiChu: `Đã lấy chữ có sẵn trong file PDF (${kq.trang.length} trang, ` +
+                `${kq.so_ky_tu.toLocaleString('vi-VN')} ký tự) — không phải AI đọc ảnh.` +
+                dau + (kq.ghi_chu ? ' ' + kq.ghi_chu : '')
+  });
 }
 
 /* ==========================================================================
@@ -757,18 +837,39 @@ export async function luuTaiLieu(env, phien, body) {
     }
   }
 
-  const tep = String(body.tep || '');
-  if (!tep) return loi('Thiếu nội dung tài liệu');
+  /* ---- HAI KHUÔN THÂN GỬI LÊN — VÁ REV-0054 · LỖI #2 --------------------
+     ĐƯỜNG BYTE THẲNG (`body.tep_byte`, do `tlLuu` trong src/index.js dựng từ
+     `Content-Type: application/octet-stream`): file đi lên NGUYÊN khối byte,
+     trong Worker chỉ tồn tại ĐÚNG MỘT bản (`arrayBuffer`), `subarray` là cửa
+     sổ nhìn vào cùng vùng nhớ chứ không phải bản chép.
+
+     ĐƯỜNG BASE64 TRONG JSON (`body.tep`): giữ lại cho đường ảnh (6 MB) và cho
+     mọi trình duyệt còn nhớ bản cũ. Đường này tốn ~3,7 lần cỡ file trong bộ
+     nhớ Worker: thân JSON → chuỗi base64 sau `JSON.parse` → chuỗi nhị phân của
+     `atob` → `Uint8Array`.
+
+     VÌ SAO PHẢI ĐỔI: bộ nhớ 128 MB là của cả isolate, KHÔNG phải của một yêu
+     cầu. Hai người cùng tải 25 MB qua đường base64 = 185 MB ⇒ chết isolate,
+     kéo theo mọi yêu cầu đang bay của người khác (REV-0054 lỗi #2). Qua đường
+     byte thẳng, hai lượt 25 MB chỉ còn ~50 MB — hết hẳn ca đó, mà KHÔNG phải
+     hạ trần xuống 15 MB, tức không phải bắt Sếp tách đôi bản scan. */
   let bytes;
-  try { bytes = base64ToBytes(tep); } catch { return loi('Nội dung tài liệu không đọc được'); }
-  if (bytes.length < 200) return loi('Tài liệu rỗng hoặc hỏng');
+  if (body.tep_byte instanceof Uint8Array) {
+    bytes = body.tep_byte;
+  } else {
+    const tep = String(body.tep || '');
+    if (!tep) return loi('Chưa có nội dung tài liệu để lưu.');
+    try { bytes = base64ToBytes(tep); }
+    catch { return loi('Không đọc được nội dung file vừa gửi. Chọn lại file rồi gửi lần nữa.'); }
+  }
+  if (bytes.length < 200) return loi('File này rỗng hoặc đã hỏng — mở thử trên máy xem có mở được không.');
   const tranByte = laPdfGoc ? TRAN_BYTE_PDF_GOC : TRAN_BYTE_PDF;
   if (bytes.length > tranByte) {
-    return loi(`Tài liệu nặng ${(bytes.length / 1048576).toFixed(1)} MB, vượt trần ` +
-               `${tranByte / 1048576} MB. ` +
+    return loi(`File nặng ${(bytes.length / 1048576).toFixed(1)} MB, quá mức ERP nhận ` +
+               `được (tối đa ${tranByte / 1048576} MB một file). ` +
                (laPdfGoc
-                 ? 'Quét lại ở 200 DPI (chế độ xám hoặc đen trắng) thường nhẹ đi ' +
-                   '3–5 lần, hoặc tách file thành nhiều phần.'
+                 ? 'Quét lại ở 200 DPI, chế độ xám hoặc đen trắng — thường nhẹ đi 3–5 ' +
+                   'lần mà chữ vẫn rõ. Hoặc tách thành nhiều file, mỗi file một tài liệu.'
                  : 'Chụp lại với ít trang hơn.'));
   }
   /* ---- ĐÚNG LÀ PDF KHÔNG — soi CHỮ KÝ, không tin lời khai ---------------
@@ -777,22 +878,25 @@ export async function luuTaiLieu(env, phien, body) {
      giấy tờ pháp lý dưới lốt PDF. Trình duyệt đã soi một lần — đây là lưới
      thứ hai, cho ca gọi thẳng API. */
   if (!laByteCuaPDF(bytes)) {
-    return loi('Nội dung gửi lên không phải file PDF (thiếu chữ ký "%PDF-" ở ' +
-               'đầu file). Kho chỉ nhận ảnh JPG/PNG/HEIC (được gộp thành PDF ' +
-               'tại máy) và file PDF.');
+    return loi('File này không phải PDF — ruột bên trong là định dạng khác, dù tên ' +
+               'file ghi là .pdf. Thử mở nó bằng trình đọc PDF xem có mở được không. ' +
+               'Kho nhận ảnh JPG · PNG · HEIC và file PDF.');
   }
 
   /* ---- Bóc chữ TRƯỚC khi tải lên ---------------------------------------
      Cố ý: nếu AI treo thì ta chưa đẩy gì lên Drive, không để lại file mồ côi.
-     `bocChu` tự nuốt mọi lỗi nên nó không bao giờ chặn luồng.
+     Cả hai nhánh tự nuốt mọi lỗi nên không bao giờ chặn luồng lưu.
 
-     ⚠️ PDF CÓ SẴN: BỎ HẲN bước này, và NÓI RA VÌ SAO.
-     Không có ảnh để đưa cho AI, mà render PDF ra ảnh thì cần thư viện đọc PDF
-     ERP không có. Bản cẩu thả sẽ để `bocChu` chạy với mảng rỗng và trả câu
-     "Không có ảnh để bóc chữ" — câu đó đọc như một TRỤC TRẶC KỸ THUẬT nhất
-     thời, trong khi đây là một GIỚI HẠN VĨNH VIỄN của sản phẩm. Hai chuyện
-     khác hẳn nhau, và người đọc phải phân biệt được để biết có nên quét lại
-     bằng máy ảnh hay không. */
+     ⚠️ PDF CÓ SẴN — CTL-0026 VÒNG 7, ĐÂY LÀ CHỖ ĐỔI LỚN NHẤT.
+     Sếp Ngọc 03/09/2026: *"định dạng file sẽ là scan pdf"*. Máy scan ra HAI
+     loại PDF trông y hệt nhau khi mở lên:
+       · CÓ LỚP CHỮ (máy scan bật nhận dạng chữ) → chữ nằm ngay trong file,
+         lấy ra được bằng thứ Workers có sẵn, không tốn đồng nào, không gọi AI.
+       · CHỈ CÓ ẢNH → không có chữ nào để lấy. Phải NÓI RA, và nói bằng tiếng
+         người: bản trước trả câu "cần thư viện đọc PDF, ràng buộc chi phí 0",
+         bạn kho đọc câu đó sẽ tưởng ERP đang hỏng (REV-0054 lỗi #3).
+     Cả hai loại đều LƯU ĐƯỢC và MỞ XEM ĐƯỢC — chỉ khác ở chỗ có tra được theo
+     nội dung hay không. */
   const dsOCR = laPdfGoc
     ? []
     : (Array.isArray(body.anh_boc_chu) ? body.anh_boc_chu.slice(0, TRAN_TRANG_BOC_CHU) : []);
@@ -800,7 +904,7 @@ export async function luuTaiLieu(env, phien, body) {
      Không mốc nào trúng thì chữ vẫn LƯU, chỉ là đeo nhãn CHƯA KIỂM và không vào
      ô tìm (luật ①②③ ở khối chú thích trên `docTinChu`). */
   const boc = laPdfGoc
-    ? { chu: '', chuTim: '', soTrang: 0, soTrangNeo: 0, ghiChu: GHI_CHU_PDF_CHUA_BOC, trang: [] }
+    ? await bocChuTrongPDF(bytes, { soHieu: soHieuTho, loai: loaiGiay, tieuDe: tieuDe })
     : await bocChu(env, dsOCR, { soHieu: soHieuTho, loai: loaiGiay, tieuDe: tieuDe });
 
   /* ---- Lưu lên Drive ---------------------------------------------------
@@ -848,6 +952,11 @@ export async function luuTaiLieu(env, phien, body) {
        này mà không phải bóc chuỗi. */
     ocr_so_trang_neo: boc.soTrangNeo || 0,
     ocr_ghi_chu: boc.ghiChu,
+    /* CHỮ NÀY TỪ ĐÂU RA — cột riêng vì Sếp cần biết TỈ LỆ kho: bao nhiêu tài
+       liệu tra được theo nội dung, bao nhiêu chỉ xem được. Suy ra từ
+       `ocr_so_trang` thì không phân biệt được "PDF chỉ có ảnh" với "AI đọc
+       hụt", mà hai ca đó cần hai cách xử khác nhau. */
+    chu_nguon: boc.nguonChu || (boc.chu ? NGUON_CHU.anh_ai : NGUON_CHU.khong),
     nhay_cam: nhayCam,
     dong_y_boi: dongYBoi,
     dong_y_luc: nhayCam ? nowVN() : null,
@@ -870,14 +979,15 @@ export async function luuTaiLieu(env, phien, body) {
         (id, ma_gui, nhom, loai, tieu_de, so_hieu, tim_kiem,
          ngay_ban_hanh, ngay_het_han, han_luu, cua_vao, gan_id, so_trang,
          kho_nha, kho_khoa, co_byte, noi_dung, ocr_so_trang, ocr_so_trang_neo, ocr_ghi_chu,
-         nhay_cam, dong_y_boi, dong_y_luc, dong_y_muc_dich, nguoi_tao, tao_luc)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+         chu_nguon, nhay_cam, dong_y_boi, dong_y_luc, dong_y_muc_dich, nguoi_tao, tao_luc)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     `).bind(
       banGhi.id, banGhi.ma_gui, banGhi.nhom, banGhi.loai, banGhi.tieu_de,
       banGhi.so_hieu, banGhi.tim_kiem, banGhi.ngay_ban_hanh, banGhi.ngay_het_han,
       banGhi.han_luu, banGhi.cua_vao, banGhi.gan_id, banGhi.so_trang,
       banGhi.kho_nha, banGhi.kho_khoa, banGhi.co_byte, banGhi.noi_dung,
-      banGhi.ocr_so_trang, banGhi.ocr_so_trang_neo, banGhi.ocr_ghi_chu, banGhi.nhay_cam,
+      banGhi.ocr_so_trang, banGhi.ocr_so_trang_neo, banGhi.ocr_ghi_chu,
+      banGhi.chu_nguon, banGhi.nhay_cam,
       banGhi.dong_y_boi, banGhi.dong_y_luc, banGhi.dong_y_muc_dich,
       banGhi.nguoi_tao, banGhi.tao_luc
     ).run();
@@ -931,6 +1041,10 @@ export async function luuTaiLieu(env, phien, body) {
     ocr_so_trang_neo: boc.soTrangNeo,
     ocr_trang: boc.trang,
     ocr_ghi_chu: boc.ghiChu,
+    /* Chữ này lấy từ đâu ra — để màn hình nói đúng một trong hai câu: "tra được
+       theo nội dung" hay "chỉ xem được". Đoán bằng `ocr_so_trang > 0` thì hai
+       ca khác hẳn nhau bị gộp làm một. */
+    chu_nguon: banGhi.chu_nguon,
     /* Có bóc được chữ thì lượt quét nào cũng phải mang theo câu này — người
        vừa quét là người duy nhất còn cầm tờ giấy trên tay để đối chiếu. */
     canh_bao_so_ai: boc.chu ? NHAN_SO_AI : null,
@@ -1018,8 +1132,8 @@ export async function danhSachTaiLieu(env, phien, thamSo) {
      Danh sách vẫn còn tiêu đề, số hiệu, ngày hết hạn — đủ để tra cứu. */
   const kq = await env.DB.prepare(`
     SELECT id, nhom, loai, tieu_de, so_hieu, ngay_ban_hanh, ngay_het_han,
-           han_luu, so_trang, co_byte, ocr_so_trang, ocr_so_trang_neo,
-           nhay_cam, nguoi_tao, tao_luc, cua_vao, gan_id,
+           han_luu, so_trang, co_byte, ocr_so_trang, ocr_so_trang_neo, chu_nguon,
+           ocr_ghi_chu, nhay_cam, nguoi_tao, tao_luc, cua_vao, gan_id,
            -- Tên người tờ giấy này thuộc về — để kho chung nói được "của ai"
            -- thay vì bày một mã ns_xxx. Câu con, KHÔNG phải JOIN: dieuKien ở
            -- trên viết cột trần (an, nhom) và được dùng lại NGUYÊN VĂN cho câu
@@ -1045,8 +1159,31 @@ export async function danhSachTaiLieu(env, phien, thamSo) {
     `SELECT COUNT(*) AS n FROM tai_lieu WHERE ${dieuKien.join(' AND ')}`, bien,
     'Gõ vào ô tìm hoặc chọn một nhóm để thu hẹp lại.');
 
+  /* ---- TỈ LỆ TRA CỨU ĐƯỢC / CHỈ XEM ĐƯỢC  ·  CTL-0026 vòng 7 -----------
+     Sếp Ngọc cần con số này để biết có phải đi chỉnh máy scan hay không. Một
+     kho mà 90% tài liệu "chỉ xem được" thì ô tìm kiếm gần như vô dụng, mà
+     nhìn từng thẻ một thì không bao giờ thấy ra điều đó.
+     MỘT lượt ĐỌC D1 thêm cho cả màn (đọc rẻ hơn ghi cả một bậc), đếm trên
+     ĐÚNG bộ điều kiện của danh sách nên con số luôn khớp với thứ đang hiện —
+     đếm trên cả bảng thì lọc theo nhóm xong tỉ lệ vẫn đứng yên, và đó là một
+     con số nói dối. Đếm trong SQL để dữ liệu không rời máy chủ. */
+  let dem = { tra_cuu_duoc: 0, chi_xem_duoc: 0 };
+  try {
+    const d = await env.DB.prepare(`
+      SELECT SUM(CASE WHEN ocr_so_trang > 0 THEN 1 ELSE 0 END) AS tra,
+             SUM(CASE WHEN ocr_so_trang > 0 THEN 0 ELSE 1 END) AS xem
+        FROM tai_lieu WHERE ${dieuKien.join(' AND ')}`).bind(...bien).first();
+    dem = { tra_cuu_duoc: Number(d?.tra) || 0, chi_xem_duoc: Number(d?.xem) || 0 };
+  } catch (e) {
+    /* Đếm hụt thì THÔI, không làm hỏng cả màn danh sách — nhưng cũng không
+       bịa một con số 0 trông như đã đếm: `null` để giao diện im lặng bỏ dải. */
+    console.error('Đếm tỉ lệ tra cứu được:', e.message);
+    dem = null;
+  }
+
   return json({
     ds,
+    dem_chu: dem,
     tong: ds.length,
     bi_cat: biCat,
     cat,
@@ -1144,10 +1281,214 @@ export async function moTaiLieu(env, phien, id) {
          Máy chủ trả VỊ TRÍ từng cụm số để giao diện bôi khác hẳn — một định
          nghĩa ở `src/so-ai.js`, không chép bản thứ hai sang trình duyệt. */
       so_ai: viTriSoAI(tl.noi_dung),
-      nhan_so_ai: NHAN_SO_AI
+      /* Nhãn nói ĐÚNG nguồn chữ: máy scan nhận dạng sẵn hay AI đọc ảnh. Hai
+         thứ tin được tới mức khác nhau, dán chung một nhãn là nói dối một nửa. */
+      nhan_so_ai: tl.chu_nguon === NGUON_CHU.pdf_lop_chu ? NHAN_CHU_PDF : NHAN_SO_AI,
+      chu_nguon: tl.chu_nguon || null,
+      /* Ai được bấm nút sửa số hiệu / tên. MÁY CHỦ trả lời, giao diện không tự
+         đoán — và máy chủ vẫn kiểm lại lần nữa ở `suaTaiLieu`. */
+      sua_duoc: duocLuuNhomTaiLieu(phien.vai_tro, tl.nhom)
     },
     canh_bao: CANH_BAO_PHAP_LY
   });
+}
+
+/* ==========================================================================
+   6b. SỬA SỐ HIỆU + TÊN TÀI LIỆU  —  POST /api/tai-lieu/sua
+   ---------------------------------------------------------------------------
+   Sếp Ngọc 03/09/2026: *"trước khi thêm tài liệu hoặc khi đã upload tài liệu
+   lên thì để cho đổi tên số tài liệu và tên tài liệu nhé"*.
+
+   TRƯỚC KHI LƯU đã sửa được từ đầu (hai ô trên màn quét). Thiếu là chiều còn
+   lại: SAU KHI LƯU thì đóng băng, gõ nhầm một chữ là phải ẩn đi quét lại — mà
+   quét lại nghĩa là đi tìm lại TỜ GIẤY THẬT. Đó đúng là lớp vấn đề CTL-0017 đã
+   chốt cho việc và mục tiêu, nay áp cho tài liệu.
+
+   BA LUẬT, chép đúng nếp CTL-0017 đã lên hệ thống thật:
+   ① SỬA CHÍNH TẢ KHÔNG BẮT GHI LÝ DO. `so_hieu` và `tieu_de` là chỗ gõ nhầm,
+      không phải cam kết. Bắt ghi lý do cho một lỗi đánh máy thì người ta quay
+      về thói XOÁ ĐI QUÉT LẠI — mất cả tờ giấy đã quét. (Chốt CSDL
+      `trg_doi_cam_ket_phai_co_ly_do` chỉ đòi lý do cho `han_chot` và
+      `nguoi_nhan_id`, nên hai trường này đi qua tự do — đúng thiết kế.)
+   ② CÓ GHI VẾT: ai sửa, lúc nào, cũ → mới. Dùng lại `lich_su_thay_doi_nen`
+      (SỔ SỬA CHUNG của cả ERP từ CTL-0017), KHÔNG đẻ bảng mới.
+   ③ KHÔNG SỬA ĐƯỢC: file đã lưu, và NHÓM giấy tờ. Đổi nhóm là đổi AI ĐƯỢC XEM
+      — đó là một quyết định về quyền, không phải sửa chính tả, nên nó là việc
+      riêng có cảnh báo riêng, không đi ké cửa này.
+
+   ⚠️⚠️ TƯƠNG TÁC PHẢI XỬ: `so_hieu` CHÍNH LÀ MỎ NEO.
+   `docTinChu()` lấy `so_hieu` người gõ làm mỏ neo MẠNH ② để chấm chữ máy đọc
+   là "ĐÃ ĐỐI CHIẾU" hay "CHƯA KIỂM". Chốt đó chạy MỘT LẦN lúc quét, với số
+   hiệu CŨ. Sửa số hiệu sau đó mà không tính lại thì kết luận cũ thành sai:
+     · gõ nhầm số → không trúng neo → chữ mang nhãn "CHƯA KIỂM". Sửa đúng số
+       thì LẼ RA phải trúng; không tính lại thì nhãn sai đó đeo VĨNH VIỄN.
+     · nguy hơn: đang TRÚNG neo, sửa số hiệu thành số khác → nhãn "ĐÃ ĐỐI
+       CHIẾU" thành một lời NÓI DỐI, và chữ đó vẫn nằm trong ô tìm kiếm.
+   → Nên: đổi `so_hieu` thì TÍNH LẠI chốt mỏ neo trên đúng phần chữ đã lưu.
+   → Tách lại từng trang không được (dòng lưu trước bản này không có dấu trang)
+     thì HẠ HẾT VỀ "CHƯA KIỂM" và nói rõ ra. Thà mất một nhãn tin cậy còn hơn
+     giữ lại một nhãn sai — đúng luật ② của khối mỏ neo ở trên.
+
+   LƯỢT GHI D1: 1 UPDATE + 1 dòng lịch sử cho MỖI trường thật sự đổi. Sửa cả
+   hai trường = 3 lượt ghi, sửa một trường = 2, không đổi gì = 0 (chặn sớm).
+   Đi bằng `batch()` nên cả cụm vào/ra cùng lúc, không có ca "sửa xong mà
+   lịch sử rỗng".
+   ========================================================================== */
+export async function suaTaiLieu(env, phien, body) {
+  const { tl, loi: l } = await layVaKiemQuyen(env, phien, body.id);
+  if (l) return l;
+
+  /* ⚠️ CẮT Ở MÁY CHỦ, THEO ĐÚNG QUYỀN NHÓM. Giao diện có ẩn nút hay không cũng
+     không liên quan: kế toán gọi thẳng API để sửa một tờ giấy nhóm `nhan_su`
+     thì dừng ở đúng dòng này. Cùng một chốt với `anTaiLieu`. */
+  if (!duocLuuNhomTaiLieu(phien.vai_tro, tl.nhom)) {
+    return loi(`Bạn không có quyền sửa tài liệu nhóm "${NHOM_TAI_LIEU[tl.nhom]?.ten || tl.nhom}"`, 403);
+  }
+
+  /* Chỉ nhận trường nào NƠI GỌI thật sự gửi. Không gửi = không đụng tới, chứ
+     không phải "gửi rỗng = xoá trắng" — người sửa mỗi cái tên không được vô
+     tình thổi bay số hiệu. */
+  const coTieuDe = Object.prototype.hasOwnProperty.call(body, 'tieu_de');
+  const coSoHieu = Object.prototype.hasOwnProperty.call(body, 'so_hieu');
+  if (!coTieuDe && !coSoHieu) return loi('Chưa có gì để sửa');
+
+  const tieuDeMoi = coTieuDe ? chuoi(body.tieu_de, 200) : tl.tieu_de;
+  const soHieuMoi = coSoHieu ? chuoi(body.so_hieu, 120) : tl.so_hieu;
+
+  if (coTieuDe && (!tieuDeMoi || tieuDeMoi.length < 3)) {
+    return loi('Tên tài liệu phải có ít nhất 3 ký tự — để trống thì sau này không ai tìm ra nó.');
+  }
+  /* Cùng chốt 12 chữ số của đường lưu: một tờ CCCD thì ô số hiệu CHÍNH LÀ số
+     CCCD, và lưu một số 11 chữ số vào hồ sơ lao động là giấy tờ sai sự thật. */
+  if (soHieuMoi && laLoaiCCCD(tl.loai)) {
+    const { so, dung } = soCCCD(soHieuMoi);
+    if (!dung) {
+      return loi(`Số CCCD phải đủ 12 chữ số — bạn nhập "${soHieuMoi}" (${so.length} chữ số). ` +
+                 'Nhìn thẻ và gõ lại, hoặc để trống.');
+    }
+  }
+
+  const doiTieuDe = coTieuDe && (tieuDeMoi || '') !== (tl.tieu_de || '');
+  const doiSoHieu = coSoHieu && (soHieuMoi || '') !== (tl.so_hieu || '');
+  if (!doiTieuDe && !doiSoHieu) {
+    /* Không đổi gì thì KHÔNG ghi gì — 0 lượt ghi D1, 0 dòng lịch sử rác. Bấm
+       Lưu mà không sửa gì là chuyện xảy ra suốt. */
+    return json({ ok: true, khong_doi: true, luot_ghi_d1: 0 });
+  }
+
+  /* ---- TÍNH LẠI MỎ NEO khi số hiệu đổi ---------------------------------- */
+  let neoMoi = null;
+  if (doiSoHieu && tl.noi_dung) {
+    const trangCu = tachTrangDaLuu(tl.noi_dung);
+    if (trangCu.length) {
+      const trang = trangCu.map(t => ({
+        so: t.so, chu: t.chu,
+        tin: docTinChu(t.chu, { soHieu: soHieuMoi, loai: tl.loai, tieuDe: tieuDeMoi })
+      }));
+      neoMoi = gopChuDaBoc(trang, {
+        nguonChu: tl.chu_nguon || NGUON_CHU.anh_ai,
+        themGhiChu: `Số hiệu vừa đổi từ "${tl.so_hieu || '(trống)'}" thành ` +
+                    `"${soHieuMoi || '(trống)'}" nên máy đã đối chiếu lại phần chữ.`
+      });
+    } else {
+      /* KHÔNG tách lại được từng trang ⇒ KHÔNG tính lại được ⇒ HẠ VỀ CHƯA KIỂM.
+         Giữ nguyên nhãn cũ là giữ một kết luận đã hết hiệu lực. Chữ vẫn còn
+         nguyên để đọc, chỉ ra khỏi ô tìm kiếm. */
+      neoMoi = {
+        chu: tl.noi_dung, chuTim: '', soTrang: tl.ocr_so_trang || 0, soTrangNeo: 0,
+        nguonChu: tl.chu_nguon || NGUON_CHU.anh_ai,
+        ghiChu: 'Số hiệu vừa đổi, mà phần chữ của tài liệu này lưu theo lối cũ nên ' +
+                'máy không đối chiếu lại được từng trang. Chữ đã hạ về CHƯA KIỂM và ' +
+                'tạm rút khỏi ô tìm kiếm — thà mất một nhãn tin cậy còn hơn giữ lại ' +
+                'một nhãn sai. Quét lại tài liệu này là máy đối chiếu lại được.'
+      };
+    }
+  }
+
+  const nguoiTen = phien.ho_ten || phien.ten_dang_nhap || phien.nhan_su_id || null;
+  const luc = nowVN();
+  const dat = ['tieu_de = ?', 'so_hieu = ?', 'tim_kiem = ?'];
+  const bien = [
+    tieuDeMoi, soHieuMoi,
+    chuoiTimKiem({
+      tieu_de: tieuDeMoi, so_hieu: soHieuMoi, loai: tl.loai, nhom: tl.nhom,
+      /* Ô tìm dựng LẠI từ đầu, không vá vào chuỗi cũ: chuỗi cũ còn mang tên và
+         số hiệu CŨ, để lại là tra bằng số đã bỏ vẫn ra — đúng kiểu lỗi không
+         ai phát hiện. */
+      noi_dung: neoMoi ? neoMoi.chuTim : chuChoOTim(soHieuDaNeo(tl))
+    })
+  ];
+  if (neoMoi) {
+    dat.push('noi_dung = ?', 'ocr_so_trang_neo = ?', 'ocr_ghi_chu = ?');
+    bien.push(neoMoi.chu || null, neoMoi.soTrangNeo || 0, neoMoi.ghiChu || null);
+  }
+  bien.push(tl.id);
+
+  const cauLenh = [
+    env.DB.prepare(`UPDATE tai_lieu SET ${dat.join(', ')} WHERE id = ?`).bind(...bien)
+  ];
+  const ghiVet = (truong, cu, moi) => env.DB.prepare(
+    `INSERT INTO lich_su_thay_doi_nen (bang, ban_ghi_id, truong, gia_tri_cu, gia_tri_moi,
+                                       nguoi_id, nguoi_ten, luc)
+     VALUES ('tai_lieu', ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(tl.id, truong, cu ?? null, moi ?? null, phien.nhan_su_id || null, nguoiTen, luc);
+  if (doiTieuDe) cauLenh.push(ghiVet('tieu_de', tl.tieu_de, tieuDeMoi));
+  if (doiSoHieu) cauLenh.push(ghiVet('so_hieu', tl.so_hieu, soHieuMoi));
+
+  await env.DB.batch(cauLenh);
+
+  return json({
+    ok: true,
+    id: tl.id,
+    tieu_de: tieuDeMoi,
+    so_hieu: soHieuMoi,
+    luot_ghi_d1: cauLenh.length,
+    /* Nói RA chuyện mỏ neo vừa được tính lại — người vừa sửa là người duy nhất
+       còn nhớ mình vừa đổi số, và họ cần biết nhãn tin cậy đã đổi theo. */
+    neo_tinh_lai: !!neoMoi,
+    ocr_so_trang_neo: neoMoi ? neoMoi.soTrangNeo : (tl.ocr_so_trang_neo ?? 0),
+    ocr_ghi_chu: neoMoi ? neoMoi.ghiChu : tl.ocr_ghi_chu,
+    canh_bao: CANH_BAO_PHAP_LY
+  });
+}
+
+/** ĐỌC LẠI VẾT SỬA của một tài liệu — GET /api/tai-lieu/lich-su.
+ *  Ghi vết mà không mở ra đọc được thì chưa chứng minh được gì, chỉ là ghi cho
+ *  có (đúng bài học REV-0040 lỗi #7 với nhật ký truy cập). Ai XEM được tài
+ *  liệu thì xem được vết sửa của nó — đây là chuyện "ai gõ nhầm rồi sửa", không
+ *  phải ruột giấy tờ, nên không cần cửa hẹp hơn cửa xem. */
+export async function lichSuTaiLieu(env, phien, id) {
+  const { tl, loi: l } = await layVaKiemQuyen(env, phien, id);
+  if (l) return l;
+  const GH = 100;
+  const kq = await env.DB.prepare(`
+    SELECT truong, gia_tri_cu, gia_tri_moi, nguoi_ten, luc
+      FROM lich_su_thay_doi_nen
+     WHERE bang = 'tai_lieu' AND ban_ghi_id = ?
+     ORDER BY luc DESC, id DESC
+     LIMIT ${GH + 1}`).bind(tl.id).all();
+  const { ds, biCat } = catBot(kq, GH);
+  const cat = await nhanCat(env, biCat, GH,
+    "SELECT COUNT(*) AS n FROM lich_su_thay_doi_nen WHERE bang = 'tai_lieu' AND ban_ghi_id = ?",
+    [tl.id], 'Cần bản đầy đủ thì lấy từ bản sao lưu tháng.');
+  return json({ ds, bi_cat: biCat, cat, tran: GH });
+}
+
+/** Phần chữ ĐANG được phép nằm trong ô tìm của một dòng đã lưu — chỉ dùng khi
+ *  KHÔNG đổi số hiệu (đổi tên thôi thì kết luận mỏ neo cũ vẫn còn hiệu lực,
+ *  không có cớ gì tính lại). Tách từ `noi_dung` theo đúng nhãn đã ghi kèm. */
+function soHieuDaNeo(tl) {
+  if (!tl.noi_dung || !(tl.ocr_so_trang_neo > 0)) return '';
+  const s = String(tl.noi_dung);
+  const re = /^--- Trang \d+ · ([^·\n]*) ·[^\n]*---$/gm;
+  const moc = [...s.matchAll(re)];
+  let ra = '';
+  for (let i = 0; i < moc.length; i++) {
+    if (moc[i][1].trim() !== MUC_TIN.da_neo) continue;
+    const dau = moc[i].index + moc[i][0].length;
+    ra += ' ' + s.slice(dau, i + 1 < moc.length ? moc[i + 1].index : s.length);
+  }
+  return ra.trim();
 }
 
 /** Tải bản PDF về. Đi qua máy chủ CHỦ Ý — không đưa đường dẫn Drive ra ngoài,

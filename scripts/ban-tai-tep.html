@@ -20,7 +20,11 @@
    Ghi lại nguyên văn để đo được câu cảnh báo có NÓI RA con số hay không. */
 window.__ALERT = [];
 window.alert = (m) => { window.__ALERT.push(String(m)); };
-window.confirm = () => true;
+/* Ghi lại CẢ câu hỏi `confirm`, không chỉ `alert`: từ CTL-0026 vòng 7, loạt
+   nhiều file PDF hỏi trước khi chạy chứ không chặn nữa — câu hỏi đó là thứ
+   phải đo (nó nói cho Sếp biết sẽ ra mấy tài liệu). */
+window.__CONFIRM = [];
+window.confirm = (m) => { window.__CONFIRM.push(String(m)); return true; };
 </script>
 
 <script type="module">
@@ -301,8 +305,15 @@ muc('④ TẢI 1 FILE PDF — nguyên bản, và NÓI RA là chưa bóc được
   dat(/hop-dong-ncc-son-la\.pdf/.test(chuThe) && /3 trang/.test(chuThe),
     '  Thẻ PDF hiện tên file và số trang đọc được từ chính file');
   dat(/KHÔNG bọc lại/.test(chuThe), '  Màn hình nói rõ "lưu nguyên bản, KHÔNG bọc lại"');
-  dat(/chưa bóc được chữ|CHƯA bóc/i.test(chuThe),
-    '  ⚠️ NÓI RA "PDF lưu được nhưng chưa bóc chữ để tra cứu" NGAY TRƯỚC khi gửi');
+  /* ⚠️ ĐỔI TỪ CTL-0026 VÒNG 7. Trước khi gửi, MÁY CHƯA BIẾT file có lớp chữ
+     hay không — phải mở file ra mới rõ. Nên câu ở đây không được hứa cứng theo
+     chiều nào: nó nói cả hai khả năng và hứa sẽ báo rõ sau khi gửi. Câu cũ
+     ("ERP CHƯA bóc được chữ trong PDF") nay là câu SAI. */
+  dat(/nhận dạng chữ sẵn/i.test(chuThe) && /ảnh chụp/i.test(chuThe) &&
+      /báo rõ/i.test(chuThe),
+    '  ⚠️ NÓI RA hai khả năng (có lớp chữ / chỉ là ảnh) NGAY TRƯỚC khi gửi');
+  dat(!/thư viện|chi phí 0|Cloudflare|Workers/i.test(chuThe),
+    '  Câu đó KHÔNG lộ ruột kỹ thuật (vá REV-0054 lỗi #3)');
   dat(/không giữ trong bản nháp/i.test(chuThe),
     '  Nói rõ file PDF không nằm trong bản nháp (chọn lại là được)');
 
@@ -314,7 +325,7 @@ muc('④ TẢI 1 FILE PDF — nguyên bản, và NÓI RA là chưa bóc được
   dat(oTen.value === 'hop dong ncc son la',
     '  Tiêu đề gợi ý sẵn từ tên file, đã bỏ đuôi và gạch nối (vẫn sửa được)', `→ "${oTen.value}"`);
   const chuForm = document.querySelector('.tlq-tam').textContent;
-  dat(/chưa bóc được chữ|CHƯA bóc/i.test(chuForm), '  Câu đó NHẮC LẠI ở màn nhập thông tin');
+  dat(/nhận dạng chữ sẵn/i.test(chuForm), '  Câu đó NHẮC LẠI ở màn nhập thông tin');
   document.querySelector('.tlq-form button[type="submit"]').click();
   await cho(1200);
   const gui = await layGui();
@@ -328,6 +339,13 @@ muc('④ TẢI 1 FILE PDF — nguyên bản, và NÓI RA là chưa bóc được
   dat(g.tep_b64 === byteThanhBase64(u8),
     '  ⚠️ Byte gửi lên TRÙNG KHÍT file gốc — không bọc lại, không nén lại',
     `→ ${kb(u8.length)} gốc · ${kb(g.tep_b64.length * 3 / 4)} gửi đi`);
+  /* ⚠️ VÁ REV-0054 #2 — FILE PDF PHẢI ĐI BẰNG KHUÔN BYTE THẲNG.
+     Đi bằng base64-trong-JSON thì trong máy chủ file tồn tại ~3,7 bản cùng
+     lúc, và hai người tải 25 MB trùng giờ là 185 MB > 128 MB của cả isolate.
+     Chốt này canh đúng chỗ đó: quay về khuôn cũ là phép đo phải đỏ. */
+  dat(g.khuon === 'byte_thang',
+    '  ⚠️ File PDF đi bằng khuôn BYTE THẲNG (không base64) — hai người tải cùng lúc vẫn sống',
+    `→ khuôn ${g.khuon}`);
   dongKho();
 }
 
@@ -353,7 +371,12 @@ muc('⑤ PDF 30 MB (vượt trần) — báo TRƯỚC khi gửi một byte nào'
     '  Báo NGAY lúc chọn, nêu CẢ HAI con số (cỡ file và trần)');
   dat(/200 DPI/.test(canh) && /Tách file/i.test(canh) && /máy ảnh/i.test(canh),
     '  Câu báo nói BA cách xử, không chỉ nói "quá to"');
-  dat(/128 MB|Cloudflare/.test(canh), '  Nói VÌ SAO trần là con số đó, không bắt tin suông');
+  /* ⚠️ ĐỔI TỪ CTL-0026 VÒNG 7 — REV-0054 lỗi #3. Bản trước ĐÒI câu báo giảng
+     "bộ nhớ 128 MB của Cloudflare Workers". Đó là ruột nhà mình: bạn kho đọc
+     câu ấy không làm được gì thêm, mà lại tưởng ERP đang hỏng. Nay chốt ngược
+     lại: câu báo phải nói CON SỐ và CÁCH XỬ, và KHÔNG được lộ ruột kỹ thuật. */
+  dat(!/128 MB|Cloudflare|Workers|base64|isolate/i.test(canh),
+    '  Câu báo KHÔNG lộ ruột kỹ thuật, chỉ nói con số và cách xử');
   dat(!document.querySelector('.tlq-the-tep'), '  File vượt trần KHÔNG vào bộ');
   dat((await layGui()).length === truoc, '  ⚠️ KHÔNG gửi một byte nào lên máy chủ',
     `→ ${(await layGui()).length - truoc} lượt gửi`);
@@ -401,13 +424,88 @@ muc('⑥ FILE SAI LOẠI — nêu đích danh file nào');
       document.querySelectorAll('.tlq-the').length === 0,
     '  ĐỐI CHỨNG: trộn ảnh + PDF → nói thẳng giới hạn, không lấy bừa file đầu');
 
-  window.__ALERT.length = 0;
+  window.__ALERT.length = 0; window.__CONFIRM.length = 0;
   hangDoi = [pdfThanhTep(dungPDF(1, 8192), 'p1.pdf'), pdfThanhTep(dungPDF(1, 8192), 'p2.pdf')];
   document.querySelector('[data-viec="chon-tep"]').click();
   await cho(700);
-  dat(/Mỗi file PDF là MỘT tài liệu/i.test(window.__ALERT.join('\n')),
-    '  ĐỐI CHỨNG: chọn 2 PDF → nói rõ mỗi PDF là một tài liệu riêng');
+  /* ⚠️ ĐỔI TỪ CTL-0026 VÒNG 7 (REV-0054 #2). Trước đây chọn 2 PDF là BỊ CHẶN
+     kèm câu "chọn từng file một" — với một tập hồ sơ 10 tờ thì đó là mở hộp
+     thoại 10 lần. Nay CHẠY ĐƯỢC, và câu hỏi trước khi chạy phải nói rõ sẽ ra
+     mấy tài liệu RIÊNG (không ghép làm một). */
+  dat(/2 tài liệu RIÊNG/i.test(window.__CONFIRM.join('\n')) &&
+      !!document.querySelector('.tlq-the-tep'),
+    '  Chọn 2 PDF → hỏi rõ "2 tài liệu RIÊNG" rồi CHẠY, không chặn nữa');
+  dat(/không ghép làm một/i.test(window.__CONFIRM.join('\n')),
+    '  Câu hỏi nói thẳng là KHÔNG ghép — không để Sếp tưởng sẽ ra một file');
   dongKho();
+}
+
+/* ==========================================================================
+   ⑥b LOẠT 5 FILE PDF MỘT LƯỢT — 5 TÀI LIỆU RIÊNG, 5 LƯỢT GHI D1
+   ---------------------------------------------------------------------------
+   Sếp Ngọc 03/09/2026: *"định dạng file sẽ là scan pdf"*. Scan cả tập hồ sơ
+   thì ra nhiều file PDF. Đây là ca ĐƯỜNG CHÍNH, không phải ca biên.
+   ========================================================================== */
+muc('⑥b Chọn 5 file PDF một lượt → 5 tài liệu riêng');
+{
+  const truoc = (await layGui()).length;
+  window.__ALERT.length = 0; window.__CONFIRM.length = 0;
+  const ten = ['scan0001.pdf', 'scan0002.pdf', 'scan0003.pdf', 'scan0010.pdf', 'scan0011.pdf'];
+  /* Số trang KHÁC nhau từng file — để chứng minh mỗi tài liệu mang đúng số
+     trang của CHÍNH file nó, chứ không phải chép của file đầu. */
+  const soTrang = [2, 1, 3, 1, 4];
+  const goc = soTrang.map(n => dungPDF(n, 20 * 1024));
+
+  moKho('chon-tep');
+  /* CỐ Ý xáo trộn thứ tự bấm chuột: máy phải sắp theo TÊN FILE, và `scan0002`
+     phải đứng trước `scan0010` (so chữ trần thì ngược lại). */
+  hangDoi = [3, 0, 4, 2, 1].map(i => pdfThanhTep(goc[i], ten[i]));
+  (await doi('[data-viec="chon-nhom"]')).click();
+  await doi('.tlq-the-tep', 8000);
+
+  dat(/5 tài liệu RIÊNG/i.test(window.__CONFIRM.join('\n')),
+    '  Hỏi trước, nói rõ sẽ ra 5 tài liệu riêng');
+
+  for (let i = 0; i < 5; i++) {
+    const chu = document.querySelector('.tlq-tam').textContent;
+    dat(new RegExp(`File ${i + 1}/5`).test(chu),
+      `  File ${i + 1}/5 — màn hình nói rõ đang ở đâu trong loạt`);
+    dat(chu.includes(ten[i]),
+      `  File ${i + 1}/5 mở ĐÚNG ${ten[i]} (sắp theo tên file, không theo thứ tự bấm)`);
+    (await doi('[data-viec="sang-thong-tin"]')).click();
+    const oTen = await doi('#tlqTieuDe');
+    dat(oTen.value === ten[i].replace('.pdf', ''),
+      `  Tiêu đề file ${i + 1} gợi ý từ CHÍNH tên file nó`, `→ "${oTen.value}"`);
+    document.querySelector('.tlq-form button[type="submit"]').click();
+    await cho(i === 4 ? 1200 : 900);
+  }
+
+  const gui = (await layGui()).slice(truoc);
+  dat(gui.length === 5, '  ⚠️ 5 file = 5 lượt ghi D1, không hơn không kém',
+    `→ ${gui.length} lượt gửi (mỗi lượt máy chủ ghi ĐÚNG 1 dòng INSERT)`);
+  dat(new Set(gui.map(g => g.ma_gui)).size === 5,
+    '  Mỗi tài liệu một `ma_gui` RIÊNG — chống trùng chạy theo từng tài liệu');
+  dat(gui.every((g, i) => g.so_trang === soTrang[i]),
+    '  Mỗi tài liệu mang ĐÚNG số trang của file nó',
+    `→ ${gui.map(g => g.so_trang).join('·')} (mong ${soTrang.join('·')})`);
+  dat(gui.every((g, i) => g.tep_b64 === byteThanhBase64(goc[i])),
+    '  ⚠️ Byte của CẢ 5 file trùng khít bản gốc — không ghép, không bọc lại');
+  dat(gui.every(g => g.dinh_dang === 'pdf_goc' && g.khuon === 'byte_thang'),
+    '  Cả 5 đi đúng đường PDF gốc, khuôn byte thẳng');
+  dat(new Set(gui.map(g => g.tieu_de)).size === 5,
+    '  5 tiêu đề KHÁC nhau — không chép tên file đầu cho cả loạt',
+    `→ ${gui.map(g => g.tieu_de).join(' · ')}`);
+  ghi(`     → 5 file scan, 1 lần mở hộp thoại. LƯỢT GHI D1: ${gui.length} (1 dòng/tài liệu).`);
+
+  /* ĐỐI CHỨNG — quá trần 10 file/lượt thì CHẶN và nói con số.
+     Lưu xong file cuối là màn quét TỰ ĐÓNG (loạt hết), nên phải mở lại. */
+  window.__ALERT.length = 0;
+  moKho('chon-tep');
+  hangDoi = Array.from({ length: 12 }, (_, i) => pdfThanhTep(dungPDF(1, 4096), `q${i}.pdf`));
+  (await doi('[data-viec="chon-nhom"]')).click();
+  await cho(700);
+  dat(/tối đa 10 file/i.test(window.__ALERT.join('\n')),
+    '  ĐỐI CHỨNG: chọn 12 file → CHẶN, nêu rõ trần 10 file/lượt');
 }
 
 /* ==========================================================================
