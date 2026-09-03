@@ -246,14 +246,35 @@ export function byteThanhBase64(bytes) {
    dày mấy trang".
    ========================================================================== */
 
-/** Đúng là file PDF không — soi CHỮ KÝ 5 byte đầu `%PDF-`, không tin phần đuôi
- *  tên file. Đổi tên `virus.exe` thành `hop-dong.pdf` là việc ai cũng làm được;
- *  đổi 5 byte đầu thì không còn là cái file người ta định gửi nữa.
- *  Máy chủ soi LẠI đúng chữ ký này (`src/tai-lieu.js`) — đây chỉ là báo sớm. */
+/** ⚠️ TRẦN DÒ CHỮ KÝ — BẢN VÁ REV-0054 · LỖI #1, LỖI SẾP GẶP NGAY HÔM ĐẦU DÙNG.
+ *
+ *  Bản trước đòi `%PDF-` ở ĐÚNG byte 0. Máy scan và khá nhiều công cụ xuất PDF
+ *  chèn thêm vài byte vào đầu file — BOM UTF-8 (3 byte `EF BB BF`), một hai
+ *  dấu xuống dòng. File đó MỞ ĐƯỢC bằng mọi trình đọc PDF, nhưng ERP chặn
+ *  thẳng kèm câu chẩn đoán sai bệnh ("file hỏng, hoặc bị đổi tên") — Sếp sẽ đi
+ *  tìm một cái file hỏng không hề tồn tại.
+ *  Trình đọc PDF thật (kể cả `pdf.js` của Mozilla) dò chữ ký trong 1024 byte
+ *  ĐẦU. Nới đúng chừng đó, không hơn: một khối byte rác chứa đúng chuỗi
+ *  `%PDF-` trong 1 KB đầu là chuyện gần như không xảy ra, nên chốt chặn file
+ *  rác vẫn còn nguyên hiệu lực — bàn đo có ca đối chứng canh đúng chỗ này.
+ *  Máy chủ dò LẠI cùng cách (`src/pdf-chu.js`); đây chỉ là báo sớm tại máy. */
+export const TRAN_DO_CHU_KY = 1024;
+
+/** Vị trí chữ ký `%PDF-`, hoặc -1 nếu không có trong 1024 byte đầu. */
+export function viTriChuKyPDF(bytes) {
+  if (!bytes || bytes.length < 6) return -1;
+  const het = Math.min(bytes.length - 5, TRAN_DO_CHU_KY);
+  for (let i = 0; i <= het; i++) {
+    if (bytes[i] === 0x25 && bytes[i + 1] === 0x50 && bytes[i + 2] === 0x44 &&
+        bytes[i + 3] === 0x46 && bytes[i + 4] === 0x2D) return i;   // % P D F -
+  }
+  return -1;
+}
+
+/** Đúng là file PDF không — soi CHỮ KÝ, không tin phần đuôi tên file. Đổi tên
+ *  `virus.exe` thành `hop-dong.pdf` là việc ai cũng làm được. */
 export function laByteCuaPDF(bytes) {
-  return !!bytes && bytes.length > 5 &&
-    bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 &&
-    bytes[3] === 0x46 && bytes[4] === 0x2D;                 // % P D F -
+  return viTriChuKyPDF(bytes) >= 0;
 }
 
 /** SỐ TRANG của một file PDF — hoặc `0` nếu KHÔNG ĐẾM ĐƯỢC.
@@ -281,8 +302,19 @@ export function demTrangPDF(bytes) {
       s += String.fromCharCode.apply(null, bytes.subarray(j, Math.min(j + MAU, het)));
     }
     /* `/Type /Page` KHÔNG theo sau bởi `s` — `/Pages` là NÚT CÂY, không phải
-       trang. Đếm nhầm nó là mọi PDF đều dày thêm đúng 1 trang. */
-    for (const _ of s.matchAll(/\/Type\s*\/Page(?![s\w])/g)) demTrang++;
+       trang. Đếm nhầm nó là mọi PDF đều dày thêm đúng 1 trang.
+
+       ⚠️ VÁ REV-0054 · LỖI #4a — VÙNG CHỒNG LẤN ĐẾM HAI LẦN.
+       Mỗi khối đọc dư 64 byte sang khối sau (để không cắt đôi cụm chữ ở mép).
+       Một cụm `/Type /Page` nằm trọn trong 64 byte dư ấy thì khối NÀY đếm một
+       lần, khối SAU đếm thêm một lần nữa — file > 1 MB tự dày thêm trang một
+       cách ngẫu nhiên (đo được: 2 trong khi đúng là 1). Bỏ qua cụm BẮT ĐẦU
+       trong vùng dư, trừ khi đây đã là khối cuối (không còn ai đếm hộ). */
+    const conKhoiSau = i + KHOI < bytes.length;
+    for (const m of s.matchAll(/\/Type\s*\/Page(?![s\w])/g)) {
+      if (conKhoiSau && m.index >= KHOI) continue;
+      demTrang++;
+    }
     /* Đường lui: `/Count N` của nút `/Pages` gốc. Lấy số LỚN NHẤT vì cây trang
        nhiều tầng có nhiều `/Count`, gốc luôn là số lớn nhất. */
     for (const m of s.matchAll(/\/Count\s+(\d+)/g)) {

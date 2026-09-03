@@ -3581,6 +3581,29 @@ tr.kd-chiadoi td {
   background: var(--warn-wash); border-radius: var(--r-sm); padding: 8px 10px;
 }
 .tl-chu-van { margin: 0; font: inherit; white-space: pre-wrap; word-break: break-word; }
+
+/* ---- HAI LOẠI TÀI LIỆU TRONG KHO (CTL-0026 vòng 7) ----------------------
+   Dải đếm "tìm được theo nội dung / chỉ xem được". Chữ nhỏ, nền xám nhạt —
+   đây là thông tin NỀN, không phải cảnh báo, nên không mượn họ nâu–cam (đã
+   dành cho "chưa kiểm") và tuyệt đối không dùng đỏ. */
+.tl-dem-chu {
+  margin: 0 0 10px; padding: 8px 10px; font-size: 13px; line-height: 1.5;
+  color: var(--text-mute); background: var(--surface-2); border-radius: var(--r-sm);
+}
+
+/* ---- SỬA SỐ HIỆU + TÊN (Sếp Ngọc 03/09/2026) ---------------------------
+   Ô nhập cao ĐÚNG 44px như mọi thứ chạm được trong ERP. Nhãn nằm TRÊN ô chứ
+   không nằm cạnh: ở 375px, nhãn cạnh ô thì ô còn chưa tới 200px — gõ một số
+   hiệu dài là không đọc lại được cái mình vừa gõ. */
+.tl-sua-o { display: block; margin-bottom: 10px; font-size: 13px; font-weight: 600; color: var(--text); }
+.tl-sua-o input {
+  display: block; width: 100%; margin-top: 4px; min-height: 44px;
+  padding: 0 12px; box-sizing: border-box;
+  border: 1px solid var(--line); border-radius: var(--r-sm);
+  background: var(--surface); color: var(--text); font: inherit; font-weight: 400;
+}
+.tl-sua-o input:focus { outline: 2px solid var(--sage); outline-offset: 1px; }
+
 .tl-nk-ds { margin: 0; padding-left: 20px; }
 .tl-nk-ds li { margin-bottom: 4px; }
 .tl-dai {

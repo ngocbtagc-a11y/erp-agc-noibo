@@ -48,9 +48,28 @@ createServer((req, res) => {
     const manh = [];
     req.on('data', c => manh.push(c));
     req.on('end', () => {
+      const than = Buffer.concat(manh);
       let j = {};
-      try { j = JSON.parse(Buffer.concat(manh).toString('utf8')); } catch {}
+      /* ⚠️ HAI KHUÔN THÂN — khớp `tlLuu` trong src/index.js (vá REV-0054 #2).
+         File PDF nay đi bằng BYTE THẲNG, không base64 trong JSON: máy chủ thật
+         đọc `arrayBuffer()` đúng một lần rồi cắt cửa sổ, nên hai người tải
+         25 MB cùng lúc không còn làm chết isolate. Bàn đo phải mổ đúng khuôn
+         ấy, không thì nó đang đo một đường không còn ai đi. */
+      const kieu = String(req.headers['content-type'] || '').toLowerCase();
+      if (kieu.includes('application/octet-stream') && than.length > 4) {
+        const dai = than.readUInt32BE(0);
+        try {
+          j = JSON.parse(than.subarray(4, 4 + dai).toString('utf8'));
+          /* Quy về base64 để phần so sánh phía dưới giữ nguyên — chuỗi base64
+             là song ánh với khối byte, so bằng nó là so bằng byte. */
+          j.tep = than.subarray(4 + dai).toString('base64');
+          j.khuon = 'byte_thang';
+        } catch { j = {}; }
+      } else {
+        try { j = JSON.parse(than.toString('utf8')); j.khuon = 'json_base64'; } catch {}
+      }
       soGui.push({
+        khuon: j.khuon,
         ma_gui: j.ma_gui, so_trang: j.so_trang, dinh_dang: j.dinh_dang,
         nguon: j.nguon, tieu_de: j.tieu_de,
         /* Băm nội dung để so BẰNG BYTE với file gốc mà không phải chuyển cả

@@ -118,6 +118,24 @@ export const CAU_TRA_GIAY =
    chờ 30 giây mới báo hỏng là cách tệ nhất. */
 export const TRAN_BYTE_PDF_GOC = 25 * 1024 * 1024;
 
+/* ⚠️ CON SỐ ① Ở TRÊN ĐÃ ĐƯỢC VÁ — ĐỌC KỸ TRƯỚC KHI TÍNH LẠI TRẦN.
+   REV-0054 lỗi #2 chỉ đúng một chỗ tôi khai thiếu: 128 MB là bộ nhớ của cả
+   ISOLATE, không phải của một yêu cầu. Hai người cùng tải 25 MB qua đường
+   base64 = 185 MB ⇒ chết isolate, kéo theo mọi yêu cầu đang bay của người khác.
+   Từ CTL-0026 vòng 7, file PDF đi lên bằng ĐƯỜNG BYTE THẲNG (`API.tlLuuTep`,
+   xem `public/assets/js/api.js`): trong Worker chỉ còn ĐÚNG MỘT bản của file,
+   nên hệ số 3,7 rơi về ~1 và hai lượt 25 MB trùng giờ chỉ còn ~50 MB.
+   Vì thế trần 25 MB GIỮ NGUYÊN — không phải hạ xuống 15 MB, tức không phải bắt
+   Sếp tách đôi một bản scan hợp lệ. */
+
+/** BAO NHIÊU FILE PDF MỘT LƯỢT CHỌN.
+ *  Máy scan ra cả tập hồ sơ là chuyện thường, nên phải cho chọn cả xấp. Nhưng
+ *  mỗi file là một tài liệu riêng và người ta phải NHẬP THÔNG TIN cho từng
+ *  file — quá 10 lượt nhập liên tiếp là chỗ bắt đầu nhập nhầm số hiệu của tờ
+ *  này sang tờ kia. Trần này là trần về sức người, không phải về máy.
+ *  Mỗi file tốn ĐÚNG 1 lượt ghi D1, nên 10 file = 10 lượt ghi, không hơn. */
+export const TRAN_PDF_MOT_LUOT = 10;
+
 /** Đuôi ảnh nhận được. HEIC/HEIF có mặt vì iPhone mặc định chụp HEIC, nhưng
  *  xem `LOI_HEIC` — Chrome trên máy tính KHÔNG giải mã được nó. */
 const DUOI_ANH = ['jpg', 'jpeg', 'png', 'heic', 'heif'];
@@ -412,6 +430,15 @@ export function moQuetTaiLieu(t) {
 
   let dangDocTep = false;              // hiện "Đang đọc file…" thay vì màn đứng im
 
+  /* ---- LOẠT NHIỀU FILE PDF  ·  CTL-0026 vòng 7 -------------------------
+     Ba biến này CỐ Ý nằm NGOÀI `hs`: `hs` là một tài liệu và được ghi vào bản
+     nháp `localStorage`, còn đây là trạng thái của LƯỢT CHỌN FILE. Nhét vào
+     `hs` thì mở lại bản nháp cũ sẽ thấy một hàng đợi trỏ tới những `File` không
+     còn tồn tại — đúng kiểu lỗi không ai dựng lại được. */
+  let hangDoi = [];            // các File PDF còn lại của lượt chọn này
+  let daLuuLoat = [];          // đã lưu xong trong loạt: [{id, tieu_de, ...}]
+  let tongLoat = 0;            // tổng số file của loạt (để hiện "3/5")
+
   oChonTep.addEventListener('change', async () => {
     const ds = [...(oChonTep.files || [])];
     oChonTep.value = '';               // chọn LẠI đúng file đó vẫn nổ sự kiện
@@ -446,20 +473,43 @@ export function moQuetTaiLieu(t) {
        duy nhất còn lại là bọc PDF vào PDF, tức là phá luật ①.
        Nên nói THẲNG giới hạn thay vì im lặng lấy file đầu tiên. */
     if (dsPdf.length && dsAnh.length) {
-      alert('Chọn ảnh và PDF cùng lúc thì kho không gộp được — gộp PDF cần thư ' +
-            'viện đọc PDF mà ERP không có (ràng buộc chi phí 0).\n\n' +
+      alert('Một tài liệu chỉ nhận MỘT trong hai: xấp ảnh, hoặc file PDF — kho ' +
+            'không ghép ảnh vào file PDF được.\n\n' +
             'Làm hai lượt: xấp ảnh một lượt, file PDF một lượt.');
       return;
     }
-    if (dsPdf.length > 1) {
-      alert(`Bạn chọn ${dsPdf.length} file PDF. Mỗi file PDF là MỘT tài liệu ` +
-            'riêng — kho lưu nguyên bản chứ không gộp (gộp PDF cần thư viện ' +
-            'ERP không có).\n\nChọn từng file PDF một. Nếu là ẢNH thì chọn cả ' +
-            'xấp một lượt được.');
+
+    /* ---- ④ NHIỀU PDF MỘT LƯỢT — VÁ REV-0054 LỖI #2 ---------------------
+       Sếp Ngọc: *"định dạng file sẽ là scan pdf"*. Scan cả tập hồ sơ thì ra
+       nhiều file PDF, và bản trước bắt "chọn từng file một" — tức là mở hộp
+       thoại 10 lần cho một tập hồ sơ 10 tờ. Nay chọn cả xấp một lượt được.
+
+       ⚠️ VẪN KHÔNG GỘP, và đó là cố ý: mỗi file PDF thành MỘT tài liệu riêng.
+       Gộp nhiều file PDF thành một thì phải ghi lại cấu trúc bên trong file —
+       không làm được ở đây, mà quan trọng hơn: 10 tờ giấy khác nhau thì đúng
+       là 10 tài liệu khác nhau, mỗi tờ một số hiệu, một ngày hết hạn riêng.
+       Gộp chúng lại mới là làm sai việc.
+
+       LƯỢT GHI D1: mỗi file ĐÚNG 1 lượt ghi (1 INSERT), y như quét một tài
+       liệu. Chọn 5 file = 5 lượt ghi — không có lượt ghi ẩn nào. */
+    if (dsPdf.length > TRAN_PDF_MOT_LUOT) {
+      alert(`Bạn chọn ${dsPdf.length} file PDF, mỗi file là một tài liệu riêng ` +
+            `— nhiều quá thì rất dễ nhập nhầm thông tin giữa chừng.\n\n` +
+            `Mỗi lượt tối đa ${TRAN_PDF_MOT_LUOT} file. Chọn lại ít hơn nhé.`);
       return;
     }
+    if (dsPdf.length > 1) {
+      if (!confirm(`Bạn chọn ${dsPdf.length} file PDF.\n\n` +
+        `Kho sẽ lưu thành ${dsPdf.length} tài liệu RIÊNG (không ghép làm một), ` +
+        'theo thứ tự tên file. Bạn nhập thông tin cho từng file, lưu xong file ' +
+        'này máy tự mở file tiếp theo.\n\nBắt đầu chứ?')) return;
+      hangDoi = dsPdf.slice(1);
+      daLuuLoat = [];
+      tongLoat = dsPdf.length;
+      return nhanMotPDF(dsPdf[0]);
+    }
 
-    if (dsPdf.length === 1) return nhanMotPDF(dsPdf[0]);
+    if (dsPdf.length === 1) { hangDoi = []; daLuuLoat = []; tongLoat = 1; return nhanMotPDF(dsPdf[0]); }
     return nhanXapAnh(dsAnh);
   }
 
@@ -477,14 +527,16 @@ export function moQuetTaiLieu(t) {
        nhớ, chưa gửi một byte nào lên mạng. Đây là chỗ RẺ NHẤT để chặn, và là
        chỗ DUY NHẤT chặn được trước khi người ta ngồi chờ. */
     if (f.size > TRAN_BYTE_PDF_GOC) {
-      alert(`File "${f.name}" nặng ${coDoc(f.size)}, vượt trần ` +
-        `${(TRAN_BYTE_PDF_GOC / 1048576).toFixed(0)} MB.\n\n` +
-        'Trần này do bộ nhớ 128 MB của máy chủ Cloudflare Workers ép ra: file ' +
-        'đi lên dưới dạng base64 nên trong máy chủ tồn tại nhiều bản cùng lúc, ' +
-        'đỉnh khoảng 3,7 lần cỡ file.\n\nBa cách xử:\n' +
-        '• Quét lại ở 200 DPI, chế độ xám hoặc đen trắng — thường nhẹ đi 3–5 lần\n' +
+      /* Câu này CHỈ nói hai thứ người ta dùng được: con số thật, và cách xử.
+         Bản trước giảng cả "bộ nhớ 128 MB của Cloudflare Workers" — ruột nhà
+         mình, không giúp gì cho bạn kho, mà lại làm người đọc tưởng ERP hỏng
+         (REV-0054 lỗi #3). */
+      alert(`File "${f.name}" nặng ${coDoc(f.size)}, quá mức kho nhận được ` +
+        `(tối đa ${(TRAN_BYTE_PDF_GOC / 1048576).toFixed(0)} MB một file).\n\n` +
+        'Ba cách xử:\n' +
+        '• Quét lại ở 200 DPI, chế độ xám hoặc đen trắng — thường nhẹ đi 3–5 lần mà chữ vẫn rõ\n' +
         '• Tách file thành nhiều phần, mỗi phần một tài liệu\n' +
-        '• Chụp bằng nút máy ảnh ở đây (ảnh được nén ngay tại máy)');
+        '• Chụp bằng nút máy ảnh ở đây (ảnh được thu nhỏ ngay tại máy)');
       return;
     }
 
@@ -496,9 +548,10 @@ export function moQuetTaiLieu(t) {
          còn soi lại lần nữa. */
       if (!laByteCuaPDF(bytes)) {
         dangDocTep = false; ve();
-        alert(`File "${f.name}" có đuôi .pdf nhưng ruột KHÔNG phải PDF ` +
-              '(thiếu chữ ký "%PDF-" ở đầu file). Có thể file hỏng, hoặc bị ' +
-              'đổi tên từ định dạng khác. Mở thử bằng trình đọc PDF xem sao.');
+        alert(`File "${f.name}" không phải PDF — ruột bên trong là định dạng ` +
+              'khác, dù tên file ghi là .pdf.\n\n' +
+              'Thử mở nó bằng trình đọc PDF xem có mở được không. Nếu là ảnh ' +
+              'thì đổi đuôi về .jpg rồi chọn lại, kho nhận ảnh bình thường.');
         return;
       }
       const soTrang = demTrangPDF(bytes);
@@ -506,7 +559,13 @@ export function moQuetTaiLieu(t) {
         ten: f.name,
         coByte: bytes.length,
         soTrang,                       // 0 = KHÔNG ĐẾM ĐƯỢC, xem `demTrangPDF`
-        base64: byteThanhBase64(bytes)
+        /* ⚠️ GIỮ NGUYÊN KHỐI BYTE, KHÔNG đổi sang base64 ở đây nữa.
+           Đường gửi mới (`API.tlLuuTep`) đẩy thẳng byte lên, nên chuỗi base64
+           trở thành một bản chép 1,34× vô ích nằm trong bộ nhớ tab suốt lúc
+           người ta nhập thông tin — trên điện thoại cũ đó là một cú treo tab
+           với file 25 MB. `tepGoc` không vào bản nháp `localStorage` (xem
+           `ghiNhap`) nên nó không cần phải là chuỗi. */
+        byte: bytes
       };
       hs.nguon = 'tep_may';
       if (!hs.tieuDe) {
@@ -516,7 +575,9 @@ export function moQuetTaiLieu(t) {
         hs.tieuDe = String(f.name).replace(/\.pdf$/i, '').replace(/[_-]+/g, ' ').trim().slice(0, 200);
       }
     } catch (e) {
-      alert('Không đọc được file: ' + (e.message || 'không rõ lý do'));
+      alert(`Không mở được file "${f.name}". Thử mở nó bằng trình đọc PDF trên ` +
+            'máy xem có mở được không; nếu file nằm trên ổ mạng hay USB thì chép ' +
+            'về máy rồi chọn lại.');
     }
     dangDocTep = false;
     ve();
@@ -605,7 +666,13 @@ export function moQuetTaiLieu(t) {
 
   function hoiThoat() {
     if (dangGui || dangDocTep) return;
-    if (hs.tepGoc && !confirm(
+    /* Đang giữa một loạt nhiều file thì phải nói rõ CÒN MẤY FILE CHƯA LƯU —
+       đóng lặng lẽ ở đây là Sếp tưởng cả xấp đã vào kho. */
+    if (hangDoi.length && !confirm(
+      `Loạt này còn ${hangDoi.length + 1} file chưa lưu ` +
+      `(đã lưu ${daLuuLoat.length}/${tongLoat}).\n\n` +
+      'Bấm OK để đóng — các file chưa lưu vẫn nằm nguyên trên máy, chọn lại là được.')) return;
+    if (hs.tepGoc && !hangDoi.length && !confirm(
       `Đã chọn file "${hs.tepGoc.ten}" nhưng chưa lưu.\n\n` +
       'Bấm OK để đóng — file vẫn nằm nguyên trên máy, lần sau chọn lại là được.')) return;
     if (hs.trang.length && !confirm(
@@ -732,16 +799,17 @@ export function moQuetTaiLieu(t) {
     ve();
   }
 
-  /* ⚠️ CÂU PHẢI NÓI RA VỀ PDF — chốt ② của lượt này.
-     ERP bóc chữ bằng Workers AI ĐỌC ẢNH. Muốn bóc chữ trong PDF thì phải
-     render PDF ra ảnh trước, cần thư viện đọc PDF mà ERP không có và chi phí 0
-     cấm thêm. Im lặng ở đây là để người ta tưởng tra cứu được bằng nội dung,
-     rồi gõ một cụm chữ trong hợp đồng, không thấy gì, và kết luận SAI rằng
-     hợp đồng đó chưa được lưu. */
+  /* ⚠️ CÂU NÓI RA VỀ PDF — VIẾT LẠI BẰNG TIẾNG NGƯỜI (REV-0054 lỗi #3).
+     Bản trước giảng "đường bóc chữ chỉ đọc được ẢNH" — đó là ruột nhà mình,
+     bạn kho đọc câu đó sẽ tưởng ERP đang hỏng. Và từ CTL-0026 vòng 7 nó còn
+     SAI hẳn: PDF có lớp chữ nay đọc được thật. Màn quét chỉ nói đúng thứ CHƯA
+     biết được trước khi gửi — có chữ hay không thì phải mở file ra mới rõ —
+     rồi máy chủ trả câu chính xác cho từng file. */
   const CAU_PDF_CHUA_BOC_CHU =
-    'File PDF lưu được nguyên bản, nhưng ERP CHƯA bóc được chữ bên trong PDF ' +
-    'để tra cứu — đường bóc chữ chỉ đọc được ẢNH. Tài liệu này sẽ tra bằng ' +
-    'TÊN, số hiệu và loại giấy. Cần tra bằng nội dung thì chụp bằng máy ảnh.';
+    'Kho lưu file PDF nguyên bản. Nếu máy scan đã nhận dạng chữ sẵn thì tài ' +
+    'liệu này tìm được cả theo nội dung bên trong; nếu file chỉ là ảnh chụp ' +
+    'trang giấy thì tìm bằng tên, số hiệu và loại giấy. Gửi xong máy báo rõ ' +
+    'file này thuộc loại nào.';
 
   /** Hai đường vào tài liệu, xếp theo ĐÚNG thiết bị.
    *
@@ -772,8 +840,19 @@ export function moQuetTaiLieu(t) {
 
   function veTheTepGoc() {
     const g = hs.tepGoc;
+    /* ⚠️ ĐANG Ở GIỮA MỘT LOẠT THÌ PHẢI NÓI RA. Không có dòng này thì lưu xong
+       file thứ nhất, màn hình lại hiện một file khác, người dùng tưởng lưu hụt
+       và bấm lưu lại — ra hai bản của cùng một tờ giấy. Nói rõ "thứ mấy trên
+       mấy" và tên file đang mở là hết chỗ hiểu nhầm. */
+    const loat = tongLoat > 1
+      ? `<p class="tlq-canh"><b>File ${daLuuLoat.length + 1}/${tongLoat}</b> của loạt vừa chọn.
+           ${daLuuLoat.length ? `Đã lưu xong ${daLuuLoat.length} tài liệu.` : ''}
+           Mỗi file là một tài liệu riêng — nhập thông tin cho file này rồi lưu,
+           máy tự mở file tiếp theo.</p>`
+      : '';
     return `
       <div class="tlq-than">
+        ${loat}
         <div class="tlq-the tlq-the-tep">
           <div class="tlq-bieu-tuong" aria-hidden="true">PDF</div>
           <div class="tlq-the-tin">
@@ -1112,8 +1191,15 @@ export function moQuetTaiLieu(t) {
        trước; máy chủ vẫn có lưới thứ hai cho ca hai tab. */
     if (dangGui) return;
     thu();
-    if (!hs.tieuDe || hs.tieuDe.length < 3) { alert('Đặt tên cho tài liệu đã nhé.'); return; }
-    if (!hs.trang.length && !hs.tepGoc) { alert('Chưa có trang nào.'); return; }
+    if (!hs.tieuDe || hs.tieuDe.length < 3) {
+      alert('Đặt tên cho tài liệu đã nhé — ít nhất 3 ký tự, không thì sau này ' +
+            'không ai tìm ra nó.');
+      return;
+    }
+    if (!hs.trang.length && !hs.tepGoc) {
+      alert('Chưa có trang nào để lưu. Chụp máy ảnh hoặc chọn file trên máy trước đã.');
+      return;
+    }
     /* Bản nháp cũ (lưu trước bản vá REV-0046 #2) có thể đã có đủ trang mà chưa
        có người. Máy chủ chặn thật; ở đây đưa người ta về đúng màn để chọn, chứ
        đừng để họ bấm Lưu rồi ăn một câu lỗi. */
@@ -1139,20 +1225,18 @@ export function moQuetTaiLieu(t) {
             PDF CÓ SẴN: chép nguyên byte, KHÔNG bọc lại (luật ①). */
       const pdf = laTepGoc ? null
         : gopTrangThanhPDF(hs.trang.map(x => dataUrlThanhByte(x.anh)), { tieuDe: hs.tieuDe });
-      const than64 = laTepGoc ? hs.tepGoc.base64 : byteThanhBase64(pdf);
       const coByte = laTepGoc ? hs.tepGoc.coByte : pdf.length;
 
       /* ② Ảnh cho AI bóc chữ: thu nhỏ thêm một nấc, tối đa 3 trang đầu. AI
          đọc ảnh không cần nét bằng mắt người, mà ảnh nhỏ thì gọi nhanh hơn
          nhiều và không tốn thêm đồng nào (Workers AI đã có sẵn).
 
-         ⚠️ PDF CÓ SẴN KHÔNG CÓ ẢNH ĐỂ ĐƯA — và đó là một GIỚI HẠN THẬT phải
-         nói ra, không phải một mảng rỗng lặng lẽ. Bóc chữ trong PDF đòi
-         render PDF ra ảnh, tức là đòi thư viện đọc PDF mà ERP không có
-         (chi phí 0). Máy chủ nhận `dinh_dang: 'pdf_goc'` và ghi thẳng câu
-         "chưa bóc được chữ" vào `ocr_ghi_chu`, để nó còn nguyên ở màn xem
-         chữ, ở bản sao lưu CSV, ở bản khôi phục — chứ không chỉ trong một
-         cái `alert` bay mất sau ba giây. */
+         ⚠️ PDF CÓ SẴN KHÔNG GỬI ẢNH — và từ CTL-0026 vòng 7 nó KHÔNG còn
+         nghĩa là "không có chữ". Máy chủ nhận `dinh_dang: 'pdf_goc'` rồi tự
+         mở file ra tìm LỚP CHỮ bên trong (`src/pdf-chu.js`): có thì bóc thật,
+         không có thì ghi thẳng câu "file này là ảnh chụp" vào `ocr_ghi_chu`
+         để nó còn nguyên ở màn xem chữ, ở bản sao lưu CSV, ở bản khôi phục —
+         chứ không chỉ trong một cái `alert` bay mất sau ba giây. */
       const anhBocChu = [];
       for (let i = 0; !laTepGoc && i < Math.min(hs.trang.length, TRAN_TRANG_BOC_CHU); i++) {
         const tep = dataUrlThanhTep(hs.trang[i].anh, `trang-${i + 1}.jpg`);
@@ -1160,7 +1244,7 @@ export function moQuetTaiLieu(t) {
       }
 
       const t0 = performance.now();
-      const kq = await API.tlLuu({
+      const moTa = {
         ma_gui: hs.maGui,                    // GIỮ NGUYÊN qua mọi lần gửi lại
         cua_vao: cuaVao,
         /* Cửa hồ sơ đã có `ganId`; cửa kho chung lấy người vừa chọn ở màn
@@ -1177,7 +1261,6 @@ export function moQuetTaiLieu(t) {
            ghi 1 và màn hình đã nói trước là ghi 1 (xem `veTheTepGoc`). Máy chủ
            đòi `so_trang >= 1`. */
         so_trang: laTepGoc ? (hs.tepGoc.soTrang || 1) : hs.trang.length,
-        tep: than64,
         anh_boc_chu: anhBocChu,
         /* Hai cột chỉ đường cho máy chủ: trần kích thước nào áp, có bỏ qua
            bước bóc chữ không, và câu ghi chú nào phải ghi lại. */
@@ -1185,19 +1268,55 @@ export function moQuetTaiLieu(t) {
         dinh_dang: laTepGoc ? 'pdf_goc' : 'anh_gop',
         dong_y_boi: hs.dongYBoi || null,
         dong_y_muc_dich: hs.dongYMucDich || null
-      });
+      };
+      /* ⚠️ HAI ĐƯỜNG GỬI, MỘT CỬA MÁY CHỦ. File PDF đi bằng BYTE THẲNG (không
+         base64) để hai người tải cùng lúc không làm chết isolate — xem
+         `API.tlLuuTep`. Ảnh vẫn đi base64 như cũ: trần 6 MB, không có vấn đề
+         gì, và đổi luôn cả thứ đang chạy tốt là tự chuốc rủi ro. */
+      const kq = laTepGoc
+        ? await API.tlLuuTep(moTa, hs.tepGoc.byte)
+        : await API.tlLuu({ ...moTa, tep: byteThanhBase64(pdf) });
       const msGui = Math.round(performance.now() - t0);
 
+      const soTrangDaGui = laTepGoc ? (hs.tepGoc.soTrang || 1) : hs.trang.length;
+      const tenTepGoc = laTepGoc ? hs.tepGoc.ten : null;
       xoaNhap(cuaVao, ganId);
+      daLuuLoat.push({ id: kq.id, tieu_de: hs.tieuDe, ten_tep: tenTepGoc, chu_nguon: kq.chu_nguon });
+
+      /* ---- CÒN FILE TRONG LOẠT: mở file kế tiếp, KHÔNG đóng màn ----------
+         Mỗi file là một tài liệu riêng nên `maGui` phải MỚI (chống trùng chạy
+         theo từng tài liệu), tên và số hiệu phải TRỐNG (hai tờ giấy khác nhau
+         thì hai số hiệu khác nhau — chép lại số hiệu tờ trước là cách chắc
+         chắn nhất để cả xấp mang cùng một số sai). Nhóm · loại · người được
+         gắn · hai ô đồng ý thì GIỮ: cả xấp thường cùng một bộ. */
+      if (hangDoi.length) {
+        const nen = {
+          nhom: hs.nhom, loai: hs.loai, ganId: hs.ganId, ganTen: hs.ganTen,
+          ngayBanHanh: hs.ngayBanHanh, ngayHetHan: hs.ngayHetHan,
+          dongYBoi: hs.dongYBoi, dongYMucDich: hs.dongYMucDich
+        };
+        hs = { ...moiBo(), ...nen, tieuDe: '', soHieu: '' };
+        dangGui = false;
+        const f = hangDoi.shift();
+        await nhanMotPDF(f);
+        manHinh = 'trang';
+        ve();
+        return;
+      }
+
       dong();
       if (typeof t.khiXong === 'function') {
         t.khiXong({
           ...kq,
-          so_trang: laTepGoc ? (hs.tepGoc.soTrang || 1) : hs.trang.length,
+          so_trang: soTrangDaGui,
           co_byte_pdf: coByte,
           ms_gui: msGui,
           la_tep_goc: laTepGoc,
-          ten_tep_goc: laTepGoc ? hs.tepGoc.ten : null
+          ten_tep_goc: tenTepGoc,
+          /* Cả loạt vừa lưu — để màn gọi nói "đã lưu 5 tài liệu" thay vì báo
+             mỗi tài liệu cuối cùng và im về bốn cái trước. */
+          loat: daLuuLoat.slice(),
+          tong_loat: tongLoat
         });
       }
     } catch (e) {

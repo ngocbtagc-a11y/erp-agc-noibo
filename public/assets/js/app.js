@@ -5568,8 +5568,12 @@ if (TOI.quyen.includes('nhansu')) {
                   màn này, là người DUY NHẤT còn cầm tờ giấy để đối chiếu.
                   Dùng CHUNG hàm với tab Kho tài liệu, không chép bản hai. */''}
             ${nutXemChuTaiLieu(t.id)}
+            ${/* Sửa số hiệu + tên SAU khi đã lưu — Sếp Ngọc 03/09/2026. Cùng
+                  một hàm với tab Kho tài liệu, không chép bản hai. */''}
+            ${nutSuaTaiLieu(t)}
           </div>
           ${oChuTaiLieu(t.id)}
+          ${oSuaTaiLieu(t)}
         </article>`;
     }
 
@@ -5602,12 +5606,16 @@ if (TOI.quyen.includes('nhansu')) {
       NS_GT_LOAI_GOI_Y = kq.loai_goi_y || [];
       NS_GT_QUET_DUOC = kq.duoc_quet_nhan_su === true;
       oNut.hidden = !NS_GT_QUET_DUOC;
+      /* Nhóm LƯU được do máy chủ trả — quyết định có bày nút "Sửa số & tên"
+         hay không. Giao diện không tự đoán, máy chủ vẫn chặn lại lần nữa. */
+      TL_NHOM_LUU_DUOC = kq.nhom_luu_duoc || [];
 
       const ds = kq.ds || [];
       oDs.innerHTML = ds.map(nsGtMotThe).join('');
       /* Cùng MỘT hàm bắt sự kiện với tab Kho tài liệu (vá REV-0046 #4) — hai
          cửa nhìn, một cỗ máy. */
       noiNutXemChu(oDs);
+      noiNutSuaTaiLieu(oDs, () => veGiayToHoSo(n));
       oDem.textContent = ds.length
         ? `${ds.length} giấy tờ trong bộ${kq.bi_cat ? ' (đã cắt bớt)' : ''}`
         : '';
@@ -9686,10 +9694,28 @@ function cauSauKhiQuet(kq) {
     ? `Đã lưu file "${kq.ten_tep_goc}" (${kq.so_trang} trang) — LƯU NGUYÊN BẢN, không bọc lại.`
     : `Đã lưu ${kq.so_trang} trang.`];
 
+  /* CẢ MỘT LOẠT NHIỀU FILE PDF (CTL-0026 vòng 7). Báo mỗi file cuối rồi im về
+     những file trước là để Sếp không biết cả xấp đã vào kho hay chưa. */
+  if (Array.isArray(kq.loat) && kq.loat.length > 1) {
+    dong.unshift(`Đã lưu xong ${kq.loat.length} tài liệu của loạt vừa chọn:\n` +
+      kq.loat.map((x, i) => `${i + 1}. ${x.tieu_de}`).join('\n'));
+  }
+
+  /* ⚠️ CHỮ TỪ ĐÂU RA THÌ NÓI ĐÚNG CHỖ ĐÓ. Chữ có sẵn trong file PDF (máy scan
+     nhận dạng) và chữ AI đọc từ ảnh chụp tin được tới mức khác nhau — dán
+     chung một nhãn là nói dối một nửa. Cả hai vẫn là chữ MÁY ĐỌC, nên con số
+     vẫn phải đối chiếu bản giấy: đó là chỗ hai đường giống nhau. */
   if (!n) {
-    /* Với PDF có sẵn thì `ocr_ghi_chu` ngay dưới nói đủ và nói ĐÚNG lý do —
-       in thêm câu chung chung này là nói hai lần, lần sau nhẹ hơn lần trước. */
+    /* Với PDF có sẵn thì `ocr_ghi_chu` ngay dưới nói đủ và nói ĐÚNG bệnh (chỉ
+       có ảnh · có mật khẩu · đọc không đủ rõ) — in thêm câu chung chung này là
+       nói hai lần, lần sau nhẹ hơn lần trước. */
     if (!kq.la_tep_goc) dong.push('Chưa bóc được chữ — vẫn tra được bằng tên.');
+  } else if (kq.chu_nguon === 'pdf_lop_chu') {
+    dong.push(`Máy scan đã nhận dạng chữ sẵn trong file này — lấy được chữ của ${n} ` +
+              `trang, trong đó ${neo} trang đối chiếu được với thứ bạn vừa gõ. ` +
+              'Tài liệu này TÌM ĐƯỢC theo nội dung bên trong.');
+    dong.push('⚠️ Con số trong phần chữ là do MÁY đọc, không phải người nhập — máy ' +
+              'scan vẫn đọc nhầm chữ số. Đối chiếu bản giấy trước khi dùng.');
   } else {
     dong.push(`Bóc chữ được ${n} trang, trong đó ${neo} trang đối chiếu được với ` +
               'thứ bạn vừa gõ.');
@@ -9716,19 +9742,145 @@ function cauSauKhiQuet(kq) {
    ký (gộp theo ngày, xem `ghiNhatKy()`), đúng thứ Luật BVDLCN bắt phải có.
    ========================================================================== */
 
-/** Bôi vàng đúng những cụm số do AI đọc. Vị trí cụm do MÁY CHỦ tính
- *  (`so_ai`, src/so-ai.js) — trình duyệt KHÔNG giữ bản dò số thứ hai. */
-function veChuCoSo(chu, viTri) {
+/** Bôi vàng đúng những cụm số MÁY đọc. Vị trí cụm do MÁY CHỦ tính
+ *  (`so_ai`, src/so-ai.js) — trình duyệt KHÔNG giữ bản dò số thứ hai.
+ *
+ *  ⚠️ VÁ REV-0055 · CAO-2 — NHÃN LẤY TỪ MÁY CHỦ, KHÔNG DÁN CỨNG.
+ *  Bản trước dán cứng "AI đọc — CHƯA KIỂM" cho MỌI con số, kể cả chữ lấy từ
+ *  lớp chữ có sẵn trong PDF — đoạn chữ mà Workers AI chưa được gọi lấy một
+ *  lượt (`do-kho-tai-lieu` ⑬a tự chứng minh: 0 lượt AI cho đường PDF). Nói sai
+ *  nguồn gốc của chữ là làm hỏng chính cái luật "con số máy đọc = chưa kiểm":
+ *  người đọc thấy nhãn dán bừa một lần thì lần sau bỏ qua nó. */
+/** ĐƯỜNG LUI khi máy chủ không trả nhãn (bản cũ còn trong bộ nhớ đệm trình
+ *  duyệt). Khai ĐÚNG MỘT chỗ: hai bản chép tay của cùng một nhãn là cách nhãn
+ *  bắt đầu lệch nhau, và bàn đo cũng chỉ soi được khi có đúng một chuỗi
+ *  (REV-0055 · CAO-2). */
+const NHAN_MAY_DOC_LUI = 'AI đọc — CHƯA KIỂM';
+
+function veChuCoSo(chu, viTri, nhan) {
   const s = String(chu || '');
+  const nh = nhan || NHAN_MAY_DOC_LUI;
   if (!Array.isArray(viTri) || !viTri.length) return esc(s);
   let ra = '', xong = 0;
   for (const [i, dai] of viTri) {
     if (!Number.isFinite(i) || !Number.isFinite(dai) || i < xong) continue;
     ra += esc(s.slice(xong, i));
-    ra += `<mark class="so-ai" title="AI đọc — CHƯA KIỂM">${esc(s.slice(i, i + dai))}</mark>`;
+    ra += `<mark class="so-ai" title="${esc(nh)}">${esc(s.slice(i, i + dai))}</mark>`;
     xong = i + dai;
   }
   return ra + esc(s.slice(xong));
+}
+
+/* ==========================================================================
+   SỬA SỐ HIỆU + TÊN TÀI LIỆU SAU KHI ĐÃ LƯU — MỘT HÀM, HAI CỬA
+   ---------------------------------------------------------------------------
+   Sếp Ngọc 03/09/2026: *"trước khi thêm tài liệu hoặc khi đã upload tài liệu
+   lên thì để cho đổi tên số tài liệu và tên tài liệu nhé"*.
+
+   TRƯỚC KHI LƯU đã sửa được từ đầu (hai ô trên màn quét). Đây là chiều còn
+   lại. Đặt ở ĐÚNG MỘT chỗ như `noiNutXemChu` — kho chung và hồ sơ nhân sự gọi
+   chung một hàm vẽ, một hàm bắt sự kiện. Chép bản thứ hai là chỗ để lần sau
+   một cửa quên mất câu nhắc về mỏ neo.
+
+   ⚠️ KHÔNG BẮT GHI LÝ DO. Đây là sửa chính tả, không phải đổi cam kết (chốt
+   `trg_doi_cam_ket_phai_co_ly_do` chỉ đòi lý do cho hạn chót và người nhận).
+   Bắt ghi lý do cho một lỗi đánh máy thì người ta quay về thói xoá đi quét
+   lại — mà quét lại nghĩa là đi tìm lại TỜ GIẤY THẬT.
+
+   ⚠️ KHÔNG SỬA ĐƯỢC ở đây: file đã lưu, và NHÓM giấy tờ (đổi nhóm là đổi ai
+   được xem — một quyết định về quyền, không phải sửa chính tả).
+   ========================================================================== */
+
+/** Nhóm giấy tờ người này LƯU được — máy chủ trả (`nhom_luu_duoc`), giao diện
+ *  không tự đoán. Cả hai cửa cùng ghi vào đây sau mỗi lượt nạp.
+ *  Ẩn nút khi không sửa được là để KHÔNG HỨA SUÔNG (bài học REV-0040 #8): máy
+ *  chủ vẫn chặn 403 thật, nhưng bày một cái nút bấm vào là ăn lỗi thì tệ. */
+let TL_NHOM_LUU_DUOC = [];
+
+function nutSuaTaiLieu(t) {
+  if (!TL_NHOM_LUU_DUOC.includes(t.nhom)) return '';
+  return `<button type="button" class="tl-nut-mo tl-nut-sua" data-sua="${esc(t.id)}">Sửa số &amp; tên</button>`;
+}
+
+function oSuaTaiLieu(t) {
+  return `<div class="tl-chu tl-sua" id="tl-sua-${esc(t.id)}" hidden
+               data-ten="${esc(t.tieu_de || '')}" data-so="${esc(t.so_hieu || '')}"></div>`;
+}
+
+/** Nối nút "Sửa số & tên" cho mọi thẻ trong `goc`. `khiXong` để cửa gọi nạp lại
+ *  danh sách — không tự gọi hàm nạp của một cửa cụ thể, vì có hai cửa. */
+function noiNutSuaTaiLieu(goc, khiXong) {
+  if (!goc) return;
+  goc.querySelectorAll('[data-sua]').forEach(b => b.addEventListener('click', () => {
+    const id = b.dataset.sua;
+    const o = document.getElementById('tl-sua-' + id);
+    if (!o) return;
+    if (!o.hidden) { o.hidden = true; return; }
+    o.hidden = false;
+    o.innerHTML = `
+      <p class="tl-so-ai-nhac">Sửa gõ nhầm thì cứ sửa, <b>không phải ghi lý do</b> —
+        nhưng máy vẫn ghi lại ai sửa, lúc nào, cũ → mới.</p>
+      <label class="tl-sua-o">Tên tài liệu
+        <input type="text" id="tl-sua-ten-${esc(id)}" maxlength="200" value="${esc(o.dataset.ten)}">
+      </label>
+      <label class="tl-sua-o">Số hiệu
+        <input type="text" id="tl-sua-so-${esc(id)}" maxlength="120" value="${esc(o.dataset.so)}">
+      </label>
+      ${/* ⚠️ NÓI TRƯỚC chuyện mỏ neo. Người sửa số hiệu cần biết nhãn tin cậy
+            của phần chữ sẽ được tính lại — nếu không, họ sửa số rồi ngạc nhiên
+            vì "đã đối chiếu" biến mất, và tưởng ERP làm hỏng dữ liệu. */''}
+      <p class="tl-so-ai-nhac">Đổi <b>số hiệu</b> thì máy sẽ <b>đối chiếu lại</b> phần chữ
+        đã bóc với số mới — nhãn "đã đối chiếu" có thể đổi theo. Đó là đúng: giữ
+        một nhãn tính bằng số cũ là giữ một kết luận đã hết hiệu lực.</p>
+      <div class="tl-the-nut">
+        <button type="button" class="tl-nut-mo tl-nut-luu-sua" data-luu="${esc(id)}">Lưu</button>
+        <button type="button" class="tl-nut-mo" data-huy="${esc(id)}">Huỷ</button>
+        <button type="button" class="tl-nut-mo" data-ls="${esc(id)}">Xem lịch sử sửa</button>
+      </div>
+      <div class="tl-chu" id="tl-ls-${esc(id)}" hidden></div>`;
+
+    o.querySelector('[data-huy]').addEventListener('click', () => { o.hidden = true; });
+
+    o.querySelector('[data-ls]').addEventListener('click', async () => {
+      const ols = document.getElementById('tl-ls-' + id);
+      if (!ols.hidden) { ols.hidden = true; return; }
+      ols.textContent = 'Đang mở…'; ols.hidden = false;
+      try {
+        const r = await API.tlLichSu(id);
+        const d = r.ds || [];
+        if (!d.length) { ols.textContent = 'Chưa ai sửa tài liệu này.'; return; }
+        const ten = { tieu_de: 'tên tài liệu', so_hieu: 'số hiệu' };
+        ols.innerHTML = '<ul class="tl-nk-ds">' + d.map(k =>
+          `<li><b>${esc(k.nguoi_ten || '—')}</b> đổi ${esc(ten[k.truong] || k.truong)}: ` +
+          `"${esc(k.gia_tri_cu || '(trống)')}" → "${esc(k.gia_tri_moi || '(trống)')}" ` +
+          `lúc ${esc(String(k.luc || '').slice(0, 16))}</li>`).join('') + '</ul>';
+      } catch (e) { ols.textContent = e.message; }
+    });
+
+    const nutLuu = o.querySelector('[data-luu]');
+    nutLuu.addEventListener('click', async () => {
+      if (nutLuu.disabled) return;                 // chặn hai lượt bấm chồng nhau
+      nutLuu.disabled = true;
+      const tenMoi = document.getElementById('tl-sua-ten-' + id).value.trim();
+      const soMoi = document.getElementById('tl-sua-so-' + id).value.trim();
+      try {
+        const r = await API.tlSua({ id, tieu_de: tenMoi, so_hieu: soMoi });
+        o.hidden = true;
+        if (r.khong_doi) { alert('Bạn chưa đổi gì cả — không có gì để lưu.'); }
+        else {
+          alert('Đã sửa xong.' +
+            (r.neo_tinh_lai
+              ? '\n\nSố hiệu đổi nên máy vừa đối chiếu lại phần chữ đã bóc.' +
+                (r.ocr_ghi_chu ? '\n⚠️ ' + r.ocr_ghi_chu : '')
+              : ''));
+        }
+        if (typeof khiXong === 'function') khiXong();
+      } catch (e) {
+        alert(e.message);
+        nutLuu.disabled = false;
+      }
+    });
+  }));
 }
 
 /** Ô chữ + nút, dán vào thẻ giấy tờ ở cả hai cửa. */
@@ -9755,14 +9907,30 @@ function noiNutXemChu(goc) {
           (tl.ocr_ghi_chu ? ' — ' + tl.ocr_ghi_chu : '') + '.';
         return;
       }
-      /* Câu nhắc đứng TRƯỚC đoạn chữ, không phải chú thích cuối trang: người
+      /* ⚠️ VÁ REV-0055 · CAO-2 — NÓI ĐÚNG NGUỒN GỐC CỦA CHỮ.
+         Bản trước dán cứng "AI đọc từ ảnh" cho cả chữ lấy từ lớp chữ có sẵn
+         trong PDF — đoạn chữ mà Workers AI chưa được gọi lấy một lượt. Nhãn
+         nói sai nguồn là nhãn sẽ bị bỏ qua, và cả cơ chế "CHƯA KIỂM" sống
+         bằng việc người đọc còn tin nhãn đó.
+         Nhãn và câu giải thích đều rẽ theo `chu_nguon` MÁY CHỦ trả về; nhãn
+         khai ở `src/tai-lieu.js` (`NHAN_CHU_PDF` / `NHAN_SO_AI`), trình duyệt
+         KHÔNG giữ bản chép tay. Điểm CHUNG của hai nhánh giữ nguyên: cả hai
+         đều là chữ MÁY đọc, con số đều phải đối chiếu bản giấy.
+         Câu nhắc đứng TRƯỚC đoạn chữ, không phải chú thích cuối trang: người
          đọc phải biết đây là chữ máy đọc TRƯỚC khi đọc con số. */
+      const tuPDF = tl.chu_nguon === 'pdf_lop_chu';
+      const nhan = tl.nhan_so_ai ||
+        (tuPDF ? 'Chữ có sẵn trong file PDF — CHƯA KIỂM' : NHAN_MAY_DOC_LUI);
       o.innerHTML =
-        '<p class="tl-so-ai-nhac">⚠️ <b>AI đọc — CHƯA KIỂM.</b> Con số được bôi ' +
-        'là do AI đọc từ ảnh. AI có thể đọc đúng tờ giấy mà vẫn chép sai vài ' +
-        'chữ số — đối chiếu bản giấy trước khi dùng bất kỳ con số nào vào giấy ' +
-        'tờ, tờ khai hay hồ sơ.</p>' +
-        `<pre class="tl-chu-van">${veChuCoSo(tl.noi_dung, tl.so_ai)}</pre>` +
+        `<p class="tl-so-ai-nhac">⚠️ <b>${esc(nhan)}.</b> ` +
+        (tuPDF
+          ? 'Con số được bôi là chữ máy scan nhận dạng sẵn trong file, KHÔNG phải ' +
+            'do AI đọc ảnh — nhưng máy scan vẫn đọc nhầm chữ số. '
+          : 'Con số được bôi là do AI đọc từ ảnh. AI có thể đọc đúng tờ giấy mà ' +
+            'vẫn chép sai vài chữ số. ') +
+        'Đối chiếu bản giấy trước khi dùng bất kỳ con số nào vào giấy tờ, tờ ' +
+        'khai hay hồ sơ.</p>' +
+        `<pre class="tl-chu-van">${veChuCoSo(tl.noi_dung, tl.so_ai, nhan)}</pre>` +
         (tl.ocr_ghi_chu ? `<p class="tl-so-ai-nhac">${esc(tl.ocr_ghi_chu)}</p>` : '');
     } catch (e) { o.textContent = e.message; }
   }));
@@ -9851,12 +10019,17 @@ async function khoiDongKhoTaiLieu() {
                 cả hai con số: "đã bóc chữ 3 trang" trơn làm người đọc tưởng cả
                 ba trang đều đã được kiểm (REV-0044 · L2 — chữ bịa được bảo
                 lãnh). Chưa đối chiếu được thì nói thẳng ra ngay ở danh sách. */''}
+          ${/* ⚠️ HAI LOẠI PDF PHẢI NHÌN RA ĐƯỢC NGAY TỪ DANH SÁCH (CTL-0026
+                vòng 7). "Tìm được theo nội dung" và "chỉ xem được" là khác biệt
+                quyết định việc Sếp có phải đi chỉnh máy scan hay không — giấu
+                nó sau một cú bấm là để không ai bao giờ thấy. */''}
           ${t.ocr_so_trang
-            ? `· bóc chữ ${Number(t.ocr_so_trang) || 0} trang` +
+            ? `· ${t.chu_nguon === 'pdf_lop_chu' ? 'chữ có sẵn trong file' : 'bóc chữ'} ` +
+              `${Number(t.ocr_so_trang) || 0} trang` +
               (Number(t.ocr_so_trang_neo) >= Number(t.ocr_so_trang)
                 ? ' <span class="tl-dai tl-dai-neo">đã đối chiếu</span>'
                 : ` <span class="tl-dai tl-dai-sap">${Number(t.ocr_so_trang) - (Number(t.ocr_so_trang_neo) || 0)} trang CHƯA KIỂM</span>`)
-            : '· <i>chưa bóc được chữ — tra bằng tên</i>'}
+            : '· <i>chỉ xem được — tìm bằng tên, số hiệu, loại giấy</i>'}
         </div>
         ${t.trich ? `<p class="tl-trich">${esc(t.trich)}…</p>`
           /* Giấy tờ nhạy cảm KHÔNG có trích đoạn ở danh sách — máy chủ cắt sẵn,
@@ -9879,8 +10052,11 @@ async function khoiDongKhoTaiLieu() {
                 Chỉ hiện ở giấy tờ NHẠY CẢM vì chỉ nhóm đó mới có nhật ký. */''}
           ${laAdminTL && t.nhay_cam
             ? `<button type="button" class="tl-nut-mo tl-nut-nk" data-nk="${t.id}">Nhật ký truy cập</button>` : ''}
+          ${/* Sửa số hiệu + tên SAU khi đã lưu — Sếp Ngọc 03/09/2026. */''}
+          ${nutSuaTaiLieu(t)}
         </div>
         ${oChuTaiLieu(t.id)}
+        ${oSuaTaiLieu(t)}
         <div class="tl-chu tl-nk" id="tl-nk-${t.id}" hidden></div>
       </article>`;
   }
@@ -9903,11 +10079,52 @@ async function khoiDongKhoTaiLieu() {
       if (kq.nhom && kq.nhom.length !== dsNhom.length) { dsNhom = kq.nhom; veLoc(); }
       else if (!dsNhom.length) { dsNhom = kq.nhom || []; veLoc(); }
       nhomLuuDuoc = kq.nhom_luu_duoc || [];
+      TL_NHOM_LUU_DUOC = nhomLuuDuoc;
       veNutQuet();
 
       const ds = kq.ds || [];
       oDanhSach.innerHTML = ds.map(veMot).join('');
       oTrong.hidden = ds.length > 0;
+
+      /* ---- TỈ LỆ TRA CỨU ĐƯỢC / CHỈ XEM ĐƯỢC  ·  CTL-0026 vòng 7 --------
+         Sếp Ngọc cần con số này để biết có phải đi chỉnh máy scan hay không.
+         Nhìn từng thẻ một thì không bao giờ thấy ra được tỉ lệ. Đếm do MÁY CHỦ
+         làm trên đúng bộ lọc đang hiện, nên lọc theo nhóm thì con số đổi theo —
+         một con số đứng yên khi bộ lọc đổi là một con số nói dối.
+         Đếm hụt (`dem_chu` = null) thì IM LẶNG bỏ dải, không in số 0 trông như
+         đã đếm. */
+      /* ---- BA VẾ, MỖI VẾ MỘT CÁCH XỬ KHÁC NHAU ------------------------
+         ⚠️ VÁ REV-0055 VÒNG 2 · CAO-A. Bản trước chỉ có hai vế và vế đầu đếm
+         "có bóc được chữ không" trong khi CHỮ HỨA là "tìm được theo nội dung"
+         — thổi lên 40% trên kho thật. Nay con số vế đầu đúng bằng số tài liệu
+         mà gõ một từ trong ruột nó SẼ RA (bàn đo `do-kho-tai-lieu` ⑱ chốt bằng
+         đường cuối: lưu N file, gõ tìm, số ra phải khớp con số này).
+         Vế GIỮA không phải để cho đẹp: đó là ca CÓ CÁCH XỬ ngay (gõ số hiệu
+         vào là máy đối chiếu lại được), khác hẳn vế cuối là không có chữ nào.
+         Gộp nó vào vế cuối thì Sếp đi chỉnh máy scan cho những tờ mà máy scan
+         đã làm đúng phần việc của nó. */
+      const oDem = $('#tl-dem-chu');
+      if (oDem) {
+        const d = kq.dem_chu;
+        const chua = d ? (d.co_chu_chua_tra_duoc || 0) : 0;
+        const tong = d ? d.tra_cuu_duoc + chua + d.chi_xem_duoc : 0;
+        oDem.hidden = !d || !tong;
+        if (d && tong) {
+          oDem.innerHTML =
+            `<b>${d.tra_cuu_duoc}</b> tài liệu tìm được theo nội dung bên trong` +
+            (chua
+              ? ` · <b>${chua}</b> có chữ nhưng chưa tra được theo nội dung ` +
+                '(máy chưa đối chiếu được chữ với số hiệu — gõ số hiệu vào rồi ' +
+                'lưu lại là máy kiểm giúp; riêng giấy tờ nhạy cảm thì nội dung ' +
+                'cố ý không vào ô tìm)'
+              : '') +
+            ` · <b>${d.chi_xem_duoc}</b> chỉ xem được (tìm bằng tên, số hiệu, loại giấy)` +
+            (d.chi_xem_duoc
+              ? ' — muốn tìm được cả nội dung thì chỉnh máy scan sang chế độ nhận ' +
+                'dạng chữ rồi quét lại những tờ hay phải tra.'
+              : '');
+        }
+      }
       /* Bị cắt thì nói ra bằng lời, kèm cách thu hẹp — không im lặng cắt. Dùng
          CHUNG `veDaiCat` như mọi màn khác: bản tự viết cũ ở đây in "đang hiện
          50" mà không có tổng thật, tức là vẫn giấu mất con số người ta cần. */
@@ -9919,6 +10136,7 @@ async function khoiDongKhoTaiLieu() {
       /* MỘT hàm cho cả hai cửa (kho chung + hồ sơ nhân sự) — xem
          `noiNutXemChu` ở đầu mục. */
       noiNutXemChu(oDanhSach);
+      noiNutSuaTaiLieu(oDanhSach, nap);
 
       /* Nhật ký truy cập — chỉ Admin, chỉ giấy tờ nhạy cảm (vá REV-0040 #7). */
       oDanhSach.querySelectorAll('[data-nk]').forEach(b => b.addEventListener('click', async () => {
