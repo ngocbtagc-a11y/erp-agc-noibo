@@ -10093,15 +10093,32 @@ async function khoiDongKhoTaiLieu() {
          một con số đứng yên khi bộ lọc đổi là một con số nói dối.
          Đếm hụt (`dem_chu` = null) thì IM LẶNG bỏ dải, không in số 0 trông như
          đã đếm. */
+      /* ---- BA VẾ, MỖI VẾ MỘT CÁCH XỬ KHÁC NHAU ------------------------
+         ⚠️ VÁ REV-0055 VÒNG 2 · CAO-A. Bản trước chỉ có hai vế và vế đầu đếm
+         "có bóc được chữ không" trong khi CHỮ HỨA là "tìm được theo nội dung"
+         — thổi lên 40% trên kho thật. Nay con số vế đầu đúng bằng số tài liệu
+         mà gõ một từ trong ruột nó SẼ RA (bàn đo `do-kho-tai-lieu` ⑱ chốt bằng
+         đường cuối: lưu N file, gõ tìm, số ra phải khớp con số này).
+         Vế GIỮA không phải để cho đẹp: đó là ca CÓ CÁCH XỬ ngay (gõ số hiệu
+         vào là máy đối chiếu lại được), khác hẳn vế cuối là không có chữ nào.
+         Gộp nó vào vế cuối thì Sếp đi chỉnh máy scan cho những tờ mà máy scan
+         đã làm đúng phần việc của nó. */
       const oDem = $('#tl-dem-chu');
       if (oDem) {
         const d = kq.dem_chu;
-        const tong = d ? d.tra_cuu_duoc + d.chi_xem_duoc : 0;
+        const chua = d ? (d.co_chu_chua_tra_duoc || 0) : 0;
+        const tong = d ? d.tra_cuu_duoc + chua + d.chi_xem_duoc : 0;
         oDem.hidden = !d || !tong;
         if (d && tong) {
           oDem.innerHTML =
-            `<b>${d.tra_cuu_duoc}</b> tài liệu tìm được theo nội dung bên trong · ` +
-            `<b>${d.chi_xem_duoc}</b> chỉ xem được (tìm bằng tên, số hiệu, loại giấy)` +
+            `<b>${d.tra_cuu_duoc}</b> tài liệu tìm được theo nội dung bên trong` +
+            (chua
+              ? ` · <b>${chua}</b> có chữ nhưng chưa tra được theo nội dung ` +
+                '(máy chưa đối chiếu được chữ với số hiệu — gõ số hiệu vào rồi ' +
+                'lưu lại là máy kiểm giúp; riêng giấy tờ nhạy cảm thì nội dung ' +
+                'cố ý không vào ô tìm)'
+              : '') +
+            ` · <b>${d.chi_xem_duoc}</b> chỉ xem được (tìm bằng tên, số hiệu, loại giấy)` +
             (d.chi_xem_duoc
               ? ' — muốn tìm được cả nội dung thì chỉnh máy scan sang chế độ nhận ' +
                 'dạng chữ rồi quét lại những tờ hay phải tra.'

@@ -515,35 +515,104 @@ const NGUONG_DOC_DUOC = 0.80;
  *  dấu vết công cụ tạo file, không phải nội dung. */
 const NGUONG_CO_CHU = 60;
 
-/* ⚠️ CHỮ VỤN — VÁ REV-0055 · CHẶN-1, TẦNG HAI
+/* ⚠️ CHỮ VỤN — VÁ REV-0055 · CHẶN-1, VÀ VIẾT LẠI LẦN HAI THEO REV-0055 VÒNG 2
    ---------------------------------------------------------------------------
-   Sửa luật xuống dòng ở `chuTuLuong` là chữa BỆNH. Chốt này là để lần sau bệnh
-   quay lại dưới hình dạng khác thì ERP vẫn KHÔNG dám khai "tra cứu được".
+   Chốt này bắt ĐÚNG MỘT dạng bệnh: chữ bị tách RỜI RẠC từng con
+   (`"I n v o i c e"`). Nó trông như chữ, đếm ký tự thì nhiều, nhưng gõ
+   "invoice" vào ô tìm ra 0 kết quả. Cái nguy không phải chữ hỏng, mà là ERP
+   KHÔNG BIẾT nó hỏng: nó dán nhãn tin cậy cao nhất lên rồi đếm vào tỉ lệ "tìm
+   được theo nội dung" — đúng con số Sếp dùng để quyết định có phải đi chỉnh
+   máy scan hay không.
 
-   Chữ vụn = chữ bị tách rời từng con (`"I n v o i c e"`). Nó trông như chữ,
-   dài như chữ, đếm ký tự thì nhiều — nhưng gõ "invoice" vào ô tìm ra 0 kết
-   quả. Cái nguy không phải chữ hỏng, mà là ERP KHÔNG BIẾT nó hỏng: nó dán nhãn
-   tin cậy cao nhất lên rồi đếm vào tỉ lệ "tìm được theo nội dung" — đúng con
-   số Sếp dùng để quyết định có phải đi chỉnh máy scan hay không.
+   ⚠️ NÓ MÙ VỚI GÌ — NÓI THẲNG, ĐỪNG ĐỂ NGƯỜI SAU TƯỞNG ĐÃ CHE KÍN
+   Hồ Ly đo (REV-0055 vòng 2 · VỪA-A): sau khi luật `Td` ở `chuTuLuong` được vá,
+   chữ hỏng còn lại ra dạng DÍNH LIỀN (`"HOADONGIATRIGIATANG…"`), KHÔNG phải
+   rời rạc. Chốt này KHÔNG bắt được cả ba dạng đó:
+     · `TJ` với khoảng nhảy âm dưới ngưỡng 120  → dính liền
+     · từng con chữ bằng `Td ty=0` trong một khối `BT…ET` → dính liền
+     · bảng dựng theo khuôn Chrome/Skia          → dính liền
+   Vậy nên ĐỪNG gọi đây là "hai tầng phòng thủ". Nó là MỘT tầng chữa bệnh
+   (`chuTuLuong`) cộng MỘT lưới hẹp canh đúng dạng rời rạc.
+   Chữ dính liền KHÔNG nguy bằng: ô tìm chạy `tim_kiem LIKE '%từ%'` — so chuỗi
+   CON — nên gõ "alpha" vẫn trúng `"…AlphaGreen…"` (Hồ Ly kiểm được). Đó là lý
+   do không dựng thêm tầng nữa: bệnh còn lại tự nó không chặn đường tra cứu.
 
-   Đo bằng chính thứ người dùng gõ: TỪ. Đếm mẩu cách nhau bằng khoảng trắng;
-   mẩu chỉ có MỘT ký tự thì không phải một từ tra cứu được.
-   Ngưỡng 50% cố ý rộng tay: tiếng Việt có từ một chữ ("ở", "ê"), bảng biểu có
-   cột số một chữ số — 50% thì văn bản thật không bao giờ chạm tới, mà chữ vụn
-   thật (đo được: 100% mẩu một ký tự) thì không bao giờ thoát.
-   Đòi ít nhất 20 mẩu để một dòng tiêu đề ngắn không bị kết tội oan. */
+   ⚠️ CHỖ CHÍNH BẢN TRƯỚC LÀM SAI — ĐỌC KỸ TRƯỚC KHI ĐỔI NGƯỠNG
+   Bản trước chỉ đếm TỈ LỆ mẩu một ký tự trên toàn bài, ngưỡng 50%, kèm lời
+   khẳng định "văn bản thật không bao giờ chạm tới". Khẳng định đó SAI, và đo
+   được là sai — ba loại giấy tờ THẬT của công ty vượt ngưỡng:
+     · Bảng chấm công kho (ô X/P/K từng ngày)      47/60 = 78%
+     · Tờ khai thuế · MST · CCCD in ô vuông từng số 30/42 = 71%
+     · Bảng quy cách đóng gói (cỡ S/M/L)            21/32 = 66%
+   Bảng chấm công là tờ anh Phạm Khương Duy ký hằng tháng cho 12 fulltime + 17
+   parttime. Kết tội oan nó nghĩa là đúng tờ hay phải tra nhất lại mất khả năng
+   tra — mà Sếp KHÔNG BIẾT mình đang thiếu gì. Chữ hỏng lọt thì Sếp gõ tìm ra
+   rác và biết ngay. Nên luật ở đây là: THÀ ĐỂ LỌT MỘT TÀI LIỆU CHỮ HỎNG CÒN
+   HƠN KHOÁ MẤT BẢNG CHẤM CÔNG CỦA ANH DUY.
+
+   ⚠️ HAI THỨ NÀY KHÁC NHAU VỀ BẢN CHẤT, KHÔNG PHẢI VỀ MỨC ĐỘ — nên nâng ngưỡng
+   là sai hướng (sẽ có ca thứ ba). Chúng khác nhau ở HÌNH DẠNG:
+     · CHỮ HỎNG  — mẩu một ký tự trải KHẮP bài, và gần như KHÔNG còn từ thật
+                   nào (mọi từ đều bị tách ra).
+     · BẢNG BIỂU — mẩu một ký tự TỤM thành cụm (cột ngày, ô vuông), còn phần
+                   văn xuôi vẫn nguyên: tên người, tiêu đề, số hiệu, đơn vị.
+   Nên chốt đòi ĐỦ BA điều kiện cùng lúc, mỗi điều kiện bắt một mặt của hình
+   dạng ấy. Thiếu bất kỳ điều kiện nào ⇒ KHÔNG kết tội. */
+
+/** Tỉ lệ mẩu chỉ một ký tự. Chữ vụn thật đo được ~100%. */
 const NGUONG_MAU_MOT_KY_TU = 0.5;
+/** Dưới chừng này mẩu thì không xét — một dòng tiêu đề ngắn không đáng kết tội. */
 const TOI_THIEU_MAU_DE_XET = 20;
+/** Dải LIỀN NHAU dài nhất của mẩu một ký tự. `"I n v o i c e"` là một dải 7;
+ *  chữ vụn thật thì cả bài là MỘT dải. Bảng biểu cũng có dải dài (31 ngày),
+ *  nên một mình điều kiện này KHÔNG đủ — nó chỉ loại ca "rải rác lác đác". */
+const TOI_THIEU_DAI_LIEN = 12;
+/** TỪ THẬT = mẩu ≥3 ký tự VÀ có chữ cái. Đây là điều kiện tách bạch nhất:
+ *  chữ vụn tách nát mọi từ nên còn ~0% từ thật; bảng chấm công vẫn giữ nguyên
+ *  tên người, tiêu đề, số hiệu nên còn 20–35%. Ngưỡng 10% nằm giữa hai vùng đó
+ *  và cách xa cả hai — đo được: chữ vụn 0%, ba mẫu giấy thật 21,7% · 28,6% ·
+ *  34,4%. Rộng tay về phía KHÔNG kết tội, đúng luật ở trên. */
+const TRAN_TU_THAT = 0.10;
+/** ĐƯỜNG THOÁT TUYỆT ĐỐI. Tỉ lệ thôi thì chưa đủ rộng tay: một bảng chấm công
+ *  nghèo chữ (chỉ mã nhân viên, không tên) có thể tụt xuống dưới 10%. Nên thêm
+ *  một sàn ĐẾM: còn từ 8 từ thật trở lên thì KHÔNG kết tội, bất kể tỉ lệ. Chữ
+ *  vụn thật gần như không bao giờ tới con số này (đo được: 0–2 từ, và những từ
+ *  đó là mẩu tình cờ không bị tách như số hiệu). Đây là chỗ nghiêng hẳn về phía
+ *  KHÔNG kết tội, đúng luật ở khối chú thích trên. */
+const TOI_THIEU_TU_THAT_DE_THA = 8;
+
+/** Mẩu này có phải một TỪ THẬT không: ≥3 ký tự và có ít nhất một chữ cái.
+ *  Đòi chữ cái để cụm số (`124/2026`, `18.500.000`) không bị tính là từ —
+ *  bảng biểu đầy số, mà số thì không cứu được khả năng tra cứu bằng chữ. */
+function laTuThat(m) {
+  const k = [...m];
+  return k.length >= 3 && /\p{L}/u.test(m);
+}
 
 /** Chữ này có bị tách rời từng ký tự không. Khai ở ĐÂY, dùng chung cho cả
  *  `docChuTuPDF` (hạ LOẠI của file) lẫn `docTinChu` ở `src/tai-lieu.js` (hạ
- *  NHÃN mỏ neo) — hai chỗ chặn, một định nghĩa. */
+ *  NHÃN mỏ neo) — hai chỗ dùng, một định nghĩa.
+ *
+ *  @returns {boolean} true CHỈ KHI đủ cả ba dấu hiệu của chữ tách rời. */
 export function laChuVun(chu) {
   const mau = String(chu || '').trim().split(/\s+/).filter(Boolean);
   if (mau.length < TOI_THIEU_MAU_DE_XET) return false;
-  let motKyTu = 0;
-  for (const m of mau) if ([...m].length === 1) motKyTu++;
-  return motKyTu / mau.length >= NGUONG_MAU_MOT_KY_TU;
+
+  let motKyTu = 0, daiLien = 0, daiLienMax = 0, tuThat = 0;
+  for (const m of mau) {
+    if ([...m].length === 1) {
+      motKyTu++;
+      daiLien++;
+      if (daiLien > daiLienMax) daiLienMax = daiLien;
+    } else {
+      daiLien = 0;
+      if (laTuThat(m)) tuThat++;
+    }
+  }
+  if (tuThat >= TOI_THIEU_TU_THAT_DE_THA) return false;   // đường thoát tuyệt đối
+  return motKyTu / mau.length >= NGUONG_MAU_MOT_KY_TU &&
+         daiLienMax >= TOI_THIEU_DAI_LIEN &&
+         tuThat / mau.length <= TRAN_TU_THAT;
 }
 
 /** Câu cho người thường khi gặp chữ vụn. KHÔNG nói "toán tử Td" — bạn kho đọc
@@ -647,7 +716,10 @@ export async function docChuTuPDF(byteVao) {
       so_trang: dsTrang.length, so_ky_tu: soChuThat, ty_le_doc_duoc: tyLe, bi_cat: biCat
     };
   }
-  /* ⚠️ CHỮ VỤN — VÁ REV-0055 · CHẶN-1 TẦNG HAI. Cùng lý lẽ với nhánh ngay
+  /* ⚠️ CHỮ VỤN — LƯỚI HẸP, KHÔNG PHẢI "TẦNG PHÒNG THỦ THỨ HAI".
+     Nó canh ĐÚNG MỘT dạng: chữ tách RỜI RẠC từng con. Nó MÙ với chữ DÍNH
+     LIỀN (xem khối chú thích trên hàm laChuVun) — dạng đó không nguy bằng vì ô
+     tìm so chuỗi CON nên vẫn tra ra. Cùng lý lẽ với nhánh ngay
      trên: chữ tra không ra thì KHÔNG được khai là "tìm được theo nội dung".
      Ở đây còn nặng hơn vì chữ vụn KHÔNG trông giống rác — nó đầy đủ ký tự,
      đủ dấu, qua được mọi ngưỡng khác, nên không chặn ở đây thì không chỗ nào

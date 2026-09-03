@@ -2661,5 +2661,279 @@ muc('⑰ Nhãn nguồn chữ ra tới giao diện (REV-0055 CAO-2)');
     'Câu giải thích rẽ theo `chu_nguon`, không dán cứng một nhánh');
 }
 
+/* ==========================================================================
+   ⑱ DẢI ĐẾM PHẢI KHỚP ĐƯỜNG CUỐI  ·  REV-0055 vòng 2 · CAO-A
+   ---------------------------------------------------------------------------
+   Hồ Ly đo được: ERP khoe "5 tài liệu tìm được theo nội dung" trong khi gõ tìm
+   chỉ ra 3 — thổi lên 40%. Đó là cùng một bệnh đã làm vòng 1 FAIL, chỉ đổi
+   đường: ERP tuyên bố khả năng tra cứu cao hơn sự thật. Và đây là con số Sếp
+   dùng để quyết định có phải đi chỉnh máy scan hay không.
+
+   Chốt duy nhất không cãi được: LƯU N FILE, GÕ TÌM TỪNG FILE, đếm xem thật sự
+   ra được mấy — con số đó PHẢI bằng con số ERP khoe. Không so với cột nào, không
+   so với ý định của ai; so với chính đường người dùng đi.
+   ========================================================================== */
+muc('⑱ Dải đếm khớp ĐƯỜNG CUỐI — khoe bao nhiêu, tìm ra bấy nhiêu (CAO-A)');
+{
+  const { deflateSync } = await import('node:zlib');
+
+  /** PDF một trang, lớp chữ lành, nội dung tuỳ ý. */
+  function pdfChu1Trang(cau) {
+    const hex4 = (n) => n.toString(16).padStart(4, '0');
+    const bang = [...cau].map((c, i) => ({ ma: i + 1, chu: c }));
+    const nd = `BT /F1 12 Tf 40 700 Td <${bang.map(b => hex4(b.ma)).join('')}> Tj ET`;
+    const ndB = deflateSync(Buffer.from(nd, 'latin1'));
+    const cmap =
+      '/CIDInit /ProcSet findresource begin 12 dict begin begincmap\n' +
+      '1 begincodespacerange\n<0000> <FFFF>\nendcodespacerange\n' +
+      `${bang.length} beginbfchar\n` +
+      bang.map(b => `<${hex4(b.ma)}> <${hex4(b.chu.charCodeAt(0))}>`).join('\n') +
+      '\nendbfchar\nendcmap CMapName currentdict /CMap defineresource pop end end';
+    const cB = Buffer.from(cmap, 'latin1');
+    const dt = [
+      '<< /Type /Catalog /Pages 2 0 R >>',
+      '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+      '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] ' +
+        '/Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>',
+      { dict: `<< /Length ${ndB.length} /Filter /FlateDecode >>`, luong: ndB },
+      '<< /Type /Font /Subtype /Type0 /BaseFont /T /Encoding /Identity-H ' +
+        '/DescendantFonts [7 0 R] /ToUnicode 6 0 R >>',
+      { dict: `<< /Length ${cB.length} >>`, luong: cB },
+      '<< /Type /Font /Subtype /CIDFontType2 /BaseFont /T >>'
+    ];
+    const manh = [Buffer.from('%PDF-1.5\n', 'latin1')];
+    dt.forEach((o, i) => {
+      const n = i + 1;
+      if (typeof o === 'string') manh.push(Buffer.from(`${n} 0 obj\n${o}\nendobj\n`, 'latin1'));
+      else {
+        manh.push(Buffer.from(`${n} 0 obj\n${o.dict}\nstream\n`, 'latin1'));
+        manh.push(o.luong);
+        manh.push(Buffer.from('\nendstream\nendobj\n', 'latin1'));
+      }
+    });
+    manh.push(Buffer.from('trailer\n<< /Size 9 /Root 1 0 R >>\n%%EOF\n', 'latin1'));
+    return Buffer.concat(manh);
+  }
+
+  /* Một PDF KHÔNG có lớp chữ — để có vế "chỉ xem được" trong cùng một kho. */
+  function pdfChiAnh() {
+    return Buffer.concat([
+      Buffer.from('%PDF-1.4\n<< /Type /Page >>\n'),
+      Buffer.alloc(60000, 0x20), Buffer.from('\n%%EOF\n')
+    ]);
+  }
+
+  /* NĂM tài liệu, cố ý trộn đủ ba vế. `tu` là từ CHỈ CÓ trong ruột file — không
+     có ở tiêu đề, loại, hay TÊN NHÓM (bẫy đã sập một lần ở mục ⑮). */
+  const bo = [
+    { ten: 'Chung tu thang bay', soHieu: '124/2026/GCN-ATTP', tu: 'maslow',
+      cau: 'CONG TY TNHH ALPHA GREEN COMMERCE So 124/2026/GCN-ATTP thang bay maslow ' +
+           'thu tu nhu cau ap dung cho kho Ha Noi', mong: 'tra' },
+    { ten: 'Chung tu thang tam', soHieu: '125/2026/GCN-ATTP', tu: 'herzberg',
+      cau: 'CONG TY TNHH ALPHA GREEN COMMERCE So 125/2026/GCN-ATTP thang tam herzberg ' +
+           'hai yeu to dong luc kho Ha Noi', mong: 'tra' },
+    /* Số hiệu KHÔNG có trong ruột giấy và tên cũng không sinh nổi mỏ neo trúng
+       ⇒ mỏ neo hụt ⇒ chữ KHÔNG vào ô tìm. Đây đúng ca ERP từng khoe nhầm. */
+    { ten: 'Giay to so hai', soHieu: '999/2026/KHONG-CO', tu: 'vroom',
+      cau: 'Bien ban ban giao noi bo vroom ky vong dong luc lam viec ' +
+           'ap dung tu quy ba nam nay cho toan bo nhan su thoi vu', mong: 'chua' },
+    { ten: 'Giay to so ba', soHieu: '888/2026/KHONG-CO', tu: 'adams',
+      cau: 'Bien ban kiem ke adams cong bang trong phan phoi thu lao ' +
+           'ap dung cho ca kho va van phong tu thang muoi', mong: 'chua' },
+    { ten: 'Giay to chi anh', soHieu: '777/2026/ANH', tu: 'khongcochutrongfile',
+      cau: null, mong: 'xem' }
+  ];
+
+  const t = d1SQLite();
+  for (const b of bo) {
+    const r = await tailieu.luuTaiLieu(t.env, phienCua('van_hanh_san'), {
+      ma_gui: 'mg18-' + Math.random().toString(36).slice(2, 9),
+      nhom: 'attp', tieu_de: b.ten, loai: 'Chứng từ', so_hieu: b.soHieu,
+      so_trang: 1, dinh_dang: 'pdf_goc',
+      tep: (b.cau ? pdfChu1Trang(b.cau) : pdfChiAnh()).toString('base64')
+    });
+    if (r.status !== 200) { dat(false, `Bàn đo: lưu "${b.ten}" hỏng`, `HTTP ${r.status}`); }
+  }
+
+  /* --- Con số ERP KHOE --- */
+  const kho = await doc(await tailieu.danhSachTaiLieu(
+    t.env, phienCua('admin'), new URLSearchParams()));
+  const khoe = kho.dem_chu;
+
+  /* --- ĐƯỜNG CUỐI: gõ từng từ, đếm xem thật sự ra được mấy --- */
+  const raDuoc = [];
+  for (const b of bo) {
+    const p = new URLSearchParams(); p.set('q', b.tu);
+    const kq = await doc(await tailieu.danhSachTaiLieu(t.env, phienCua('admin'), p));
+    const trung = (kq.ds || []).some(x => x.tieu_de === b.ten);
+    if (trung) raDuoc.push(b.ten);
+  }
+
+  console.log(`     → ERP khoe: ${khoe.tra_cuu_duoc} tìm được · ` +
+    `${khoe.co_chu_chua_tra_duoc} có chữ chưa tra được · ${khoe.chi_xem_duoc} chỉ xem được`);
+  console.log(`     → Đường cuối: gõ 5 từ trong ruột 5 file, RA ĐƯỢC ${raDuoc.length} ` +
+    `(${raDuoc.join(', ') || 'không file nào'})`);
+
+  dat(khoe.tra_cuu_duoc === raDuoc.length,
+    '⚠️ ĐƯỜNG CUỐI: con số ERP khoe = số tài liệu gõ tìm THẬT SỰ ra được',
+    `→ khoe ${khoe.tra_cuu_duoc}, ra được ${raDuoc.length}`);
+  dat(khoe.tra_cuu_duoc === 2 && khoe.co_chu_chua_tra_duoc === 2 && khoe.chi_xem_duoc === 1,
+    'Ba vế chia đúng: 2 tìm được · 2 có chữ chưa tra được · 1 chỉ xem được',
+    `→ ${JSON.stringify(khoe)}`);
+  dat(khoe.tra_cuu_duoc + khoe.co_chu_chua_tra_duoc + khoe.chi_xem_duoc === 5,
+    'Ba vế cộng lại đúng bằng số tài liệu trong kho — không sót, không đếm hai lần');
+
+  /* ĐỐI CHỨNG BH-16 — bản CŨ (đếm bằng `ocr_so_trang`) phải THỔI LÊN.
+     Không có ca này thì con số "khớp" ở trên có thể chỉ vì bàn đo dựng bộ dữ
+     liệu quá dễ. */
+  {
+    const d = t.kho.prepare(`
+      SELECT SUM(CASE WHEN ocr_so_trang > 0 THEN 1 ELSE 0 END) AS tra
+        FROM tai_lieu WHERE an = 0`).get();
+    dat(Number(d.tra) === 4 && Number(d.tra) > raDuoc.length,
+      'ĐỐI CHỨNG BH-16: cách đếm CŨ (`ocr_so_trang > 0`) khoe 4 trong khi tìm ra 2',
+      `→ cũ khoe ${d.tra}, thật ${raDuoc.length} (phải LỆCH — nếu khớp thì PHÉP ĐO hỏng)`);
+  }
+
+  /* Giấy tờ NHẠY CẢM: chữ lành, mỏ neo trúng, nhưng ruột KHÔNG vào ô tìm
+     (vá REV-0040 #4) ⇒ KHÔNG được đếm vào vế "tìm được theo nội dung". */
+  {
+    const t2 = d1SQLite();
+    t2.kho.prepare("INSERT INTO nhan_su (id, ho_ten) VALUES ('ns_duy', 'Phạm Khương Duy')").run();
+    const r = await tailieu.luuTaiLieu(t2.env, phienCua('hcns', 'ns_hcns'), {
+      ma_gui: 'mg18ns-' + Math.random().toString(36).slice(2, 9),
+      nhom: 'nhan_su', gan_id: 'ns_duy', tieu_de: 'Quyết định bổ nhiệm',
+      loai: 'Quyết định', so_hieu: '126/2026/QD-AGC', so_trang: 1, dinh_dang: 'pdf_goc',
+      tep: pdfChu1Trang('QUYET DINH BO NHIEM So 126/2026/QD-AGC ' +
+        'CONG TY TNHH ALPHA GREEN COMMERCE bo nhiem ong Pham Khuong Duy ' +
+        'giu chuc quan ly kho ke tu ngay mot thang chin').toString('base64'),
+      dong_y_boi: 'Phạm Khương Duy', dong_y_muc_dich: 'Hồ sơ lao động'
+    });
+    dat(r.status === 200, 'Bàn đo: lưu được giấy tờ nhạy cảm', `HTTP ${r.status}`);
+    const d = t2.kho.prepare('SELECT ocr_so_trang_neo, nhay_cam FROM tai_lieu').get();
+    const k2 = await doc(await tailieu.danhSachTaiLieu(
+      t2.env, phienCua('hcns', 'ns_hcns'), new URLSearchParams()));
+    dat(d.ocr_so_trang_neo > 0 && d.nhay_cam === 1,
+      'Giấy nhạy cảm: chữ ĐÃ đối chiếu được (mỏ neo trúng)',
+      `→ neo ${d.ocr_so_trang_neo}, nhạy cảm ${d.nhay_cam}`);
+    dat(k2.dem_chu.tra_cuu_duoc === 0 && k2.dem_chu.co_chu_chua_tra_duoc === 1,
+      '⚠️ Nhưng KHÔNG đếm vào "tìm được theo nội dung" — ruột giấy nhạy cảm không vào ô tìm',
+      `→ ${JSON.stringify(k2.dem_chu)}`);
+    /* Từ tra CHỈ có trong ruột giấy: 'bo nhiem' nằm ngay ở TIÊU ĐỀ nên gõ nó
+       sẽ trúng vì lý do khác — đúng cái bẫy đã ghi ở mục ⑮. 'giu chuc' chỉ có
+       trong thân văn bản. */
+    const p = new URLSearchParams(); p.set('q', 'giu chuc');
+    const k3 = await doc(await tailieu.danhSachTaiLieu(t2.env, phienCua('hcns', 'ns_hcns'), p));
+    dat((k3.ds || []).length === 0,
+      'ĐƯỜNG CUỐI khớp: gõ từ trong ruột giấy nhạy cảm → 0 kết quả, đúng như dải đếm nói',
+      `→ ${(k3.ds || []).length} kết quả`);
+  }
+}
+
+/* ==========================================================================
+   ⑲ `laChuVun` KHÔNG ĐƯỢC KẾT TỘI OAN GIẤY TỜ THẬT  ·  REV-0055 vòng 2 · CAO-B
+   ---------------------------------------------------------------------------
+   Ngưỡng cũ (chỉ đếm tỉ lệ mẩu một ký tự ≥50%) kết tội oan ba loại giấy tờ THẬT
+   của công ty: bảng chấm công anh Duy ký hằng tháng, tờ khai thuế/CCCD in ô
+   vuông từng chữ số, bảng quy cách đóng gói. Chúng trúng mỏ neo MẠNH mà vẫn bị
+   hạ về `chua_kiem` ⇒ rút khỏi ô tìm ⇒ đúng tờ hay phải tra nhất lại mất khả
+   năng tra, mà Sếp KHÔNG BIẾT mình đang thiếu gì.
+
+   Luật: THÀ ĐỂ LỌT MỘT TÀI LIỆU CHỮ HỎNG CÒN HƠN KHOÁ MẤT BẢNG CHẤM CÔNG.
+   Nên bàn đo có HAI RỔ, và rổ "tuyệt đối không được bắt" là rổ nặng hơn.
+   ========================================================================== */
+muc('⑲ laChuVun: hai rổ đối chứng — bắt đúng chữ hỏng, tha đúng giấy tờ thật');
+{
+  const pdfChu = await import(pathToFileURL(path.join(GOC, 'src/pdf-chu.js')).href);
+
+  /* ---- RỔ 1: PHẢI BẮT (chữ tách rời từng con) ---- */
+  const roBat = [
+    ['Invoice tiếng Anh vỡ vụn',
+     'P a g e 1 o f 1 I n v o i c e I n v o i c e n u m b e r S 3 Y 0 A X D 0 0 0 0 1 ' +
+     'D a t e o f i s s u e J u l y 7 2 0 2 6'],
+    ['Giấy tờ tiếng Việt vỡ vụn',
+     'C Ô N G T Y T N H H A L P H A G R E E N C O M M E R C E G i ấ y c h ứ n g ' +
+     'n h ậ n a n t o à n t h ự c p h ẩ m s ố 1 2 4'],
+    ['Vỡ vụn nhưng lẫn vài mẩu dài không bị tách',
+     'P a g e 1 o f 1 I n v o i c e n u m b e r S3Y0AXD0-0001 D a t e o f i s s u e ' +
+     'J u l y 7 2 0 2 6 OpenAI S a n F r a n c i s c o']
+  ];
+  for (const [ten, chu] of roBat) {
+    dat(pdfChu.laChuVun(chu) === true, `RỔ BẮT · ${ten}`, thongKeVun(chu));
+  }
+
+  /* ---- RỔ 2: TUYỆT ĐỐI KHÔNG ĐƯỢC BẮT (giấy tờ thật của công ty) ---- */
+  const roTha = [
+    ['Bảng chấm công kho (ô X/P/K từng ngày)',
+     'BANG CHAM CONG THANG 8 So 124/2026/BCC Kho Ha Noi Nguyen Van An ' +
+     'X X X P X X K X X X X X X P X X X X X X K X X X X X X X X X X ' +
+     'Tran Thi Binh X P X X X X X X K X X X X X X X X P X X X X X X X X X X X X Tong cong 58 cong'],
+    ['Tờ khai thuế · MST + CCCD in ô vuông từng chữ số',
+     'TO KHAI THUE THU NHAP CA NHAN Ma so thue 0 1 1 0 9 3 8 4 7 2 ' +
+     'So CCCD 0 0 1 3 0 1 2 3 4 5 6 7 Ho ten NGUYEN THI HUYEN Dia chi Cau Giay Ha Noi ' +
+     'Ky ten Ngay 12 thang 3 nam 2026'],
+    ['Bảng quy cách đóng gói (cỡ S/M/L)',
+     'BANG QUY CACH DONG GOI Ma hang AGC 001 Co S M L XL Thung 12 24 36 ' +
+     'Trong luong 5 10 15 kg Kho Ha Noi Nha cung cap HTX Son La ghi chu hang kho'],
+    ['Danh sách mã hàng',
+     'DANH MUC MA HANG Kho Ha Noi AGC001 hat dieu rang muoi AGC002 hanh nhan my ' +
+     'AGC003 nho kho uc AGC004 viet quat say A B C D E F G H nhom hang nong san kho'],
+    ['Bảng lương tháng',
+     'BANG LUONG THANG 8 2026 Ho ten Chuc danh Luong Phu cap Tong ' +
+     'Pham Khuong Duy Quan ly kho 18 500 000 2 000 000 20 500 000 ' +
+     'Phan Thi Hang Ke toan truong 17 000 000 1 500 000 18 500 000'],
+    ['Văn bản "Điều 1. a) b) c)"',
+     'QUY DINH NOI BO Dieu 1 Pham vi ap dung a Nhan vien kho b Nhan vien van hanh san ' +
+     'c Ke toan Dieu 2 Trach nhiem a Bao quan hang hoa b Kiem ke dinh ky ' +
+     'Dieu 3 Hieu luc thi hanh tu ngay ky'],
+    ['Tài liệu NGẮN (dưới ngưỡng xét)',
+     'H o a d o n G T G T s o 1 2 4'],
+    ['Bảng chấm công NGHÈO CHỮ nhất (chỉ mã nhân viên, có tên viết tắt)',
+     'BCC thang 8 2026 Kho Ha Noi NVAn X X X P X X K X X X X X X P X X X X X X ' +
+     'NVBinh X P X X X X X X K X X X X X X X X P X X Tong cong 58 cong ngay ky duyet']
+  ];
+  for (const [ten, chu] of roTha) {
+    dat(pdfChu.laChuVun(chu) === false, `RỔ THA · ${ten}`, thongKeVun(chu));
+  }
+
+  /* ---- ĐƯỜNG THẬT: qua `docTinChu`, đúng đường AI đọc ảnh ---- */
+  const mocBCC = { soHieu: '124/2026/BCC', loai: 'Bảng chấm công', tieuDe: 'Bảng chấm công kho tháng 8' };
+  const chuBCC = roTha[0][1];
+  dat(tailieu.docTinChu(chuBCC, mocBCC).muc === 'da_neo',
+    '⚠️ ĐƯỜNG THẬT: bảng chấm công trúng mỏ neo mạnh → GIỮ nhãn ĐÃ ĐỐI CHIẾU',
+    `→ ${tailieu.docTinChu(chuBCC, mocBCC).muc}`);
+  const mocTK = { soHieu: '0110938472', loai: 'Tờ khai thuế', tieuDe: 'Tờ khai thuế TNCN' };
+  dat(tailieu.docTinChu(roTha[1][1], mocTK).muc === 'da_neo',
+    '⚠️ ĐƯỜNG THẬT: tờ khai ô vuông trúng mỏ neo mạnh → GIỮ nhãn ĐÃ ĐỐI CHIẾU',
+    `→ ${tailieu.docTinChu(roTha[1][1], mocTK).muc}`);
+  const chuVun = roBat[0][1];
+  dat(tailieu.docTinChu(chuVun, { soHieu: 'S3Y0AXD0-0001', loai: 'Hoá đơn', tieuDe: 'Hoá đơn' }).muc
+      === 'chua_kiem',
+    'ĐƯỜNG THẬT: chữ vỡ vụn vẫn bị HẠ về chưa kiểm dù mỏ neo trúng (chốt còn sống)');
+
+  /* ---- ĐỐI CHỨNG BH-16: ngưỡng CŨ phải kết tội oan bảng chấm công ---- */
+  const vunCu = (chu) => {
+    const mau = String(chu || '').trim().split(/\s+/).filter(Boolean);
+    if (mau.length < 20) return false;
+    return mau.filter(m => [...m].length === 1).length / mau.length >= 0.5;
+  };
+  const oanCu = roTha.filter(([, chu]) => vunCu(chu)).map(([ten]) => ten);
+  dat(oanCu.length >= 2,
+    'ĐỐI CHỨNG BH-16: ngưỡng CŨ kết tội oan ít nhất 2 loại giấy tờ thật',
+    `→ oan ${oanCu.length}: ${oanCu.join(' · ')}`);
+  dat(roBat.every(([, chu]) => vunCu(chu)),
+    'ĐỐI CHỨNG: ngưỡng cũ vẫn bắt được rổ chữ hỏng ⇒ khác biệt nằm ở RỔ THA, không phải rổ bắt');
+}
+
+/** Ba con số mà `laChuVun` nhìn vào — in ra để đọc bảng kết quả không phải đoán. */
+function thongKeVun(chu) {
+  const mau = String(chu || '').trim().split(/\s+/).filter(Boolean);
+  const mot = mau.filter(m => [...m].length === 1).length;
+  const tt = mau.filter(m => [...m].length >= 3 && /\p{L}/u.test(m)).length;
+  let d = 0, dm = 0;
+  for (const m of mau) { if ([...m].length === 1) { d++; if (d > dm) dm = d; } else d = 0; }
+  return `1kt=${(mot / mau.length * 100).toFixed(0)}% dải=${dm} từthật=${tt} (${(tt / mau.length * 100).toFixed(0)}%)`;
+}
+
 console.log(soHong === 0 ? '  KẾT LUẬN: ĐẠT toàn bộ.' : `  KẾT LUẬN: ✗ ${soHong} mục HỎNG.`);
 process.exit(soHong === 0 ? 0 : 1);

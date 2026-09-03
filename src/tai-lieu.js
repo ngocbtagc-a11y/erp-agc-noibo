@@ -524,7 +524,11 @@ export function docTinChu(chu, { soHieu = null, loai = null, tieuDe = null,
     if (trung) yeu = `cụm "${trung}" trong tên bạn vừa gõ`;
   }
 
-  /* ⚠️ VÁ REV-0055 · CHẶN-1, TẦNG HAI — CHỐT MỎ NEO TỪNG MÙ ĐÚNG BỆNH NÀY.
+  /* ⚠️ VÁ REV-0055 · CHỐT MỎ NEO TỪNG MÙ ĐÚNG BỆNH CHỮ TÁCH RỜI.
+     (Không gọi đây là "tầng phòng thủ thứ hai": laChuVun chỉ bắt dạng RỜI
+      RẠC, mù với dạng DÍNH LIỀN — xem khối chú thích trên hàm đó ở
+      src/pdf-chu.js. Nói quá phạm vi của một chốt là cách để người sau đọc
+      xong tưởng đã được che kín.)
      Cả ba mỏ neo MẠNH ở trên so bằng `gonHet()`, tức BỎ HẾT khoảng trắng
      trước khi so. Nên khi chữ bóc ra vỡ vụn thành `"S 3 Y 0 A X D 0 0 0 0 1"`,
      `gonHet` vẫn nặn nó về `s3y0axd00001` và mỏ neo VẪN TRÚNG — rồi ERP trao
@@ -1217,21 +1221,53 @@ export async function danhSachTaiLieu(env, phien, thamSo) {
     `SELECT COUNT(*) AS n FROM tai_lieu WHERE ${dieuKien.join(' AND ')}`, bien,
     'Gõ vào ô tìm hoặc chọn một nhóm để thu hẹp lại.');
 
-  /* ---- TỈ LỆ TRA CỨU ĐƯỢC / CHỈ XEM ĐƯỢC  ·  CTL-0026 vòng 7 -----------
+  /* ---- BA VẾ: TÌM ĐƯỢC · CÓ CHỮ MÀ CHƯA TRA ĐƯỢC · CHỈ XEM ĐƯỢC --------
      Sếp Ngọc cần con số này để biết có phải đi chỉnh máy scan hay không. Một
      kho mà 90% tài liệu "chỉ xem được" thì ô tìm kiếm gần như vô dụng, mà
      nhìn từng thẻ một thì không bao giờ thấy ra điều đó.
-     MỘT lượt ĐỌC D1 thêm cho cả màn (đọc rẻ hơn ghi cả một bậc), đếm trên
-     ĐÚNG bộ điều kiện của danh sách nên con số luôn khớp với thứ đang hiện —
-     đếm trên cả bảng thì lọc theo nhóm xong tỉ lệ vẫn đứng yên, và đó là một
-     con số nói dối. Đếm trong SQL để dữ liệu không rời máy chủ. */
-  let dem = { tra_cuu_duoc: 0, chi_xem_duoc: 0 };
+
+     ⚠️ VÁ REV-0055 VÒNG 2 · CAO-A — ĐẾM BẰNG ĐÚNG THỨ Ô TÌM DÙNG.
+     Bản trước đếm `ocr_so_trang > 0`, tức "có bóc ra được chữ không". Nhưng
+     dòng chữ hiện trên màn hình hứa một điều KHÁC: "tìm được theo NỘI DUNG".
+     Hai thứ đó không bằng nhau, và chỗ lệch chính là chỗ ERP nói dối:
+     Hồ Ly đo trên CSDL thật, 5 file PDF thật — ERP khoe 5, sự thật 3, THỔI LÊN
+     40%; gõ "maslow" (từ CÓ THẬT trong file) trả về 0 kết quả.
+     Đó đúng là bệnh đã làm vòng 1 FAIL, chỉ đổi đường đi: vòng 1 nói dối qua
+     nhãn "đã đối chiếu", vòng 2 nói dối qua dải đếm. Và nó TỰ NẶNG THÊM —
+     càng nhiều tài liệu chưa đối chiếu được thì số càng thổi.
+
+     Nay đếm bằng ĐÚNG hai điều kiện quyết định chữ có vào cột `tim_kiem` hay
+     không — đọc thẳng từ `chuoiTimKiem()` + luật ③ của khối mỏ neo:
+       ① `ocr_so_trang_neo > 0` — chỉ trang ĐÃ ĐỐI CHIẾU mới được vào ô tìm;
+       ② `nhay_cam = 0`         — nhóm nhạy cảm thì ruột giấy KHÔNG vào ô tìm,
+                                  dù chữ có lành tới đâu (vá REV-0040 #4).
+     Đổi một trong hai luật trên thì PHẢI đổi câu này cùng lúc, không thì dải
+     đếm lại nói dối lần nữa. Bàn đo `do-kho-tai-lieu` ⑱ chốt bằng ĐƯỜNG CUỐI:
+     lưu N file, gõ tìm từng file, số tra ra được PHẢI khớp con số ERP khoe.
+
+     Vế GIỮA sinh ra để không mất thông tin khi hạ con số vế đầu: tài liệu có
+     chữ mà chưa tra được theo nội dung là ca CÓ CÁCH XỬ (gõ số hiệu vào là máy
+     đối chiếu lại được), khác hẳn tài liệu không có chữ nào.
+
+     MỘT lượt ĐỌC D1 thêm cho cả màn (đọc rẻ hơn ghi cả một bậc), đếm trên ĐÚNG
+     bộ điều kiện của danh sách nên con số luôn khớp thứ đang hiện — đếm trên cả
+     bảng thì lọc theo nhóm xong tỉ lệ vẫn đứng yên, và đó là một con số nói
+     dối. Đếm trong SQL để dữ liệu không rời máy chủ. */
+  let dem = null;
   try {
     const d = await env.DB.prepare(`
-      SELECT SUM(CASE WHEN ocr_so_trang > 0 THEN 1 ELSE 0 END) AS tra,
+      SELECT SUM(CASE WHEN ocr_so_trang_neo > 0 AND nhay_cam = 0
+                      THEN 1 ELSE 0 END) AS tra,
+             SUM(CASE WHEN ocr_so_trang > 0
+                       AND NOT (ocr_so_trang_neo > 0 AND nhay_cam = 0)
+                      THEN 1 ELSE 0 END) AS chua,
              SUM(CASE WHEN ocr_so_trang > 0 THEN 0 ELSE 1 END) AS xem
         FROM tai_lieu WHERE ${dieuKien.join(' AND ')}`).bind(...bien).first();
-    dem = { tra_cuu_duoc: Number(d?.tra) || 0, chi_xem_duoc: Number(d?.xem) || 0 };
+    dem = {
+      tra_cuu_duoc: Number(d?.tra) || 0,
+      co_chu_chua_tra_duoc: Number(d?.chua) || 0,
+      chi_xem_duoc: Number(d?.xem) || 0
+    };
   } catch (e) {
     /* Đếm hụt thì THÔI, không làm hỏng cả màn danh sách — nhưng cũng không
        bịa một con số 0 trông như đã đếm: `null` để giao diện im lặng bỏ dải. */
