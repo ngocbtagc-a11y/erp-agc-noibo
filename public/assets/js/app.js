@@ -19,6 +19,18 @@ import { nenAnhChung, coByteCuaDataUrl } from './anh-chung.js';
 import { moQuetTaiLieu } from './quet-tai-lieu.js';
 import { soDoHienThi, chuHuyHieu, datSoDo, nenNhacCai, CHU_NHAC_CAI, KHOA_BO_QUA }
   from './so-do-bieu-tuong.js';
+/* ---- MÀN HÌNH TỰ LÀM MỚI (Sếp Ngọc 03/09/2026: "đã duyệt hoàn thành mà nó
+   vẫn hiện ở đây") ---------------------------------------------------------
+   `ngheDuLieu(nhóm, hàm)` đăng ký "màn này đang hiện nhóm dữ liệu đó" VÀ trả
+   về chính hàm đã bọc. Luôn dùng BẢN TRẢ VỀ cho mọi lời gọi tay — nhờ vậy đài
+   biết hàm vừa tự chạy nên không gọi lần thứ hai, tức KHÔNG tốn gấp đôi lượt
+   đọc D1. Xem `lam-moi.js`. */
+import { ngheDuLieu, lamMoiManVuaMo } from './lam-moi.js';
+
+/* Gốc của một màn = đúng ô `#v-<tab>` mà `moTab` bật/tắt. Đài dùng nó để biết
+   màn đang ẨN (thì NGỦ, khỏi tốn lượt đọc D1 vẽ vào tab không ai nhìn) hay
+   người dùng đang GÕ DỞ trong đó (thì hoãn, khỏi mất chữ). */
+const oTab = (...ds) => () => ds.map(id => document.getElementById('v-' + id)).filter(Boolean);
 
 /* ---- GỌI MÓC NỐI GIỮA CÁC MÔ-ĐUN — thay cho `window.CAI_GI_DO?.()` -------
    BÀI HỌC 29/08/2026 (REV-0038 · L3). `window.moChatVoi?.()` đã biến một
@@ -102,7 +114,7 @@ let DS_NHAN_SU_QT = [], DS_VAI_TRO_QT = [];
 // (không cột lương nếu không có quyền) — vẫn cần lưu lại để Search/Filter
 // lọc phía client không phải gọi lại API mỗi lần gõ.
 let DS_NHAN_SU_DOC = [], NS_XEM_LUONG_DOC = true;
-async function taiDanhMucNen() {
+const taiDanhMucNen = ngheDuLieu('du_lieu_nen', async function taiDanhMucNen() {
   const [pb, cd, dv] = await Promise.all([
     API.dlnPhongBan().catch(() => ({ ds: [] })),
     API.dlnChucDanh().catch(() => ({ ds: [] })),
@@ -111,14 +123,14 @@ async function taiDanhMucNen() {
   DS_PHONG_BAN = pb.ds || [];
   DS_CHUC_DANH = cd.ds || [];
   DS_DON_VI = dv.ds || [];
-}
+});
 window.LAM_MOI_DANHMUC_NEN = taiDanhMucNen;
 
 /* Nạp lại bảng Nhân sự (tab Nhân sự — hồ sơ) và bảng Quản trị (tab Quản
    trị — tài khoản) cùng lúc. HCNS/Admin (them_nhan_su) dùng chung 1 API
    (qtDanhSach) cho cả 2 bảng; người xem thường chỉ có bảng Nhân sự dạng
    đọc (API.nhanSu, không có cột lương nếu không có quyền). */
-async function taiLaiNhanSuQuanTri() {
+const taiLaiNhanSuQuanTri = ngheDuLieu(['nhan_su', 'tai_khoan'], async function taiLaiNhanSuQuanTri() {
   if (!TOI.them_nhan_su) {
     const { nhan_su, xem_luong } = await API.nhanSu();
     NS_XEM_LUONG_DOC = xem_luong;
@@ -166,7 +178,7 @@ async function taiLaiNhanSuQuanTri() {
   // mở lại hộp mới thấy đúng (Employee Profile Phase 1, UI State Consistency
   // — Rule 7 trong ERP-CONSTITUTION.md).
   goiMocNoi('LAM_MOI_HOSO_NHANSU', 'nhansu');
-}
+});
 
 /* ---- Search + Filter: Nhân sự / Tài khoản --------------------------------
    Dữ liệu nhỏ (chục dòng, không phải nghìn) nên lọc thẳng phía client, không
@@ -208,7 +220,7 @@ function locNhanSu(ds) {
     if (hopDong && hopDong !== 'thieu' && n.hd_loai !== hopDong) return false;
     if (k && !boDau(`${n.ma_nv || ''} ${n.ho_ten} ${n.sdt || ''} ${n.email || ''}`).includes(k)) return false;
     return true;
-  });
+  }, { goc: oTab('nhansu', 'quantri') });
 }
 
 function xoaLocNS() {
@@ -264,11 +276,11 @@ function veDaiThieuHopDong() {
    theo mỗi lần đổi bộ lọc thì gõ 1 chữ vào ô tìm là bắn cả chục lượt. */
 let VIEC_CAN_LAM = null;
 
-async function taiViecCanLam() {
+const taiViecCanLam = ngheDuLieu('ho_so', async function taiViecCanLam() {
   if (!TOI.them_nhan_su) return;         // không đủ quyền thì không hỏi, khỏi ăn 403
   try { VIEC_CAN_LAM = await API.nsViecCanLam(); } catch { VIEC_CAN_LAM = null; }
   veDaiViecCanLam();
-}
+});
 
 function veDaiViecCanLam() {
   const o = $('#ns-vieccanlam'); if (!o) return;
@@ -429,7 +441,7 @@ function veBangNsDoc() {
       `<td><span class="tag ${tt.mau}">${esc(tt.chu)}</span></td>` +
       `<td class="sm">${esc(r.ngay_vao)}</td>` +
       (NS_XEM_LUONG_DOC ? `<td class="num">${esc(tienVN(r.luong))}</td>` : '');
-  });
+  }, { goc: oTab('nhansu') });
   veTrongNS(DS_NHAN_SU_DOC, ds);
 }
 
@@ -1645,6 +1657,11 @@ function moTab(id) {
   const t = TAB.find(x => x.id === id);
   $('#tieuDe').textContent = t ? t.ten : '';
 
+  /* Màn này lúc nãy đang ẩn nên đài cho NGỦ thay vì gọi máy chủ. Mở ra là
+     đánh thức — người dùng chuyển tab sang phải thấy số MỚI, không phải số
+     của lúc mở trang. Màn nào không ngủ thì hàm này không tốn gì cả. */
+  lamMoiManVuaMo();
+
   dongThanhBen();
   window.scrollTo(0, 0);
 }
@@ -2314,7 +2331,13 @@ if (TOI.quyen.includes('danhba')) {
 /* -- Trạm Mục Tiêu: giao việc cho nhân viên (máy chủ thật) -- */
 if (TOI.quyen.includes('congviec')) {
   try { await khoiDongCongViec(); } catch (e) { console.error('Trạm Mục Tiêu:', e); }
-  try { await veTongQuanTheoVaiTro(); } catch (e) { console.error('Tóm tắt Tổng quan:', e); }
+  /* Khối thẻ tóm tắt ("Việc tôi giao — chờ duyệt: N") ĐỌC cùng dữ liệu với
+     Trạm Việc nhưng trước nay chỉ chạy MỘT lần lúc mở trang: duyệt xong danh
+     sách hết việc đó, còn con số trên thẻ vẫn là số cũ. Đúng "rổ B" của góp ý
+     03/09/2026 — nên nó phải nghe cả `viec` lẫn `muc_tieu`. */
+  const lamMoiTomTatTQ = ngheDuLieu(['viec', 'muc_tieu'], veTongQuanTheoVaiTro,
+    { ten: 'Thẻ tóm tắt Trạm Mục Tiêu', goc: oTab('tongquan') });
+  try { await lamMoiTomTatTQ(); } catch (e) { console.error('Tóm tắt Tổng quan:', e); }
   // SPEC-0004 — "Việc của tôi hôm nay" + "Ai đang đọng việc" + "Đáng ghi nhận".
   // Bọc try/catch riêng: chưa nạp migration thì ba khối này im, phần Trạm Mục
   // Tiêu đang chạy KHÔNG được hỏng theo.
@@ -2572,7 +2595,7 @@ async function khoiDongVinhDanh() {
   }
   window.MO_FORM_VINH_DANH = moFormVinhDanh;
 
-  async function taiLai() {
+  const taiLai = ngheDuLieu('vinh_danh', async function taiLaiVinhDanh() {
     let kq;
     try { kq = await API.vdDanhSach(); } catch { return; }
     const ds = kq.vinh_danh || [];
@@ -2620,9 +2643,9 @@ async function khoiDongVinhDanh() {
           ${nut}
         </div>
       </div>`;
-    }).join('');
+    });
     $('#vd-trong').hidden = ds.length > 0;
-  }
+  }, { goc: oTab('tongquan') });
 
   let VD_THEO_ID = {};
   $('#vd-list').addEventListener('click', async (e) => {
@@ -2684,9 +2707,23 @@ async function khoiDongVinhDanh() {
 async function veTongQuanTheoVaiTro() {
   if (!TOI.quyen.includes('congviec')) return;
 
-  let cv, mt;
-  try { [cv, mt] = await Promise.all([API.cvDanhSach(), API.mtDanhSach()]); }
-  catch { return; }
+  /* DÙNG LẠI dữ liệu vừa nạp, KHÔNG gọi máy chủ lần hai.
+     Khối này đọc đúng hai thứ mà Trạm Việc và Trạm Mục Tiêu VỪA tải xong.
+     Đài làm mới chạy lần lượt theo thứ tự đăng ký (lam-moi.js) — hai màn kia
+     đăng ký trước nên khi tới lượt khối này, hai biến dưới đã là dữ liệu MỚI.
+     Trước bản 03/09/2026 chỗ này gọi thêm `cvDanhSach` + `mtDanhSach`, tức
+     mỗi cú bấm Duyệt tốn thêm 2 lượt đọc D1 cho đúng dữ liệu vừa tải.
+     Thiếu (mô-đun kia hỏng lúc khởi động) thì mới tự đi hỏi máy chủ. */
+  let cv = window.CV_DU_LIEU_CUA_TOI, mt = window.MT_DU_LIEU_CUA_TOI;
+  try {
+    if (!cv || !mt) {
+      const [a, b] = await Promise.all([
+        cv || API.cvDanhSach(),
+        mt || API.mtDanhSach()
+      ]);
+      cv = a; mt = b;
+    }
+  } catch { return; }
 
   const homNay = new Date().toISOString().slice(0, 10);
   const chuaXong = c => !['hoan_thanh', 'huy'].includes(c.trang_thai);
@@ -2997,8 +3034,11 @@ async function khoiDongMucTieu() {
     };
   }
 
-  async function taiLaiMucTieu() {
+  const taiLaiMucTieu = ngheDuLieu('muc_tieu', async function taiLaiMucTieu() {
     const kq = await API.mtDanhSach();
+    /* Khối thẻ tóm tắt đọc lại CHÍNH bản này thay vì gọi máy chủ lần hai —
+       xem `veTongQuanTheoVaiTro`. Một lượt tải, hai chỗ dùng. */
+    window.MT_DU_LIEU_CUA_TOI = kq;
     $('#mt-ky-hint').textContent = `Quý ${kq.quy}/${kq.nam}`;
     // REV-0034 · L5: dải nói "ĐÃ TẢI", không nói "đang hiện" — màn này còn lọc
     // tiếp phía trình duyệt (cấp cá nhân chỉ hiện mục tiêu CỦA CHÍNH người
@@ -3026,7 +3066,7 @@ async function khoiDongMucTieu() {
           `<option value="${m.id}">[${nhanCap(m)}] ${esc(m.tieu_de)}</option>`).join('');
       oSel.value = dangChon;
     }
-  }
+  }, { goc: oTab('tongquan') });
   window.LAM_MOI_MUCTIEU = taiLaiMucTieu;
 
   $('#mt-form').addEventListener('submit', async (e) => {
@@ -3414,7 +3454,12 @@ async function khoiDongCongViec() {
   // (audit 23/08/2026: phát hiện "Lịch sử làm việc" và "Tổng quan công ty"
   // từng chỉ tải 1 lần lúc vào trang, không cập nhật khi có việc mới/đổi
   // trạng thái trong lúc đang dùng).
-  async function lamMoiCacManLienQuanCv() {
+  /* Từ 03/09/2026 hàm này ĐĂNG KÝ NGHE nhóm `viec` (`lam-moi.js`): mọi hàm
+     ghi đụng công việc — kể cả nút mới ai đó thêm ngày mai — đều tự bắn tín
+     hiệu, không cần nhớ gọi tay ở từng nút nữa. Những lời gọi tay còn lại
+     bên dưới KHÔNG bị chạy hai lần: đài thấy hàm vừa tự chạy thì bỏ qua lượt
+     tín hiệu (xem `batDauLuc` trong lam-moi.js), nên lượt đọc D1 không đội. */
+  const lamMoiCacManLienQuanCv = ngheDuLieu('viec', async function lamMoiCacManLienQuanCv() {
     await taiLai();                 // nạp lại cvDanhSach -> window.CV_DU_LIEU_CUA_TOI
     await taiLaiTongQuanCongTy();
     // Thứ tự BẮT BUỘC: `taiLai()` trước, màn gộp vẽ sau — vẽ trước là vẽ lại
@@ -3424,7 +3469,7 @@ async function khoiDongCongViec() {
        Mục Tiêu — nộp/duyệt xong mà nó vẫn kể việc cũ thì đúng bằng nói dối.
        Trước bản gộp nó ăn theo ba bảng bên cạnh nên không lộ. */
     try { await veHomNay(); } catch { /* chưa nạp migration nhắc việc — bỏ qua */ }
-  }
+  }, { goc: oTab('tongquan', 'lichsuviec') });
 
   $('#cv-form').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -5833,7 +5878,7 @@ if (TOI.quyen.includes('kinhdoanh')) {
       $('#kdsp-trong').hidden = ds.length > 0;
     }
 
-    async function taiLaiSp() {
+    const taiLaiSp = ngheDuLieu('kho', async function taiLaiSpKinhDoanh() {
       const kq = await API.khoSanPham().catch(() => null);
       if (!kq) return;
       DS_SP_KD = kq.san_pham || [];
@@ -5844,7 +5889,7 @@ if (TOI.quyen.includes('kinhdoanh')) {
           DS_DON_VI.filter(x => x.hoat_dong).map(d => `<option value="${d.id}">${esc(d.ten)}</option>`).join('');
       }
       veBangSp($('#kdsp-tim').value);
-    }
+    }, { goc: oTab('kinhdoanh') });
 
     $('#kdsp-tim')?.addEventListener('input', e => veBangSp(e.target.value));
 
@@ -6307,7 +6352,10 @@ async function khoiDongGopY() {
     return false;
   }
 
-  async function taiLai() {
+  /* Nghe nhóm `gop_y` — duyệt / từ chối / hoàn tác / gửi mới đều tự bắn tín
+     hiệu ngay ở tầng api.js, kể cả nút ai đó thêm sau này. Đây đúng chỗ Sếp
+     Ngọc bấm Duyệt hôm 03/09/2026. */
+  const taiLai = ngheDuLieu('gop_y', async function taiLaiGopY() {
     let kq;
     try { kq = await API.gopYDanhSach(); } catch { return; }
     dsGopY = kq.gop_y || [];
@@ -6354,7 +6402,7 @@ async function khoiDongGopY() {
     $('#gy-bang').innerHTML = dsGopY.map(veDongGopY).join('');
     veDs('#gy-the-ds', dsGopY, false);
     $('#gy-trong').hidden = dsGopY.length > 0;
-  }
+  }, { goc: oTab('gopy') });
 
   // Duyệt thẳng từ thẻ — 1 thao tác cho việc rủi ro thấp.
   document.addEventListener('click', async (e) => {
@@ -6673,7 +6721,9 @@ async function khoiDongDonHangHuy() {
         oLoi.style.color = 'var(--ok-dark)';
         oLoi.textContent = `Đã đồng bộ xong: ${kq.so_don} đơn hàng (Shopee + TikTok).`;
       }
-      await taiDonHangHuy();
+      /* KHÔNG gọi tay `taiDonHangHuy()` ở đây nữa: `API.kdDongBoDonHang` đã
+         tự bắn tín hiệu nhóm `hoan` (lam-moi.js), bảng dưới tự nạp lại. Gọi
+         thêm ở đây là nạp HAI lượt cho cùng một cú bấm — tốn lượt đọc D1. */
     } catch (err) {
       oLoi.textContent = err.message || 'Không đồng bộ được, thử lại nhé.';
     } finally {
@@ -6682,7 +6732,12 @@ async function khoiDongDonHangHuy() {
     }
   });
 
-  await taiDonHangHuy();
+  /* Bảng "Đơn hàng huỷ" nghe nhóm `hoan`. Khai báo bằng lambda chuyển tiếp
+     (không đổi cách khai hàm) vì hàm này được GỌI TRƯỚC chỗ nó được định
+     nghĩa — đổi sang `const` là vỡ ngay lúc mở trang. */
+  const lamMoiDonHangHuy = ngheDuLieu('hoan', () => taiDonHangHuy(),
+    { ten: 'Đơn hàng huỷ', goc: oTab('kinhdoanh') });
+  await lamMoiDonHangHuy();
 
   async function taiDonHangHuy() {
   const { don_huy, co_bang, co_van_don } = await API.kdDonHangHuy();
@@ -6867,15 +6922,19 @@ async function khoiDongDoiSoatSan() {
       : `${ds.length} đơn cần đối soát`;
 
     // Mỗi lần vẽ lại bảng là danh sách chọn reset về rỗng (dữ liệu vừa đổi)
-    $('#kd-ds-chontatca').checked = false;
+    /* Cùng lý do với chỗ gắn listener bên dưới: ô "chọn tất cả" bị xoá khỏi
+       bảng với người không có `thao_tac_van_hanh`, nên phải kiểm trước khi
+       chạm vào — trước bản 03/09/2026 dòng này ném lỗi và giết cả màn. */
+    const oTatCa = $('#kd-ds-chontatca');
+    if (oTatCa) oTatCa.checked = false;
     veThanhChon();
   }
 
-  async function veDoiSoat() {
+  const veDoiSoat = ngheDuLieu('hoan', async function veDoiSoat() {
     const { can_doi_soat } = await API.kdCanDoiSoat();
     DS_DOISOAT = can_doi_soat;
     veBangDoiSoat();
-  }
+  }, { goc: oTab('kinhdoanh') });
   $('#kd-ds-tim').addEventListener('input', veBangDoiSoat);
   $('#kd-ds-locnguon').addEventListener('change', veBangDoiSoat);
 
@@ -6892,13 +6951,25 @@ async function khoiDongDoiSoatSan() {
     if (!e.target.matches('input[data-chon]')) return;
     veThanhChon();
   });
-  $('#kd-ds-chontatca').addEventListener('change', (e) => {
-    document.querySelectorAll('#kd-ds-bang input[data-chon]').forEach(o => { o.checked = e.target.checked; });
-    veThanhChon();
-  });
+  /* Ô "chọn tất cả" CÓ THỂ KHÔNG CÒN: ngay phía trên, người không có
+     `thao_tac_van_hanh` bị xoá trắng ô tick đầu bảng (`thTick.innerHTML = ''`)
+     — mà ô đó CHÍNH LÀ `#kd-ds-chontatca`. Trước bản 03/09/2026 chỗ này gắn
+     thẳng listener vào `null` nên NÉM LỖI, và cả hàm `khoiDongDoiSoatSan`
+     chết theo: kế toán trưởng mở Kinh doanh ra là màn Đối soát trống trơn,
+     không một dòng báo. Bàn đo `do-tu-lam-moi` bắt được vì nó nạp app.js
+     trong trình duyệt thật với vai trò KHÔNG có quyền thao tác.
+     Không dùng `?.` — `?.` nuốt lỗi (REV-0038 · L3); ở đây là điều kiện CÓ
+     THẬT và đã giải thích, nên kiểm bằng `if`. */
+  const oChonTatCa = $('#kd-ds-chontatca');
+  if (oChonTatCa) {
+    oChonTatCa.addEventListener('change', (e) => {
+      document.querySelectorAll('#kd-ds-bang input[data-chon]').forEach(o => { o.checked = e.target.checked; });
+      veThanhChon();
+    });
+  }
   $('#kd-ds-huychon').addEventListener('click', () => {
     document.querySelectorAll('#kd-ds-bang input[data-chon]').forEach(o => { o.checked = false; });
-    $('#kd-ds-chontatca').checked = false;
+    if (oChonTatCa) oChonTatCa.checked = false;
     veThanhChon();
   });
   async function dayHangLoat(nut, goi) {
@@ -7036,7 +7107,12 @@ if (TOI.shopee && TOI.shopee.xem) {
   const ICO = { day_kho: '📦', day_ke_toan: '💰', khieu_nai: '⚠️', canh_bao: '🔔',
                 cong_viec_moi: '🎯', cong_viec_phoi_hop: '🤝' };
 
-  async function taiThongBao() {
+  /* RỔ B của góp ý 03/09/2026 — chỗ dễ bỏ sót nhất. Trước bản này chuông chỉ
+     tự hỏi lại 5 PHÚT/LẦN: giao việc xong, danh sách đã đúng nhưng con số đỏ
+     trên chuông vẫn là số cũ suốt 5 phút. Máy chủ bắn tin vào chuông ở rất
+     nhiều đường ghi (`guiThongBao`, src/index.js) nên chuông phải nghe nhóm
+     `thong_bao`. */
+  const taiThongBao = ngheDuLieu('thong_bao', async function taiThongBao() {
     let kq;
     try { kq = await API.thongBao(); } catch { return; }
     const list = kq.thong_bao || [];
@@ -7050,7 +7126,7 @@ if (TOI.shopee && TOI.shopee.xem) {
     // REV-0034 · L3: trần 50 tin — cắt thì phải nói ra. Không cắt thì dải
     // biến mất hẳn (kq.cat = null), chuông không mọc thêm một dòng thừa.
     veDaiCat('#tb-cat', kq.cat, { don_vi: 'thông báo' });
-  }
+  });
 
   nut.addEventListener('click', async (e) => {
     e.stopPropagation();
@@ -7116,7 +7192,7 @@ async function khoiDongDuLieuNen() {
       : [{ m: 'sage', b: 'Dữ liệu nền đã đủ cho các mục đang theo dõi.', s: '', t: '' }]);
   }
 
-  async function lamMoiTatCa() {
+  const lamMoiTatCa = ngheDuLieu('du_lieu_nen', async function lamMoiTatCaDuLieuNen() {
     await taiDanhMucNen();   // làm mới cache dùng chung (Nhân sự/Kho vận cũng đọc từ đây)
     veDanhMuc('#dln-pb-list', '#dln-pb-dem', '#dln-pb-trong', DS_PHONG_BAN,
       (id, ten) => API.dlnSuaPhongBan(id, { ten }), (id, hd) => API.dlnSuaPhongBan(id, { hoat_dong: hd }),
@@ -7131,7 +7207,7 @@ async function khoiDongDuLieuNen() {
       (id, ten) => API.dlnSuaDonVi(id, { ten }), (id, hd) => API.dlnSuaDonVi(id, { hoat_dong: hd }),
       (id, tt) => API.dlnKhoaDonVi(id, tt), null, lamMoiTatCa);
     await veTinhTrang();
-  }
+  }, { goc: oTab('quantri') });
 
   $('#dln-pb-form').addEventListener('submit', async e => {
     e.preventDefault();
@@ -7160,7 +7236,7 @@ async function khoiDongDuLieuNen() {
 
   /* ---- Nhà cung cấp ---- */
   let dsNCC = [], nccDangSua = null;
-  async function veNCC() {
+  const veNCC = ngheDuLieu('du_lieu_nen', async function veNCC() {
     const kq = await API.dlnNCC().catch(() => ({ ds: [] }));
     dsNCC = kq.ds || [];
     const box = $('#dln-ncc-list');
@@ -7183,7 +7259,7 @@ async function khoiDongDuLieuNen() {
     });
     $('#dln-ncc-dem').textContent = dsNCC.length ? `${dsNCC.length} nhà cung cấp` : '';
     $('#dln-ncc-trong').hidden = dsNCC.length > 0;
-  }
+  }, { goc: oTab('khovan') });
 
   function dienFormNCC(n) {
     nccDangSua = n || null;
@@ -7254,7 +7330,7 @@ async function khoiDongDuLieuNen() {
 
   /* ---- Kho (nhiều kho vật lý — chỉ Admin quản lý) ---- */
   let dsKho = [], khoDangSua = null;
-  async function veKhoList() {
+  const veKhoList = ngheDuLieu('du_lieu_nen', async function veKhoList() {
     const kq = await API.dlnKho().catch(() => ({ ds: [] }));
     dsKho = kq.ds || [];
     const box = $('#dln-kho-list');
@@ -7274,7 +7350,7 @@ async function khoiDongDuLieuNen() {
     $('#dln-kho-dem').textContent = dsKho.length ? `${dsKho.length} kho` : '';
     $('#dln-kho-trong').hidden = dsKho.length > 0;
     if (!TOI.la_admin) $('#dln-kho-form').hidden = true;
-  }
+  }, { goc: oTab('khovan') });
 
   function dienFormKho(k) {
     khoDangSua = k || null;
@@ -7462,14 +7538,14 @@ async function khoiDongTaiSan() {
     if (ds.length) inTemNhieu(ds);
   });
 
-  async function taiLai() {
+  const taiLai = ngheDuLieu('tai_san', async function taiLaiTaiSan() {
     const kq = await API.taiSanDanhSach();
     DS_TS = kq.ds || [];
     quanLy = !!(kq.quyen && kq.quyen.quan_ly);
     $('#ts-panel-them').hidden = !quanLy;
     $('#ts-panel-danhmuc').hidden = !quanLy;
     ve();
-  }
+  }, { goc: oTab('taisan') });
   window.LAM_MOI_TAISAN = taiLai;
 
   function xoaLocTS() {
@@ -7485,8 +7561,13 @@ async function khoiDongTaiSan() {
      QUICK_CREATE_ALLOWED (docs/audit/AUDIT-QUICK-CREATE-POLICY.md mục E) —
      rủi ro thấp, chỉ tên, người bấm "Tài sản" đã đúng luôn là Data Owner
      (duocQuanLyTaiSan) nên không cần thêm bước xác nhận/quyền riêng. ---- */
-  const taoMoiDanhMuc = { xuLyTao: API.dlnThemDanhMucTaiSan, capNhatDs: taiDanhMucViTri };
-  const taoMoiViTri = { xuLyTao: API.dlnThemViTriTaiSan, capNhatDs: taiDanhMucViTri };
+  /* `() => taiDanhMucViTri()` chứ KHÔNG phải `taiDanhMucViTri` trần: hàm đó
+     khai bằng `const` ở dưới (để đăng ký nghe dữ liệu), mà đọc `const` trước
+     dòng khai của nó là ném lỗi ngay lúc mở trang — bàn đo `do-tu-lam-moi`
+     đã bắt đúng cú đó. Bọc trong lambda thì tới lúc GỌI mới đọc, và lúc đó
+     nó đã có. */
+  const taoMoiDanhMuc = { xuLyTao: API.dlnThemDanhMucTaiSan, capNhatDs: () => taiDanhMucViTri() };
+  const taoMoiViTri = { xuLyTao: API.dlnThemViTriTaiSan, capNhatDs: () => taiDanhMucViTri() };
   const { capNhatHienThi: veThemDanhMuc } = ganCombo({
     hienThi: $('#tsThemDanhMucHienThi'), panel: $('#tsThemDanhMucPanel'),
     tim: $('#tsThemDanhMucTim'), goiY: $('#tsThemDanhMucGoiY'), giaTri: $('#tsThemDanhMucId')
@@ -7511,7 +7592,7 @@ async function khoiDongTaiSan() {
     sel.value = hienTaiId != null ? String(hienTaiId) : '';
   }
 
-  async function taiDanhMucViTri() {
+  const taiDanhMucViTri = ngheDuLieu(['du_lieu_nen', 'tai_san'], async function taiDanhMucViTri() {
     try {
       const [dm, vt] = await Promise.all([API.dlnDanhMucTaiSan(), API.dlnViTriTaiSan()]);
       DS_TS_DANHMUC = dm.ds || []; DS_TS_VITRI = vt.ds || [];
@@ -7519,7 +7600,7 @@ async function khoiDongTaiSan() {
     veThemDanhMuc(); veThemViTri(); veSuaDanhMuc(); veSuaViTri();
     veChonPhongBan($('#tsThemPhongBan'));
     if (quanLy) veQuanLyDanhMuc();
-  }
+  }, { goc: oTab('taisan') });
 
   function veQuanLyDanhMuc() {
     veDanhMuc('#ts-dm-list', null, null, DS_TS_DANHMUC,
@@ -7961,10 +8042,10 @@ async function khoiDongXepCa() {
   /* ---- Mẫu ca: HR quản lý danh mục, nhưng ai có tab 'xepca' cũng ĐỌC được
      (trưởng phòng cần danh sách này để lập Kế hoạch nhân lực tuần). ---- */
   let dsMauCa = [];
-  async function taiMauCaDungChung() {
+  const taiMauCaDungChung = ngheDuLieu('ca', async function taiMauCaDungChung() {
     const kq = await API.caMauCa().catch(() => ({ ds: [] }));
     dsMauCa = kq.ds || [];
-  }
+  }, { goc: oTab('xepca') });
   await taiMauCaDungChung();
 
   /* ================= HR/ADMIN: Cấu hình Mẫu ca ================= */
@@ -8035,7 +8116,7 @@ async function khoiDongXepCa() {
   }
 
   /* ================= NHÂN VIÊN: Đăng ký ca ================= */
-  async function taiDangKy() {
+  const taiDangKy = ngheDuLieu('ca', async function taiDangKy() {
     const kq = await API.caDangMo();
     const duocDangKy = ['ban_thoi_gian', 'thoi_vu'].includes(kq.loai_lao_dong);
     $('#xc-khongduockyy').hidden = duocDangKy;
@@ -8063,7 +8144,7 @@ async function khoiDongXepCa() {
         `<div class="meta">${tt ? `<span class="tag ${tt.mau}">${tt.chu}</span> ` : ''}${hanhDong}</div>`
       ));
     });
-  }
+  }, { goc: oTab('xepca') });
 
   $('#xc-dangky-list').addEventListener('click', async e => {
     const btnDk = e.target.closest('[data-xc-dk]');
@@ -8571,7 +8652,7 @@ async function khoiDongKho() {
   }
 
   /* ---- Nạp lại toàn bộ dữ liệu kho từ máy chủ ---- */
-  async function taiLai() {
+  const taiLai = ngheDuLieu('kho', async function taiLaiKho() {
     const kq = await API.khoSanPham();
     DS_SP = kq.san_pham;
     xemGiaVon = kq.xem_gia_von;
@@ -8579,7 +8660,7 @@ async function khoiDongKho() {
     veThe_Kho();
     veTonKho($('#kv-tim').value);
     doDropdown();
-  }
+  }, { goc: oTab('khovan') });
 
   await taiLai();
   $('#kv-tim').addEventListener('input', e => veTonKho(e.target.value));
@@ -8943,11 +9024,11 @@ async function khoiDongDonHoan() {
     $('#dh-trong').hidden = ds.length > 0;
     $('#dh-dem').textContent = `${ds.length}/${DS_DH.length} đơn hoàn`;
   }
-  async function veDanhSach() {
+  const veDanhSach = ngheDuLieu('hoan', async function veDanhSachDonHoan() {
     const { don_hoan } = await API.hoanDanhSach();
     DS_DH = don_hoan;
     veBangDH($('#dh-tim').value);
-  }
+  }, { goc: oTab('khovan', 'donhoan') });
   $('#dh-tim').addEventListener('input', e => veBangDH(e.target.value));
   $('#dh-nguon-shopee').addEventListener('change', () => veBangDH($('#dh-tim').value));
   $('#dh-nguon-tiktok').addEventListener('change', () => veBangDH($('#dh-tim').value));
@@ -9350,7 +9431,7 @@ async function khoiDongKeToanTraSoat() {
     $('#kt-ts-sldachon').innerHTML = `Đã chọn <b>${sl}</b> đơn`;
   }
 
-  async function veTraSoat() {
+  const veTraSoat = ngheDuLieu('hoan', async function veTraSoat() {
     let kq;
     try { kq = await API.ktCanTraSoat(); } catch { return; }
     DS_TS = kq.can_tra_soat || [];
@@ -9382,7 +9463,7 @@ async function khoiDongKeToanTraSoat() {
     $('#kt-ts-dem').textContent = DS_TS.length ? `${DS_TS.length} đơn cần tra soát` : '';
     $('#kt-ts-chontatca').checked = false;
     veThanhChon();
-  }
+  }, { goc: oTab('ketoan') });
 
   $('#kt-ts-bang').addEventListener('change', (e) => {
     if (!e.target.matches('input[data-chon]')) return;
@@ -9461,7 +9542,7 @@ async function khoiDongKeToanHangHong() {
     $('#kt-hh-sldachon').innerHTML = `Đã chọn <b>${sl}</b> đơn`;
   }
 
-  async function veHangHong() {
+  const veHangHong = ngheDuLieu('hoan', async function veHangHong() {
     let kq;
     try { kq = await API.ktHangHong(); } catch { return; }
     const ds = kq.hang_hong || [];
@@ -9482,7 +9563,7 @@ async function khoiDongKeToanHangHong() {
     $('#kt-hh-dem').textContent = ds.length ? `${ds.length} đơn chờ lập biên bản` : '';
     $('#kt-hh-chontatca').checked = false;
     veThanhChon();
-  }
+  }, { goc: oTab('ketoan') });
 
   $('#kt-hh-bang').addEventListener('change', (e) => {
     if (!e.target.matches('input[data-chon]')) return;
@@ -9893,7 +9974,7 @@ async function khoiDongKhoTaiLieu() {
      Vị trí cụm số do MÁY CHỦ tính (`so_ai`, src/so-ai.js) — trình duyệt không
      giữ bản dò số thứ hai, vì hai bản chép tay của cùng một định nghĩa chính
      là cách đường đọc CCCD chết âm thầm 11 ngày. */
-  async function nap() {
+  const nap = ngheDuLieu('tai_lieu', async function napKhoTaiLieu() {
     try {
       const kq = await API.tlDanhSach({
         q: oTim ? oTim.value.trim() : '',
@@ -9956,7 +10037,7 @@ async function khoiDongKhoTaiLieu() {
       oTrong.textContent = 'Không tải được kho tài liệu: ' + e.message;
       nhomLuuDuoc = []; veNutQuet();
     }
-  }
+  }, { goc: oTab('khotailieu') });
 
   if (nutQuet) nutQuet.addEventListener('click', () => {
     moQuetTaiLieu({

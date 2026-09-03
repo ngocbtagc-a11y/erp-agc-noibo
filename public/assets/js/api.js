@@ -4,7 +4,13 @@
    Phiên đăng nhập nằm trong cookie HttpOnly — JavaScript ở đây KHÔNG đọc
    được nó, và đó là chủ ý: trang có dính mã độc cũng không lấy được phiên.
    Trình duyệt tự đính cookie vào mỗi lệnh gọi nhờ credentials: 'same-origin'.
+
+   Cuối file có một đoạn BỌC: mọi hàm GHI, khi thành công, tự bắn tín hiệu
+   "nhóm dữ liệu này vừa đổi" để các màn đang mở tự nạp lại phần của mình.
+   Xem `lam-moi.js` — đó là chỗ DUY NHẤT khai nhóm dữ liệu cho từng hàm.
    ========================================================================== */
+
+import { NHOM_DU_LIEU, MIEN_TRU, baoDuLieuDoi } from './lam-moi.js';
 
 /* tuChoiTuDong: true = gặp 401 thì tự đá về màn đăng nhập.
    Phải tắt cờ này ở chính màn đăng nhập, không thì trang tự đá về chính nó
@@ -459,3 +465,30 @@ export const API = {
   // Lưu ý: kết nối Shopee đi thẳng bằng chuyển trang tới /api/shopee/connect
   // (server trả 302 sang trang ủy quyền Shopee), không qua lớp fetch này.
 };
+
+/* ==========================================================================
+   BỌC MỘT LẦN CHO CẢ LỚP — "ghi xong thì màn hình tự làm mới"
+   ---------------------------------------------------------------------------
+   Sếp Ngọc 03/09/2026: *"đã duyệt hoàn thành mà nó vẫn hiện ở đây"*. Cách cũ
+   là mỗi nút tự nhớ gọi thêm hàm nạp lại — 122 chỗ bấm là 122 lần phải nhớ,
+   và chỗ thứ 123 luôn quên. Ở đây bọc ĐÚNG MỘT LẦN: hàm ghi nào thành công
+   thì tự bắn tên nhóm dữ liệu, màn nào đang hiện nhóm đó thì tự vẽ lại.
+
+   THẤT BẠI thì KHÔNG bắn: máy chủ chưa ghi gì mà bắt cả loạt màn nạp lại là
+   đốt lượt đọc D1 vô ích (ERP này từng vượt hạn mức miễn phí).
+
+   Danh sách nhóm nằm ở `lam-moi.js`, không nằm ở đây — để `npm run
+   do-tu-lam-moi` soi được một chỗ duy nhất và bắt được hàm ghi mới bị quên.
+   ========================================================================== */
+for (const ten of Object.keys(API)) {
+  const nhom = NHOM_DU_LIEU[ten];
+  if (!nhom || MIEN_TRU[ten]) continue;
+  const goc = API[ten];
+  if (typeof goc !== 'function') continue;
+  API[ten] = function (...thamSo) {
+    const kq = goc.apply(this, thamSo);
+    // Hàm ghi nào cũng trả Promise; kiểm tra để phòng người sau đổi kiểu trả về.
+    if (!kq || typeof kq.then !== 'function') return kq;
+    return kq.then((v) => { baoDuLieuDoi(nhom); return v; });
+  };
+}
