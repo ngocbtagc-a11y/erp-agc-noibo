@@ -74,6 +74,7 @@
     "cong-khoi-tu-kiem": "node scripts/cong-khoi.mjs --tu-kiem",
     "do-moc-noi": "node scripts/do-moc-noi.mjs",
     "do-tu-lam-moi": "node scripts/do-tu-lam-moi.mjs",
+    "do-kiem-ke-lam-moi": "node scripts/do-kiem-ke-lam-moi.mjs",
     "do-luot-doc-lam-moi": "node scripts/do-luot-doc-lam-moi.mjs",
     "do-chat-noibo": "node scripts/do-chat-noibo.mjs",
     "do-gop-viec": "node scripts/do-gop-viec-lichsu.mjs",

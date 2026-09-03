@@ -18,7 +18,7 @@ import { dungMayGia, moChrome, GOC, TOI_ID } from './lib/ban-do-chrome.mjs';
 
 const QUYEN = ['tongquan', 'lichsuviec', 'danhba', 'chat', 'gopy', 'nhansu',
                'khovan', 'kinhdoanh', 'ketoan', 'taisan', 'xepca', 'donhoan',
-               'khotailieu', 'quantri', 'congviec', 'muctieu'];
+               'khotailieu', 'quantri', 'dulieunen', 'congviec', 'muctieu'];
 
 const MAIN = execFileSync('git', ['rev-parse', 'origin/main'], { cwd: GOC })
   .toString().trim();

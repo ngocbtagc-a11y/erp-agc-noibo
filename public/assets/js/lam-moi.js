@@ -9,20 +9,29 @@
    Trạm Mục Tiêu". Lớp là: **mọi chỗ người dùng bấm một nút làm ĐỔI DỮ LIỆU mà
    danh sách / con số trên màn hình không tự vẽ lại theo.**
 
-   QUÉT CẢ ERP TRƯỚC KHI SỬA (luật ②) — số đếm thật trên `origin/main`,
-   115 chỗ trong giao diện gọi một hàm ghi:
-     · RỔ A — bấm xong KHÔNG vẽ lại gì:                              1 chỗ
-       (công tắc "công khai sinh nhật": dải "sinh nhật tháng sau" không đổi)
-     · RỔ B — vẽ lại chỗ mình, KHÔNG vẽ lại chỗ liên quan:          50 chỗ
-       (ổ lớn nhất là CHUÔNG 🔔 — máy chủ bắn tin vào chuông ở 18 đường ghi
-        mà chuông chỉ tự hỏi lại 5 phút/lần; kế đó là thẻ tóm tắt Trạm Mục
-        Tiêu, danh mục nền dùng chung, và bốn màn cùng đọc bảng đơn hoàn)
-     · RỔ C — đã đúng:                                              64 chỗ
+   QUÉT CẢ ERP TRƯỚC KHI SỬA (luật ②). Đếm theo KHỐI HIỂN THỊ — đơn vị người
+   dùng thật sự nhìn thấy — chứ KHÔNG theo nút bấm. Vòng đầu tôi đếm theo nút
+   và cách đó giấu mất mức nặng: nút "Duyệt xong" CÓ gọi hàm nạp lại (nên
+   trông như rổ B nhẹ), nhưng cái THẺ tóm tắt ngay cạnh nó chạy đúng một lần
+   lúc mở trang rồi thôi (rổ A tuyệt đối) — nên Sếp vấp trúng ngay ngày đầu.
+
+   Số đếm trên `origin/main`, 26 khối hiển thị / 121 chỗ gọi hàm ghi:
+     · RỔ A — khối KHÔNG BAO GIỜ vẽ lại:                4 khối
+       (chuông 🔔 · thẻ tóm tắt Trạm Mục Tiêu · kho danh mục nền · kho tài liệu)
+     · RỔ B — vẽ ở chỗ này, không vẽ ở chỗ kia:        20 khối
+     · RỔ C — đã đúng:                                  2 khối
+       (danh sách Góp ý ERP · bảng Vinh danh)
+
+   BA CON SỐ ĐÓ ĐẾM LẠI ĐƯỢC: `npm run do-kiem-ke-lam-moi`. Vòng đầu tôi báo
+   số mà không có máy nào sinh ra nó — tháng sau không ai kiểm lại được, đúng
+   thứ luật "phải dựng lưới tự động" đòi tránh (REV-0057 · L4).
 
    VÌ SAO KHÔNG SỬA TỪNG NÚT. Cách cũ là mỗi nút tự nhớ gọi thêm một hàm nạp
-   lại. 115 chỗ bấm thì 115 lần phải nhớ — và chỗ thứ 116 sẽ lại quên, y như
+   lại. 121 chỗ bấm thì 121 lần phải nhớ — và chỗ thứ 122 sẽ lại quên, y như
    "Lịch sử làm việc" và "Tổng quan công ty" từng quên (audit 23/08/2026).
-   Trí nhớ không phải kiến trúc.
+   Trí nhớ không phải kiến trúc. Bằng chứng ngay trong vòng này: gộp nhánh đọc
+   chữ PDF vào, hai hàm ghi mới (`tlLuuTep`, `tlSua`) chưa khai nhóm — bàn đo
+   `do-tu-lam-moi` đỏ ngay, không phải chờ Sếp bấm rồi kêu.
 
    CÁCH LÀM. MỘT chỗ duy nhất phát tín hiệu: `api.js` bọc mọi hàm gọi máy chủ
    KIỂU GHI, thành công thì bắn tên NHÓM DỮ LIỆU vừa bị đụng (`viec`,
@@ -177,8 +186,14 @@ export const NHOM_DU_LIEU = {
   ktDaTraSoat:        ['hoan'],
   ktLapBienBan:       ['hoan'],
 
-  /* -- Kho tài liệu quản trị -- */
+  /* -- Kho tài liệu quản trị. `tlLuuTep` là ĐƯỜNG BYTE THẲNG cho PDF có sẵn
+        (CTL-0026 vòng 7) — cùng một kho, cùng một cửa `/api/tai-lieu/luu`, nên
+        cùng nhóm với `tlLuu`. Nó vào ERP sau bản vá này và bàn đo
+        `do-tu-lam-moi` bắt được ngay lúc gộp nhánh — đúng thứ cái lưới sinh
+        ra để làm. -- */
   tlLuu:              ['tai_lieu', 'ho_so'],
+  tlLuuTep:           ['tai_lieu', 'ho_so'],
+  tlSua:              ['tai_lieu', 'ho_so'],
   tlAn:               ['tai_lieu', 'ho_so']
 };
 
@@ -259,25 +274,79 @@ export function ngheDuLieu(nhom, ham, tuyChon = {}) {
 /* ---- MÀN VỪA ĐƯỢC MỞ RA ------------------------------------------------
    `moTab()` gọi hàm này. Màn nào lúc có tín hiệu đang ẩn nên ngủ, giờ hiện
    ra thì nạp lại — người dùng chuyển tab sang là thấy số mới, không thấy số
-   của mười phút trước. */
-export function lamMoiManVuaMo() {
+   của mười phút trước.
+
+   `await` Ở ĐÂY LÀ BẮT BUỘC, KHÔNG PHẢI CHO ĐẸP (REV-0057 · L1).
+   Bản đầu 03/09/2026 gọi `chay(n)` trần, và Hồ Ly bắt được: đứng Tổng quan →
+   sang Tài sản → duyệt xong → quay lại Tổng quan, thẻ "Việc tôi giao — chờ
+   duyệt" vẫn kể số CŨ. Vì hai người nghe của tab đó chạy SONG SONG: khối việc
+   đang tải dữ liệu mới thì thẻ tóm tắt đã đọc xong biến cũ
+   (`window.CV_DU_LIEU_CUA_TOI`, đọc đồng bộ ngay dòng đầu). Đúng bằng bệnh Sếp
+   kể, chỉ khác đường vào. Ba đường đánh thức người nghe — `xa`, hàm này, và
+   `thuLaiNguoiHoan` — PHẢI cùng chạy lần lượt, không được lệch nhau chỗ nào. */
+export async function lamMoiManVuaMo() {
   for (const n of nguoiNghe) {
     if (!n.ngu || !hienThi(n)) continue;
     n.ngu = false;
     dem.danhThuc++;
-    chay(n);
+    await chay(n);
   }
 }
 
-/* ---- ④ PHÁT TÍN HIỆU ---------------------------------------------------- */
+/* ---- ④ PHÁT TÍN HIỆU ----------------------------------------------------
+   HAI TAB ERP CÙNG MỞ (REV-0057 · L9). Sếp Ngọc bấm Duyệt ở tab 1 thì tab 2
+   trước nay không biết gì — vẫn kể số cũ, đúng lớp bệnh đang vá, chỉ khác
+   đường vào. `BroadcastChannel` có sẵn trong trình duyệt (chi phí 0, không
+   thêm gói, không thêm dịch vụ, không đi qua máy chủ) nên tab nào ghi thì báo
+   luôn cho các tab còn lại.
+
+   HAI CHỖ PHẢI CẨN THẬN, đã xử ngay tại đây:
+   ① KHÔNG dội lại. Tín hiệu NHẬN từ tab khác chỉ xếp vào hàng chờ, tuyệt đối
+      không phát tiếp — không thì hai tab bắn qua bắn lại vô tận.
+   ② KHÔNG tốn thêm lượt đọc D1 một cách vô ích: tab kia thường đang ẩn hoặc
+      đang mở tab khác, mà màn đang ẩn thì NGỦ (xem `hienThi`). Chỉ đúng khối
+      người ta đang nhìn mới nạp lại. */
+let keChung = null;
+try {
+  if (typeof BroadcastChannel === 'function') {
+    keChung = new BroadcastChannel('agc-lam-moi');
+    keChung.onmessage = (e) => {
+      const ds = e && e.data && e.data.nhom;
+      if (Array.isArray(ds) && ds.length) xepHang(ds);   // xếp hàng, KHÔNG phát lại
+    };
+  }
+} catch { keChung = null; }   // trình duyệt cũ không có thì thôi, mọi thứ khác vẫn chạy
+
 export function baoDuLieuDoi(dsNhom) {
   if (!dsNhom || !dsNhom.length) return;
+  xepHang(dsNhom);
+  // Báo sang các tab ERP khác của cùng người dùng. Hỏng thì kệ, không chặn.
+  try { if (keChung) keChung.postMessage({ nhom: [...dsNhom] }); } catch { /* kệ */ }
+}
+
+function xepHang(dsNhom) {
   const luc = gio();
   dem.ban++;
   for (const n of dsNhom) if (!dangCho.has(n)) dangCho.set(n, luc);
   // Gộp trong 60ms: một cú bấm đụng 3 nhóm thì vẫn CHỈ một lượt vẽ lại.
   if (hen) return;
-  hen = setTimeout(() => { hen = null; xa(); }, 60);
+  hen = setTimeout(() => { hen = null; batDauXa(); }, 60);
+}
+
+/* Một lượt xả đang chạy thì lượt sau XẾP HÀNG, không chạy chồng (REV-0057 ·
+   L10). `xa()` nay `await` từng người nghe, nên với mạng chậm một lượt có thể
+   còn đang chạy khi hẹn 60ms kế tiếp nổ — hai lượt chồng nhau là mất luôn thứ
+   tự chạy, mà thứ tự chạy chính là thứ giữ cho thẻ tóm tắt không nói dối. */
+let dangXa = false, coLuotChoXa = false;
+async function batDauXa() {
+  if (dangXa) { coLuotChoXa = true; return; }
+  dangXa = true;
+  try {
+    do {
+      coLuotChoXa = false;
+      await xa();
+    } while (coLuotChoXa);
+  } finally { dangXa = false; }
 }
 
 /* Chạy LẦN LƯỢT, không bắn cả loạt cùng lúc. Hai lý do, cả hai là thật:
@@ -304,7 +373,10 @@ async function xa() {
        là đốt lượt đọc D1. Đánh dấu "cũ rồi", `moTab` sẽ đánh thức. */
     if (!hienThi(n)) { n.ngu = true; dem.ngu++; continue; }
 
-    if (dangGoTrong(n)) { n.hoan = true; dem.hoan++; canhGac(); continue; }
+    /* `if (!n.hoan)` — chỉ đếm LẦN ĐẦU bị hoãn. Bản trước cộng mỗi lượt tín
+       hiệu mà chỉ trừ một lần lúc chạy, nên `dem.hoan` trôi dần và con số
+       báo ra sai (REV-0057 · L10). Số để đọc thì cũng phải đọc được. */
+    if (dangGoTrong(n)) { if (!n.hoan) dem.hoan++; n.hoan = true; canhGac(); continue; }
     await chay(n);
   }
 }
@@ -366,13 +438,26 @@ function dangGoTrong(n) {
 }
 
 let henGac = null;
-function thuLaiNguoiHoan() {
-  for (const n of nguoiNghe) {
-    if (!n.hoan) continue;
-    if (dangGoTrong(n)) continue;   // vẫn đang gõ trong vùng đó → chờ tiếp
-    dem.hoan--;
-    chay(n);
-  }
+let dangThuLai = false;
+/* `await chay(n)` — CÙNG LÝ DO với `lamMoiManVuaMo` (REV-0057 · L1): đây là
+   đường "rời ô là nạp nốt", và nó cũng có thể đánh thức HAI người nghe cùng
+   một tab. Chạy song song thì màn đọc-lại-dữ-liệu (thẻ tóm tắt) đọc trúng
+   biến cũ, tức màn hình lại nói dối đúng kiểu Sếp đã kêu.
+   `dangThuLai` chặn hai lượt chồng nhau: hàm này chạy từ `setInterval`
+   500ms/lần lẫn từ `focusout`, mà nay nó `await` nên một lượt có thể còn
+   đang chạy khi lượt sau tới. */
+async function thuLaiNguoiHoan() {
+  if (dangThuLai) return;
+  dangThuLai = true;
+  try {
+    for (const n of nguoiNghe) {
+      if (!n.hoan) continue;
+      if (dangGoTrong(n)) continue;   // vẫn đang gõ trong vùng đó → chờ tiếp
+      n.hoan = false;                 // gỡ cờ TRƯỚC khi chạy, để `dem.hoan` không trôi
+      dem.hoan--;
+      await chay(n);
+    }
+  } finally { dangThuLai = false; }
   if (!nguoiNghe.some(n => n.hoan) && henGac) {
     clearInterval(henGac);
     henGac = null;

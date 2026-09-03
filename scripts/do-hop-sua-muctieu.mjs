@@ -116,7 +116,11 @@ async function doMotVong({ be = null, tep = null } = {}) {
   const suaTep = be
     ? (s, ten) => { if (ten !== tep) return s; const sau = be(s); if (sau !== s) daBe = true; return sau; }
     : null;
-  /* `dungMayGia` chỉ chạy `suaTep` cho app.html + app.js. Ca DC-A cần bẻ CSS,
+  /* `dungMayGia` chạy `suaTep` cho bốn tệp JS/HTML (app.html · app.js ·
+     api.js · lam-moi.js — xem `lib/ban-do-chrome.mjs`), KHÔNG có style.css.
+     (Sửa chú thích 03/09/2026: bản cũ viết "app.html + app.js" và đã thành cũ
+     khi danh sách nới lên bốn tệp — chú thích sai là bẫy cho người sau.)
+     Ca DC-A cần bẻ CSS,
      nên bẻ thẳng trên thư mục tạm sau khi máy giả đã dựng xong. */
   const may = await dungMayGia({ apiRieng, tatHoatAnh: true, suaTep: tep === 'assets/css/style.css' ? null : suaTep });
   if (tep === 'assets/css/style.css' && be) {

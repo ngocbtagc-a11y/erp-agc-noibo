@@ -178,7 +178,7 @@ const taiLaiNhanSuQuanTri = ngheDuLieu(['nhan_su', 'tai_khoan'], async function 
   // mở lại hộp mới thấy đúng (Employee Profile Phase 1, UI State Consistency
   // — Rule 7 trong ERP-CONSTITUTION.md).
   goiMocNoi('LAM_MOI_HOSO_NHANSU', 'nhansu');
-});
+}, { goc: oTab('nhansu', 'quantri') });
 
 /* ---- Search + Filter: Nhân sự / Tài khoản --------------------------------
    Dữ liệu nhỏ (chục dòng, không phải nghìn) nên lọc thẳng phía client, không
@@ -220,7 +220,7 @@ function locNhanSu(ds) {
     if (hopDong && hopDong !== 'thieu' && n.hd_loai !== hopDong) return false;
     if (k && !boDau(`${n.ma_nv || ''} ${n.ho_ten} ${n.sdt || ''} ${n.email || ''}`).includes(k)) return false;
     return true;
-  }, { goc: oTab('nhansu', 'quantri') });
+  });
 }
 
 function xoaLocNS() {
@@ -280,7 +280,7 @@ const taiViecCanLam = ngheDuLieu('ho_so', async function taiViecCanLam() {
   if (!TOI.them_nhan_su) return;         // không đủ quyền thì không hỏi, khỏi ăn 403
   try { VIEC_CAN_LAM = await API.nsViecCanLam(); } catch { VIEC_CAN_LAM = null; }
   veDaiViecCanLam();
-});
+}, { goc: oTab('nhansu') });
 
 function veDaiViecCanLam() {
   const o = $('#ns-vieccanlam'); if (!o) return;
@@ -441,7 +441,7 @@ function veBangNsDoc() {
       `<td><span class="tag ${tt.mau}">${esc(tt.chu)}</span></td>` +
       `<td class="sm">${esc(r.ngay_vao)}</td>` +
       (NS_XEM_LUONG_DOC ? `<td class="num">${esc(tienVN(r.luong))}</td>` : '');
-  }, { goc: oTab('nhansu') });
+  });
   veTrongNS(DS_NHAN_SU_DOC, ds);
 }
 
