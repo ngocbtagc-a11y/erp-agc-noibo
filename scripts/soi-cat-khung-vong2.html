@@ -1,0 +1,393 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bàn soi Cắt khung — REV-0056 vòng 2 (Hồ Ly)</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+<style>
+  body { font: 14px/1.6 system-ui, sans-serif; margin: 0; padding: 12px; background: #f5ecdf; color: #2c2117; }
+  pre { background: #fffcf4; border: 1px solid #e2d0ba; border-radius: 8px; padding: 10px; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<h2>Bàn soi Cắt khung — vòng 2</h2>
+<pre id="kq">đang soi…</pre>
+
+<script type="module">
+import { nenAnhChung, coByteCuaDataUrl } from '/assets/js/anh-chung.js';
+import { moQuetTaiLieu, ANH_TRANG } from '/assets/js/quet-tai-lieu.js';
+import { doanBonGoc, duoiPhang, taiAnh } from '/assets/js/cat-khung.js';
+import { veToGiay, datGiayVaoCanh, nenBanGo, themNhieu } from '/lib/trang-giay-thu.js';
+
+const dong = [];
+const ghi = (s) => { dong.push(s); document.getElementById('kq').textContent = dong.join('\n'); };
+const dat = (ok, ten, phu = '') => { if (!ok) soHong++; ghi(`  ${ok ? 'ĐẠT ' : '✗ HỎNG'}  ${ten}${phu ? '   ' + phu : ''}`); };
+const cho = (ms) => new Promise(r => setTimeout(r, ms));
+const kb = (b) => (b / 1024).toFixed(0) + ' KB';
+const doi = async (chon, hen = 12000) => {
+  const t = Date.now();
+  while (Date.now() - t < hen) { const e = document.querySelector(chon); if (e) return e; await cho(40); }
+  throw new Error('Không thấy ' + chon);
+};
+async function bamChuoi(s) {
+  const h = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
+  return [...new Uint8Array(h)].map(x => x.toString(16).padStart(2, '0')).join('');
+}
+const W12 = 3024, H12 = 4032;
+const KHOA = 'tl_nhap_v1_kho_chung_chung';
+const nhap = () => { try { return JSON.parse(localStorage.getItem(KHOA) || 'null'); } catch { return null; } };
+function canvasThanhFile(c, ten, cl = 0.95) {
+  return new Promise(r => c.toBlob(b => r(new File([b], ten, { type: 'image/jpeg' })), 'image/jpeg', cl));
+}
+let soHong = 0;
+
+/* ==========================================================================
+   CHẶN localStorage THEO CỠ — để ép đúng đường "hết chỗ" mà không phải đổ
+   thật 5 MB vào máy. Đây là cách DUY NHẤT ép được cả hai lượt thử của
+   `ghiNhap()` một cách xác định.
+   ========================================================================== */
+const setGoc = Storage.prototype.setItem;
+let TRAN = Infinity, soLuotGhi = 0, soLuotNem = 0;
+Storage.prototype.setItem = function (k, v) {
+  if (String(k).startsWith('tl_nhap_')) {
+    soLuotGhi++;
+    if (String(v).length > TRAN) {
+      soLuotNem++;
+      const e = new Error('Quota exceeded (giả lập)');
+      e.name = 'QuotaExceededError';
+      throw e;
+    }
+  }
+  return setGoc.call(this, k, v);
+};
+
+/* ---- Dựng cảnh ---------------------------------------------------------- */
+function toGiay(tc) { return veToGiay(1500, 2000, { nhieu: 10, ...(tc || {}) }); }
+function canhVoiCacTo(dsGoc, tc = {}) {
+  const nen = nenBanGo(W12, H12);
+  for (const g of dsGoc) datGiayVaoCanh(nen, toGiay(), g.map(p => [p[0] * W12, p[1] * H12]));
+  if (tc.veThem) tc.veThem(nen.getContext('2d'));
+  themNhieu(nen.getContext('2d'), W12, H12, 10);
+  return nen;
+}
+/** Vệt kẻ DỌC hết chiều cao tờ giấy — nếp gấp đôi / gáy sách. */
+function vetDoc(x0, y0, y1, dam) {
+  return (x) => {
+    x.strokeStyle = `rgba(60,45,30,${dam})`;
+    x.lineWidth = Math.max(3, Math.round(W12 * 0.004));
+    x.beginPath(); x.moveTo(x0 * W12, y0 * H12); x.lineTo(x0 * W12, y1 * H12); x.stroke();
+  };
+}
+
+try {
+
+/* ==========================================================================
+   ① CHỖ CÃI THỨ HAI — PHÉP THỬ ĐẢO CHIỀU: tự kiểm bằng chính `dat()`
+   ========================================================================== */
+ghi('─── ① PHÉP THỬ CŨ CỦA TÔI CÓ ĐẢO CHIỀU KHÔNG (kiểm bằng logic thuần) ───');
+{
+  /* Tái dựng đúng hai vế, không cần chạy lại mã cũ: `dat(dk, nhan)` in "ĐẠT"
+     khi `dk` đúng. Nhãn cũ mô tả MỘT CÁI LỖI ("cắt CHỒNG"). */
+  const nhanCu = 'Mỗi lần "Cắt lại" tạo ra ảnh KHÁC — tức là cắt CHỒNG lên bản đã cắt';
+  const maCu = { a1: 'A', a2: 'B', a3: 'C' };        // mã CŨ: mỗi lần một ảnh khác
+  const maVa = { a1: 'A', a2: 'A', a3: 'A' };        // mã ĐÃ VÁ: ba lần y hệt
+  const dkCu = maCu.a1 !== maCu.a2 && maCu.a2 !== maCu.a3;
+  const dkVa = maVa.a1 !== maVa.a2 && maVa.a2 !== maVa.a3;
+  ghi(`  Nhãn: "${nhanCu}"`);
+  ghi(`  Trên mã CÒN LỖI  → điều kiện ${dkCu} → dat() in "${dkCu ? 'ĐẠT' : 'HỎNG'}"`);
+  ghi(`  Trên mã ĐÃ VÁ    → điều kiện ${dkVa} → dat() in "${dkVa ? 'ĐẠT' : 'HỎNG'}"`);
+  const daoChieu = dkCu === true && dkVa === false;
+  ghi(`  → ĐẢO CHIỀU: ${daoChieu ? 'ĐÚNG — xanh lúc lỗi còn, đỏ lúc lỗi đã vá' : 'không'}`);
+  ghi('  → Khỉ Đột nói ĐÚNG. Phép thử cũ của tôi chứng nhận cái sai.');
+}
+
+/* ==========================================================================
+   ② RỦI RO MỚI: localStorage HẾT CHỖ — đường mất dữ liệu mới
+   ========================================================================== */
+ghi('\n─── ② HẾT CHỖ localStorage: thứ tự nhường · lượt hai hỏng · trần bằng 0 ───');
+
+let canhDangChup = canhVoiCacTo([[[0.15, 0.12], [0.86, 0.10], [0.88, 0.90], [0.13, 0.88]]]);
+const clickGoc = HTMLInputElement.prototype.click;
+HTMLInputElement.prototype.click = function () {
+  if (this.type !== 'file') return clickGoc.call(this);
+  canhDangChup.toBlob(b => {
+    const dt = new DataTransfer();
+    dt.items.add(new File([b], 'chup.jpg', { type: 'image/jpeg' }));
+    this.files = dt.files;
+    this.dispatchEvent(new Event('change', { bubbles: true }));
+  }, 'image/jpeg', 0.95);
+};
+const nutKho = document.createElement('button');
+document.body.appendChild(nutKho);
+let phien = null;
+nutKho.addEventListener('click', () => {
+  phien = moQuetTaiLieu({
+    cuaVao: 'kho_chung', duongMacDinh: 'may-anh',
+    nhom: [{ ma: 'attp', ten: 'An toàn thực phẩm', vi_du: 'Giấy ATTP', han_luu: '5 năm', nhay_cam: 0 }],
+    khiXong: () => {}
+  });
+});
+const ep375 = () => { const o = document.querySelector('.tlq-tam'); if (o) o.style.width = '375px'; };
+
+/** Chụp một trang rồi CẮT nó (qua giao diện thật). */
+async function chupVaCat(dauTien) {
+  if (dauTien) {
+    nutKho.click();
+    (await doi('[data-viec="chon-nhom"]')).click();
+  } else {
+    (await doi('[data-viec="chup-tiep"]')).click();
+    await cho(500);
+  }
+  try { await doi('#tlqCatKhung', 12000); ep375(); (await doi('[data-viec="cat-xong"]')).click(); }
+  catch { /* màn cắt không bày thì thôi */ }
+  await doi('.tlq-the');
+  await cho(250);
+}
+
+/* --- ②a Đo THẬT ảnh gốc tốn thêm bao nhiêu --------------------------------- */
+localStorage.removeItem(KHOA); localStorage.removeItem('tl_lam_ro_chu_v1');
+TRAN = Infinity;
+await chupVaCat(true);
+{
+  const d = nhap();
+  const tr = d.trang[0];
+  const coGoc = JSON.stringify(d).length;
+  const khongGoc = JSON.stringify({ ...d, trang: d.trang.map(({ anh_goc, ...t }) => t) }).length;
+  ghi(`  Bản nháp 1 trang đã cắt: ${kb(coGoc)} · bỏ ảnh gốc còn ${kb(khongGoc)}`);
+  ghi(`  → ẢNH GỐC TỐN THÊM: ${kb(coGoc - khongGoc)}/trang (Khỉ Đột khai 293 KB)`);
+  ghi(`    12 trang ≈ ${((coGoc - khongGoc) * 12 / 1048576).toFixed(1)} MB chỉ riêng ảnh gốc`);
+  dat(!!tr.anh_goc, 'Trang đã cắt có `anh_goc` trong bản nháp');
+}
+
+/* --- ②b Trần vừa đủ cho bản GỌN, không đủ cho bản ĐỦ → phải nhường ĐÚNG THỨ TỰ --- */
+{
+  const d = nhap();
+  const gon = JSON.stringify({ ...d, trang: d.trang.map(({ anh_goc, ...t }) => t) }).length;
+  const du = JSON.stringify(d).length;
+  TRAN = Math.floor((gon + du) / 2);         // lọt bản gọn, chặn bản đủ
+  soLuotGhi = 0; soLuotNem = 0;
+  /* Bắn một lượt ghi bản nháp bằng cách cắt lại trang (đi qua `luuNhap`). */
+  (await doi('[data-viec="cat"][data-i="0"]')).click();
+  await doi('#tlqCatKhung'); ep375();
+  (await doi('[data-viec="cat-xong"]')).click();
+  await doi('.tlq-the'); await cho(300);
+
+  const sau = nhap();
+  ghi(`  Ép trần ${kb(TRAN)} (bản đủ ${kb(du)}, bản gọn ${kb(gon)}): ` +
+      `${soLuotGhi} lượt ghi, ${soLuotNem} lượt bị chặn`);
+  dat(!!sau, 'Bản nháp VẪN CÒN sau khi hết chỗ (không mất trắng)');
+  dat(sau && sau.trang.length === 1, 'Không mất trang nào', `→ ${sau ? sau.trang.length : 0} trang`);
+  dat(sau && sau.trang.every(t => !!t.anh), '⭐ ẢNH ĐANG DÙNG (`anh`) GIỮ ĐƯỢC — thứ mất là mất trắng');
+  dat(sau && sau.trang.every(t => !t.anh_goc), '⭐ ẢNH GỐC là thứ bị NHƯỜNG (đúng thứ tự khai)');
+  const canh_ = [...document.querySelectorAll('.tlq-canh')].map(e => e.textContent.replace(/\s+/g, ' ').trim());
+  const coCanh = canh_.some(c => /không giữ được ảnh gốc/i.test(c));
+  dat(coCanh, '⭐ Câu báo "không giữ được ảnh gốc" HIỆN RA trên màn, không phải chỉ ghi log');
+  if (coCanh) ghi(`    câu hiện ra: "${canh_.find(c => /không giữ được ảnh gốc/i.test(c)).slice(0, 150)}…"`);
+  else ghi(`    các câu .tlq-canh đang hiện: ${JSON.stringify(canh_).slice(0, 300)}`);
+}
+
+/* --- ②c CẢ HAI LƯỢT ĐỀU HỎNG ---------------------------------------------- */
+{
+  const truoc = nhap();
+  const soTrangTruoc = truoc ? truoc.trang.length : 0;
+  TRAN = 1000;                                // bé hơn mọi bản nháp có ảnh
+  soLuotGhi = 0; soLuotNem = 0;
+  let noLoi = null;
+  try {
+    (await doi('[data-viec="cat"][data-i="0"]')).click();
+    await doi('#tlqCatKhung'); ep375();
+    (await doi('[data-viec="cat-xong"]')).click();
+    await doi('.tlq-the'); await cho(300);
+  } catch (e) { noLoi = e.message; }
+  ghi(`  Ép trần 1 KB: ${soLuotGhi} lượt ghi, ${soLuotNem} lượt bị chặn`);
+  dat(!noLoi, 'Cả hai lượt ghi hỏng → giao diện KHÔNG nổ', noLoi ? '→ ' + noLoi : '');
+  const sau = nhap();
+  dat(!!sau && sau.trang.length === soTrangTruoc,
+    'Bản nháp CŨ còn nguyên trên đĩa (setItem hỏng không xoá bản cũ)',
+    `→ ${sau ? sau.trang.length : 0}/${soTrangTruoc} trang`);
+  const the = document.querySelectorAll('.tlq-the').length;
+  dat(the === soTrangTruoc, 'Trang vẫn còn TRONG BỘ NHỚ TRANG, vẫn lưu lên máy chủ được',
+    `→ ${the} thẻ trang`);
+  const canh_ = [...document.querySelectorAll('.tlq-canh')].map(e => e.textContent.replace(/\s+/g, ' ').trim());
+  dat(canh_.some(c => /không lưu được bản nháp/i.test(c)),
+    'Câu báo "máy không lưu được bản nháp" HIỆN RA');
+}
+
+/* --- ②d TRẦN BẰNG 0 NGAY TỪ ĐẦU (chế độ riêng tư) -------------------------- */
+{
+  phien && phien.dong();
+  localStorage.removeItem(KHOA);
+  TRAN = 0;
+  let noLoi = null;
+  try { await chupVaCat(true); } catch (e) { noLoi = e.message; }
+  dat(!noLoi, 'Trần 0 ngay từ đầu (chế độ riêng tư): chụp + cắt vẫn chạy, không nổ',
+    noLoi ? '→ ' + noLoi : '');
+  dat(document.querySelectorAll('.tlq-the').length === 1, 'Trang vẫn hiện trên màn');
+  TRAN = Infinity;
+}
+
+/* --- ②e CA XẤU NHẤT: đang cắt trang thứ 12 thì hết chỗ --------------------- */
+{
+  phien && phien.dong();
+  localStorage.removeItem(KHOA);
+  TRAN = Infinity;
+  nutKho.click();
+  (await doi('[data-viec="chon-nhom"]')).click();
+  try { await doi('#tlqCatKhung', 12000); ep375(); (await doi('[data-viec="cat-bo"]')).click(); } catch {}
+  await doi('.tlq-the');
+  for (let i = 2; i <= 12; i++) {
+    (await doi('[data-viec="chup-tiep"]')).click();
+    await cho(450);
+    try { await doi('#tlqCatKhung', 8000); ep375(); (await doi('[data-viec="cat-bo"]')).click(); } catch {}
+    await doi('.tlq-the'); await cho(60);
+  }
+  const truoc = nhap();
+  ghi(`  Đã dựng ${truoc.trang.length} trang, bản nháp ${kb(JSON.stringify(truoc).length)}`);
+  /* Trần = đúng cỡ hiện tại → thêm ảnh gốc của trang 12 là vượt. */
+  TRAN = JSON.stringify(truoc).length + 2000;
+  soLuotNem = 0;
+  (await doi('[data-viec="cat"][data-i="11"]')).click();
+  await doi('#tlqCatKhung'); ep375();
+  (await doi('[data-viec="cat-xong"]')).click();
+  await doi('.tlq-the'); await cho(400);
+  const sau = nhap();
+  ghi(`  Sau khi cắt trang 12 dưới trần: ${soLuotNem} lượt bị chặn, ` +
+      `bản nháp ${sau ? kb(JSON.stringify(sau).length) : 'MẤT'}`);
+  dat(!!sau && sau.trang.length === 12, '⭐ Cắt trang 12 lúc hết chỗ → 12 trang CÒN ĐỦ',
+    `→ ${sau ? sau.trang.length : 0} trang`);
+  dat(!!sau && sau.trang.every(t => !!t.anh && t.anh.startsWith('data:image')),
+    '⭐ Cả 12 trang còn ảnh dùng được (không trang nào hỏng lây)');
+  const soCoGoc = sau ? sau.trang.filter(t => !!t.anh_goc).length : -1;
+  ghi(`    số trang còn giữ được ảnh gốc: ${soCoGoc}/12`);
+  TRAN = Infinity;
+  phien && phien.dong();
+}
+
+/* ==========================================================================
+   ③ MÁY DÒ "NHIỀU HƠN MỘT TỜ" — tấn công CẢ HAI CHIỀU
+   ========================================================================== */
+ghi('\n─── ③ DÒ "NHIỀU TỜ": báo động giả và ca lọt (ngưỡng phuGiua ≥ 0,40) ───');
+{
+  const MOT_TO = [
+    ['tờ đơn, ngay giữa, chiếm 62%', canhVoiCacTo([[[0.15, 0.12], [0.86, 0.10], [0.88, 0.90], [0.13, 0.88]]])],
+    ['tờ đơn LỆCH HẲN SANG TRÁI', canhVoiCacTo([[[0.05, 0.12], [0.45, 0.12], [0.45, 0.88], [0.05, 0.88]]])],
+    ['tờ đơn NHỎ giữa khung (chụp xa)', canhVoiCacTo([[[0.31, 0.27], [0.72, 0.24], [0.75, 0.75], [0.28, 0.71]]])],
+    ['tờ đơn GẤP ĐÔI, nếp hằn giữa', canhVoiCacTo([[[0.15, 0.12], [0.86, 0.10], [0.88, 0.90], [0.13, 0.88]]],
+      { veThem: vetDoc(0.505, 0.11, 0.89, 0.55) })],
+    ['tờ đơn có KHUNG VIỀN dọc', canhVoiCacTo([[[0.15, 0.12], [0.86, 0.10], [0.88, 0.90], [0.13, 0.88]]],
+      { veThem: (x) => { vetDoc(0.20, 0.15, 0.86, 0.7)(x); vetDoc(0.81, 0.15, 0.86, 0.7)(x); } })],
+    ['tờ đơn chụp NGHIÊNG', canhVoiCacTo([[[0.24, 0.14], [0.83, 0.20], [0.90, 0.86], [0.11, 0.78]]])]
+  ];
+  const NHIEU_TO = [
+    ['hai tờ RỜI cạnh nhau', canhVoiCacTo([
+      [[0.06, 0.10], [0.47, 0.10], [0.47, 0.62], [0.06, 0.62]],
+      [[0.53, 0.34], [0.95, 0.38], [0.93, 0.92], [0.51, 0.88]]])],
+    ['hai tờ CHỒNG MÉP nhau', canhVoiCacTo([
+      [[0.08, 0.12], [0.52, 0.12], [0.52, 0.88], [0.08, 0.88]],
+      [[0.47, 0.16], [0.92, 0.16], [0.92, 0.92], [0.47, 0.92]]])],
+    ['hai tờ KHÁC CỠ', canhVoiCacTo([
+      [[0.06, 0.10], [0.44, 0.10], [0.44, 0.90], [0.06, 0.90]],
+      [[0.52, 0.34], [0.78, 0.34], [0.78, 0.70], [0.52, 0.70]]])],
+    ['SÁCH MỞ (hai trang, gáy giữa)', canhVoiCacTo([
+      [[0.09, 0.14], [0.50, 0.14], [0.50, 0.86], [0.09, 0.86]],
+      [[0.50, 0.14], [0.91, 0.14], [0.91, 0.86], [0.50, 0.86]]])]
+  ];
+  const doCa = async (ten, cv) => {
+    const im = await taiAnh(await nenAnhChung(await canvasThanhFile(cv, 'x.jpg'), ANH_TRANG));
+    const d = doanBonGoc(im);
+    return { ten, phuGiua: d.phuGiua, nhieuTo: d.nhieuTo, tuTin: d.tuTin, ms: d.ms,
+             khuyen: (d.loiKhuyen || '').slice(0, 40) };
+  };
+  const kqDon = [], kqNhieu = [];
+  for (const [t, c] of MOT_TO) kqDon.push(await doCa(t, c));
+  for (const [t, c] of NHIEU_TO) kqNhieu.push(await doCa(t, c));
+
+  ghi('  TỜ ĐƠN (phải KHÔNG báo "nhiều tờ"):');
+  for (const k of kqDon) {
+    ghi(`    ${(k.nhieuTo ? '✗ BÁO NHẦM' : 'ok        ')} ${k.ten.padEnd(34)} ` +
+        `phuGiua ${(k.phuGiua * 100).toFixed(0).padStart(3)}% · ${k.ms} ms`);
+  }
+  ghi('  NHIỀU TỜ (phải báo "nhiều tờ"):');
+  for (const k of kqNhieu) {
+    ghi(`    ${(k.nhieuTo ? 'ok        ' : '✗ LỌT     ')} ${k.ten.padEnd(34)} ` +
+        `phuGiua ${(k.phuGiua * 100).toFixed(0).padStart(3)}% · ${k.ms} ms`);
+  }
+  const baoNham = kqDon.filter(k => k.nhieuTo);
+  const lot = kqNhieu.filter(k => !k.nhieuTo);
+  const donCao = Math.max(...kqDon.map(k => k.phuGiua));
+  const nhieuThap = Math.min(...kqNhieu.map(k => k.phuGiua));
+  ghi(`  → Tờ đơn cao nhất ${(donCao * 100).toFixed(0)}% · nhiều tờ thấp nhất ` +
+      `${(nhieuThap * 100).toFixed(0)}% · ngưỡng 40%`);
+  ghi(`  → Khoảng cách thật: ${(nhieuThap / Math.max(donCao, 0.001)).toFixed(1)} lần ` +
+      `(Khỉ Đột khai "gần 7 lần" cho Gạo, "năm lần" trong chú thích mã)`);
+  dat(baoNham.length === 0, 'Không tờ đơn nào bị BÁO ĐỘNG GIẢ "nhiều tờ"',
+    `→ ${baoNham.length} ca báo nhầm${baoNham.length ? ': ' + baoNham.map(k => k.ten).join(' · ') : ''}`);
+  dat(lot.length === 0, 'Không ca nhiều tờ nào LỌT',
+    `→ ${lot.length} ca lọt${lot.length ? ': ' + lot.map(k => k.ten).join(' · ') : ''}`);
+  dat(nhieuThap > donCao, 'Ngưỡng 40% có KHE HỞ THẬT giữa hai nhóm',
+    `→ đơn ≤${(donCao * 100).toFixed(0)}% < nhiều ≥${(nhieuThap * 100).toFixed(0)}%`);
+}
+
+/* ==========================================================================
+   ④ ĐƯỜNG LÙI: ca Khỉ Đột CHƯA nêu
+   ========================================================================== */
+ghi('\n─── ④ ĐƯỜNG LÙI: lùi → cắt lại → lùi lần nữa · trang KIỂU CŨ ───');
+{
+  localStorage.removeItem(KHOA);
+  canhDangChup = canhVoiCacTo([[[0.15, 0.12], [0.86, 0.10], [0.88, 0.90], [0.13, 0.88]]]);
+  nutKho.click();
+  (await doi('[data-viec="chon-nhom"]')).click();
+  await doi('#tlqCatKhung', 12000); ep375();
+  const hGoc = await bamChuoi(nhap().trang[0].anh);
+  (await doi('[data-viec="cat-xong"]')).click();
+  await doi('.tlq-the'); await cho(250);
+
+  const xacNhanCu = window.confirm; window.confirm = () => true;
+  for (let vong = 1; vong <= 2; vong++) {
+    const nutLui = document.querySelector('[data-viec="cat-hoan"][data-i="0"]');
+    dat(!!nutLui, `Vòng ${vong}: có nút "↩ Ảnh gốc"`);
+    if (!nutLui) break;
+    nutLui.click(); await cho(300);
+    const h = await bamChuoi(nhap().trang[0].anh);
+    dat(h === hGoc, `Vòng ${vong}: lùi xong băm SHA-256 TRÙNG KHÍT ảnh chưa cắt`,
+      `→ ${h.slice(0, 12)}… / ${hGoc.slice(0, 12)}…`);
+    const t = nhap().trang[0];
+    dat(!t.da_cat && !t.anh_goc && !t.goc_cat, `Vòng ${vong}: trang sạch dấu vết lượt cắt`);
+    dat(!document.querySelector('[data-viec="cat-hoan"][data-i="0"]'),
+      `Vòng ${vong}: nút "↩ Ảnh gốc" ẩn đi khi trang chưa cắt`);
+    /* Cắt lại để vòng sau có cái mà lùi. */
+    (await doi('[data-viec="cat"][data-i="0"]')).click();
+    await doi('#tlqCatKhung'); ep375();
+    (await doi('[data-viec="cat-xong"]')).click();
+    await doi('.tlq-the'); await cho(250);
+  }
+  window.confirm = xacNhanCu;
+
+  /* --- Trang KIỂU CŨ: đã cắt nhưng KHÔNG có `anh_goc` (bản nháp cũ còn trên
+         máy Sếp sau khi nâng cấp, hoặc trang bị nhường ảnh gốc vì hết chỗ) --- */
+  {
+    const d = nhap();
+    const { anh_goc, ...cu } = d.trang[0];
+    d.trang[0] = { ...cu, da_cat: true };
+    setGoc.call(localStorage, KHOA, JSON.stringify(d));
+    phien && phien.dong();
+    nutKho.click();
+    await doi('.tlq-the', 12000);
+    const nutLui = document.querySelector('[data-viec="cat-hoan"][data-i="0"]');
+    dat(!nutLui, '⭐ Trang kiểu CŨ (đã cắt, không có ảnh gốc): nút "↩ Ảnh gốc" ẨN — ' +
+      'không hiện nút bấm không được', nutLui ? '→ VẪN HIỆN' : '→ ẩn đúng');
+    const nutCat = document.querySelector('[data-viec="cat"][data-i="0"]');
+    dat(!!nutCat, 'Trang kiểu CŨ vẫn cắt lại được (đường vào không mất)');
+  }
+  phien && phien.dong();
+}
+
+ghi('\n───────────────────────────────────────────────────────────');
+ghi(`KET_LUAN so_hong=${soHong}`);
+} catch (e) {
+  ghi('✗ BÀN ĐO HỎNG: ' + e.message + '\n' + e.stack);
+}
+</script>
+</body>
+</html>
