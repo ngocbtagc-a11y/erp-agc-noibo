@@ -52,12 +52,81 @@ function canvasThanhFile(c, ten, cl = 0.95) {
 }
 
 /* ==========================================================================
-   DỰNG SÁU CẢNH THẬT
+   BỘ CẢNH HAI RỔ  ·  REV-0056 vòng 2 lỗi #1
    ---------------------------------------------------------------------------
-   Mỗi cảnh trả về `{ ten, canvas, goc }` — `goc` là 4 góc THẬT của tờ giấy
-   (chuẩn hoá 0..1). Có góc thật thì mới chấm được "máy đoán lệch bao nhiêu",
-   thay vì chấm bằng mắt.
+   Mỗi cảnh trả `{ ten, canvas, goc }` — `goc` là 4 góc THẬT của tờ giấy (thứ
+   nhất, nếu có nhiều tờ), chuẩn hoá 0..1. Có góc thật thì mới chấm được "máy
+   đoán lệch bao nhiêu" thay vì chấm bằng mắt.
+
+   VÌ SAO PHẢI DỰNG LẠI BỘ CẢNH: vòng trước tôi chốt ngưỡng "nhiều tờ" trên 5
+   cảnh — mà cả 5 đều có tờ giấy NẰM GIỮA và CHIẾM GẦN HẾT KHUNG. Con số "cách
+   nhau 7 lần" vì thế là tính chất của 5 cảnh TÔI CHỌN, không phải tính chất
+   của máy dò: Hồ Ly thêm một cảnh tờ đơn nằm lệch là khoảng cách sập còn 0,1
+   lần. Ngưỡng tự đặt thì phải TỰ TẤN CÔNG CẢ HAI CHIỀU.
+
+   Nên bộ cảnh nay chia HAI RỔ, và rổ "tuyệt đối không được báo" ĐÔNG HƠN rổ
+   kia — vì khuyên sai tốn công Sếp thật, còn bỏ sót thì Sếp vẫn kéo 4 chấm
+   được. Gồm cả cảnh Hồ Ly chưa nghĩ tới: giấy gấp đôi có nếp giữa · giấy có
+   khung viền · giấy có bảng kẻ dọc · lệch phải · rất xa (<15% khung) · hai tờ
+   khác cỡ · hai tờ xếp dọc.
    ========================================================================== */
+const RO_DON = 'don', RO_NHIEU = 'nhieu';
+const BO_CANH = {
+  /* ---- RỔ 1: MỘT tờ giấy — TUYỆT ĐỐI không được báo "nhiều tờ" ---------- */
+  'ban-go':          { ro: RO_DON, nhan: 'MỘT tờ trên bàn gỗ, ngay giữa' },
+  'don-lech-trai':   { ro: RO_DON, nhan: 'MỘT tờ lệch hẳn sang TRÁI' },
+  'don-lech-phai':   { ro: RO_DON, nhan: 'MỘT tờ lệch hẳn sang PHẢI' },
+  'chup-xa':         { ro: RO_DON, nhan: 'MỘT tờ nhỏ giữa khung (chụp rộng)' },
+  'don-rat-xa':      { ro: RO_DON, nhan: 'MỘT tờ RẤT xa (dưới 15% khung)' },
+  'don-gap-doi':     { ro: RO_DON, nhan: 'MỘT tờ gấp đôi, NẾP HẰN giữa' },
+  'don-khung-vien':  { ro: RO_DON, nhan: 'MỘT tờ có KHUNG VIỀN in sẵn' },
+  'don-bang-ke':     { ro: RO_DON, nhan: 'MỘT tờ có BẢNG KẺ DỌC lớn' },
+  'nghieng':         { ro: RO_DON, nhan: 'MỘT tờ chụp nghiêng' },
+  'che-goc':         { ro: RO_DON, nhan: 'MỘT tờ bị che một góc' },
+  'kin-khung':       { ro: RO_DON, nhan: 'MỘT tờ chụp sát, kín khung' },
+  'trang-tren-trang':{ ro: RO_DON, nhan: 'MỘT tờ trắng trên nền trắng' },
+  /* ---- RỔ 2: NHIỀU tờ — nên báo; bỏ sót thì chấp nhận được ------------- */
+  'hai-to':          { ro: RO_NHIEU, nhan: 'hai tờ RỜI cạnh nhau' },
+  'hai-chong-mep':   { ro: RO_NHIEU, nhan: 'hai tờ CHỒNG MÉP nhau' },
+  'hai-khac-co':     { ro: RO_NHIEU, nhan: 'hai tờ KHÁC CỠ' },
+  'sach-mo':         { ro: RO_NHIEU, nhan: 'SÁCH MỞ (hai trang, gáy giữa)' },
+  'hai-doc':         { ro: RO_NHIEU, nhan: 'hai tờ xếp DỌC (trên–dưới)' }
+};
+
+/** Nếp gấp dọc giữa tờ — với máy dò biên nó trông y hệt một mép giấy. */
+function themNepGap(giay) {
+  const x = giay.getContext('2d');
+  const g = x.createLinearGradient(giay.width * 0.47, 0, giay.width * 0.53, 0);
+  g.addColorStop(0, 'rgba(120,110,95,0)');
+  g.addColorStop(0.5, 'rgba(85,76,62,.8)');
+  g.addColorStop(1, 'rgba(120,110,95,0)');
+  x.fillStyle = g;
+  x.fillRect(giay.width * 0.47, 0, giay.width * 0.06, giay.height);
+}
+/** Khung viền in sẵn — hai nét DỌC nằm trong lòng tờ giấy. */
+function themKhungVien(giay) {
+  const x = giay.getContext('2d');
+  x.strokeStyle = '#2b2b2b';
+  x.lineWidth = Math.max(3, Math.round(giay.width / 170));
+  x.strokeRect(giay.width * 0.055, giay.height * 0.035,
+    giay.width * 0.89, giay.height * 0.93);
+}
+/** Bảng kẻ lớn: nét DỌC chạy gần hết chiều cao tờ giấy. */
+function themBangKeLon(giay) {
+  const x = giay.getContext('2d');
+  x.strokeStyle = '#333';
+  x.lineWidth = Math.max(3, Math.round(giay.width / 240));
+  const t = giay.height * 0.28, d = giay.height * 0.95;
+  for (let i = 0; i <= 4; i++) {
+    const cx = giay.width * (0.10 + i * 0.20);
+    x.beginPath(); x.moveTo(cx, t); x.lineTo(cx, d); x.stroke();
+  }
+  for (let i = 0; i <= 8; i++) {
+    const cy = t + (d - t) * i / 8;
+    x.beginPath(); x.moveTo(giay.width * 0.10, cy); x.lineTo(giay.width * 0.90, cy); x.stroke();
+  }
+}
+
 function dungCanh(ten) {
   const nen = ten === 'trang-tren-trang' ? nenTrang(W12, H12) : nenBanGo(W12, H12);
   /* Tờ giấy vẽ ở cỡ vừa phải rồi mới đặt vào cảnh: vẽ ở 12MP rồi thu nhỏ là
@@ -79,11 +148,53 @@ function dungCanh(ten) {
        chiếm ~21% diện tích khung, lại hơi nghiêng, lại có bóng đổ vắt ngang.
        Đây mới là ca để trả lời "cắt khung có làm AI đọc tốt lên không";
        ca `ban-go` (giấy chiếm 62%) quá dễ, ba tấm đều 8/8, đo không ra gì. */
-    'chup-xa':         [[0.31, 0.27], [0.72, 0.24], [0.75, 0.75], [0.28, 0.71]]
+    'chup-xa':         [[0.31, 0.27], [0.72, 0.24], [0.75, 0.75], [0.28, 0.71]],
+    /* ---- CẢNH MỚI, REV-0056 vòng 2 ---- */
+    /* Lệch hẳn sang trái: mép PHẢI của chính nó rơi vào giữa ảnh. Đây là
+       cảnh làm sập ngưỡng cũ của lời nhắc "nhiều tờ" (nay đã bỏ). */
+    'don-lech-trai':   [[0.03, 0.12], [0.52, 0.10], [0.54, 0.90], [0.02, 0.88]],
+    'don-lech-phai':   [[0.46, 0.10], [0.97, 0.12], [0.98, 0.88], [0.44, 0.90]],
+    /* Rất xa: dưới 15% khung → `doanBonGoc` phải LÙI (khung quá nhỏ). */
+    'don-rat-xa':      [[0.38, 0.34], [0.63, 0.33], [0.64, 0.68], [0.37, 0.67]],
+    'don-gap-doi':     [[0.15, 0.12], [0.86, 0.10], [0.88, 0.90], [0.13, 0.88]],
+    'don-khung-vien':  [[0.15, 0.12], [0.86, 0.10], [0.88, 0.90], [0.13, 0.88]],
+    'don-bang-ke':     [[0.15, 0.12], [0.86, 0.10], [0.88, 0.90], [0.13, 0.88]],
+    /* Hai tờ chồng mép: tờ 2 đè lên mép phải tờ 1 — không có khe hở nền. */
+    'hai-chong-mep':   [[0.08, 0.12], [0.55, 0.12], [0.55, 0.86], [0.08, 0.86]],
+    'hai-khac-co':     [[0.05, 0.14], [0.48, 0.14], [0.48, 0.88], [0.05, 0.88]],
+    'sach-mo':         [[0.06, 0.18], [0.49, 0.18], [0.49, 0.84], [0.06, 0.84]],
+    'hai-doc':         [[0.12, 0.06], [0.88, 0.06], [0.88, 0.46], [0.12, 0.46]]
   }[ten];
+
+  if (ten === 'don-gap-doi') themNepGap(giay);
+  if (ten === 'don-khung-vien') themKhungVien(giay);
+  if (ten === 'don-bang-ke') themBangKeLon(giay);
 
   const gocPx = G.map(g => [g[0] * W12, g[1] * H12]);
   datGiayVaoCanh(nen, giay, gocPx);
+
+  /* ---- Tờ giấy THỨ HAI cho rổ "nhiều tờ" ---- */
+  const toHai = {
+    'hai-chong-mep': [[0.50, 0.16], [0.94, 0.16], [0.94, 0.90], [0.50, 0.90]],
+    'hai-khac-co':   [[0.54, 0.30], [0.96, 0.30], [0.96, 0.72], [0.54, 0.72]],
+    'sach-mo':       [[0.51, 0.18], [0.94, 0.18], [0.94, 0.84], [0.51, 0.84]],
+    'hai-doc':       [[0.12, 0.52], [0.88, 0.52], [0.88, 0.92], [0.12, 0.92]]
+  }[ten];
+  if (toHai) {
+    datGiayVaoCanh(nen, veToGiay(1500, 2000, { nhieu: 10 }),
+      toHai.map(g => [g[0] * W12, g[1] * H12]));
+  }
+  if (ten === 'sach-mo') {
+    /* Gáy sách: vệt tối hẹp giữa hai trang, KHÔNG phải mép giấy sắc nét. Đây
+       đúng lý do máy dò biên hay bỏ sót ca này. */
+    const x = nen.getContext('2d');
+    const g = x.createLinearGradient(W12 * 0.475, 0, W12 * 0.525, 0);
+    g.addColorStop(0, 'rgba(30,22,12,0)');
+    g.addColorStop(0.5, 'rgba(30,22,12,.55)');
+    g.addColorStop(1, 'rgba(30,22,12,0)');
+    x.fillStyle = g;
+    x.fillRect(W12 * 0.475, H12 * 0.18, W12 * 0.05, H12 * 0.66);
+  }
 
   if (ten === 'hai-to') {
     /* Tờ thứ hai, lệch chỗ và hơi nghiêng — đúng cảnh đặt hai tờ chụp một
@@ -295,15 +406,11 @@ dat(coSau <= ANH_TRANG.gioiHanByte && coSauRo <= ANH_TRANG.gioiHanByte,
    duy nhất là ĐỪNG TỰ TIN SAI — không nhận ra thì lùi về mép ảnh, im lặng.
    ========================================================================== */
 ghi('\n─── ③ DÒ GÓC TRÊN SÁU CA THẬT (máy đoán chỉ là GỢI Ý) ───');
-const CA = ['ban-go', 'nghieng', 'che-goc', 'hai-to', 'trang-tren-trang', 'kin-khung'];
-const NHAN = {
-  'ban-go': 'giấy trên bàn gỗ',
-  'nghieng': 'chụp nghiêng',
-  'che-goc': 'giấy bị che một góc',
-  'hai-to': 'hai tờ giấy trong một ảnh',
-  'trang-tren-trang': 'giấy trắng trên nền trắng',
-  'kin-khung': 'chụp sát — giấy kín khung'
-};
+/* CẢ 17 CẢNH đều đo dò góc — kể cả `chup-xa`, ca chủ lực của mục ② mà vòng
+   trước KHÔNG nằm trong danh sách này (REV-0056 vòng 2, lỗi #5). Chính chỗ
+   thiếu đó làm lỗi CAO lọt qua cổng. */
+const CA = Object.keys(BO_CANH);
+const NHAN = Object.fromEntries(Object.entries(BO_CANH).map(([k, v]) => [k, v.nhan]));
 let soDung = 0, soTuTinSai = 0;
 const bangCa = [];
 for (const ten of CA) {
@@ -318,44 +425,64 @@ for (const ten of CA) {
   if (dung) soDung++;
   if (d.tuTin && lech > 0.06) soTuTinSai++;
   bangCa.push({ ten, tuTin: d.tuTin, lech, ms: d.ms, viSao: d.viSao, dung,
-                nhieuTo: d.nhieuTo, phuGiua: d.phuGiua, loiKhuyen: d.loiKhuyen });
+                loiKhuyen: d.loiKhuyen });
   ghi(`  ${(dung ? 'ĐÚNG ' : d.tuTin ? '~lệch' : 'lùi  ').padEnd(6)} ${NHAN[ten].padEnd(30)} ` +
       `lệch ${(lech * 100).toFixed(1)}% · ${d.ms} ms · ${d.tuTin ? 'tự tin' : 'KHÔNG tự tin → mép ảnh'}` +
-      ` · mép giữa ${(d.phuGiua * 100).toFixed(0)}%${d.nhieuTo ? ' → NHIỀU TỜ' : ''}`);
+      ` · ${d.loiKhuyen ? 'bảo kéo 4 chấm' : 'im lặng'}`);
   if (!dung) ghi(`         lý do máy nêu: ${d.viSao}`);
 }
 ghi(`  ĐOÁN ĐÚNG ${soDung}/${CA.length} ca.`);
 
-/* ---- MÀN HÌNH CÓ NÓI THẬT VỀ ĐỘ CHẮC CHẮN KHÔNG · REV-0056 lỗi #2 -------
-   KHÔNG phải chỉnh ngưỡng cho khéo hơn — máy VẪN đoán sai ca hai tờ y như cũ
-   (lệch 36%), và đoán sai là chuyện chấp nhận được. Thứ phải sửa là màn hình
-   NÓI DỐI về độ chắc chắn của nó: bản trước khoe "4 mép rõ, 65% chiều dài"
-   đúng lúc đang đoán sai. Nay nó nói đúng bệnh và khuyên một việc làm được. */
-ghi('\n  ▸ Màn hình nói gì về độ chắc chắn của máy:');
+/* ---- MÀN HÌNH CHỈ ĐƯỢC NÓI HAI CÂU · REV-0056 vòng 2 lỗi #1 ----------
+   Lời nhắc "hình như có nhiều hơn một tờ giấy" ĐÃ BỎ HẲN khỏi sản phẩm. Đây
+   là chỗ giữ BẰNG CHỨNG vì sao bỏ, để ai định làm lại thì đo lại ngay trên 17
+   cảnh này thay vì phát minh lại bộ cảnh.
+
+   SỐ ĐO CUỐI CÙNG TRƯỚC KHI BỎ — tỉ lệ "mép giữa" phủ chiều cao tứ giác, đã
+   dùng CÁCH NHÌN ĐÚNG (đo trong lòng tứ giác, không đo giữa ảnh):
+
+     RỔ "MỘT tờ" — tuyệt đối không được báo    RỔ "NHIỀU tờ" — nên báo
+       gấp đôi, NẾP HẰN giữa      100%             hai tờ rời           100%
+       có BẢNG KẺ dọc lớn          43%             hai tờ khác cỡ       100%
+       nhỏ giữa khung (chụp rộng)  25%             sách mở              100%
+       lệch hẳn sang trái          20%             hai tờ chồng mép      12%
+       8 cảnh còn lại            ≤ 19%             hai tờ xếp dọc        10%
+
+   Cách nhìn mới CHỮA ĐÚNG ba cảnh Hồ Ly bắt (lệch trái 100→20 · lệch phải
+   →17 · chụp rộng 65→25). NHƯNG lòi ra hai cảnh mới mà KHÔNG cách nhìn nào
+   chữa được: NẾP GẤP và ĐƯỜNG KẺ BẢNG. Với máy dò biên thì nếp gấp, đường kẻ
+   bảng và mép tờ thứ hai là CÙNG MỘT THỨ — một vệt thẳng đứng. Hai rổ chồng
+   lên nhau hoàn toàn (một tờ cao nhất 100%, nhiều tờ thấp nhất 10%): không
+   ngưỡng nào tách được, và chỉnh ngưỡng chỉ đổi xem cảnh nào lọt.
+
+   → BỎ. Hợp đồng gấp đôi để nhét phong bì là chuyện hằng ngày ở kho; bảo Sếp
+     "chụp lại từng tờ" một tấm ảnh vốn đã đúng là bắt làm việc thừa, mà câu
+     sai đó còn ĐÈ mất câu đúng. Bỏ một tính năng khuyên sai là THẮNG.
+   Muốn làm lại: phải tách được NẾP GẤP khỏi MÉP GIẤY trước đã. */
+ghi('\n  ▸ Màn hình chỉ được nói HAI câu (lời nhắc "nhiều tờ" đã BỎ HẲN):');
 {
-  const h2 = bangCa.find(c => c.ten === 'hai-to');
-  const donTo = bangCa.filter(c => c.ten !== 'hai-to');
-  const caoNhatDon = Math.max(...donTo.map(c => c.phuGiua));
-  ghi(`    "mép giữa" — ca hai tờ ${(h2.phuGiua * 100).toFixed(0)}% · ` +
-      `tờ ĐƠN cao nhất ${(caoNhatDon * 100).toFixed(0)}% · ngưỡng 40%`);
-  dat(h2.nhieuTo, 'Ca hai tờ → máy NHẬN RA có nhiều hơn một tờ');
-  dat(donTo.every(c => !c.nhieuTo), 'Không ca tờ ĐƠN nào bị báo động giả "nhiều tờ"',
-    `→ ${donTo.filter(c => c.nhieuTo).length} ca báo nhầm`);
-  dat(caoNhatDon < 0.30, 'Ngưỡng 40% cách xa tờ đơn (tờ đơn phải dưới 30%)',
-    `→ tờ đơn cao nhất ${(caoNhatDon * 100).toFixed(0)}%`);
-  dat(/nhiều hơn một tờ/i.test(h2.loiKhuyen || '') && /chụp lại từng tờ/i.test(h2.loiKhuyen || ''),
-    'Lời khuyên nói ĐÚNG BỆNH và bảo được việc phải làm',
-    `→ "${(h2.loiKhuyen || '').slice(0, 52)}…"`);
+  const donTo = bangCa.filter(c => BO_CANH[c.ten].ro === RO_DON);
+  const nhieuTo = bangCa.filter(c => BO_CANH[c.ten].ro === RO_NHIEU);
+  const dungHet = bangCa.filter(c => c.dung);
+  const luiHet = bangCa.filter(c => !c.tuTin);
+  const doaNham = bangCa.filter(c => /nhiều hơn một tờ|chụp lại từng tờ/i.test(c.loiKhuyen || ''));
+  ghi(`    Bộ cảnh: ${donTo.length} cảnh MỘT tờ · ${nhieuTo.length} cảnh NHIỀU tờ = ${bangCa.length} cảnh.`);
+  dat(doaNham.length === 0,
+    `KHÔNG cảnh nào bị khuyên "chụp lại" — kể cả ${donTo.length} cảnh MỘT tờ`,
+    `→ ${doaNham.length} cảnh`);
   dat(bangCa.every(c => !/\d+\s*%/.test(c.loiKhuyen || '')),
-    'KHÔNG lời khuyên nào chứa phần trăm — bỏ hẳn câu khoe');
-  dat(bangCa.filter(c => c.dung).every(c => !c.loiKhuyen),
-    'Máy đoán ĐÚNG thì IM LẶNG, không bắt Sếp đọc thêm dòng nào');
-  /* ĐỐI CHỨNG: phép đo "báo động giả" phải bắt được nếu hạ ngưỡng xuống mức
-     mà tờ đơn cũng lọt. Không bắt được thì con số trên vô nghĩa. */
-  const nguongHong = caoNhatDon * 0.9;
-  dat(donTo.some(c => c.phuGiua >= nguongHong),
-    `ĐỐI CHỨNG: hạ ngưỡng xuống ${(nguongHong * 100).toFixed(0)}% → tờ đơn LỌT, phép đo bắt được`);
+    'KHÔNG lời khuyên nào chứa phần trăm — câu khoe cũng đã bỏ');
+  dat(dungHet.every(c => !c.loiKhuyen),
+    `Máy đoán ĐÚNG (${dungHet.length} cảnh) → IM LẶNG, không bắt Sếp đọc dòng nào`);
+  dat(luiHet.length > 0 && luiHet.every(c => /kéo 4 chấm/i.test(c.loiKhuyen || '')),
+    `Máy KHÔNG chắc (${luiHet.length} cảnh) → luôn đúng MỘT câu: kéo 4 chấm`,
+    `→ ${luiHet.map(c => NHAN[c.ten]).join(' · ')}`);
+  /* ĐỐI CHỨNG (BH-16): cắm lại một câu khuyên thứ ba → phép đo phải bắt. */
+  const gai = bangCa.concat([{ ten: 'ban-go', loiKhuyen: 'hình như có NHIỀU HƠN MỘT tờ giấy' }]);
+  dat(gai.some(c => /nhiều hơn một tờ/i.test(c.loiKhuyen || '')),
+    'ĐỐI CHỨNG: cắm lại câu "nhiều hơn một tờ" → phép đo BẮT ĐƯỢC');
 }
+
 {
   /* CA HAI TỜ GIẤY — NÓI THẲNG, ĐỪNG CHẤM ĐẠT/HỎNG CHO CÓ.
      Ảnh có hai tờ thì KHÔNG có một đáp án đúng: máy chỉ dựng được MỘT tứ
@@ -371,9 +498,10 @@ ghi('\n  ▸ Màn hình nói gì về độ chắc chắn của máy:');
   /* ⚠️ SỐ ĐO, KHÔNG PHẢI CẢM TÍNH. Bản báo cáo trước tôi khai "kéo 2 góc là
      xong"; Hồ Ly đo lại ra 3/4 góc (31 · 70 · 54 px), và Hồ Ly đúng. Sửa
      hẳn con số ở đây để lần sau không ai chép lại lời khai cũ. */
-  ghi('    → Xử: màn cắt vẫn bày, VÀ nay nói thẳng là ảnh có nhiều hơn một tờ.');
-  ghi('    → Kéo về đúng một tờ được, nhưng phải kéo 3/4 góc (REV-0056 đo: 31 · 70 · 54 px).');
-  ghi('    → Cách đúng vẫn là chụp từng tờ một — đó là lời khuyên màn hình đưa ra.');
+  ghi('    → Xử: màn cắt vẫn bày, Sếp kéo khung về đúng MỘT tờ.');
+  ghi('    → Kéo được thật, nhưng phải kéo 3/4 góc (REV-0056 đo: 31 · 70 · 54 px).');
+  ghi('    → Máy KHÔNG nhắc "có hai tờ" nữa: lời nhắc đó báo nhầm cả tờ gấp đôi');
+  ghi('      lẫn tờ có bảng kẻ, nên đã bỏ hẳn (số đo ở mục ▸ ngay trên).');
   dat(bangCa.every(c => c.lech < 0.9),
     'Mọi ca: khung đoán ra vẫn nằm trong ảnh và kéo được (không ca nào lệch >90%)');
 }
@@ -723,6 +851,47 @@ let khongTuiChatLuong = false, luiTrungKhit = false;
     } finally {
       Storage.prototype.setItem = setCu;
     }
+
+    /* ---- NHƯỜNG TỪNG CÁI, KHÔNG NHƯỜNG CẢ NẮM · REV-0056 vòng 2 #4 ----
+       Ba trang cùng đã cắt, trần vừa đủ cho HAI ảnh gốc: trang 1 (cũ nhất)
+       phải mất `anh_goc`, trang 2 và 3 phải GIỮ. Bản trước bóc sạch cả ba. */
+    {
+      localStorage.removeItem(KHOA);
+      canhDangChup = canh.canvas;
+      nutKho.click();
+      (await doi('[data-viec="chon-nhom"]')).click();
+      for (let t = 1; t <= 3; t++) {
+        await doi('#tlqCatKhung', 15000); ep375();
+        (await doi('[data-viec="cat-xong"]')).click();
+        await doi('.tlq-the'); await cho(150);
+        if (t < 3) { (await doi('[data-viec="chup-tiep"]')).click(); await cho(300); }
+      }
+      const day = () => JSON.parse(localStorage.getItem(KHOA) || 'null').trang;
+      const coDu = new Blob([localStorage.getItem(KHOA)]).size;
+      const setCu2 = Storage.prototype.setItem;
+      /* Trần đặt ở "đủ chỗ cho 2 trong 3 ảnh gốc": bỏ đúng một cái là vừa. */
+      const tran = coDu - 200000;
+      Storage.prototype.setItem = function (k, v) {
+        if (String(k).startsWith('tl_nhap_') && String(v).length > tran) {
+          const e = new Error('hết chỗ (ép để thử)'); e.name = 'QuotaExceededError'; throw e;
+        }
+        return setCu2.call(this, k, v);
+      };
+      try {
+        (await doi('[data-viec="cat"][data-i="2"]')).click();
+        await doi('#tlqCatKhung'); ep375();
+        (await doi('[data-viec="cat-xong"]')).click();
+        await doi('.tlq-the'); await cho(250);
+      } finally { Storage.prototype.setItem = setCu2; }
+      const ds = day();
+      const conGoc = ds.map(t => !!t.anh_goc);
+      dat(ds.length === 3 && ds.every(t => !!t.anh),
+        'HẾT CHỖ giữa chừng: cả 3 trang vẫn còn ẢNH', `→ ${ds.length} trang`);
+      dat(!conGoc[0] && conGoc.slice(1).some(Boolean),
+        'Nhường ảnh gốc TỪNG CÁI, cũ nhất trước — không bóc cả nắm',
+        `→ trang còn đường lùi: ${conGoc.map((c, i) => (c ? i + 1 : null)).filter(Boolean).join(', ') || 'không trang nào'}`);
+      phien && phien.dong();
+    }
   }
 }
 
@@ -770,12 +939,87 @@ let khongTuiChatLuong = false, luiTrungKhit = false;
   ep375();
   const canhBao = [...document.querySelectorAll('.tlq-than .tlq-canh')]
     .map(p => p.textContent.replace(/\s+/g, ' ').trim()).join(' | ');
-  dat(/nhiều hơn một tờ/i.test(canhBao),
-    'Ca hai tờ: lời khuyên HIỆN THẬT trên màn cắt', `→ "${canhBao.slice(0, 64)}…"`);
+  /* Ca hai tờ chạy THẬT qua màn quét: màn hình TUYỆT ĐỐI không được khuyên
+     "chụp lại từng tờ" — đó là câu đã bỏ. Kiểm trên DOM thật, không đọc mã
+     rồi đoán. */
+  dat(!/nhiều hơn một tờ|chụp lại từng tờ/i.test(canhBao),
+    'Ca hai tờ chạy thật: màn cắt KHÔNG khuyên "chụp lại" nữa',
+    `→ .tlq-canh: "${canhBao.slice(0, 56) || '(không có)'}"`);
   const moiChu = document.querySelector('.tlq-than').textContent;
   dat(!/\d+\s*%\s*chiều dài/.test(moiChu),
     'Màn cắt KHÔNG còn câu khoe "N% chiều dài" ở bất kỳ đâu');
   phien && phien.dong();
+}
+
+/* ==========================================================================
+   ⑧ MÀN THẤP và MÀN HẸP  ·  REV-0056 vòng 2 lỗi #2 + #3
+   ---------------------------------------------------------------------------
+   Hai lỗi này lọt qua cổng của tôi HAI VÒNG LIỀN vì bàn đo chỉ đứng ở một chỗ
+   duy nhất: 375×812. Nay đổi khung nhìn THẬT bằng CDP (`Emulation
+   .setDeviceMetricsOverride`) — co `.tlq-tam` bằng CSS thì `window.innerHeight`
+   vẫn 812 và phép đo nói dối.
+   ========================================================================== */
+ghi('\n─── ⑧ MÀN THẤP (xoay ngang · bàn phím ảo) và MÀN HẸP 320px ───');
+let nutLuoiThay = true, theHepOk = true;
+{
+  const doiKhungNhin = async (rong, cao) => {
+    window.__daDoiKhungNhin = false;
+    window.__xinKhungNhin = { rong, cao };
+    const t = Date.now();
+    while (!window.__daDoiKhungNhin && Date.now() - t < 15000) await cho(150);
+    await cho(200);
+    return !!window.__daDoiKhungNhin;
+  };
+
+  const KHUNG = [
+    [375, 812, 'điện thoại dọc'],
+    [320, 568, 'iPhone SE dọc'],
+    [812, 375, 'XOAY NGANG'],
+    [375, 480, 'bàn phím ảo bật']
+  ];
+  for (const [rong, cao, nhan] of KHUNG) {
+    if (!(await doiKhungNhin(rong, cao))) { ghi(`  (không đổi được khung ${rong}×${cao})`); continue; }
+    localStorage.removeItem(KHOA);
+    canhDangChup = canh.canvas;
+    nutKho.click();
+    (await doi('[data-viec="chon-nhom"]')).click();
+    await doi('#tlqCatKhung', 15000);
+    await cho(300);
+    const rX = document.querySelector('#tlqCatXong').getBoundingClientRect();
+    const rB = document.querySelector('#tlqCatBo').getBoundingClientRect();
+    const day = Math.max(rX.bottom, rB.bottom);
+    const oVe = document.querySelector('#tlqCatVe');
+    const thay = day <= window.innerHeight + 1 && rX.top >= 0 && rB.top >= 0;
+    if (!thay) nutLuoiThay = false;
+    dat(thay, `${nhan.padEnd(16)} ${rong}×${cao}: hai nút NẰM TRONG màn`,
+      `→ mép dưới ${day.toFixed(0)}px / ${window.innerHeight}px · ảnh xem trước ` +
+      `${oVe.width}×${oVe.height}`);
+    phien && phien.dong();
+  }
+
+  /* ---- THẺ TRANG ĐÃ CẮT (6 nút) Ở MÀN HẸP 320px ---- */
+  if (await doiKhungNhin(320, 568)) {
+    localStorage.removeItem(KHOA);
+    nutKho.click();
+    (await doi('[data-viec="chon-nhom"]')).click();
+    await doi('#tlqCatKhung', 15000);
+    (await doi('[data-viec="cat-xong"]')).click();
+    await doi('.tlq-the');
+    await cho(250);
+    const the = document.querySelector('.tlq-the');
+    const caoThe = the.getBoundingClientRect().height;
+    const nut = [...the.querySelectorAll('.tlq-nut-phu')];
+    const caoNut = nut.map(n => n.getBoundingClientRect().height);
+    const tranNgang = the.scrollWidth <= the.clientWidth + 1;
+    theHepOk = caoThe <= 200 && caoNut.every(h => h >= 44) && tranNgang;
+    dat(caoThe <= 200, `Thẻ trang ĐÃ CẮT (${nut.length} nút) ở màn 320px không quá 200px`,
+      `→ ${caoThe.toFixed(0)}px (trước khi vá: 421px)`);
+    dat(caoNut.every(h => h >= 44), `Cả ${nut.length} nút vẫn ≥44px ở 320px`,
+      `→ thấp nhất ${Math.min(...caoNut).toFixed(0)}px`);
+    dat(tranNgang, 'Thẻ KHÔNG tràn ngang ở 320px');
+    phien && phien.dong();
+  }
+  await doiKhungNhin(375, 812);          // trả lại khung chuẩn cho phần sau
 }
 
 ghi('\n───────────────────────────────────────────────────────────');
@@ -783,7 +1027,8 @@ ghi(`KET_LUAN doan_dung=${soDung}/${CA.length} tu_tin_sai=${soTuTinSai} ` +
     `ms_tong=${Math.round(msTong)} ms_tong_lamro=${Math.round(msTongRo)} ` +
     `co_truoc=${coTruoc} co_sau=${coSau} co_sau_lamro=${coSauRo} ` +
     `cham_44=${du44} keo_4_goc=${keoDuHet} ` +
-    `khong_tui_chat_luong=${khongTuiChatLuong} lui_trung_khit=${luiTrungKhit}`);
+    `khong_tui_chat_luong=${khongTuiChatLuong} lui_trung_khit=${luiTrungKhit} ` +
+    `nut_luon_thay=${nutLuoiThay} the_320=${theHepOk}`);
 } catch (e) {
   ghi('✗ BÀN ĐO HỎNG: ' + e.message + '\n' + e.stack);
 }

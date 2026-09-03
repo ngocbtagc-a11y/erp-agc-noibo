@@ -273,10 +273,32 @@ const SO_NGHIENG = 25;                   // 25 nấc ≈ mỗi nấc 2°
 export const KHUYEN_KHONG_CHAC =
   'Máy không nhận ra rõ mép tờ giấy nên đặt tạm 4 chấm ở mép ảnh. ' +
   'Sếp kéo 4 chấm vào đúng 4 góc tờ giấy giúp.';
-export const KHUYEN_NHIEU_TO =
-  'Trong ảnh hình như có NHIỀU HƠN MỘT tờ giấy, và khung máy đoán đang ôm cả ' +
-  'hai. Sếp kéo khung về đúng MỘT tờ — hoặc chụp lại từng tờ một, mỗi tờ một ' +
-  'trang, sẽ nhanh và rõ hơn.';
+/* ⚠️ ĐÃ BỎ: lời nhắc "trong ảnh hình như có nhiều hơn một tờ giấy".
+   ---------------------------------------------------------------------------
+   Bỏ vì ĐO ĐƯỢC là nó không đáng tin, không phải vì ngại làm. Cách nhận diện
+   là "có mép giấy dọc nằm sâu trong lòng tứ giác vừa dựng". Đo trên 17 cảnh
+   (`do-cat-khung` mục ③, hai rổ), tỉ lệ mép giữa phủ chiều cao tứ giác:
+
+     RỔ "MỘT tờ" (tuyệt đối không được báo)   RỔ "NHIỀU tờ" (nên báo)
+       gấp đôi, nếp hằn giữa      100%          hai tờ rời            100%
+       có bảng kẻ dọc lớn          43%          hai tờ khác cỡ        100%
+       nhỏ giữa khung (chụp rộng)  25%          sách mở               100%
+       lệch hẳn sang trái          20%          hai tờ chồng mép       12%
+       … 8 cảnh còn lại ≤ 19%                   hai tờ xếp dọc         10%
+
+   HAI RỔ CHỒNG LÊN NHAU HOÀN TOÀN. Một tờ giấy GẤP ĐÔI cho đúng 100% — y hệt
+   hai tờ rời. Không có ngưỡng nào tách được, vì với máy dò biên thì NẾP GẤP,
+   ĐƯỜNG KẺ BẢNG và MÉP TỜ THỨ HAI là cùng một thứ: một vệt thẳng đứng.
+
+   Mà hợp đồng lao động gấp đôi để nhét phong bì là chuyện hằng ngày ở kho.
+   Bảo Sếp "chụp lại từng tờ một" một tấm ảnh vốn đã đúng là bắt làm việc
+   thừa, và câu sai đó còn ĐÈ mất câu đúng ("kéo 4 chấm").
+
+   → Giữ đúng hai câu: máy chắc thì IM LẶNG, không chắc thì bảo kéo 4 chấm.
+     Ảnh có hai tờ thì Sếp vẫn kéo được về một tờ — đường lùi còn nguyên, chỉ
+     mất một lời nhắc mà lời nhắc đó sai nhiều hơn đúng.
+   Ai muốn làm lại: phải tách được NẾP GẤP khỏi MÉP GIẤY trước đã. Bộ 17 cảnh
+   trong bàn đo giữ nguyên để đo lại ngay. */
 
 /** Tìm MỘT đường mép mạnh nhất trong nửa `nua` của ảnh.
  *  Đường "dọc" tham số hoá `x = s·y + b`; đường "ngang" là `y = s·x + b`.
@@ -289,10 +311,17 @@ export const KHUYEN_NHIEU_TO =
  *  Sobel cho biên dày ~2 điểm nên tỉ số này hay vượt 1 — chuẩn hoá ở nơi gọi.
  *
  *  Trả `{s, b, diem}` với `diem` = số điểm biên đỡ đường đó. */
-function timMep(diemBien, doDai, nganh, nua) {
+function timMep(diemBien, doDai, nganh, cuaLo, cuaHi) {
   /* `diemBien` = [toaDoChinh, toaDoPhu, doManh] × N, đã lọc theo hướng gradient.
      `nganh` = bề rộng theo trục chính (W cho đường dọc, H cho đường ngang).
-     `doDai` = bề dài theo trục phụ (H cho đường dọc, W cho đường ngang). */
+     `doDai` = bề dài theo trục phụ (H cho đường dọc, W cho đường ngang).
+     `cuaLo`..`cuaHi` = CỬA SỔ tìm trên trục chính, đo tại chính giữa cạnh.
+
+     ⚠️ CỬA SỔ DO NƠI GỌI TRUYỀN VÀO, không còn là ba hằng số tính theo bề
+     ngang ẢNH. Lý do ở REV-0056 vòng 2: "giữa ẢNH" là sai CÁCH NHÌN — một tờ
+     giấy nằm lệch thì mép của CHÍNH NÓ rơi vào giữa ảnh, và máy kết luận có
+     tờ thứ hai. Cửa sổ đúng phải tính theo TỨ GIÁC vừa dựng, mà tứ giác chỉ
+     biết được SAU khi đã tìm xong bốn mép — nên phải tham số hoá. */
   const dich = Math.ceil(Math.tan(DO_NGHIENG) * doDai) + 2;
   const soO = nganh + 2 * dich + 2;
   const buoc = (2 * DO_NGHIENG) / (SO_NGHIENG - 1);
@@ -311,16 +340,7 @@ function timMep(diemBien, doDai, nganh, nua) {
       if (!d) continue;
       const b = o - dich;
       const giua = b + s * (doDai / 2);          // toạ độ chính tại chính giữa
-      /* BA cửa sổ, không phải hai:
-           `dau`  — nửa đầu  (mép trái / mép trên)
-           `cuoi` — nửa cuối (mép phải / mép dưới)
-           `giua` — khoảng GIỮA ảnh. Cửa sổ này không dùng để dựng khung; nó
-                    chỉ để hỏi "trong ảnh có mép giấy nào nằm giữa không" —
-                    tức là có tờ giấy THỨ HAI. Xem `nhieuTo` ở `doanBonGoc`. */
-      const trongCua = nua === 'dau' ? (giua >= -2 && giua <= nganh * 0.45)
-        : nua === 'cuoi' ? (giua >= nganh * 0.55 && giua <= nganh + 2)
-        : (giua >= nganh * 0.28 && giua <= nganh * 0.72);
-      if (!trongCua) continue;
+      if (!(giua >= cuaLo && giua <= cuaHi)) continue;
       if (!tot || d > tot.diem) tot = { s, b, diem: d, giua };
     }
   }
@@ -345,7 +365,6 @@ export function doanBonGoc(anh, tc = {}) {
   const thoi = (viSao, tuTin, goc, them) => ({
     goc: goc || GOC_TRON_KHUNG.map(g => g.slice()),
     tuTin: !!tuTin, ms: Math.round(gio() - t0), viSao,
-    nhieuTo: false, phuGiua: 0,
     loiKhuyen: tuTin ? '' : KHUYEN_KHONG_CHAC,
     ...(them || {})
   });
@@ -409,10 +428,10 @@ export function doanBonGoc(anh, tc = {}) {
   }
   if (doc.length < 9 || ngang.length < 9) return thoi('không đủ biên để dựng mép', false);
 
-  const trai = timMep(doc, H, W, 'dau');
-  const phai = timMep(doc, H, W, 'cuoi');
-  const tren = timMep(ngang, W, H, 'dau');
-  const duoi = timMep(ngang, W, H, 'cuoi');
+  const trai = timMep(doc, H, W, -2, W * 0.45);
+  const phai = timMep(doc, H, W, W * 0.55, W + 2);
+  const tren = timMep(ngang, W, H, -2, H * 0.45);
+  const duoi = timMep(ngang, W, H, H * 0.55, H + 2);
   if (!trai || !phai || !tren || !duoi) return thoi('thiếu mép ở một phía', false);
 
   /* ĐỘ TỰ TIN = PHẦN CẠNH CÓ BIÊN THẬT ĐỠ, một con số đọc được.
@@ -447,28 +466,13 @@ export function doanBonGoc(anh, tc = {}) {
   ]);
   const tuTin = yeuNhat >= 0.30;
 
-  /* ---- CÓ TỜ GIẤY THỨ HAI TRONG ẢNH KHÔNG ------------------------------
-     Chỉ dò theo phương DỌC (hai tờ đặt cạnh nhau — cách người ta thật sự
-     chụp hai tờ một phát). CỐ Ý KHÔNG dò phương ngang: tờ giấy hành chính
-     nào cũng có ít nhất một đường kẻ NGANG hết bề ngang (dòng kẻ đầu thư,
-     viền bảng, dòng ký tên), nên phép dò ngang báo động giả gần như mọi
-     lần — đo thấy ngay ở tờ giấy thử. Một lời khuyên sai còn tệ hơn không
-     có lời khuyên nào.
-
-     Ngưỡng 0,40 chọn theo SỐ ĐO, không theo cảm tính (xem `do-cat-khung`
-     mục ③): tờ đơn cao nhất 0,10 (đường kẻ dọc của bảng, ngắn), ca hai tờ
-     0,50–0,66. Khoảng cách năm lần, không phải chỉnh cho vừa. */
-  const mepGiua = timMep(doc, H, W, 'giua');
-  const phuGiua = mepGiua ? phuSong(mepGiua, H) : 0;
-  const nhieuTo = phuGiua >= 0.40;
-
+  /* ĐÚNG HAI CÂU, không hơn: chắc thì im lặng, không chắc thì bảo kéo 4 chấm.
+     Câu thứ ba ("hình như có nhiều hơn một tờ") đã bị bỏ — lý do và số đo ghi
+     ở đầu tệp, chỗ khai `KHUYEN_KHONG_CHAC`. */
   return thoi(
     (tuTin ? '4 mép rõ' : 'mép mờ, đặt tạm') +
-      ` (mép yếu nhất ${(yeuNhat * 100).toFixed(0)}% chiều dài, giữa ${(phuGiua * 100).toFixed(0)}%)`,
-    tuTin, gocChuan,
-    /* Lời khuyên "nhiều tờ" ĐÈ LÊN cả hai nhánh: nó nói đúng bệnh hơn, và là
-       lời khuyên làm được ngay (chụp lại từng tờ). */
-    { nhieuTo, phuGiua, loiKhuyen: nhieuTo ? KHUYEN_NHIEU_TO : (tuTin ? '' : KHUYEN_KHONG_CHAC) });
+      ` (mép yếu nhất ${(yeuNhat * 100).toFixed(0)}% chiều dài)`,
+    tuTin, gocChuan);
 }
 
 /* ==========================================================================

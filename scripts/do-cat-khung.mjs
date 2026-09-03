@@ -109,6 +109,21 @@ createServer((req, res) => {
   while (Date.now() < han) {
     /* Trang tự giơ tay khi màn cắt đang mở ở đúng 375px — chụp NGAY LÚC ĐÓ,
        không hẹn giờ. Hẹn giờ là phép đo phụ thuộc máy đang bận hay rảnh. */
+    /* ---- TRANG XIN ĐỔI KHUNG NHÌN -------------------------------------
+       Bề ngang/chiều cao khung nhìn KHÔNG đổi được từ trong trang; phải đổi
+       bằng CDP ở đây. REV-0056 vòng 2 lỗi #2 và #3 là hai lỗi CHỈ lộ ra ở màn
+       THẤP (320×568 · 812×375 · 375×480) và màn HẸP (320px) — giả lập bằng
+       cách co `.tlq-tam` thì không bao giờ thấy, vì `window.innerHeight` vẫn
+       cứ 812. Đó đúng là lý do hai lỗi đó lọt qua cổng của tôi hai vòng liền. */
+    const xin = await cr.chay('window.__xinKhungNhin ? JSON.stringify(window.__xinKhungNhin) : ""');
+    if (xin) {
+      const { rong, cao } = JSON.parse(xin);
+      await cr.goi('Emulation.setDeviceMetricsOverride',
+        { width: rong, height: cao, deviceScaleFactor: 1, mobile: rong <= 640 }, cr.sessionId);
+      await cr.doi(300);
+      await cr.chay('window.__xinKhungNhin = null; window.__daDoiKhungNhin = true; 1');
+      continue;
+    }
     if (!anhCat && await cr.chay('window.__moiChup === "man-cat"')) {
       mkdirSync(path.join(GOC, '.do-tam'), { recursive: true });
       anhCat = path.join(GOC, '.do-tam', 'man-cat-375.png');

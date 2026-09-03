@@ -233,11 +233,25 @@ function ghiNhap(cuaVao, ganId, d) {
     localStorage.setItem(khoa, JSON.stringify(con));
     return 'du';
   } catch { /* hết chỗ — thử lại bản gọn */ }
-  try {
-    const gon = { ...con, trang: con.trang.map(({ anh_goc, ...t }) => t) };
-    localStorage.setItem(khoa, JSON.stringify(gon));
-    return 'thieu-goc';
-  } catch { return false; }
+  /* ⚠️ NHƯỜNG TỪNG CÁI, CŨ NHẤT TRƯỚC — REV-0056 vòng 2 lỗi #4.
+     Bản trước bóc `anh_goc` của MỌI trang trong một nhát, nên đo được ở ca 12
+     trang: trang 12 làm tràn thì số trang còn đường lùi là 0/12, chứ không
+     phải 11/12. Người đã cắt trang 3 từ nửa tiếng trước mất đường lùi của
+     trang 3 chỉ vì trang 12 không vừa.
+     Nay bỏ dần từ TRANG ĐẦU cho tới khi vừa. Trang vừa cắt xong — thứ người
+     ta hay muốn lùi nhất — là thứ giữ được lâu nhất.
+     Tốn thêm tối đa N lượt `JSON.stringify`, nhưng CHỈ chạy khi đã hết chỗ,
+     tức là hiếm; và dừng ngay khi vừa. */
+  const trang = con.trang.map(t => ({ ...t }));
+  for (let i = 0; i < trang.length; i++) {
+    if (!trang[i].anh_goc) continue;
+    delete trang[i].anh_goc;
+    try {
+      localStorage.setItem(khoa, JSON.stringify({ ...con, trang }));
+      return 'thieu-goc';
+    } catch { /* vẫn chưa vừa — nhường tiếp trang sau */ }
+  }
+  return false;
 }
 
 function xoaNhap(cuaVao, ganId) {
@@ -1065,7 +1079,7 @@ export function moQuetTaiLieu(t) {
         <p class="tlq-do">"Làm rõ chữ" xoá bóng đổ, làm nền trắng đều,
           <b>giữ nguyên màu dấu đỏ</b>.</p>
         ${c.loi ? `<p class="tlq-loi">${esc(c.loi)}</p>` : ''}
-        <div class="tlq-hai-duong">
+        <div class="tlq-hai-duong tlq-cat-nut">
           <button type="button" class="tlq-nut-chinh" id="tlqCatXong"
                   data-viec="cat-xong" ${c.dangXu ? 'disabled' : ''}>
             ${c.dangXu ? 'Đang cắt…' : '✂ Cắt & duỗi'}
@@ -1180,9 +1194,15 @@ export function moQuetTaiLieu(t) {
        Không có bước này thì ở màn 812px hàng nút rơi xuống 850px: người ta
        thấy ảnh, thấy chấm, KHÔNG thấy nút cắt — coi như tính năng không có. */
     function tuCoVuaMan() {
-      const hangNut = tam.querySelector('.tlq-hai-duong');
-      if (!hangNut) return;
-      const thua = Math.ceil(hangNut.getBoundingClientRect().bottom - window.innerHeight + 8);
+      /* ⚠️ ĐO PHẦN TRÀN CỦA KHUNG CUỘN, KHÔNG ĐO MÉP DƯỚI HÀNG NÚT.
+         Hàng nút nay `position: sticky` (REV-0056 vòng 2 lỗi #2) nên mép dưới
+         của nó LUÔN nằm trong khung nhìn — đo nó là luôn ra "vừa rồi", và ảnh
+         xem trước không bao giờ co nữa. Thứ cần biết là cả màn có phải cuộn
+         hay không, tức `scrollHeight` so với `clientHeight`.
+         Hai cơ chế bù nhau: co ảnh lo cho màn CAO VỪA (co một chút là hết
+         cuộn); `sticky` lo cho màn QUÁ THẤP (co hết cỡ vẫn phải cuộn, thì ít
+         nhất hai cái nút vẫn nằm trong tầm mắt). */
+      const thua = Math.ceil(tam.scrollHeight - tam.clientHeight);
       if (thua > 0 && H - thua >= 150) {
         ti *= (H - thua) / H;
         datCo();
