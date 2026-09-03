@@ -203,11 +203,31 @@ const nenCat = await nenAnhChung(tepCat, ANH_TRANG);
 const msNenLai = performance.now() - t0;
 ghi(`  Nén lại sau cắt (cùng nenAnhChung):  ${msNenLai.toFixed(0)} ms`);
 
-const msTong = doThat.ms + kqDuoi.ms + msNenLai;
-const msTongRo = doThat.ms + kqDuoi.ms + cLamRo.msLamRo + msNenLai;
-ghi(`  TỔNG từ lúc chụp xong tới lúc có trang đã cắt: ` +
-    `${(msTong / 1000).toFixed(2)} s (không làm rõ chữ) · ` +
+/* ⚠️ TỔNG PHẢI ĐO BẤM GIỜ MỘT LƯỢT, KHÔNG ĐƯỢC CỘNG BA CON SỐ RỜI.
+   REV-0056 bắt đúng chỗ này: bản báo cáo trước tôi cộng dò+duỗi+nén ra 0,08 s
+   rồi khai đó là "tổng một lượt cắt". Cộng như thế BỎ MẤT ba thứ có thật:
+   giải mã ảnh (`taiAnh`), mã hoá canvas ra tệp (`toBlob`), và lượt vẽ lại màn
+   hình. Số thật cao hơn ~1,5–2 lần. Đo lại bằng MỘT cái đồng hồ ôm cả đường. */
+const doMotLuot = async (coLamRo) => {
+  const t = performance.now();
+  const im = await taiAnh(nenDau);
+  doanBonGoc(im);
+  const k = duoiPhang(im, canh.goc, { canhToiDa: ANH_TRANG.canhToiDa });
+  if (coLamRo) lamRoChu(k.canvas);
+  await nenAnhChung(await canvasThanhTep(k.canvas, 'e2e.jpg'), ANH_TRANG);
+  return performance.now() - t;
+};
+/* Chạy nháp một lượt rồi mới bấm giờ: lượt đầu tiên gánh cả chi phí JIT làm
+   nóng, nên nếu không hâm trước thì "có làm rõ chữ" đo ra NHANH HƠN "không
+   làm rõ chữ" — một con số vô lý mà vẫn in ra được. */
+await doMotLuot(true);
+const msTong = await doMotLuot(false);
+const msTongRo = await doMotLuot(true);
+ghi(`  TỔNG BẤM GIỜ MỘT LƯỢT (giải mã → dò → duỗi → mã hoá → nén):`);
+ghi(`    ${(msTong / 1000).toFixed(2)} s (không làm rõ chữ) · ` +
     `${(msTongRo / 1000).toFixed(2)} s (có làm rõ chữ)`);
+ghi(`    Cộng ba bước rời chỉ ra ${((doThat.ms + kqDuoi.ms + msNenLai) / 1000).toFixed(2)} s — ` +
+    `ĐỪNG lấy số đó làm tổng, nó bỏ mất giải mã + mã hoá + vẽ lại.`);
 dat(msTongRo < 4000, 'Dưới 4 giây — ngưỡng người ta còn chờ được', `→ ${(msTongRo / 1000).toFixed(2)} s`);
 
 /* ==========================================================================
@@ -297,12 +317,45 @@ for (const ten of CA) {
   const dung = d.tuTin && lech <= 0.03;
   if (dung) soDung++;
   if (d.tuTin && lech > 0.06) soTuTinSai++;
-  bangCa.push({ ten, tuTin: d.tuTin, lech, ms: d.ms, viSao: d.viSao, dung });
+  bangCa.push({ ten, tuTin: d.tuTin, lech, ms: d.ms, viSao: d.viSao, dung,
+                nhieuTo: d.nhieuTo, phuGiua: d.phuGiua, loiKhuyen: d.loiKhuyen });
   ghi(`  ${(dung ? 'ĐÚNG ' : d.tuTin ? '~lệch' : 'lùi  ').padEnd(6)} ${NHAN[ten].padEnd(30)} ` +
-      `lệch ${(lech * 100).toFixed(1)}% đường chéo · ${d.ms} ms · ${d.tuTin ? 'tự tin' : 'KHÔNG tự tin → mép ảnh'}`);
+      `lệch ${(lech * 100).toFixed(1)}% · ${d.ms} ms · ${d.tuTin ? 'tự tin' : 'KHÔNG tự tin → mép ảnh'}` +
+      ` · mép giữa ${(d.phuGiua * 100).toFixed(0)}%${d.nhieuTo ? ' → NHIỀU TỜ' : ''}`);
   if (!dung) ghi(`         lý do máy nêu: ${d.viSao}`);
 }
 ghi(`  ĐOÁN ĐÚNG ${soDung}/${CA.length} ca.`);
+
+/* ---- MÀN HÌNH CÓ NÓI THẬT VỀ ĐỘ CHẮC CHẮN KHÔNG · REV-0056 lỗi #2 -------
+   KHÔNG phải chỉnh ngưỡng cho khéo hơn — máy VẪN đoán sai ca hai tờ y như cũ
+   (lệch 36%), và đoán sai là chuyện chấp nhận được. Thứ phải sửa là màn hình
+   NÓI DỐI về độ chắc chắn của nó: bản trước khoe "4 mép rõ, 65% chiều dài"
+   đúng lúc đang đoán sai. Nay nó nói đúng bệnh và khuyên một việc làm được. */
+ghi('\n  ▸ Màn hình nói gì về độ chắc chắn của máy:');
+{
+  const h2 = bangCa.find(c => c.ten === 'hai-to');
+  const donTo = bangCa.filter(c => c.ten !== 'hai-to');
+  const caoNhatDon = Math.max(...donTo.map(c => c.phuGiua));
+  ghi(`    "mép giữa" — ca hai tờ ${(h2.phuGiua * 100).toFixed(0)}% · ` +
+      `tờ ĐƠN cao nhất ${(caoNhatDon * 100).toFixed(0)}% · ngưỡng 40%`);
+  dat(h2.nhieuTo, 'Ca hai tờ → máy NHẬN RA có nhiều hơn một tờ');
+  dat(donTo.every(c => !c.nhieuTo), 'Không ca tờ ĐƠN nào bị báo động giả "nhiều tờ"',
+    `→ ${donTo.filter(c => c.nhieuTo).length} ca báo nhầm`);
+  dat(caoNhatDon < 0.30, 'Ngưỡng 40% cách xa tờ đơn (tờ đơn phải dưới 30%)',
+    `→ tờ đơn cao nhất ${(caoNhatDon * 100).toFixed(0)}%`);
+  dat(/nhiều hơn một tờ/i.test(h2.loiKhuyen || '') && /chụp lại từng tờ/i.test(h2.loiKhuyen || ''),
+    'Lời khuyên nói ĐÚNG BỆNH và bảo được việc phải làm',
+    `→ "${(h2.loiKhuyen || '').slice(0, 52)}…"`);
+  dat(bangCa.every(c => !/\d+\s*%/.test(c.loiKhuyen || '')),
+    'KHÔNG lời khuyên nào chứa phần trăm — bỏ hẳn câu khoe');
+  dat(bangCa.filter(c => c.dung).every(c => !c.loiKhuyen),
+    'Máy đoán ĐÚNG thì IM LẶNG, không bắt Sếp đọc thêm dòng nào');
+  /* ĐỐI CHỨNG: phép đo "báo động giả" phải bắt được nếu hạ ngưỡng xuống mức
+     mà tờ đơn cũng lọt. Không bắt được thì con số trên vô nghĩa. */
+  const nguongHong = caoNhatDon * 0.9;
+  dat(donTo.some(c => c.phuGiua >= nguongHong),
+    `ĐỐI CHỨNG: hạ ngưỡng xuống ${(nguongHong * 100).toFixed(0)}% → tờ đơn LỌT, phép đo bắt được`);
+}
 {
   /* CA HAI TỜ GIẤY — NÓI THẲNG, ĐỪNG CHẤM ĐẠT/HỎNG CHO CÓ.
      Ảnh có hai tờ thì KHÔNG có một đáp án đúng: máy chỉ dựng được MỘT tứ
@@ -315,8 +368,12 @@ ghi(`  ĐOÁN ĐÚNG ${soDung}/${CA.length} ca.`);
   const h2 = bangCa.find(c => c.ten === 'hai-to');
   ghi(`  Ca "hai tờ giấy": máy dựng MỘT khung ôm cả hai, lệch ${(h2.lech * 100).toFixed(1)}% ` +
       'so với tờ thứ nhất — ĐOÁN SAI, và không có cách nào đoán đúng khi chỉ được dựng một khung.');
-  ghi('    → Xử: màn cắt vẫn bày, người ta kéo 2 góc là xong (mục ⑤ đo việc kéo).');
-  ghi('    → Muốn hai tờ thành hai trang thì chụp hai phát — đó mới là cách đúng.');
+  /* ⚠️ SỐ ĐO, KHÔNG PHẢI CẢM TÍNH. Bản báo cáo trước tôi khai "kéo 2 góc là
+     xong"; Hồ Ly đo lại ra 3/4 góc (31 · 70 · 54 px), và Hồ Ly đúng. Sửa
+     hẳn con số ở đây để lần sau không ai chép lại lời khai cũ. */
+  ghi('    → Xử: màn cắt vẫn bày, VÀ nay nói thẳng là ảnh có nhiều hơn một tờ.');
+  ghi('    → Kéo về đúng một tờ được, nhưng phải kéo 3/4 góc (REV-0056 đo: 31 · 70 · 54 px).');
+  ghi('    → Cách đúng vẫn là chụp từng tờ một — đó là lời khuyên màn hình đưa ra.');
   dat(bangCa.every(c => c.lech < 0.9),
     'Mọi ca: khung đoán ra vẫn nằm trong ảnh và kéo được (không ca nào lệch >90%)');
 }
@@ -528,6 +585,164 @@ let coSauGiaoDien = 0, coTruocGiaoDien = 0;
   ghi(`  Cỡ trang: ${kb(coTruocGiaoDien)} → ${kb(coSauGiaoDien)}`);
 }
 
+/* ==========================================================================
+   ⑦ KHÔNG ĐƯỢC MẤT ẢNH GỐC  ·  REV-0056 lỗi #1 (CHẶN PHÁT HÀNH)
+   ---------------------------------------------------------------------------
+   Ba việc phải chứng minh, và phải chứng minh bằng BYTE chứ không bằng mắt:
+     ① cắt 3 lần liên tiếp → cỡ ảnh và cỡ tệp KHÔNG tụt dần
+     ② bấm "↩ Ảnh gốc"    → băm SHA-256 TRÙNG KHÍT ảnh chưa cắt
+     ③ thẻ trang không cao thêm dù nay có tới SÁU nút
+   Kèm CA TỰ KIỂM ở cuối: gài lại đúng lỗi #1 rồi cho thấy phép đo bắt được.
+   ========================================================================== */
+ghi('\n─── ⑦ CẮT NHIỀU LẦN KHÔNG ĐƯỢC LÀM HỎNG ẢNH (REV-0056 #1) ───');
+const bamChuoi = async (s) => {
+  const b = new TextEncoder().encode(s);
+  const h = await crypto.subtle.digest('SHA-256', b);
+  return [...new Uint8Array(h)].map(x => x.toString(16).padStart(2, '0')).join('');
+};
+let khongTuiChatLuong = false, luiTrungKhit = false;
+{
+  phien && phien.dong();
+  localStorage.removeItem(KHOA);
+  canhDangChup = canh.canvas;
+  nutKho.click();
+  (await doi('[data-viec="chon-nhom"]')).click();
+  await doi('#tlqCatKhung', 15000);
+  ep375();
+  (await doi('[data-viec="cat-bo"]')).click();
+  await doi('.tlq-the');
+
+  const nhap = () => JSON.parse(localStorage.getItem(KHOA) || 'null').trang[0];
+  const goc0 = nhap();
+  const bamGoc = await bamChuoi(goc0.anh);
+  const dsLan = [];
+  for (let lan = 1; lan <= 3; lan++) {
+    (await doi('[data-viec="cat"][data-i="0"]')).click();
+    await doi('#tlqCatKhung');
+    ep375();
+    /* Mỗi lượt kéo góc trên-trái vào 12% — ĐÚNG thao tác "cắt lại cho gọn". */
+    const oVe = document.querySelector('#tlqCatVe');
+    const r = oVe.getBoundingClientRect();
+    const b = document.querySelectorAll('.tlq-cat-goc')[0];
+    const x = r.left + r.width * 0.12, y = r.top + r.height * 0.12;
+    b.dispatchEvent(new PointerEvent('pointerdown', { pointerId: 1, clientX: 0, clientY: 0, bubbles: true, cancelable: true }));
+    document.dispatchEvent(new PointerEvent('pointermove', { pointerId: 1, clientX: x, clientY: y, bubbles: true, cancelable: true }));
+    document.dispatchEvent(new PointerEvent('pointerup', { pointerId: 1, clientX: x, clientY: y, bubbles: true, cancelable: true }));
+    await cho(80);
+    (await doi('[data-viec="cat-xong"]')).click();
+    await doi('.tlq-the');
+    await cho(150);
+    const tr = nhap();
+    const im = await taiAnh(tr.anh);
+    dsLan.push({ co: tr.co_nen, rong: im.naturalWidth, cao: im.naturalHeight });
+    ghi(`  Cắt lần ${lan}: ${kb(tr.co_nen)} · ${im.naturalWidth}×${im.naturalHeight}`);
+  }
+  /* Phép đo đặt thành HÀM để ca tự kiểm ở dưới gọi lại được y hệt. */
+  const khongTui = (ds) => ds.every(x => x.co === ds[0].co && x.rong === ds[0].rong && x.cao === ds[0].cao);
+  khongTuiChatLuong = khongTui(dsLan);
+  dat(khongTuiChatLuong, 'Cắt 3 lần liên tiếp: cỡ tệp và kích thước KHÔNG tụt dần',
+    `→ ${dsLan.map(x => kb(x.co)).join(' · ')} · ${dsLan[0].rong}×${dsLan[0].cao}`);
+
+  /* --- ĐƯỜNG LÙI --- */
+  const nutLui = document.querySelector('[data-viec="cat-hoan"][data-i="0"]');
+  dat(!!nutLui, 'Thẻ trang đã cắt có nút lùi, nói bằng tiếng người',
+    nutLui ? `→ "${nutLui.textContent.trim()}" (${nutLui.getAttribute('aria-label')})` : '→ KHÔNG có');
+  /* Sáu nút rồi mà thẻ VẪN không được cao thêm — cùng trần 116px mà
+     `do-tai-tep` áp cho thẻ 5 nút. `do-tai-tep` không bao giờ cắt nên không
+     bao giờ thấy thẻ 6 nút; chỗ này là chỗ duy nhất đo được nó. */
+  const soNut = document.querySelectorAll('.tlq-the .tlq-nut-phu').length;
+  const caoThe = document.querySelector('.tlq-the').getBoundingClientRect().height;
+  const caoNut = [...document.querySelectorAll('.tlq-the .tlq-nut-phu')]
+    .map(n => n.getBoundingClientRect().height);
+  dat(caoThe <= 116, `Thẻ trang KHÔNG cao thêm dù nay có ${soNut} nút`,
+    `→ ${caoThe.toFixed(0)}px (trần 116px của do-tai-tep)`);
+  dat(caoNut.every(h => h >= 44), `Cả ${soNut} nút trong thẻ vẫn ≥44px`,
+    `→ ${Math.min(...caoNut).toFixed(0)}px thấp nhất`);
+
+  const xacNhanCu = window.confirm;
+  window.confirm = () => true;
+  nutLui.click();
+  await cho(250);
+  window.confirm = xacNhanCu;
+  const sauLui = nhap();
+  const bamSau = await bamChuoi(sauLui.anh);
+  luiTrungKhit = bamGoc === bamSau;
+  dat(luiTrungKhit, 'Bấm nút lùi → băm SHA-256 TRÙNG KHÍT ảnh gốc chưa cắt',
+    `→ ${bamGoc.slice(0, 16)}… / ${bamSau.slice(0, 16)}…`);
+  dat(!sauLui.da_cat && !sauLui.anh_goc && !sauLui.goc_cat,
+    'Lùi xong, trang sạch dấu vết lượt cắt');
+
+  /* --- BỘ NHỚ: giữ thêm ảnh gốc tốn bao nhiêu --- */
+  {
+    (await doi('[data-viec="cat"][data-i="0"]')).click();
+    await doi('#tlqCatKhung'); ep375();
+    (await doi('[data-viec="cat-xong"]')).click();
+    await doi('.tlq-the'); await cho(150);
+    const tr = nhap();
+    const thanhBo = (o) => new Blob([JSON.stringify(o)]).size;
+    const coDu = thanhBo(tr);
+    const { anh_goc, ...gon } = tr;
+    const coGon = thanhBo(gon);
+    ghi(`  Một trang ĐÃ CẮT nặng ${kb(coDu)} trong bản nháp; bỏ ảnh gốc còn ${kb(coGon)} ` +
+        `→ ảnh gốc tốn thêm ${kb(coDu - coGon)}/trang.`);
+    ghi(`    10 trang đã cắt ≈ ${(coDu * 10 / 1048576).toFixed(1)} MB · ` +
+        `12 trang (trần) ≈ ${(coDu * 12 / 1048576).toFixed(1)} MB — trần localStorage thường là 5 MB.`);
+    ghi('    → Chạm trần thì ghiNhap() tự thử lượt hai KHÔNG kèm ảnh gốc, và màn hình');
+    ghi('      nói thẳng là không lùi được nữa. Ảnh đã chụp KHÔNG bao giờ bị hi sinh.');
+
+    /* ---- ÉP HẾT CHỖ THẬT, không nói suông ----------------------------
+       Ràng buộc gốc của cả tính năng: ảnh đã chụp không được mất khi tắt
+       máy. Thêm ảnh gốc là chạm trần localStorage sớm hơn, nên PHẢI chứng
+       minh được thứ tự nhường: ảnh GỐC nhường trước, ảnh ĐANG DÙNG giữ tới
+       cùng. Ép bằng cách cho `setItem` ném QuotaExceededError với chuỗi dài
+       — đúng thứ trình duyệt thật ném khi hết chỗ. */
+    const setCu = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (k, v) {
+      if (String(k).startsWith('tl_nhap_') && String(v).length > 320000) {
+        const e = new Error('hết chỗ (ép để thử)');
+        e.name = 'QuotaExceededError';
+        throw e;
+      }
+      return setCu.call(this, k, v);
+    };
+    try {
+      (await doi('[data-viec="cat"][data-i="0"]')).click();
+      await doi('#tlqCatKhung'); ep375();
+      (await doi('[data-viec="cat-xong"]')).click();
+      await doi('.tlq-the'); await cho(200);
+      const trHet = nhap();
+      dat(!!trHet && !!trHet.anh,
+        'HẾT CHỖ: ảnh ĐÃ CHỤP vẫn được lưu — không bao giờ hi sinh ảnh',
+        `→ ${trHet && trHet.anh ? kb(trHet.co_nen) : 'MẤT'}`);
+      dat(!!trHet && !trHet.anh_goc,
+        'HẾT CHỖ: ảnh gốc là thứ bị bỏ TRƯỚC, đúng thứ tự nhường');
+      const canh = [...document.querySelectorAll('.tlq-canh')]
+        .map(p => p.textContent).join(' ');
+      dat(/không giữ được ảnh gốc/i.test(canh),
+        'HẾT CHỖ: màn hình NÓI RA là không lùi được nữa, không nhường lặng lẽ');
+    } finally {
+      Storage.prototype.setItem = setCu;
+    }
+  }
+}
+
+/* ---- CA TỰ KIỂM (BH-16): gài LẠI lỗi #1 → phép đo phải bắt được ---------
+   Không có ca này thì hai dòng ĐẠT ở trên chỉ là lời khai. Dựng lại đúng dãy
+   số mà bản CHƯA VÁ cho ra (đo thật, REV-0056 mục ③b) rồi đưa qua CÙNG một
+   hàm kiểm — nó phải đỏ. */
+{
+  const dayHong = [{ co: 176128, rong: 980, cao: 1367 },
+                   { co: 141312, rong: 967, cao: 1197 },
+                   { co: 49152, rong: 558, cao: 590 }];
+  const khongTui = (ds) => ds.every(x => x.co === ds[0].co && x.rong === ds[0].rong && x.cao === ds[0].cao);
+  dat(!khongTui(dayHong),
+    'ĐỐI CHỨNG: đưa lại dãy số của bản CHƯA VÁ (172→138→48 KB) → phép đo BẮT ĐƯỢC');
+  /* Và ca đối chứng cho đường lùi: trang không có `anh_goc` thì không thể lùi. */
+  const trangHong = { anh: 'data:image/jpeg;base64,AAAA', da_cat: true };
+  dat(!trangHong.anh_goc,
+    'ĐỐI CHỨNG: trang kiểu CŨ (không có anh_goc) → không có gì để lùi, phép đo thấy ngay');
+}
+
 /* Ca KÍN KHUNG: chụp sát giấy → màn cắt KHÔNG được tự bày. */
 {
   phien && phien.dong();
@@ -543,11 +758,32 @@ let coSauGiaoDien = 0, coTruocGiaoDien = 0;
   phien && phien.dong();
 }
 
+/* Ca HAI TỜ: lời khuyên phải LÊN ĐƯỢC MÀN HÌNH, không chỉ nằm trong đối
+   tượng trả về. Khẳng định `loiKhuyen` có chữ mà không kiểm nó có được vẽ ra
+   hay không thì đúng là kiểu "đọc mã rồi đoán" mà REV-0056 đã chê. */
+{
+  localStorage.removeItem(KHOA);
+  canhDangChup = dungCanh('hai-to').canvas;
+  nutKho.click();
+  (await doi('[data-viec="chon-nhom"]')).click();
+  await doi('#tlqCatKhung', 15000);
+  ep375();
+  const canhBao = [...document.querySelectorAll('.tlq-than .tlq-canh')]
+    .map(p => p.textContent.replace(/\s+/g, ' ').trim()).join(' | ');
+  dat(/nhiều hơn một tờ/i.test(canhBao),
+    'Ca hai tờ: lời khuyên HIỆN THẬT trên màn cắt', `→ "${canhBao.slice(0, 64)}…"`);
+  const moiChu = document.querySelector('.tlq-than').textContent;
+  dat(!/\d+\s*%\s*chiều dài/.test(moiChu),
+    'Màn cắt KHÔNG còn câu khoe "N% chiều dài" ở bất kỳ đâu');
+  phien && phien.dong();
+}
+
 ghi('\n───────────────────────────────────────────────────────────');
 ghi(`KET_LUAN doan_dung=${soDung}/${CA.length} tu_tin_sai=${soTuTinSai} ` +
     `ms_tong=${Math.round(msTong)} ms_tong_lamro=${Math.round(msTongRo)} ` +
     `co_truoc=${coTruoc} co_sau=${coSau} co_sau_lamro=${coSauRo} ` +
-    `cham_44=${du44} keo_4_goc=${keoDuHet}`);
+    `cham_44=${du44} keo_4_goc=${keoDuHet} ` +
+    `khong_tui_chat_luong=${khongTuiChatLuong} lui_trung_khit=${luiTrungKhit}`);
 } catch (e) {
   ghi('✗ BÀN ĐO HỎNG: ' + e.message + '\n' + e.stack);
 }

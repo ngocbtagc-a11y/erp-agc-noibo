@@ -262,6 +262,22 @@ function lamMuot(x, W, H, lan = 2) {
 const DO_NGHIENG = 24 * Math.PI / 180;   // dò tới ±24° — chụp nghiêng hơn thế thì kéo tay
 const SO_NGHIENG = 25;                   // 25 nấc ≈ mỗi nấc 2°
 
+/* HAI CÂU CHO NGƯỜI ĐỌC, không phải cho máy.
+   Nguyên tắc (REV-0056 lỗi #2): máy đoán sai là chuyện bình thường và chấp
+   nhận được; màn hình NÓI DỐI về độ chắc chắn của mình mới là lỗi. Nên:
+     · chắc      → im lặng, không câu nào
+     · không chắc → nói thẳng là không chắc, và bảo phải làm gì
+     · thấy nhiều hơn một tờ → nói đúng bệnh, kèm lời khuyên DÙNG ĐƯỢC
+   Không câu nào có phần trăm: người quét kho không quyết định được gì bằng
+   con số "mép yếu nhất 65%". */
+export const KHUYEN_KHONG_CHAC =
+  'Máy không nhận ra rõ mép tờ giấy nên đặt tạm 4 chấm ở mép ảnh. ' +
+  'Sếp kéo 4 chấm vào đúng 4 góc tờ giấy giúp.';
+export const KHUYEN_NHIEU_TO =
+  'Trong ảnh hình như có NHIỀU HƠN MỘT tờ giấy, và khung máy đoán đang ôm cả ' +
+  'hai. Sếp kéo khung về đúng MỘT tờ — hoặc chụp lại từng tờ một, mỗi tờ một ' +
+  'trang, sẽ nhanh và rõ hơn.';
+
 /** Tìm MỘT đường mép mạnh nhất trong nửa `nua` của ảnh.
  *  Đường "dọc" tham số hoá `x = s·y + b`; đường "ngang" là `y = s·x + b`.
  *
@@ -295,8 +311,16 @@ function timMep(diemBien, doDai, nganh, nua) {
       if (!d) continue;
       const b = o - dich;
       const giua = b + s * (doDai / 2);          // toạ độ chính tại chính giữa
-      if (nua === 'dau' ? !(giua >= -2 && giua <= nganh * 0.45)
-        : !(giua >= nganh * 0.55 && giua <= nganh + 2)) continue;
+      /* BA cửa sổ, không phải hai:
+           `dau`  — nửa đầu  (mép trái / mép trên)
+           `cuoi` — nửa cuối (mép phải / mép dưới)
+           `giua` — khoảng GIỮA ảnh. Cửa sổ này không dùng để dựng khung; nó
+                    chỉ để hỏi "trong ảnh có mép giấy nào nằm giữa không" —
+                    tức là có tờ giấy THỨ HAI. Xem `nhieuTo` ở `doanBonGoc`. */
+      const trongCua = nua === 'dau' ? (giua >= -2 && giua <= nganh * 0.45)
+        : nua === 'cuoi' ? (giua >= nganh * 0.55 && giua <= nganh + 2)
+        : (giua >= nganh * 0.28 && giua <= nganh * 0.72);
+      if (!trongCua) continue;
       if (!tot || d > tot.diem) tot = { s, b, diem: d, giua };
     }
   }
@@ -312,9 +336,18 @@ export function doanBonGoc(anh, tc = {}) {
   const t0 = gio();
   const canhDo = tc.canhDo || 360;
   const [W0, H0] = coAnh(anh);
-  const thoi = (viSao, tuTin, goc) => ({
+  /* `viSao` là ghi chú KỸ THUẬT — cho bàn đo và nhật ký, KHÔNG cho màn hình.
+     `loiKhuyen` là câu cho NGƯỜI: rỗng khi máy chắc (im lặng, đừng bắt đọc),
+     có chữ khi máy không chắc hoặc thấy nhiều hơn một tờ giấy.
+     REV-0056 lỗi #2: bản trước in thẳng `viSao` lên màn — hoá ra là câu KHOE
+     ("4 mép rõ, 65% chiều dài") đúng lúc máy đang đoán sai 36%. Con số đó
+     người dùng không dùng được vào việc gì, mà lại tạo lòng tin sai. */
+  const thoi = (viSao, tuTin, goc, them) => ({
     goc: goc || GOC_TRON_KHUNG.map(g => g.slice()),
-    tuTin: !!tuTin, ms: Math.round(gio() - t0), viSao
+    tuTin: !!tuTin, ms: Math.round(gio() - t0), viSao,
+    nhieuTo: false, phuGiua: 0,
+    loiKhuyen: tuTin ? '' : KHUYEN_KHONG_CHAC,
+    ...(them || {})
   });
   if (!(W0 > 40 && H0 > 40)) return thoi('ảnh quá nhỏ để dò', false);
 
@@ -413,10 +446,29 @@ export function doanBonGoc(anh, tc = {}) {
     Math.min(1, Math.max(0, p[1] / H))
   ]);
   const tuTin = yeuNhat >= 0.30;
+
+  /* ---- CÓ TỜ GIẤY THỨ HAI TRONG ẢNH KHÔNG ------------------------------
+     Chỉ dò theo phương DỌC (hai tờ đặt cạnh nhau — cách người ta thật sự
+     chụp hai tờ một phát). CỐ Ý KHÔNG dò phương ngang: tờ giấy hành chính
+     nào cũng có ít nhất một đường kẻ NGANG hết bề ngang (dòng kẻ đầu thư,
+     viền bảng, dòng ký tên), nên phép dò ngang báo động giả gần như mọi
+     lần — đo thấy ngay ở tờ giấy thử. Một lời khuyên sai còn tệ hơn không
+     có lời khuyên nào.
+
+     Ngưỡng 0,40 chọn theo SỐ ĐO, không theo cảm tính (xem `do-cat-khung`
+     mục ③): tờ đơn cao nhất 0,10 (đường kẻ dọc của bảng, ngắn), ca hai tờ
+     0,50–0,66. Khoảng cách năm lần, không phải chỉnh cho vừa. */
+  const mepGiua = timMep(doc, H, W, 'giua');
+  const phuGiua = mepGiua ? phuSong(mepGiua, H) : 0;
+  const nhieuTo = phuGiua >= 0.40;
+
   return thoi(
-    tuTin ? `4 mép rõ (mép yếu nhất có biên trên ${(yeuNhat * 100).toFixed(0)}% chiều dài)`
-      : `mép quá mờ (mép yếu nhất chỉ ${(yeuNhat * 100).toFixed(0)}% chiều dài) — đặt tạm 4 góc này, kéo lại giúp`,
-    tuTin, gocChuan);
+    (tuTin ? '4 mép rõ' : 'mép mờ, đặt tạm') +
+      ` (mép yếu nhất ${(yeuNhat * 100).toFixed(0)}% chiều dài, giữa ${(phuGiua * 100).toFixed(0)}%)`,
+    tuTin, gocChuan,
+    /* Lời khuyên "nhiều tờ" ĐÈ LÊN cả hai nhánh: nó nói đúng bệnh hơn, và là
+       lời khuyên làm được ngay (chụp lại từng tờ). */
+    { nhieuTo, phuGiua, loiKhuyen: nhieuTo ? KHUYEN_NHIEU_TO : (tuTin ? '' : KHUYEN_KHONG_CHAC) });
 }
 
 /* ==========================================================================
