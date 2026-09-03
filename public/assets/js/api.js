@@ -457,8 +457,34 @@ export const API = {
     return goi('/api/tai-lieu' + (u.toString() ? '?' + u : ''));
   },
   tlLuu: (than) => goi('/api/tai-lieu/luu', { method: 'POST', body: JSON.stringify(than) }),
+
+  /* ⚠️ ĐƯỜNG BYTE THẲNG CHO FILE PDF CÓ SẴN — vá REV-0054 lỗi #2.
+     Gửi base64 trong JSON thì trong máy chủ file tồn tại ~3,7 bản cùng lúc, mà
+     bộ nhớ 128 MB là của cả isolate chứ không của riêng một yêu cầu: HAI người
+     cùng tải 25 MB là chết isolate, kéo theo yêu cầu của người khác.
+     Khung: [4 byte độ dài phần mô tả] [JSON mô tả] [byte file] — máy chủ đọc
+     đúng MỘT lần `arrayBuffer()` rồi cắt cửa sổ, không chép lại lần nào.
+     Đường ảnh (`tlLuu`) GIỮ NGUYÊN base64: trần 6 MB, không có vấn đề gì, và
+     đổi cả hai cùng lúc là đổi luôn thứ đang chạy tốt. */
+  tlLuuTep: (moTa, byte) => {
+    const md = new TextEncoder().encode(JSON.stringify(moTa));
+    const khung = new Uint8Array(4 + md.length + byte.length);
+    new DataView(khung.buffer).setUint32(0, md.length, false);   // big-endian
+    khung.set(md, 4);
+    khung.set(byte, 4 + md.length);
+    return goi('/api/tai-lieu/luu', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/octet-stream' },
+      body: khung
+    });
+  },
   tlMo: (id) => goi('/api/tai-lieu/mo?id=' + encodeURIComponent(id)),
   tlNhatKy: (id) => goi('/api/tai-lieu/nhat-ky?id=' + encodeURIComponent(id)),
+  /* Sửa SỐ HIỆU + TÊN sau khi đã lưu — Sếp Ngọc 03/09/2026. KHÔNG đòi lý do:
+     đây là sửa chính tả, bắt ghi lý do thì người ta quay về thói xoá đi quét
+     lại, mà quét lại nghĩa là đi tìm lại tờ giấy thật. */
+  tlSua: (du) => goi('/api/tai-lieu/sua', { method: 'POST', body: JSON.stringify(du) }),
+  tlLichSu: (id) => goi('/api/tai-lieu/lich-su?id=' + encodeURIComponent(id)),
   tlAn: (id) => goi('/api/tai-lieu/an', { method: 'POST', body: JSON.stringify({ id }) })
   // Bản PDF mở thẳng bằng /api/tai-lieu/tep?id=... (máy chủ trả file kèm kiểm
   // quyền + ghi nhật ký), không qua lớp fetch này.
