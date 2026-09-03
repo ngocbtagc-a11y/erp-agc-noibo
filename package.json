@@ -68,6 +68,8 @@
     "ban-kho-tai-lieu": "node scripts/ban-quet-tai-lieu.mjs",
     "do-quet-375": "node scripts/ban-quet-tai-lieu.mjs --tu-dong",
     "do-boc-chu": "node scripts/do-boc-chu.mjs",
+    "ban-cat-khung": "node scripts/do-cat-khung.mjs",
+    "do-cat-khung": "node scripts/do-cat-khung.mjs --tu-dong",
     "do-ba-mau": "node scripts/do-ba-mau.mjs",
     "cong-khoi": "node scripts/cong-khoi.mjs",
     "cong-khoi-dienthoai": "node scripts/cong-khoi.mjs --rong 375",

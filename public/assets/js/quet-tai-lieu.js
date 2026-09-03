@@ -39,6 +39,10 @@
 import { nenAnhChung, coByteCuaDataUrl } from './anh-chung.js';
 import { gopTrangThanhPDF, dataUrlThanhByte, byteThanhBase64,
          laByteCuaPDF, demTrangPDF } from './gop-trang-pdf.js';
+/* CẮT KHUNG VĂN BẢN — toàn bộ phần toán nằm ở `cat-khung.js` (hàm thuần).
+   Ở đây chỉ có màn hình và mấy cái nút. */
+import { doanBonGoc, duoiPhang, lamRoChu, taiAnh, canvasThanhTep,
+         laTronKhung, tuGiacLoi } from './cat-khung.js';
 import { API } from './api.js';
 
 /* ---- Thông số nén. Đo thật rồi mới chốt (xem báo cáo CTL-0026):
@@ -46,8 +50,10 @@ import { API } from './api.js';
    trang A4 ra 180–380 KB. Trần 450 KB để 12 trang vẫn dưới trần 6 MB của
    máy chủ. Ảnh bóc chữ nhỏ hơn hẳn: AI đọc ảnh không cần nét bằng mắt
    người, mà ảnh nhỏ thì gọi AI nhanh hơn nhiều. */
-const ANH_TRANG = { cheDo: 'vua-khung', canhToiDa: 1700, chatLuong: 0.72, gioiHanByte: 450 * 1024 };
-const ANH_BOC_CHU = { cheDo: 'vua-khung', canhToiDa: 1100, chatLuong: 0.65, gioiHanByte: 160 * 1024 };
+/* Hai bộ thông số này `export` để BÀN ĐO dùng lại đúng con số đang chạy —
+   chép tay sang bàn đo là đo một đường khác với đường sản phẩm. */
+export const ANH_TRANG = { cheDo: 'vua-khung', canhToiDa: 1700, chatLuong: 0.72, gioiHanByte: 450 * 1024 };
+export const ANH_BOC_CHU = { cheDo: 'vua-khung', canhToiDa: 1100, chatLuong: 0.65, gioiHanByte: 160 * 1024 };
 const TRAN_SO_TRANG = 12;
 const TRAN_TRANG_BOC_CHU = 3;      // khớp TRAN_TRANG_BOC_CHU ở src/tai-lieu.js
 
@@ -135,6 +141,21 @@ export const TRAN_BYTE_PDF_GOC = 25 * 1024 * 1024;
  *  này sang tờ kia. Trần này là trần về sức người, không phải về máy.
  *  Mỗi file tốn ĐÚNG 1 lượt ghi D1, nên 10 file = 10 lượt ghi, không hơn. */
 export const TRAN_PDF_MOT_LUOT = 10;
+/* ⚠️ NHỚ LỰA CHỌN "LÀM RÕ CHỮ" — một khoá `localStorage` riêng, KHÔNG nằm
+   trong bản nháp bộ quét. Bản nháp bị xoá sau mỗi lần lưu xong; lựa chọn này
+   phải sống qua nhiều lượt quét, vì ai đã bật một lần thì lần sau thường vẫn
+   muốn bật. Mất khoá này cũng không mất gì: mặc định TẮT. */
+const KHOA_LAM_RO = 'tl_lam_ro_chu_v1';
+function nhoLamRo() {
+  try { return localStorage.getItem(KHOA_LAM_RO) === '1'; } catch { return false; }
+}
+function ghiNhoLamRo(bat) {
+  try { localStorage.setItem(KHOA_LAM_RO, bat ? '1' : '0'); } catch { /* kệ */ }
+}
+
+/** Tên 4 góc, theo đúng thứ tự TL·TR·BR·BL của `cat-khung.js`. Dùng cho nhãn
+ *  trình đọc màn hình — "Góc 1" thì người khiếm thị không biết là góc nào. */
+const TEN_GOC = ['trên trái', 'trên phải', 'dưới phải', 'dưới trái'];
 
 /** Đuôi ảnh nhận được. HEIC/HEIF có mặt vì iPhone mặc định chụp HEIC, nhưng
  *  xem `LOI_HEIC` — Chrome trên máy tính KHÔNG giải mã được nó. */
@@ -202,22 +223,52 @@ function docNhap(cuaVao, ganId) {
   } catch { return null; }
 }
 
-/** Trả về true nếu ghi được. Ghi HỎNG (hết chỗ, chế độ ẩn danh) thì KHÔNG
- *  ném lỗi — bộ ảnh vẫn nằm trong bộ nhớ trang, chỉ là đóng tab thì mất, và
- *  màn hình sẽ nói thẳng câu đó ra thay vì im lặng. */
+/** Ghi bản nháp. Trả `'du'` (ghi đủ) · `'thieu-goc'` (ghi được, nhưng phải bỏ
+ *  ảnh gốc của các trang đã cắt) · `false` (không ghi được gì).
+ *  Ghi HỎNG (hết chỗ, chế độ ẩn danh) thì KHÔNG ném lỗi — bộ ảnh vẫn nằm
+ *  trong bộ nhớ trang, chỉ là đóng tab thì mất, và màn hình nói thẳng câu đó
+ *  ra thay vì im lặng.
+ *
+ *  ⚠️ HAI LƯỢT THỬ, CỐ Ý — thêm theo REV-0056 lỗi #1.
+ *  Mỗi trang ĐÃ CẮT nay mang thêm `anh_goc` để còn lùi lại được. Bản nháp 12
+ *  trang vốn đã sát trần `localStorage` (~5 MB), thêm ảnh gốc là chạm trần
+ *  sớm hơn. Nhưng "chạm trần" KHÔNG được phép biến thành "mất sạch bản nháp":
+ *  ràng buộc gốc của cả tính năng là ẢNH ĐÃ CHỤP KHÔNG ĐƯỢC MẤT khi tắt máy.
+ *  Nên thứ tự nhường là: ảnh GỐC nhường trước, ảnh ĐANG DÙNG giữ tới cùng.
+ *  Và nhường thì phải NÓI RA (`gocKhongLuuDuoc`), không nhường lặng lẽ. */
 function ghiNhap(cuaVao, ganId, d) {
+  /* ⚠️ FILE PDF CÓ SẴN KHÔNG VÀO BẢN NHÁP — CỐ Ý, KHÔNG PHẢI SÓT.
+     `localStorage` cho khoảng 5–10 MB; một bản scan 25 MB thành base64 là
+     33 MB, ghi vào là ném `QuotaExceededError` và làm MẤT LUÔN bản nháp của
+     cả bộ ảnh đang có. Mà lý do bản nháp tồn tại là "chụp xong tắt máy thì
+     ảnh vẫn còn" — ảnh chụp mất là mất thật, còn FILE PDF thì vẫn nằm
+     nguyên trên đĩa máy Sếp, gửi hụt chỉ việc chọn lại. Hai chuyện khác
+     hẳn nhau, nên xử khác nhau. Màn hình nói thẳng điều này ở thẻ PDF. */
+  const { tepGoc, ...con } = d;
+  const khoa = khoaNhap(cuaVao, ganId);
   try {
-    /* ⚠️ FILE PDF CÓ SẴN KHÔNG VÀO BẢN NHÁP — CỐ Ý, KHÔNG PHẢI SÓT.
-       `localStorage` cho khoảng 5–10 MB; một bản scan 25 MB thành base64 là
-       33 MB, ghi vào là ném `QuotaExceededError` và làm MẤT LUÔN bản nháp của
-       cả bộ ảnh đang có. Mà lý do bản nháp tồn tại là "chụp xong tắt máy thì
-       ảnh vẫn còn" — ảnh chụp mất là mất thật, còn FILE PDF thì vẫn nằm
-       nguyên trên đĩa máy Sếp, gửi hụt chỉ việc chọn lại. Hai chuyện khác
-       hẳn nhau, nên xử khác nhau. Màn hình nói thẳng điều này ở thẻ PDF. */
-    const { tepGoc, ...con } = d;
-    localStorage.setItem(khoaNhap(cuaVao, ganId), JSON.stringify(con));
-    return true;
-  } catch { return false; }
+    localStorage.setItem(khoa, JSON.stringify(con));
+    return 'du';
+  } catch { /* hết chỗ — thử lại bản gọn */ }
+  /* ⚠️ NHƯỜNG TỪNG CÁI, CŨ NHẤT TRƯỚC — REV-0056 vòng 2 lỗi #4.
+     Bản trước bóc `anh_goc` của MỌI trang trong một nhát, nên đo được ở ca 12
+     trang: trang 12 làm tràn thì số trang còn đường lùi là 0/12, chứ không
+     phải 11/12. Người đã cắt trang 3 từ nửa tiếng trước mất đường lùi của
+     trang 3 chỉ vì trang 12 không vừa.
+     Nay bỏ dần từ TRANG ĐẦU cho tới khi vừa. Trang vừa cắt xong — thứ người
+     ta hay muốn lùi nhất — là thứ giữ được lâu nhất.
+     Tốn thêm tối đa N lượt `JSON.stringify`, nhưng CHỈ chạy khi đã hết chỗ,
+     tức là hiếm; và dừng ngay khi vừa. */
+  const trang = con.trang.map(t => ({ ...t }));
+  for (let i = 0; i < trang.length; i++) {
+    if (!trang[i].anh_goc) continue;
+    delete trang[i].anh_goc;
+    try {
+      localStorage.setItem(khoa, JSON.stringify({ ...con, trang }));
+      return 'thieu-goc';
+    } catch { /* vẫn chưa vừa — nhường tiếp trang sau */ }
+  }
+  return false;
 }
 
 function xoaNhap(cuaVao, ganId) {
@@ -298,6 +349,7 @@ export function moQuetTaiLieu(t) {
   let dangGui = false;
   let loiGui = null;
   let nhapKhongLuuDuoc = false;                       // localStorage không ghi được
+  let gocKhongLuuDuoc = false;                        // ghi được, nhưng phải bỏ ảnh gốc
 
   /* ---- NHÓM NHÂN SỰ PHẢI CÓ CHỦ  ·  REV-0046 #2 ------------------------
      Máy chủ đã chặn cứng (giấy nhóm `nhan_su` không có `gan_id` → 400). Màn
@@ -335,8 +387,14 @@ export function moQuetTaiLieu(t) {
   }
 
   function luuNhap() {
-    if (!hs.trang.length) { xoaNhap(cuaVao, ganId); nhapKhongLuuDuoc = false; return; }
-    nhapKhongLuuDuoc = !ghiNhap(cuaVao, ganId, hs);
+    if (!hs.trang.length) {
+      xoaNhap(cuaVao, ganId);
+      nhapKhongLuuDuoc = false; gocKhongLuuDuoc = false;
+      return;
+    }
+    const kq = ghiNhap(cuaVao, ganId, hs);
+    nhapKhongLuuDuoc = kq === false;
+    gocKhongLuuDuoc = kq === 'thieu-goc';
   }
 
   function nhomDangChon() { return dsNhom.find(n => n.ma === hs.nhom) || null; }
@@ -390,12 +448,17 @@ export function moQuetTaiLieu(t) {
         co_nen: coByteCuaDataUrl(nen_),
         ms_nen: Math.round(performance.now() - t0)
       };
-      if (viTriChupLai >= 0) hs.trang[viTriChupLai] = trang;
-      else hs.trang.push(trang);
+      let viTri;
+      if (viTriChupLai >= 0) { hs.trang[viTriChupLai] = trang; viTri = viTriChupLai; }
+      else { hs.trang.push(trang); viTri = hs.trang.length - 1; }
       viTriChupLai = -1;
       luuNhap();
       manHinh = 'trang';
       ve();
+      /* KHÔNG `await`: màn xem trang đã hiện rồi, việc dò góc chạy tiếp phía
+         sau. Dò hỏng hay không tự tin thì màn cắt không bật, người ta đi tiếp
+         như chưa từng có tính năng này. */
+      moCatTuDong(viTri);
     } catch (e) {
       alert('Không đọc được ảnh vừa chụp: ' + e.message);
     }
@@ -408,6 +471,165 @@ export function moQuetTaiLieu(t) {
     }
     viTriChupLai = viTri;
     oMayAnh.click();
+  }
+
+  /* ======================================================================
+     3a-bis. CẮT KHUNG VĂN BẢN  ·  Sếp Ngọc 03/09/2026
+     ----------------------------------------------------------------------
+     *"chụp rộng nhưng tao chỉnh được khung văn bản"* — chụp cả mặt bàn cũng
+     được, máy cắt lấy tờ giấy rồi duỗi phẳng.
+
+     BA LUẬT CỦA MÀN NÀY, theo đúng thứ tự quan trọng:
+
+     ① KÉO TAY LÀ CHÍNH, MÁY ĐOÁN LÀ PHỤ. Bốn chấm luôn kéo được, kể cả khi
+        máy đoán trượt hoàn toàn. Máy đoán chỉ để đỡ người ta vài giây.
+
+     ② BỎ QUA ĐƯỢC, VÀ BỎ QUA LÀ ĐI ĐÚNG ĐƯỜNG CŨ. Nút "Dùng nguyên ảnh"
+        KHÔNG nén lại, KHÔNG đụng một byte nào của trang — ảnh y hệt lúc
+        chưa có màn này. Người quét vội một xấp giấy sẽ bấm nó, và thế là
+        đúng.
+
+     ③ KHÔNG BÀY MÀN NÀY KHI KHÔNG CÓ GÌ ĐỂ CẮT. Ảnh chụp đã kín tờ giấy
+        (khung đoán ra ≈ mép ảnh) thì cắt là cắt vào không khí, mà bày ra là
+        bắt bấm thừa MỘT CÁI cho MỖI TRANG — đúng thứ giết một tính năng
+        trong tuần đầu. Nút "✂ Cắt khung" vẫn nằm sẵn trên từng thẻ trang,
+        nên không bao giờ mất đường vào: đây là bỏ BÀY, không phải bỏ CHỨC
+        NĂNG (không phải "cắt im lặng").
+     ====================================================================== */
+  /* {i, anh, goc[4], tuTin, viSao, msDoan, lamRo, dangXu, loi} */
+  let cat = null;
+  let boKeoGoc = null;         // gỡ trình bắt sự kiện kéo của lượt vẽ trước
+
+  /** Dò góc rồi CHỈ bày màn cắt khi thật sự có việc để làm (luật ③). */
+  async function moCatTuDong(i) {
+    try {
+      const tr = hs.trang[i];
+      if (!tr) return;
+      const anh = await taiAnh(tr.anh_goc || tr.anh);
+      const d = doanBonGoc(anh);
+      tr.ms_doan = d.ms;
+      /* Sai số 4%: ảnh chụp sát mép giấy thì mép giấy TRÙNG mép ảnh, lệch vài
+         phần trăm là do nhiễu chứ không phải có mặt bàn để cắt. */
+      if (!d.tuTin || laTronKhung(d.goc, 0.04)) return;
+      if (manHinh !== 'trang' || cat) return;      // người ta đã đi tiếp rồi
+      cat = { i, anh, goc: d.goc.map(g => g.slice()), tuTin: d.tuTin,
+              viSao: d.viSao, loiKhuyen: d.loiKhuyen || '', msDoan: d.ms,
+              lamRo: nhoLamRo(), dangXu: false, loi: null };
+      manHinh = 'cat';
+      ve();
+    } catch { /* dò hỏng thì im lặng đi tiếp — đây chỉ là GỢI Ý, không phải luật */ }
+  }
+
+  /** Mở màn cắt bằng tay từ thẻ trang — đường vào LUÔN CÓ, kể cả khi máy đã
+   *  quyết định không tự bày.
+   *
+   *  ⚠️ LUÔN CẮT TỪ `anh_goc`, KHÔNG BAO GIỜ CẮT CHỒNG LÊN BẢN ĐÃ CẮT.
+   *  REV-0056 lỗi #1: bản trước đọc `tr.anh` (= bản đã cắt), nên nút "Cắt lại"
+   *  cắt chồng lên bản cắt — ba lần bấm là tờ hợp đồng còn 558×590 điểm ảnh và
+   *  219 KB tụt xuống 48 KB, không có đường về. Nay cắt 10 lần vẫn ra đúng
+   *  chất lượng của lần cắt thứ nhất. */
+  async function moCatTay(i) {
+    const tr = hs.trang[i];
+    if (!tr) return;
+    try {
+      const anh = await taiAnh(tr.anh_goc || tr.anh);
+      /* Trang đã cắt rồi thì mở lại ĐÚNG khung Sếp kéo lần trước, đừng dò
+         lại: dò lại là vứt công đã kéo và bắt kéo lại từ đầu. */
+      const d = tr.goc_cat
+        ? { goc: tr.goc_cat, tuTin: true, ms: 0, loiKhuyen: '',
+            viSao: 'mở lại khung đã kéo lần trước' }
+        : doanBonGoc(anh);
+      cat = { i, anh, goc: d.goc.map(g => g.slice()), tuTin: d.tuTin,
+              viSao: d.viSao, loiKhuyen: d.loiKhuyen || '', msDoan: d.ms,
+              lamRo: tr.lam_ro != null ? !!tr.lam_ro : nhoLamRo(),
+              dangXu: false, loi: null };
+      manHinh = 'cat';
+      ve();
+    } catch (e) {
+      alert('Không mở được ảnh trang này để cắt: ' + (e.message || 'không rõ lý do'));
+    }
+  }
+
+  /** ĐƯỜNG LÙI — trả trang về ĐÚNG ảnh gốc chưa cắt, byte y hệt.
+   *  Đây là câu trả lời cho "cắt hỏng rồi thì sao": không phải "chụp lại". */
+  function catHoanGoc(i) {
+    const tr = hs.trang[i];
+    if (!tr || !tr.anh_goc) return;
+    if (!confirm(`Quay lại ảnh gốc chưa cắt của trang ${i + 1}?\n\n` +
+      'Bản đã cắt sẽ bỏ đi. Ảnh gốc trở lại nguyên vẹn như lúc vừa chụp.')) return;
+    /* Bóc SẠCH mọi dấu vết của lượt cắt — để trang trở lại đúng hình dạng một
+       trang chưa từng cắt, không phải một trang "đã cắt rồi hoàn tác". */
+    const { anh_goc, goc_cat, da_cat, lam_ro, co_truoc_cat,
+            ms_duoi, ms_lam_ro, ms_cat, ...con } = tr;
+    hs.trang[i] = { ...con, anh: anh_goc, co_nen: coByteCuaDataUrl(anh_goc) };
+    luuNhap();
+    ve();
+  }
+
+  /** Bỏ qua — KHÔNG đụng gì vào trang. Đây là ca "đi đúng đường cũ". */
+  function catBoQua() {
+    cat = null;
+    manHinh = 'trang';
+    ve();
+  }
+
+  async function catXong() {
+    if (!cat || cat.dangXu) return;
+    if (!tuGiacLoi(cat.goc)) {
+      cat.loi = 'Bốn góc đang vắt chéo nhau nên không dựng được khung. ' +
+        'Kéo lại cho bốn cạnh không cắt nhau, hoặc bấm "Đặt lại 4 góc".';
+      ve(); return;
+    }
+    /* Không kéo gì mà cũng không bật làm rõ chữ → không có gì để làm. Nén lại
+       một tấm ảnh y nguyên chỉ để nó xấu đi một nấc là việc vô nghĩa. */
+    if (laTronKhung(cat.goc) && !cat.lamRo) return catBoQua();
+
+    cat.dangXu = true; cat.loi = null; ve();
+    const i = cat.i;
+    try {
+      const t0 = performance.now();
+      const kq = duoiPhang(cat.anh, cat.goc, { canhToiDa: ANH_TRANG.canhToiDa });
+      let msRo = 0;
+      if (cat.lamRo) { lamRoChu(kq.canvas); msRo = kq.canvas.msLamRo || 0; }
+      /* ⚠️ QUAY VỀ ĐÚNG `nenAnhChung()` với ĐÚNG `ANH_TRANG`. Trang đã cắt và
+         trang chưa cắt phải ra cùng một loại tệp, cùng một trần dung lượng —
+         thêm một chỗ chốt chất lượng thứ hai là thêm một chỗ để hai con số
+         lệch nhau (Hiến pháp Rule 5). */
+      const tep = await canvasThanhTep(kq.canvas, `cat-${i + 1}.jpg`);
+      const nen_ = await nenAnhChung(tep, ANH_TRANG);
+      const cu = hs.trang[i];
+      hs.trang[i] = {
+        ...cu,
+        anh: nen_,
+        /* ⚠️ GIỮ ẢNH GỐC — REV-0056 lỗi #1 (CHẶN PHÁT HÀNH).
+           `cu.anh_goc || cu.anh`: cắt lần thứ hai KHÔNG được đè gốc thật bằng
+           bản đã cắt của lần thứ nhất. Ảnh vào màn quét bằng
+           `<input capture>`, mà trên iPhone ảnh chụp kiểu đó KHÔNG vào Cuộn
+           camera — mất là mất thật, phải cầm tờ giấy đi chụp lại, và với hợp
+           đồng đã ký thì tờ giấy có khi không còn ở đó nữa. */
+        anh_goc: cu.anh_goc || cu.anh,
+        /* Nhớ khung đã kéo, để "Cắt lại" mở đúng chỗ cũ thay vì dò lại. */
+        goc_cat: cat.goc.map(g => g.slice()),
+        co_nen: coByteCuaDataUrl(nen_),
+        co_truoc_cat: cu.co_truoc_cat != null ? cu.co_truoc_cat : cu.co_nen,
+        da_cat: true,
+        lam_ro: !!cat.lamRo,
+        ms_duoi: kq.ms, ms_lam_ro: msRo,
+        ms_cat: Math.round(performance.now() - t0)
+      };
+      ghiNhoLamRo(cat.lamRo);
+      cat = null;
+      luuNhap();
+      manHinh = 'trang';
+      ve();
+    } catch (e) {
+      /* KHÔNG đụng vào trang gốc. Cắt hỏng thì trang vẫn là trang cũ, người ta
+         bấm "Dùng nguyên ảnh" là đi tiếp được ngay. */
+      cat.dangXu = false;
+      cat.loi = 'Không cắt được: ' + (e.message || 'không rõ lý do') +
+        '. Ảnh gốc vẫn nguyên — bấm "Dùng nguyên ảnh" để đi tiếp.';
+      ve();
+    }
   }
 
   /* ======================================================================
@@ -656,6 +878,11 @@ export function moQuetTaiLieu(t) {
   /* ---- Đóng ---- */
   function dong() {
     document.body.classList.remove('tlq-khoa-cuon');
+    /* Màn cắt gắn trình bắt `pointermove` lên `document` (kéo góc phải theo
+       ngón tay cả khi nó ra ngoài chấm). Không gỡ ở đây là để lại một trình
+       bắt sống mãi sau khi màn đã đóng. */
+    if (boKeoGoc) { boKeoGoc(); boKeoGoc = null; }
+    cat = null;
     nen.remove();
     oMayAnh.remove();
     oChonTep.remove();
@@ -687,13 +914,18 @@ export function moQuetTaiLieu(t) {
      4. Vẽ màn hình
      ====================================================================== */
   function ve() {
+    if (boKeoGoc) { boKeoGoc(); boKeoGoc = null; }
     tam.innerHTML =
       dauTrang() +
       (manHinh === 'chon-nhom' ? veChonNhom()
         : manHinh === 'chon-nguoi' ? veChonNguoi()
         : manHinh === 'thong-tin' ? veThongTin()
+        /* `&& cat`: màn cắt không có hồ sơ cắt thì rơi về màn trang, đừng nổ.
+           Rẻ hơn nhiều so với một màn trắng giữa lúc đang quét dở. */
+        : (manHinh === 'cat' && cat) ? veCat()
         : veTrang());
     noiSuKien();
+    if (manHinh === 'cat' && cat) noiCat();
     const oDau = tam.querySelector('[data-tu-focus]');
     if (oDau) setTimeout(() => oDau.focus(), 30);
   }
@@ -880,6 +1112,259 @@ export function moQuetTaiLieu(t) {
       </div>`;
   }
 
+  /* ---- MÀN CẮT KHUNG ---------------------------------------------------
+     Chấm góc là `<button>` THẬT chứ không phải hình vẽ trên canvas: nút thật
+     thì có vùng chạm 44px do CSS bảo đảm (đo được bằng
+     `getBoundingClientRect`), bấm được bằng phím Tab, và trình đọc màn hình
+     đọc ra tên góc. Hình vẽ trên canvas thì cả ba thứ đó đều không có. */
+  /* ⚠️ KHÔNG in "mép yếu nhất N% chiều dài" lên màn này nữa (REV-0056 #2).
+     Con số đó người quét kho không quyết định được gì bằng nó, mà đọc lên là
+     câu KHOE — đúng lúc máy đang đoán sai 36% thì nó thành lời nói dối. Máy
+     chắc thì IM LẶNG; không chắc thì đã có "loiKhuyen" nói bằng tiếng người.
+
+     ⚠️ CHÚ THÍCH KIỂU HTML KHÔNG ĐƯỢC NẰM TRONG CHUỖI MẪU BÊN DƯỚI: một dấu
+     ngoặc huyền trong chú thích là ĐÓNG luôn chuỗi mẫu, cả tệp thành lỗi cú
+     pháp, và màn quét chết câm. Đã dính đúng một lần — chú thích để Ở ĐÂY. */
+  function veCat() {
+    const c = cat;
+    /* ⚠️ MÀN NÀY PHẢI VỪA MỘT TRANG Ở 375×812 — Sếp Ngọc: "ưu tiên vừa một
+       trang, hạn chế kéo trang". Câu pháp lý ở đầu màn chiếm sẵn ~130px và
+       KHÔNG được bỏ (CTL-0026 Mục 2), nên chỗ tiết kiệm phải lấy ở nơi khác:
+       hai nút hành động NẰM CẠNH NHAU một hàng thay vì chồng lên nhau, lời
+       giải thích "làm rõ chữ" gộp vào một dòng nhỏ thay vì một đoạn riêng, và
+       ảnh xem trước bị trần chiều cao (xem `noiCat`). Bàn đo `do-cat-khung`
+       kiểm thẳng: hai nút phải nằm TRONG khung nhìn, không phải cuộn xuống
+       mới thấy. */
+    return `
+      <div class="tlq-than">
+        <p class="tlq-huong">Kéo <b>4 chấm</b> vào 4 góc tờ giấy — máy duỗi phẳng
+          thành hình chữ nhật ngay ngắn. Bốn góc máy đặt sẵn chỉ là <b>gợi ý</b>.</p>
+        ${c.loiKhuyen ? `<p class="tlq-canh">${esc(c.loiKhuyen)}</p>` : ''}
+        <div class="tlq-cat-khung" id="tlqCatKhung">
+          <canvas id="tlqCatVe"></canvas>
+          ${[0, 1, 2, 3].map(k => `
+            <button type="button" class="tlq-cat-goc" data-goc="${k}"
+                    aria-label="Góc ${TEN_GOC[k]} — kéo để chỉnh"><i></i></button>`).join('')}
+        </div>
+        <div class="tlq-chip">
+          <button type="button" class="tlq-nut-phu${c.lamRo ? ' chon' : ''}"
+                  data-viec="cat-lamro" aria-pressed="${c.lamRo ? 'true' : 'false'}"
+                  title="Xoá bóng đổ, làm nền trắng đều. Giữ nguyên màu dấu đỏ.">
+            ${c.lamRo ? '☑' : '☐'} Làm rõ chữ
+          </button>
+          <button type="button" class="tlq-nut-phu" data-viec="cat-datlai">Đặt lại 4 góc</button>
+        </div>
+        <p class="tlq-do">"Làm rõ chữ" xoá bóng đổ, làm nền trắng đều,
+          <b>giữ nguyên màu dấu đỏ</b>.</p>
+        ${c.loi ? `<p class="tlq-loi">${esc(c.loi)}</p>` : ''}
+        <div class="tlq-hai-duong tlq-cat-nut">
+          <button type="button" class="tlq-nut-chinh" id="tlqCatXong"
+                  data-viec="cat-xong" ${c.dangXu ? 'disabled' : ''}>
+            ${c.dangXu ? 'Đang cắt…' : '✂ Cắt & duỗi'}
+          </button>
+          <button type="button" class="tlq-nut-nhi" id="tlqCatBo"
+                  data-viec="cat-bo" ${c.dangXu ? 'disabled' : ''}>
+            Dùng nguyên ảnh
+          </button>
+        </div>
+      </div>`;
+  }
+
+  /** Đệm quanh ảnh xem trước. Chấm góc rộng 44px, tâm nằm ĐÚNG trên góc, nên
+   *  góc sát mép ảnh thì 22px của chấm thò ra ngoài. Không có đệm này thì
+   *  chấm bị cắt cụt hoặc đẩy khỏi vùng chạm — và bốn góc mép ảnh chính là
+   *  trạng thái MẶC ĐỊNH khi máy không đoán được. */
+  const CAT_DEM = 24;
+
+  function noiCat() {
+    const khung = tam.querySelector('#tlqCatKhung');
+    const oVe = tam.querySelector('#tlqCatVe');
+    if (!khung || !oVe || !cat) return;
+    const anh = cat.anh;
+    const rongAnh = anh.naturalWidth || anh.width;
+    const caoAnh = anh.naturalHeight || anh.height;
+
+    /* Bề ngang khung do CSS quyết (vừa màn), chiều cao suy ra theo tỉ lệ ảnh.
+       Trần chiều cao để ảnh dọc không đẩy hai nút xuống dưới màn — Sếp đã
+       chốt "ưu tiên vừa một trang, hạn chế kéo trang". */
+    let ti = 1, W = 0, H = 0;
+    function tinhTiLe() {
+      const rongCo = Math.max(120, Math.round(khung.clientWidth - CAT_DEM * 2));
+      /* 520px là chỗ mọi thứ KHÁC chiếm: đầu màn 52 + câu pháp lý 130 + dòng
+         hướng dẫn 44 + đệm khung 60 + dòng số đo 52 + hàng chip 60 + hàng hai
+         nút 62 + đệm thân 32 ≈ 492, cộng ít dư. Đo bằng bàn đo chứ không ước —
+         xem phép kiểm "hai nút nằm trong khung nhìn" ở `do-cat-khung`. */
+      const caoTran = Math.max(170, Math.round(window.innerHeight - 520));
+      ti = Math.min(rongCo / rongAnh, caoTran / caoAnh);
+    }
+    tinhTiLe();
+    function datCo() {
+      W = Math.max(80, Math.round(rongAnh * ti));
+      H = Math.max(80, Math.round(caoAnh * ti));
+      oVe.width = W; oVe.height = H;
+      oVe.style.width = W + 'px'; oVe.style.height = H + 'px';
+    }
+    datCo();
+    const x = oVe.getContext('2d');
+
+    /* Màu lấy từ BIẾN CSS, không gõ mã màu vào JS: luật ba màu
+       (`docs/BANG-MAU.md`) chỉ giữ được nếu mọi chỗ cùng đọc một nguồn. */
+    const bien = getComputedStyle(document.documentElement);
+    const mau = (ten, du) => (bien.getPropertyValue(ten) || '').trim() || du;
+    const CAM = mau('--cam', '#eb7c17');
+    const DO = mau('--danger', '#c0392b');
+
+    const chams = [...khung.querySelectorAll('.tlq-cat-goc')];
+    let choKhung = 0;
+
+    function veLai() {
+      x.clearRect(0, 0, W, H);
+      x.drawImage(anh, 0, 0, W, H);
+      const diem = cat.goc.map(g => [g[0] * W, g[1] * H]);
+      /* `moi = true` mở đường mới (để vẽ viền); `false` nối thêm vào đường
+         đang dựng (để tô phần bị bỏ bằng luật chẵn-lẻ). Một hàm, hai chỗ
+         dùng — chép hai lần là có ngày sửa một chỗ quên chỗ kia. */
+      const duong = (moi) => {
+        if (moi) x.beginPath();
+        x.moveTo(diem[0][0], diem[0][1]);
+        for (let k = 1; k < 4; k++) x.lineTo(diem[k][0], diem[k][1]);
+        x.closePath();
+      };
+      /* Phần BỊ BỎ tối đi — nhìn một cái là biết cái gì còn lại, không phải
+         đoán theo bốn cái chấm. */
+      x.save();
+      x.beginPath();
+      x.rect(0, 0, W, H);            // khung ngoài + tứ giác, tô theo luật chẵn-lẻ
+      duong(false);
+      x.fillStyle = 'rgba(44, 33, 23, .5)';
+      x.fill('evenodd');
+      x.restore();
+      duong(true);
+      x.lineWidth = 2;
+      /* Khung lõm thì viền chuyển ĐỎ — đỏ chỉ dùng cho "có việc hỏng", và
+         khung vắt chéo đúng là hỏng: cắt ra sẽ méo. */
+      x.strokeStyle = tuGiacLoi(cat.goc) ? CAM : DO;
+      x.stroke();
+      /* ⚠️ LẤY `offsetLeft/offsetTop` CỦA CHÍNH CANVAS, đừng cộng tay `CAT_DEM`.
+         Canvas được CĂN GIỮA (`margin: 0 auto`) nên khi ảnh dọc bị trần chiều
+         cao ép hẹp lại, nó không còn nằm ở mép trái vùng đệm — cộng tay là
+         bốn cái chấm lệch khỏi bốn góc đúng bằng nửa phần thừa. Bàn đo bắt
+         được đúng cảnh này: lệch 13,5px ở cả bốn góc. */
+      chams.forEach((b, k) => {
+        b.style.left = (oVe.offsetLeft + diem[k][0] - 22) + 'px';
+        b.style.top = (oVe.offsetTop + diem[k][1] - 22) + 'px';
+      });
+    }
+    /* ---- DỰNG LẠI TOÀN BỘ KÍCH THƯỚC ------------------------------------
+       Gói cả ba bước (tính tỉ lệ → đặt cỡ → vẽ → tự co) vào MỘT hàm, vì màn
+       này phải dựng lại được BẤT CỨ LÚC NÀO chứ không chỉ lúc mở. */
+    function dungLai() {
+      tinhTiLe();
+      datCo();
+      veLai();
+      tuCoVuaMan();
+    }
+    /* ---- TỰ CO CHO VỪA MÀN ----------------------------------------------
+       Con số 520 ở trên chỉ là ước lượng ban đầu. Cái ĐÚNG trên mọi máy, mọi
+       cỡ chữ hệ thống, mọi độ dài câu là: đo mép dưới THẬT của hàng nút rồi
+       cắt đúng phần thừa khỏi ảnh xem trước. Sàn 150px — hẹp hơn thế thì kéo
+       góc không còn chính xác, thà để cuộn một chút.
+       Không có bước này thì ở màn 812px hàng nút rơi xuống 850px: người ta
+       thấy ảnh, thấy chấm, KHÔNG thấy nút cắt — coi như tính năng không có. */
+    function tuCoVuaMan() {
+      /* ⚠️ ĐO PHẦN TRÀN CỦA KHUNG CUỘN, KHÔNG ĐO MÉP DƯỚI HÀNG NÚT.
+         Hàng nút nay `position: sticky` (REV-0056 vòng 2 lỗi #2) nên mép dưới
+         của nó LUÔN nằm trong khung nhìn — đo nó là luôn ra "vừa rồi", và ảnh
+         xem trước không bao giờ co nữa. Thứ cần biết là cả màn có phải cuộn
+         hay không, tức `scrollHeight` so với `clientHeight`.
+         Hai cơ chế bù nhau: co ảnh lo cho màn CAO VỪA (co một chút là hết
+         cuộn); `sticky` lo cho màn QUÁ THẤP (co hết cỡ vẫn phải cuộn, thì ít
+         nhất hai cái nút vẫn nằm trong tầm mắt). */
+      const thua = Math.ceil(tam.scrollHeight - tam.clientHeight);
+      if (thua > 0 && H - thua >= 150) {
+        ti *= (H - thua) / H;
+        datCo();
+        veLai();
+      }
+    }
+    dungLai();
+
+    /* ---- ĐỔI CỠ MÀN / XOAY MÁY  ·  REV-0056 lỗi #3 ----------------------
+       Canvas có `margin: 0 auto` nên chỗ đứng THẬT của nó phụ thuộc bề ngang
+       khung chứa; bốn chấm thì đặt bằng `style.left/top` tính MỘT LẦN lúc vẽ.
+       Khung hẹp lại mà không vẽ lại thì canvas dịch còn chấm đứng yên — đo
+       được 28px lệch khi khung 375 → 320. Chấm rộng 44px mà lệch 28px thì
+       ngón tay chạm hụt, trong khi lớp phủ tối (vẽ BÊN TRONG canvas) vẫn đúng
+       chỗ: hai thứ nói hai đằng.
+       Vẽ lại giữ nguyên 4 góc vì góc lưu ở dạng CHUẨN HOÁ 0..1, không phải px.
+       `requestAnimationFrame` để một cú xoay máy bắn hàng chục sự kiện
+       `resize` chỉ dựng lại đúng một lần. */
+    let choDoiCo = 0;
+    function khiDoiCo() {
+      if (choDoiCo) return;
+      choDoiCo = requestAnimationFrame(() => { choDoiCo = 0; dungLai(); });
+    }
+    window.addEventListener('resize', khiDoiCo);
+    window.addEventListener('orientationchange', khiDoiCo);
+
+    /* ---- KÉO BẰNG NGÓN TAY ---------------------------------------------
+       `pointer*` chứ không `mouse*`/`touch*`: một bộ trình bắt chạy cho cả
+       ngón tay, chuột và bút. `touch-action: none` ở CSS chặn trình duyệt
+       cuộn trang khi ngón tay đi ngang — không có nó thì kéo góc thành cuộn
+       màn hình, đúng lỗi kinh điển của mọi màn kéo thả trên điện thoại. */
+    let dangKeo = -1;
+    function diChuyen(e) {
+      if (dangKeo < 0) return;
+      const r = oVe.getBoundingClientRect();
+      cat.goc[dangKeo] = [
+        Math.min(1, Math.max(0, (e.clientX - r.left) / (r.width || 1))),
+        Math.min(1, Math.max(0, (e.clientY - r.top) / (r.height || 1)))
+      ];
+      if (!choKhung) choKhung = requestAnimationFrame(() => { choKhung = 0; veLai(); });
+      e.preventDefault();
+    }
+    function thaTay() {
+      if (dangKeo < 0) return;
+      chams[dangKeo]?.classList.remove('keo');
+      dangKeo = -1;
+      veLai();
+    }
+    chams.forEach((b, k) => {
+      b.addEventListener('pointerdown', (e) => {
+        dangKeo = k;
+        b.classList.add('keo');
+        try { b.setPointerCapture(e.pointerId); } catch { /* trình duyệt cũ */ }
+        e.preventDefault();
+      });
+      /* Bàn phím: mỗi lần bấm dời 1% cạnh — đường vào cho người không dùng
+         được cảm ứng, và cũng là đường bàn đo bấm được mà không cần giả lập
+         ngón tay. */
+      b.addEventListener('keydown', (e) => {
+        const b1 = { ArrowLeft: [-0.01, 0], ArrowRight: [0.01, 0],
+                     ArrowUp: [0, -0.01], ArrowDown: [0, 0.01] }[e.key];
+        if (!b1) return;
+        cat.goc[k] = [
+          Math.min(1, Math.max(0, cat.goc[k][0] + b1[0])),
+          Math.min(1, Math.max(0, cat.goc[k][1] + b1[1]))
+        ];
+        veLai();
+        e.preventDefault();
+      });
+    });
+    document.addEventListener('pointermove', diChuyen, { passive: false });
+    document.addEventListener('pointerup', thaTay);
+    document.addEventListener('pointercancel', thaTay);
+    boKeoGoc = () => {
+      document.removeEventListener('pointermove', diChuyen, { passive: false });
+      document.removeEventListener('pointerup', thaTay);
+      document.removeEventListener('pointercancel', thaTay);
+      window.removeEventListener('resize', khiDoiCo);
+      window.removeEventListener('orientationchange', khiDoiCo);
+      if (choKhung) cancelAnimationFrame(choKhung);
+      if (choDoiCo) cancelAnimationFrame(choDoiCo);
+    };
+  }
+
   function veTrang() {
     if (dangDocTep) {
       return `<div class="tlq-than"><p class="tlq-huong">Đang đọc file…</p></div>`;
@@ -893,6 +1378,10 @@ export function moQuetTaiLieu(t) {
       <div class="tlq-than">
         ${nhapKhongLuuDuoc ? `<p class="tlq-canh">Máy không lưu được bản nháp (hết chỗ hoặc chế độ ẩn danh).
           <b>Đừng đóng trang này</b> cho tới khi lưu xong.</p>` : ''}
+        ${gocKhongLuuDuoc ? `<p class="tlq-canh">Máy hết chỗ nên <b>không giữ được ảnh gốc</b> của
+          các trang đã cắt. Ảnh đã chụp vẫn còn nguyên, nhưng nếu đóng trang này rồi mở lại
+          thì <b>không lùi về ảnh gốc</b> được nữa. Muốn lùi thì lùi ngay bây giờ,
+          hoặc lưu bớt trang thành một tài liệu riêng cho nhẹ.</p>` : ''}
         <div class="tlq-dsdanh">
           ${hs.trang.map((tr, i) => `
             <div class="tlq-the" draggable="true" data-i="${i}">
@@ -901,14 +1390,28 @@ export function moQuetTaiLieu(t) {
                 <b>Trang ${i + 1}</b>
                 <span>${coDoc(tr.co_goc || 0)} → <b>${coDoc(tr.co_nen)}</b></span>
                 ${tr.ten_goc ? `<span class="tlq-ten-goc">${esc(tr.ten_goc)}</span>` : ''}
+                ${/* "Đã cắt khung" KHÔNG cần một dòng riêng nữa: thẻ đã có
+                      nút "↩ Ảnh gốc", mà nút đó chỉ hiện khi trang đã cắt —
+                      sự có mặt của nó ĐÃ LÀ câu trả lời. Bỏ dòng thừa vì ô
+                      chữ bị bóp hẹp bởi cột 6 nút, thêm một dòng là thẻ cao
+                      127px (bàn đo bắt được, trần 116px). Chỉ giữ lại khi có
+                      "làm rõ chữ" — cái đó nút không nói hộ được. */
+                  tr.da_cat && tr.lam_ro
+                    ? '<span class="tlq-ten-goc">✂ đã làm rõ chữ</span>' : ''}
               </div>
               <div class="tlq-the-nut">
                 <button type="button" class="tlq-nut-phu" data-viec="len" data-i="${i}"
                         ${i === 0 ? 'disabled' : ''} aria-label="Đưa trang ${i + 1} lên trên">↑</button>
                 <button type="button" class="tlq-nut-phu" data-viec="xuong" data-i="${i}"
                         ${i === n - 1 ? 'disabled' : ''} aria-label="Đưa trang ${i + 1} xuống dưới">↓</button>
+                <button type="button" class="tlq-nut-phu" data-viec="cat" data-i="${i}"
+                        aria-label="Cắt khung văn bản trang ${i + 1}">✂ ${tr.da_cat ? 'Cắt lại' : 'Cắt'}</button>
                 <button type="button" class="tlq-nut-phu" data-viec="chup-lai" data-i="${i}">Thay</button>
                 <button type="button" class="tlq-nut-phu" data-viec="xoa-trang" data-i="${i}">Xoá</button>
+                ${tr.da_cat && tr.anh_goc ? `
+                  <button type="button" class="tlq-nut-phu" data-viec="cat-hoan" data-i="${i}"
+                          title="Quay lại ảnh gốc chưa cắt"
+                          aria-label="Quay lại ảnh gốc chưa cắt của trang ${i + 1}">↩ Ảnh gốc</button>` : ''}
               </div>
             </div>`).join('')}
         </div>
@@ -1053,6 +1556,24 @@ export function moQuetTaiLieu(t) {
         if (v === 'chup-tiep') return moMayAnh(-1);
         if (v === 'chon-tep') return moChonTep();
         if (v === 'chup-lai') return moMayAnh(parseInt(el.dataset.i, 10));
+        if (v === 'cat') return moCatTay(parseInt(el.dataset.i, 10));
+        if (v === 'cat-hoan') return catHoanGoc(parseInt(el.dataset.i, 10));
+        if (v === 'cat-bo') return catBoQua();
+        if (v === 'cat-xong') return catXong();
+        if (v === 'cat-lamro') {
+          if (!cat) return;
+          cat.lamRo = !cat.lamRo;
+          ghiNhoLamRo(cat.lamRo);
+          ve(); return;
+        }
+        if (v === 'cat-datlai') {
+          if (!cat) return;
+          /* Đặt lại = về MÉP ẢNH, không phải về "máy đoán lần nữa". Máy vừa
+             đoán ra cái người ta đang muốn bỏ đi, đoán lại là trả về đúng nó. */
+          cat.goc = [[0, 0], [1, 0], [1, 1], [0, 1]];
+          cat.loi = null;
+          ve(); return;
+        }
         if (v === 'bo-tep') {
           if (!confirm(`Bỏ file "${hs.tepGoc?.ten}" khỏi bộ này?`)) return;
           hs.tepGoc = null; hs.nguon = null;

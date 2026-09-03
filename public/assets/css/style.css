@@ -3689,13 +3689,23 @@ tr.kd-chiadoi td {
 .tlq-the img { width: 64px; height: 84px; object-fit: cover; border-radius: var(--r-sm); background: var(--surface-2); }
 .tlq-the-tin b { display: block; font-size: 14px; color: var(--ink); }
 .tlq-the-tin span { font-size: 12px; color: var(--text-mute); }
-/* BỐN NÚT MỖI THẺ, NHƯNG THẺ KHÔNG CAO THÊM MỘT PIXEL NÀO.
-   Trước: hai nút xếp chồng = 2×44 + 6 = 94px. Nay: lưới 2×2 = vẫn 2 hàng,
-   vẫn 94px. Sếp Ngọc vừa chốt "ưu tiên vừa một trang, hạn chế kéo trang" —
-   thêm ↑↓ theo kiểu xếp chồng là đẩy thẻ lên 4 hàng (190px), màn dài gấp đôi.
-   Mỗi nút vẫn ≥44px (đo THẬT ở `do-tai-tep-len-kho`, không đọc CSS).
+/* NĂM NÚT MỖI THẺ, NHƯNG THẺ VẪN KHÔNG CAO THÊM MỘT PIXEL NÀO.
+   Trước: hai nút xếp chồng = 2×44 + 6 = 94px. Rồi lưới 2×2 (↑ ↓ Thay Xoá) =
+   vẫn 2 hàng, vẫn 94px. Nay thêm nút "✂ Cắt" là nút thứ NĂM: giữ 2×2 thì
+   thành 3 hàng = 162px, thẻ cao thêm 40% và màn dài gấp rưỡi — đúng thứ
+   `do-tai-tep` bắt được ngay lượt chạy đầu.
+   → Đổi sang BA CỘT: hàng 1 là ↑ ↓ ✂Cắt, hàng 2 là Thay Xoá. Vẫn 2 hàng,
+   vẫn 94px, không mất nút nào.
+   Sếp Ngọc chốt "ưu tiên vừa một trang, hạn chế kéo trang" — luật đó áp cho
+   cả nút thứ sáu nếu có ngày ai thêm: thêm nút thì đổi số cột, đừng đổi số
+   hàng. Mỗi nút vẫn ≥44px (đo THẬT ở `do-tai-tep`, không đọc CSS).
    `min-width: 0` để nút ↑↓ co được trong cột hẹp mà không tràn thẻ. */
-.tlq-the-nut { display: grid; grid-template-columns: auto auto; gap: 6px; }
+.tlq-the-nut { display: grid; grid-template-columns: repeat(3, auto); gap: 6px; }
+/* Ô chữ NHƯỜNG chỗ cho cột nút thay vì đẩy nút ra ngoài thẻ. Nhường được vì
+   tên tệp đã có `text-overflow: ellipsis` ở `.tlq-ten-goc`.
+   (Luật `white-space` cho chính mấy cái nút nằm ở khối "BA LUẬT RIÊNG" phía
+   dưới — KHÔNG được đặt ở đây, xem lý do ghi ngay tại đó.) */
+.tlq-the-tin { min-width: 0; }
 .tlq-do { font-size: 12px; color: var(--text-mute); margin: 0 0 12px; }
 .tlq-ten-goc {
   display: block; font-size: 11px; color: var(--text-mute);
@@ -3752,7 +3762,34 @@ tr.kd-chiadoi td {
 
    Nút ↑↓ trong thẻ trang: bốn nút một thẻ nên cột hẹp lại; `min-width: 0` cho
    nút co được mà không tràn thẻ. KHÔNG đụng `min-height` — 44px giữ nguyên. */
-.tlq-the-nut .tlq-nut-phu { min-width: 0; padding: 0 10px; }
+/* `white-space: nowrap` PHẢI nằm ở ĐÂY, không được đặt cạnh `.tlq-the-nut`
+   phía trên: `do-kho-tai-lieu.mjs` đọc `min-height` bằng LẦN XUẤT HIỆN ĐẦU
+   TIÊN của tên lớp, nên một luật `.tlq-nut-phu` đặt trước khối gốc là phép đo
+   báo "KHÔNG KHAI" trong khi nút vẫn 44px thật. Đã dính đúng một lần khi vá
+   REV-0056 — cổng `do-kho-tai-lieu` bắt được, và nó đúng.
+   Vì sao cần `nowrap`: trang ĐÃ CẮT có nút thứ sáu ("↩ Ảnh gốc"), cột nút hẹp
+   lại làm chữ trong nút xuống dòng → nút cao 64px → thẻ phình lên 153px. */
+.tlq-the-nut .tlq-nut-phu { min-width: 0; padding: 0 10px; white-space: nowrap; }
+/* MÀN RẤT HẸP (≤360px) — XUỐNG 2 CỘT  ·  REV-0056 vòng 2 lỗi #3
+   Ba cột vừa khít ở 375px, nhưng ở 320px thì cột nút ép ô chữ xuống gần 0 và
+   thẻ phình lên 421px (đo thật). `do-tai-tep` không thấy vì nó chỉ đo 1440 và
+   375, và chỉ đo thẻ 5 nút — thẻ 6 nút chỉ có sau khi CẮT, mà đường tải file
+   không bao giờ cắt. Hai cột ở 320px cho 6 nút = 3 hàng ≈ 160px, vẫn ngắn hơn
+   nhiều so với 421px. */
+@media (max-width: 360px) {
+  /* Ba cột nút vừa khít ở 375px. Ở 320px thì không: cột nút bóp ô chữ xuống
+     ~30px, "3,2 MB → 173 KB" xuống 8 dòng, thẻ phình 421px.
+     Ép nút xuống 2 cột chỉ hạ được tới 242px — vẫn cao, vì ô chữ vẫn bị bóp.
+     Cách đúng ở màn hẹp là ĐỔI BỐ CỤC chứ không đổi số cột: cho hàng nút
+     XUỐNG HẲN MỘT HÀNG RIÊNG chiếm cả bề ngang thẻ. Ô chữ được nguyên chỗ
+     (một dòng là đủ), hàng nút được rộng nên giữ 3 cột = 2 hàng.
+     Ảnh xem trước nhỏ lại 48×64: ở 320px nó chỉ để nhận ra trang nào, mà
+     84px ảnh đang là thứ quyết định chiều cao thẻ.
+     Kết quả đo: 421px → 184px. */
+  .tlq-the { grid-template-columns: 48px 1fr; }
+  .tlq-the img, .tlq-the .tlq-bieu-tuong { width: 48px; height: 64px; }
+  .tlq-the-nut { grid-column: 1 / -1; justify-content: start; }
+}
 
 /* HAI ĐƯỜNG VÀO NẰM CẠNH NHAU — một hàng, không phải hai.
    Thứ tự do JS quyết theo thiết bị (`duongMacDinh()`): máy tính thì "Chọn
@@ -3797,6 +3834,81 @@ textarea.tlq-o { padding: 10px 12px; }
 }
 .tlq-dongy > b { color: var(--cam-text); font-size: 14px; }
 .tlq-dongy > p { margin: 4px 0 0; font-size: 12px; color: var(--text-mute); }
+
+/* ==========================================================================
+   MÀN CẮT KHUNG VĂN BẢN  ·  Sếp Ngọc 03/09/2026
+   --------------------------------------------------------------------------
+   ⚠️ KHỐI NÀY PHẢI NẰM SAU `.tlq-nut-*` Ở TRÊN — cùng lý do đã ghi ở khối
+   `.tlq-hai-duong`: `do-kho-tai-lieu.mjs` đọc `min-height` bằng LẦN XUẤT
+   HIỆN ĐẦU TIÊN của tên lớp trong tệp. Đừng ai đẩy khối này lên trước.
+
+   LUẬT BA MÀU (`docs/BANG-MAU.md`): khối này KHÔNG thêm màu nào. Chấm góc là
+   `--cam` (đúng vai của cam: thứ cần nhìn và đang thao tác), phần bị bỏ tối
+   đi bằng `--ink` pha trong suốt (họ nâu), viền khung LÕM chuyển `--danger`
+   — ngoại lệ đỏ, và là đỏ đúng nghĩa: khung lõm cắt ra là ảnh méo thật.
+
+   ĐỆM 24px QUANH ẢNH LÀ BẮT BUỘC, KHÔNG PHẢI TRANG TRÍ: chấm góc rộng 44px
+   với tâm nằm ĐÚNG trên góc, nên góc ở mép ảnh có 22px thò ra ngoài. Không
+   có đệm thì bốn góc mặc định (= mép ảnh, đúng trạng thái khi máy không đoán
+   được) bị cắt cụt và không kéo nổi.
+   ========================================================================== */
+.tlq-cat-khung {
+  position: relative;
+  padding: 24px;
+  margin-bottom: 12px;
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  /* Ngón tay đi ngang KHÔNG được biến thành cuộn trang. */
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.tlq-cat-khung canvas {
+  display: block;
+  margin: 0 auto;
+  border-radius: var(--r-sm);
+  background: var(--surface);
+}
+/* Chấm góc: vùng chạm 44×44 THẬT (nút trong suốt), chấm nhìn thấy nhỏ hơn ở
+   giữa. Làm ngược lại — vẽ chấm to bằng cả vùng chạm — thì bốn cái chấm che
+   mất đúng bốn góc chữ mà người ta đang cần nhìn để căn. */
+.tlq-cat-goc {
+  position: absolute; left: 0; top: 0;
+  width: 44px; height: 44px; min-width: 44px; min-height: 44px;
+  padding: 0; margin: 0; border: 0; background: none; cursor: grab;
+  display: flex; align-items: center; justify-content: center;
+  touch-action: none;
+}
+.tlq-cat-goc i {
+  display: block; width: 20px; height: 20px; border-radius: 50%;
+  background: var(--cam); border: 3px solid var(--white);
+  box-shadow: 0 1px 4px rgba(44, 33, 23, .55);
+}
+.tlq-cat-goc:focus-visible i { outline: 3px solid var(--ink); outline-offset: 2px; }
+.tlq-cat-goc.keo { cursor: grabbing; }
+.tlq-cat-goc.keo i { width: 26px; height: 26px; }
+
+/* HAI NÚT HÀNH ĐỘNG DÍNH ĐÁY  ·  REV-0056 vòng 2 lỗi #2
+   --------------------------------------------------------------------------
+   Ảnh xem trước đã tự co hết cỡ mà màn cắt vẫn không vừa khi khung nhìn thấp:
+   đo được mép dưới hàng nút ở 757px/568 (màn 320×568) · 622px/375 (xoay
+   ngang) · 683px/480 (bàn phím ảo bật). Phần CỐ ĐỊNH — đầu màn + đoạn pháp lý
+   130px + hướng dẫn + chip + hai nút — tự nó đã cao hơn 375px, nên co ảnh
+   thêm cũng vô ích (mà co dưới 150px thì kéo góc hết chính xác).
+
+   Cách thoát không phải co ảnh, mà là ĐỪNG ĐỂ NÚT TRÔI: `sticky` giữ hàng hai
+   nút dính đáy khung cuộn. Nội dung dài bao nhiêu cũng được, "✂ Cắt & duỗi"
+   và "Dùng nguyên ảnh" LUÔN trong tầm mắt — đúng tinh thần Sếp Ngọc chốt
+   "ưu tiên hiển thị trên 1 trang": thứ bắt buộc phải thấy là NÚT.
+   Nền ĐẶC là bắt buộc: để trong suốt thì ảnh cuộn lộ ra dưới chữ trên nút. */
+.tlq-cat-nut {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  margin-bottom: 0;
+  padding: 8px 0 4px;
+  background: var(--bg);
+}
 
 /* ==========================================================================
    CTL-0017 — SỬA VIỆC ĐÃ GIAO

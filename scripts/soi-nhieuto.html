@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="vi">
+<head><meta charset="utf-8"><title>Soi dò nhiều tờ</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+<style>body{font:14px/1.6 system-ui;margin:0;padding:12px;background:#f5ecdf;color:#2c2117}
+pre{background:#fffcf4;border:1px solid #e2d0ba;border-radius:8px;padding:10px;white-space:pre-wrap}</style>
+</head>
+<body><pre id="kq">đang soi…</pre>
+<script type="module">
+import { nenAnhChung } from '/assets/js/anh-chung.js';
+import { moQuetTaiLieu, ANH_TRANG } from '/assets/js/quet-tai-lieu.js';
+import { doanBonGoc, taiAnh, KHUYEN_NHIEU_TO } from '/assets/js/cat-khung.js';
+import { veToGiay, datGiayVaoCanh, nenBanGo, themNhieu } from '/lib/trang-giay-thu.js';
+
+const dong = [];
+const ghi = (s) => { dong.push(s); document.getElementById('kq').textContent = dong.join('\n'); };
+const cho = (ms) => new Promise(r => setTimeout(r, ms));
+const doi = async (c, h = 12000) => { const t = Date.now();
+  while (Date.now() - t < h) { const e = document.querySelector(c); if (e) return e; await cho(40); }
+  throw new Error('Không thấy ' + c); };
+const W12 = 3024, H12 = 4032;
+const KHOA = 'tl_nhap_v1_kho_chung_chung';
+function canh1(goc) {
+  const nen = nenBanGo(W12, H12);
+  datGiayVaoCanh(nen, veToGiay(1500, 2000, { nhieu: 10 }), goc.map(p => [p[0] * W12, p[1] * H12]));
+  themNhieu(nen.getContext('2d'), W12, H12, 10);
+  return nen;
+}
+function tep(c) { return new Promise(r => c.toBlob(b => r(new File([b], 'x.jpg', { type: 'image/jpeg' })), 'image/jpeg', 0.95)); }
+
+try {
+const CA = [
+  ['tờ đơn LỆCH TRÁI',            [[0.05, 0.12], [0.45, 0.12], [0.45, 0.88], [0.05, 0.88]]],
+  ['tờ đơn CHỤP XA (cảnh của chính Khỉ Đột)', [[0.31, 0.27], [0.72, 0.24], [0.75, 0.75], [0.28, 0.71]]],
+  ['tờ đơn giữa khung (đối chứng)', [[0.15, 0.12], [0.86, 0.10], [0.88, 0.90], [0.13, 0.88]]]
+];
+ghi('─── Máy nói gì với người dùng, trên TỜ ĐƠN ───');
+for (const [ten, goc] of CA) {
+  const im = await taiAnh(await nenAnhChung(await tep(canh1(goc)), ANH_TRANG));
+  const d = doanBonGoc(im);
+  ghi(`\n  ${ten}`);
+  ghi(`    phuGiua=${(d.phuGiua * 100).toFixed(0)}% · nhieuTo=${d.nhieuTo} · tuTin=${d.tuTin}`);
+  ghi(`    → màn cắt TỰ BÀY: ${d.tuTin ? 'CÓ' : 'không'}`);
+  ghi(`    → câu nói với Sếp: "${(d.loiKhuyen || '(im lặng)')}"`);
+}
+
+/* Chạy thật qua màn quét: câu đó có HIỆN LÊN màn không. */
+/* CHẠY THẬT trên ca CHỤP XA — ca DUY NHẤT trong hai ca báo nhầm mà máy
+   `tuTin=true`, tức là màn cắt TỰ BÀY và câu sai ĐẬP THẲNG vào mắt người
+   dùng. Ca "lệch trái" `tuTin=false` nên màn không tự bày; phải đo đúng ca
+   có hại, không đo ca dễ. */
+ghi('\n─── Chạy thật qua màn quét (tờ đơn CHỤP XA, 375px) ───');
+let canhDangChup = canh1(CA[1][1]);
+const clickGoc = HTMLInputElement.prototype.click;
+HTMLInputElement.prototype.click = function () {
+  if (this.type !== 'file') return clickGoc.call(this);
+  canhDangChup.toBlob(b => { const dt = new DataTransfer();
+    dt.items.add(new File([b], 'chup.jpg', { type: 'image/jpeg' }));
+    this.files = dt.files; this.dispatchEvent(new Event('change', { bubbles: true })); }, 'image/jpeg', 0.95);
+};
+const nut = document.createElement('button'); document.body.appendChild(nut);
+nut.addEventListener('click', () => moQuetTaiLieu({ cuaVao: 'kho_chung', duongMacDinh: 'may-anh',
+  nhom: [{ ma: 'attp', ten: 'An toàn thực phẩm', vi_du: 'Giấy ATTP', han_luu: '5 năm', nhay_cam: 0 }],
+  khiXong: () => {} }));
+localStorage.removeItem(KHOA); localStorage.removeItem('tl_lam_ro_chu_v1');
+nut.click();
+(await doi('[data-viec="chon-nhom"]')).click();
+let bay = true;
+try { await doi('#tlqCatKhung', 12000); } catch { bay = false; }
+const o = document.querySelector('.tlq-tam'); if (o) o.style.width = '375px';
+ghi(`  Màn cắt tự bày: ${bay ? 'CÓ' : 'không'}`);
+const canhEl = document.querySelector('.tlq-cat-khung')
+  ? [...document.querySelectorAll('.tlq-canh')].map(e => e.textContent.replace(/\s+/g, ' ').trim()) : [];
+ghi(`  Câu .tlq-canh đang hiện trên màn cắt: ${JSON.stringify(canhEl)}`);
+const nhamHien = canhEl.some(c => /NHIỀU HƠN MỘT/i.test(c));
+ghi(`  → Người dùng CÓ thấy câu "nhiều hơn một tờ" cho một tờ giấy DUY NHẤT: ${nhamHien ? 'CÓ ✗' : 'không'}`);
+
+/* ---- MÀN CẮT CÓ CÒN VỪA MỘT MÀN KHI CÓ THÊM ĐOẠN LỜI KHUYÊN KHÔNG ----
+   Bản vá thêm `<p class="tlq-canh">` — đoạn này CHỈ hiện ở ca máy không chắc
+   hoặc thấy nhiều tờ, mà cổng `do-cat-khung` chỉ đo ca máy CHẮC (im lặng).
+   Tức là đúng cấu hình cao nhất của màn lại là cấu hình KHÔNG được đo. */
+{
+  const hang = document.querySelector('.tlq-hai-duong');
+  const day = hang ? hang.getBoundingClientRect().bottom : null;
+  const cCanh = document.querySelector('.tlq-canh');
+  const caoCanh = cCanh ? cCanh.getBoundingClientRect().height : 0;
+  ghi(`\n  Màn cắt CÓ đoạn lời khuyên (cao ${caoCanh.toFixed(0)}px):`);
+  ghi(`    mép dưới hàng hai nút: ${day === null ? 'không thấy' : day.toFixed(0) + 'px'} / màn ${window.innerHeight}px`);
+  ghi(`    → ${day !== null && day <= window.innerHeight ? 'VỪA một màn' : '✗ PHẢI CUỘN mới thấy nút'}`);
+}
+
+ghi('\nKET_LUAN xong');
+} catch (e) { ghi('✗ BÀN ĐO HỎNG: ' + e.message + '\n' + e.stack); }
+</script>
+</body>
+</html>
