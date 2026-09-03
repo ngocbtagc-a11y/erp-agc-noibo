@@ -3776,6 +3776,59 @@ textarea.tlq-o { padding: 10px 12px; }
 .tlq-dongy > p { margin: 4px 0 0; font-size: 12px; color: var(--text-mute); }
 
 /* ==========================================================================
+   MÀN CẮT KHUNG VĂN BẢN  ·  Sếp Ngọc 03/09/2026
+   --------------------------------------------------------------------------
+   ⚠️ KHỐI NÀY PHẢI NẰM SAU `.tlq-nut-*` Ở TRÊN — cùng lý do đã ghi ở khối
+   `.tlq-hai-duong`: `do-kho-tai-lieu.mjs` đọc `min-height` bằng LẦN XUẤT
+   HIỆN ĐẦU TIÊN của tên lớp trong tệp. Đừng ai đẩy khối này lên trước.
+
+   LUẬT BA MÀU (`docs/BANG-MAU.md`): khối này KHÔNG thêm màu nào. Chấm góc là
+   `--cam` (đúng vai của cam: thứ cần nhìn và đang thao tác), phần bị bỏ tối
+   đi bằng `--ink` pha trong suốt (họ nâu), viền khung LÕM chuyển `--danger`
+   — ngoại lệ đỏ, và là đỏ đúng nghĩa: khung lõm cắt ra là ảnh méo thật.
+
+   ĐỆM 24px QUANH ẢNH LÀ BẮT BUỘC, KHÔNG PHẢI TRANG TRÍ: chấm góc rộng 44px
+   với tâm nằm ĐÚNG trên góc, nên góc ở mép ảnh có 22px thò ra ngoài. Không
+   có đệm thì bốn góc mặc định (= mép ảnh, đúng trạng thái khi máy không đoán
+   được) bị cắt cụt và không kéo nổi.
+   ========================================================================== */
+.tlq-cat-khung {
+  position: relative;
+  padding: 24px;
+  margin-bottom: 12px;
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  /* Ngón tay đi ngang KHÔNG được biến thành cuộn trang. */
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.tlq-cat-khung canvas {
+  display: block;
+  margin: 0 auto;
+  border-radius: var(--r-sm);
+  background: var(--surface);
+}
+/* Chấm góc: vùng chạm 44×44 THẬT (nút trong suốt), chấm nhìn thấy nhỏ hơn ở
+   giữa. Làm ngược lại — vẽ chấm to bằng cả vùng chạm — thì bốn cái chấm che
+   mất đúng bốn góc chữ mà người ta đang cần nhìn để căn. */
+.tlq-cat-goc {
+  position: absolute; left: 0; top: 0;
+  width: 44px; height: 44px; min-width: 44px; min-height: 44px;
+  padding: 0; margin: 0; border: 0; background: none; cursor: grab;
+  display: flex; align-items: center; justify-content: center;
+  touch-action: none;
+}
+.tlq-cat-goc i {
+  display: block; width: 20px; height: 20px; border-radius: 50%;
+  background: var(--cam); border: 3px solid var(--white);
+  box-shadow: 0 1px 4px rgba(44, 33, 23, .55);
+}
+.tlq-cat-goc:focus-visible i { outline: 3px solid var(--ink); outline-offset: 2px; }
+.tlq-cat-goc.keo { cursor: grabbing; }
+.tlq-cat-goc.keo i { width: 26px; height: 26px; }
+
+/* ==========================================================================
    CTL-0017 — SỬA VIỆC ĐÃ GIAO
    --------------------------------------------------------------------------
    LUẬT BA MÀU (docs/BANG-MAU.md): không thêm màu thứ tư ở đây.

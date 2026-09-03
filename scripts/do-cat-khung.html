@@ -1,0 +1,556 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bàn đo Cắt khung văn bản</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+<style>
+  body { font: 14px/1.6 system-ui, sans-serif; margin: 0; padding: 16px; background: #f5ecdf; color: #2c2117; }
+  pre { background: #fffcf4; border: 1px solid #e2d0ba; border-radius: 8px; padding: 12px; white-space: pre-wrap; }
+  h3 { margin: 18px 0 6px; }
+  .anh { display: flex; gap: 10px; flex-wrap: wrap; }
+  .anh img { max-width: 210px; border: 1px solid #e2d0ba; border-radius: 8px; }
+  .anh figcaption { font-size: 12px; color: #6b5a48; }
+</style>
+</head>
+<body>
+<h2>Bàn đo Cắt khung văn bản</h2>
+<p>Chạy trên <b>đúng mã đang phát hành</b> trong <code>public/assets/js/cat-khung.js</code>.</p>
+<pre id="kq">đang đo…</pre>
+<h3>Cảnh dựng để thử (đã thu nhỏ)</h3>
+<div class="anh" id="anhThu"></div>
+
+<script type="module">
+import { nenAnhChung, coByteCuaDataUrl } from '/assets/js/anh-chung.js';
+import { moQuetTaiLieu, ANH_TRANG, ANH_BOC_CHU } from '/assets/js/quet-tai-lieu.js';
+import { doanBonGoc, duoiPhang, lamRoChu, taiAnh, canvasThanhTep } from '/assets/js/cat-khung.js';
+import { veToGiay, datGiayVaoCanh, nenBanGo, nenTrang, themNhieu, TI_THANH_MOC }
+  from '/lib/trang-giay-thu.js';
+
+const dong = [];
+const ghi = (s) => { dong.push(s); document.getElementById('kq').textContent = dong.join('\n'); };
+const kb = (b) => (b / 1024).toFixed(0) + ' KB';
+const mb = (b) => (b / 1048576).toFixed(2) + ' MB';
+const cho = (ms) => new Promise(r => setTimeout(r, ms));
+const doi = async (chon, hen = 6000) => {
+  const t = Date.now();
+  while (Date.now() - t < hen) {
+    const e = document.querySelector(chon);
+    if (e) return e;
+    await cho(40);
+  }
+  throw new Error('Không thấy ' + chon);
+};
+const dat = (ok, ten, phu = '') => ghi(`  ${ok ? 'ĐẠT ' : '✗ HỎNG'}  ${ten}${phu ? '   ' + phu : ''}`);
+
+/* Cỡ cảm biến 12MP dọc — đúng ảnh điện thoại công ty đang chụp. */
+const W12 = 3024, H12 = 4032;
+
+function canvasThanhFile(c, ten, cl = 0.95) {
+  return new Promise(r => c.toBlob(b => r(new File([b], ten, { type: 'image/jpeg' })), 'image/jpeg', cl));
+}
+
+/* ==========================================================================
+   DỰNG SÁU CẢNH THẬT
+   ---------------------------------------------------------------------------
+   Mỗi cảnh trả về `{ ten, canvas, goc }` — `goc` là 4 góc THẬT của tờ giấy
+   (chuẩn hoá 0..1). Có góc thật thì mới chấm được "máy đoán lệch bao nhiêu",
+   thay vì chấm bằng mắt.
+   ========================================================================== */
+function dungCanh(ten) {
+  const nen = ten === 'trang-tren-trang' ? nenTrang(W12, H12) : nenBanGo(W12, H12);
+  /* Tờ giấy vẽ ở cỡ vừa phải rồi mới đặt vào cảnh: vẽ ở 12MP rồi thu nhỏ là
+     tốn vài giây mà không thêm thông tin. */
+  const giay = veToGiay(1500, 2000, { nhieu: 10,
+    nenGiay: ten === 'trang-tren-trang' ? '#fbfaf6' : '#f7f4ec' });
+
+  const G = {
+    /* Giấy nằm ngay ngắn trên bàn, chiếm ~62% khung — ca hay gặp nhất. */
+    'ban-go':          [[0.15, 0.12], [0.86, 0.10], [0.88, 0.90], [0.13, 0.88]],
+    'trang-tren-trang':[[0.15, 0.12], [0.86, 0.10], [0.88, 0.90], [0.13, 0.88]],
+    /* Chụp nghiêng thật: cạnh trên ngắn hơn cạnh dưới, cả khung xoay ~7°. */
+    'nghieng':         [[0.24, 0.14], [0.83, 0.20], [0.90, 0.86], [0.11, 0.78]],
+    'che-goc':         [[0.15, 0.12], [0.86, 0.10], [0.88, 0.90], [0.13, 0.88]],
+    'hai-to':          [[0.06, 0.10], [0.47, 0.10], [0.47, 0.62], [0.06, 0.62]],
+    /* Chụp sát giấy: giấy KÍN khung → không có gì để cắt. */
+    'kin-khung':       [[0.004, 0.004], [0.996, 0.004], [0.996, 0.996], [0.004, 0.996]],
+    /* CHỤP XA + THIẾU SÁNG — đúng cảnh Sếp mô tả: "chụp rộng". Tờ giấy chỉ
+       chiếm ~21% diện tích khung, lại hơi nghiêng, lại có bóng đổ vắt ngang.
+       Đây mới là ca để trả lời "cắt khung có làm AI đọc tốt lên không";
+       ca `ban-go` (giấy chiếm 62%) quá dễ, ba tấm đều 8/8, đo không ra gì. */
+    'chup-xa':         [[0.31, 0.27], [0.72, 0.24], [0.75, 0.75], [0.28, 0.71]]
+  }[ten];
+
+  const gocPx = G.map(g => [g[0] * W12, g[1] * H12]);
+  datGiayVaoCanh(nen, giay, gocPx);
+
+  if (ten === 'hai-to') {
+    /* Tờ thứ hai, lệch chỗ và hơi nghiêng — đúng cảnh đặt hai tờ chụp một
+       phát. Máy chỉ được chọn MỘT tứ giác; chọn tờ nào cũng được, miễn là
+       không đẻ ra một khung ôm cả hai rồi khoe là tự tin. */
+    const g2 = [[0.53, 0.34], [0.95, 0.38], [0.93, 0.92], [0.51, 0.88]]
+      .map(g => [g[0] * W12, g[1] * H12]);
+    datGiayVaoCanh(nen, veToGiay(1500, 2000, { nhieu: 10 }), g2);
+  }
+  if (ten === 'che-goc') {
+    /* Bàn tay che góc dưới-phải — mép giấy đứt hẳn một đoạn. */
+    const x = nen.getContext('2d');
+    x.fillStyle = '#c98d63';
+    x.beginPath();
+    x.ellipse(W12 * 0.88, H12 * 0.88, W12 * 0.16, H12 * 0.10, -0.4, 0, Math.PI * 2);
+    x.fill();
+    themNhieu(x, W12, H12, 12);
+  }
+  if (ten === 'chup-xa') {
+    /* Bóng đổ vắt chéo + thiếu sáng chung. Đây là thứ `lamRoChu()` sinh ra để
+       xoá, và là thứ làm AI đọc sai trong kho — không phải "thiếu tương phản"
+       chung chung. Không dựng nó ra thì phép đo "làm rõ chữ có ích không"
+       không có gì để đo. */
+    const x = nen.getContext('2d');
+    const g = x.createLinearGradient(0, 0, W12, H12);
+    g.addColorStop(0, 'rgba(20, 14, 8, 0)');
+    g.addColorStop(0.45, 'rgba(20, 14, 8, .30)');
+    g.addColorStop(1, 'rgba(20, 14, 8, .62)');
+    x.fillStyle = g;
+    x.fillRect(0, 0, W12, H12);
+    themNhieu(x, W12, H12, 22);
+  }
+  return { ten, canvas: nen, goc: G };
+}
+
+/* ==========================================================================
+   THƯỚC ĐO ĐỘ NGHIÊNG — độc lập với `cat-khung.js`
+   ---------------------------------------------------------------------------
+   Tờ giấy thử có một THANH KẺ ĐEN ngang hết bề ngang. Quét cột trái và cột
+   phải tìm hàng tối nhất; chênh lệch hai hàng chia cho khoảng cách hai cột ra
+   độ nghiêng còn lại. Duỗi phẳng đúng thì con số này ≈ 0.
+   Đây là phép đo bằng ĐIỂM ẢNH, không gọi một dòng nào của mã đang bị đo.
+   ========================================================================== */
+function doNghiengConLai(c) {
+  const W = c.width, H = c.height;
+  const d = c.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, W, H).data;
+  /* Tìm HÀNG CÓ NHIỀU ĐIỂM TỐI NHẤT trong một cửa sổ ngang, chứ không tìm
+     "hàng tối nhất tại một cột". Thanh mốc kéo hết bề ngang tờ giấy nên phủ
+     gần 100% cửa sổ; chữ tiêu đề dày mấy cũng chỉ phủ vài chục phần trăm.
+     Bản đầu dò một cột 9px và đã bắt nhầm nét chữ — sai đúng ở chỗ cần đúng. */
+  /* Quét CẢ GÓC lẫn vị trí: với mỗi góc nghiêng thử và mỗi hàng, đếm điểm tối
+     dọc theo đường nghiêng đó. Thanh mốc là vệt đen liền hết bề ngang nên ở
+     ĐÚNG góc của nó sẽ phủ ~100% số điểm lấy mẫu; dòng chữ thân bài có khoảng
+     trắng giữa các chữ nên không bao giờ tới đó.
+     Bản trước chỉ dò theo hàng NGANG và đã bắt nhầm dòng chữ khi thanh mốc
+     nghiêng — thanh nghiêng thì không hàng ngang nào phủ nổi nó. */
+  const xa = Math.round(W * 0.12), xb = Math.round(W * 0.88), SO_MAU = 80;
+  const y0 = Math.round(H * 0.05), y1 = Math.round(H * 0.45);
+  const giuaX = (xa + xb) / 2;
+  let tot = -1, gocTot = 0;
+  for (let i = 0; i <= 40; i++) {
+    const goc = (-20 + i) * Math.PI / 180;
+    const dy = Math.tan(goc);
+    for (let y = y0; y < y1; y++) {
+      let dem = 0;
+      for (let k = 0; k < SO_MAU; k++) {
+        const x = Math.round(xa + (xb - xa) * k / (SO_MAU - 1));
+        const yy = Math.round(y + dy * (x - giuaX));
+        if (yy < 0 || yy >= H) continue;
+        const p = (yy * W + x) << 2;
+        if (0.299 * d[p] + 0.587 * d[p + 1] + 0.114 * d[p + 2] < 110) dem++;
+      }
+      if (dem > tot) { tot = dem; gocTot = goc; }
+    }
+  }
+  return { do: gocTot * 180 / Math.PI, phu: tot / SO_MAU };
+}
+
+const KHOA = 'tl_nhap_v1_kho_chung_chung';
+try {
+
+/* ==========================================================================
+   ① THỜI GIAN TỪNG BƯỚC TRÊN ẢNH 12MP
+   ========================================================================== */
+ghi('─── ① THỜI GIAN XỬ LÝ, ảnh 12MP 3024×4032 (mili-giây thật) ───');
+const canh = dungCanh('ban-go');
+const tepGoc12 = await canvasThanhFile(canh.canvas, 'chup.jpg');
+ghi(`  Ảnh chụp gốc: ${mb(tepGoc12.size)} · ${W12}×${H12}`);
+
+/* Đường thật của sản phẩm: NÉN TRƯỚC (mọi trang đều đi qua đây), rồi mới cắt.
+   Đo trên ảnh đã nén chứ không trên ảnh 12MP thô là ĐÚNG với sản phẩm —
+   `moCatTuDong()` chạy sau `nenAnhChung()`. */
+let t0 = performance.now();
+const nenDau = await nenAnhChung(tepGoc12, ANH_TRANG);
+const msNenDau = performance.now() - t0;
+const anhNen = await taiAnh(nenDau);
+ghi(`  Nén ảnh chụp (nenAnhChung, đường cũ, KHÔNG đổi): ` +
+    `${msNenDau.toFixed(0)} ms → ${kb(coByteCuaDataUrl(nenDau))} · ${anhNen.naturalWidth}×${anhNen.naturalHeight}`);
+
+/* Dò góc chạy hai lượt: một trên ảnh 12MP thô (để biết trần), một trên ảnh
+   đã nén (đường thật). Nêu cả hai để không ai tưởng số nhỏ là do gian lận. */
+const doTho = doanBonGoc(await taiAnh(URL.createObjectURL(tepGoc12)));
+const doThat = doanBonGoc(anhNen);
+ghi(`  Dò 4 góc trên ảnh 12MP thô:      ${doTho.ms} ms   (${doTho.tuTin ? 'tự tin' : 'không tự tin'})`);
+ghi(`  Dò 4 góc trên ảnh đã nén 1700px: ${doThat.ms} ms   (${doThat.tuTin ? 'tự tin' : 'không tự tin'}) ← đường thật`);
+
+const kqDuoi = duoiPhang(anhNen, canh.goc, { canhToiDa: ANH_TRANG.canhToiDa });
+ghi(`  Duỗi phẳng (phối cảnh + song tuyến): ${kqDuoi.ms} ms → ${kqDuoi.rong}×${kqDuoi.cao}`);
+
+const cLamRo = duoiPhang(anhNen, canh.goc, { canhToiDa: ANH_TRANG.canhToiDa }).canvas;
+lamRoChu(cLamRo);
+ghi(`  Làm rõ chữ (chia nền + kéo giãn):    ${cLamRo.msLamRo} ms`);
+
+t0 = performance.now();
+const tepCat = await canvasThanhTep(kqDuoi.canvas, 'cat.jpg');
+const nenCat = await nenAnhChung(tepCat, ANH_TRANG);
+const msNenLai = performance.now() - t0;
+ghi(`  Nén lại sau cắt (cùng nenAnhChung):  ${msNenLai.toFixed(0)} ms`);
+
+const msTong = doThat.ms + kqDuoi.ms + msNenLai;
+const msTongRo = doThat.ms + kqDuoi.ms + cLamRo.msLamRo + msNenLai;
+ghi(`  TỔNG từ lúc chụp xong tới lúc có trang đã cắt: ` +
+    `${(msTong / 1000).toFixed(2)} s (không làm rõ chữ) · ` +
+    `${(msTongRo / 1000).toFixed(2)} s (có làm rõ chữ)`);
+dat(msTongRo < 4000, 'Dưới 4 giây — ngưỡng người ta còn chờ được', `→ ${(msTongRo / 1000).toFixed(2)} s`);
+
+/* ==========================================================================
+   ② CỠ FILE TRƯỚC / SAU CẮT
+   ========================================================================== */
+ghi('\n─── ② CỠ FILE TRƯỚC / SAU CẮT ───');
+const coTruoc = coByteCuaDataUrl(nenDau);
+const coSau = coByteCuaDataUrl(nenCat);
+const nenCatRo = await nenAnhChung(await canvasThanhTep(cLamRo, 'ro.jpg'), ANH_TRANG);
+const coSauRo = coByteCuaDataUrl(nenCatRo);
+ghi(`  Nguyên ảnh (có cả mặt bàn):     ${kb(coTruoc)}`);
+ghi(`  Sau cắt khung:                  ${kb(coSau)}   (${coSau < coTruoc ? 'nhẹ đi' : 'nặng thêm'} ` +
+    `${Math.abs(100 - coSau / coTruoc * 100).toFixed(0)}%)`);
+ghi(`  Sau cắt + làm rõ chữ:           ${kb(coSauRo)}   (${coSauRo < coTruoc ? 'nhẹ đi' : 'nặng thêm'} ` +
+    `${Math.abs(100 - coSauRo / coTruoc * 100).toFixed(0)}%)`);
+dat(coSau <= ANH_TRANG.gioiHanByte && coSauRo <= ANH_TRANG.gioiHanByte,
+  `Cả hai vẫn dưới trần ${kb(ANH_TRANG.gioiHanByte)} của một trang`);
+
+/* Ghi ảnh cho bàn đo BÓC CHỮ — đúng thông số `ANH_BOC_CHU` của sản phẩm. */
+{
+  const anhTruoc = await nenAnhChung(tepGoc12, ANH_BOC_CHU);
+  const anhSau = await nenAnhChung(await canvasThanhTep(kqDuoi.canvas, 'a.jpg'), ANH_BOC_CHU);
+  const anhSauRo = await nenAnhChung(await canvasThanhTep(cLamRo, 'b.jpg'), ANH_BOC_CHU);
+  /* CA THỨ HAI: chụp XA + thiếu sáng. Đây mới là ca có sức phân biệt — ca gần
+     ở trên dễ tới mức cả ba tấm đều 8/8 trường, đo không ra chênh lệch nào. */
+  const cXa = dungCanh('chup-xa');
+  const nenXa = await nenAnhChung(await canvasThanhFile(cXa.canvas, 'xa.jpg'), ANH_TRANG);
+  const imXa = await taiAnh(nenXa);
+  const catXa = duoiPhang(imXa, cXa.goc, { canhToiDa: ANH_TRANG.canhToiDa });
+  const catXaRo = duoiPhang(imXa, cXa.goc, { canhToiDa: ANH_TRANG.canhToiDa }).canvas;
+  lamRoChu(catXaRo);
+
+  const anhXaTruoc = await nenAnhChung(await canvasThanhFile(cXa.canvas, 'x1.jpg'), ANH_BOC_CHU);
+  const anhXaSau = await nenAnhChung(await canvasThanhTep(catXa.canvas, 'x2.jpg'), ANH_BOC_CHU);
+  const anhXaRo = await nenAnhChung(await canvasThanhTep(catXaRo, 'x3.jpg'), ANH_BOC_CHU);
+
+  const r = await fetch('/luu-anh-thu', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      'cat-truoc': anhTruoc, 'cat-sau': anhSau, 'cat-sau-lamro': anhSauRo,
+      'cat-xa-truoc': anhXaTruoc, 'cat-xa-sau': anhXaSau, 'cat-xa-sau-lamro': anhXaRo
+    })
+  });
+  ghi(`  Đã ghi ${(await r.json()).so_tep} ảnh vào .do-tam/ cho bàn đo bóc chữ`);
+  ghi(`    ca GẦN (giấy chiếm ~62% khung): trước ${kb(coByteCuaDataUrl(anhTruoc))} · ` +
+      `sau ${kb(coByteCuaDataUrl(anhSau))} · sau+rõ ${kb(coByteCuaDataUrl(anhSauRo))}`);
+  ghi(`    ca XA + thiếu sáng (giấy ~21% diện tích): trước ${kb(coByteCuaDataUrl(anhXaTruoc))} · ` +
+      `sau ${kb(coByteCuaDataUrl(anhXaSau))} · sau+rõ ${kb(coByteCuaDataUrl(anhXaRo))}`);
+  ghi(`    → Chạy \`npm run do-boc-chu\` để lấy con số độ chính xác đọc chữ.`);
+  const khung = document.getElementById('anhThu');
+  for (const [t, s] of [['gần: nguyên ảnh', anhTruoc], ['gần: đã cắt', anhSau],
+    ['gần: cắt + làm rõ', anhSauRo], ['xa: nguyên ảnh', anhXaTruoc],
+    ['xa: đã cắt', anhXaSau], ['xa: cắt + làm rõ', anhXaRo]]) {
+    const f = document.createElement('figure');
+    f.innerHTML = `<img src="${s}" alt="${t}"><figcaption>${t}</figcaption>`;
+    khung.appendChild(f);
+  }
+}
+
+/* ==========================================================================
+   ③ DÒ GÓC ĐÚNG MẤY TRÊN SÁU CA
+   ---------------------------------------------------------------------------
+   "Đúng" = tự tin VÀ cả 4 góc lệch dưới 3% đường chéo ảnh so với góc thật.
+   Ca `trang-tren-trang` cố ý KHÔNG đòi đúng: đòi ở đó là đòi phép màu. Đòi
+   duy nhất là ĐỪNG TỰ TIN SAI — không nhận ra thì lùi về mép ảnh, im lặng.
+   ========================================================================== */
+ghi('\n─── ③ DÒ GÓC TRÊN SÁU CA THẬT (máy đoán chỉ là GỢI Ý) ───');
+const CA = ['ban-go', 'nghieng', 'che-goc', 'hai-to', 'trang-tren-trang', 'kin-khung'];
+const NHAN = {
+  'ban-go': 'giấy trên bàn gỗ',
+  'nghieng': 'chụp nghiêng',
+  'che-goc': 'giấy bị che một góc',
+  'hai-to': 'hai tờ giấy trong một ảnh',
+  'trang-tren-trang': 'giấy trắng trên nền trắng',
+  'kin-khung': 'chụp sát — giấy kín khung'
+};
+let soDung = 0, soTuTinSai = 0;
+const bangCa = [];
+for (const ten of CA) {
+  const cn = ten === 'ban-go' ? canh : dungCanh(ten);
+  const nenX = await nenAnhChung(await canvasThanhFile(cn.canvas, ten + '.jpg'), ANH_TRANG);
+  const im = await taiAnh(nenX);
+  const d = doanBonGoc(im);
+  const cheo = Math.hypot(1, im.naturalHeight / im.naturalWidth);   // đường chéo chuẩn hoá
+  const lech = Math.max(...d.goc.map((g, k) =>
+    Math.hypot(g[0] - cn.goc[k][0], (g[1] - cn.goc[k][1]) * im.naturalHeight / im.naturalWidth) / cheo));
+  const dung = d.tuTin && lech <= 0.03;
+  if (dung) soDung++;
+  if (d.tuTin && lech > 0.06) soTuTinSai++;
+  bangCa.push({ ten, tuTin: d.tuTin, lech, ms: d.ms, viSao: d.viSao, dung });
+  ghi(`  ${(dung ? 'ĐÚNG ' : d.tuTin ? '~lệch' : 'lùi  ').padEnd(6)} ${NHAN[ten].padEnd(30)} ` +
+      `lệch ${(lech * 100).toFixed(1)}% đường chéo · ${d.ms} ms · ${d.tuTin ? 'tự tin' : 'KHÔNG tự tin → mép ảnh'}`);
+  if (!dung) ghi(`         lý do máy nêu: ${d.viSao}`);
+}
+ghi(`  ĐOÁN ĐÚNG ${soDung}/${CA.length} ca.`);
+{
+  /* CA HAI TỜ GIẤY — NÓI THẲNG, ĐỪNG CHẤM ĐẠT/HỎNG CHO CÓ.
+     Ảnh có hai tờ thì KHÔNG có một đáp án đúng: máy chỉ dựng được MỘT tứ
+     giác. Nó chọn cái khung ôm cả hai tờ. Đó là đoán SAI, và bàn đo phải in
+     ra con số sai đó chứ không được giấu. Thứ bảo đảm ở đây không phải "máy
+     đoán đúng" mà là "đoán sai thì kéo lại được trong vài giây" — mục ⑤
+     chứng minh việc đó bằng cách kéo thật đủ bốn góc.
+     Ràng buộc DUY NHẤT bắt buộc: khung đoán ra phải nằm trong ảnh và không
+     lõm, để người ta kéo từ đó ra cái đúng chứ không phải làm lại từ đầu. */
+  const h2 = bangCa.find(c => c.ten === 'hai-to');
+  ghi(`  Ca "hai tờ giấy": máy dựng MỘT khung ôm cả hai, lệch ${(h2.lech * 100).toFixed(1)}% ` +
+      'so với tờ thứ nhất — ĐOÁN SAI, và không có cách nào đoán đúng khi chỉ được dựng một khung.');
+  ghi('    → Xử: màn cắt vẫn bày, người ta kéo 2 góc là xong (mục ⑤ đo việc kéo).');
+  ghi('    → Muốn hai tờ thành hai trang thì chụp hai phát — đó mới là cách đúng.');
+  dat(bangCa.every(c => c.lech < 0.9),
+    'Mọi ca: khung đoán ra vẫn nằm trong ảnh và kéo được (không ca nào lệch >90%)');
+}
+{
+  const kk = bangCa.find(c => c.ten === 'kin-khung');
+  ghi(`  Ca "kín khung": lệch ${(kk.lech * 100).toFixed(1)}% — coi như KHÔNG có gì để cắt, ` +
+      'màn cắt sẽ không tự bày (kiểm ở mục ⑥).');
+}
+
+/* ==========================================================================
+   ④ ĐỐI CHỨNG BH-16 — BỎ PHÉP DUỖI PHẲNG, THƯỚC ĐO PHẢI BẮT ĐƯỢC
+   ========================================================================== */
+ghi('\n─── ④ ĐỐI CHỨNG (BH-16): bỏ duỗi phẳng → ảnh nghiêng phải RA nghiêng ───');
+{
+  const cn = dungCanh('nghieng');
+  const im = await taiAnh(await nenAnhChung(await canvasThanhFile(cn.canvas, 'ng.jpg'), ANH_TRANG));
+
+  /* BẢN CÓ DUỖI: cắt theo đúng 4 góc thật rồi duỗi. */
+  const co = duoiPhang(im, cn.goc, { canhToiDa: ANH_TRANG.canhToiDa }).canvas;
+  const ngCo = doNghiengConLai(co);
+
+  /* BẢN KHÔNG DUỖI (đối chứng): cắt CHỮ NHẬT bao quanh tứ giác — đúng thứ
+     một cái "crop" tầm thường làm được, không có phối cảnh. */
+  const xs = cn.goc.map(g => g[0]), ys = cn.goc.map(g => g[1]);
+  const x0 = Math.round(Math.min(...xs) * im.naturalWidth);
+  const x1 = Math.round(Math.max(...xs) * im.naturalWidth);
+  const y0 = Math.round(Math.min(...ys) * im.naturalHeight);
+  const y1 = Math.round(Math.max(...ys) * im.naturalHeight);
+  const khong = document.createElement('canvas');
+  khong.width = x1 - x0; khong.height = y1 - y0;
+  khong.getContext('2d', { willReadFrequently: true })
+    .drawImage(im, x0, y0, x1 - x0, y1 - y0, 0, 0, x1 - x0, y1 - y0);
+  const ngKhong = doNghiengConLai(khong);
+
+  ghi('  Thanh mốc trên trang giấy — độ nghiêng còn lại (đo bằng điểm ảnh):');
+  ghi(`    CÓ duỗi phẳng:                    ${ngCo.do.toFixed(2)}°   (bắt trúng thanh mốc ${(ngCo.phu * 100).toFixed(0)}%)`);
+  ghi(`    KHÔNG duỗi (cắt chữ nhật thường): ${ngKhong.do.toFixed(2)}°   (bắt trúng thanh mốc ${(ngKhong.phu * 100).toFixed(0)}%)`);
+  dat(ngCo.phu > 0.7 && ngKhong.phu > 0.7,
+    'Cả hai bản đều đo ĐÚNG thanh mốc (phủ >70% cửa sổ), không đo nhầm nét chữ');
+  dat(Math.abs(ngCo.do) < 1.5, 'Sau duỗi phẳng, trang giấy nằm ngang (<1,5°)', `→ ${ngCo.do.toFixed(2)}°`);
+  dat(Math.abs(ngKhong.do) > 3, 'ĐỐI CHỨNG: bỏ duỗi phẳng thì thước đo BẮT ĐƯỢC (>3°)',
+    `→ ${ngKhong.do.toFixed(2)}°`);
+  ghi(`  → Phép đo nhạy thật: chênh ${Math.abs(Math.abs(ngKhong.do) - Math.abs(ngCo.do)).toFixed(2)}° giữa hai bản.`);
+}
+
+/* ==========================================================================
+   ⑤ + ⑥ MÀN QUÉT THẬT Ở 375px
+   ========================================================================== */
+ghi('\n─── ⑤ MÀN CẮT TRONG MÀN QUÉT THẬT, bề ngang 375px ───');
+
+/* Máy ảnh giả — nhét đúng cảnh đang thử vào ô file rồi bắn `change`, y như
+   điện thoại làm sau khi người ta bấm "Dùng ảnh này". */
+let canhDangChup = canh.canvas;
+const clickGoc = HTMLInputElement.prototype.click;
+HTMLInputElement.prototype.click = function () {
+  if (this.type !== 'file') return clickGoc.call(this);
+  canhDangChup.toBlob(b => {
+    const dt = new DataTransfer();
+    dt.items.add(new File([b], 'chup.jpg', { type: 'image/jpeg' }));
+    this.files = dt.files;
+    this.dispatchEvent(new Event('change', { bubbles: true }));
+  }, 'image/jpeg', 0.95);
+};
+
+const nutKho = document.createElement('button');
+nutKho.className = 'btn-primary tl-nut-quet';
+nutKho.textContent = '📷 Quét tài liệu mới';
+document.body.appendChild(nutKho);
+let phien = null;
+nutKho.addEventListener('click', () => {
+  phien = moQuetTaiLieu({
+    cuaVao: 'kho_chung',
+    duongMacDinh: 'may-anh',
+    nhom: [{ ma: 'attp', ten: 'An toàn thực phẩm', vi_du: 'Giấy ATTP', han_luu: '5 năm', nhay_cam: 0 }],
+    khiXong: () => {}
+  });
+});
+const ep375 = () => { const o = document.querySelector('.tlq-tam'); if (o) o.style.width = '375px'; };
+
+localStorage.removeItem(KHOA);
+localStorage.removeItem('tl_lam_ro_chu_v1');
+nutKho.click();
+(await doi('[data-viec="chon-nhom"]')).click();
+/* Màn cắt phải TỰ BÀY: cảnh này là giấy trên bàn gỗ, có mặt bàn để cắt. */
+let tuBay = true;
+try { await doi('#tlqCatKhung', 12000); } catch { tuBay = false; }
+ep375();
+dat(tuBay, 'Chụp thấy cả mặt bàn → màn cắt TỰ BÀY, không phải đi tìm nút');
+
+const chams = [...document.querySelectorAll('.tlq-cat-goc')];
+dat(chams.length === 4, 'Có đúng 4 chấm góc', `→ ${chams.length}`);
+const capCao = chams.map(b => {
+  const r = b.getBoundingClientRect();
+  return [Math.round(r.width * 10) / 10, Math.round(r.height * 10) / 10];
+});
+let du44 = true;
+capCao.forEach(([w, h], k) => {
+  const ok = w >= 44 && h >= 44;
+  if (!ok) du44 = false;
+  dat(ok, `Chấm góc ${['trên trái', 'trên phải', 'dưới phải', 'dưới trái'][k]} vùng chạm`, `→ ${w}×${h}px`);
+});
+
+/* ---- VỪA MỘT TRANG: hai nút hành động phải NHÌN THẤY, không phải cuộn ----
+   Sếp Ngọc: "ưu tiên vừa một trang, hạn chế kéo trang". Nút cắt nằm dưới mép
+   màn hình thì tính năng coi như không có — người ta bấm nút đầu tiên nhìn
+   thấy rồi đi tiếp. */
+{
+  const rXong = document.querySelector('#tlqCatXong').getBoundingClientRect();
+  const rBo = document.querySelector('#tlqCatBo').getBoundingClientRect();
+  const day = Math.max(rXong.bottom, rBo.bottom);
+  dat(day <= window.innerHeight,
+    'Hai nút "Cắt & duỗi" và "Dùng nguyên ảnh" nằm TRONG màn 375×812, không phải cuộn',
+    `→ mép dưới ở ${day.toFixed(0)}px / màn ${window.innerHeight}px`);
+  dat(Math.abs(rXong.top - rBo.top) < 2 && rXong.left < rBo.left,
+    'Hai nút nằm CẠNH NHAU một hàng (tiết kiệm đúng một hàng 62px)');
+}
+
+/* ĐỐI CHỨNG cho phép đo 44px: ép một chấm xuống 40px → phải bắt được. */
+{
+  const st = document.createElement('style');
+  st.textContent = '.tlq-cat-goc{width:40px !important;height:40px !important;min-width:40px !important;min-height:40px !important}';
+  document.head.appendChild(st);
+  const r = chams[0].getBoundingClientRect();
+  const caoHong = Math.round(r.height * 10) / 10;
+  st.remove();
+  dat(caoHong < 44, 'ĐỐI CHỨNG: ép chấm góc xuống 40px → phép đo BẮT ĐƯỢC', `→ ${caoHong}px`);
+}
+
+/* Bảo bên Node chụp một tấm màn cắt ở đúng 375px rồi mới đi tiếp. Số đo nói
+   được "chấm 44px, kéo được", nhưng KHÔNG nói được "nhìn có ra cái gì không"
+   — cái đó phải có ảnh cho người xem. Chờ tối đa 8 giây; chạy tay (không có
+   bên Node) thì đi tiếp bình thường, không treo. */
+window.__moiChup = 'man-cat';
+{
+  const tc = Date.now();
+  while (!window.__daChup && Date.now() - tc < 8000) await cho(200);
+  ghi(`  ${window.__daChup ? 'Đã chụp' : 'Không chụp'} ảnh màn cắt ở 375px ` +
+      `(${window.__daChup ? '.do-tam/man-cat-375.png' : 'chạy tay thì bỏ qua'})`);
+}
+
+/* ---- KÉO ĐƯỢC Ở CẢ BỐN GÓC, KỂ CẢ KHI GÓC NẰM SÁT MÉP ẢNH ---------------
+   Bấm "Đặt lại 4 góc" trước: nó đưa cả bốn góc về ĐÚNG mép ảnh — đúng ca khó
+   nhất, và cũng đúng trạng thái mặc định khi máy không đoán được. */
+(await doi('[data-viec="cat-datlai"]')).click();
+await cho(120);
+const oVe = document.querySelector('#tlqCatVe');
+const keo = (b, x, y) => {
+  b.dispatchEvent(new PointerEvent('pointerdown', { pointerId: 1, clientX: 0, clientY: 0, bubbles: true, cancelable: true }));
+  document.dispatchEvent(new PointerEvent('pointermove', { pointerId: 1, clientX: x, clientY: y, bubbles: true, cancelable: true }));
+  document.dispatchEvent(new PointerEvent('pointerup', { pointerId: 1, clientX: x, clientY: y, bubbles: true, cancelable: true }));
+};
+let keoDuHet = true;
+for (let k = 0; k < 4; k++) {
+  const b = document.querySelectorAll('.tlq-cat-goc')[k];
+  const truoc = b.style.left + '|' + b.style.top;
+  const r = oVe.getBoundingClientRect();
+  /* Kéo vào một điểm 30%/70% khác nhau cho từng góc — không kéo tất cả về
+     cùng một chỗ, vì thế thì bốn góc chồng nhau và không biết cái nào ăn. */
+  const dx = r.left + r.width * (0.28 + k * 0.05);
+  const dy = r.top + r.height * (0.30 + k * 0.08);
+  keo(b, dx, dy);
+  await cho(80);
+  const sau = document.querySelectorAll('.tlq-cat-goc')[k];
+  const doi_ = (sau.style.left + '|' + sau.style.top) !== truoc;
+  /* Chấm phải nằm ĐÚNG chỗ vừa thả (sai số 2px cho làm tròn). */
+  const rs = sau.getBoundingClientRect();
+  const trungDich = Math.hypot(rs.left + 22 - dx, rs.top + 22 - dy) < 3;
+  if (!(doi_ && trungDich)) keoDuHet = false;
+  dat(doi_ && trungDich,
+    `Kéo được góc ${['trên trái', 'trên phải', 'dưới phải', 'dưới trái'][k]} từ SÁT MÉP ảnh`,
+    `→ lệch đích ${Math.hypot(rs.left + 22 - dx, rs.top + 22 - dy).toFixed(1)}px`);
+}
+
+ghi('\n─── ⑥ CA BỎ QUA và CA KÍN KHUNG ───');
+/* Ca BỎ QUA: bấm "Dùng nguyên ảnh" → byte ảnh của trang KHÔNG đổi một chữ. */
+{
+  /* Lấy byte trang TRƯỚC khi bấm, đọc từ bản nháp trong máy (đúng thứ sẽ được
+     gửi lên). */
+  const nhapTruoc = JSON.parse(localStorage.getItem(KHOA) || 'null');
+  (await doi('[data-viec="cat-bo"]')).click();
+  await doi('.tlq-the');
+  const nhapSau = JSON.parse(localStorage.getItem(KHOA) || 'null');
+  const yHet = nhapTruoc && nhapSau && nhapTruoc.trang[0].anh === nhapSau.trang[0].anh;
+  dat(yHet, '"Dùng nguyên ảnh" → ảnh trang KHÔNG đổi một byte (đi đúng đường cũ)');
+  dat(nhapSau && !nhapSau.trang[0].da_cat, 'Trang không bị đánh dấu "đã cắt"');
+  dat(!!document.querySelector('[data-viec="cat"][data-i="0"]'),
+    'Nút "✂ Cắt" vẫn nằm trên thẻ trang — bỏ BÀY chứ không bỏ CHỨC NĂNG');
+}
+
+/* Ca CẮT THẬT qua giao diện: mở lại màn cắt bằng nút trên thẻ rồi bấm Cắt. */
+let coSauGiaoDien = 0, coTruocGiaoDien = 0;
+{
+  const nhapTruoc = JSON.parse(localStorage.getItem(KHOA) || 'null');
+  coTruocGiaoDien = nhapTruoc.trang[0].co_nen;
+  (await doi('[data-viec="cat"][data-i="0"]')).click();
+  await doi('#tlqCatKhung');
+  ep375();
+  const tCat = performance.now();
+  (await doi('[data-viec="cat-xong"]')).click();
+  await doi('.tlq-the');
+  const msGiaoDien = performance.now() - tCat;
+  const nhapSau = JSON.parse(localStorage.getItem(KHOA) || 'null');
+  coSauGiaoDien = nhapSau.trang[0].co_nen;
+  dat(nhapSau.trang[0].da_cat === true, 'Bấm "✂ Cắt & duỗi phẳng" → trang được đánh dấu đã cắt');
+  dat(nhapSau.trang[0].anh !== nhapTruoc.trang[0].anh, 'Ảnh trang thật sự đổi sau khi cắt');
+  ghi(`  Từ lúc bấm nút tới lúc thấy trang mới: ${msGiaoDien.toFixed(0)} ms ` +
+      `(dò ${nhapSau.trang[0].ms_doan || 0} ms · duỗi ${nhapSau.trang[0].ms_duoi} ms · ` +
+      `làm rõ ${nhapSau.trang[0].ms_lam_ro} ms)`);
+  ghi(`  Cỡ trang: ${kb(coTruocGiaoDien)} → ${kb(coSauGiaoDien)}`);
+}
+
+/* Ca KÍN KHUNG: chụp sát giấy → màn cắt KHÔNG được tự bày. */
+{
+  phien && phien.dong();
+  localStorage.removeItem(KHOA);
+  canhDangChup = dungCanh('kin-khung').canvas;
+  nutKho.click();
+  (await doi('[data-viec="chon-nhom"]')).click();
+  await doi('.tlq-the');
+  /* Chờ đủ lâu cho lượt dò góc chạy xong — bày muộn cũng là bày. */
+  await cho(2500);
+  const coManCat = !!document.querySelector('#tlqCatKhung');
+  dat(!coManCat, 'Chụp sát giấy (kín khung) → màn cắt KHÔNG tự bày, không bấm thừa');
+  phien && phien.dong();
+}
+
+ghi('\n───────────────────────────────────────────────────────────');
+ghi(`KET_LUAN doan_dung=${soDung}/${CA.length} tu_tin_sai=${soTuTinSai} ` +
+    `ms_tong=${Math.round(msTong)} ms_tong_lamro=${Math.round(msTongRo)} ` +
+    `co_truoc=${coTruoc} co_sau=${coSau} co_sau_lamro=${coSauRo} ` +
+    `cham_44=${du44} keo_4_goc=${keoDuHet}`);
+} catch (e) {
+  ghi('✗ BÀN ĐO HỎNG: ' + e.message + '\n' + e.stack);
+}
+</script>
+</body>
+</html>

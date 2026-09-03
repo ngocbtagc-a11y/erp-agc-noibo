@@ -44,11 +44,22 @@ const GOC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const TAM = path.join(GOC, '.do-tam');
 const CONG = 8903;
 
-const ANH = ['anh-thu-net', 'anh-thu-mo', 'anh-thu-te'];
-const THIEU = ANH.filter(t => !existsSync(path.join(TAM, t + '.jpg')));
-if (THIEU.length) {
-  console.error(`Thiếu ảnh thử: ${THIEU.join(', ')}\n` +
-    'Chạy `node scripts/ban-quet-tai-lieu.mjs` rồi mở http://127.0.0.1:8902 một lượt trước.');
+const ANH_QUET = ['anh-thu-net', 'anh-thu-mo', 'anh-thu-te'];
+/* BA TẤM CỦA BÀN ĐO CẮT KHUNG (`npm run do-cat-khung`). Có mặt thì đo luôn —
+   đây là chỗ trả lời câu hỏi quan trọng nhất của lượt cắt khung: "cắt khung
+   và làm rõ chữ có làm AI đọc TỐT LÊN không, hay chỉ trông đẹp hơn". Không
+   có thì bỏ qua, ba tấm cũ vẫn chạy y như trước.
+     · cat-truoc      — nguyên ảnh, còn cả mặt bàn gỗ
+     · cat-sau        — đã cắt khung + duỗi phẳng
+     · cat-sau-lamro  — cắt khung + duỗi phẳng + làm rõ chữ */
+const ANH_CAT = ['cat-truoc', 'cat-sau', 'cat-sau-lamro',
+  'cat-xa-truoc', 'cat-xa-sau', 'cat-xa-sau-lamro'];
+const coTep = (t) => existsSync(path.join(TAM, t + '.jpg'));
+const ANH = [...ANH_QUET, ...ANH_CAT].filter(coTep);
+if (!ANH.length) {
+  console.error('Chưa có ảnh thử nào trong .do-tam/.\n' +
+    '  · Ba tấm của bàn quét: chạy `node scripts/ban-quet-tai-lieu.mjs` rồi mở http://127.0.0.1:8902\n' +
+    '  · Ba tấm của bàn cắt khung: chạy `npm run do-cat-khung`');
   process.exit(2);
 }
 
@@ -182,9 +193,14 @@ for (const ten of ANH) {
   process.stdout.write(`  ${ten} (${(b64.length * 3 / 4 / 1024).toFixed(0)} KB) → đang hỏi AI… `);
   let j;
   try {
+    /* ⏱ TRẦN 2 PHÚT MỖI TẤM — thêm 03/09/2026 sau khi bàn đo này treo 30 phút
+       không in một chữ nào. `fetch` không có trần thì một lượt gọi AI kẹt là
+       cả phép đo đứng im, và "đứng im" là dạng hỏng tệ nhất: không ai biết
+       nên chờ hay nên bỏ. Hết giờ thì ghi HỎNG kèm lý do rồi đo tấm tiếp. */
     const r = await fetch(`http://127.0.0.1:${CONG}/`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mo: MO_HINH_DOC_ANH, khuon: khuonDocAnh(b64, NHAC) })
+      body: JSON.stringify({ mo: MO_HINH_DOC_ANH, khuon: khuonDocAnh(b64, NHAC) }),
+      signal: AbortSignal.timeout(120000)
     });
     j = await r.json();
   } catch (e) { j = { ok: false, loi: e.message, ms: 0 }; }
@@ -270,5 +286,53 @@ if (net && te && !net.hong && !te.hong) {
   console.log(`  Nén tệ (700px · 0.40): ${te.dungTruong}/${TRUONG.length} trường (${te.giong.toFixed(1)}%) — ` +
     'mốc để biết hạ thông số nén tới đâu là bắt đầu mất chữ.');
 }
+
+/* ---- CẮT KHUNG CÓ LÀM AI ĐỌC TỐT LÊN KHÔNG -----------------------------
+   Câu hỏi này chỉ có một cách trả lời: ba tấm CÙNG một tờ giấy, CÙNG một
+   thông số nén, khác nhau đúng ở chỗ có cắt/có làm rõ hay không.
+   Không tốt lên thì phải NÓI THẲNG LÀ KHÔNG. */
+function soSanhCat(nhan, tienTo) {
+  const cTruoc = ketQua.find(k => k.ten === tienTo + '-truoc');
+  const cSau = ketQua.find(k => k.ten === tienTo + '-sau');
+  const cRo = ketQua.find(k => k.ten === tienTo + '-sau-lamro');
+  if (!cTruoc || !cSau || cTruoc.hong || cSau.hong) return;
+  console.log(`\n  ▸ ${nhan}`);
+  const dong = (k, ten) => console.log(
+    `    ${ten.padEnd(26)} ${k.dungTruong}/${TRUONG.length} trường · ` +
+    `${k.giong.toFixed(1)}% ký tự · ${k.ms} ms`);
+  dong(cTruoc, 'Nguyên ảnh (cả mặt bàn)');
+  dong(cSau, 'Đã cắt + duỗi phẳng');
+  if (cRo && !cRo.hong) dong(cRo, 'Cắt + duỗi + làm rõ chữ');
+
+  const noi = (n) => n > 0 ? `TỐT LÊN ${n} trường` : n < 0 ? `TỆ ĐI ${-n} trường` : 'KHÔNG đổi số trường đúng';
+  const dau = (x) => (x >= 0 ? '+' : '') + x.toFixed(1);
+  console.log(`    ① CẮT KHUNG: ${noi(cSau.dungTruong - cTruoc.dungTruong)} ` +
+    `(ký tự ${dau(cSau.giong - cTruoc.giong)} điểm).`);
+  if (cRo && !cRo.hong) {
+    console.log(`    ② LÀM RÕ CHỮ (so với chỉ cắt): ${noi(cRo.dungTruong - cSau.dungTruong)} ` +
+      `(ký tự ${dau(cRo.giong - cSau.giong)} điểm).`);
+  }
+  if (cTruoc.dungTruong === TRUONG.length && cSau.dungTruong === TRUONG.length) {
+    console.log('    ⚠ Cả hai KỊCH TRẦN 8/8 — ca này KHÔNG phân biệt được, đừng đọc gì thêm từ nó.');
+  }
+}
+
+if (ketQua.some(k => k.ten.startsWith('cat-') && !k.hong)) {
+  console.log('\n─── CẮT KHUNG CÓ LÀM AI ĐỌC CHỮ TỐT LÊN KHÔNG ───');
+  console.log('  Cùng một tờ giấy, cùng thông số nén ảnh bóc chữ, khác đúng ở chỗ');
+  console.log('  có cắt / có làm rõ hay không. Không tốt lên thì phải NÓI THẲNG LÀ KHÔNG.');
+  soSanhCat('CA GẦN — giấy chiếm ~62% khung, đủ sáng', 'cat');
+  soSanhCat('CA XA + THIẾU SÁNG — giấy ~21% diện tích, có bóng đổ', 'cat-xa');
+}
 console.log('\n  Nhắc lại: bóc chữ HỎNG cũng KHÔNG chặn việc lưu tài liệu.');
 console.log('  Tài liệu vẫn vào kho, chỉ là tra bằng tên thay vì tra bằng nội dung.');
+
+/* ⚠️ THOÁT TƯỜNG MINH — thêm 03/09/2026, sau khi bàn đo này "treo" ba lượt
+   liền, mỗi lượt hơn nửa tiếng, mà thực ra ĐÃ ĐO XONG TỪ LÂU.
+   `wr.kill()` ở trên giết tiến trình `npx`, nhưng ba đường ống stdio của nó
+   vẫn là handle đang mở trong vòng lặp sự kiện của Node, nên tiến trình cha
+   KHÔNG bao giờ tự thoát. Chạy tay thì vẫn thấy chữ in ra và tưởng nó đang
+   nghĩ; chạy qua đường ống (`| Select-Object`, hay bất kỳ cổng CI nào) thì
+   KHÔNG thấy một chữ nào — đường ống chỉ xả khi tiến trình chết.
+   Đây đúng dạng hỏng tệ nhất: im lặng, và im lặng giống hệt "đang chạy". */
+process.exit(0);
