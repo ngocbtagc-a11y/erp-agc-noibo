@@ -30,7 +30,7 @@ sao ở scratch, không đụng worktree nào): **67 file · tự nạp được
    mãi mãi nằm trong `conThieu` ⇒ `tu-nap-db.mjs` thoát 1 ở **mọi** lần đẩy `main`, mà `deploy.yml` của
    nhánh đó đặt bước này **TRƯỚC** bước deploy → **không lần deploy nào đi qua được.** Nhánh đó rẽ ra ở
    `a73f538`, trước khi 4 file `lui-*` ra đời (`343ce05`), nên chưa từng gặp: tree nó 52 file, `main` 66.
-   **Rẻ nhất: `git mv migrations/lui-*.sql migrations/lui/` — 0 dòng mã.** Cả ba công cụ đều dùng
+   **Rẻ nhất: `git mv migrations/lui/lui-*.sql migrations/lui/` — 0 dòng mã.** Cả ba công cụ đều dùng
    `readdirSync('migrations')` (KHÔNG đệ quy) rồi lọc `.sql`, nên thư mục con biến mất khỏi cả ba cùng lúc;
    gỡ luôn exit-1 vĩnh viễn của `kiem-tra-migration`. Lọc `lui-*` đắt hơn: sửa **hai** script + đẻ một quy
    ước đặt tên mới ai cũng quên được.
@@ -77,7 +77,7 @@ trước, không thì chết `no such column` — tín hiệu ĐÚNG, không ph�
 ## Bảng lỗi
 | # | Mức | Chặn phát hành? | Việc |
 |---|---|---|---|
-| 1 | **L1** | **CÓ — cho `feature/tu-nap-db`**; KHÔNG cho nhánh này | 4 file `lui-*.sql` kẹt mọi lần deploy vĩnh viễn → `git mv migrations/lui-*.sql migrations/lui/` |
+| 1 | **L1** | **CÓ — cho `feature/tu-nap-db`**; KHÔNG cho nhánh này | 4 file `lui-*.sql` kẹt mọi lần deploy vĩnh viễn → `git mv migrations/lui/lui-*.sql migrations/lui/` |
 | 2 | L2 | Không (chỉ là thứ tự thao tác) | Chạy tay 2 migration đợt này **trước khi** gộp `tu-nap-db`, để câu `UPDATE` ở đuôi được ghi nhận |
 | 3 | L2 | Không | `kiem-tra-migration.mjs` dùng `.sort()` trần → in **sai thứ tự** (`…-cot-ocr-neo` trước `…-tai-lieu`); người máy trắng làm theo sẽ chết `no such table`. Sửa 1 dòng: bỏ đuôi `.sql` rồi mới so |
 | 4 | L3 | Không | Dòng `nhom='nhan_su'` cũ trên bản thật (nếu có) vẫn mồ côi — chặn dòng mới, bỏ mặc dòng cũ. Đếm trước; có thì vá tay, ĐỪNG thêm `UPDATE` vào `migrations/` |
