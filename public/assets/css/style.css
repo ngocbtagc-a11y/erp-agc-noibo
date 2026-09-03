@@ -3666,13 +3666,18 @@ tr.kd-chiadoi td {
 .tlq-the img { width: 64px; height: 84px; object-fit: cover; border-radius: var(--r-sm); background: var(--surface-2); }
 .tlq-the-tin b { display: block; font-size: 14px; color: var(--ink); }
 .tlq-the-tin span { font-size: 12px; color: var(--text-mute); }
-/* BỐN NÚT MỖI THẺ, NHƯNG THẺ KHÔNG CAO THÊM MỘT PIXEL NÀO.
-   Trước: hai nút xếp chồng = 2×44 + 6 = 94px. Nay: lưới 2×2 = vẫn 2 hàng,
-   vẫn 94px. Sếp Ngọc vừa chốt "ưu tiên vừa một trang, hạn chế kéo trang" —
-   thêm ↑↓ theo kiểu xếp chồng là đẩy thẻ lên 4 hàng (190px), màn dài gấp đôi.
-   Mỗi nút vẫn ≥44px (đo THẬT ở `do-tai-tep-len-kho`, không đọc CSS).
+/* NĂM NÚT MỖI THẺ, NHƯNG THẺ VẪN KHÔNG CAO THÊM MỘT PIXEL NÀO.
+   Trước: hai nút xếp chồng = 2×44 + 6 = 94px. Rồi lưới 2×2 (↑ ↓ Thay Xoá) =
+   vẫn 2 hàng, vẫn 94px. Nay thêm nút "✂ Cắt" là nút thứ NĂM: giữ 2×2 thì
+   thành 3 hàng = 162px, thẻ cao thêm 40% và màn dài gấp rưỡi — đúng thứ
+   `do-tai-tep` bắt được ngay lượt chạy đầu.
+   → Đổi sang BA CỘT: hàng 1 là ↑ ↓ ✂Cắt, hàng 2 là Thay Xoá. Vẫn 2 hàng,
+   vẫn 94px, không mất nút nào.
+   Sếp Ngọc chốt "ưu tiên vừa một trang, hạn chế kéo trang" — luật đó áp cho
+   cả nút thứ sáu nếu có ngày ai thêm: thêm nút thì đổi số cột, đừng đổi số
+   hàng. Mỗi nút vẫn ≥44px (đo THẬT ở `do-tai-tep`, không đọc CSS).
    `min-width: 0` để nút ↑↓ co được trong cột hẹp mà không tràn thẻ. */
-.tlq-the-nut { display: grid; grid-template-columns: auto auto; gap: 6px; }
+.tlq-the-nut { display: grid; grid-template-columns: repeat(3, auto); gap: 6px; }
 .tlq-do { font-size: 12px; color: var(--text-mute); margin: 0 0 12px; }
 .tlq-ten-goc {
   display: block; font-size: 11px; color: var(--text-mute);

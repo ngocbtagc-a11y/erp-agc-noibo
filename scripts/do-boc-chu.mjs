@@ -171,15 +171,42 @@ let log = '';
 wr.stdout.on('data', d => { log += d; });
 wr.stderr.on('data', d => { log += d; });
 
+/* ⚠️ GIẾT CẢ CÂY TIẾN TRÌNH, KHÔNG CHỈ GIẾT `npx`.
+   `spawn(..., { shell: true })` đẻ ra ba tầng: cmd.exe → npx → wrangler.
+   `wr.kill()` chỉ hạ tầng đầu, `wrangler` con vẫn giữ cổng 8903. Hậu quả
+   thật, gặp ngay 03/09/2026: chạy bàn đo này xong rồi chạy `npm run
+   do-tai-tep` (cũng dùng 8903) là ăn `EADDRINUSE` — cổng đo báo đỏ vì một
+   tiến trình mồ côi, không phải vì mã sai. Đó là dạng báo đỏ tệ nhất: đúng
+   hình thức, sai nguyên nhân. */
+function dungWorker() {
+  try {
+    if (process.platform === 'win32') {
+      spawn('taskkill', ['/pid', String(wr.pid), '/T', '/F'], { stdio: 'ignore' });
+    } else {
+      process.kill(-wr.pid, 'SIGKILL');
+    }
+  } catch { /* đã chết rồi thì thôi */ }
+  try { wr.kill(); } catch { /* kệ */ }
+}
+
 const cho = (ms) => new Promise(r => setTimeout(r, ms));
 let san = false;
 for (let i = 0; i < 90 && !san; i++) {
   await cho(1000);
-  try { await fetch(`http://127.0.0.1:${CONG}/`, { method: 'POST', body: '{}' }); san = true; } catch { /* chưa lên */ }
+  /* ⏱ TRẦN 4 GIÂY CHO MỖI LƯỢT THĂM DÒ — thêm 03/09/2026.
+     `wrangler dev` MỞ CỔNG trước khi Worker sẵn sàng, nên `fetch` bắt tay
+     xong rồi nằm chờ VÔ HẠN. Không có trần thì cả bàn đo đứng im ngay ở đây,
+     và đứng im trông y hệt "đang khởi động" — đã treo ba lượt, mỗi lượt hơn
+     nửa tiếng, trước khi tìm ra chỗ này. */
+  try {
+    await fetch(`http://127.0.0.1:${CONG}/`,
+      { method: 'POST', body: '{}', signal: AbortSignal.timeout(4000) });
+    san = true;
+  } catch { /* chưa lên */ }
 }
 if (!san) {
   console.error('Worker tạm không lên được. Log:\n' + log.slice(-2000));
-  wr.kill(); process.exit(1);
+  dungWorker(); process.exit(1);
 }
 console.log('Worker tạm đã sẵn sàng.\n');
 
@@ -221,7 +248,7 @@ for (const ten of ANH) {
       console.log('  → HỆ QUẢ RỘNG HƠN: đường đọc ảnh CCCD đang có trong ERP');
       console.log('    (src/nhansu.js → docCCCD) cũng đang chết vì đúng lý do này.');
       console.log('  → Chạy lại bàn đo này sau khi mở cổng để có con số độ chính xác.\n');
-      wr.kill();
+      dungWorker();
       process.exit(3);
     }
     ketQua.push({ ten, hong: j.loi });
@@ -244,7 +271,7 @@ for (const ten of ANH) {
   ketQua.push({ ten, ms: j.ms, dungTruong, giong, chiTiet, chu: bocGon });
 }
 
-wr.kill();
+dungWorker();
 
 console.log(`\n═══ ĐỘ CHÍNH XÁC BÓC CHỮ — ${MO_HINH_DOC_ANH} ═══`);
 for (const k of ketQua) {
@@ -329,7 +356,7 @@ console.log('  Tài liệu vẫn vào kho, chỉ là tra bằng tên thay vì tr
 
 /* ⚠️ THOÁT TƯỜNG MINH — thêm 03/09/2026, sau khi bàn đo này "treo" ba lượt
    liền, mỗi lượt hơn nửa tiếng, mà thực ra ĐÃ ĐO XONG TỪ LÂU.
-   `wr.kill()` ở trên giết tiến trình `npx`, nhưng ba đường ống stdio của nó
+   `dungWorker()` ở trên hạ cả cây tiến trình, nhưng ba đường ống stdio của nó
    vẫn là handle đang mở trong vòng lặp sự kiện của Node, nên tiến trình cha
    KHÔNG bao giờ tự thoát. Chạy tay thì vẫn thấy chữ in ra và tưởng nó đang
    nghĩ; chạy qua đường ống (`| Select-Object`, hay bất kỳ cổng CI nào) thì

@@ -1057,8 +1057,11 @@ export function moQuetTaiLieu(t) {
       x.clearRect(0, 0, W, H);
       x.drawImage(anh, 0, 0, W, H);
       const diem = cat.goc.map(g => [g[0] * W, g[1] * H]);
-      const duong = () => {
-        x.beginPath();
+      /* `moi = true` mở đường mới (để vẽ viền); `false` nối thêm vào đường
+         đang dựng (để tô phần bị bỏ bằng luật chẵn-lẻ). Một hàm, hai chỗ
+         dùng — chép hai lần là có ngày sửa một chỗ quên chỗ kia. */
+      const duong = (moi) => {
+        if (moi) x.beginPath();
         x.moveTo(diem[0][0], diem[0][1]);
         for (let k = 1; k < 4; k++) x.lineTo(diem[k][0], diem[k][1]);
         x.closePath();
@@ -1067,14 +1070,12 @@ export function moQuetTaiLieu(t) {
          đoán theo bốn cái chấm. */
       x.save();
       x.beginPath();
-      x.rect(0, 0, W, H);
-      x.moveTo(diem[0][0], diem[0][1]);
-      for (let k = 1; k < 4; k++) x.lineTo(diem[k][0], diem[k][1]);
-      x.closePath();
+      x.rect(0, 0, W, H);            // khung ngoài + tứ giác, tô theo luật chẵn-lẻ
+      duong(false);
       x.fillStyle = 'rgba(44, 33, 23, .5)';
       x.fill('evenodd');
       x.restore();
-      duong();
+      duong(true);
       x.lineWidth = 2;
       /* Khung lõm thì viền chuyển ĐỎ — đỏ chỉ dùng cho "có việc hỏng", và
          khung vắt chéo đúng là hỏng: cắt ra sẽ méo. */
@@ -1188,8 +1189,7 @@ export function moQuetTaiLieu(t) {
                 <span>${coDoc(tr.co_goc || 0)} → <b>${coDoc(tr.co_nen)}</b></span>
                 ${tr.ten_goc ? `<span class="tlq-ten-goc">${esc(tr.ten_goc)}</span>` : ''}
                 ${tr.da_cat ? `<span class="tlq-ten-goc">✂ đã cắt khung${
-                  tr.lam_ro ? ' · làm rõ chữ' : ''}${tr.co_truoc_cat
-                    ? ` · ${coDoc(tr.co_truoc_cat)} → ${coDoc(tr.co_nen)}` : ''}</span>` : ''}
+                  tr.lam_ro ? ' · làm rõ chữ' : ''}</span>` : ''}
               </div>
               <div class="tlq-the-nut">
                 <button type="button" class="tlq-nut-phu" data-viec="len" data-i="${i}"
