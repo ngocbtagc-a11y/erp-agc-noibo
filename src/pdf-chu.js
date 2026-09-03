@@ -354,6 +354,16 @@ function docChuoiTron(s, i) {
   return { byte: ra, ket: i };
 }
 
+/** Bỏ ký tự điều khiển (NUL, BEL, ESC…) khỏi một mẩu chữ vừa tra bảng ra.
+ *  Giữ lại `\t` và `\n` vì hai thứ đó là bố cục thật. Trả chuỗi RỖNG nghĩa là
+ *  "mã này không đọc được", để nơi gọi tính vào phần HỤT chứ không phải phần
+ *  đọc được. */
+function boKyTuDieuKhien(u) {
+  if (u === undefined || u === null) return '';
+  // eslint-disable-next-line no-control-regex
+  return String(u).replace(new RegExp('[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]', 'g'), '');
+}
+
 /** Mã trong phông → chữ. Đếm luôn số mã KHÔNG tra được, để nói ra tỉ lệ hụt. */
 function giaiMa(byte, phong, dem) {
   if (phong && phong.bf && phong.bf.size) {
@@ -362,9 +372,19 @@ function giaiMa(byte, phong, dem) {
     for (let k = 0; k + w <= byte.length; k += w) {
       let ma = 0;
       for (let q = 0; q < w; q++) ma = (ma << 8) | byte[k + q];
-      const u = phong.bf.get(ma);
+      /* ⚠️ VÁ REV-0055 · VỪA-1 — `NUL` KHÔNG PHẢI LÀ "ĐỌC ĐƯỢC".
+         Bảng `/ToUnicode` của Skia ánh xạ con chữ nó không tra được sang
+         `<0000>`, nên `bf.get(ma)` trả về chuỗi `"NUL"` — KHÁC `undefined`.
+         Bản trước tính đó là đọc được: `ty_le_doc_duoc` khai 100% trong khi
+         `S3Y0AXD0-0001` bóc ra thành `S3Y0AXD0␀0001` (đo được 4 và 8 ký tự NUL
+         trên hai file thật), và ký tự rác ấy đi thẳng vào cột `noi_dung`,
+         `tim_kiem`, rồi ra tới bản sao lưu CSV. Chỗ mất gần như luôn là DẤU
+         GẠCH NỐI — mà số hiệu giấy tờ Việt Nam tờ nào cũng có gạch nối
+         (`124/2026/GCN-ATTP`). Ngưỡng 80% ở dưới chỉ có nghĩa khi cái thước
+         này đo đúng. */
+      const u = boKyTuDieuKhien(phong.bf.get(ma));
       dem.tong++;
-      if (u === undefined) { dem.hut++; } else { dem.duoc++; ra += u; }
+      if (!u) { dem.hut++; } else { dem.duoc++; ra += u; }
     }
     return ra;
   }
@@ -376,10 +396,22 @@ function giaiMa(byte, phong, dem) {
   return ra;
 }
 
+/** Lấy toán hạng SỐ thứ `viTriTuCuoi` (đếm ngược từ cuối) của một lệnh cần
+ *  `soToanHang` số. Trả `null` khi ngăn xếp không đủ số — thà không kết luận
+ *  còn hơn kết luận trên một con số không có ở đó. */
+function soCuoi(ngan, soToanHang, viTriTuCuoi) {
+  const so = [];
+  for (const t of ngan) if (t.so !== undefined) so.push(parseFloat(t.so));
+  if (so.length < soToanHang) return null;
+  const v = so[so.length - viTriTuCuoi];
+  return Number.isFinite(v) ? v : null;
+}
+
 /** Luồng nội dung (đã xả nén) → chữ. Máy quét toán tử, không phải khớp regex:
  *  regex không phân biệt nổi `(` trong chuỗi với `(` mở chuỗi. */
 function chuTuLuong(s, phongTheoTen, dem) {
   let i = 0, ra = '', phong = null;
+  let yTruoc = null;                 // toạ độ y của `Tm` gần nhất — xem nhánh `Tm`
   const ngan = [];
   const n = s.length;
   const laNgat = (c) => c === undefined || /[\s/[\]<>(){}%]/.test(c);
@@ -436,7 +468,33 @@ function chuTuLuong(s, phongTheoTen, dem) {
       }
       ngan.length = 0; continue;
     }
-    if (tk === 'Td' || tk === 'TD' || tk === 'T*' || tk === 'ET') { ra += '\n'; ngan.length = 0; continue; }
+    /* ⚠️ VÁ REV-0055 · CHẶN-1 — `Td` KHÔNG PHẢI LÚC NÀO CŨNG LÀ XUỐNG DÒNG.
+       `tx ty Td` dời gốc dòng đi (tx, ty). Khi `ty = 0` nó dời NGANG, vẫn trên
+       CÙNG một dòng — và Chrome/Skia đặt TỪNG CON CHỮ bằng đúng khuôn đó
+       (`<0176> Tj  4.76 0 Td  <01F8> Tj …`). Bản trước bỏ qua hẳn hai toán
+       hạng và LUÔN chèn xuống dòng, nên mỗi con chữ thành một dòng: 4/8 file
+       PDF có lớp chữ thật trên máy Sếp bóc ra `"I n v o i c e"`, tra cứu theo
+       nội dung trả về 0 kết quả. Đo bằng bàn đo của Hồ Ly
+       (`scripts/ho-ly-do-pdf-that.mjs`, đối chiếu `pdftotext`) — không phỏng đoán. */
+    if (tk === 'Td' || tk === 'TD') {
+      const ty = soCuoi(ngan, 2, 1);
+      if (ty !== null && ty !== 0) ra += '\n';
+      ngan.length = 0; continue;
+    }
+    /* `a b c d e f Tm` đặt THẲNG ma trận chữ; `f` là toạ độ y. Nhiều bộ sinh
+       PDF (Chrome trong đó) mở mỗi dòng bằng một `Tm` chứ không bằng `Td`.
+       Không đọc nó thì cả trang dính thành MỘT dòng dài — chữ vẫn tra được,
+       nhưng người mở ra đọc thì không đọc nổi. So với y của `Tm` TRƯỚC: khác
+       thì xuống dòng. Ngưỡng 0,5 để nhiễu làm tròn không đẻ ra dòng rỗng. */
+    if (tk === 'Tm') {
+      const y = soCuoi(ngan, 6, 1);
+      if (y !== null) {
+        if (yTruoc !== null && Math.abs(y - yTruoc) > 0.5) ra += '\n';
+        yTruoc = y;
+      }
+      ngan.length = 0; continue;
+    }
+    if (tk === 'T*' || tk === 'ET') { ra += '\n'; ngan.length = 0; continue; }
     if (tk === 'BT' || tk === 'Q' || tk === 'q') { ngan.length = 0; continue; }
     ngan.push({ so: tk });
     if (ngan.length > 96) ngan.splice(0, 48);
@@ -456,6 +514,45 @@ const NGUONG_DOC_DUOC = 0.80;
  *  có lớp chữ thật luôn vượt xa; vài chục ký tự lẻ thường là số trang hoặc
  *  dấu vết công cụ tạo file, không phải nội dung. */
 const NGUONG_CO_CHU = 60;
+
+/* ⚠️ CHỮ VỤN — VÁ REV-0055 · CHẶN-1, TẦNG HAI
+   ---------------------------------------------------------------------------
+   Sửa luật xuống dòng ở `chuTuLuong` là chữa BỆNH. Chốt này là để lần sau bệnh
+   quay lại dưới hình dạng khác thì ERP vẫn KHÔNG dám khai "tra cứu được".
+
+   Chữ vụn = chữ bị tách rời từng con (`"I n v o i c e"`). Nó trông như chữ,
+   dài như chữ, đếm ký tự thì nhiều — nhưng gõ "invoice" vào ô tìm ra 0 kết
+   quả. Cái nguy không phải chữ hỏng, mà là ERP KHÔNG BIẾT nó hỏng: nó dán nhãn
+   tin cậy cao nhất lên rồi đếm vào tỉ lệ "tìm được theo nội dung" — đúng con
+   số Sếp dùng để quyết định có phải đi chỉnh máy scan hay không.
+
+   Đo bằng chính thứ người dùng gõ: TỪ. Đếm mẩu cách nhau bằng khoảng trắng;
+   mẩu chỉ có MỘT ký tự thì không phải một từ tra cứu được.
+   Ngưỡng 50% cố ý rộng tay: tiếng Việt có từ một chữ ("ở", "ê"), bảng biểu có
+   cột số một chữ số — 50% thì văn bản thật không bao giờ chạm tới, mà chữ vụn
+   thật (đo được: 100% mẩu một ký tự) thì không bao giờ thoát.
+   Đòi ít nhất 20 mẩu để một dòng tiêu đề ngắn không bị kết tội oan. */
+const NGUONG_MAU_MOT_KY_TU = 0.5;
+const TOI_THIEU_MAU_DE_XET = 20;
+
+/** Chữ này có bị tách rời từng ký tự không. Khai ở ĐÂY, dùng chung cho cả
+ *  `docChuTuPDF` (hạ LOẠI của file) lẫn `docTinChu` ở `src/tai-lieu.js` (hạ
+ *  NHÃN mỏ neo) — hai chỗ chặn, một định nghĩa. */
+export function laChuVun(chu) {
+  const mau = String(chu || '').trim().split(/\s+/).filter(Boolean);
+  if (mau.length < TOI_THIEU_MAU_DE_XET) return false;
+  let motKyTu = 0;
+  for (const m of mau) if ([...m].length === 1) motKyTu++;
+  return motKyTu / mau.length >= NGUONG_MAU_MOT_KY_TU;
+}
+
+/** Câu cho người thường khi gặp chữ vụn. KHÔNG nói "toán tử Td" — bạn kho đọc
+ *  câu đó không làm được gì; nói đúng thứ họ quyết định được. */
+export const CAU_CHU_VUN =
+  'File này có chữ bên trong nhưng chữ bị rời rạc từng ký tự, nên tìm theo nội ' +
+  'dung sẽ không ra. Tài liệu vẫn lưu nguyên bản và mở xem được bình thường, ' +
+  'vẫn tra được bằng tên, số hiệu, loại giấy. Muốn tìm được cả theo nội dung ' +
+  'thì quét lại bằng máy scan ở chế độ nhận dạng chữ.';
 
 /**
  * Đọc chữ nằm sẵn trong PDF.
@@ -547,6 +644,19 @@ export async function docChuTuPDF(byteVao) {
         `(${Math.round(tyLe * 100)}% ký tự đọc được). Tài liệu vẫn lưu và mở xem ` +
         'được, vẫn tra được bằng tên, số hiệu, loại giấy. Muốn tìm theo nội dung ' +
         'thì quét lại bằng máy scan ở chế độ nhận dạng chữ, hoặc chụp bằng máy ảnh.'),
+      so_trang: dsTrang.length, so_ky_tu: soChuThat, ty_le_doc_duoc: tyLe, bi_cat: biCat
+    };
+  }
+  /* ⚠️ CHỮ VỤN — VÁ REV-0055 · CHẶN-1 TẦNG HAI. Cùng lý lẽ với nhánh ngay
+     trên: chữ tra không ra thì KHÔNG được khai là "tìm được theo nội dung".
+     Ở đây còn nặng hơn vì chữ vụn KHÔNG trông giống rác — nó đầy đủ ký tự,
+     đủ dấu, qua được mọi ngưỡng khác, nên không chặn ở đây thì không chỗ nào
+     chặn nữa. Trả về `chi_anh` ⇒ `chu_nguon = 'khong'` ⇒ không lọt vào vế
+     "tìm được theo nội dung" của dải đếm, và màn quét không in câu "TÌM ĐƯỢC
+     theo nội dung bên trong". */
+  if (laChuVun(chuGop)) {
+    return {
+      ...rong(LOAI_PDF.chi_anh, CAU_CHU_VUN),
       so_trang: dsTrang.length, so_ky_tu: soChuThat, ty_le_doc_duoc: tyLe, bi_cat: biCat
     };
   }

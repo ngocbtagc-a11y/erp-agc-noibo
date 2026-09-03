@@ -50,7 +50,7 @@ import { NHAN_SO_AI, viTriSoAI, soCCCD } from './so-ai.js';
 /* Dò chữ ký `%PDF-` + đọc chữ nằm sẵn trong PDF. Khai ĐÚNG MỘT chỗ
    (`src/pdf-chu.js`) — hai bản chép tay của cùng một định nghĩa chính là cách
    đường đọc CCCD từng chết âm thầm 11 ngày. */
-import { laByteCuaPDF, docChuTuPDF, LOAI_PDF } from './pdf-chu.js';
+import { laByteCuaPDF, docChuTuPDF, LOAI_PDF, laChuVun } from './pdf-chu.js';
 
 /** Câu phải xuất hiện ở mọi cửa. Đặt ở ĐÚNG MỘT chỗ để không có hai bản
  *  lệch nhau, và để phép kiểm tự động soi được một chuỗi duy nhất. */
@@ -524,6 +524,25 @@ export function docTinChu(chu, { soHieu = null, loai = null, tieuDe = null,
     if (trung) yeu = `cụm "${trung}" trong tên bạn vừa gõ`;
   }
 
+  /* ⚠️ VÁ REV-0055 · CHẶN-1, TẦNG HAI — CHỐT MỎ NEO TỪNG MÙ ĐÚNG BỆNH NÀY.
+     Cả ba mỏ neo MẠNH ở trên so bằng `gonHet()`, tức BỎ HẾT khoảng trắng
+     trước khi so. Nên khi chữ bóc ra vỡ vụn thành `"S 3 Y 0 A X D 0 0 0 0 1"`,
+     `gonHet` vẫn nặn nó về `s3y0axd00001` và mỏ neo VẪN TRÚNG — rồi ERP trao
+     nhãn tin cậy CAO NHẤT ("ĐÃ ĐỐI CHIẾU") cho một mớ chữ mà gõ "invoice" vào
+     ô tìm ra 0 kết quả (Hồ Ly đo được trên CSDL thật, REV-0055).
+     Luật giữ nguyên như lần trước: THÀ MẤT NHÃN TIN CẬY CÒN HƠN GIỮ NHÃN SAI.
+     Chữ vẫn LƯU (luật ①), chỉ là không lên được bậc "đã đối chiếu" và không
+     vào ô tìm kiếm. Một chỗ định nghĩa `laChuVun` — dùng chung với
+     `src/pdf-chu.js`, không có bản chép tay thứ hai. */
+  if (manh && laChuVun(chu)) {
+    return {
+      muc: 'chua_kiem', neo: null, coMoc, traiMocBatBuoc,
+      viSao: `Chữ trang này có trúng ${manh}, NHƯNG chỉ trúng khi bỏ hết khoảng ` +
+             'trắng: chữ bóc ra bị rời rạc từng ký tự nên gõ vào ô tìm sẽ không ' +
+             'ra. Máy KHÔNG dám nhận là đã đối chiếu. Chữ vẫn lưu để bạn tự đọc, ' +
+             'nhưng KHÔNG đưa vào ô tìm kiếm.'
+    };
+  }
   if (manh) {
     return { muc: 'da_neo', neo: manh, coMoc, viSao: null, traiMocBatBuoc: false };
   }
@@ -924,9 +943,20 @@ export async function luuTaiLieu(env, phien, body) {
     });
   } catch (e) {
     /* Nói thẳng là CHƯA LƯU ĐƯỢC, và điện thoại vẫn giữ bản nháp nên bấm
-       "Gửi lại" là xong — không mất ảnh đã chụp. */
-    return loi('Chưa gửi được lên kho: ' + (e.message || '').slice(0, 200) +
-               ' — ảnh vẫn giữ trên máy, bấm "Gửi lại" khi có sóng.', 502);
+       "Gửi lại" là xong — không mất ảnh đã chụp.
+
+       ⚠️ VÁ REV-0055 · THẤP-2 — KHÔNG PHUN `e.message` RA MẶT NGƯỜI DÙNG.
+       `src/kho-file.js` nhét cả thân JSON của Google vào `e.message`, nên câu
+       cũ ra tới bạn kho là: `Chưa gửi được lên kho: Google từ chối cấp vé
+       (401). { "error": "inva… — ảnh vẫn giữ trên máy…`. Đọc câu đó không ai
+       biết phải làm gì, mà lại tưởng ERP hỏng nặng.
+       Chi tiết kỹ thuật đi vào `console.error` — chỗ của nó, và Workers Logs
+       đang bật nên vẫn đọc được khi cần dò. Người dùng nhận đúng hai thứ họ
+       dùng được: chuyện gì xảy ra, và làm gì tiếp. */
+    console.error('Đẩy tài liệu lên kho hỏng:', (e && e.message) || e);
+    return loi('Chưa gửi được lên kho — có thể mạng chập chờn, hoặc kho ngoài ' +
+               'đang bận. Ảnh và file vẫn còn nguyên trên máy: bấm "Gửi lại" ' +
+               'khi có sóng. Thử vài lần vẫn không được thì nhắn quản trị ERP.', 502);
   }
 
   const banGhi = {
@@ -1004,7 +1034,35 @@ export async function luuTaiLieu(env, phien, body) {
        `UNIQUE` ở đây KHÔNG phải sự cố, nó là câu "đã có rồi": dọn đúng file
        mình vừa đẩy lên rồi trả về bản đã lưu, y như đường gửi lại bình thường. */
     const m = String((e && e.message) || '');
-    if (!/UNIQUE constraint failed/i.test(m) || !maGui) throw e;
+
+    /* ⚠️ VÁ REV-0055 · CAO-3 — GHI CSDL HỎNG THÌ PHẢI DỌN FILE VỪA ĐẨY LÊN.
+       Trước bản vá, mọi lỗi KHÔNG phải `UNIQUE` đều `throw e` ra ngoài. Nhưng
+       file ĐÃ nằm trên Drive rồi (lượt đẩy ở trên đã xong): kết quả là 500 cho
+       người dùng CỘNG một file MỒ CÔI trên Drive mà không dòng nào trong CSDL
+       trỏ tới — không ai tìm thấy, không ai dọn được. Mỗi lần Sếp bấm "Gửi
+       lại" là thêm một file mồ côi nữa.
+       Hồ Ly dựng được ca thật: deploy mã mới TRƯỚC khi chạy migration ⇒ câu
+       `INSERT` nổ `no such column: chu_nguon` ⇒ rơi đúng vào đường này.
+       Nay: dọn file, rồi trả câu TIẾNG NGƯỜI. Ném ra ngoài để lớp trên biến
+       thành chữ "undefined" là hai lỗi chồng lên nhau. */
+    if (!/UNIQUE constraint failed/i.test(m) || !maGui) {
+      let daDon = false;
+      try {
+        await xoaFile(env, { nha: luuXong.nha, khoa: luuXong.khoa });
+        daDon = true;
+      } catch (e2) {
+        /* Dọn hụt thì KHÔNG được nuốt im: file mồ côi vẫn nằm trên Drive, phải
+           để lại đúng mã file trong log để dọn tay được. */
+        console.error(`Tài liệu ${id}: ghi CSDL hỏng VÀ dọn file mồ côi hụt ` +
+                      `(kho_khoa=${luuXong.khoa}): ${e2.message}`);
+      }
+      console.error(`Tài liệu ${id}: ghi CSDL hỏng: ${m}`);
+      return loi('Chưa lưu được tài liệu vào kho — máy chủ đang trục trặc ở bước ' +
+                 'ghi dữ liệu. File trên máy bạn vẫn còn nguyên: chọn lại rồi gửi ' +
+                 'lần nữa. Nếu vẫn báo lỗi thì nhắn quản trị ERP.' +
+                 (daDon ? '' : ' (Có một bản file thừa còn nằm trên kho — quản trị ' +
+                  'ERP dọn giúp, bạn không phải làm gì.)'), 500);
+    }
 
     let donDuoc = false;
     try {

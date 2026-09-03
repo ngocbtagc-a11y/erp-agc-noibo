@@ -9742,16 +9742,30 @@ function cauSauKhiQuet(kq) {
    ký (gộp theo ngày, xem `ghiNhatKy()`), đúng thứ Luật BVDLCN bắt phải có.
    ========================================================================== */
 
-/** Bôi vàng đúng những cụm số do AI đọc. Vị trí cụm do MÁY CHỦ tính
- *  (`so_ai`, src/so-ai.js) — trình duyệt KHÔNG giữ bản dò số thứ hai. */
-function veChuCoSo(chu, viTri) {
+/** Bôi vàng đúng những cụm số MÁY đọc. Vị trí cụm do MÁY CHỦ tính
+ *  (`so_ai`, src/so-ai.js) — trình duyệt KHÔNG giữ bản dò số thứ hai.
+ *
+ *  ⚠️ VÁ REV-0055 · CAO-2 — NHÃN LẤY TỪ MÁY CHỦ, KHÔNG DÁN CỨNG.
+ *  Bản trước dán cứng "AI đọc — CHƯA KIỂM" cho MỌI con số, kể cả chữ lấy từ
+ *  lớp chữ có sẵn trong PDF — đoạn chữ mà Workers AI chưa được gọi lấy một
+ *  lượt (`do-kho-tai-lieu` ⑬a tự chứng minh: 0 lượt AI cho đường PDF). Nói sai
+ *  nguồn gốc của chữ là làm hỏng chính cái luật "con số máy đọc = chưa kiểm":
+ *  người đọc thấy nhãn dán bừa một lần thì lần sau bỏ qua nó. */
+/** ĐƯỜNG LUI khi máy chủ không trả nhãn (bản cũ còn trong bộ nhớ đệm trình
+ *  duyệt). Khai ĐÚNG MỘT chỗ: hai bản chép tay của cùng một nhãn là cách nhãn
+ *  bắt đầu lệch nhau, và bàn đo cũng chỉ soi được khi có đúng một chuỗi
+ *  (REV-0055 · CAO-2). */
+const NHAN_MAY_DOC_LUI = 'AI đọc — CHƯA KIỂM';
+
+function veChuCoSo(chu, viTri, nhan) {
   const s = String(chu || '');
+  const nh = nhan || NHAN_MAY_DOC_LUI;
   if (!Array.isArray(viTri) || !viTri.length) return esc(s);
   let ra = '', xong = 0;
   for (const [i, dai] of viTri) {
     if (!Number.isFinite(i) || !Number.isFinite(dai) || i < xong) continue;
     ra += esc(s.slice(xong, i));
-    ra += `<mark class="so-ai" title="AI đọc — CHƯA KIỂM">${esc(s.slice(i, i + dai))}</mark>`;
+    ra += `<mark class="so-ai" title="${esc(nh)}">${esc(s.slice(i, i + dai))}</mark>`;
     xong = i + dai;
   }
   return ra + esc(s.slice(xong));
@@ -9893,14 +9907,30 @@ function noiNutXemChu(goc) {
           (tl.ocr_ghi_chu ? ' — ' + tl.ocr_ghi_chu : '') + '.';
         return;
       }
-      /* Câu nhắc đứng TRƯỚC đoạn chữ, không phải chú thích cuối trang: người
+      /* ⚠️ VÁ REV-0055 · CAO-2 — NÓI ĐÚNG NGUỒN GỐC CỦA CHỮ.
+         Bản trước dán cứng "AI đọc từ ảnh" cho cả chữ lấy từ lớp chữ có sẵn
+         trong PDF — đoạn chữ mà Workers AI chưa được gọi lấy một lượt. Nhãn
+         nói sai nguồn là nhãn sẽ bị bỏ qua, và cả cơ chế "CHƯA KIỂM" sống
+         bằng việc người đọc còn tin nhãn đó.
+         Nhãn và câu giải thích đều rẽ theo `chu_nguon` MÁY CHỦ trả về; nhãn
+         khai ở `src/tai-lieu.js` (`NHAN_CHU_PDF` / `NHAN_SO_AI`), trình duyệt
+         KHÔNG giữ bản chép tay. Điểm CHUNG của hai nhánh giữ nguyên: cả hai
+         đều là chữ MÁY đọc, con số đều phải đối chiếu bản giấy.
+         Câu nhắc đứng TRƯỚC đoạn chữ, không phải chú thích cuối trang: người
          đọc phải biết đây là chữ máy đọc TRƯỚC khi đọc con số. */
+      const tuPDF = tl.chu_nguon === 'pdf_lop_chu';
+      const nhan = tl.nhan_so_ai ||
+        (tuPDF ? 'Chữ có sẵn trong file PDF — CHƯA KIỂM' : NHAN_MAY_DOC_LUI);
       o.innerHTML =
-        '<p class="tl-so-ai-nhac">⚠️ <b>AI đọc — CHƯA KIỂM.</b> Con số được bôi ' +
-        'là do AI đọc từ ảnh. AI có thể đọc đúng tờ giấy mà vẫn chép sai vài ' +
-        'chữ số — đối chiếu bản giấy trước khi dùng bất kỳ con số nào vào giấy ' +
-        'tờ, tờ khai hay hồ sơ.</p>' +
-        `<pre class="tl-chu-van">${veChuCoSo(tl.noi_dung, tl.so_ai)}</pre>` +
+        `<p class="tl-so-ai-nhac">⚠️ <b>${esc(nhan)}.</b> ` +
+        (tuPDF
+          ? 'Con số được bôi là chữ máy scan nhận dạng sẵn trong file, KHÔNG phải ' +
+            'do AI đọc ảnh — nhưng máy scan vẫn đọc nhầm chữ số. '
+          : 'Con số được bôi là do AI đọc từ ảnh. AI có thể đọc đúng tờ giấy mà ' +
+            'vẫn chép sai vài chữ số. ') +
+        'Đối chiếu bản giấy trước khi dùng bất kỳ con số nào vào giấy tờ, tờ ' +
+        'khai hay hồ sơ.</p>' +
+        `<pre class="tl-chu-van">${veChuCoSo(tl.noi_dung, tl.so_ai, nhan)}</pre>` +
         (tl.ocr_ghi_chu ? `<p class="tl-so-ai-nhac">${esc(tl.ocr_ghi_chu)}</p>` : '');
     } catch (e) { o.textContent = e.message; }
   }));

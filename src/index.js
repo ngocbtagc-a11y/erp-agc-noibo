@@ -6419,7 +6419,12 @@ async function tlLuu(req, env) {
     let b;
     try { b = JSON.parse(new TextDecoder().decode(khung.subarray(4, 4 + dai))); }
     catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
-    if (!b || typeof b !== 'object') return loi('Dữ liệu gửi lên không hợp lệ');
+    /* `typeof [] === 'object'` nên một MẢNG JSON lọt qua chốt cũ rồi mới chết
+       ở chốt nghiệp vụ. Vô hại (400, 0 lượt ghi) nhưng chốt phải nói đúng ý nó
+       muốn nói — REV-0055 · THẤP-1. */
+    if (!b || typeof b !== 'object' || Array.isArray(b)) {
+      return loi('Dữ liệu gửi lên không hợp lệ');
+    }
     b.tep_byte = khung.subarray(4 + dai);
     return tailieu.luuTaiLieu(env, phien, b);
   }
@@ -6760,8 +6765,13 @@ export default {
     try {
       return await xuLy(req, env, ctx);
     } catch (e) {
-      // Không trả chi tiết lỗi ra ngoài — lộ cấu trúc hệ thống cho kẻ dò.
-      console.error('Lỗi máy chủ:', e.stack || e.message);
+      /* Không trả chi tiết lỗi ra ngoài — lộ cấu trúc hệ thống cho kẻ dò.
+         ⚠️ `e` KHÔNG chắc là một Error: ném một chuỗi, một object, hay
+         `undefined` thì `e.stack`/`e.message` đều là `undefined` và dòng log
+         này thành "Lỗi máy chủ: undefined" — mất sạch manh mối đúng lúc cần
+         nó nhất (REV-0055 · CAO-3 gặp đúng ca đó). Câu RA NGOÀI vẫn là câu
+         cố định, không bao giờ là "undefined". */
+      console.error('Lỗi máy chủ:', (e && (e.stack || e.message)) || String(e));
       return loi('Máy chủ gặp sự cố', 500);
     }
   }

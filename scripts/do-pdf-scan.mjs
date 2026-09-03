@@ -48,13 +48,38 @@ const muc = (s) => console.log(`\n─── ${s} ${'─'.repeat(Math.max(0, 62 -
 /** PDF một trang, phông có `/ToUnicode` ánh xạ mã → chữ tiếng Việt CÓ DẤU.
  *  Đây đúng khuôn máy scan xuất ra khi bật nhận dạng chữ: mã trong luồng nội
  *  dung là mã trong phông (1, 2, 3…), chữ thật chỉ đọc được qua bảng đổi mã. */
-function dungPDFCoChu(cau, { coToUnicode = true, nen = true } = {}) {
+function dungPDFCoChu(cau, { coToUnicode = true, nen = true, kieuDat = 'motTj' } = {}) {
   const ky = [...cau];
   /* Mã bắt đầu từ 1 để CỐ TÌNH khác mã ASCII — bỏ bảng đổi mã là ra rác ngay,
      chứ không "tình cờ đúng" như khi mã trùng ASCII. */
   const bang = ky.map((c, i) => ({ ma: i + 1, chu: c }));
-  const hex = bang.map(b => b.ma.toString(16).padStart(4, '0')).join('');
-  const nd = `BT /F1 12 Tf 40 700 Td <${hex}> Tj ET`;
+  const hex4 = (n) => n.toString(16).padStart(4, '0');
+  const hex = bang.map(b => hex4(b.ma)).join('');
+
+  /* ⚠️ BA KIỂU ĐẶT CHỮ — THÊM VÌ BÀN ĐO THIẾU CA, KHÔNG PHẢI VÌ NỚI.
+     REV-0055 · CHẶN-1 chỉ đúng một chỗ: bản trước bàn đo này chỉ dựng được
+     `kieuDat: 'motTj'` — đúng MỘT `Tj`, không `Td` nào ở giữa. Đường mã hỏng
+     (`Td` luôn chèn xuống dòng) KHÔNG BAO GIỜ chạy tới, nên bàn đo báo 100%
+     trong khi 4/8 file PDF thật trên máy Sếp bóc ra `"I n v o i c e"`.
+       · motTj    — cả câu trong một `Tj` (bộ sinh PDF đơn giản)
+       · tdNgang  — TỪNG CON CHỮ, cách nhau bằng `tx 0 Td` (Chrome/Skia) ← ca thiếu
+       · tdXuong  — mỗi dòng một `Td` có `ty ≠ 0` (xuống dòng THẬT, phải giữ) */
+  let nd;
+  if (kieuDat === 'tdNgang') {
+    const dat = bang.map((b, i) =>
+      (i === 0 ? '' : `${(4.7 + (i % 3) * 0.3).toFixed(4)} 0 Td `) + `<${hex4(b.ma)}> Tj`);
+    nd = `BT /F1 12 Tf 1 0 0 -1 40 700 Tm ${dat.join(' ')} ET`;
+  } else if (kieuDat === 'tdXuong') {
+    /* Cắt câu thành 3 khúc, mỗi khúc một dòng thật (`ty = -14`). */
+    const khuc = [];
+    const buoc = Math.ceil(bang.length / 3);
+    for (let i = 0; i < bang.length; i += buoc) khuc.push(bang.slice(i, i + buoc));
+    nd = 'BT /F1 12 Tf 40 700 Td ' +
+      khuc.map((k, i) => (i ? '0 -14 Td ' : '') + `<${k.map(b => hex4(b.ma)).join('')}> Tj`).join(' ') +
+      ' ET';
+  } else {
+    nd = `BT /F1 12 Tf 40 700 Td <${hex}> Tj ET`;
+  }
   const ndByte = nen ? deflateSync(Buffer.from(nd, 'latin1')) : Buffer.from(nd, 'latin1');
 
   const cmap =
@@ -194,6 +219,72 @@ muc('② PDF có lớp chữ tiếng Việt — % ký tự đúng, dấu còn đ
   /* ---- BOM ở đầu KHÔNG làm hỏng việc bóc chữ ---- */
   const r4 = await pdfChu.docChuTuPDF(themDauFile(b, BOM));
   ok(r4.loai === 'co_lop_chu' && r4.co_dau, 'PDF có BOM vẫn bóc được chữ có dấu');
+
+  /* ======================================================================
+     ⚠️ CA THIẾU — `Td` DỜI NGANG (REV-0055 · CHẶN-1)
+     ----------------------------------------------------------------------
+     Thêm vì BÀN ĐO THIẾU CA, KHÔNG PHẢI VÌ NỚI: bản trước chỉ dựng được PDF
+     có ĐÚNG MỘT `Tj`, nên đường mã hỏng không bao giờ chạy tới và bàn đo báo
+     100% trong khi một nửa PDF thật hỏng. Chốt dưới đây CHẶT HƠN bản cũ.
+     ====================================================================== */
+  const bNgang = dungPDFCoChu(CAU_VN, { kieuDat: 'tdNgang' });
+  const rNgang = await pdfChu.docChuTuPDF(bNgang);
+  ok(rNgang.loai === 'co_lop_chu',
+     'Td-NGANG (Chrome đặt từng con chữ) → vẫn nhận là PDF có lớp chữ',
+     `loai=${rNgang.loai}`);
+  ok(!pdfChu.laChuVun(rNgang.chu),
+     '⚠️ Td-NGANG: chữ KHÔNG bị vỡ vụn từng ký tự',
+     JSON.stringify(rNgang.chu.slice(0, 46)));
+  {
+    const rawN = rNgang.chu.replace(/\s+/g, '');
+    let t = 0;
+    for (let i = 0; i < mong.length; i++) if (rawN[i] === mong[i]) t++;
+    ok(t / mong.length >= 0.99,
+       `Td-NGANG: bóc đúng ${(t / mong.length * 100).toFixed(1)}% ký tự`, `${t}/${mong.length}`);
+    /* Từ phải còn nguyên thành TỪ — đây mới là thứ ô tìm kiếm dùng. */
+    ok(/CÔNG TY TNHH ALPHA GREEN COMMERCE/.test(rNgang.chu),
+       '⚠️ Td-NGANG: cụm từ nguyên vẹn, gõ vào ô tìm sẽ trúng');
+  }
+
+  /* ĐỐI CHỨNG BH-16 — bản CŨ (mọi `Td` đều xuống dòng) phải VỠ ca này.
+     Không có ca đối chứng thì không biết phép đo trên có mắt hay không. */
+  {
+    const nguon = readFileSync(path.join(GOC, 'src/pdf-chu.js'), 'utf8').replace(/\r\n/g, '\n');
+    const moc = "    if (tk === 'Td' || tk === 'TD') {\n      const ty = soCuoi(ngan, 2, 1);\n" +
+                "      if (ty !== null && ty !== 0) ra += '\\n';";
+    if (!nguon.includes(moc)) {
+      ok(false, 'Tìm được chỗ vá luật xuống dòng để dựng ca đối chứng', '→ đã đổi mã, sửa bàn đo!');
+    } else {
+      const { writeFileSync, mkdirSync } = await import('node:fs');
+      const { pathToFileURL } = await import('node:url');
+      const TAM = path.join(GOC, '.do-tam');
+      mkdirSync(TAM, { recursive: true });
+      const va = nguon.replace(moc,
+        "    if (tk === 'Td' || tk === 'TD') {\n      const ty = soCuoi(ngan, 2, 1);\n" +
+        "      if (true) ra += '\\n';   /* CỐ Ý QUAY VỀ LUẬT CŨ — ca đối chứng BH-16 */");
+      const d = path.join(TAM, 'pdf-chu-LUAT-CU.mjs');
+      writeFileSync(d, va);
+      const modCu = await import(pathToFileURL(d).href + '?v=' + Date.now());
+      const rCu = await modCu.docChuTuPDF(bNgang);
+      ok(rCu.loai === 'chi_anh' || modCu.laChuVun(rCu.chu),
+         'ĐỐI CHỨNG BH-16 — luật CŨ (mọi Td đều xuống dòng) làm VỠ chữ ca này',
+         `loai=${rCu.loai} · ${JSON.stringify(String(rCu.chu || '').slice(0, 30))}`);
+      /* Và chốt chữ vụn phải TỰ CHẶN được bản hỏng đó — đây là tầng hai. */
+      ok(modCu.laChuVun('P a g e 1 o f 1 I n v o i c e I n v o i c e n u m b e r S 3 Y 0'),
+         'Chốt `laChuVun` nhận ra chữ vỡ vụn thật (mẫu lấy từ REV-0055)');
+      ok(!modCu.laChuVun(CAU_VN),
+         'ĐỐI CHỨNG: câu tiếng Việt bình thường KHÔNG bị kết tội là chữ vụn');
+      ok(!modCu.laChuVun('Số 1 ở ô A 2 và B 3 của bảng kê hàng nhập tháng 8 năm 2026 kho Hà Nội'),
+         'ĐỐI CHỨNG: câu có nhiều mẩu một ký tự (bảng kê) vẫn KHÔNG bị kết tội oan');
+    }
+  }
+
+  /* Xuống dòng THẬT (`ty ≠ 0`) phải còn nguyên — vá lỗi không được ăn mất
+     cái đang đúng. */
+  const rXuong = await pdfChu.docChuTuPDF(dungPDFCoChu(CAU_VN, { kieuDat: 'tdXuong' }));
+  ok(rXuong.loai === 'co_lop_chu' && rXuong.chu.split('\n').filter(Boolean).length >= 3,
+     'Td-XUỐNG (ty ≠ 0) vẫn xuống dòng thật — không vá quá tay',
+     `${rXuong.chu.split('\n').filter(Boolean).length} dòng`);
 }
 
 /* ==========================================================================
@@ -310,27 +401,83 @@ muc('⑥ Câu báo lỗi của đường tải file — quét toàn bộ');
   const CAM = [/thư viện/i, /chi phí 0/i, /Cloudflare/i, /\bWorkers?\b/, /render/i,
                /FlateDecode/i, /\bbase64\b/i, /isolate/i, /%PDF-/, /Uint8Array/,
                /localStorage/, /\bAPI\b/, /\bJSON\b/, /Content-Type/i];
-  const dsFile = ['src/tai-lieu.js', 'src/pdf-chu.js', 'public/assets/js/quet-tai-lieu.js'];
-  let daSua = 0, conDinh = [];
-  for (const f of dsFile) {
+  /* ⚠️ VÙNG QUÉT MỞ RỘNG — VÁ REV-0055 · THẤP-2.
+     Vòng trước chỉ quét 3 file, và khai "còn 0 câu lộ ruột". Khai đó HẸP HƠN
+     sự thật: câu xấu nhất trên chính đường đang phát hành —
+     `Chưa gửi được lên kho: Google từ chối cấp vé (401). {"error":…` — sinh ra
+     ở `src/kho-file.js` rồi được `src/tai-lieu.js` ghép nguyên văn vào câu ra
+     người dùng. Nằm ngoài vùng quét thì quét bao nhiêu cũng không thấy.
+     Nay quét CẢ đường tải file, kể cả `src/index.js` và `app.js`. */
+  /* ĐƯỜNG TẢI FILE — CHỐT CỨNG. Đây là phạm vi phiếu này chịu trách nhiệm. */
+  const dsDuongTaiFile = [
+    'src/tai-lieu.js', 'src/pdf-chu.js', 'src/kho-file.js',
+    'public/assets/js/quet-tai-lieu.js', 'public/assets/js/gop-trang-pdf.js'
+  ];
+  /* NGOÀI ĐƯỜNG TẢI FILE — QUÉT VÀ IN RA, KHÔNG CHỐT CỨNG. Câu xấu ở đây là
+     của tính năng khác (đổi mật khẩu, quẹt QR…), sửa ở nhánh này là đụng việc
+     người khác. Nhưng IM LẶNG bỏ qua thì lần sau lại khai "còn 0 câu" hẹp hơn
+     sự thật — đúng lỗi REV-0055 · THẤP-2 vừa chỉ ra. In ra để còn thấy. */
+  const dsNgoaiPhamVi = ['src/index.js', 'public/assets/js/app.js'];
+
+  /** Bóc mọi chuỗi ra mắt người dùng trong một file. */
+  function quetCau(f) {
     const src = readFileSync(path.join(GOC, f), 'utf8');
     /* CHỈ soi chuỗi thật sự ra mắt người dùng: đối số của `loi(...)`,
        `alert(...)`, `confirm(...)`, và các hằng `CAU_*` / `GHI_CHU_*`.
        Chú thích trong mã ĐƯỢC PHÉP nói chuyện kỹ thuật — đó là chỗ của nó. */
-    const re = /(?:\bloi\(|\balert\(|\bconfirm\(|CAU_LOAI\s*=|GHI_CHU_PDF_CHUA_BOC\s*=)([\s\S]{0,900}?)(?:\);|\n\s*\n)/g;
+    const re = /(?:\bloi\(|\balert\(|\bconfirm\(|CAU_LOAI\s*=|CAU_CHU_VUN\s*=|GHI_CHU_PDF_CHUA_BOC\s*=)([\s\S]{0,900}?)(?:\);|\n\s*\n)/g;
+    const ra = [];
     for (const m of src.matchAll(re)) {
-      const doan = m[1];
-      const chuoi = [...doan.matchAll(/'((?:[^'\\]|\\.)*)'|`((?:[^`\\]|\\.)*)`/g)]
+      const chuoi = [...m[1].matchAll(/'((?:[^'\\]|\\.)*)'|`((?:[^`\\]|\\.)*)`/g)]
         .map(x => x[1] || x[2] || '').join(' ');
-      if (!chuoi.trim()) continue;
+      if (chuoi.trim()) ra.push(chuoi);
+    }
+    return ra;
+  }
+
+  let daSua = 0;
+  const conDinh = [];
+  for (const f of dsDuongTaiFile) {
+    for (const chuoi of quetCau(f)) {
       daSua++;
       const v = CAM.filter(c => c.test(chuoi));
       if (v.length) conDinh.push(`${f}: «${chuoi.slice(0, 70)}…» → ${v.join(' ')}`);
     }
   }
-  console.log(`  · Đã quét ${daSua} câu ra người dùng trong ${dsFile.length} file.`);
-  ok(conDinh.length === 0, 'Không câu nào còn chữ kỹ thuật',
+  console.log(`  · Đã quét ${daSua} câu ra người dùng trên ĐƯỜNG TẢI FILE ` +
+              `(${dsDuongTaiFile.length} file).`);
+  ok(conDinh.length === 0, 'Đường tải file: không câu nào còn chữ kỹ thuật',
      conDinh.length ? '\n      ' + conDinh.slice(0, 8).join('\n      ') : 'sạch');
+
+  /* ⚠️ CHỐT CHO ĐÚNG BỆNH REV-0055 · THẤP-2: câu ra người dùng KHÔNG được
+     ghép `e.message` vào. `src/kho-file.js` nhét cả thân JSON của Google vào
+     `e.message`, nên ghép nó vào là phun nguyên văn lỗi Google cho bạn kho.
+     Chi tiết kỹ thuật thuộc về `console.error`, không thuộc về màn hình. */
+  {
+    const src = readFileSync(path.join(GOC, 'src/tai-lieu.js'), 'utf8');
+    const gheps = [...src.matchAll(/\bloi\(([\s\S]{0,400}?)\)\s*[,;]/g)]
+      .filter(m => /\be\d?\s*\.\s*message\b/.test(m[1]));
+    ok(gheps.length === 0,
+       '⚠️ Không câu `loi(...)` nào ghép `e.message` vào mặt người dùng',
+       gheps.length ? gheps.map(g => g[1].slice(0, 60)).join(' | ') : 'sạch');
+  }
+
+  /* Ngoài phạm vi phiếu: đếm và NÊU RA, không chốt cứng, không giấu. */
+  {
+    const ngoai = [];
+    let demNgoai = 0;
+    for (const f of dsNgoaiPhamVi) {
+      for (const chuoi of quetCau(f)) {
+        demNgoai++;
+        const v = CAM.filter(c => c.test(chuoi));
+        if (v.length) ngoai.push(`${f}: «${chuoi.slice(0, 60)}…» → ${v.join(' ')}`);
+      }
+    }
+    console.log(`  · Ngoài đường tải file: quét thêm ${demNgoai} câu, ` +
+                `${ngoai.length} câu còn chữ kỹ thuật — KHÔNG sửa ở nhánh này ` +
+                `(thuộc tính năng khác), nêu ra để đừng khai "còn 0 câu":`);
+    for (const d of ngoai.slice(0, 6)) console.log('      · ' + d);
+  }
 
   ok(!/thư viện|chi phí 0/i.test(taiLieu.GHI_CHU_PDF_CHUA_BOC),
      'Câu ghi vào CỘT `ocr_ghi_chu` đã bỏ hết chữ kỹ thuật');
@@ -477,6 +624,48 @@ if (tepThat && existsSync(tepThat)) {
   if (r.chu) console.log('  · 160 ký tự đầu: ' + JSON.stringify(r.chu.slice(0, 160)));
   ok(r.loai === 'co_lop_chu' || r.loai === 'chi_anh', 'Kết luận rõ ràng, không "không rõ"');
   ok(ms < 5000, `Đọc xong dưới 5 giây (${ms} ms)`);
+
+  /* ⚠️ VÁ REV-0055 · CAO-1 — ĐỪNG TỰ CHẤM BÀI.
+     Mọi con số "% ký tự đúng" ở mục ② đều đo trên PDF do CHÍNH bàn đo này dựng
+     ra từ chuỗi nó đã biết trước — bản đối chiếu và bản đo cùng một tay làm.
+     Con số ấy chỉ nói "đọc được đúng khuôn PDF mà bàn đo biết viết".
+     Ở đây đối chiếu với `pdftotext` (poppler, có sẵn ở /mingw64/bin — chi phí
+     0, KHÔNG thêm thư viện): một bộ bóc chữ ĐỘC LẬP, không dính dáng gì tới mã
+     của ERP. Không có `pdftotext` thì NÓI RA là chưa đo được, không im lặng bỏ
+     qua rồi để người đọc tưởng đã đo.
+     Bàn đo TRỌNG TÀI đầy đủ (cả một thư mục, có trung bình) là
+     `scripts/ho-ly-do-pdf-that.mjs` — của Hồ Ly, KHÔNG sửa. */
+  let dc = null;
+  try {
+    const { execFileSync } = await import('node:child_process');
+    dc = execFileSync('pdftotext', ['-enc', 'UTF-8', '-f', '1', '-l', '8', tepThat, '-'],
+      { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  } catch { dc = null; }
+
+  if (dc === null) {
+    console.log('  · (chưa đo được độ chính xác: máy này không có `pdftotext`)');
+  } else {
+    const gon = (s) => String(s || '').normalize('NFC').replace(/\s+/g, ' ').trim();
+    const tach = (s) => gon(s).toLowerCase().split(' ').filter(Boolean);
+    const tuDC = tach(dc), tuTa = tach(r.chu);
+    const bo = new Map();
+    for (const t of tuTa) bo.set(t, (bo.get(t) || 0) + 1);
+    let hit = 0;
+    for (const t of tuDC) { const c = bo.get(t) || 0; if (c > 0) { hit++; bo.set(t, c - 1); } }
+    const pTu = tuDC.length ? hit / tuDC.length : null;
+    console.log(`  · Đối chiếu pdftotext: ${tuDC.length} từ · thu hồi được ` +
+                `${pTu === null ? '—' : (pTu * 100).toFixed(1) + '%'}`);
+    if (tuDC.length > 20) {
+      /* Ngưỡng 80% là ngưỡng ĐO ĐƯỢC, không phải ngưỡng mong muốn: trên 9 file
+         thật có chữ, trung bình thu hồi 85,8% (Hồ Ly đo lại sau bản vá). File
+         nào tụt dưới 80% thì có chuyện, phải đi xem. */
+      ok(pTu >= 0.80, `Thu hồi ≥ 80% số từ so với pdftotext`,
+         `${(pTu * 100).toFixed(1)}%`);
+      ok(!pdfChu.laChuVun(r.chu), '⚠️ Chữ bóc ra KHÔNG vỡ vụn từng ký tự');
+    } else if (r.loai === 'chi_anh') {
+      ok(true, 'pdftotext cũng không đọc ra chữ ⇒ hai bên cùng nói "chỉ xem được"');
+    }
+  }
 }
 
 console.log('\n───────────────────────────────────────────────────────────');

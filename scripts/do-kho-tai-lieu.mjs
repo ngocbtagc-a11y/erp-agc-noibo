@@ -2380,5 +2380,286 @@ muc('⑭ Sửa SỐ HIỆU + TÊN sau khi đã lưu (Sếp Ngọc 03/09/2026)');
   }
 }
 
+/* ==========================================================================
+   ⑮ CHỐT CUỐI ĐƯỜNG — LƯU XONG, GÕ MỘT TỪ CÓ THẬT PHẢI RA ĐƯỢC TÀI LIỆU
+   ---------------------------------------------------------------------------
+   Hồ Ly đòi đúng chốt này ở REV-0055, và đòi đúng: mọi con số bóc chữ ở trên
+   đều là lời khai về một khâu GIỮA đường. Chỉ chốt này trả lời câu Sếp thật sự
+   hỏi — *"tôi gõ một chữ trong tờ giấy, ERP có tìm ra nó không?"*.
+
+   Chạy TRỌN đường: dựng PDF có lớp chữ → `luuTaiLieu` thật → CSDL SQLite thật
+   → `danhSachTaiLieu` thật với `q = <một từ trong giấy>`.
+
+   Ba ca, và ca thứ hai mới là ca đắt nhất:
+     a. Chữ LÀNH   → gõ từ trong giấy PHẢI ra tài liệu.
+     b. Chữ VỠ VỤN (đúng ca CHẶN-1) → gõ ra 0 kết quả, VÀ ERP phải TỰ KHAI là
+        "chỉ xem được", KHÔNG được dán nhãn "đã đối chiếu".
+     c. Nhóm NHẠY CẢM → ruột giấy KHÔNG bao giờ vào ô tìm, dù chữ lành.
+   ========================================================================== */
+muc('⑮ Chốt CUỐI ĐƯỜNG: lưu xong, gõ một từ có thật phải ra tài liệu');
+{
+  const { deflateSync } = await import('node:zlib');
+
+  /** PDF một trang, có lớp chữ thật.
+   *  'lien' — cả câu trong một `Tj` (chữ lành).
+   *  'vun'  — TỪNG CON CHỮ, mỗi con một `Tj`, cách nhau bằng `Td` DỌC
+   *           (`ty ≠ 0`). Đây là chữ vỡ vụn THẬT nằm ngay trong file, không
+   *           phải giả lập bằng cách sửa mã của ta — nên nó vẫn vụn kể cả sau
+   *           khi luật `Td` đã được vá. */
+  function pdfCoLopChu(cau, kieuDat) {
+    const hex4 = (n) => n.toString(16).padStart(4, '0');
+    const bang = [...cau].map((c, i) => ({ ma: i + 1, chu: c }));
+    const nd = kieuDat === 'vun'
+      ? 'BT /F1 12 Tf 40 700 Td ' +
+        bang.map((b, i) => (i ? '0 -12 Td ' : '') + `<${hex4(b.ma)}> Tj`).join(' ') + ' ET'
+      : `BT /F1 12 Tf 40 700 Td <${bang.map(b => hex4(b.ma)).join('')}> Tj ET`;
+    const ndB = deflateSync(Buffer.from(nd, 'latin1'));
+    const cmap =
+      '/CIDInit /ProcSet findresource begin 12 dict begin begincmap\n' +
+      '1 begincodespacerange\n<0000> <FFFF>\nendcodespacerange\n' +
+      `${bang.length} beginbfchar\n` +
+      bang.map(b => `<${hex4(b.ma)}> <${hex4(b.chu.charCodeAt(0))}>`).join('\n') +
+      '\nendbfchar\nendcmap CMapName currentdict /CMap defineresource pop end end';
+    const cB = Buffer.from(cmap, 'latin1');
+    const dt = [
+      '<< /Type /Catalog /Pages 2 0 R >>',
+      '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+      '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] ' +
+        '/Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>',
+      { dict: `<< /Length ${ndB.length} /Filter /FlateDecode >>`, luong: ndB },
+      '<< /Type /Font /Subtype /Type0 /BaseFont /T /Encoding /Identity-H ' +
+        '/DescendantFonts [7 0 R] /ToUnicode 6 0 R >>',
+      { dict: `<< /Length ${cB.length} >>`, luong: cB },
+      '<< /Type /Font /Subtype /CIDFontType2 /BaseFont /T >>'
+    ];
+    const manh = [Buffer.from('%PDF-1.5\n', 'latin1')];
+    dt.forEach((o, i) => {
+      const n = i + 1;
+      if (typeof o === 'string') manh.push(Buffer.from(`${n} 0 obj\n${o}\nendobj\n`, 'latin1'));
+      else {
+        manh.push(Buffer.from(`${n} 0 obj\n${o.dict}\nstream\n`, 'latin1'));
+        manh.push(o.luong);
+        manh.push(Buffer.from('\nendstream\nendobj\n', 'latin1'));
+      }
+    });
+    manh.push(Buffer.from('trailer\n<< /Size 9 /Root 1 0 R >>\n%%EOF\n', 'latin1'));
+    return Buffer.concat(manh);
+  }
+
+  const CAU = 'GIAY CHUNG NHAN CO SO DU DIEU KIEN AN TOAN THUC PHAM. ' +
+    'CONG TY TNHH ALPHA GREEN COMMERCE. So 124/2026/GCN-ATTP. ' +
+    'Dia chi kho Ha Noi, nganh hang nong san kho nhap khau.';
+
+  /** Lưu một PDF rồi hỏi ô tìm — trọn đường, không tắt đoạn nào. */
+  async function luuRoiTim(kieuDat, tuTim, nhom = 'attp') {
+    const t = d1SQLite();
+    const res = await tailieu.luuTaiLieu(t.env, phienCua('van_hanh_san'), {
+      ma_gui: 'mg15-' + kieuDat + '-' + Math.random().toString(36).slice(2, 8),
+      nhom, tieu_de: 'Giấy chứng nhận ATTP kho Hà Nội', loai: 'Giấy chứng nhận',
+      so_hieu: '124/2026/GCN-ATTP', so_trang: 1, dinh_dang: 'pdf_goc',
+      tep: pdfCoLopChu(CAU, kieuDat).toString('base64'),
+      dong_y_boi: 'x', dong_y_muc_dich: 'y'
+    });
+    const than = await doc(res);
+    const dong = t.kho.prepare('SELECT * FROM tai_lieu').get();
+    const p = new URLSearchParams(); p.set('q', tuTim);
+    const rTim = await tailieu.danhSachTaiLieu(t.env, phienCua('admin'), p);
+    const thanTim = await doc(rTim);
+    /* Dải đếm đi theo BỘ LỌC ĐANG XEM (cố ý — xem danhSachTaiLieu). Nên muốn
+       đo tỉ lệ của cả kho thì phải hỏi một lượt KHÔNG lọc; hỏi kèm từ khoá là đo
+       tỉ lệ của đúng những dòng vừa trúng ô tìm, tức đo nhầm thứ. */
+    const rCaKho = await tailieu.danhSachTaiLieu(t.env, phienCua('admin'), new URLSearchParams());
+    const thanCaKho = await doc(rCaKho);
+    return { t, ma: res.status, than, dong, ds: thanTim.ds || [], dem: thanCaKho.dem_chu };
+  }
+
+  /* ---- a. CHỮ LÀNH: gõ từ trong giấy PHẢI ra tài liệu ------------------ */
+  {
+    /* ⚠️ TỪ ĐEM TRA PHẢI CHỈ CÓ TRONG RUỘT GIẤY, không có ở tiêu đề · loại ·
+       TÊN NHÓM. Bẫy đã sập một lần ngay tại đây: gõ "thuc pham" ra 1 kết quả
+       kể cả khi chữ vỡ vụn — vì chuoiTimKiem() nhét cả TÊN NHÓM ("An toàn thực
+       phẩm") vào ô tìm. Phép đo trúng vì lý do khác thì không đo gì cả.
+       "nhap khau" và "nong san" chỉ nằm trong ruột tờ giấy. */
+    const k = await luuRoiTim('lien', 'nhap khau');
+    dat(k.ma === 200 && k.dong.chu_nguon === 'pdf_lop_chu',
+      'a. Lưu PDF có lớp chữ → nhận đúng nguồn chữ', `→ HTTP ${k.ma}, ${k.dong.chu_nguon}`);
+    dat(k.dong.ocr_so_trang_neo === 1,
+      'a. Chữ lành + số hiệu trúng ⇒ nhãn ĐÃ ĐỐI CHIẾU', `→ neo ${k.dong.ocr_so_trang_neo}`);
+    dat(k.ds.length === 1,
+      '⚠️ a. CHỐT CUỐI ĐƯỜNG: gõ "nhap khau" → RA tài liệu', `→ ${k.ds.length} kết quả`);
+
+    const k2 = await luuRoiTim('lien', 'nong san');
+    dat(k2.ds.length === 1, 'a. Gõ "nong san" (chữ ở giữa trang) → RA tài liệu',
+      `→ ${k2.ds.length}`);
+    const k3 = await luuRoiTim('lien', 'khongcotunaydau');
+    dat(k3.ds.length === 0, 'a. ĐỐI CHỨNG: gõ từ KHÔNG có trong giấy → 0 kết quả',
+      `→ ${k3.ds.length}`);
+  }
+
+  /* ---- b. CHỮ VỠ VỤN — đây là ca CHẶN-1 của REV-0055 ------------------- */
+  {
+    const k = await luuRoiTim('vun', 'nhap khau');
+    dat(k.ds.length === 0,
+      'b. Chữ vỡ vụn → gõ "nhap khau" ra 0 kết quả (sự thật phũ phàng)',
+      `→ ${k.ds.length}`);
+    /* ⚠️ ĐÂY MỚI LÀ CHỖ REV-0055 GỌI LÀ CHẶN: không phải chữ hỏng, mà là ERP
+       KHÔNG BIẾT nó hỏng rồi khai ngược lại với sự thật. */
+    dat(k.dong.ocr_so_trang_neo === 0,
+      '⚠️ b. ERP KHÔNG dán nhãn "đã đối chiếu" cho chữ tra không ra',
+      `→ neo ${k.dong.ocr_so_trang_neo}`);
+    dat(k.dong.chu_nguon !== 'pdf_lop_chu',
+      '⚠️ b. KHÔNG đếm vào vế "tìm được theo nội dung" của dải tỉ lệ',
+      `→ chu_nguon=${k.dong.chu_nguon}`);
+    dat(k.dem && k.dem.tra_cuu_duoc === 0 && k.dem.chi_xem_duoc === 1,
+      '⚠️ b. Dải đếm khai đúng: 0 tìm được theo nội dung · 1 chỉ xem được',
+      `→ ${JSON.stringify(k.dem)}`);
+    dat(/rời rạc từng ký tự/i.test(String(k.dong.ocr_ghi_chu || '')),
+      'b. NÓI RA vì sao, bằng tiếng người',
+      `→ "${String(k.dong.ocr_ghi_chu || '').slice(0, 58)}…"`);
+    dat(!/\bTd\b|toán tử|Skia|Chrome/i.test(String(k.dong.ocr_ghi_chu || '')),
+      'b. Câu đó KHÔNG lộ ruột kỹ thuật');
+    dat(!/ t h u c /.test(' ' + String(k.dong.tim_kiem || '') + ' '),
+      'b. Chữ vụn KHÔNG lọt vào ô tìm kiếm (không làm bẩn kết quả về sau)');
+  }
+
+  /* ---- c. Nhóm NHẠY CẢM: ruột giấy không bao giờ vào ô tìm ------------- */
+  {
+    const k = await luuRoiTim('lien', 'nhap khau', 'nhan_su');
+    dat(k.ma === 400 || k.ds.length === 0,
+      'c. Nhóm nhân sự: ruột giấy KHÔNG vào ô tìm (vá REV-0040 #4 còn nguyên)',
+      `→ HTTP ${k.ma}, ${k.ds.length} kết quả`);
+  }
+}
+
+/* ==========================================================================
+   ⑯ GHI CSDL HỎNG GIỮA CHỪNG — KHÔNG ĐƯỢC ĐẺ FILE MỒ CÔI  ·  REV-0055 CAO-3
+   ---------------------------------------------------------------------------
+   Ca thật Hồ Ly dựng được: deploy mã mới TRƯỚC khi chạy migration ⇒ CSDL chưa
+   có cột `chu_nguon` ⇒ câu `INSERT` nổ. Trước bản vá, `try/catch` chỉ bọc lượt
+   đẩy file lên Drive, còn `INSERT` nằm NGOÀI ⇒ trình tự thật là:
+       file ĐÃ lên Drive → INSERT nổ → 500 câu rỗng → file MỒ CÔI ở lại.
+   Mỗi lần Sếp bấm "Gửi lại" là thêm một file mồ côi nữa: không ai tìm thấy,
+   không ai dọn được.
+   ========================================================================== */
+muc('⑯ Ghi CSDL hỏng → KHÔNG đẻ file mồ côi trên Drive (REV-0055 CAO-3)');
+{
+  const pdfThu = () => Buffer.concat([
+    Buffer.from('%PDF-1.4\n<< /Type /Page >>\n'),
+    Buffer.alloc(60000, 0x20), Buffer.from('\n%%EOF\n')
+  ]).toString('base64');
+
+  /* Dựng đúng CSDL của cửa sổ "mã mới, migration chưa chạy": có bảng, THIẾU
+     cột `chu_nguon`. Không giả lập bằng cách ném lỗi bừa — dùng đúng nguyên
+     nhân thật để câu lỗi cũng là câu lỗi thật. */
+  function d1ThieuCot() {
+    const t = d1SQLite();
+    t.kho.exec('ALTER TABLE tai_lieu DROP COLUMN chu_nguon');
+    return t;
+  }
+
+  const t = d1ThieuCot();
+  const truocDrive = driveGia.size;
+  const res = await tailieu.luuTaiLieu(t.env, phienCua('ke_toan_truong'), {
+    ma_gui: 'mg16-' + Math.random().toString(36).slice(2, 8),
+    nhom: 'ke_toan', tieu_de: 'Hoá đơn thử ca thiếu cột', so_trang: 1,
+    dinh_dang: 'pdf_goc', tep: pdfThu()
+  });
+  const than = await doc(res);
+
+  dat(res.status >= 400, 'Thiếu cột `chu_nguon` → lượt lưu BÁO HỎNG, không im lặng',
+    `→ HTTP ${res.status}`);
+  dat(typeof than.loi === 'string' && than.loi.length > 30 && than.loi !== 'undefined',
+    '⚠️ Câu ra người dùng là TIẾNG NGƯỜI, không bao giờ là "undefined"',
+    `→ "${String(than.loi).slice(0, 62)}…"`);
+  dat(!/no such column|SQLITE|INSERT INTO|chu_nguon/i.test(String(than.loi || '')),
+    'Câu đó KHÔNG phun ruột CSDL ra ngoài');
+  dat(/chọn lại|gửi lần nữa/i.test(String(than.loi || '')),
+    'Câu đó nói CÁCH XỬ (file còn trên máy, chọn lại rồi gửi lần nữa)');
+  dat(driveGia.size === truocDrive,
+    '⚠️ KHÔNG còn file mồ côi trên Drive — ghi CSDL hỏng thì file vừa đẩy đã bị dọn',
+    `→ Drive lệch ${driveGia.size - truocDrive} file`);
+  dat(t.kho.prepare('SELECT COUNT(*) AS n FROM tai_lieu').get().n === 0,
+    'Và CSDL không có dòng nào (không có bản ghi nửa vời)');
+
+  /* ĐỐI CHỨNG BH-16 — bản CŨ (ném thẳng ra ngoài, không dọn) phải ĐỂ LẠI file
+     mồ côi. Không có ca này thì con số "Drive lệch 0" ở trên có thể chỉ vì bàn
+     đo không đếm đúng chỗ. */
+  const hong = await napBanVa('ném thẳng lỗi ghi CSDL ra ngoài (bản trước REV-0055)',
+    /* Quay về ĐÚNG hành vi cũ: ném thẳng ra ngoài, KHÔNG dọn file. Vá thành
+       'if (false)' là chưa đủ — luồng sẽ rơi xuống nhánh UNIQUE ngay dưới,
+       mà nhánh đó CŨNG dọn file, nên ca đối chứng tự nó bị vô hiệu. */
+    ['    if (!/UNIQUE constraint failed/i.test(m) || !maGui) {',
+     '    if (true) { throw e; }\n    if (false) {']);
+  if (hong) {
+    const t2 = d1ThieuCot();
+    const truoc2 = driveGia.size;
+    let nem = null;
+    try {
+      await hong.luuTaiLieu(t2.env, phienCua('ke_toan_truong'), {
+        ma_gui: 'mg16b-' + Math.random().toString(36).slice(2, 8),
+        nhom: 'ke_toan', tieu_de: 'Hoá đơn thử ca đối chứng', so_trang: 1,
+        dinh_dang: 'pdf_goc', tep: pdfThu()
+      });
+    } catch (e) { nem = e; }
+    dat(nem !== null && driveGia.size - truoc2 === 1,
+      'ĐỐI CHỨNG BH-16: bản CŨ ném lỗi ra ngoài VÀ để lại 1 file mồ côi',
+      `→ ném ${nem ? 'có' : 'KHÔNG'}, Drive lệch ${driveGia.size - truoc2} ` +
+      '(phải là 1 — nếu 0 thì PHÉP ĐO hỏng)');
+  }
+}
+
+/* ==========================================================================
+   ⑰ NHÃN NGUỒN CHỮ PHẢI RA TỚI MẮT NGƯỜI DÙNG  ·  REV-0055 CAO-2
+   ---------------------------------------------------------------------------
+   Máy chủ CÓ nhãn riêng `NHAN_CHU_PDF`, nhưng vòng trước KHÔNG một dòng giao
+   diện nào đọc `nhan_so_ai` — màn "Xem chữ đã bóc" dán cứng "AI đọc — CHƯA
+   KIỂM" cho cả đoạn chữ mà Workers AI chưa được gọi lấy một lượt.
+   Nói sai nguồn gốc của chữ là làm hỏng chính cái luật "con số máy đọc = chưa
+   kiểm": người đọc thấy nhãn dán bừa một lần thì lần sau bỏ qua nó.
+   ========================================================================== */
+muc('⑰ Nhãn nguồn chữ ra tới giao diện (REV-0055 CAO-2)');
+{
+  const t = d1SQLite();
+  const themDong = (id, nguon) => t.kho.prepare(
+    `INSERT INTO tai_lieu (id, nhom, tieu_de, tim_kiem, so_trang, kho_nha,
+                           noi_dung, ocr_so_trang, chu_nguon, tao_luc)
+     VALUES (?, 'ke_toan', 'Hoá đơn thử', 'hoa don thu', 1, 'drive', ?, 1, ?, '2026-09-03 09:00:00')`
+  ).run(id, '--- Trang 1 · ĐÃ ĐỐI CHIẾU · x ---\nSo 124/2026 tong 42.350.000 dong', nguon);
+  themDong('tl_pdf', 'pdf_lop_chu');
+  themDong('tl_anh', 'anh_ai');
+
+  const tPdf = await doc(await tailieu.moTaiLieu(t.env, phienCua('ke_toan_truong'), 'tl_pdf'));
+  const tAnh = await doc(await tailieu.moTaiLieu(t.env, phienCua('ke_toan_truong'), 'tl_anh'));
+
+  dat(tPdf.tai_lieu.nhan_so_ai === tailieu.NHAN_CHU_PDF &&
+      tPdf.tai_lieu.chu_nguon === 'pdf_lop_chu',
+    'Máy chủ trả nhãn "chữ có sẵn trong file PDF" cho tài liệu đọc từ lớp chữ',
+    `→ "${tPdf.tai_lieu.nhan_so_ai}"`);
+  dat(!/AI đọc/i.test(String(tPdf.tai_lieu.nhan_so_ai)),
+    '⚠️ Nhãn đó KHÔNG nói "AI đọc" — Workers AI chưa được gọi lấy một lượt');
+  dat(/AI đọc/i.test(String(tAnh.tai_lieu.nhan_so_ai)),
+    'ĐỐI CHỨNG: tài liệu do AI đọc ảnh VẪN mang nhãn "AI đọc"',
+    `→ "${tAnh.tai_lieu.nhan_so_ai}"`);
+  dat(Array.isArray(tPdf.tai_lieu.so_ai) && tPdf.tai_lieu.so_ai.length > 0,
+    'Con số trong chữ lấy từ PDF VẪN được đánh dấu để bôi (chưa kiểm vẫn là chưa kiểm)',
+    `→ ${tPdf.tai_lieu.so_ai.length} cụm số`);
+
+  /* --- Tầng giao diện: `app.js` phải ĐỌC nhãn đó, không dán cứng --- */
+  const gd = readFileSync(path.join(GOC, 'public/assets/js/app.js'), 'utf8');
+  dat(/tl\.nhan_so_ai/.test(gd),
+    '⚠️ Giao diện ĐỌC `nhan_so_ai` máy chủ trả về (vòng trước: grep 0 kết quả)');
+  dat(/veChuCoSo\(tl\.noi_dung,\s*tl\.so_ai,\s*nhan\)/.test(gd),
+    'Nhãn đó truyền xuống tận chỗ bôi số, không chỉ in một dòng ở đầu ô');
+  const dauXem = gd.indexOf('function veChuCoSo');
+  const cuoiXem = gd.indexOf('KHO TÀI LIỆU QUẢN TRỊ');
+  const doanXem = gd.slice(dauXem, cuoiXem > dauXem ? cuoiXem : dauXem + 6000);
+  const danCung = (doanXem.match(/'AI đọc — CHƯA KIỂM'|<b>AI đọc — CHƯA KIỂM/g) || []);
+  dat(danCung.length <= 1,
+    'Chỉ còn TỐI ĐA một chỗ nhắc "AI đọc" — và đó là đường lui khi máy chủ không trả nhãn',
+    `→ ${danCung.length} chỗ`);
+  dat(/chu_nguon === 'pdf_lop_chu'/.test(doanXem),
+    'Câu giải thích rẽ theo `chu_nguon`, không dán cứng một nhánh');
+}
+
 console.log(soHong === 0 ? '  KẾT LUẬN: ĐẠT toàn bộ.' : `  KẾT LUẬN: ✗ ${soHong} mục HỎNG.`);
 process.exit(soHong === 0 ? 0 : 1);
