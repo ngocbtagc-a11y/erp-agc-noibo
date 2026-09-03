@@ -7193,6 +7193,13 @@ async function khoiDongDuLieuNen() {
   }
 
   const lamMoiTatCa = ngheDuLieu('du_lieu_nen', async function lamMoiTatCaDuLieuNen() {
+    /* NÓI THẲNG MỘT CHỖ TỐN THÊM (03/09/2026): `taiDanhMucNen` cũng nghe nhóm
+       `du_lieu_nen` và chạy TRƯỚC (đăng ký sớm hơn), nên khi đài gọi tới đây
+       thì dòng dưới là lượt tải THỨ HAI — tốn thêm 3 lệnh gọi. Cố ý GIỮ: bỏ
+       đi thì những chỗ gọi TAY `lamMoiTatCa()` (nút Thêm phòng ban / chức
+       danh / đơn vị) sẽ vẽ từ kho CŨ — tức lại đúng cái bệnh đang vá. Ba lệnh
+       gọi này chỉ rơi vào thao tác của Admin ở màn Cơ cấu tổ chức, không phải
+       việc hằng ngày của ai. Muốn bỏ thì phải bỏ KÈM bàn đo. */
     await taiDanhMucNen();   // làm mới cache dùng chung (Nhân sự/Kho vận cũng đọc từ đây)
     veDanhMuc('#dln-pb-list', '#dln-pb-dem', '#dln-pb-trong', DS_PHONG_BAN,
       (id, ten) => API.dlnSuaPhongBan(id, { ten }), (id, hd) => API.dlnSuaPhongBan(id, { hoat_dong: hd }),
@@ -8158,7 +8165,7 @@ async function khoiDongXepCa() {
     } catch (err) { alert(err.message || 'Không thực hiện được, thử lại nhé.'); }
   });
 
-  async function taiLichCuaToi() {
+  const taiLichCuaToi = ngheDuLieu('ca', async function taiLichCuaToi() {
     const homNay = ngayISO(new Date());
     const den = ngayISO(new Date(Date.now() + 30 * 86400000));
     const kq = await API.caLichCuaToi(homNay, den).catch(() => ({ ds: [] }));
@@ -8174,7 +8181,7 @@ async function khoiDongXepCa() {
         `<div class="meta"><span class="tag ${khoa ? 'ok' : 'sage'}">${khoa ? 'Đã chốt' : 'Đã xếp'}</span></div>`
       ));
     });
-  }
+  }, { goc: oTab('xepca') });
 
   /* ================= TRƯỞNG PHÒNG: Xếp ca tuần (ma trận) ================= */
   let dsPhongBanQuanLy = TOI.phong_ban_quan_ly || [];
