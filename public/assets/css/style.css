@@ -1523,6 +1523,321 @@ table { width: 100%; border-collapse: collapse; min-width: 560px; }
 }
 .cuon-bao b { color: var(--ink); font-weight: 600; }
 
+/* ==========================================================================
+   ④ LƯỚI BẢNG — Sếp Ngọc nhắc LẦN THỨ HAI 04/09/2026:
+      "ưu tiên hiển thị trên 1 màn hình, hạn chế thanh kéo sang"
+   ---------------------------------------------------------------------------
+   VÌ SAO PHẢI LÀM LẠI. Chốt ① ② ③ ở trên đã hạ bớt bề ngang, nhưng đo lại
+   bằng DỮ LIỆU THẬT (mô tả việc dài 150–200 ký tự, tên người kèm chức danh)
+   thì 17/26 bảng vẫn tràn NGAY Ở 1440px — đúng màn Sếp chụp ảnh. Hai thủ
+   phạm, cả hai đều là luật TOÀN CỤC chứ không phải lỗi của một bảng nào:
+
+     · `tbody td { white-space: nowrap }` — ô nào chứa chữ tự do thì bề ngang
+       TỐI THIỂU của cột đó = TOÀN BỘ câu chữ. Một mô tả 180 ký tự ép cột rộng
+       ~1.400px, và không CSS nào ở dưới cứu được: min-content đã thế rồi.
+     · Không cột nào có TRẦN bề ngang. Bảng `width:100%` chỉ co được tới tổng
+       min-content; vượt qua đó là tràn khung, kéo ngang.
+
+   Bàn đo cũ không thấy vì nó chèn dòng mẫu CHỮ NGẮN ("Nguyễn Văn An",
+   "29/08/2026") — đo bề ngang bảng bằng dữ liệu không ai có. Bàn đo mới:
+   `npm run do-bang-that`.
+
+   BA LỚP DƯỚI ĐÂY LÀ LƯỚI TỰ ĐỘNG: gắn theo LỚP trên `<th>`, JS `luoiBang()`
+   dập xuống `<td>` cùng cột. Bảng thứ 23 ai thêm ngày mai chỉ cần đánh dấu
+   `<th>` là được che; không đánh dấu thì bàn đo kêu.
+
+   KHÔNG lớp nào bóp cỡ chữ (giữ nguyên 13.5px ô / 11px tiêu đề) và không lớp
+   nào đụng đệm DỌC (chiều cao dòng, tức số dòng thấy được, giữ nguyên).
+   ========================================================================== */
+
+/* --- LỚP 1: `.cot-chu` — CỘT CHỮ DÀI CÓ TRẦN --------------------------------
+   Mô tả · đầu ra · lý do · ghi chú · tên sản phẩm. Ba việc một lúc: cho phép
+   xuống dòng (hạ min-content xuống còn TỪ dài nhất), đặt trần bề ngang, và
+   kẹp 2 dòng để chiều cao dòng không phình. Chữ đầy đủ vẫn tới được: `dg()`
+   đã kèm nút "Xem thêm", và cột nào không qua `dg()` thì có `title`. */
+th.cot-chu, td.cot-chu {
+  white-space: normal;
+  max-width: 240px;
+  min-width: 120px;
+}
+/* Trong cửa sổ bật lên khung chỉ rộng ~588px trên máy và ~295px trên điện
+   thoại — trần 300px của bảng thường là quá rộng, hai cột chữ đã ăn hết chỗ. */
+.modal th.cot-chu, .modal td.cot-chu { max-width: 160px; min-width: 100px; }
+/* Từ 1100px xuống, khung bảng chỉ còn ~718px (máy tính bảng nằm ngang) — bốn
+   bảng vẫn tràn 15–62px với trần 240px. Hạ trần thay vì bỏ thêm cột: chữ vẫn
+   đọc được 2 dòng, và không cột nào phải rời bảng ở một bề ngang trung gian.
+   Đo bằng `node scripts/ho-ly-soi-luoi.mjs` (bàn dò của Hồ Ly, có mốc 1024px
+   mà bàn đo của tôi không có). */
+@media (max-width: 1100px) {
+  th.cot-chu, td.cot-chu { max-width: 180px; min-width: 90px; }
+  /* Chỗ THẬT SỰ chặn ở bề ngang này là `min-width`, không phải `max-width`:
+     bảng đã co hết cỡ rồi mà sàn của từng cột cộng lại vẫn vượt khung. Hạ sàn
+     mới cứu được, hạ trần thì không đổi gì cả (thử rồi, +36px vẫn nguyên). */
+  td.cot-chu.co-chitiet { min-width: 150px; }
+}
+/* CÁI KẸP 2 DÒNG NẰM Ở LỚP CON, TUYỆT ĐỐI KHÔNG NẰM TRÊN Ô.
+   Bẫy đã dính một lần và bàn đo bắt được: đặt `display:-webkit-box` thẳng
+   lên `<td>` thì ô đó THÔI LÀ Ô BẢNG — bố cục hàng vỡ, chiều cao một dòng
+   nhảy 55px → 93px, tức là ăn mất số dòng thấy được, đúng thứ Sếp cấm
+   (`npm run do-bang-vua-man`, arm G). Ô giữ nguyên `table-cell`; `luoiBang()`
+   bọc chữ trần vào `.dai-gon` — thứ đã có sẵn từ trước, kèm nút "Xem thêm"
+   nên chữ bị kẹp vẫn có đường đọc đủ. */
+td.cot-chu { overflow-wrap: anywhere; }
+/* Tên trong cột chữ ĐƯỢC xuống dòng. `td .nm` để `nowrap` cho tên người và mã
+   hàng — đúng cho field NGẮN — nhưng trong một cột chữ dài (tên việc, tên sản
+   phẩm) thì `nowrap` biến bề ngang TỐI THIỂU của cột thành cả câu, và đó chính
+   là thứ kéo bảng ra khỏi màn. */
+td.cot-chu .nm { white-space: normal; }
+/* Ô mang nút "Chi tiết" mất 50px bên phải cho nút; cột chữ phải rộng bù lại,
+   nếu không một cái tên ngắn cũng gãy hai dòng. */
+td.cot-chu.co-chitiet { min-width: 190px; }
+/* `.dai`/`.dai-gon` bên trong ô bảng phải theo trần của ô, nếu không chính nó
+   lại là thứ kéo cột rộng ra (max-content của nó là cả câu). */
+td .dai, td .dai-gon { max-width: 100%; }
+
+/* Dòng phụ dưới tên việc — chữ nhỏ hơn NHƯNG KHÔNG dưới 13px là chữ chính;
+   đây là chú thích cấp hai (12px) đúng như `.sm` vốn có, không phải chỗ đọc
+   chính. Điều đổi so với trước: nó ĐƯỢC XUỐNG DÒNG và bị kẹp, thay vì
+   `nowrap` kéo bảng rộng ra.
+
+   KẸP BẰNG `max-height`, KHÔNG BẰNG `display:-webkit-box`. Bẫy đã dính một
+   lần: đặt `display` ở đây thì luật này (ưu tiên 0,0,2,1) ĐÈ luôn
+   `.daura-hep { display: none }` (0,0,1,0) — và ở màn 1440px cột "Đầu ra cần
+   đạt" hiện HAI LẦN: một lần trong cột riêng, một lần làm dòng phụ dưới tên
+   việc. ẢNH CHỤP bắt được chuyện này, bàn đo số thì không. `max-height:2.8em`
+   = đúng 2 dòng ở line-height 1.4, kẹp y hệt mà không đụng vào `display`. */
+td .sm.dong-phu, td.cot-chu .sm {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.4;
+  max-height: 2.8em;
+  overflow: hidden;
+}
+
+/* --- Ô CHỨA NHÓM NÚT — `.o-nut` ---------------------------------------------
+   Thay cho `style="white-space:nowrap"` viết thẳng trong JS ở 5 chỗ. Cái
+   nowrap đó giữ ba cái nút trên MỘT dòng, và bề ngang tối thiểu của cột thành
+   tổng bề ngang ba nút cộng lại: đo được ở bảng Đơn hoàn, ô "Kho nhận" rộng
+   432px trong khung 303px và kéo cả bảng tràn +129px @1440, +170px @375 —
+   arm R của `do-bang-that` bắt được trên đường vẽ thật.
+   Nay nhóm nút tự xuống hàng khi hết chỗ. Nút KHÔNG bị gãy đôi (mỗi nút vẫn
+   là một khối), chỉ là hàng thứ hai bắt đầu sớm hơn. Inline style thắng mọi
+   lớp CSS, nên phải bỏ hẳn nó chứ không đè được.
+
+   KHÔNG đặt `display` lên chính `<td>`. Bản đầu ở đây dùng
+   `display:flex; flex-wrap:wrap` — chạy được, cột vẫn thẳng hàng, nhưng đó
+   đúng cái bẫy đã dính một lần ở `.cot-chu` (đặt `display:-webkit-box` lên ô
+   làm ô thôi là ô bảng, chiều cao dòng nhảy 55px → 93px). Đo lại chỗ này:
+   dòng việc thật có nút là 64px với `flex`, 63px không `flex` — và 63px cũng
+   đúng bằng số đo trên `origin/main c221fd0`, tức chiều cao đó có sẵn, không
+   phải bản vá gây ra. Bỏ `flex` vì chỉ cần bỏ `nowrap` là mấy cái nút đã tự
+   xuống hàng (chúng là inline-block, cách nhau bằng dấu cách có sẵn trong
+   mã) — được cùng kết quả mà không đụng vào mô hình hộp của bảng. */
+td.o-nut { white-space: normal; }
+td.o-nut > * { white-space: nowrap; }   /* mỗi nút vẫn nguyên khối, không gãy đôi */
+
+/* --- LỚP 2: `.cot-phu` — CỘT KHÔNG THAM GIA QUYẾT ĐỊNH ----------------------
+   Người giao · ngày tạo · mã nội bộ · email… Không nằm trên bảng ở BẤT KỲ bề
+   ngang nào — kể cả 1440px, vì "vừa một màn" là yêu cầu của Sếp chứ không
+   phải chỉ là chuyện màn hẹp. KHÔNG MẤT: `luoiBang()` gắn nút "Chi tiết" mở
+   ra đúng những ô này, đọc thẳng từ DOM nên không thể lệch với bảng. */
+th.cot-phu, td.cot-phu { display: none; }
+
+/* --- Ô TICK CHỌN DÒNG — 44px cho ngón tay -----------------------------------
+   REV-0059 CAO-2. Ô tick mặc định của trình duyệt là 13×13px — chưa tới một
+   phần ba luật nhà (≥44px). Bốn bảng dính: Đối soát sàn · Kế toán tra soát ·
+   Kế toán hàng hoàn (việc HẰNG NGÀY của chị Phan Thị Hằng) và Tài sản.
+
+   Cách làm: bỏ hình vẽ mặc định (`appearance:none`) rồi tự vẽ ô vuông 18px ở
+   giữa một vùng chạm 44×44. Vùng chạm to nhưng CHIỀU CAO DÒNG KHÔNG ĐỔI — lề
+   âm 13px trên/dưới đúng bằng đệm dọc của ô bảng, nên 44 − 26 = 18px, y hệt
+   chiều cao cũ. Bàn đo arm G của `do-bang-vua-man` canh chỗ này.
+   Màu: xanh lá cho trạng thái đã chọn (docs/BANG-MAU.md), không đỏ. */
+thead th > input[type="checkbox"],
+tbody td > input[type="checkbox"],
+.dk-thanh > input[type="checkbox"] {
+  appearance: none; -webkit-appearance: none;
+  width: 44px; height: 44px;
+  margin: -13px -12px; padding: 0;
+  display: inline-grid; place-content: center;
+  background: none; border: none; cursor: pointer;
+  vertical-align: middle;
+}
+thead th > input[type="checkbox"]::before,
+tbody td > input[type="checkbox"]::before,
+.dk-thanh > input[type="checkbox"]::before {
+  content: ""; width: 18px; height: 18px;
+  border: 1.5px solid var(--sage); border-radius: 4px;
+  background: var(--card);
+}
+thead th > input[type="checkbox"]:checked::before,
+tbody td > input[type="checkbox"]:checked::before,
+.dk-thanh > input[type="checkbox"]:checked::before {
+  background: var(--sage-dark); border-color: var(--sage-dark);
+  box-shadow: inset 0 0 0 2px var(--card), inset 0 0 0 9px var(--sage-dark);
+}
+thead th > input[type="checkbox"]:focus-visible::before,
+tbody td > input[type="checkbox"]:focus-visible::before,
+.dk-thanh > input[type="checkbox"]:focus-visible::before {
+  outline: 2px solid var(--sage-dark); outline-offset: 2px;
+}
+
+/* --- THANH ĐẦU BẢNG — chỗ đứng cho nút bị `thead{display:none}` nuốt mất ----
+   REV-0059 vòng 2 CAO-2. Chỉ hiện ở chế độ thẻ; JS bật/tắt bằng `hidden`
+   (xem `datChoDieuKhienThead` trong app.js). Nằm NGAY TRÊN bảng — đúng chỗ mắt
+   người ta đi tìm cái "Chọn tất cả", không phải cuối trang. */
+.thanh-dau-bang {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px;
+  margin: 0 0 8px; padding: 4px 12px;
+  border: 1px solid var(--line); border-radius: var(--r-md);
+  background: var(--surface);
+}
+.dk-thanh {
+  display: inline-flex; align-items: center; gap: 6px;
+  min-height: 44px; padding: 0 6px; cursor: pointer;
+}
+/* Ô vuông VẼ LẠI trong nhãn — ô tick thật vẫn nằm trong `<thead>` (đang bị
+   `display:none`), nhãn `for=` mới là thứ ngón tay chạm vào. Cùng hình dạng
+   và cùng màu xanh lá với ô tick trong bảng, để không ai phải học lại. */
+.dk-o {
+  width: 18px; height: 18px; flex: 0 0 18px;
+  border: 1.5px solid var(--sage); border-radius: 4px; background: var(--card);
+}
+.dk-thanh.dk-bat .dk-o {
+  background: var(--sage-dark); border-color: var(--sage-dark);
+  box-shadow: inset 0 0 0 2px var(--card), inset 0 0 0 9px var(--sage-dark);
+}
+.dk-thanh:hover .dk-o { border-color: var(--sage-dark); }
+.dk-thanh > input[type="checkbox"] { margin: 0 0 0 -12px; }
+.dk-chu {
+  font-size: 12px; font-weight: 600; letter-spacing: .04em;
+  text-transform: uppercase; color: var(--text-mute);
+}
+
+/* --- Nút "Chi tiết" + dòng chi tiết ----------------------------------------
+   NÚT ĐẶT TUYỆT ĐỐI, KHÔNG NẰM TRONG DÒNG CHỮ. Bản đầu để nút inline ngay sau
+   tên: ở khung hẹp nó tụt xuống dòng thứ hai và chiều cao mỗi dòng bảng nhảy
+   55px → 70px — tức là ăn mất số dòng thấy được, đúng thứ Sếp cấm; bàn đo
+   `npm run do-bang-vua-man` arm G bắt được. Đặt tuyệt đối thì nút KHÔNG BAO
+   GIỜ đổi chiều cao dòng, dù chữ trong ô dài đến đâu. Ô chừa sẵn 50px bên
+   phải nên nút không đè lên chữ. Vùng chạm 44×44px cho ngón tay. */
+td.co-chitiet { position: relative; padding-right: 50px; }
+.o-chitiet {
+  position: absolute; right: 2px; top: 50%; transform: translateY(-50%);
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 44px; height: 44px; margin: 0; padding: 0;
+  border: none; background: none; cursor: pointer;
+  color: var(--sage-dark); font-size: 12px; font-weight: 600;
+}
+.o-chitiet:hover { background: var(--sage-wash); border-radius: var(--r-pill); }
+.o-chitiet .mui { display: inline-block; font-size: 20px; line-height: 1; transition: transform .15s; }
+.o-chitiet[aria-expanded="true"] .mui { transform: rotate(90deg); }
+/* Chữ "Chi tiết" chỉ hiện ở chế độ thẻ, nơi có chỗ nằm ngang thoải mái. Ở
+   chế độ bảng nút là mũi ›, nghĩa đọc qua `title`/`aria-label`. */
+.o-chitiet .chu { display: none; }
+
+tr.dong-chitiet > td {
+  white-space: normal;
+  background: var(--sage-wash);
+  padding: 12px 16px;
+}
+.chitiet-luoi {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px 22px;
+}
+.chitiet-o { display: flex; gap: 8px; align-items: baseline; }
+.chitiet-nhan {
+  flex: 0 0 auto; min-width: 96px;
+  font-size: 11px; font-weight: 600; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--text-mute);
+}
+.chitiet-tri { font-size: 13.5px; color: var(--ink); overflow-wrap: anywhere; }
+
+/* --- LỚP 3: ≤980px BẢNG THÀNH THẺ -----------------------------------------
+   Một dòng = một thẻ, nhãn cột đi kèm giá trị nên không mất nghĩa. Đây là
+   cách DUY NHẤT bỏ hẳn kéo ngang trên điện thoại: bảng 8 cột không thể vừa
+   341px mà chữ vẫn đọc được. `data-nhan` do `luoiBang()` dập từ `<th>`.
+   Bảng nào không đổi thẻ được (ma trận xếp ca) KHÔNG mang lớp `.luoi-bang`.
+   NGƯỠNG 980px — dùng lại đúng mốc đã có sẵn trong tệp này (cột "Đầu ra" cũng
+   tụt xuống dòng phụ ở 979px), không đẻ thêm mốc thứ n. Dưới 980px khung bảng
+   chỉ còn ~790px: bảng 7 cột ở đó vẫn phải kéo ngang, nên thẻ bắt đầu từ đây
+   chứ không đợi tới 780px. */
+@media (max-width: 980px) {
+  .luoi-bang, .luoi-bang tbody, .luoi-bang tr, .luoi-bang td { display: block; width: auto; }
+  .luoi-bang thead { display: none; }
+  .luoi-bang { min-width: 0; }
+  /* NÉN THẺ — Sếp dặn không được làm giảm số dòng thấy được. Thẻ vốn cao hơn
+     dòng bảng, nên phải bù lại bằng cách bỏ mọi khoảng trống không chở nghĩa:
+     đệm 8/12, khoảng cách giữa hai trường 2px, nút "Chi tiết" nằm CÙNG HÀNG với
+     tên (góc trên phải) thay vì chiếm hẳn một hàng 44px. Đo thật:
+     npm run do-gop-viec (ràng buộc "số dòng KHÔNG ĐƯỢC GIẢM" nằm trong đó). */
+  .luoi-bang tbody tr {
+    border: 1px solid var(--line); border-radius: var(--r-md);
+    background: var(--card); box-shadow: var(--shadow-sm);
+    padding: 8px 12px; margin-bottom: 8px;
+  }
+  .luoi-bang tbody tr:hover { background: var(--card); }
+  /* MỘT TRƯỜNG MỘT HÀNG thì thẻ cao gấp ba dòng bảng và số dòng thấy được tụt
+     hẳn (đo được: 9 → 4). Nên các trường phụ chạy NỐI NHAU trên cùng một dòng,
+     ngăn bằng chính cái nhãn IN HOA chữ mờ, nên không mất nghĩa con số. (Đã
+     thử thêm dấu chấm giữa: cột ẩn nằm xen giữa làm dấu chấm rơi xuống một
+     dòng riêng trước hàng nút — ảnh chụp bắt được, nên bỏ.)
+     Chỉ ô đầu (tên) đứng riêng một hàng làm tiêu đề thẻ. */
+  .luoi-bang tbody td {
+    border: none; padding: 0; margin-right: 14px;
+    white-space: normal; overflow-wrap: anywhere;
+    display: inline; max-width: none;
+    line-height: 1.9;
+  }
+  .luoi-bang tbody td::before {
+    content: attr(data-nhan) " ";
+    font-size: 11px; font-weight: 600; letter-spacing: .06em;
+    text-transform: uppercase; color: var(--text-mute);
+  }
+  /* Cột phụ VẪN ẩn trong thẻ — luật `td.cot-phu{display:none}` ở trên có độ
+     ưu tiên 0,0,1,1, thua `.luoi-bang tbody td` (0,0,1,2) nên phải nhắc lại ở
+     đây. Không nhắc thì thẻ điện thoại xổ ra đủ 9 trường, mất hẳn ý "mỗi thẻ
+     3–4 trường" và ảnh chụp 375px lộ ngay. */
+  .luoi-bang tbody td.cot-phu { display: none; }
+  /* TÊN NGƯỜI PHẢI XUỐNG DÒNG TRONG THẺ — REV-0059 CHẶN-1.
+     `td .nm { white-space: nowrap }` đúng cho BẢNG (thà cuộn còn hơn bóp tên
+     người xuống nhiều dòng), nhưng trong THẺ thì không còn cột nào để cuộn:
+     một họ tên 80 ký tự (đúng trần ô nhập) kéo thẻ rộng 711px trong khung
+     341px và thanh kéo ngang quay lại — đúng thứ Sếp nhắc hai lần. Trong thẻ,
+     xuống dòng là cách duy nhất. */
+  .luoi-bang tbody .nm, .luoi-bang tbody .sm { white-space: normal; }
+  /* Ô tick đứng riêng một hàng đầu thẻ, kèm nhãn "CHỌN DÒNG" — trong thẻ mọi
+     trường đều có tên, ô tick không được là ngoại lệ (REV-0059 CAO-2). Vùng
+     chạm 44px giữ nguyên: trên điện thoại nó càng cần thiết. */
+  .luoi-bang tbody td.o-tick { display: block; margin: 0 0 2px; }
+  .luoi-bang tbody td.o-tick > input[type="checkbox"] { margin: 0 4px 0 -12px; }
+  /* Ô không có nhãn (cột nút) thì không đặt chỗ trống cho nhãn. */
+  .luoi-bang tbody td[data-nhan=""]::before,
+  .luoi-bang tbody td:not([data-nhan])::before { content: none; }
+  /* Ô đầu (tên việc / tên người) là tiêu đề thẻ — không nhãn, chữ to hơn. */
+  .luoi-bang tbody td.o-dau { display: block; margin: 0; font-size: 14.5px; font-weight: 600; color: var(--ink); line-height: 1.35; }
+  .luoi-bang tbody td.o-dau::before { content: none; }
+  /* Trong thẻ, cột chữ bỏ trần bề ngang nhưng VẪN xếp nhãn-giá trị như mọi
+     ô khác — để một cột trồi lên kiểu khác làm cái thẻ trông vá víu. */
+  .luoi-bang tbody td.cot-chu { max-width: none; }
+  /* Trong thẻ có chỗ nằm ngang: nút hiện đủ chữ, không phải đoán mũi tên. */
+  /* Nút nằm góc trên phải của thẻ, CÙNG HÀNG với tên — không chiếm thêm một
+     hàng 44px cho mỗi thẻ. 96px chừa chỗ cho nút có chữ. */
+  /* Ô mang nút phải CHỪA ĐỦ CHIỀU CAO cho nó. Nút cao 44px mà ô chỉ cao một
+     dòng chữ thì phần thừa của nút đổ xuống đè lên trường ngay dưới — ảnh
+     chụp 375px bắt được (tên sản phẩm chui dưới chữ "Chi tiết"). */
+  .luoi-bang td.co-chitiet { padding-right: 96px; min-height: 44px; }
+  .luoi-bang .o-chitiet {
+    right: 0; top: 0; transform: none;
+    width: auto; min-width: 44px; padding: 0 10px; margin: 0; gap: 6px;
+    border: 1px solid var(--line); border-radius: var(--r-pill);
+  }
+  .luoi-bang .o-chitiet .chu { display: inline; }
+  .luoi-bang tr.dong-chitiet { padding: 0; border: none; background: none; box-shadow: none; }
+  .luoi-bang tr.dong-chitiet > td { border-radius: var(--r-md); }
+  .chitiet-luoi { grid-template-columns: 1fr; }
+}
+
 thead th {
   text-align: left;
   padding: 11px 16px;
@@ -2977,8 +3292,8 @@ tr.kd-chiadoi td {
 
    NGƯỠNG ĐỔI BỐ CỤC: 980px (dùng lại đúng ngưỡng đã có sẵn trong file này,
    không đẻ thêm mốc thứ n).
-     · ≥ 980px  → cột riêng `.cot-daura` hiện · `.daura-hep` ẩn
-     · ≤ 979px  → cột riêng ẩn · `.daura-hep` (dòng phụ trong ô "Việc") hiện,
+     · ≥ 1400px → cột riêng `.cot-daura` hiện · `.daura-hep` ẩn
+     · ≤ 1399px → cột riêng ẩn · `.daura-hep` (dòng phụ trong ô "Việc") hiện,
                   ĐÚNG y bố cục 375px đang chạy. Màn hẹp bảng đã 8 cột phải
                   cuộn ngang; cột thứ chín chỉ đẩy đầu ra ra xa tầm mắt hơn.
    `display:none` ở đây KHÔNG dính bẫy `[hidden]` đầu file: nó nhằm ẨN, không
@@ -2990,7 +3305,13 @@ tr.kd-chiadoi td {
    vừa một dòng nên số dòng thấy được không giảm. Đo thật: npm run do-gop-viec
    (ràng buộc "số dòng KHÔNG ĐƯỢC GIẢM" nằm ngay trong bàn đo đó). */
 #ls-cv-tbl .cot-daura { min-width: 220px; max-width: 320px; }
-@media (max-width: 979px) {
+/* NGƯỠNG NÂNG 979px → 1399px (04/09/2026). Ở khung 1100px bảng chỉ còn 794px
+   cho 6 cột: cột "Việc" bị bóp xuống 140px, tên việc gãy hai dòng và chiều cao
+   mỗi dòng nhảy 55px → 68px — mất số dòng thấy được, đúng thứ Sếp cấm. Đầu ra
+   KHÔNG biến mất, nó tụt xuống dòng phụ ngay dưới tên việc (`.daura-hep`), vẫn
+   đọc được bằng mắt trên cùng một màn. Trên máy Sếp (1440px) cột riêng vẫn còn.
+   Đo thật: npm run do-bang-vua-man (arm C và arm G @1100px). */
+@media (max-width: 1399px) {
   #ls-cv-tbl .cot-daura { display: none; }
   .daura-hep { display: block; }
 }

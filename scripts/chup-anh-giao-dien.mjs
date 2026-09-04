@@ -125,7 +125,12 @@ const MAN = [
   { ten: 'lichsuviec',  trang: 'app.html',   tab: 'lichsuviec' },
   { ten: 'khovan',      trang: 'app.html',   tab: 'khovan' }
 ];
-const KHUNG = [{ nhan: '1440', rong: 1440, cao: 900 }, { nhan: '375', rong: 375, cao: 812 }];
+/* Ba bề ngang người ta THẬT SỰ dùng — 1280 thêm 04/09/2026: laptop phổ
+   thông là chỗ bảng chật nhất mà vẫn còn là BẢNG (dưới 980px đã đổi sang thẻ),
+   nên chụp thiếu nó là bỏ trống đúng khoảng dễ hỏng nhất. */
+const KHUNG = [{ nhan: '1440', rong: 1440, cao: 900 },
+               { nhan: '1280', rong: 1280, cao: 860 },
+               { nhan: '375',  rong: 375,  cao: 812 }];
 
 const may = await dungMayGia({ commit, apiRieng, tatHoatAnh: true });
 if (commit) console.log(`  ↩ hoàn nguyên public/ về ${commit} (đủ tệp, không danh sách tay)`);

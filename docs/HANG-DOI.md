@@ -89,8 +89,20 @@ Sau khi dời: file `.sql` thẳng trong `migrations/` = 64, **file lùi = 0**.
 
 ## NỢ ĐÃ BIẾT, CHƯA XẾP LỊCH
 
-- **22 bảng còn tràn @375px** — cần Sếp chốt một lượt: mỗi bảng chọn 3–4 trường
-  lên thẻ *(~2–3 ngày)*
+- ~~**22 bảng còn tràn @375px**~~ — **XONG 04/09/2026** (nhánh
+  `fix/bang-vua-man-het-keo-ngang`). Đo lại bằng DỮ LIỆU THẬT thì con số còn
+  tệ hơn sổ nợ ghi: **17/26 bảng tràn ngay ở 1440px**, 17/26 ở 1280px, 22/24 ở
+  375px. Sau bản vá: **0 · 0 · 0**, trừ Đối soát sàn cố ý giữ kéo ngang ở màn
+  rộng (lý do viết trong `BANG_GIU_CUON`, app.js). Không phải hỏi Sếp chọn cột:
+  luật chọn là *"nhìn một dòng, người dùng cần quyết định điều gì?"* — cột
+  không tham gia câu trả lời thì xuống mục "Chi tiết". Bàn đo:
+  `npm run do-bang-that`.
+- **`MOC_TRAN` từng là giấy phép tràn** — bài học 04/09/2026, ghi lại để đừng
+  lặp: chốt kiểu *"đừng tệ hơn hôm qua"* là đúng ngay sau khi vá một lỗi, nhưng
+  **nó phải có hạn dùng**. Để lâu là nó đổi vai từ cái SÀN thành cái MÁI: bàn đo
+  in "42 ĐẠT · 0 TRƯỢT" trong khi ERP còn thanh kéo ngang, và người duy nhất
+  phát hiện ra là Sếp — bằng ảnh chụp màn hình, lần thứ hai. Từ nay muốn miễn
+  trừ thì phải viết LÝ DO bằng chữ, không được thêm một con số.
 - **Quản lý cấp trên không thấy nút Sửa mục tiêu** — máy chủ cho, giao diện chặn
   *(REV-0053 #1)*
 - `do-quyen-duyet-gopy` **183/9** — 9 lỗi môi trường: bàn đo thêm cột đã có sẵn
