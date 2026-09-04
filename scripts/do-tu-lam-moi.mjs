@@ -36,10 +36,10 @@
    Chạy:  npm run do-tu-lam-moi      (mã thoát 0 = đạt)
    ========================================================================== */
 
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { dungMayGia, moChrome, GOC, TOI_ID } from './lib/ban-do-chrome.mjs';
-import { soiDoiSoThua, lamSachMa } from './lib/soi-doi-so-thua.mjs';
+import { soiDoiSoThua, lamSachMa, soiDongBiXoaOan } from './lib/soi-doi-so-thua.mjs';
 
 let dat = 0, truot = 0;
 function ok(ten, dung, chiTiet = '') {
@@ -167,25 +167,58 @@ ok('③a api.js còn gọi baoDuLieuDoi sau khi ghi thành công',
    của đài lạc sang hàm khác, và bất kỳ chỗ gọi nào truyền nhiều đối số hơn
    hàm nhận. Cả hai đều im lặng tuyệt đối nên phải soi bằng máy. */
 {
-  const dongApp = appSrc.split(/\r?\n/);
+  /* ③d — PHÉP DÒ CẤU TRÚC, KHÔNG PHẢI DÒ KHOẢNG CÁCH (REV-0057 vòng 2 · VỪA-2).
+     Bản trước coi một `{ goc: … }` là "gắn đúng" nếu trong 400 DÒNG phía trên
+     có chữ `ngheDuLieu(`. Hồ Ly cắm lại đúng lỗi L2 vào `app.js:223` — cách
+     lời đăng ký 90 dòng — và phép soi vẫn XANH. Một phép soi xanh trên chính
+     ca nó sinh ra để bắt là sự yên tâm giả, và lần sau sẽ có người tin nó.
+     Nay hỏi đúng câu: dấu `{ goc:` đó có NẰM TRONG cặp ngoặc của một lời gọi
+     `ngheDuLieu(` không — khớp ngoặc thật, trên mã đã bóc chuỗi/chú thích.
+     Đây cũng là phép DUY NHẤT bắt được vế `Array.filter` của L2: `filter` là
+     hàm dựng sẵn nên ③e (so số tham số) không thể thấy nó. */
+  const sachApp = lamSachMa(appSrc);
+  const vungNghe = [];                       // [batDau, ketThuc] của mỗi lời gọi
+  for (const m of sachApp.matchAll(/\bngheDuLieu\s*\(/g)) {
+    let sau = 0, j = m.index + m[0].length - 1;
+    for (; j < sachApp.length; j++) {
+      if (sachApp[j] === '(') sau++;
+      else if (sachApp[j] === ')') { sau--; if (!sau) break; }
+    }
+    vungNghe.push([m.index, j]);
+  }
+  const dongCua = (viTri) => sachApp.slice(0, viTri).split('\n').length;
   const lacGoc = [];
-  dongApp.forEach((d, i) => {
-    if (!/\{\s*goc:/.test(d)) return;
-    if (/ngheDuLieu\(/.test(d)) return;                  // khai ngay trên cùng dòng
-    /* Hoặc là dòng đóng `}, { goc: … });` của một lời `ngheDuLieu` — dò ngược
-       lên tối đa 400 dòng; không gặp lời đăng ký nào thì nó đang LẠC. */
-    let j = i - 1, gap = false;
-    for (; j >= 0 && i - j <= 400; j--) if (/ngheDuLieu\(/.test(dongApp[j])) { gap = true; break; }
-    if (!gap) lacGoc.push(i + 1);
-  });
-  ok('③d không tuỳ chọn `{ goc: … }` nào lạc khỏi ngheDuLieu', lacGoc.length === 0,
-    lacGoc.length ? 'LẠC ở dòng ' + lacGoc.join(', ') : 'mọi `{ goc: … }` đều gắn đúng lời đăng ký');
+  for (const m of sachApp.matchAll(/\{\s*goc\s*:/g)) {
+    if (!vungNghe.some(([a, b]) => m.index > a && m.index < b)) lacGoc.push(dongCua(m.index));
+  }
+  ok('③d mọi `{ goc: … }` đều nằm TRONG một lời gọi ngheDuLieu()', lacGoc.length === 0,
+    lacGoc.length
+      ? 'LẠC ở dòng ' + lacGoc.join(', ') + ' → tuỳ chọn rơi vào hàm khác, im lặng vô tác dụng'
+      : `${vungNghe.length} lời đăng ký · không tuỳ chọn nào rơi ra ngoài`);
 
   const thuaDoiSo = soiDoiSoThua(appSrc);
   ok('③e không chỗ gọi nào truyền thừa đối số vào hàm không nhận', thuaDoiSo.length === 0,
     thuaDoiSo.length
       ? thuaDoiSo.map(b => `app.js:${b.ln} ${b.ten}(…) truyền ${b.truyen}/nhận ${b.nhan} (khai ở dòng ${b.khaiO})`).join(' · ')
       : 'đã soi mọi hàm khai đúng một lần trong app.js');
+
+  /* ③f — CHỐT TỰ KIỂM CHO CHÍNH MÁY SOI (REV-0057 vòng 2 · VỪA-1). Máy bóc
+     chú thích từng nuốt oan 244 dòng của `quet-tai-lieu.js` và 107 dòng của
+     `app.js` (không hiểu regex literal, không hiểu chuỗi mẫu lồng nhau), làm
+     ③e mù 18/318 hàm. Máy soi mù im lặng tệ hơn không có máy soi. Nay mỗi lần
+     chạy đều tự hỏi lại: có dòng MÃ nào bị bóc trắng oan không. */
+  const TEP_SOI = ['app.js', 'api.js', 'lam-moi.js', 'quet-tai-lieu.js',
+                   'anh-chung.js', 'gop-trang-pdf.js', 'so-do-bieu-tuong.js',
+                   'nhip-tim-chat.js', 'tbd-trangthai.js', 'cat-khung.js'];
+  const oan = [];
+  for (const t of TEP_SOI) {
+    const duong = join(GOC, 'public/assets/js', t);
+    if (!existsSync(duong)) continue;
+    for (const x of soiDongBiXoaOan(readFileSync(duong, 'utf8'))) oan.push(`${t}:${x.ln}`);
+  }
+  ok('③f máy bóc chú thích không nuốt oan dòng mã nào', oan.length === 0,
+    oan.length ? `${oan.length} dòng bị bóc trắng oan: ` + oan.slice(0, 5).join(' · ')
+      : `${TEP_SOI.length} tệp giao diện, 0 dòng mã bị bóc oan`);
 }
 
 /* ==========================================================================
@@ -214,12 +247,13 @@ function viec(id, trangThai) {
    vai nhân viên, còn ca nào cần phủ hết tab/khối thì đóng vai Admin. Đóng sai
    vai là phép đo xanh mà không chứng minh gì. */
 async function moPhien({ goBoc = false, boChongChongCheo = false, ghiHong = false,
+                         boQuenTabNen = false,
                          laAdmin = true, suaThem = null } = {}) {
   const dem = new Map();
   const trangThai = { choDuyet: 2, canLyDo: false };
   /* Chốt tự kiểm cho ca đối chứng: chuỗi thay thế mà TRƯỢT thì ca đó đang
      chạy trên bản LÀNH và không chứng minh gì — phải biết ngay. */
-  const daGai = { goBoc: false, boChong: false };
+  const daGai = { goBoc: false, boChong: false, quenTabNen: false };
   const may = await dungMayGia({
     tatHoatAnh: true,
     suaTep: (s, f) => {
@@ -238,6 +272,12 @@ async function moPhien({ goBoc = false, boChongChongCheo = false, ghiHong = fals
         const moi = s.replace(/if \(n\.batDauLuc >= tinHieuLuc\) \{ dem\.boQua\+\+; continue; \}/,
                               '/* ĐỐI CHỨNG: đã bỏ chống chạy hai lần */');
         daGai.boChong = moi !== s; s = moi;
+      }
+      if (f === 'assets/js/lam-moi.js' && boQuenTabNen) {
+        // ĐỐI CHỨNG ④: quên hỏi  — đúng lỗi CAO-1 vòng 2.
+        const moi = s.replace('  if (tabTrinhDuyetAn()) return false;',
+                              '  /* ĐỐI CHỨNG: đã quên hỏi tab nền */');
+        daGai.quenTabNen = moi !== s; s = moi;
       }
       if (suaThem) s = suaThem(s, f);
       return s;
@@ -519,14 +559,48 @@ console.log('\n⑪ HAI TAB ERP CÙNG MỞ — bấm ở tab này, tab kia phải
       })()`, returnByValue: true, awaitPromise: true }, s2);
     return r.result.value;
   };
+  const an2 = async () => {
+    const r = await q.cr.goi('Runtime.evaluate',
+      { expression: 'document.hidden', returnByValue: true }, s2);
+    return r.result.value;
+  };
   ok('⑪a tab 2 mở lên, thẻ nói 2', (await doc2()) === '2', 'tab 2: thẻ = ' + (await doc2()));
-  // Bấm Duyệt ở TAB 1
+
+  /* `Target.createTarget` đưa tab MỚI ra trước, nên phải tự tay kéo tab 1 về
+     trước lại — không thì phép đo đo nhầm tab. Nói ra chỗ này vì lần chạy đầu
+     nó chính là thứ làm ba ca dưới đỏ oan. */
+  await q.cr.goi('Page.bringToFront', {}, q.cr.sessionId);
+  await q.cr.doi(600);
+
+  /* CAO-1 (REV-0057 vòng 2). Tab 2 nay nằm NỀN. `offsetParent` không biết điều
+     đó — Chrome vẫn bố cục đầy đủ cho tab nền — nên bản trước CẢ HAI tab cùng
+     nạp lại cho MỘT cú bấm: Hồ Ly đo 2 tab +5 lệnh gọi, 3 tab +9, 4 tab +13.
+     Nay `document.hidden` quyết định, nên tab nền phải NGỦ. */
+  ok('⑪b tab 2 đang ở NỀN (điều kiện của phép đo)', (await an2()) === true,
+    `document.hidden của tab 2 = ${await an2()}` +
+    ((await an2()) === true ? '' : ' — Chrome không mô phỏng tab nền, ca ⑪c/⑪d vô nghĩa'));
+
+  q.datLai();
   await q.cr.chay(`window.__API.cvCapNhat(1, 'hoan_thanh', 'xong')`);
   await q.cr.doi(1200);
-  const t1 = await q.theChoDuyet(), the2 = await doc2();
-  ok('⑪b tab 1 (chỗ bấm) nói 0', t1 === '0', 'tab 1: thẻ = ' + t1);
-  ok('⑪c tab 2 (không bấm gì) cũng tự nói 0', the2 === '0',
-    'tab 2: thẻ = ' + the2 + (the2 === '2' ? '  ❌ tab kia vẫn kể số cũ' : ''));
+  const soLuotHaiTab = q.tong() - q.lay('/api/cong-viec/cap-nhat');
+  const t1 = await q.theChoDuyet();
+  ok('⑪c tab 1 (chỗ bấm) nói 0', t1 === '0', 'tab 1: thẻ = ' + t1);
+  /* 4 lượt, không phải 5: vai NHÂN VIÊN nên `tong-quan-congty` (chỉ Admin) không
+     chạy. Điều được đo ở đây là con số KHÔNG ĐỔI khi mở thêm tab. */
+  ok('⑪d tab NỀN không gọi máy chủ — vẫn đúng 4 lượt như khi chỉ một tab',
+    soLuotHaiTab === 4, `${soLuotHaiTab} lượt nạp lại` +
+    (soLuotHaiTab > 4 ? ' ❌ tab nền cũng nạp — mỗi tab mở thêm là một lần đốt lượt đọc D1' : ''));
+  ok('⑪e tab NỀN vẫn giữ số cũ trong lúc ngủ (chưa ai nhìn nó)',
+    (await doc2()) === '2', 'tab 2: thẻ = ' + (await doc2()));
+
+  /* Ngủ KHÔNG được thành QUÊN: đưa tab 2 ra trước thì nó phải bắt kịp ngay. */
+  await q.cr.goi('Page.enable', {}, s2);
+  await q.cr.goi('Page.bringToFront', {}, s2);
+  await q.cr.doi(1500);
+  const the2 = await doc2();
+  ok('⑪f đưa tab 2 ra trước → nó bắt kịp, nói 0 (ngủ chứ không quên)', the2 === '0',
+    'tab 2: thẻ = ' + the2 + (the2 === '2' ? '  ❌ tab kia vẫn kể số cũ — ngủ thành quên' : ''));
   try { await q.cr.goi('Target.closeTarget', { targetId: t2.targetId }); } catch { /* kệ */ }
   q.dong();
 }
@@ -587,6 +661,26 @@ console.log('\n⑩ ĐỐI CHỨNG — gài lại lỗi, bàn đo PHẢI bắt đ
   const themVao = d.tong() - d.lay('/api/cong-viec/cap-nhat');
   ok('⑩c GHI HỎNG CŨNG BẮN → ca ⑨ phải thấy lượt gọi thừa', themVao > 0,
     `${themVao} lượt thêm` + (themVao === 0 ? ' — BÀN ĐO MÙ, sửa bàn đo trước' : ''));
+  d.dong();
+}
+{
+  /* ĐỐI CHỨNG ④ — gài lại ĐÚNG lỗi CAO-1 của vòng 2: quên hỏi `document.hidden`
+     nên tab nền cũng nạp lại. Ca ⑪d phải thấy số lượt gọi đội lên. */
+  const d = await moPhien({ laAdmin: false, boQuenTabNen: true });
+  const t2 = await d.cr.goi('Target.createTarget', { url: `http://127.0.0.1:${d.may.cong}/app.html` });
+  await d.cr.goi('Target.attachToTarget', { targetId: t2.targetId, flatten: true });
+  await d.cr.doi(3500);
+  await d.cr.goi('Page.bringToFront', {}, d.cr.sessionId);
+  await d.cr.doi(600);
+  d.datLai();
+  await d.cr.chay(`window.__API.cvCapNhat(1, 'hoan_thanh', 'xong')`);
+  await d.cr.doi(1200);
+  const luot = d.tong() - d.lay('/api/cong-viec/cap-nhat');
+  ok('⑩d0 gài được lỗi vào bản tạm', d.daGai.quenTabNen,
+    d.daGai.quenTabNen ? 'đã gỡ câu hỏi `document.hidden`' : 'CHUỖI THAY THẾ TRƯỢT — sửa bàn đo');
+  ok('⑩d QUÊN HỎI TAB NỀN → ca ⑪d phải thấy lượt gọi đội lên', luot > 4,
+    `${luot} lượt (bản lành: 4)` + (luot <= 4 ? ' — BÀN ĐO MÙ, sửa bàn đo trước' : ''));
+  try { await d.cr.goi('Target.closeTarget', { targetId: t2.targetId }); } catch { /* kệ */ }
   d.dong();
 }
 

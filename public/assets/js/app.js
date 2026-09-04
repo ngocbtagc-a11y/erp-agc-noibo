@@ -5967,7 +5967,15 @@ if (TOI.quyen.includes('kinhdoanh')) {
   // quyền Đơn hoàn mới thấy. Bọc try/catch để 1 lỗi không kéo sập phần sau.
   if (TOI.quyen.includes('donhoan')) {
     try { await khoiDongDoiSoatSan(); } catch (e) { console.error('Đối soát sàn:', e); }
-    try { await khoiDongCSKH(); } catch (e) { console.error('CSKH:', e); }
+    /* Bảng "Khách hoàn nhiều" nghe nhóm `hoan` (REV-0057 vòng 2 · CAO-2):
+       nó đọc dữ liệu ĐƠN HOÀN mà trước nay chỉ nạp MỘT lần lúc mở trang —
+       chị Huyền phân loại đơn cả ngày ngay trên tab này, bảng bên cạnh vẫn
+       kể số của lúc chị mở máy. Đúng câu Sếp kêu, chỉ đổi màn.
+       Lambda chuyển tiếp chứ không đổi sang `const`: hàm này được GỌI ở đây
+       mà khai mãi phía dưới, đổi cách khai là ném lỗi ngay lúc mở trang. */
+    const lamMoiCSKH = ngheDuLieu('hoan', () => khoiDongCSKH(),
+      { ten: 'Bảng Khách hoàn nhiều', goc: oTab('kinhdoanh') });
+    try { await lamMoiCSKH(); } catch (e) { console.error('CSKH:', e); }
   }
   try { await khoiDongDonHangHuy(); } catch (e) { console.error('Đơn hàng bị hủy:', e); }
 }
@@ -6793,6 +6801,11 @@ async function khoiDongDonHangHuy() {
 }
 
 /* Chăm sóc khách hàng — bảng xếp hạng khách hoàn/hủy nhiều nhất 6 tháng gần đây */
+/* NGHE NHÓM `hoan` (REV-0057 vòng 2 · CAO-2). Bảng này đọc dữ liệu đơn
+   hoàn mà trước nay chỉ nạp MỘT lần lúc mở trang: chị Huyền phân loại đơn
+   cả ngày trên đúng tab này, bảng vẫn kể số của lúc mở máy. Hồ Ly tìm ra
+   bằng cách dò khối ĐỌC-RỒI-VẼ trong trình duyệt, không dò theo bảng đăng
+   ký — nên bản kiểm kê nay cũng dò theo cách đó (do-kiem-ke-lam-moi.mjs). */
 async function khoiDongCSKH() {
   let kq;
   try { kq = await API.kdKhachHoanNhieu(); } catch { return; }
@@ -8217,7 +8230,11 @@ async function khoiDongXepCa() {
       $('#xcTuanLabel').textContent = `${tuanHienTai.getDate()}/${tuanHienTai.getMonth() + 1} – ${cuoiTuan.getDate()}/${cuoiTuan.getMonth() + 1}/${cuoiTuan.getFullYear()}`;
     }
 
-    async function taiMaTran() {
+    /* NGHE NHÓM `ca` (REV-0057 vòng 2 · CAO-2). Trên `main` khối này đúng
+       nhờ SÁU chỗ nhớ gọi tay — tức đang sống bằng trí nhớ, đúng thứ bản vá
+       này tồn tại để bỏ đi. Sáu lời gọi tay bên dưới GIỮ NGUYÊN và không bị
+       chạy hai lần: đài thấy hàm vừa tự chạy thì bỏ qua lượt tín hiệu. */
+    const taiMaTran = ngheDuLieu('ca', async function taiMaTran() {
       tuanLabel();
       const phongBanId = $('#xcPhongBan').value;
       if (!phongBanId) return;
@@ -8228,7 +8245,7 @@ async function khoiDongXepCa() {
       catch (err) { alert(err.message || 'Không tải được dữ liệu tuần này.'); duLieuTuan = null; return; }
       veMaTran(tu);
       veKeHoach(tu);
-    }
+    }, { ten: 'Ma trận Xếp ca tuần', goc: oTab('xepca') });
 
     /* ---- Kế hoạch nhân lực tuần: 1 hàng/mẫu ca, cột = 7 ngày, ô nhập số
        người cần. Trưởng phòng nhập xong bấm "Mở đăng ký cho tuần" 1 lần —

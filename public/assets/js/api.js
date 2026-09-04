@@ -506,8 +506,8 @@ export const API = {
    BỌC MỘT LẦN CHO CẢ LỚP — "ghi xong thì màn hình tự làm mới"
    ---------------------------------------------------------------------------
    Sếp Ngọc 03/09/2026: *"đã duyệt hoàn thành mà nó vẫn hiện ở đây"*. Cách cũ
-   là mỗi nút tự nhớ gọi thêm hàm nạp lại — 121 chỗ bấm là 121 lần phải nhớ,
-   và chỗ thứ 122 luôn quên. Ở đây bọc ĐÚNG MỘT LẦN: hàm ghi nào thành công
+   là mỗi nút tự nhớ gọi thêm hàm nạp lại — 123 chỗ bấm là 123 lần phải nhớ,
+   và chỗ thứ 124 luôn quên. Ở đây bọc ĐÚNG MỘT LẦN: hàm ghi nào thành công
    thì tự bắn tên nhóm dữ liệu, màn nào đang hiện nhóm đó thì tự vẽ lại.
 
    THẤT BẠI thì KHÔNG bắn: máy chủ chưa ghi gì mà bắt cả loạt màn nạp lại là

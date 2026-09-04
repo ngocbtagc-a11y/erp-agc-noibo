@@ -15,19 +15,24 @@
    trông như rổ B nhẹ), nhưng cái THẺ tóm tắt ngay cạnh nó chạy đúng một lần
    lúc mở trang rồi thôi (rổ A tuyệt đối) — nên Sếp vấp trúng ngay ngày đầu.
 
-   Số đếm trên `origin/main`, 26 khối hiển thị / 121 chỗ gọi hàm ghi:
-     · RỔ A — khối KHÔNG BAO GIỜ vẽ lại:                4 khối
-       (chuông 🔔 · thẻ tóm tắt Trạm Mục Tiêu · kho danh mục nền · kho tài liệu)
-     · RỔ B — vẽ ở chỗ này, không vẽ ở chỗ kia:        20 khối
-     · RỔ C — đã đúng:                                  2 khối
-       (danh sách Góp ý ERP · bảng Vinh danh)
+   Số đếm trên mốc `merge-base` — 37 khối hiển thị / 123 chỗ gọi + 13 chỗ
+   truyền hàm ghi làm tham số (= 136):
+     · RỔ A — khối KHÔNG BAO GIỜ vẽ lại:               10 khối
+       (chuông 🔔 · thẻ tóm tắt Trạm Mục Tiêu · bảng "Khách hoàn nhiều" của
+        chị Huyền · ma trận Xếp ca · …)
+     · RỔ B — vẽ ở chỗ này, không vẽ ở chỗ kia:        22 khối
+     · RỔ C — đã đúng:                                  5 khối
 
-   BA CON SỐ ĐÓ ĐẾM LẠI ĐƯỢC: `npm run do-kiem-ke-lam-moi`. Vòng đầu tôi báo
-   số mà không có máy nào sinh ra nó — tháng sau không ai kiểm lại được, đúng
-   thứ luật "phải dựng lưới tự động" đòi tránh (REV-0057 · L4).
+   BA CON SỐ ĐÓ ĐẾM LẠI ĐƯỢC: `npm run do-kiem-ke-lam-moi`.
+   VÒNG 2 PHẢI VIẾT LẠI CÁCH ĐẾM (REV-0057 vòng 2 · CAO-2). Bản đầu lấy danh
+   sách khối từ chính bảng đăng ký của bản vá — định nghĩa vòng tròn: khối nào
+   chưa ai nối dây thì không bao giờ lọt vào bảng, nên không bao giờ bị xếp
+   vào rổ A. Nó chỉ đếm được những chỗ tôi đã sửa. Hồ Ly đi tìm tay và ra ngay
+   hai khối bị bỏ sót. Nay máy TỰ DÒ từ mã đang chạy: khối = hàm vừa gọi API
+   ĐỌC vừa vẽ ra màn hình — và nó tìm ra đúng hai khối đó mà không cần ai mách.
 
    VÌ SAO KHÔNG SỬA TỪNG NÚT. Cách cũ là mỗi nút tự nhớ gọi thêm một hàm nạp
-   lại. 121 chỗ bấm thì 121 lần phải nhớ — và chỗ thứ 122 sẽ lại quên, y như
+   lại. 123 chỗ bấm thì 123 lần phải nhớ — và chỗ thứ 124 sẽ lại quên, y như
    "Lịch sử làm việc" và "Tổng quan công ty" từng quên (audit 23/08/2026).
    Trí nhớ không phải kiến trúc. Bằng chứng ngay trong vòng này: gộp nhánh đọc
    chữ PDF vào, hai hàm ghi mới (`tlLuuTep`, `tlSua`) chưa khai nhóm — bàn đo
@@ -420,13 +425,36 @@ function layGoc(n) {
   return ds.length ? ds : null;
 }
 
+/* ---- CẢ TAB TRÌNH DUYỆT ĐANG ẨN THÌ CŨNG NGỦ (REV-0057 vòng 2 · CAO-1) ---
+   `offsetParent` và `getClientRects()` KHÔNG biết tab trình duyệt đang nằm ở
+   NỀN: Chrome vẫn bố cục đầy đủ cho tab nền, nên hỏi hai thứ đó ra "đang
+   hiện", và cả bốn tab ERP cùng nạp lại cho MỘT cú bấm của MỘT người.
+   Hồ Ly đo được: 1 tab +1 lệnh gọi · 2 tab +5 · 3 tab +9 · 4 tab +13 — tức
+   chính tính năng nhiều tab lại ăn mất cái tiết kiệm mà nó khoe.
+   `document.hidden` mới là câu hỏi đúng. Dùng lại ĐÚNG khuôn mà mô-đun chat
+   đã dùng từ trước (`visibilitychange`, app.js) — không nghĩ cách mới. */
+function tabTrinhDuyetAn() {
+  return typeof document !== 'undefined' && document.hidden === true;
+}
+
 /* Không khai gốc = luôn coi như đang hiện (chuông, kho danh mục nền). Khai
    gốc mà tìm không thấy phần tử = coi như ĐANG HIỆN, không phải đang ẩn: thà
-   nạp thừa một lượt còn hơn để màn hình nói dối vì một cái id gõ sai. */
+   nạp thừa một lượt còn hơn để màn hình nói dối vì một cái id gõ sai.
+   NHƯNG tab TRÌNH DUYỆT ẩn thì ngủ HẾT, kể cả người nghe không khai gốc
+   (chuông): người dùng đang không nhìn cái tab này. */
 function hienThi(n) {
+  if (tabTrinhDuyetAn()) return false;
   const ds = layGoc(n);
   if (!ds) return true;
   return ds.some(el => el.offsetParent !== null || el.getClientRects().length > 0);
+}
+
+/* Quay lại tab là nạp nốt những màn đã ngủ. Thiếu dòng này thì "ngủ" biến
+   thành "quên", và màn hình lại nói dối — đúng bệnh đang vá. */
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) lamMoiManVuaMo();
+  });
 }
 
 function dangGoTrong(n) {
