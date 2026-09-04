@@ -1622,13 +1622,20 @@ td .sm.dong-phu, td.cot-chu .sm {
    arm R của `do-bang-that` bắt được trên đường vẽ thật.
    Nay nhóm nút tự xuống hàng khi hết chỗ. Nút KHÔNG bị gãy đôi (mỗi nút vẫn
    là một khối), chỉ là hàng thứ hai bắt đầu sớm hơn. Inline style thắng mọi
-   lớp CSS, nên phải bỏ hẳn nó chứ không đè được. */
-td.o-nut {
-  white-space: normal;
-  display: flex; flex-wrap: wrap; align-items: center; gap: 4px;
-  min-width: 0;
-}
-td.o-nut > * { white-space: nowrap; }
+   lớp CSS, nên phải bỏ hẳn nó chứ không đè được.
+
+   KHÔNG đặt `display` lên chính `<td>`. Bản đầu ở đây dùng
+   `display:flex; flex-wrap:wrap` — chạy được, cột vẫn thẳng hàng, nhưng đó
+   đúng cái bẫy đã dính một lần ở `.cot-chu` (đặt `display:-webkit-box` lên ô
+   làm ô thôi là ô bảng, chiều cao dòng nhảy 55px → 93px). Đo lại chỗ này:
+   dòng việc thật có nút là 64px với `flex`, 63px không `flex` — và 63px cũng
+   đúng bằng số đo trên `origin/main c221fd0`, tức chiều cao đó có sẵn, không
+   phải bản vá gây ra. Bỏ `flex` vì chỉ cần bỏ `nowrap` là mấy cái nút đã tự
+   xuống hàng (chúng là inline-block, cách nhau bằng dấu cách có sẵn trong
+   mã) — được cùng kết quả mà không đụng vào mô hình hộp của bảng. */
+td.o-nut { white-space: normal; }
+td.o-nut > * { white-space: nowrap; }   /* mỗi nút vẫn nguyên khối, không gãy đôi */
+
 /* --- LỚP 2: `.cot-phu` — CỘT KHÔNG THAM GIA QUYẾT ĐỊNH ----------------------
    Người giao · ngày tạo · mã nội bộ · email… Không nằm trên bảng ở BẤT KỲ bề
    ngang nào — kể cả 1440px, vì "vừa một màn" là yêu cầu của Sếp chứ không
