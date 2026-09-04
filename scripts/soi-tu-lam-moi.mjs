@@ -99,7 +99,18 @@ bd('A · Đang đứng ở tab Tổng quan, ghi vào các nhóm khác — có n�
     ['hoan       (kdDaDoiSoat)',    `kdDaDoiSoat('RS1')`,                      '/api/hoan/danh-sach'],
     ['nhan_su    (qtSuaNhanSu)',    `qtSuaNhanSu({id:'NS-DUY'})`,              '/api/quan-tri/danh-sach'],
     ['ho_so      (nsHopDongLuu)',   `nsHopDongLuu({id:'NS-DUY'})`,             '/api/nhan-su/viec-can-lam'],
-    ['du_lieu_nen(dlnSuaPhongBan)', `dlnSuaPhongBan(1,{ten:'x'})`,             '/api/du-lieu-nen/phong-ban']
+    ['du_lieu_nen(dlnSuaPhongBan)', `dlnSuaPhongBan(1,{ten:'x'})`,             '/api/du-lieu-nen/phong-ban'],
+    /* VÒNG 2 — kiểm ĐỦ 14 nhóm, không phải 6. Lời khai vòng 1 là "sai với 3/14
+       nhóm", nên phải đi hết 14 mới đóng được câu đó. `thong_bao` (chuông) KHÔNG
+       khai `goc` — cố ý luôn thức — nên nó phải ra 1, và 1 ở đó là ĐÚNG. */
+    ['ca         (caDuyet)',        `caDuyet([1])`,                            '/api/ca/mau-ca'],
+    ['muc_tieu   (mtChot)',         `mtChot(1)`,                               '/api/muc-tieu/danh-sach'],
+    ['viec       (cvCapNhat)',      `cvCapNhat(1,'hoan_thanh','x')`,           '/api/cong-viec/danh-sach'],
+    ['gop_y      (gopYDuyet)',      `gopYDuyet({id:1,quyet_dinh:'duyet'})`,    '/api/gop-y'],
+    ['vinh_danh  (vdGui)',          `vdGui('NS-DUY','khen',3)`,                '/api/vinh-danh'],
+    ['tai_khoan  (qtSuaVaiTro)',    `qtSuaVaiTro('t1','admin')`,               '/api/quan-tri/danh-sach'],
+    ['tai_lieu   (tlAn)',           `tlAn(1)`,                                 '/api/tai-lieu'],
+    ['thong_bao  (CỐ Ý luôn thức)', `cvSua(1,{tieu_de:'x'})`,                  '/api/thong-bao']
   ];
   for (const [ten, goi, duong] of ca) {
     p.datLai();

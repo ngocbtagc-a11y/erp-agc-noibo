@@ -55,11 +55,16 @@ async function doMot(nhan, commit) {
     }
   });
   const cr = await moChrome({ url: `http://127.0.0.1:${may.cong}/app.html`, doiMs: 3000 });
+  /* ĐỌC THEO CẤU TRÚC — xem ghi chú dài ở `soi-tu-lam-moi-2.mjs`. Bản cũ cắt
+     chuỗi `textContent` gộp ba ô `.k`+`.v`+`.d` nên đọc "0" thành "02" và in ❌
+     oan trên bản lành. Lỗi của bàn soi, không phải của bản vá. */
   const doc = () => cr.chay(`(() => {
     const o = document.querySelector('#tq-tomtat');
     if (!o) return 'KHÔNG CÓ THẺ';
-    const m = (o.textContent || '').match(/Việc tôi giao — chờ duyệt(\\d+)/);
-    return m ? m[1] : '(không thấy thẻ chờ duyệt) ' + (o.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 90);
+    const t = [...o.querySelectorAll('.stat')]
+      .find(x => ((x.querySelector('.k') || {}).textContent || '').includes('chờ duyệt'));
+    if (!t) return '(không thấy thẻ chờ duyệt)';
+    return ((t.querySelector('.v') || {}).textContent || '').trim();
   })()`);
 
   const truoc = await doc();
