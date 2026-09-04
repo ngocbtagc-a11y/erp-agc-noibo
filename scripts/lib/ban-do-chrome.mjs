@@ -136,7 +136,11 @@ export async function dungMayGia({ commit = null, tatHoatAnh = false, apiRieng =
     writeFileSync(p, s, 'utf8');
   }
   if (suaTep) {
-    for (const f of ['app.html', 'assets/js/app.js']) {
+    /* Thêm `api.js` + `lam-moi.js` (03/09/2026, bàn đo `do-tu-lam-moi`): CA
+       ĐỐI CHỨNG của bàn đo đó phải GỠ ĐƯỢC đoạn bọc phát tín hiệu nằm trong
+       `api.js` — không gỡ được thì không chứng minh được bàn đo có mắt. Danh
+       sách cũ chỉ hai tệp nên mọi bàn đo cũ KHÔNG đổi hành vi. */
+    for (const f of ['app.html', 'assets/js/app.js', 'assets/js/api.js', 'assets/js/lam-moi.js']) {
       const p = join(tam, f);
       if (!existsSync(p)) continue;
       const truoc = readFileSync(p, 'utf8');

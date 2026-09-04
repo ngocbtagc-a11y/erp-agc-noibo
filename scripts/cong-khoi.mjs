@@ -34,19 +34,92 @@
    MÃ THOÁT: 0 = xanh, 1 = đỏ.
    ========================================================================== */
 
-import { dungMayGia, moChrome } from './lib/ban-do-chrome.mjs';
+import { dungMayGia, moChrome, TOI, TOI_ID } from './lib/ban-do-chrome.mjs';
+
+/* ---- LƯỢT THỨ HAI: VAI ĐỦ QUYỀN (REV-0057 vòng 3 · VỪA-2) --------------
+   Người dùng giả dùng chung chỉ có BẢY quyền, nên tám mô-đun này chưa bao
+   giờ chạy dưới cổng khói — cái cổng BẮT BUỘC trước mọi lần đẩy của cả đội:
+     khoiDongCongViec · khoiDongDoiSoatSan · khoiDongDuLieuNen ·
+     khoiDongTaiSan · khoiDongXepCa · khoiDongKhoTaiLieu ·
+     khoiDongDonHoan · khoiDongLichSuHoan
+   Hồ Ly chứng minh cái giá: gài một lỗi TDZ ở `khoiDongCSKH` thì cổng khói
+   vẫn XANH. Đó cũng là lý do lỗi Đối soát sàn của chị Hằng sống được lâu.
+
+   KHÔNG sửa `TOI` dùng chung — sáu bàn đo khác đang dựa vào đúng bảy quyền
+   đó, đổi nó là lặng lẽ đổi bài của người khác. Thay vào đó chạy THÊM một
+   lượt với vai đủ quyền, chỉ hỏi một câu: nạp trang có nổ không. */
+const QUYEN_DU = ['tongquan', 'lichsuviec', 'danhba', 'chat', 'gopy', 'nhansu',
+                  'khovan', 'kinhdoanh', 'ketoan', 'taisan', 'xepca', 'donhoan',
+                  'khotailieu', 'quantri', 'dulieunen', 'congviec', 'muctieu'];
+
+/* Ổ trả lời cho những đường mà tám mô-đun kia đọc. Ổ chung của thư viện trả
+   `{ok:true, danh_sach:[]}` cho mọi thứ, mà vài màn đòi khoá riêng — thiếu
+   thì cổng đỏ vì BÀN ĐO, không phải vì sản phẩm. */
+function apiVaiDuQuyen(duong, u, traJson) {
+  if (duong === '/api/toi-la-ai') return traJson({
+    ...TOI, id: TOI_ID, nhan_su_id: TOI_ID, quyen: QUYEN_DU,
+    la_admin: 1, them_nhan_su: 1, thao_tac_van_hanh: 1, phong_ban_quan_ly: [],
+    shopee: { xem: 1 }
+  }) || true;
+  if (duong === '/api/thong-bao') return traJson({ thong_bao: [], chua_doc: 0 }) || true;
+  if (duong === '/api/cong-viec/hom-nay') return traJson({ toi: {}, nhac_tat: 0 }) || true;
+  if (duong === '/api/cong-viec/danh-sach') return traJson({ nhan: [], giao: [] }) || true;
+  if (duong === '/api/muc-tieu/danh-sach')
+    return traJson({ cong_ty: [], phong_ban: [], ca_nhan: [], nam: 2026, quy: 3 }) || true;
+  if (duong === '/api/dulieunen/tinh-trang') return traJson({ muc: [], viec_tiep_theo: [] }) || true;
+  if (duong === '/api/kinh-doanh/can-doi-soat') return traJson({ can_doi_soat: [] }) || true;
+  if (duong === '/api/kinh-doanh/khach-hoan-nhieu') return traJson({ khach_hang: [] }) || true;
+  if (duong === '/api/kinh-doanh/don-hang-huy')
+    return traJson({ don_huy: [], co_bang: 1, co_van_don: 1 }) || true;
+  if (duong === '/api/ke-toan/can-tra-soat') return traJson({ can_tra_soat: [] }) || true;
+  if (duong === '/api/ke-toan/hang-hong') return traJson({ hang_hong: [] }) || true;
+  if (duong === '/api/tai-san') return traJson({ ds: [], quyen: { quan_ly: 1 } }) || true;
+  if (duong === '/api/hoan/danh-sach') return traJson({ don_hoan: [] }) || true;
+  if (duong === '/api/kho/san-pham') return traJson({ san_pham: [], quyen: {} }) || true;
+  if (duong === '/api/quan-tri/danh-sach') return traJson({ nhan_su: [], vai_tro: [] }) || true;
+  if (duong === '/api/nhan-su/viec-can-lam')
+    return traJson({ qua_han: [], sap_het: [], sinh_nhat_thang_sau: [] }) || true;
+  return false;
+}
 
 const dso = process.argv;
 const lay = (co, mac) => { const i = dso.indexOf(co); return i > 0 ? dso[i + 1] : mac; };
 const COMMIT = lay('--commit', null);
 const RONG = Number(lay('--rong', 1440));
 const TU_KIEM = dso.includes('--tu-kiem');   // chèn mẫu hỏng giả để tự chứng minh
+const TU_KIEM_TDZ = dso.includes('--tu-kiem-tdz');
 
 /* MẪU HỎNG GIẢ — một dòng `console.error` cố ý, chèn vào bản TẠM của app.js
    (không đụng tệp thật trong repo). Nếu cổng khói vẫn XANH với dòng này thì
    cổng khói hỏng, không phải mã hỏng. */
 const MAU_HONG = `\nconsole.error('MẪU HỎNG GIẢ — cổng khói phải bắt được dòng này');\n`;
-const suaTep = TU_KIEM ? (s, ten) => (ten === 'assets/js/app.js' ? s + MAU_HONG : s) : null;
+/* MẪU HỎNG GIẢ THỨ HAI — lỗi TDZ THẬT (REV-0057 vòng 3 · VỪA-2).
+   Đổi 'khoiDongCSKH' sang 'const' và bỏ lambda chuyển tiếp: hàm bị GỌI ở
+   phía trên chỗ nó được khai, nên trang nổ ngay lúc mở. Hồ Ly gài đúng lỗi
+   này và cổng khói CŨ vẫn XANH — vì vai 7 quyền không nạp tới mô-đun đó.
+   Nay lượt ĐỦ QUYỀN phải bắt được. Đây là cách cổng khói tự chứng minh nó có
+   mắt ở phần vừa mở rộng, thay vì bắt người ta tin lời.
+   Chạy:  npm run cong-khoi-tu-kiem-tdz   → PHẢI ĐỎ.
+   Mẫu này TRƯỢT thì ném lỗi ngay, không lặng lẽ chạy trên bản lành. */
+const MAU_TDZ = [
+  ["    const lamMoiCSKH = ngheDuLieu('hoan', () => khoiDongCSKH(),", ""],
+  ["      { ten: 'Bảng Khách hoàn nhiều', goc: oTab('kinhdoanh') });", ""],
+  ["    try { await lamMoiCSKH(); }", "    try { await khoiDongCSKH(); }"],
+  ["async function khoiDongCSKH() {", "const khoiDongCSKH = async function () {"]
+];
+function gaiTDZ(ma) {
+  for (const [cu, moiDoan] of MAU_TDZ) {
+    if (!ma.includes(cu)) throw new Error(`Mẫu TDZ trượt, sửa bàn đo: ${cu.trim().slice(0, 60)}`);
+    ma = ma.replace(cu, moiDoan);
+  }
+  return ma;
+}
+
+const suaTep = TU_KIEM
+  ? (s, ten) => (ten === 'assets/js/app.js' ? s + MAU_HONG : s)
+  : (TU_KIEM_TDZ
+      ? (s, ten) => (ten === 'assets/js/app.js' ? gaiTDZ(s) : s)
+      : null);
 
 /* ---- DANH SÁCH NÚT CỬA NGÕ ---------------------------------------------
    Mỗi tab một nút chính — thứ người dùng bấm ĐẦU TIÊN khi vào tab đó. Bấm
@@ -130,6 +203,19 @@ kq.canh_bao_so = cr.canhBao.length;
 
 cr.dong(); may.dong();
 
+/* ---- ③ LƯỢT ĐỦ QUYỀN: nạp trang với vai thấy HẾT mô-đun -------------- */
+const may2 = await dungMayGia({ commit: COMMIT, suaTep, apiRieng: apiVaiDuQuyen });
+const cr2 = await moChrome({ url: `http://127.0.0.1:${may2.cong}/app.html`, rong: RONG, doiMs: 3500 });
+kq.du_quyen = {
+  so_tab: await cr2.chay(`document.querySelectorAll('[data-tab]').length`),
+  loi_console: cr2.loiConsole.slice(),
+  ngoai_le: cr2.ngoaiLe.slice()
+};
+cr2.dong(); may2.dong();
+/* Gộp vào cùng một rổ: một ngoại lệ ở lượt nào cũng là cổng ĐỎ. */
+kq.loi_console = kq.loi_console.concat(kq.du_quyen.loi_console);
+kq.ngoai_le = kq.ngoai_le.concat(kq.du_quyen.ngoai_le);
+
 /* ---- KẾT LUẬN ----------------------------------------------------------- */
 const nutHong = kq.cua_ngo.filter(c => !c.co_nut || !c.dat || c.loi);
 const doVi = [];
@@ -145,6 +231,7 @@ kq.vi_sao_do = doVi;
 console.log(JSON.stringify(kq, null, 2));
 console.error('');
 console.error(`CỔNG KHÓI [${kq.commit} @${RONG}px]: ${XANH ? '✅ XANH' : '❌ ĐỎ — ' + doVi.join(' · ')}`);
+console.error(`  hai lượt vai: 7 quyền (${kq.nap.so_tab} tab) + đủ 17 quyền (${kq.du_quyen.so_tab} tab)`);
 for (const l of kq.loi_console.slice(0, 12)) console.error('  console.error: ' + l);
 for (const l of kq.ngoai_le.slice(0, 12))    console.error('  ngoại lệ:      ' + String(l).split('\n')[0]);
 for (const c of nutHong) console.error(`  nút hỏng:      ${c.ten}` +
@@ -157,6 +244,18 @@ if (TU_KIEM) {
   console.error(dat
     ? '  ✅ TỰ KIỂM ĐẠT — mẫu hỏng giả làm cổng khói đỏ đúng như phải thế.'
     : '  ❌ TỰ KIỂM TRƯỢT — chèn lỗi thật mà cổng khói vẫn xanh: cổng khói là đồ trang trí.');
+  process.exit(dat ? 0 : 1);
+}
+
+/* TỰ KIỂM THỨ HAI — lỗi TDZ thật ở một trong tám mô-đun chỉ vai ĐỦ QUYỀN mới
+   nạp tới. CÙNG QUY ƯỚC với `--tu-kiem`: bắt được thì thoát 0. Hai lệnh cùng
+   họ mà ngược quy ước mã thoát là bẫy cho người sau (REV-0057 vòng 4). */
+if (TU_KIEM_TDZ) {
+  const dat = !XANH && [...kq.loi_console, ...kq.ngoai_le]
+    .some(l => String(l).includes('khoiDongCSKH') && String(l).includes('before initialization'));
+  console.error(dat
+    ? '  ✅ TỰ KIỂM TDZ ĐẠT — lỗi ở mô-đun chỉ vai đủ quyền mới nạp tới đã làm cổng khói đỏ.'
+    : '  ❌ TỰ KIỂM TDZ TRƯỢT — gài lỗi TDZ thật mà cổng khói không thấy: lượt vai đủ quyền đang hỏng.');
   process.exit(dat ? 0 : 1);
 }
 
