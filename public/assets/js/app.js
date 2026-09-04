@@ -5008,7 +5008,21 @@ if (TOI.quyen.includes('nhansu')) {
       // SPEC-0007 Đợt 1 — hai sự kiện này backend ĐÃ ghi từ vòng trước nhưng
       // từ điển thiếu ⇒ hồ sơ hiện mã thô (N-2 · REV-0013).
       doi_loai_lao_dong: 'Đổi loại lao động', don_ca_khoan_viec: '⚠️ Dọn ca do chuyển Khoán việc',
-      hop_dong: 'Hợp đồng lao động'
+      hop_dong: 'Hợp đồng lao động',
+      /* REV-0058 ③ — LẶP LẠI ĐÚNG LỖI mà chú thích ngay phía trên vừa nói là
+         đã vá vòng trước. Nên quét lại CẢ từ điển thay vì chỉ thêm cái vừa
+         thiếu: máy chủ ghi 15 loại sự kiện vào `nhan_su_lich_su`, từ điển này
+         mới có 9 — SÁU loại hiện mã thô, không phải hai. Bốn loại đầu dưới đây
+         đã hỏng âm thầm từ TRƯỚC bản này; hai loại cuối là của bản này.
+         Bàn đo `scripts/do-tach-vai-tro.mjs` nay đối chiếu từ điển với mọi
+         chuỗi máy chủ THẬT SỰ ghi — thêm loại mới mà quên khai là ĐỎ ngay,
+         nên đây là lần vá cuối cho lớp lỗi này. */
+      ky_nang: 'Kỹ năng',
+      doi_ngay_sinh: 'Đổi ngày sinh',
+      mo_ta_cong_viec: 'Mô tả công việc',
+      khoi_phuc_dang_nhap: '🔑 Khôi phục đăng nhập',
+      cap_tai_khoan: '🔑 Cấp tài khoản ERP',
+      doi_vai_tro: 'Đổi vai trò · vị trí công việc'
     };
 
     // Header tổng quan + khối Tài khoản ERP (Employee Profile Phase 1) —

@@ -141,7 +141,18 @@ export async function coCotViTri(db) {
     await db.prepare('SELECT vi_tri_cong_viec FROM tai_khoan LIMIT 1').first();
     _nhoCotViTri.set(db, { co: true, hetHan: 0 });
     return true;
-  } catch {
+  } catch (e) {
+    /* CHỈ NUỐT ĐÚNG LỖI THIẾU CỘT — `catch` trần là một lỗ thật (REV-0058 ①).
+       D1 hỏng tạm thời (nghẽn, hết giờ, mất kết nối) cũng rơi vào đây, và
+       `catch` trần đọc nó thành "chưa có cột". Hậu quả ĐO ĐƯỢC: qtTaoTaiKhoan
+       đi nhánh không-cột, ghi tài khoản MẤT Ô 2, rồi trả về **200**. Người
+       cấp tài khoản tưởng xong; nhân viên mới không có vị trí công việc, tức
+       không mở được tab nào của nghề mình — đúng cái triệu chứng bản vá này
+       sinh ra để chữa, nay tự tay dựng lại.
+       Ném ra thì cửa gọi trả 500 và người dùng bấm lại — mất một lượt bấm còn
+       hơn im lặng ghi hỏng. Cùng khuôn với docPhien() ngay bên dưới. */
+    const tin = String(e && e.message);
+    if (!/no such column/i.test(tin) || !/vi_tri_cong_viec/i.test(tin)) throw e;
     _nhoCotViTri.set(db, { co: false, hetHan: Date.now() + 60000 });
     return false;
   }

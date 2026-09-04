@@ -1270,14 +1270,21 @@ async function qtTaoTaiKhoan(req, env) {
    KHÔNG ĐƯỢC LÀM HỎNG VIỆC CHÍNH: bảng có thể chưa nạp trên một CSDL cũ.
    Ghi hỏng thì kêu lên console (Workers Logs đọc được) rồi đi tiếp — mất một
    dòng nhật ký còn hơn Sếp bấm "Lưu" mà báo lỗi đỏ trong khi vai trò đã đổi
-   xong. Đây là ghi thêm, không phải nguồn sự thật của quyền. */
+   xong. Đây là ghi thêm, không phải nguồn sự thật của quyền.
+
+   `datetime('now','+7 hours')` = GIỜ VIỆT NAM — KHÔNG được bỏ đuôi +7 (REV-0058 ②).
+   Chín chỗ ghi khác vào CÙNG CUỐN SỔ này đều +7 (vao_lam · hop_dong · ky_nang ·
+   doi_ngay_sinh · don_ca_khoan_viec · khoi_phuc_dang_nhap · mota-cv …). Sổ này
+   là BẰNG CHỨNG ai trao quyền xem lương cho ai; một dòng lệch 7 tiếng so với
+   mọi dòng khác trong cùng sổ thì tra ngược không khớp, và người tra sẽ tin
+   con số chứ không tin là công cụ ghi sai. */
 async function ghiVetVaiTro(env, phien, nhanSuId, loaiSuKien, cu, moi, ghiChu) {
   if (!nhanSuId) return false;
   try {
     await env.DB.prepare(`
       INSERT INTO nhan_su_lich_su (nhan_su_id, loai_su_kien, gia_tri_cu, gia_tri_moi,
                                    nguoi_thuc_hien_id, ghi_chu, luc)
-      VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+      VALUES (?, ?, ?, ?, ?, ?, datetime('now','+7 hours'))
     `).bind(nhanSuId, loaiSuKien, cu || null, moi || null,
             phien.nhan_su_id, ghiChu || null).run();
     return true;

@@ -192,6 +192,54 @@ async function doDanhSachKhopMigration(thuMucSrc) {
 }
 
 /* ======================================================================
+   PHÉP ĐO 2b — TỪ ĐIỂN NHÃN SỰ KIỆN PHỦ HẾT THỨ MÁY CHỦ GHI
+   ----------------------------------------------------------------------
+   REV-0058 ③: hồ sơ nhân sự hiện MÃ THÔ (`doi_vai_tro`) thay vì tiếng Việt —
+   và đó là LẦN THỨ HAI: chú thích ngay trên từ điển đã ghi "backend ĐÃ ghi từ
+   vòng trước nhưng từ điển thiếu" cho một cặp khác. Vá tay lần nữa thì sẽ có
+   lần thứ ba. Nên đo.
+
+   Cách đo: quét MỌI chuỗi mà `src/*.js` thật sự ghi vào cột `loai_su_kien`
+   của `nhan_su_lich_su`, rồi đối chiếu với từ điển `NHAN_SU_KIEN` trong
+   `public/assets/js/app.js`. Thêm loại sự kiện mới mà quên khai nhãn ⇒ ĐỎ.
+   Chỉ bắt được chuỗi viết thẳng trong câu SQL — loại ghi qua BIẾN thì liệt kê
+   tay ở `LOAI_QUA_BIEN` kèm chỗ sinh ra, và bàn đo đòi chúng cũng phải có
+   nhãn. ================================================================= */
+const LOAI_QUA_BIEN = [
+  // src/index.js — mảng `suKien` dựng động lúc sửa hồ sơ nhân sự
+  'doi_phong_ban', 'doi_chuc_danh', 'doi_quan_ly', 'doi_trang_thai', 'doi_loai_lao_dong',
+  // src/index.js — ghiVetVaiTro(), tham số `loaiSuKien`
+  'doi_vai_tro', 'cap_tai_khoan',
+  // nghi_viec: khai trong schema, chưa có chỗ ghi — vẫn phải có nhãn sẵn
+  'nghi_viec'
+];
+function doTuDienNhan() {
+  const thuMuc = path.join(GOC, 'src');
+  const ghiRa = new Set(LOAI_QUA_BIEN);
+  for (const f of readdirSync(thuMuc).filter(f => f.endsWith('.js'))) {
+    const s = readFileSync(path.join(thuMuc, f), 'utf8');
+    // Chỉ soi câu INSERT vào ĐÚNG bảng nhan_su_lich_su, không quét bừa cả tệp.
+    for (const m of s.matchAll(/INSERT INTO nhan_su_lich_su[\s\S]{0,400}?VALUES\s*\(([\s\S]{0,200}?)\)/g)) {
+      /* Gọt `datetime('now', '+7 hours')` đi TRƯỚC khi bóc chuỗi — không thì
+         'now' bị đọc thành một loại sự kiện và bàn đo đòi khai nhãn cho nó.
+         Cắt từ `datetime(` tới hết chứ không khớp cả cặp ngoặc: phần bắt được
+         ở trên dừng ở dấu `)` ĐẦU TIÊN, tức ngay giữa lời gọi datetime, nên
+         không bao giờ có ngoặc đóng để khớp. Cột `luc` luôn đứng cuối danh
+         sách VALUES nên cắt tới hết là an toàn. */
+      const than = m[1].replace(/datetime\([\s\S]*$/, '');
+      for (const t of than.matchAll(/'([a-z_]{3,})'/g)) ghiRa.add(t[1]);
+    }
+  }
+  const app = readFileSync(path.join(GOC, 'public', 'assets', 'js', 'app.js'), 'utf8');
+  const khoi = app.match(/const NHAN_SU_KIEN = \{([\s\S]*?)\n\s*\};/);
+  /* KHÔNG neo vào đầu dòng: từ điển khai nhiều khoá trên CÙNG một dòng
+     (`vao_lam: '…', doi_phong_ban: '…'`), neo `^` thì chỉ thấy khoá đầu mỗi
+     dòng và bàn đo báo thiếu oan đúng 5 khoá đang có sẵn. */
+  const coNhan = new Set(khoi ? [...khoi[1].matchAll(/([a-z_]{3,})\s*:/g)].map(m => m[1]) : []);
+  return { ghiRa: [...ghiRa].sort(), thieu: [...ghiRa].filter(v => !coNhan.has(v)).sort(), soNhan: coNhan.size };
+}
+
+/* ======================================================================
    PHÉP ĐO 3 — GỌI THẲNG API: không ai tự nâng quyền
    ====================================================================== */
 async function doCuaAPI(thuMucSrc) {
@@ -395,6 +443,12 @@ const kh = await doDanhSachKhopMigration(SRC);
 ok('Danh sách vị trí trong migration KHỚP src/quyen.js', kh.khop,
    kh.khop ? kh.trongMa.length + ' mã' : `SQL=[${kh.trongSql}] · mã=[${kh.trongMa}]`);
 
+const td = doTuDienNhan();
+ok(`Từ điển nhãn phủ HẾT ${td.ghiRa.length} loại sự kiện máy chủ ghi (REV-0058 ③)`,
+   td.thieu.length === 0,
+   td.thieu.length ? 'THIẾU NHÃN, hồ sơ sẽ hiện mã thô: ' + td.thieu.join(', ')
+                   : `${td.soNhan} nhãn / ${td.ghiRa.length} loại`);
+
 console.log('\n— ④ MIGRATION —');
 const mg = doMigration();
 const bang = Object.fromEntries(mg.sau.map(r => [r.nhan_su_id, r]));
@@ -511,6 +565,70 @@ const DC = [
     (f, s) => f !== 'index.js' ? s :
       s.replace(/\$\{coViTri \? "AND \(t\.vi_tri_cong_viec IS NULL OR t\.vi_tri_cong_viec != 'nv_test'\)" : ''\}/, ''),
     async (t) => (await doCuaAPI(t)).danhBaCoTest],
+  /* REV-0058 ① — `catch` trần trong coCotViTri đọc MỌI lỗi D1 thành "chưa có
+     cột", nên tài khoản tạo ra mất ô 2 mà API vẫn trả 200. Ca này bơm một lỗi
+     D1 KHÔNG PHẢI thiếu cột và đòi cửa tạo tài khoản phải HỎNG TO, không được
+     âm thầm ghi thiếu. */
+  ['I', 'catch trần nuốt lỗi D1 tạm thời thành "chưa có cột"',
+    (f, s) => f !== 'auth.js' ? s
+      : s.replace("if (!/no such column/i.test(tin) || !/vi_tri_cong_viec/i.test(tin)) throw e;", ''),
+    async (t) => {
+      const { db, d1 } = dungDB();
+      moi(db, { HUONG: 'hcns' });
+      /* `moi()` cấp tài khoản cho MỌI người, nên phải xoá tài khoản của anh
+         Linh đi thì cửa tạo mới chạy tới được chỗ cần đo — không thì nó dừng
+         ở "Nhân sự này đã có tài khoản rồi" (400) và ca đối chứng LỌT vì lý
+         do chẳng liên quan gì tới lỗi đang đo. */
+      db.prepare("DELETE FROM tai_khoan WHERE nhan_su_id = 'LINH'").run();
+      const env = dungEnv(d1);
+      const worker = await napWorker(t);
+      const token = await taoPhienThat(env, CHI_SO.SEP);
+      /* Bơm lỗi D1 tạm thời ĐÚNG MỘT LẦN, đúng vào câu dò cột — mọi câu khác
+         chạy bình thường, nên nếu cửa tạo tài khoản vẫn trả 200 thì đó là do
+         nuốt lỗi, không phải do DB chết hẳn. */
+      const that = d1.prepare.bind(d1);
+      let daBom = false;
+      d1.prepare = (sql) => {
+        if (!daBom && /SELECT vi_tri_cong_viec FROM tai_khoan LIMIT 1/.test(sql)) {
+          daBom = true;
+          return { bind: () => ({ first: async () => { throw new Error('D1_ERROR: Network connection lost'); } }),
+                   first: async () => { throw new Error('D1_ERROR: Network connection lost'); } };
+        }
+        return that(sql);
+      };
+      const r = await goiAPI(worker, env, '/api/quan-tri/tao-tai-khoan', token,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ nhan_su_id: 'LINH', ten_dang_nhap: 'linh01',
+                                 vai_tro: 'nguoi_dung', vi_tri_cong_viec: 'nhan_vien_kho' }) });
+      d1.prepare = that;
+      const dong = db.prepare("SELECT vi_tri_cong_viec FROM tai_khoan WHERE ten_dang_nhap='linh01'").get();
+      // Bắt được = "trả 200 mà ô 2 rỗng" — đúng cảnh người tạo tưởng xong.
+      return r.status === 200 && dong && dong.vi_tri_cong_viec === null;
+    }],
+  /* REV-0058 ② — dấu thời gian ghi vết phải là giờ VN như 9 chỗ ghi khác vào
+     cùng cuốn sổ. Đo bằng cách so CHÍNH dòng mình vừa ghi với một dòng do mã
+     sẵn có ghi (`vao_lam`), trong cùng một lượt chạy. */
+  ['J', 'dấu thời gian ghi vết lệch 7 tiếng so với cùng cuốn sổ',
+    (f, s) => f !== 'index.js' ? s
+      : s.replace(`VALUES (?, ?, ?, ?, ?, ?, datetime('now','+7 hours'))`,
+                  `VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`),
+    async (t) => {
+      const { db, d1 } = dungDB();
+      moi(db, { DUY: 'quan_ly_kho' });
+      const env = dungEnv(d1);
+      const worker = await napWorker(t);
+      const token = await taoPhienThat(env, CHI_SO.SEP);
+      const idTk = db.prepare("SELECT id FROM tai_khoan WHERE nhan_su_id='DUY'").get().id;
+      await goiAPI(worker, env, '/api/quan-tri/sua-vai-tro', token,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tai_khoan_id: idTk, vi_tri_cong_viec: 'nhan_vien_kho' }) });
+      const vet = db.prepare(
+        "SELECT luc FROM nhan_su_lich_su WHERE loai_su_kien='doi_vai_tro' ORDER BY id DESC LIMIT 1").get();
+      const mocVN = db.prepare("SELECT datetime('now','+7 hours') AS t").get().t;
+      if (!vet) return false;
+      // Lệch quá 1 tiếng so với giờ VN ⇒ đang ghi bằng múi giờ khác.
+      return Math.abs(new Date(vet.luc + 'Z') - new Date(mocVN + 'Z')) > 3600 * 1000;
+    }],
   ['H', 'cron nhắc nhân sự chỉ soi ô 1 (chị Hương mất hết tin nhắc)',
     (f, s) => f !== 'nhac-nhan-su.js' ? s :
       s.replace("${coViTri ? \"OR t.vi_tri_cong_viec = 'hcns'\" : ''}", ''),

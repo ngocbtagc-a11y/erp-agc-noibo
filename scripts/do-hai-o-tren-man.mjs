@@ -122,18 +122,30 @@ async function motVong(suaTep) {
       };
     })()`);
 
-    // Mở từng ô, đọc thẳng danh sách gợi ý đang hiện.
+    /* Mở từng ô, đọc danh sách gợi ý VÀ ĐO CHIỀU CAO TỪNG DÒNG.
+       REV-0058 ④: bản trước chỉ đo hai cái NÚT mở danh sách, mà nút chỉ để
+       BẬT panel — thứ ngón tay chạm để CHỌN một vai trò là `.ql-goiy-item`,
+       đo được 36,9px. Đo thứ DỄ ĐO thay vì thứ người dùng CHẠM chính là loại
+       phép đo lúc nào cũng xanh mà lỗi vẫn còn (BH-47). */
     const doc = async (nutId, goiYId) => {
       await cr.chay(`document.querySelector('#${nutId}').click(), 1`);
       await cr.chay(`new Promise(r => setTimeout(r, 300))`);
-      const ds = await cr.chay(
-        `[...document.querySelectorAll('#${goiYId} .ql-goiy-item')].map(e => e.textContent.trim())`);
+      const r = await cr.chay(`(() => {
+        const ds = [...document.querySelectorAll('#${goiYId} .ql-goiy-item')];
+        return {
+          nhan: ds.map(e => e.textContent.trim()),
+          cao: ds.map(e => Math.round(e.getBoundingClientRect().height * 10) / 10)
+        };
+      })()`);
       await cr.chay(`document.querySelector('#${nutId}').click(), 1`);
       await cr.chay(`new Promise(r => setTimeout(r, 200))`);
-      return ds || [];
+      return r || { nhan: [], cao: [] };
     };
-    kq.dsO1 = kq.coO1 ? await doc('taoTkVaiTroHienThi', 'taoTkVaiTroGoiY') : [];
-    kq.dsO2 = kq.coO2 ? await doc('taoTkViTriHienThi', 'taoTkViTriGoiY') : [];
+    const r1 = kq.coO1 ? await doc('taoTkVaiTroHienThi', 'taoTkVaiTroGoiY') : { nhan: [], cao: [] };
+    const r2 = kq.coO2 ? await doc('taoTkViTriHienThi', 'taoTkViTriGoiY') : { nhan: [], cao: [] };
+    kq.dsO1 = r1.nhan; kq.dsO2 = r2.nhan;
+    kq.caoDong = [...r1.cao, ...r2.cao];
+    kq.dongThapNhat = kq.caoDong.length ? Math.min(...kq.caoDong) : 0;
     kq.coNut = coNut;
     kq.loiConsole = cr.loiConsole.slice();
     kq.ngoaiLe = cr.ngoaiLe.slice();
@@ -149,7 +161,9 @@ function chamDo(k) {
       k.dsO2.some(x => /^Admin/.test(x))) do_.push('②');
   // Hộp thoại nằm trong .modal-nen có đệm 20px mỗi bên — trừ ra rồi mới so.
   if (k.hopPhaiCuon || k.caoHop > k.caoMan - 40) do_.push('③');
+  // ④ đo CẢ nút mở danh sách LẪN từng dòng chọn — dòng chọn mới là thứ chạm.
   if (k.caoO1 < 44 || k.caoO2 < 44) do_.push('④');
+  if (!k.caoDong.length || k.dongThapNhat < 44) do_.push('④b');
   if (k.loiConsole.length || k.ngoaiLe.length) do_.push('⑤');
   return do_;
 }
@@ -181,8 +195,13 @@ ok('② Ô 2 bỏ trống được ("— Chưa gán —")', k.dsO2.some(x => /Ch
 ok(`③ Ở ${RONG}px hộp thoại VỪA MỘT MÀN, không phải cuộn`,
    !k.hopPhaiCuon && k.caoHop <= k.caoMan - 40,
    `hộp ${Math.round(k.caoHop)}px / chỗ trống ${k.caoMan - 40}px`);
-ok('④ Vùng chạm cả hai ô ≥ 44px',
+ok('④ Nút MỞ danh sách của cả hai ô ≥ 44px',
    k.caoO1 >= 44 && k.caoO2 >= 44, `${Math.round(k.caoO1)}px · ${Math.round(k.caoO2)}px`);
+/* Phép đo quan trọng hơn phép trên: nút chỉ MỞ panel, còn thứ ngón tay chạm
+   để CHỌN là từng dòng trong panel (REV-0058 ④). */
+ok(`④ TỪNG DÒNG CHỌN vai trò/vị trí ≥ 44px (${k.caoDong.length} dòng)`,
+   k.caoDong.length > 0 && k.dongThapNhat >= 44,
+   k.caoDong.length ? `thấp nhất ${k.dongThapNhat}px` : 'KHÔNG đo được dòng nào');
 ok('⑤ Không một dòng console.error nào',
    k.loiConsole.length === 0 && k.ngoaiLe.length === 0,
    [...k.loiConsole, ...k.ngoaiLe].join(' | ') || 'sạch');
@@ -200,7 +219,13 @@ const DC = [
                   'veComboVaiTro(tienTo, () => DS_VAI_TRO_QT, hienTai')],
   ['3', 'ép hai ô cao 200px (làm hộp tràn màn)', '③',
     (s, ten) => ten !== 'app.html' ? s
-      : s.replace('</head>', '<style>#taoTkForm .combo1-hienthi{height:200px}</style></head>')]
+      : s.replace('</head>', '<style>#taoTkForm .combo1-hienthi{height:200px}</style></head>')],
+  /* DC-4 dựng lại ĐÚNG cảnh REV-0058 ④ đã bắt được: nút mở danh sách vẫn
+     44px (nên phép ④ cũ vẫn XANH), chỉ riêng dòng chọn tụt về 36,9px. Ca này
+     là bằng chứng bàn đo đã hết mù — bản trước lọt đúng ở đây. */
+  ['4', 'dòng chọn tụt về 36,9px (nút vẫn 44px — bản trước LỌT ca này)', '④b',
+    (s, ten) => ten !== 'app.html' ? s
+      : s.replace('</head>', '<style>.ql-goiy-item{min-height:0;display:block;padding:8px 10px}</style></head>')]
 ];
 
 for (const [ma, ten, mongDoi, sua] of DC) {
