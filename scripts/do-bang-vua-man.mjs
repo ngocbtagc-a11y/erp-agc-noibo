@@ -40,6 +40,7 @@
 
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readFileSync } from 'node:fs';
 import { dungMayGia, moChrome } from './lib/ban-do-chrome.mjs';
 import { ok, tongKet } from './ban-thu-d1.mjs';
 
@@ -52,49 +53,44 @@ const TU_KIEM = dso.includes('--tu-kiem');
 const RONGS = [1440, 1100, 900, 375, 320];
 
 /* ---- BẢNG CỐ Ý GIỮ CUỘN NGANG ------------------------------------------
-   Không phải bảng nào cũng ép vừa màn được, và ép bằng cách bỏ cột thì mất
-   nghĩa. Ba bảng dưới đây là bảng ĐỐI CHIẾU: người dùng mở nó ra để so hàng
-   ngang, bỏ cột là hỏng việc. Chúng được phép cuộn — NHƯNG phải nói rõ là
-   còn cột bên phải (arm E), đừng để người ta tưởng đã thấy hết. */
-const DUOC_CUON = {
-  'kd-ds-bang': 'Đối soát sàn (12 cột) — đọc theo hàng ngang để so tiền với sàn; bỏ cột là mất nghĩa đối chiếu',
-  'dh-bang':    'Đơn hoàn (11 cột) — kho đối chiếu mã vận đơn · sản phẩm · số tiền · kho nhận trên cùng một hàng',
-  'ls-bang':    'Lịch sử đơn hoàn (12 cột) — sổ tra cứu, phải giữ đủ vết để đối chiếu với sàn',
-  'kt-ts-bang': 'Kế toán tra soát (10 cột) — đối chiếu tiền hoàn với đơn gốc trên cùng một hàng',
-  'xc-kehoach-tbody': 'Ma trận xếp ca — một cột là một ngày, số cột do lịch quyết',
-  'xc-matrix-tbody':  'Ma trận xếp ca (tuần) — như trên'
-};
+   ĐỌC BẢN GỐC Ở app.js. Danh sách này TRƯỚC ĐÂY chép tay 6 bảng và đã lạc
+   hậu: `dh-bang`, `ls-bang`, `kt-ts-bang` từng được ghi là "không ép vừa màn
+   được", nhưng 04/09/2026 đo lại thì ép được — chỉ cần trả lời đúng câu
+   *"nhìn một dòng, người dùng đang cần quyết định điều gì?"* rồi cho những
+   cột không tham gia câu trả lời xuống mục "Chi tiết". Lý do nghe hợp lý
+   không có nghĩa là còn đúng.
+   Nay đọc thẳng `BANG_GIU_CUON` trong app.js — một nguồn sự thật, không có
+   bản chép thứ hai để lệch. */
+const DUOC_CUON = (function () {
+  const src = readFileSync(path.join(GOC, 'public/assets/js/app.js'), 'utf8');
+  const khoi = src.match(/const BANG_GIU_CUON = \{([\s\S]*?)\n\};/);
+  const ds = {};
+  if (khoi) for (const m of khoi[1].matchAll(/'([^']+)':\s*((?:'[^']*'(?:\s*\+\s*)?)+)/g))
+    ds[m[1]] = m[2].split('+').map(x => x.trim().replace(/^'|'$/g, '')).join('');
+  return ds;
+})();
 
-/* ---- MỐC TRÀN TRƯỚC BẢN VÁ (đo trên 755d556, cùng bàn đo này) -----------
-   Dùng làm CHỐT CHỐNG TỆ ĐI: không bảng nào được tràn nhiều hơn số này. Chỉ
-   ghi những bảng từng tràn; bảng không có tên ở đây thì mốc là 0 (đang vừa
-   màn, và phải vừa tiếp). */
-const MOC_TRAN = {
-  1440: { 'ls-cv-bang': 27, 'kd-ds-bang': 260, 'dh-bang': 294, 'ls-bang': 459,
-          'kt-ts-bang': 24, 'nsSua-hopdong': 78, 'mtModalViec': 14 },
-  1100: { 'ls-cv-bang': 367, 'db-bang': 216, 'kd-ds-bang': 600, 'kd-dhh-bang': 305,
-          'cskh-bang': 35, 'dh-bang': 634, 'ls-bang': 799, 'kt-ts-bang': 364,
-          'kt-hh-bang': 5, 'ts-bang': 131, 'nsSua-hopdong': 78, 'mtModalViec': 14 },
-  900:  { 'ls-cv-bang': 464, 'db-bang': 416, 'ns-bang': 82, 'kd-ds-bang': 800,
-          'kd-dhh-bang': 505, 'cskh-bang': 235, 'kv-ton-bang': 26, 'kv-bc-bang': 120,
-          'dh-bang': 834, 'ls-bang': 999, 'kt-ts-bang': 564, 'kt-hh-bang': 205,
-          'ts-bang': 331, 'nsSua-hopdong': 78, 'mtModalViec': 14,
-          'xc-kehoach-tbody': 6 },
-  375:  { 'ls-cv-bang': 645, 'db-bang': 613, 'knChamBang': 239, 'ns-bang': 287,
-          'kd-ds-bang': 1053, 'kd-dhh-bang': 686, 'kdsp-bang': 219, 'cskh-bang': 440,
-          'kv-bc-bang': 325, 'dh-bang': 999, 'ls-bang': 1156, 'kt-ts-bang': 737,
-          'kt-hh-bang': 402, 'ts-bang': 520, 'qtBang': 219, 'nsSua-jdBang': 285,
-          'nsSua-knBang': 285, 'nsSua-hopdong': 323, 'nsSua-lichsu': 265,
-          'mtModalViec': 267, 'kvModalLo': 265, 'kvModalLichSu': 265,
-          'xc-kehoach-tbody': 251, 'xc-matrix-tbody': 217 },
-  320:  { 'ls-cv-bang': 700, 'db-bang': 668, 'knChamBang': 294, 'ns-bang': 342,
-          'kd-ds-bang': 1108, 'kd-dhh-bang': 741, 'kdsp-bang': 274, 'cskh-bang': 495,
-          'kv-bc-bang': 380, 'dh-bang': 1054, 'ls-bang': 1211, 'kt-ts-bang': 792,
-          'kt-hh-bang': 457, 'ts-bang': 575, 'qtBang': 274, 'nsSua-jdBang': 340,
-          'nsSua-knBang': 340, 'nsSua-hopdong': 378, 'nsSua-lichsu': 320,
-          'mtModalViec': 322, 'kvModalLo': 320, 'kvModalLichSu': 320,
-          'xc-kehoach-tbody': 306, 'xc-matrix-tbody': 272 }
-};
+/* ---- MỐC TRÀN: RỖNG, VÀ PHẢI Ở LẠI RỖNG --------------------------------
+   BÀI HỌC 04/09/2026 — đây là chỗ bàn đo này từng nói dối, nên viết dài ra
+   để người sau đừng làm lại.
+
+   Ô này từng chứa "mốc tràn trước bản vá" cho 24 bảng: `ls-cv-bang` được
+   phép tràn 27px ở 1440, 367px ở 1100, 645px ở 375… Ý định ban đầu đúng —
+   vừa vá xong một lỗi thì cần cái chốt "đừng tệ hơn hôm qua". Nhưng chốt đó
+   KHÔNG CÓ HẠN DÙNG, nên nó ở lại và đổi vai: từ cái SÀN thành cái MÁI. Bảng
+   tràn đúng bằng giấy phép, bàn đo in "42 ĐẠT · 0 TRƯỢT", và người duy nhất
+   phát hiện ra ERP còn thanh kéo ngang là Sếp Ngọc — bằng ảnh chụp màn hình,
+   lần thứ hai.
+
+   Nay tất cả các mốc đã hạ về 0 và khoá bị XOÁ, không phải hạ số. Khoá còn
+   nằm đây là còn giấy phép tràn.
+
+   MUỐN THÊM KHOÁ VÀO ĐÂY: đừng. Bảng nào thật sự buộc phải kéo ngang thì
+   thêm vào `BANG_GIU_CUON` trong app.js — chỗ đó BẮT BUỘC kèm lý do bằng
+   chữ, và `do-bang-that.mjs` arm C sẽ đọc lại lý do đó. Một con số thì ai
+   cũng thêm được trong ba giây và không ai đọc lại; một câu lý do thì người
+   thêm phải nghĩ, và người sau đọc được để cãi. */
+const MOC_TRAN = { 1440: {}, 1100: {}, 900: {}, 375: {}, 320: {} };
 
 /* Mốc CỠ CHỮ và CHIỀU CAO DÒNG đo trên cùng cây 755d556. Sếp dặn thẳng: bỏ
    bớt CỘT chứ không thu nhỏ CHỮ, và không được làm giảm số dòng thấy được.
@@ -183,13 +179,32 @@ const DO_CHU_VA_DONG = `(function(){
     const r = td.getBoundingClientRect();
     if (r.height > 0) { o = td; dong = td.parentElement; break; }
   }
+  /* CHẾ ĐỘ THẺ (≤980px) — 04/09/2026. Từ bản "lưới bảng", dưới 980px bảng đổi
+     hẳn sang THẺ: một dòng = một thẻ, mỗi trường một hàng kèm nhãn. Hai phép
+     đo dưới đây phải biết chuyện đó, nếu không chúng đo sai chứ không phải
+     ứng dụng sai:
+       · chuTieuDe — thead bị ẩn, nhưng nhãn cột KHÔNG mất: nó thành
+         td::before đọc từ data-nhan. Đo đúng cái nhãn người dùng nhìn.
+       · caoDong — "chiều cao một DÒNG" không còn nghĩa gì khi một dòng là cả
+         một cái thẻ. Ở chế độ thẻ trả null và arm G bỏ qua; thứ phải canh ở
+         đó là "thẻ có đủ trường không", việc của do-bang-that.mjs arm G/G3.
+     Đây là NỚI bàn đo cũ, và ghi ngay tại đây vì sao: mốc 55px là mốc của
+     BẢNG, đem chấm một cái THẺ thì con số không nói gì cả. */
+  const cheDoThe = dong ? getComputedStyle(dong.closest('table')).display === 'block' : false;
   return {
+    cheDoThe,
     chuBody: parseFloat(cs.fontSize),
     chuO: o ? parseFloat(getComputedStyle(o).fontSize) : null,
-    chuTieuDe: (function(){ for (const th of document.querySelectorAll('thead th'))
-      if (th.getBoundingClientRect().height > 0) return parseFloat(getComputedStyle(th).fontSize);
+    chuTieuDe: (function(){
+      for (const th of document.querySelectorAll('thead th'))
+        if (th.getBoundingClientRect().height > 0) return parseFloat(getComputedStyle(th).fontSize);
+      for (const td of document.querySelectorAll('.luoi-bang tbody td[data-nhan]')) {
+        if (!td.dataset.nhan || td.getBoundingClientRect().height <= 0) continue;
+        const c2 = getComputedStyle(td, '::before');
+        if (c2.content && c2.content !== 'none') return parseFloat(c2.fontSize);
+      }
       return null; })(),
-    caoDong: dong ? Math.round(dong.getBoundingClientRect().height) : null
+    caoDong: (dong && !cheDoThe) ? Math.round(dong.getBoundingClientRect().height) : null
   };
 })()`;
 
@@ -251,9 +266,13 @@ for (const RONG of RONGS) {
      cuonMaCam.length === 0,
      cuonMaCam.map(b => b.ma).join(', '));
 
-  /* ---- C. KHÔNG BẢNG NÀO ĐƯỢC TỆ ĐI so với mốc trước bản vá ---- */
+  /* ---- C. KHÔNG BẢNG NÀO ĐƯỢC TỆ ĐI so với mốc trước bản vá ----
+     `MOC_TRAN` nay RỖNG (xem ghi chú dài ở đầu tệp), nên arm này thành "0 bảng
+     tràn". Bảng nằm trong `DUOC_CUON` được bỏ qua ở đây vì arm A đã xét chúng
+     riêng và chúng có LÝ DO viết bằng chữ trong app.js — nếu không thì arm C
+     sẽ đỏ vĩnh viễn vì đúng những bảng ta CỐ Ý cho kéo ngang. */
   const moc = MOC_TRAN[RONG] || {};
-  const teDi = hien.filter(b => b.thua > (moc[b.ma] || 0));
+  const teDi = hien.filter(b => !DUOC_CUON[b.ma] && b.thua > (moc[b.ma] || 0));
   const tongTruoc = hien.reduce((s, b) => s + (moc[b.ma] || 0), 0);
   const tongSau = hien.reduce((s, b) => s + b.thua, 0);
   ok(`C @${RONG}px · 0 bảng tràn nhiều hơn trước (tổng px tràn ${tongTruoc} → ${tongSau})`,
@@ -271,8 +290,9 @@ for (const RONG of RONGS) {
   /* ---- G. Số dòng thấy được KHÔNG được giảm ----------------------------
      Đo gián tiếp mà chắc chắn: cùng một chiều cao khung, dòng cao hơn nghĩa
      là ít dòng hơn. Mốc lấy từ chính cây trước bản vá. */
-  ok(`G @${RONG}px · chiều cao một dòng không tăng (mốc ${MOC_CAO_DONG[RONG]}px)`,
-     cd.caoDong != null && cd.caoDong <= MOC_CAO_DONG[RONG], `${cd.caoDong}px`);
+  ok(`G @${RONG}px · chiều cao một dòng không tăng (mốc ${MOC_CAO_DONG[RONG]}px)` +
+     (cd.cheDoThe ? ' — bỏ qua: đang ở chế độ THẺ, "chiều cao một dòng" không có nghĩa' : ''),
+     cd.cheDoThe || (cd.caoDong != null && cd.caoDong <= MOC_CAO_DONG[RONG]), `${cd.caoDong}px`);
 
   ok(`Z @${RONG}px · 0 lỗi console, 0 ngoại lệ`,
      cr.loiConsole.length === 0 && cr.ngoaiLe.length === 0,

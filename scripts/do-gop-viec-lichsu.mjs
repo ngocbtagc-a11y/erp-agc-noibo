@@ -458,9 +458,36 @@ for (const rong of CAC_RONG) {
   console.log(`\n--- ${rong}px ------------------------------------------------`);
   console.log(`  SỐ DÒNG THẤY ĐƯỢC — TRƯỚC: tab "Việc cần làm" ${truoc.so_dong.tab_nhan} dòng · Lịch sử ${truoc.so_dong.lichsu} dòng`);
   console.log(`                       SAU: "Việc của tôi" ${sau.so_dong['gop.toi']} dòng · "Toàn công ty" ${sau.so_dong['gop.congty']} dòng`);
-  const khongGiam = sau.so_dong['gop.toi'] >= truoc.so_dong.tab_nhan &&
-                    sau.so_dong['gop.congty'] >= truoc.so_dong.lichsu;
-  console.log(`  Số dòng KHÔNG giảm : ${khongGiam ? 'ĐẠT' : '❌ HỎNG'}`);
+  /* ------------------------------------------------------------------------
+     NỚI Ở ĐÚNG MỘT CHỖ, VÀ ĐÂY LÀ LÝ DO — 04/09/2026.
+
+     Ràng buộc "số dòng KHÔNG được giảm" GIỮ NGUYÊN ở màn rộng. Ở ≤980px nó
+     được thay bằng một ràng buộc khác, vì cái cũ đã thôi đo được thứ nó định
+     đo:
+
+     Sếp Ngọc nhắc LẦN THỨ HAI 04/09/2026 — "ưu tiên hiển thị trên 1 màn
+     hình, hạn chế thanh kéo sang". Từ bản "lưới bảng", dưới 980px bảng đổi
+     hẳn sang THẺ. Trước đó ở 375px bảng này hiện 9 dòng — nhưng là 9 dòng
+     của một cái bảng rộng 4.462px: muốn đọc người nhận hay hạn chót thì phải
+     kéo ngang. "9 dòng" đó là 9 dòng KHÔNG ĐỌC ĐƯỢC.
+
+     Nên ở màn hẹp phép đo đúng không phải "bao nhiêu dòng" mà là "một màn cho
+     ra bao nhiêu dòng ĐỌC ĐƯỢC". Chốt mới: ≥4 thẻ một màn (đo được 04/09/2026
+     là 5 — chừa đúng một thẻ dung sai, không hơn), VÀ bảng không còn kéo ngang
+     (npm run do-bang-that arm A canh việc đó: 0 bảng tràn ở 375px).
+
+     ĐỪNG hạ con số 4 này xuống nữa. Muốn nhét thêm thẻ thì bỏ bớt TRƯỜNG trên
+     thẻ — đừng bóp chữ, đừng hạ mốc. Hạ mốc đúng là cách MOC_TRAN của
+     do-bang-vua-man.mjs biến thành giấy phép và để lọt chuyện này tới tận tay
+     Sếp. */
+  const THE_TOI_THIEU = 4;
+  const cheDoThe = rong <= 980;
+  const khongGiam = cheDoThe
+    ? (sau.so_dong['gop.toi'] >= THE_TOI_THIEU && sau.so_dong['gop.congty'] >= THE_TOI_THIEU)
+    : (sau.so_dong['gop.toi'] >= truoc.so_dong.tab_nhan &&
+       sau.so_dong['gop.congty'] >= truoc.so_dong.lichsu);
+  console.log(`  Số dòng KHÔNG giảm : ${khongGiam ? 'ĐẠT' : '❌ HỎNG'}` +
+    (cheDoThe ? `  (chế độ THẺ — chốt là ≥${THE_TOI_THIEU} thẻ ĐỌC ĐƯỢC một màn, không phải số dòng của một bảng phải kéo ngang)` : ''));
   console.log(`  Nút bộ lọc ≥44px   : ${sau.nut.dat_44 ? 'ĐẠT' : '❌ HỎNG'}  (${(sau.nut.cao_nut_loc || []).join(' · ')} px)`);
   /* Cột "Đầu ra cần đạt" đo ở CẢ HAI bề ngang, không chỉ ở bề ngang đầu tiên.
      Bảng đối chiếu ① bên dưới chỉ đọc `CAC_RONG[0]`, mà đây đúng là thứ đổi

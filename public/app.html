@@ -373,22 +373,28 @@
         <div class="table-wrap">
           <table id="ls-cv-tbl">
             <thead>
-              <!-- "Đầu ra cần đạt" là CỘT RIÊNG, không phải dòng phụ chữ nhỏ.
-                   Công ty chạy MBOs: câu hỏi kỷ luật là "đầu ra cụ thể là gì?",
-                   nên Sếp phải rà được CẢ MỘT CỘT bằng mắt, thay vì đọc từng ô
-                   "Việc" đi tìm. Ngang hàng với tên việc, không phải chú thích.
-                   Ở màn hẹp (≤979px) cột này tụt xuống dòng phụ trong ô "Việc"
-                   — chỉ khi đó, và bằng CSS thuần (`.cot-daura`/`.daura-hep`
-                   trong style.css), không phải bằng JS vẽ hai kiểu. -->
+              <!-- CHỌN CỘT — Sếp Ngọc nhắc LẦN HAI 04/09/2026 "ưu tiên hiển
+                   thị trên 1 màn hình, hạn chế thanh kéo sang". Câu hỏi kỷ
+                   luật: *nhìn một dòng ở đây, người dùng đang cần quyết định
+                   điều gì?* → "việc nào đang trễ, ai đang giữ, có phải việc
+                   của tôi không".
+                     Ở LẠI   : Việc · Đầu ra · Người nhận · Hạn chót · Trạng thái
+                     DÒNG PHỤ: mô tả · phối hợp · kết quả (trong ô "Việc")
+                     CHI TIẾT: Người giao · Mục tiêu · Cập nhật — không cột nào
+                       trong ba cái đó đổi được câu trả lời trong một cái liếc.
+                   "Đầu ra cần đạt" GIỮ CỘT RIÊNG (quyết định 29/08/2026): công
+                   ty chạy MBOs, Sếp phải rà được cả cột bằng mắt. Nó chỉ thêm
+                   `.cot-chu` để có TRẦN bề ngang — một đầu ra 200 ký tự trước
+                   đây kéo bảng rộng thêm ~1.400px vì ô để `nowrap`. -->
               <tr>
-                <th>Việc</th>
-                <th class="cot-daura">Đầu ra cần đạt</th>
-                <th>Người nhận</th>
-                <th>Người giao</th>
-                <th>Mục tiêu</th>
+                <th class="cot-chu">Việc</th>
+                <th class="cot-daura cot-chu">Đầu ra cần đạt</th>
+                <th class="cot-chu">Người nhận</th>
+                <th class="cot-phu">Người giao</th>
+                <th class="cot-phu">Mục tiêu</th>
                 <th>Hạn chót</th>
                 <th>Trạng thái</th>
-                <th>Cập nhật</th>
+                <th class="cot-phu">Cập nhật</th>
                 <th></th>
               </tr>
             </thead>
@@ -428,8 +434,8 @@
                 <th>Trạng thái</th>
                 <th>Bộ phận</th>
                 <th>Điện thoại</th>
-                <th>Email</th>
-                <th>Quản lý trực tiếp</th>
+                <th class="cot-phu">Email</th>
+                <th class="cot-phu">Quản lý trực tiếp</th>
                 <th></th>
               </tr>
             </thead>
@@ -565,8 +571,8 @@
         <div class="table-wrap gy-chi-may">
           <table>
             <thead><tr>
-              <th>Mã</th><th>Tiêu đề</th><th>Trạng thái</th><th>Đang chờ ai</th>
-              <th id="gy-cot-nguoigui" hidden>Người gửi</th><th>Ngày gửi</th>
+              <th>Mã</th><th class="cot-chu">Tiêu đề</th><th>Trạng thái</th><th>Đang chờ ai</th>
+              <th id="gy-cot-nguoigui" class="cot-phu" hidden>Người gửi</th><th class="cot-phu">Ngày gửi</th>
               <th id="gy-cot-ruiro" hidden>Rủi ro</th><th></th>
             </tr></thead>
             <tbody id="gy-bang"></tbody>
@@ -1007,7 +1013,7 @@
             <div class="jd-nhac-vitri" id="knChamNhac"></div>
             <div class="table-wrap">
               <table>
-                <thead><tr><th>Kỹ năng</th><th>Mức</th><th>Ai xác nhận</th><th></th></tr></thead>
+                <thead><tr><th class="cot-chu">Kỹ năng</th><th>Mức</th><th>Ai xác nhận</th><th></th></tr></thead>
                 <tbody id="knChamBang"></tbody>
               </table>
             </div>
@@ -1051,7 +1057,7 @@
                      rời: ERP chạy trên điện thoại, mỗi cột thêm là một lần
                      phải kéo ngang. Ngày vào làm đã có sẵn cột bên cạnh. -->
                 <th id="ns-thHopDong" hidden>Hợp đồng</th>
-                <th>Vào làm</th>
+                <th class="cot-phu">Vào làm</th>
                 <th class="num" id="ns-thLuong">Lương</th>
                 <th id="ns-thThaoTac" hidden></th>
               </tr>
@@ -1121,9 +1127,9 @@
                 <th class="dinh-cot2">Mã đơn hoàn</th>
                 <th class="dinh-cot3">Đơn gốc</th>
                 <th class="dinh-cot4">Mã vận đơn</th>
-                <th>Sản phẩm hoàn về</th>
+                <th class="cot-chu">Sản phẩm hoàn về</th>
                 <th class="num">Số lượng</th>
-                <th>Lý do</th>
+                <th class="cot-chu">Lý do</th>
                 <th>Trạng thái trên sàn</th>
                 <th class="num">Số tiền</th>
                 <th>Đã tra soát</th>
@@ -1151,15 +1157,15 @@
           <table>
             <thead>
               <tr>
-                <th>Nguồn</th>
+                <th class="cot-phu">Nguồn</th>
                 <th>Ngày</th>
                 <th>Mã đơn hàng</th>
                 <th id="kd-dhh-th-mavandon" hidden>Mã vận đơn</th>
-                <th>Người mua</th>
-                <th>Sản phẩm</th>
+                <th class="cot-phu">Người mua</th>
+                <th class="cot-chu">Sản phẩm</th>
                 <th class="num">Giá trị đơn</th>
-                <th>Ai hủy</th>
-                <th>Lý do hủy</th>
+                <th class="cot-chu">Ai hủy</th>
+                <th class="cot-phu cot-chu">Lý do hủy</th>
               </tr>
             </thead>
             <tbody id="kd-dhh-bang"></tbody>
@@ -1227,7 +1233,7 @@
             <table>
               <thead>
                 <tr>
-                  <th>Sản phẩm</th>
+                  <th class="cot-chu">Sản phẩm</th>
                   <th>Mã hàng</th>
                   <th>Đơn vị</th>
                   <th>Trạng thái</th>
@@ -1264,8 +1270,8 @@
             <table>
               <thead>
                 <tr>
-                  <th style="width:40px">#</th>
-                  <th>Khách hàng</th>
+                  <th class="cot-phu" style="width:40px">#</th>
+                  <th class="cot-chu">Khách hàng</th>
                   <th>Nguồn</th>
                   <th class="num">Tổng đơn hoàn/hủy</th>
                   <th class="num">Trong đó hủy</th>
@@ -1319,7 +1325,7 @@
             <table>
               <thead>
                 <tr>
-                  <th>Sản phẩm</th>
+                  <th class="cot-chu">Sản phẩm</th>
                   <th>Mã hàng</th>
                   <th class="num">Tồn</th>
                   <th>HSD gần nhất</th>
@@ -1493,7 +1499,7 @@
             <table>
               <thead>
                 <tr>
-                  <th>Sản phẩm</th>
+                  <th class="cot-chu">Sản phẩm</th>
                   <th>Mã hàng</th>
                   <th class="num">Tồn đầu kỳ</th>
                   <th class="num">Nhập</th>
@@ -1537,16 +1543,16 @@
             <table>
               <thead>
                 <tr>
-                  <th>Nguồn</th>
-                  <th>Ngày</th>
+                  <th class="cot-phu">Nguồn</th>
+                  <th class="cot-phu">Ngày</th>
                   <th>Mã đơn hoàn</th>
-                  <th>Đơn gốc</th>
-                  <th>Mã vận đơn</th>
-                  <th>Sản phẩm hoàn về</th>
+                  <th class="cot-phu">Đơn gốc</th>
+                  <th class="cot-phu">Mã vận đơn</th>
+                  <th class="cot-chu">Sản phẩm hoàn về</th>
                   <th class="num">Số lượng</th>
                   <th>Trạng thái trên sàn</th>
-                  <th class="num">Số tiền</th>
-                  <th>Người mua</th>
+                  <th class="num cot-phu">Số tiền</th>
+                  <th class="cot-phu">Người mua</th>
                   <th>Kho nhận</th>
                 </tr>
               </thead>
@@ -1582,18 +1588,18 @@
             <table>
               <thead>
                 <tr>
-                  <th>Nguồn</th>
-                  <th>Ngày</th>
+                  <th class="cot-phu">Nguồn</th>
+                  <th class="cot-phu">Ngày</th>
                   <th>Mã đơn hoàn</th>
-                  <th>Đơn gốc</th>
-                  <th>Mã vận đơn</th>
-                  <th>Sản phẩm hoàn về</th>
+                  <th class="cot-phu">Đơn gốc</th>
+                  <th class="cot-phu">Mã vận đơn</th>
+                  <th class="cot-chu">Sản phẩm hoàn về</th>
                   <th class="num">Số lượng</th>
-                  <th>Trạng thái trên sàn</th>
-                  <th class="num">Số tiền</th>
-                  <th>Người mua</th>
+                  <th class="cot-phu">Trạng thái trên sàn</th>
+                  <th class="num cot-phu">Số tiền</th>
+                  <th class="cot-phu">Người mua</th>
                   <th>Trạng thái xử lý</th>
-                  <th>Người thực hiện</th>
+                  <th class="cot-chu">Người thực hiện</th>
                 </tr>
               </thead>
               <tbody id="ls-bang"></tbody>
@@ -1721,13 +1727,13 @@
             <thead>
               <tr>
                 <th style="width:40px"><input type="checkbox" id="kt-ts-chontatca" title="Chọn tất cả"></th>
-                <th>Nguồn</th>
+                <th class="cot-phu">Nguồn</th>
                 <th>Mã đơn hoàn</th>
-                <th>Đơn gốc</th>
-                <th>Về từ đâu</th>
-                <th>Sản phẩm hoàn về</th>
+                <th class="cot-phu">Đơn gốc</th>
+                <th class="cot-phu">Về từ đâu</th>
+                <th class="cot-chu">Sản phẩm hoàn về</th>
                 <th class="num">Số lượng</th>
-                <th>Lý do</th>
+                <th class="cot-phu cot-chu">Lý do</th>
                 <th class="num">Số tiền hoàn</th>
                 <th></th>
               </tr>
@@ -1761,8 +1767,8 @@
                 <th style="width:40px"><input type="checkbox" id="kt-hh-chontatca" title="Chọn tất cả"></th>
                 <th>Nguồn</th>
                 <th>Mã đơn hoàn</th>
-                <th>Đơn gốc</th>
-                <th>Sản phẩm</th>
+                <th class="cot-phu">Đơn gốc</th>
+                <th class="cot-chu">Sản phẩm</th>
                 <th class="num">Số lượng</th>
                 <th>Kho phân loại</th>
               </tr>
@@ -1922,11 +1928,11 @@
               <tr>
                 <th style="width:28px"><input type="checkbox" id="ts-chontatca"></th>
                 <th>Mã TS</th>
-                <th>Tên</th>
-                <th>Danh mục</th>
+                <th class="cot-chu">Tên</th>
+                <th class="cot-phu">Danh mục</th>
                 <th>Trạng thái</th>
-                <th>Đang giữ</th>
-                <th>Vị trí</th>
+                <th class="cot-chu">Đang giữ</th>
+                <th class="cot-phu">Vị trí</th>
                 <th>Thao tác</th>
               </tr>
             </thead>
@@ -2670,7 +2676,7 @@
 
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Đầu ra (bàn giao được)</th><th>Đo bằng</th><th>Nhịp</th><th></th></tr></thead>
+          <thead><tr><th class="cot-chu">Đầu ra (bàn giao được)</th><th class="cot-chu">Đo bằng</th><th>Nhịp</th><th></th></tr></thead>
           <tbody id="nsSua-jdBang"></tbody>
         </table>
       </div>
@@ -2746,7 +2752,7 @@
 
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Kỹ năng</th><th>Mức</th><th>Ai xác nhận</th><th></th></tr></thead>
+          <thead><tr><th class="cot-chu">Kỹ năng</th><th>Mức</th><th class="cot-phu">Ai xác nhận</th><th></th></tr></thead>
           <tbody id="nsSua-knBang"></tbody>
         </table>
       </div>
@@ -2908,7 +2914,7 @@
     <div class="kv-md-muc">Lịch sử thay đổi</div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Thời gian</th><th>Thay đổi</th><th>Người thực hiện</th></tr></thead>
+        <thead><tr><th>Thời gian</th><th class="cot-chu">Thay đổi</th><th>Người thực hiện</th></tr></thead>
         <tbody id="nsSua-lichsu"></tbody>
       </table>
     </div>
@@ -3208,9 +3214,9 @@
       <table>
         <thead>
           <tr>
-            <th>Việc</th>
-            <th>Người nhận</th>
-            <th>Người giao</th>
+            <th class="cot-chu">Việc</th>
+            <th class="cot-chu">Người nhận</th>
+            <th class="cot-phu">Người giao</th>
             <th>Hạn chót</th>
             <th>Trạng thái</th>
           </tr>
@@ -3245,7 +3251,7 @@
     <div class="kv-md-muc">Lịch sử gần đây</div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Thời gian</th><th>Loại</th><th class="num">SL</th><th>Đối tác</th><th>Người</th></tr></thead>
+        <thead><tr><th>Thời gian</th><th>Loại</th><th class="num">SL</th><th class="cot-chu">Đối tác</th><th class="cot-phu">Người</th></tr></thead>
         <tbody id="kvModalLichSu"></tbody>
       </table>
     </div>
