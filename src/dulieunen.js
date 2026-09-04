@@ -46,7 +46,7 @@ export async function ghiLichSuThayDoi(env, phien, bang, banGhiId, thayDoi) {
    được phép sửa, trả về Response lỗi nếu bị chặn. */
 function batBuocDuocSuaKhoa(phien, hienCo) {
   if (hienCo.trang_thai !== 'da_khoa') return null;   // còn nháp, ai có quyền sửa danh mục đều sửa được
-  if (laAdmin(phien.vai_tro)) return null;             // Admin luôn sửa được kể cả đã khoá
+  if (laAdmin(phien)) return null;             // Admin luôn sửa được kể cả đã khoá
   return loi('Dữ liệu này đã khoá — cần Admin sửa hoặc mở khoá lại', 403);
 }
 
@@ -131,7 +131,7 @@ async function khoaDanhMuc(env, phien, bang, body) {
   const id = parseInt(body?.id, 10) || 0;
   if (!id) return loi('Thiếu id');
   const muon = body.trang_thai === 'da_khoa' ? 'da_khoa' : 'nhap';
-  if (muon === 'nhap' && !laAdmin(phien.vai_tro)) {
+  if (muon === 'nhap' && !laAdmin(phien)) {
     return loi('Chỉ Admin mới mở khoá lại được', 403);
   }
   await env.DB.prepare(`UPDATE ${bang} SET trang_thai = ? WHERE id = ?`).bind(muon, id).run();
@@ -144,10 +144,10 @@ async function khoaDanhMuc(env, phien, bang, body) {
    ai có tab "Dữ liệu nền" cũng xem được — không kiểm ở đây, kiểm ở tầng
    router (index.js) theo tab, giống cách Kho vận đang làm. */
 function batBuocToChuc(phien) {
-  return duocThemNhanSu(phien.vai_tro) ? null : loi('Bạn không có quyền sửa Phòng ban/Chức danh', 403);
+  return duocThemNhanSu(phien) ? null : loi('Bạn không có quyền sửa Phòng ban/Chức danh', 403);
 }
 function batBuocHangHoa(phien) {
-  return duocQuanLyKho(phien.vai_tro) ? null : loi('Bạn không có quyền sửa Đơn vị tính', 403);
+  return duocQuanLyKho(phien) ? null : loi('Bạn không có quyền sửa Đơn vị tính', 403);
 }
 
 /* ==========================================================================
@@ -209,7 +209,7 @@ export const khoaChucDanh = (env, phien, body) =>
    không viết lại logic khoá/Search Before Create riêng cho 2 bảng này.
    ========================================================================== */
 function batBuocTaiSan(phien) {
-  return duocQuanLyTaiSan(phien.vai_tro) ? null : loi('Bạn không có quyền sửa Danh mục/Vị trí tài sản', 403);
+  return duocQuanLyTaiSan(phien) ? null : loi('Bạn không có quyền sửa Danh mục/Vị trí tài sản', 403);
 }
 export const danhSachDanhMucTaiSan = (env) => danhSachDanhMuc(env, 'tai_san_danh_muc');
 export const themDanhMucTaiSan = (env, phien, body) =>
@@ -312,7 +312,7 @@ export const khoaNhaCungCap = (env, phien, body) => {
    sẵn để mở kho 2 không cần sửa code).
    ========================================================================== */
 function batBuocKho(phien) {
-  return laAdmin(phien.vai_tro) ? null : loi('Chỉ Admin mới quản lý được danh sách Kho', 403);
+  return laAdmin(phien) ? null : loi('Chỉ Admin mới quản lý được danh sách Kho', 403);
 }
 export async function danhSachKho(env) {
   return danhSachDanhMuc(env, 'kho', ', dia_chi');

@@ -1923,8 +1923,18 @@ tr.canh-bao:hover > td { background: #fbdbd6; }
    chọn, bấm vào mới mở khung tìm+chọn (không tách ô tìm với dropdown thành
    2 control riêng). */
 .combo1 { position: relative; }
+/* min-height 44px — LUẬT NHÀ VỀ NGÓN TAY, không phải trang trí.
+   Đo được 04/09/2026 khi tách vai trò khỏi vị trí: nút combobox này cao đúng
+   38px ở 375px (đệm 9px + chữ 14px), tức DƯỚI ngưỡng chạm ở CẢ HAI MƯƠI chỗ
+   đang dùng `.combo1` — không riêng gì hai ô mới. Thêm ô thứ hai làm số nút
+   hụt ngưỡng trên màn Tạo tài khoản tăng gấp đôi, nên vá ở ĐÚNG MỘT CHỖ (lớp
+   dùng chung) thay vì chỉ nống hai ô mới lên rồi để mười tám chỗ kia nguyên
+   trạng — làm thế mới là chữa triệu chứng (docs/LUAT-GOP-Y-LA-TRIEU-CHUNG.md).
+   Chỉ +6px mỗi ô; dùng `min-height` chứ không `height` để combo có chữ dài
+   xuống dòng vẫn tự cao thêm được. */
 .combo1-hienthi {
   width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  min-height: 44px;
   padding: 9px 12px; border: 1px solid var(--line); border-radius: var(--r-sm);
   background: var(--white); font-family: inherit; font-size: 14px; color: var(--text);
   cursor: pointer; text-align: left;
@@ -1941,7 +1951,18 @@ tr.canh-bao:hover > td { background: #fbdbd6; }
 .combo1-panel[hidden] { display: none; }
 .combo1-panel input[type="search"] { margin-bottom: 6px; }
 .combo1-panel .ql-goiy { max-height: 220px; overflow-y: auto; border: none; margin: 0; }
-.ql-goiy-item { padding: 8px 10px; font-size: 13.5px; cursor: pointer; border-radius: 8px; }
+/* min-height 44px — ĐÂY MỚI LÀ THỨ NGƯỜI TA BẤM THẬT (REV-0058 ④).
+   Nút `.combo1-hienthi` chỉ MỞ danh sách ra; cái mà ngón tay chạm để CHỌN một
+   vai trò là dòng này, và nó đo được 36,9px — hụt ngưỡng còn nhiều hơn cả cái
+   nút. Bàn đo vòng trước mù chỗ này vì chỉ đo hai cái NÚT, tức đo thứ DỄ ĐO
+   chứ không đo thứ người dùng CHẠM; nay `do-hai-o-tren-man.mjs` mở panel ra và
+   đo từng dòng gợi ý.
+   Dùng flex + align-items để chữ vẫn nằm giữa theo chiều dọc khi dòng cao
+   thêm, và `min-height` để lựa chọn có chữ dài xuống dòng vẫn tự cao được. */
+.ql-goiy-item {
+  padding: 8px 10px; font-size: 13.5px; cursor: pointer; border-radius: 8px;
+  min-height: 44px; display: flex; align-items: center;
+}
 .ql-goiy-item:hover { background: var(--surface); }
 .ql-goiy-item.active { background: var(--sage-wash); font-weight: 600; }
 .ql-goiy-nhom { padding: 8px 10px 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .3px; color: var(--text-mute); }

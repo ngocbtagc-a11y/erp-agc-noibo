@@ -208,7 +208,7 @@ async function goiTheoShop(env, path, kn, thamSo = {}) {
 
 /* Trạng thái kết nối — cho tab Đơn hoàn vẽ đúng (đã nối hay chưa) */
 export async function apiTrangThai(env, phien) {
-  if (!duocXemDonHoan(phien.vai_tro)) return loi('Bạn không có quyền xem Đơn hoàn', 403);
+  if (!duocXemDonHoan(phien)) return loi('Bạn không có quyền xem Đơn hoàn', 403);
   const cauHinh = daCauHinh(env);
   const kn = cauHinh ? await env.DB.prepare('SELECT shop_id, token_het_han, cap_nhat_luc FROM shopee_ket_noi LIMIT 1').first() : null;
   return json({
@@ -216,13 +216,13 @@ export async function apiTrangThai(env, phien) {
     da_ket_noi: !!kn,
     shop_id: kn ? kn.shop_id : null,
     cap_nhat_luc: kn ? kn.cap_nhat_luc : null,
-    quyen: { quan_ly: duocQuanLyShopee(phien.vai_tro) }
+    quyen: { quan_ly: duocQuanLyShopee(phien) }
   });
 }
 
 /* Bắt đầu kết nối: chuyển hướng sang trang ủy quyền của Shopee (admin) */
 export async function apiConnect(env, phien) {
-  if (!duocQuanLyShopee(phien.vai_tro)) return loi('Chỉ Admin mới được kết nối Shopee', 403);
+  if (!duocQuanLyShopee(phien)) return loi('Chỉ Admin mới được kết nối Shopee', 403);
   if (!daCauHinh(env)) return loi('Chưa nạp khóa Shopee (partner_id/partner_key) trên máy chủ', 409);
   const url = await linkUyQuyen(env);
   return new Response(null, { status: 302, headers: { Location: url } });
@@ -322,7 +322,7 @@ export async function dongBoNen(env) {
 
 /* Đồng bộ đơn hoàn: kéo get_return_list về, lưu vào bảng don_hoan (nút bấm) */
 export async function apiDongBo(env, phien) {
-  if (!duocXemDonHoan(phien.vai_tro)) return loi('Bạn không có quyền', 403);
+  if (!duocXemDonHoan(phien)) return loi('Bạn không có quyền', 403);
   if (!daCauHinh(env)) return loi('Chưa nạp khóa Shopee trên máy chủ', 409);
   const co = await env.DB.prepare('SELECT shop_id FROM shopee_ket_noi LIMIT 1').first();
   if (!co) return loi('Chưa kết nối shop Shopee. Hãy bấm “Kết nối Shopee” trước.', 409);
@@ -336,7 +336,7 @@ export async function apiDongBo(env, phien) {
 
 /* Danh sách đơn hoàn đã lưu (để tab hiển thị) */
 export async function apiDanhSach(env, phien) {
-  if (!duocXemDonHoan(phien.vai_tro)) return loi('Bạn không có quyền', 403);
+  if (!duocXemDonHoan(phien)) return loi('Bạn không có quyền', 403);
   // Đơn cũ sàn không trả SKU (san_pham_sku NULL) thì lấy tạm SKU đã ghép tay
   // trong sku_map theo đúng tên sản phẩm — xem migrations/them-sku-map.sql.
   // Đơn bị HUỶ trên sàn thường KHÔNG có hàng vật lý quay lại nên loại khỏi
@@ -543,7 +543,7 @@ export async function dongBoDonHangNen(env) {
 
 /* Nút "Đồng bộ đơn hàng" ở tab Kinh doanh — ai xem được Kinh doanh đều bấm được */
 export async function apiDongBoDonHang(env, phien) {
-  if (!duocXemTab(phien.vai_tro, 'kinhdoanh')) return loi('Bạn không có quyền', 403);
+  if (!duocXemTab(phien, 'kinhdoanh')) return loi('Bạn không có quyền', 403);
   if (!daCauHinh(env)) return loi('Chưa nạp khóa Shopee trên máy chủ', 409);
   if (!(await coBangDonHang(env))) return loi('Chưa nạp migration them-donhang.sql trên máy chủ', 409);
   const co = await env.DB.prepare('SELECT shop_id FROM shopee_ket_noi LIMIT 1').first();

@@ -2513,7 +2513,10 @@
                 <th>Nhân sự</th>
                 <th>Bộ phận</th>
                 <th>Tài khoản</th>
-                <th>Vai trò</th>
+                <!-- Hai ô gộp lại một cột: "Admin backup · Kế toán trưởng".
+                     Tách thành hai cột thì bảng Quản trị vượt bề ngang điện
+                     thoại — cùng cột, ngăn bằng "·", đọc vẫn rõ. -->
+                <th>Vai trò · Vị trí</th>
                 <th>Thao tác</th>
               </tr>
             </thead>
@@ -3437,8 +3440,13 @@
         <label>Tên đăng nhập (số điện thoại) *</label>
         <input maxlength="80" type="text" id="taoTkTen" required placeholder="09xx xxx xxx">
       </div>
-      <div class="field field-rong">
-        <label>Vai trò *</label>
+      <!-- HAI Ô, KHÔNG PHẢI MỘT (Sếp Ngọc chốt 04/09/2026: "gộp 2 vai trò như
+           này ko biết phân quyền kiểu gì nhé, tách ra 2 vai trò đi").
+           Cố ý dùng `.field` chứ KHÔNG `.field-rong`: hai ô nằm CẠNH nhau
+           trên lưới .form-luoi khi màn còn chỗ, nên form KHÔNG cao thêm một
+           hàng so với bản một ô. -->
+      <div class="field">
+        <label>Vai trò hệ thống *</label>
         <div class="combo1" id="taoTkVaiTroCombo">
           <button type="button" class="combo1-hienthi rong" id="taoTkVaiTroHienThi">
             <span>Chọn vai trò...</span>
@@ -3450,6 +3458,20 @@
           </div>
         </div>
         <input type="hidden" id="taoTkVaiTro">
+      </div>
+      <div class="field">
+        <label>Vị trí công việc</label>
+        <div class="combo1" id="taoTkViTriCombo">
+          <button type="button" class="combo1-hienthi rong" id="taoTkViTriHienThi">
+            <span>Chưa gán vị trí</span>
+            <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+          <div class="combo1-panel" id="taoTkViTriPanel" hidden>
+            <input maxlength="80" type="search" id="taoTkViTriTim" placeholder="Tìm vị trí...">
+            <div class="ql-goiy" id="taoTkViTriGoiY"></div>
+          </div>
+        </div>
+        <input type="hidden" id="taoTkViTri">
       </div>
       <div class="field field-nut" style="display:flex; gap:10px">
         <button type="submit" class="btn-primary" id="taoTkNutLuu" style="width:auto">Tạo tài khoản</button>
@@ -3466,8 +3488,10 @@
     <h4>Đổi vai trò</h4>
     <p class="modal-nhac">Cho <b id="doiVaiTroHoTen">—</b> — đang là <b id="doiVaiTroHienTai">—</b></p>
     <form id="doiVaiTroForm" class="form-luoi" autocomplete="off">
-      <div class="field field-rong">
-        <label>Vai trò mới *</label>
+      <!-- Hai ô — xem chú thích ở hộp Tạo tài khoản phía trên. Ô 1 chỉ hiện
+           với người cấp được tài khoản; HCNS chỉ thấy ô 2 (app.js ẩn ô 1). -->
+      <div class="field" id="doiVaiTroO1">
+        <label>Vai trò hệ thống *</label>
         <div class="combo1" id="doiVaiTroMoiCombo">
           <button type="button" class="combo1-hienthi rong" id="doiVaiTroMoiHienThi">
             <span>Chọn vai trò...</span>
@@ -3479,6 +3503,20 @@
           </div>
         </div>
         <input type="hidden" id="doiVaiTroMoi">
+      </div>
+      <div class="field" id="doiVaiTroO2">
+        <label>Vị trí công việc</label>
+        <div class="combo1" id="doiViTriCombo">
+          <button type="button" class="combo1-hienthi rong" id="doiViTriHienThi">
+            <span>Chưa gán vị trí</span>
+            <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+          <div class="combo1-panel" id="doiViTriPanel" hidden>
+            <input maxlength="80" type="search" id="doiViTriTim" placeholder="Tìm vị trí...">
+            <div class="ql-goiy" id="doiViTriGoiY"></div>
+          </div>
+        </div>
+        <input type="hidden" id="doiViTri">
       </div>
       <div class="field field-nut" style="display:flex; gap:10px">
         <button type="submit" class="btn-primary" id="doiVaiTroNutLuu" style="width:auto">Lưu</button>
