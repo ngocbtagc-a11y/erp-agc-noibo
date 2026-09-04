@@ -278,13 +278,13 @@ function viec(id, trangThai) {
    vai nhân viên, còn ca nào cần phủ hết tab/khối thì đóng vai Admin. Đóng sai
    vai là phép đo xanh mà không chứng minh gì. */
 async function moPhien({ goBoc = false, boChongChongCheo = false, ghiHong = false,
-                         boQuenTabNen = false,
+                         boQuenTabNen = false, doiThuTuDangKy = false,
                          laAdmin = true, suaThem = null } = {}) {
   const dem = new Map();
-  const trangThai = { choDuyet: 2, canLyDo: false };
+  const trangThai = { choDuyet: 2, canLyDo: false, tenPhongBan: 'Kho vận' };
   /* Chốt tự kiểm cho ca đối chứng: chuỗi thay thế mà TRƯỢT thì ca đó đang
      chạy trên bản LÀNH và không chứng minh gì — phải biết ngay. */
-  const daGai = { goBoc: false, boChong: false, quenTabNen: false };
+  const daGai = { goBoc: false, boChong: false, quenTabNen: false, doiThuTu: false };
   const may = await dungMayGia({
     tatHoatAnh: true,
     suaTep: (s, f) => {
@@ -309,6 +309,22 @@ async function moPhien({ goBoc = false, boChongChongCheo = false, ghiHong = fals
         const moi = s.replace('  if (tabTrinhDuyetAn()) return false;',
                               '  /* ĐỐI CHỨNG: đã quên hỏi tab nền */');
         daGai.quenTabNen = moi !== s; s = moi;
+      }
+      if (f === 'assets/js/app.js' && doiThuTuDangKy) {
+        /* ĐỐI CHỨNG ⑤ — một refactor AI CŨNG CÓ THỂ LÀM: dời lời đăng ký
+           `taiDanhMucNen` từ đầu tệp xuống cuối. Không đổi gì khác. Thứ tự
+           đăng ký quyết định thứ tự chạy, nên ô chọn Phòng ban sẽ vẽ lại
+           TRƯỚC khi kho danh mục nền kịp nạp — và nói dối trở lại.
+           Ca ⑫ phải bắt được; nếu không thì bản vá đang sống nhờ một điều
+           kiện ngầm mà không ai canh (REV-0057 vòng 5 · ①). */
+        const mo = s.indexOf('const taiDanhMucNen = ngheDuLieu(');
+        const dong = s.indexOf('window.LAM_MOI_DANHMUC_NEN = taiDanhMucNen;');
+        if (mo >= 0 && dong > mo) {
+          const khoi = s.slice(mo, dong) + 'window.LAM_MOI_DANHMUC_NEN = taiDanhMucNen;';
+          const NEO = 'window.LAM_MOI_DANHMUC_NEN = taiDanhMucNen;';
+          s = s.slice(0, mo) + s.slice(dong + NEO.length) + '\n' + khoi + '\n';
+          daGai.doiThuTu = true;
+        }
       }
       if (suaThem) s = suaThem(s, f);
       return s;
@@ -353,9 +369,26 @@ async function moPhien({ goBoc = false, boChongChongCheo = false, ghiHong = fals
       if (duong === '/api/hoan/danh-sach') return traJson({ don_hoan: [] }) || true;
       if (duong === '/api/kho/san-pham') return traJson({ san_pham: [], quyen: {} }) || true;
       if (duong === '/api/thong-bao/da-xem') return traJson({ ok: true }) || true;
+      /* Màn Xếp ca nay chạy sâu hơn (ô chọn đã có phòng ban thật) nên chạm tới
+         những đường này — máy giả phải trả ĐÚNG KHUÔN, không thì cổng đỏ vì
+         BÀN ĐO chứ không phải vì sản phẩm. */
+      if (duong === '/api/ca/ma-tran-tuan')
+        return traJson({ ca_mo: [], dang_ky: [], lich: [], ke_hoach: [], mau_ca: [],
+                         nhan_su: [], phong_ban: [], khoa: 0 }) || true;
+      if (duong === '/api/ca/mau-ca') return traJson({ ds: [] }) || true;
+      if (duong === '/api/ca/dang-mo') return traJson({ ca_mo: [], dang_ky: [] }) || true;
+      if (duong === '/api/ca/lich-cua-toi') return traJson({ ds: [] }) || true;
       if (duong === '/api/dulieunen/tinh-trang')
         return traJson({ muc: [], viec_tiep_theo: [] }) || true;
-      if (duong === '/api/dulieunen/phong-ban' || duong === '/api/dulieunen/chuc-danh'
+      /* Phòng ban trả TÊN THEO TRẠNG THÁI: ghi xong thì đổi tên, để ca ⑫ đo
+         được bằng CHỮ trong ô chọn chứ không phải bằng số lượt gọi. */
+      if (duong === '/api/dulieunen/phong-ban')
+        return traJson({ ds: [{ id: 1, ten: trangThai.tenPhongBan, hoat_dong: 1 }] }) || true;
+      if (duong === '/api/dulieunen/phong-ban/sua') {
+        trangThai.tenPhongBan = 'Kho vận ĐỔI TÊN';
+        return traJson({ ok: true }) || true;
+      }
+      if (duong === '/api/dulieunen/chuc-danh'
        || duong === '/api/dulieunen/don-vi' || duong === '/api/dulieunen/ncc'
        || duong === '/api/dulieunen/kho' || duong === '/api/dulieunen/tai-san-danh-muc'
        || duong === '/api/dulieunen/tai-san-vi-tri') return traJson({ ds: [] }) || true;
@@ -641,6 +674,39 @@ console.log('\n⑪ HAI TAB ERP CÙNG MỞ — bấm ở tab này, tab kia phải
    đúng MỘT lỗi và bàn đo PHẢI đỏ ở đúng chỗ tương ứng. Ba lỗi này chính là ba
    lỗi Hồ Ly gài trong REV-0057; bản đầu chỉ bắt được ca ⑩a.
    ------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------
+   ⑫ Ô CHỌN PHÒNG BAN Ở XẾP CA — đo bằng CHỮ, không đếm lượt gọi.
+   Bản vá vòng 3 ở đây CÓ chạy, CÓ gọi mạng, mà vẫn vẽ ra tên cũ — đếm lượt
+   gọi thì xanh, đọc chữ mới thấy đỏ. Và nó sống nhờ MỘT ĐIỀU KIỆN NGẦM: lời
+   đăng ký `taiDanhMucNen` phải nằm TRƯỚC, vì đài chạy lần lượt theo thứ tự
+   đăng ký. Dời lời đăng ký đó xuống cuối tệp — một việc dọn dẹp ai cũng có
+   thể làm — là lỗi quay lại mà không phép đo nào kêu (REV-0057 vòng 5 · ①).
+   Ca này là người canh cho điều kiện ngầm đó.
+   ------------------------------------------------------------------------- */
+console.log('\n⑫ Ô CHỌN PHÒNG BAN Ở XẾP CA — đọc CHỮ trong ô, không đếm lượt gọi');
+let oLanh = null;   // giá trị ô chọn ở BẢN LÀNH, để ⑩e đối chiếu
+const DOC_O_PHONGBAN = `(() => {
+  const o = document.querySelector('#xcPhongBan');
+  if (!o) return 'KHÔNG CÓ Ô CHỌN';
+  return [...o.options].map(x => x.textContent.trim()).join(' | ');
+})()`;
+{
+  const q = await moPhien();
+  await q.moTab('xepca');
+  await q.cr.doi(600);
+  const truoc = await q.cr.chay(DOC_O_PHONGBAN);
+  ok('⑫a ô chọn đọc được, đang là tên cũ', truoc.includes('Kho vận') && !truoc.includes('ĐỔI TÊN'),
+    'ô chọn = ' + truoc);
+  await q.cr.chay(`window.__API.dlnSuaPhongBan(1, { ten: 'Kho vận ĐỔI TÊN' })`);
+  await q.cr.doi(900);
+  const sau = await q.cr.chay(DOC_O_PHONGBAN);
+  oLanh = String(sau);   // giữ lại cho ca đối chứng ⑩e so sánh
+  ok('⑫b đổi tên phòng ban → CHỮ trong ô chọn đổi theo, không F5',
+    sau.includes('ĐỔI TÊN'), 'ô chọn = ' + sau +
+    (sau.includes('ĐỔI TÊN') ? '' : '  ❌ vẫn vẽ ra tên cũ — bản vá không chạy'));
+  q.dong();
+}
+
 console.log('\n⑩ ĐỐI CHỨNG — gài lại lỗi, bàn đo PHẢI bắt được cả ba');
 {
   const d = await moPhien({ goBoc: true });
@@ -714,6 +780,25 @@ console.log('\n⑩ ĐỐI CHỨNG — gài lại lỗi, bàn đo PHẢI bắt đ
   try { await d.cr.goi('Target.closeTarget', { targetId: t2.targetId }); } catch { /* kệ */ }
   d.dong();
 }
+{
+  /* ĐỐI CHỨNG ⑤ — dời lời đăng ký `taiDanhMucNen` xuống CUỐI tệp, không đổi
+     gì khác. Đúng một việc dọn dẹp ai cũng có thể làm. Ca ⑫ phải thấy ô chọn
+     nói dối trở lại; không thấy thì bản vá đang sống nhờ điều kiện ngầm mà
+     không ai canh (REV-0057 vòng 5 · ①). */
+  const e = await moPhien({ doiThuTuDangKy: true });
+  await e.moTab('xepca');
+  await e.cr.doi(600);
+  await e.cr.chay(`window.__API.dlnSuaPhongBan(1, { ten: 'Kho vận ĐỔI TÊN' })`);
+  await e.cr.doi(900);
+  const sauGai = await e.cr.chay(DOC_O_PHONGBAN);
+  ok('⑩e0 gài được lỗi vào bản tạm', e.daGai.doiThuTu,
+    e.daGai.doiThuTu ? 'đã dời lời đăng ký taiDanhMucNen xuống cuối' : 'CHUỖI THAY THẾ TRƯỢT — sửa bàn đo');
+  ok('⑩e ĐỔI THỨ TỰ ĐĂNG KÝ → ca ⑫ phải thấy ô chọn KHÁC bản lành',
+    String(sauGai) !== oLanh,
+    `bản lành: "${oLanh}" · bản gài lỗi: "${sauGai}"` +
+    (String(sauGai) === oLanh ? '  — BÀN ĐO MÙ, sửa bàn đo trước' : ''));
+}
+
 
 console.log(`\n══════════════════════════════════════════\nĐẠT ${dat} · TRƯỢT ${truot}\n`);
 process.exit(truot ? 1 : 0);

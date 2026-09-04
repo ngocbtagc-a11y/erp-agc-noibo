@@ -160,7 +160,8 @@ function nhomCuaHamDoc(ten) {
 const TU_KIEM = process.argv.includes('--tu-kiem');
 const KHOI_GIAU = [
   'khoiGiauMotHam',
-  'taiKhoiGiauHaiHam'
+  'taiKhoiGiauHaiHam',
+  'taiKhoiGiauMocNoi'
 ];
 const MA_GIAU = [
   ".",
@@ -176,6 +177,17 @@ const MA_GIAU = [
   "  const kq = await API.hoanDanhSach();",
   "  GIAU_DS = kq.don_hoan || [];",
   "  veKhoiGiauHaiHam();",
+  "}",
+  "/* Dạng ③ — vẽ QUA MÓC NỐI `window.LAM_MOI_*`, khuôn ERP dùng nhiều nhất. */",
+  "let GIAU_DS3 = [];",
+  "function veKhoiGiauMocNoi() {",
+  "  document.querySelector('#giau-3').innerHTML = GIAU_DS3.length;",
+  "}",
+  "window.LAM_MOI_GIAU3 = veKhoiGiauMocNoi;",
+  "async function taiKhoiGiauMocNoi() {",
+  "  const kq = await API.hoanDanhSach();",
+  "  GIAU_DS3 = kq.don_hoan || [];",
+  "  window.LAM_MOI_GIAU3();",
   "}"
 ].slice(1).join('\n');
 
@@ -368,6 +380,24 @@ function veGianTiep(o, khoa) {
   const chu = o.v;
   for (const [khoa2, o2] of rieng) {
     if (khoa2 === khoa || !o2.ve) continue;
+
+    /* ① GỌI QUA MÓC NỐI `window.LAM_MOI_*` — khuôn ERP này dùng NHIỀU NHẤT,
+       và đúng là khuôn làm cho Lịch sử làm việc cập nhật được:
+           lamMoiCacManLienQuanCv()  →  window.LAM_MOI_LICHSU_VIEC()
+       Bản trước chỉ dò tên hàm trần nên không thấy đường này — máy kiểm kê mù
+       đúng cái khuôn nó cần nhìn nhất (REV-0057 vòng 5 · ②).
+       Đường này CỐ Ý xuyên phạm vi: móc nối sinh ra để hai mô-đun khác nhau
+       gọi được nhau, nên chặn theo phạm vi là chặn nhầm.
+       `biDanhWindow` đã dựng sẵn ở trên: tên móc nối → tên hàm thật. */
+    for (const [bd, dich] of biDanhWindow) {
+      if (dich !== o2.v.ten) continue;
+      if (new RegExp(`window\\.${bd}\\s*\\(`).test(chu.than)) return true;
+      if (new RegExp(`goiMocNoi\\(\\s*[\'"\`]${bd}`).test(chu.than)) return true;
+    }
+
+    /* ② GỌI THẲNG BẰNG TÊN — chỉ tính trong CÙNG phạm vi. Hai hàm trùng tên ở
+       hai mô-đun khác nhau là chuyện thường trong tệp này (`taiLai`, `nap`…),
+       bỏ ràng buộc phạm vi ở đây là mời nhận nhầm. */
     if (o2.v.trong !== chu.trong && o2.v.trong !== chu.ten) continue;
     if (new RegExp(`(^|[^\\w.$])${o2.v.ten}\\s*\\(`).test(chu.than)) return true;
   }
@@ -491,7 +521,7 @@ if (TU_KIEM) {
     else if (oKhac) { truot++; console.log(`  ❌ ${ten} — tìm ra nhưng xếp SAI rổ`); }
     else { truot++; console.log(`  ❌ ${ten} — KHÔNG TÌM RA (máy kiểm kê mù đúng hình dạng này)`); }
   }
-  console.log(truot ? `\nTỰ KIỂM TRƯỢT ${truot}/2 — sửa bản kiểm kê trước khi tin số của nó.\n`
-                    : '\nTỰ KIỂM ĐẠT 2/2 — nhìn được cả khối một-hàm lẫn khối hai-hàm.\n');
+  console.log(truot ? `\nTỰ KIỂM TRƯỢT ${truot}/${KHOI_GIAU.length} — sửa bản kiểm kê trước khi tin số của nó.\n`
+                    : '\nTỰ KIỂM ĐẠT 3/3 — nhìn được khối một-hàm, khối hai-hàm, và khối vẽ qua móc nối.\n');
   process.exit(truot ? 1 : 0);
 }

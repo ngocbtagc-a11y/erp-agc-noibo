@@ -3908,6 +3908,14 @@ async function khoiDongLichSuViec() {
      hết công họ vừa bấm. Con trỏ `truoc_tiep` chỉ đi được một chiều nên
      không dựng lại được các trang đã tải. */
   let daBamThemLSCV = false;
+  /* CHƯA VÁ HẾT — nói thẳng ra (Hồ Ly, `scripts/soi-lichsu-bang-chu.mjs`,
+     REV-0057 vòng 5). Cờ này chỉ giữ được trang cũ ở phạm vi "Toàn công ty",
+     nơi `DS_LSCV` tự cộng dồn từng trang. Ba phạm vi "của tôi" lấy dữ liệu từ
+     `window.CV_DU_LIEU_CUA_TOI`, mà `lamMoiCacManLienQuanCv` THAY CẢ MẢNG mỗi
+     lần làm mới — nên ở đó bấm "Tải thêm" xong, một cú ghi bất kỳ vẫn cuốn
+     trang cũ đi. Muốn vá hết thì phải cho `cvDanhSach` cộng dồn theo trang,
+     tức đụng cả đường dữ liệu của Trạm Việc — không làm ở vòng cuối. Ai nhận
+     việc tiếp: bắt đầu từ `nguonLoc()` và `taiLai()` trong khoiDongCongViec. */
   let TONG_LSCV = null;   // tổng thật của cả bảng cong_viec (chỉ có khi bị cắt)
 
   /* Dải cắt của màn này — ĐÂY LÀ CHỖ CÁC DẢI KHÁC CHỈ NGƯỜI SANG, nên câu chữ
@@ -3927,7 +3935,8 @@ async function khoiDongLichSuViec() {
       const { cat } = nguonLoc();
       return veDaiCat('#ls-cv-cat', cat, {
         don_vi: 'việc',
-        goi_y: 'Ô tìm kiếm phía trên chỉ tìm trong phần ĐÃ TẢI về máy.',
+      goi_y: (daBamThemLSCV ? 'Bạn đang xem thêm cả trang cũ. Khi có người đổi dữ liệu, bảng có thể quay về trang đầu — bấm "Tải thêm" lại nếu cần xem tiếp. ' : '') +
+        'Ô tìm kiếm phía trên chỉ tìm trong phần ĐÃ TẢI về máy.',
         nut: { chu: 'Xem đầy đủ ở phạm vi "Toàn công ty"', chay: () => doiLoc('congty') }
       });
     }
@@ -3935,7 +3944,8 @@ async function khoiDongLichSuViec() {
     const conLai = TONG_LSCV != null ? Math.max(0, TONG_LSCV - DS_LSCV.length) : null;
     veDaiCat('#ls-cv-cat', { gioi_han: DS_LSCV.length, tong: TONG_LSCV }, {
       don_vi: 'việc',
-      goi_y: 'Ô tìm kiếm phía trên chỉ tìm trong phần ĐÃ TẢI về máy.',
+      goi_y: (daBamThemLSCV ? 'Bạn đang xem thêm cả trang cũ. Khi có người đổi dữ liệu, bảng có thể quay về trang đầu — bấm "Tải thêm" lại nếu cần xem tiếp. ' : '') +
+        'Ô tìm kiếm phía trên chỉ tìm trong phần ĐÃ TẢI về máy.',
       nut: {
         chu: conLai != null ? `Tải thêm ${Math.min(500, conLai)} việc cũ hơn` : 'Tải thêm việc cũ hơn',
         chay: async (b) => {
@@ -9513,7 +9523,8 @@ async function khoiDongLichSuHoan() {
       ? Math.max(0, CAT_LS.tong - DS_LS.length) : null;
     veDaiCat('#ls-cat', { gioi_han: DS_LS.length, tong: CAT_LS ? CAT_LS.tong : null }, {
       don_vi: 'đơn hoàn',
-      goi_y: 'Đang tải các đơn sàn tạo GẦN NHẤT. Ô tìm phía trên chỉ tìm trong phần ĐÃ TẢI về máy.',
+      goi_y: (daBamThemLS ? 'Bạn đang xem thêm cả trang cũ. Khi có người đổi dữ liệu, bảng có thể quay về trang đầu — bấm "Tải thêm" lại nếu cần xem tiếp. ' : '') +
+        'Đang tải các đơn sàn tạo GẦN NHẤT. Ô tìm phía trên chỉ tìm trong phần ĐÃ TẢI về máy.',
       nut: {
         chu: conLai != null ? `Tải thêm ${Math.min(500, conLai)} đơn cũ hơn` : 'Tải thêm đơn cũ hơn',
         chay: async (b) => { b.disabled = true; b.textContent = 'Đang tải…'; daBamThemLS = true; await veLichSu({ them: true }); }
