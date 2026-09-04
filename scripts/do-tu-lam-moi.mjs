@@ -231,10 +231,20 @@ ok('③a api.js còn gọi baoDuLieuDoi sau khi ghi thành công',
   const khoaChanMem = new Set();
   for (const t of readdirSync(join(GOC, 'src'))) {
     if (!t.endsWith('.js')) continue;
-    const src = readFileSync(join(GOC, 'src', t), 'utf8');
+    /* Đọc MÃ THẬT ở cả hai đầu: máy chủ khai khoá trong mã, không phải trong
+       chú thích. Bóc chú thích + chuỗi trước khi dò (REV-0057 vòng 4 · VỪA). */
+    const src = lamSachMa(readFileSync(join(GOC, 'src', t), 'utf8'));
     for (const m of src.matchAll(/\b(can_[a-z_]+)\s*:\s*true/g)) khoaChanMem.add(m[1]);
   }
-  const chuaKhai = [...khoaChanMem].filter(k => !apiSrc.includes(k));
+  /* HỎI MÃ, KHÔNG HỎI CHỮ TRONG TỆP. Bản trước dùng `apiSrc.includes(khoa)`,
+     nên chỉ cần NHẮC TÊN KHOÁ TRONG MỘT DÒNG CHÚ THÍCH là chốt tưởng đã khai
+     — Hồ Ly thử và bàn đo vẫn ĐẠT 50/0. Nay chỉ nhìn phần MÃ của
+     `CHUA_LUU_DU`, đã bóc sạch chú thích và chuỗi. Dùng lại đúng máy bóc đã
+     có, không chế cái thứ hai. */
+  const maApi = lamSachMa(apiSrc);
+  const iBang = maApi.indexOf('const CHUA_LUU_DU = {');
+  const banKhai = iBang < 0 ? '' : maApi.slice(iBang, maApi.indexOf('};', iBang));
+  const chuaKhai = [...khoaChanMem].filter(k => banKhai.indexOf(k) < 0);
   ok('③g mọi khoá `can_…` của máy chủ đều được khai ở CHUA_LUU_DU',
     chuaKhai.length === 0,
     chuaKhai.length ? 'CHƯA KHAI: ' + chuaKhai.join(', ') +

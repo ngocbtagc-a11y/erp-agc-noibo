@@ -102,8 +102,14 @@ function docAPI(src) {
 const HAM_API = docAPI(doc('public/assets/js/api.js'));
 const LA_GHI = new Set(HAM_API.filter(([, b]) => /method:\s*'(POST|PUT|PATCH|DELETE)'/.test(b)).map(([t]) => t));
 /** Tiền tố đường của một hàm API: `/api/cong-viec/cap-nhat` → `/api/cong-viec` */
+/* Nhận CẢ BA kiểu mở chuỗi (REV-0057 vòng 4 · VỪA). Bản trước chỉ nhận dấu
+   nháy đơn, nên ba hàm API viết đường bằng CHUỖI MẪU — `suaLichSu`,
+   `caLichCuaToi`, `caMaTranTuan` — thành vô hình, kéo theo hai khối THẬT đã
+   nối dây (`taiMaTran`, `taiLichCuaToi`) không có mặt trong bản kiểm kê.
+   Một ký tự thiếu, hai khối biến mất khỏi bảng — đúng kiểu lỗi im lặng mà cả
+   vòng vá này sinh ra để chống. */
 const tienTo = (than) => {
-  const m = than.match(/'(\/api\/[a-z0-9-]+)/);
+  const m = than.match(/['"`](\/api\/[a-z0-9-]+)/);
   return m ? m[1] : null;
 };
 const TIEN_TO = {};
@@ -347,6 +353,16 @@ dongSach.forEach((d, i) => {
    của hàm con — hai hàm đó là MỘT khối theo mắt người dùng.
    Chỉ mượn MỘT cấp và chỉ từ hàm cùng phạm vi: mượn sâu hơn thì mọi hàm
    khởi động lại "thừa hưởng" cả màn hình, đúng lỗi đã sửa ở vòng 2. */
+/* HAI HÌNH DẠNG BÀN KIỂM KÊ NÀY VẪN MÙ — nói ra để người sau khỏi tưởng nó
+   thấy hết (Hồ Ly giấu 5 dạng, bắt 3; REV-0057 vòng 4):
+     ① MƯỢN HAI CẤP:  taiA() → veB() → veC()  (nét vẽ nằm ở cấp thứ hai)
+     ② VẼ QUA THAM SỐ: taiA(veC) rồi gọi qua tên tham số
+   Cả hai đều cố ý: mượn sâu hơn một cấp thì mọi hàm khởi động lại "thừa
+   hưởng" cả màn hình — đúng lỗi đã phải sửa ở vòng 2, và nó làm hỏng con số
+   nhiều hơn là cứu. Ai gặp một khối nói dối mà bảng này không kể tên, hãy
+   ngờ hai dạng đó trước.
+   Dạng thứ ba từng mù đã VÁ ở vòng 4: đường API viết bằng chuỗi mẫu — xem
+   `tienTo()` phía trên. */
 function veGianTiep(o, khoa) {
   if (o.ve) return true;
   const chu = o.v;

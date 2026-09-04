@@ -15,27 +15,47 @@
    trông như rổ B nhẹ), nhưng cái THẺ tóm tắt ngay cạnh nó chạy đúng một lần
    lúc mở trang rồi thôi (rổ A tuyệt đối) — nên Sếp vấp trúng ngay ngày đầu.
 
-   Số đếm trên mốc `merge-base` — 44 khối hiển thị / 123 chỗ gọi + 13 chỗ
+   Số đếm trên mốc `merge-base` — 46 khối hiển thị / 123 chỗ gọi + 13 chỗ
    truyền hàm ghi làm tham số (= 136):
      · RỔ A — khối KHÔNG BAO GIỜ vẽ lại:               13 khối
-     · RỔ B — vẽ ở chỗ này, không vẽ ở chỗ kia:        26 khối
+     · RỔ B — vẽ ở chỗ này, không vẽ ở chỗ kia:        28 khối
      · RỔ C — đã đúng:                                  5 khối
 
    ĐỌC CON SỐ RỔ A CHO ĐÚNG — máy đếm theo HÀM, người đọc theo MÀN HÌNH, và
    hai thứ đó không trùng khít. Soi tay 13 khối rổ A:
-     · 5 khối là bệnh thật, NAY ĐÃ NỐI DÂY — thẻ tóm tắt Trạm Mục Tiêu ·
+     · 6 khối là bệnh thật, NAY ĐÃ NỐI DÂY — thẻ tóm tắt Trạm Mục Tiêu ·
        chuông 🔔 · bảng "Khách hoàn nhiều" (chị Huyền) · ô chọn Phòng ban ở
-       Xếp ca · danh sách Lịch sử làm việc.
+       Xếp ca · danh sách Lịch sử làm việc · danh sách Lịch sử hoàn.
+       Hai cái cuối nghe CÓ ĐIỀU KIỆN, xem ghi chú ngay dưới.
      · 4 khối là HỘP MỞ THEO YÊU CẦU (mở ra mới đọc, nên không cần nghe):
        chi tiết Mục tiêu · "ai làm được" của Năng lực · giấy tờ trong hồ sơ ·
        tay xử lý quét mã QR.
      · 3 khối là NHIỄU CỦA PHÉP ĐẾM, không phải khối thật: `veLaiBangNs` là
        một dòng điều phối, `khoiDongKho`/`khoiDongKhoTaiLieu` là hàm khởi
-       động — khối thật đằng sau chúng đều đã nối dây. Hồ Ly chỉ ra chỗ này
-       ở REV-0057 vòng 3; vòng 2 tôi khai nhầm cả ba thành "hộp mở theo yêu
-       cầu", sai lý do dù đúng kết luận.
-     · 1 khối CỐ Ý KHÔNG NGHE: danh sách Lịch sử hoàn — nó có con trỏ "xem
-       tiếp", tự nạp lại là vứt hết những trang người dùng đã bấm tải.
+       động — khối thật đằng sau chúng đều đã nối dây.
+
+   HAI MÀN CÓ CON TRỎ "XEM TIẾP" — Lịch sử làm việc và Lịch sử hoàn — nghe
+   theo ĐIỀU KIỆN: CHƯA bấm "Tải thêm" lần nào thì tự nạp lại như mọi màn
+   khác; bấm rồi thì thôi. Lý do: con trỏ `truoc_tiep` chỉ đi được một chiều,
+   nạp lại trang 1 là vứt sạch những trang người dùng vừa bấm về mà không
+   dựng lại được. Vòng 3 tôi để cả hai KHÔNG nghe hẳn — đúng lý do nhưng quá
+   tay: phần lớn thời gian người ta chưa bấm trang nào, và số cũ nằm đó tới
+   tận lần tải lại trang (Hồ Ly chỉ ra, REV-0057 vòng 4).
+
+   ĐỌC SỐ LƯỢT GỌI CỦA LỊCH SỬ LÀM VIỆC CHO ĐÚNG. Ở ba phạm vi "của tôi"
+   (mặc định), bảng đó vẽ từ `window.CV_DU_LIEU_CUA_TOI` — đúng bộ dữ liệu mà
+   `lamMoiCacManLienQuanCv` vừa nạp mới ngay trước đó — nên nó CÓ đổi nội dung
+   mà KHÔNG gọi thêm `cvLichSu` lượt nào. Đo bằng số lượt gọi sẽ thấy 0 và
+   tưởng nó không nghe; đo bằng CHỮ trong bảng thì thấy "Chờ duyệt" đổi thành
+   "Hoàn thành". Chỉ phạm vi "Toàn công ty" mới thật sự gọi mạng, và chỉ khi
+   người dùng chưa bấm sang trang.
+
+
+   VÒNG 4 CÒN SỬA MỘT BẢN VÁ KHÔNG CHẠY: ô chọn Phòng ban ở Xếp ca vòng 3 có
+   đăng ký nghe, có chạy, nhưng vẽ lại từ một mảng không ai nạp lại — nên vẫn
+   ra tên cũ. Đo bằng số lượt gọi thì thấy xanh; Hồ Ly đo bằng CHỮ trong ô
+   chọn nên thấy đỏ. Một bản vá không chạy kèm chú thích nói rằng nó chạy còn
+   nguy hơn không vá.
 
    BA CON SỐ ĐÓ ĐẾM LẠI ĐƯỢC: `npm run do-kiem-ke-lam-moi`.
    VÒNG 2 PHẢI VIẾT LẠI CÁCH ĐẾM (REV-0057 vòng 2 · CAO-2). Bản đầu lấy danh

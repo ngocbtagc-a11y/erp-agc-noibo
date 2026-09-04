@@ -82,8 +82,8 @@ await thu('③ Đối chứng: bảng Đối soát sàn (CÓ đăng ký nghe) �
 /* ---- VÒNG 3: ba khối còn lại trong rổ A mà Khỉ Đột nói "không sao" ---- */
 console.log('\nVÒNG 3 — BA KHỐI RỔ A CÒN LẠI: có thật sự không sao không?\n');
 
-await thu('④ Dropdown Phòng ban ở màn Xếp ca (khoiDongXepCa) — CỐ Ý để lại',
-  'xepca', `dlnSuaPhongBan(1, { ten: 'Kho vận ĐỔI TÊN' })`, '/api/du-lieu-nen/phong-ban',
+await thu('④ Ô chọn Phòng ban ở màn Xếp ca — vòng 4 khai ĐÃ NỐI DÂY',
+  'xepca', `dlnSuaPhongBan(1, { ten: 'Kho vận ĐỔI TÊN' })`, '/api/dulieunen/phong-ban',   /* SỬA VÒNG 4: đường THẬT không có dấu gạch (api.js:308) — bản cũ gõ sai nên luôn ra 0 */
   'Đổi tên phòng ban thì ô chọn phòng ban ở Xếp ca có đổi theo không.');
 
 await thu('⑤ Bảng Kho (khoiDongKho xếp rổ A) — khối THẬT là taiLaiKho, đã nối dây',

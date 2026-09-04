@@ -3873,6 +3873,12 @@ async function khoiDongLichSuViec() {
   /* CON TRỎ trang — chuỗi `cap_nhat_luc|id` của dòng cuối đã tải. `null` =
      không còn gì cũ hơn. Xem src/index.js cvLichSu. */
   let TRUOC_LSCV = null;
+  /* Đã bấm "Tải thêm" lần nào chưa (REV-0057 vòng 4 · VỪA-1). Chưa bấm thì
+     tự nạp lại thoải mái — chỉ có một trang, nạp lại không mất gì. Bấm rồi
+     thì người dùng đang GIỮ nhiều trang trong tay: nạp lại trang 1 là vứt
+     hết công họ vừa bấm. Con trỏ `truoc_tiep` chỉ đi được một chiều nên
+     không dựng lại được các trang đã tải. */
+  let daBamThemLSCV = false;
   let TONG_LSCV = null;   // tổng thật của cả bảng cong_viec (chỉ có khi bị cắt)
 
   /* Dải cắt của màn này — ĐÂY LÀ CHỖ CÁC DẢI KHÁC CHỈ NGƯỜI SANG, nên câu chữ
@@ -3905,6 +3911,7 @@ async function khoiDongLichSuViec() {
         chu: conLai != null ? `Tải thêm ${Math.min(500, conLai)} việc cũ hơn` : 'Tải thêm việc cũ hơn',
         chay: async (b) => {
           b.disabled = true; b.textContent = 'Đang tải…';
+          daBamThemLSCV = true;
           await taiLaiLichSuCv({ them: true });
         }
       }
@@ -3961,6 +3968,11 @@ async function khoiDongLichSuViec() {
      kia đọc `window.CV_DU_LIEU_CUA_TOI` mà `lamMoiCacManLienQuanCv` vừa làm
      mới ngay trước đó, nên vẽ lại là đủ và không tốn thêm lượt gọi nào. */
   window.LAM_MOI_LICHSU_VIEC = async (o) => {
+    /* Đã bấm "Tải thêm" thì CHỈ vẽ lại từ phần đã tải — gọi `taiLaiLichSuCv()`
+       không tham số là nạp lại trang 1 và ném sạch các trang cũ hơn người
+       dùng vừa bấm về. Vẽ lại vẫn đúng: `lamMoiCacManLienQuanCv` đã nạp mới
+       phần việc của tôi ngay trước đó. */
+    if (daBamThemLSCV) { veBangLsCv(); return; }
     if (LOC_LSV === 'congty' || DS_LSCV.length > 0) return taiLaiLichSuCv(o);
     veBangLsCv();
   };
@@ -8212,6 +8224,9 @@ async function khoiDongXepCa() {
 
   /* ================= TRƯỞNG PHÒNG: Xếp ca tuần (ma trận) ================= */
   let dsPhongBanQuanLy = TOI.phong_ban_quan_ly || [];
+  /* Admin không được gán trưởng phòng thì danh sách này DỰNG TỪ danh mục
+     phòng ban; cờ dưới đây để lúc làm mới biết phải dựng lại kiểu nào. */
+  let phongBanLayTuDanhMuc = false;
   let tuanHienTai = dauTuanCuaNgay(new Date());
   let duLieuTuan = null;   // kết quả API.caMaTranTuan gần nhất
 
@@ -8221,6 +8236,7 @@ async function khoiDongXepCa() {
     try {
       const kq = await API.dlnPhongBan();
       dsPhongBanQuanLy = (kq.ds || []).filter(p => p.hoat_dong).map(p => ({ id: p.id, ten: p.ten }));
+      phongBanLayTuDanhMuc = true;
     } catch { /* kệ, để trống */ }
   }
 
@@ -8229,14 +8245,28 @@ async function khoiDongXepCa() {
   $('#xc-xep-body').hidden = !coQuyenXep;
 
   if (coQuyenXep) {
-    /* Ô chọn Phòng ban NGHE nhóm `du_lieu_nen` (REV-0057 vòng 3 · VỪA-3).
-       Trước đây nó đổ đúng một lần lúc mở trang: đổi tên phòng ban ở màn Cơ
-       cấu tổ chức thì ô này vẫn giữ tên cũ cho tới lần tải trang sau. Thao
-       tác hiếm và hậu quả nhẹ (một cái tên cũ, không phải con số sai), nhưng
-       chi phí sửa đúng bằng một lời đăng ký — và luật của nhà là quét cả lớp,
-       không chừa chỗ dễ. Giữ nguyên lựa chọn đang chọn để người dùng không bị
-       nhảy phòng ban giữa chừng. */
+    /* Ô chọn Phòng ban NGHE nhóm `du_lieu_nen` (REV-0057 vòng 3 · VỪA-3,
+       vá lại ở vòng 4 · CAO).
+       BẢN VÒNG 3 KHÔNG CHẠY: nó vẽ lại từ `dsPhongBanQuanLy`, mà mảng đó chỉ
+       được gán LÚC KHỞI ĐỘNG và không ai nạp lại — nên đổi tên phòng ban thì
+       người nghe có chạy, có vẽ, mà vẫn vẽ ra đúng cái tên cũ. Hồ Ly đo bằng
+       CHỮ trong ô chọn nên thấy; đo bằng số lượt gọi thì không thấy. Một bản
+       vá không chạy kèm chú thích nói rằng nó chạy còn nguy hơn không vá.
+       Nay lấy tên mới từ `DS_PHONG_BAN` — kho danh mục nền dùng chung, do
+       `taiDanhMucNen` nạp lại và đăng ký nghe TRƯỚC người nghe này nên khi
+       tới lượt đây thì kho đã mới (đài chạy lần lượt, xem lam-moi.js).
+       Giữ nguyên lựa chọn đang chọn để người dùng không bị nhảy phòng ban. */
     const doPhongBanXepCa = ngheDuLieu('du_lieu_nen', function doPhongBanXepCa() {
+      if (phongBanLayTuDanhMuc) {
+        dsPhongBanQuanLy = (DS_PHONG_BAN || []).filter(p => p.hoat_dong)
+          .map(p => ({ id: p.id, ten: p.ten }));
+      } else {
+        /* Trưởng phòng: danh sách phòng mình quản lý không đổi, chỉ TÊN đổi. */
+        for (const p of dsPhongBanQuanLy) {
+          const moi = (DS_PHONG_BAN || []).find(x => String(x.id) === String(p.id));
+          if (moi) p.ten = moi.ten;
+        }
+      }
       const dangChon = $('#xcPhongBan').value;
       $('#xcPhongBan').innerHTML = dsPhongBanQuanLy.map(p => `<option value="${p.id}">${esc(p.ten)}</option>`).join('');
       if (dangChon) $('#xcPhongBan').value = dangChon;
@@ -9351,6 +9381,12 @@ async function khoiDongLichSuHoan() {
   let DS_LS = [];
   let CAT_LS = null;   // vết cắt do trần LIMIT — null nghĩa là KHÔNG bị cắt
   let TRUOC_LS = null; // con trỏ `tao_luc_shopee|return_sn` để tải tiếp đơn cũ hơn
+  /* Cùng luật với Lịch sử làm việc (REV-0057 vòng 4 · VỪA-1): CHƯA bấm
+     "Tải thêm" thì màn này nghe nhóm `hoan` như mọi màn khác; bấm rồi thì
+     thôi, vì nạp lại là vứt các trang người dùng đang giữ. Trước vòng 4 tôi
+     để nó KHÔNG nghe hẳn — đúng lý do nhưng quá tay: phần lớn thời gian
+     người ta chưa bấm trang nào, và số cũ nằm đó tới tận lần tải lại trang. */
+  let daBamThemLS = false;
   const TT_NHAN_LS = {
     con_tot: ['ok', '✓ Còn tốt'], hu_hong: ['danger', '⚠️ Hư hỏng'],
     thieu_hang: ['danger', '⚠️ Thiếu hàng'], sai_hang: ['danger', '⚠️ Sai hàng']
@@ -9432,10 +9468,16 @@ async function khoiDongLichSuHoan() {
       goi_y: 'Đang tải các đơn sàn tạo GẦN NHẤT. Ô tìm phía trên chỉ tìm trong phần ĐÃ TẢI về máy.',
       nut: {
         chu: conLai != null ? `Tải thêm ${Math.min(500, conLai)} đơn cũ hơn` : 'Tải thêm đơn cũ hơn',
-        chay: async (b) => { b.disabled = true; b.textContent = 'Đang tải…'; await veLichSu({ them: true }); }
+        chay: async (b) => { b.disabled = true; b.textContent = 'Đang tải…'; daBamThemLS = true; await veLichSu({ them: true }); }
       }
     });
   }
+
+  /* Nghe nhóm `hoan` nhưng TỰ TỪ CHỐI khi người dùng đã bấm sang trang. */
+  const lamMoiLichSuHoan = ngheDuLieu('hoan', async function lamMoiLichSuHoan() {
+    if (daBamThemLS) return;
+    await veLichSu();
+  }, { ten: 'Lịch sử đơn hoàn', goc: oTab('khovan', 'donhoan') });
 
   async function veLichSu({ them = false } = {}) {
     let kq;

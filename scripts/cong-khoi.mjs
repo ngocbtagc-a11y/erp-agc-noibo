@@ -109,7 +109,7 @@ const MAU_TDZ = [
 ];
 function gaiTDZ(ma) {
   for (const [cu, moiDoan] of MAU_TDZ) {
-    if (!ma.includes(cu)) throw new Error('Mẫu TDZ trượt, sửa bàn đo: ${cu.trim().slice(0, 60)}');
+    if (!ma.includes(cu)) throw new Error(`Mẫu TDZ trượt, sửa bàn đo: ${cu.trim().slice(0, 60)}`);
     ma = ma.replace(cu, moiDoan);
   }
   return ma;
@@ -244,6 +244,18 @@ if (TU_KIEM) {
   console.error(dat
     ? '  ✅ TỰ KIỂM ĐẠT — mẫu hỏng giả làm cổng khói đỏ đúng như phải thế.'
     : '  ❌ TỰ KIỂM TRƯỢT — chèn lỗi thật mà cổng khói vẫn xanh: cổng khói là đồ trang trí.');
+  process.exit(dat ? 0 : 1);
+}
+
+/* TỰ KIỂM THỨ HAI — lỗi TDZ thật ở một trong tám mô-đun chỉ vai ĐỦ QUYỀN mới
+   nạp tới. CÙNG QUY ƯỚC với `--tu-kiem`: bắt được thì thoát 0. Hai lệnh cùng
+   họ mà ngược quy ước mã thoát là bẫy cho người sau (REV-0057 vòng 4). */
+if (TU_KIEM_TDZ) {
+  const dat = !XANH && [...kq.loi_console, ...kq.ngoai_le]
+    .some(l => String(l).includes('khoiDongCSKH') && String(l).includes('before initialization'));
+  console.error(dat
+    ? '  ✅ TỰ KIỂM TDZ ĐẠT — lỗi ở mô-đun chỉ vai đủ quyền mới nạp tới đã làm cổng khói đỏ.'
+    : '  ❌ TỰ KIỂM TDZ TRƯỢT — gài lỗi TDZ thật mà cổng khói không thấy: lượt vai đủ quyền đang hỏng.');
   process.exit(dat ? 0 : 1);
 }
 
