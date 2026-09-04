@@ -215,7 +215,11 @@ muc('① b. Gọi THẬT qua hàm xử lý HTTP — mã trả về phải là 40
 muc('② CA ĐỐI CHỨNG (BH-16) — bản BỎ CHẶN phải LỌT');
 {
   const goc = docNguon('src/tai-lieu.js');
-  const chan = `  if (!duocXemNhomTaiLieu(phien.vai_tro, tl.nhom)) {
+  /* Neo lại 04/09/2026: nhánh tách vai trò đổi duocXemNhomTaiLieu(phien.vai_tro,…)
+     thành duocXemNhomTaiLieu(phien,…) — quyền nay đọc CẢ HAI ô (vai trò hệ thống +
+     vị trí công việc). Đổi ĐÚNG một chỗ; khiếm khuyết gài vào giữ nguyên: vẫn là gỡ
+     đúng cửa của layVaKiemQuyen() — cửa mà moTaiLieu() thật sự đi qua. */
+  const chan = `  if (!duocXemNhomTaiLieu(phien, tl.nhom)) {
     return { loi: loi('Bạn không có quyền xem nhóm giấy tờ này', 403) };
   }`;
   if (!goc.includes(chan)) {
@@ -1503,7 +1507,7 @@ muc('⑨c CA ĐỐI CHỨNG (BH-16) — bỏ chốt thì phép kiểm PHẢI b�
      `danhSachTaiLieu`. Bỏ nó → quản lý kho phải LỌT. Bản bỏ chặn mà vẫn 403 thì
      phép đo đang bắt nhầm thứ khác, và mọi dòng ĐẠT ở ⑨b đều vô nghĩa. */
   const hong = await napBanVa('bỏ chốt cửa hồ sơ',
-    [`  if (ganId && !duocXemNhomTaiLieu(phien.vai_tro, NHOM_CUA_NHAN_SU)) {`,
+    [`  if (ganId && !duocXemNhomTaiLieu(phien, NHOM_CUA_NHAN_SU)) {`,
      `  if (false) {`]);
   if (hong) {
     const { env } = khoCoNguoi({ ...banGhiNhayCam, cua_vao: 'nhan_su', gan_id: 'ns_huyen' });
