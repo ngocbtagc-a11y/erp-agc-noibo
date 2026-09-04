@@ -7202,14 +7202,20 @@ async function khoiDongDuLieuNen() {
   async function veTinhTrang() {
     let kq;
     try { kq = await API.dlnTinhTrang(); } catch { return; }
-    veThe('#dln-tinhtrang', kq.muc.map(m => ({
+    /* `|| []` KHÔNG phải để cho đẹp (REV-0057 vòng 3 · THẤP-1): máy chủ trả
+       thiếu khoá — bản cũ, migration chưa nạp, hay một lỗi phía server — thì
+       `kq.muc.map` ném, và cả người nghe `lamMoiTatCaDuLieuNen` chết theo.
+       `keu()` ở lam-moi.js chặn không cho lan sang màn khác, nhưng màn Cơ cấu
+       tổ chức thì trắng. Nợ cũ, có sẵn từ trước bản vá; cổng khói nay chạy
+       vai đủ quyền nên mới đi qua đường này và thấy. */
+    veThe('#dln-tinhtrang', (kq.muc || []).map(m => ({
       k: m.ten,
       v: m.da_gan != null ? `${m.da_gan}/${m.tong}` : `${m.tong}`,
       d: NHAN_TT[m.trang_thai] || m.trang_thai,
       dir: m.trang_thai === 'READY' ? 'up' : (m.trang_thai === 'NOT_STARTED' ? 'down' : '')
     })));
-    veDanhSach('#dln-viectieptheo', kq.viec_tiep_theo.length
-      ? kq.viec_tiep_theo.map(v => ({ m: 'warn', b: v.chu, s: '', t: '' }))
+    veDanhSach('#dln-viectieptheo', (kq.viec_tiep_theo || []).length
+      ? (kq.viec_tiep_theo || []).map(v => ({ m: 'warn', b: v.chu, s: '', t: '' }))
       : [{ m: 'sage', b: 'Dữ liệu nền đã đủ cho các mục đang theo dõi.', s: '', t: '' }]);
   }
 
@@ -8223,7 +8229,19 @@ async function khoiDongXepCa() {
   $('#xc-xep-body').hidden = !coQuyenXep;
 
   if (coQuyenXep) {
-    $('#xcPhongBan').innerHTML = dsPhongBanQuanLy.map(p => `<option value="${p.id}">${esc(p.ten)}</option>`).join('');
+    /* Ô chọn Phòng ban NGHE nhóm `du_lieu_nen` (REV-0057 vòng 3 · VỪA-3).
+       Trước đây nó đổ đúng một lần lúc mở trang: đổi tên phòng ban ở màn Cơ
+       cấu tổ chức thì ô này vẫn giữ tên cũ cho tới lần tải trang sau. Thao
+       tác hiếm và hậu quả nhẹ (một cái tên cũ, không phải con số sai), nhưng
+       chi phí sửa đúng bằng một lời đăng ký — và luật của nhà là quét cả lớp,
+       không chừa chỗ dễ. Giữ nguyên lựa chọn đang chọn để người dùng không bị
+       nhảy phòng ban giữa chừng. */
+    const doPhongBanXepCa = ngheDuLieu('du_lieu_nen', function doPhongBanXepCa() {
+      const dangChon = $('#xcPhongBan').value;
+      $('#xcPhongBan').innerHTML = dsPhongBanQuanLy.map(p => `<option value="${p.id}">${esc(p.ten)}</option>`).join('');
+      if (dangChon) $('#xcPhongBan').value = dangChon;
+    }, { ten: 'Ô chọn Phòng ban (Xếp ca)', goc: oTab('xepca') });
+    doPhongBanXepCa();
 
     function tuanLabel() {
       const cuoiTuan = new Date(tuanHienTai); cuoiTuan.setDate(cuoiTuan.getDate() + 6);

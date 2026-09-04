@@ -36,7 +36,7 @@
    Chạy:  npm run do-tu-lam-moi      (mã thoát 0 = đạt)
    ========================================================================== */
 
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { dungMayGia, moChrome, GOC, TOI_ID } from './lib/ban-do-chrome.mjs';
 import { soiDoiSoThua, lamSachMa, soiDongBiXoaOan } from './lib/soi-doi-so-thua.mjs';
@@ -219,6 +219,27 @@ ok('③a api.js còn gọi baoDuLieuDoi sau khi ghi thành công',
   ok('③f máy bóc chú thích không nuốt oan dòng mã nào', oan.length === 0,
     oan.length ? `${oan.length} dòng bị bóc trắng oan: ` + oan.slice(0, 5).join(' · ')
       : `${TEP_SOI.length} tệp giao diện, 0 dòng mã bị bóc oan`);
+
+  /* ③g — "TRẢ 200 MÀ CHƯA GHI" (REV-0057 · THẤP-2). `CHUA_LUU_DU` trong
+     api.js là danh sách VIẾT TAY: cửa thứ hai kiểu đó thêm vào ngày mai sẽ
+     lại bị quên, đúng lớp bệnh đang vá. Máy chủ dùng khuôn `can_…: true` cho
+     nước "chặn mềm — chưa ghi, đợi người nhập bổ sung" (thí dụ `can_ly_do`
+     của hợp đồng, chặn theo BLLĐ Đ.20). Mỗi khoá `can_…` mới xuất hiện ở
+     `src/` mà chưa được khai ở đây thì đỏ.
+     `chua_…` KHÔNG tính: nó nằm ở đường ĐỌC và mang nghĩa khác hẳn ("chưa
+     nạp migration" / "chưa chấm"), không phải một lần ghi trượt. */
+  const khoaChanMem = new Set();
+  for (const t of readdirSync(join(GOC, 'src'))) {
+    if (!t.endsWith('.js')) continue;
+    const src = readFileSync(join(GOC, 'src', t), 'utf8');
+    for (const m of src.matchAll(/\b(can_[a-z_]+)\s*:\s*true/g)) khoaChanMem.add(m[1]);
+  }
+  const chuaKhai = [...khoaChanMem].filter(k => !apiSrc.includes(k));
+  ok('③g mọi khoá `can_…` của máy chủ đều được khai ở CHUA_LUU_DU',
+    chuaKhai.length === 0,
+    chuaKhai.length ? 'CHƯA KHAI: ' + chuaKhai.join(', ') +
+        ' → thêm vào CHUA_LUU_DU trong api.js, không thì ghi trượt vẫn bắt cả loạt màn nạp lại'
+      : [...khoaChanMem].join(', ') + ' — đều có mặt');
 }
 
 /* ==========================================================================

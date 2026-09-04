@@ -15,13 +15,27 @@
    trông như rổ B nhẹ), nhưng cái THẺ tóm tắt ngay cạnh nó chạy đúng một lần
    lúc mở trang rồi thôi (rổ A tuyệt đối) — nên Sếp vấp trúng ngay ngày đầu.
 
-   Số đếm trên mốc `merge-base` — 37 khối hiển thị / 123 chỗ gọi + 13 chỗ
+   Số đếm trên mốc `merge-base` — 44 khối hiển thị / 123 chỗ gọi + 13 chỗ
    truyền hàm ghi làm tham số (= 136):
-     · RỔ A — khối KHÔNG BAO GIỜ vẽ lại:               10 khối
-       (chuông 🔔 · thẻ tóm tắt Trạm Mục Tiêu · bảng "Khách hoàn nhiều" của
-        chị Huyền · ma trận Xếp ca · …)
-     · RỔ B — vẽ ở chỗ này, không vẽ ở chỗ kia:        22 khối
+     · RỔ A — khối KHÔNG BAO GIỜ vẽ lại:               13 khối
+     · RỔ B — vẽ ở chỗ này, không vẽ ở chỗ kia:        26 khối
      · RỔ C — đã đúng:                                  5 khối
+
+   ĐỌC CON SỐ RỔ A CHO ĐÚNG — máy đếm theo HÀM, người đọc theo MÀN HÌNH, và
+   hai thứ đó không trùng khít. Soi tay 13 khối rổ A:
+     · 5 khối là bệnh thật, NAY ĐÃ NỐI DÂY — thẻ tóm tắt Trạm Mục Tiêu ·
+       chuông 🔔 · bảng "Khách hoàn nhiều" (chị Huyền) · ô chọn Phòng ban ở
+       Xếp ca · danh sách Lịch sử làm việc.
+     · 4 khối là HỘP MỞ THEO YÊU CẦU (mở ra mới đọc, nên không cần nghe):
+       chi tiết Mục tiêu · "ai làm được" của Năng lực · giấy tờ trong hồ sơ ·
+       tay xử lý quét mã QR.
+     · 3 khối là NHIỄU CỦA PHÉP ĐẾM, không phải khối thật: `veLaiBangNs` là
+       một dòng điều phối, `khoiDongKho`/`khoiDongKhoTaiLieu` là hàm khởi
+       động — khối thật đằng sau chúng đều đã nối dây. Hồ Ly chỉ ra chỗ này
+       ở REV-0057 vòng 3; vòng 2 tôi khai nhầm cả ba thành "hộp mở theo yêu
+       cầu", sai lý do dù đúng kết luận.
+     · 1 khối CỐ Ý KHÔNG NGHE: danh sách Lịch sử hoàn — nó có con trỏ "xem
+       tiếp", tự nạp lại là vứt hết những trang người dùng đã bấm tải.
 
    BA CON SỐ ĐÓ ĐẾM LẠI ĐƯỢC: `npm run do-kiem-ke-lam-moi`.
    VÒNG 2 PHẢI VIẾT LẠI CÁCH ĐẾM (REV-0057 vòng 2 · CAO-2). Bản đầu lấy danh

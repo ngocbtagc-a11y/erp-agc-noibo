@@ -44,7 +44,9 @@ import { lamSachMa } from './lib/soi-doi-so-thua.mjs';
    nó đã đi 5 lần trong một ngày. Bàn đo sinh ra để con số đếm lại được mà lại
    đo trên mốc trôi thì tháng sau hai người chạy ra hai kết quả. `merge-base`
    là điểm nhánh này tách ra — cố định, và đúng nghĩa "trước bản vá". */
-const MOC = process.argv[2] ||
+/* Đối số vị trí đầu tiên KHÔNG phải cờ = mốc đo. Lọc cờ ra, không thì
+   `--tu-kiem` bị hiểu thành tên commit. */
+const MOC = process.argv.slice(2).find(x => !x.startsWith("--")) ||
   execFileSync('git', ['merge-base', 'HEAD', 'origin/main'], { cwd: GOC }).toString().trim();
 const doc = (p) => execFileSync('git', ['show', `${MOC}:${p}`], { cwd: GOC, maxBuffer: 1 << 28 }).toString();
 
@@ -140,7 +142,39 @@ function nhomCuaHamDoc(ten) {
 /* ==========================================================================
    ② ĐỌC `app.js` CỦA MỐC: thân từng hàm + bí danh window.* + bí danh THAM SỐ
    ========================================================================== */
-const appSrc = doc('public/assets/js/app.js');
+/* ---- TỰ KIỂM: GIẤU HAI KHỐI RỒI ĐÒI TÌM RA CẢ HAI --------------------
+   `npm run do-kiem-ke-tu-kiem`. Một bản kiểm kê không tự chứng minh được
+   là nó nhìn thấy khối CHƯA AI NỐI DÂY thì chỉ là một danh sách đẹp.
+   Hai khối dưới đây GIỐNG HỆT nhau về tác dụng (đọc `hoanDanhSach`, vẽ
+   `innerHTML`, không ai nối dây), chỉ khác HÌNH DẠNG:
+     ① nạp và vẽ trong CÙNG một hàm
+     ② nạp một hàm, vẽ một hàm  ← khuôn phổ biến nhất của ERP này, và là
+        đúng vùng mù Hồ Ly bắt được ở vòng 3.
+   Cả hai phải hiện ra ở rổ A. Thiếu một cái là máy kiểm kê đang mù. */
+const TU_KIEM = process.argv.includes('--tu-kiem');
+const KHOI_GIAU = [
+  'khoiGiauMotHam',
+  'taiKhoiGiauHaiHam'
+];
+const MA_GIAU = [
+  ".",
+  "async function khoiGiauMotHam() {",
+  "  const kq = await API.hoanDanhSach();",
+  "  document.querySelector('#giau-1').innerHTML = (kq.don_hoan || []).length;",
+  "}",
+  "let GIAU_DS = [];",
+  "function veKhoiGiauHaiHam() {",
+  "  document.querySelector('#giau-2').innerHTML = GIAU_DS.length;",
+  "}",
+  "async function taiKhoiGiauHaiHam() {",
+  "  const kq = await API.hoanDanhSach();",
+  "  GIAU_DS = kq.don_hoan || [];",
+  "  veKhoiGiauHaiHam();",
+  "}"
+].slice(1).join('\n');
+
+let appSrc = doc('public/assets/js/app.js');
+if (TU_KIEM) appSrc += '\n' + MA_GIAU + '\n';
 const sach = lamSachMa(appSrc);
 const dongSach = sach.split(/\r?\n/);
 
@@ -171,11 +205,22 @@ dongSach.forEach((d, i) => {
          || (laHamMuiTen(d) ? d.match(/^( {2,6})const ([A-Za-z0-9_$]+) = /) : null);
   if (!m) return;
   const thut = m[1].length;
+  /* HÀM BAO NGOÀI (REV-0057 vòng 3 · VỪA-1). Bản trước chỉ nhận
+     `function X(` và `(function X(` ở cột 0, nên BẢY khối bị dán nhãn sai
+     "trong khoiDongChat" — nó cứ lùi lên tới hàm mức 0 gần nhất. Hai khuôn
+     thật bị bỏ sót:
+        `(async function khoiDongSanPhamKinhDoanh() {`   ← có `async`
+        `if (TOI.quyen.includes('nhansu')) {`            ← khối quyền, không phải hàm
+     Nhãn sai KHÔNG chỉ xấu mắt: `duongToi()` lấy `k.trong` để giới hạn phạm
+     vi tìm hàm gọi, nên nhãn sai thì tìm sai chỗ — một nguồn của rổ A giả. */
   let trong = '';
   for (let k = i; k >= 0; k--) {
-    const t = dongSach[k].match(/^(?:async )?function ([A-Za-z0-9_$]+)\s*\(/)
-           || dongSach[k].match(/^\(function ([A-Za-z0-9_$]+)\s*\(/);
+    const dk = dongSach[k];
+    const t = dk.match(/^(?:async )?function ([A-Za-z0-9_$]+)\s*\(/)
+           || dk.match(/^\(\s*(?:async )?function ([A-Za-z0-9_$]+)\s*\(/);
     if (t) { trong = t[1]; break; }
+    // Khối `if (TOI.…) {` ở cột 0 là một phạm vi riêng, không thuộc hàm nào.
+    if (/^if \(TOI\./.test(dk)) { trong = ''; break; }
   }
   const khoa = trong + '::' + m[2];
   if (!ham.has(khoa)) ham.set(khoa, { ...thanHam(i, thut), ten: m[2], trong, thamSo: tenThamSo(d) });
@@ -284,15 +329,38 @@ dongSach.forEach((d, i) => {
   const chu = hamTrongCung(i);
   if (!chu) return;
   const khoa = chu.trong + '::' + chu.ten;
+  /* Giữ cả hàm CHỈ VẼ (không đọc gì) — `veGianTiep` cần tra tới chúng để
+     nhận ra khuôn `taiX()` gọi `veX()`. */
   if (!rieng.has(khoa)) rieng.set(khoa, { doc: new Set(), ve: false, v: chu });
   const o = rieng.get(khoa);
   for (const t of coDoc) o.doc.add(t);
   if (coVe) o.ve = true;
 });
 
+/* KHUÔN TÁCH ĐÔI (REV-0057 vòng 3 · CAO). Luật "đọc VÀ vẽ trong CÙNG một
+   hàm" bỏ sót đúng khuôn viết phổ biến nhất của ERP này: `taiX()` nạp rồi
+   gọi `veX()` vẽ. Hồ Ly giấu hai khối giống hệt nhau về tác dụng, chỉ khác
+   hình dạng — khối một-hàm thì tìm ra, khối hai-hàm thì KHÔNG. Và vùng mù đó
+   che mất 9 trong 27 người nghe mà chính bản vá đã nối dây, gồm `veDoiSoat`
+   và `lamMoiCacManLienQuanCv` — tức máy kiểm kê không nhìn thấy 1/3 công
+   việc chính. Nay: hàm ĐỌC mà gọi thẳng một hàm CHỈ VẼ thì mượn luôn nét vẽ
+   của hàm con — hai hàm đó là MỘT khối theo mắt người dùng.
+   Chỉ mượn MỘT cấp và chỉ từ hàm cùng phạm vi: mượn sâu hơn thì mọi hàm
+   khởi động lại "thừa hưởng" cả màn hình, đúng lỗi đã sửa ở vòng 2. */
+function veGianTiep(o, khoa) {
+  if (o.ve) return true;
+  const chu = o.v;
+  for (const [khoa2, o2] of rieng) {
+    if (khoa2 === khoa || !o2.ve) continue;
+    if (o2.v.trong !== chu.trong && o2.v.trong !== chu.ten) continue;
+    if (new RegExp(`(^|[^\\w.$])${o2.v.ten}\\s*\\(`).test(chu.than)) return true;
+  }
+  return false;
+}
+
 const KHOI = [];
 for (const [khoa, o] of rieng) {
-  if (!o.doc.size || !o.ve) continue;        // phải VỪA đọc máy chủ VỪA vẽ
+  if (!o.doc.size || !veGianTiep(o, khoa)) continue;   // phải ĐỌC, và VẼ (trực tiếp hoặc qua hàm vẽ)
   const docApi = [...o.doc];
   const nhomKhoi = [...new Set(docApi.flatMap(nhomCuaHamDoc))];
   if (!nhomKhoi.length) continue;            // đọc thứ không nhóm nào ghi vào
@@ -395,3 +463,19 @@ console.log(rB.map(nhan).join('\n'));
 console.log(`\nRỔ C — đã đúng: ${rC.length}`);
 console.log(rC.map(nhan).join('\n'));
 console.log('\nĐây là kiểm kê TĨNH (đọc mã). Hành vi thật do `npm run do-tu-lam-moi` chứng minh.\n');
+
+/* ---- CHẤM TỰ KIỂM ---- */
+if (TU_KIEM) {
+  let truot = 0;
+  console.log('TỰ KIỂM — hai khối giấu phải cùng hiện ra ở rổ A:');
+  for (const ten of KHOI_GIAU) {
+    const o = rA.find(x => x.ten === ten);
+    const oKhac = [...rB, ...rC].find(x => x.ten === ten);
+    if (o) console.log(`  ✅ ${ten} — tìm ra, rổ A (${o.veLai}/${o.tong})`);
+    else if (oKhac) { truot++; console.log(`  ❌ ${ten} — tìm ra nhưng xếp SAI rổ`); }
+    else { truot++; console.log(`  ❌ ${ten} — KHÔNG TÌM RA (máy kiểm kê mù đúng hình dạng này)`); }
+  }
+  console.log(truot ? `\nTỰ KIỂM TRƯỢT ${truot}/2 — sửa bản kiểm kê trước khi tin số của nó.\n`
+                    : '\nTỰ KIỂM ĐẠT 2/2 — nhìn được cả khối một-hàm lẫn khối hai-hàm.\n');
+  process.exit(truot ? 1 : 0);
+}
