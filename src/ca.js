@@ -28,7 +28,7 @@ function chuoi(v) { const s = String(v ?? '').trim(); return s || null; }
    Admin luôn được. Ngoài ra chỉ đúng người đang là truong_phong_id của
    CHÍNH phòng ban đó — không suy rộng ra "quản lý trực tiếp" nói chung. */
 async function laTruongPhong(env, phien, phongBanId) {
-  if (laAdmin(phien.vai_tro)) return true;
+  if (laAdmin(phien)) return true;
   const pb = await env.DB.prepare('SELECT truong_phong_id FROM phong_ban WHERE id = ?').bind(phongBanId).first();
   return !!(pb && pb.truong_phong_id === phien.nhan_su_id);
 }
@@ -51,7 +51,7 @@ export async function danhSachMauCa(env) {
 }
 
 export async function themMauCa(env, phien, body) {
-  if (!duocQuanLyChinhSachCa(phien.vai_tro)) return loi('Bạn không có quyền quản lý Mẫu ca', 403);
+  if (!duocQuanLyChinhSachCa(phien)) return loi('Bạn không có quyền quản lý Mẫu ca', 403);
   const maCa = chuoi(body.ma_ca), tenCa = chuoi(body.ten_ca);
   const gioBd = chuoi(body.gio_bat_dau), gioKt = chuoi(body.gio_ket_thuc);
   if (!maCa || !tenCa || !gioBd || !gioKt) return loi('Vui lòng nhập đủ mã ca, tên ca, giờ bắt đầu/kết thúc');
@@ -69,7 +69,7 @@ export async function themMauCa(env, phien, body) {
 }
 
 export async function suaMauCa(env, phien, body) {
-  if (!duocQuanLyChinhSachCa(phien.vai_tro)) return loi('Bạn không có quyền quản lý Mẫu ca', 403);
+  if (!duocQuanLyChinhSachCa(phien)) return loi('Bạn không có quyền quản lý Mẫu ca', 403);
   const id = chuoi(body.id);
   if (!id) return loi('Thiếu id mẫu ca');
   const maCa = chuoi(body.ma_ca), tenCa = chuoi(body.ten_ca);
@@ -91,7 +91,7 @@ export async function suaMauCa(env, phien, body) {
    Mẫu ca đã dùng rồi thì "Ẩn" (dang_dung=0) thay vì xoá, để không phá vỡ
    liên kết dữ liệu lịch sử. */
 export async function xoaMauCa(env, phien, body) {
-  if (!duocQuanLyChinhSachCa(phien.vai_tro)) return loi('Bạn không có quyền quản lý Mẫu ca', 403);
+  if (!duocQuanLyChinhSachCa(phien)) return loi('Bạn không có quyền quản lý Mẫu ca', 403);
   const id = chuoi(body.id);
   if (!id) return loi('Thiếu id mẫu ca');
 

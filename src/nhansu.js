@@ -55,7 +55,7 @@ function rutJSON(text) {
    1. AI ĐỌC ẢNH CCCD → trả các trường điền sẵn
    ========================================================================== */
 export async function docCCCD(env, phien, body) {
-  if (!duocThemNhanSu(phien.vai_tro)) return loi('Bạn không có quyền quản lý nhân sự', 403);
+  if (!duocThemNhanSu(phien)) return loi('Bạn không có quyền quản lý nhân sự', 403);
   if (!env.AI) return loi('Máy chủ chưa bật AI đọc ảnh', 409);
 
   const anh = body.anh;
@@ -165,7 +165,7 @@ export async function docCCCD(env, phien, body) {
    2. LƯU HỒ SƠ NHÂN SỰ MỚI (kèm ảnh + trường HR gõ tay)
    ========================================================================== */
 export async function donNhanSuMoi(env, phien, body) {
-  if (!duocThemNhanSu(phien.vai_tro)) return loi('Bạn không có quyền quản lý nhân sự', 403);
+  if (!duocThemNhanSu(phien)) return loi('Bạn không có quyền quản lý nhân sự', 403);
 
   const hoTen = String(body.ho_ten || '').trim();
   if (hoTen.length < 2) return loi('Vui lòng nhập họ tên');
@@ -173,7 +173,7 @@ export async function donNhanSuMoi(env, phien, body) {
   const id = 'ns_' + crypto.randomUUID().slice(0, 12);
 
   // Lương: chỉ admin mới đặt được (HCNS gửi lên cũng bị ép NULL)
-  const luong = laAdmin(phien.vai_tro)
+  const luong = laAdmin(phien)
     ? ((body.luong === '' || body.luong == null) ? null : parseInt(String(body.luong).replace(/\D/g, ''), 10) || null)
     : null;
 
