@@ -73,15 +73,23 @@ const a = await thu('① Danh sách Lịch sử làm việc (taiLaiLichSuCv)',
 
 const b = await thu('② Danh sách Lịch sử hoàn (veLichSu)',
   'donhoan', `kdDaDoiSoat('RS1')`, '/api/hoan/lich-su',
-  'nằm trong nhóm "1 khối CỐ Ý KHÔNG NGHE" (có con trỏ xem tiếp)');
+  'VÒNG 5 đổi thành NGHE CÓ ĐIỀU KIỆN: chưa bấm "Tải thêm" thì nạp lại, bấm rồi thì thôi');
 
 const c = await thu('③ ĐỐI CHỨNG: bảng Đơn hoàn (veDanhSachDonHoan, CÓ nghe)',
   'donhoan', `kdDaDoiSoat('RS2')`, '/api/hoan/danh-sach',
   'khối này CÓ đăng ký nghe → phải nạp lại');
 
 console.log('\n── ĐỌC KẾT QUẢ');
-console.log(`   ① ${a > 0 ? 'ĐÚNG lời khai (đã nối dây)' : '❌ LỆCH LỜI KHAI — khai "đã nối dây" nhưng KHÔNG nạp lại'}`);
-console.log(`   ② ${b === 0 ? 'ĐÚNG lời khai (cố ý không nghe)' : '⚠ nạp lại dù khai là cố ý không nghe'}`);
+/* ⚠️ SỬA VÒNG 5 — KẾT LUẬN CŨ CỦA BÀN SOI NÀY LÀ SAI.
+   Vòng 4 tôi đọc "① 0 lượt" rồi kết luận Lịch sử làm việc "khai đã nối dây
+   nhưng KHÔNG". SAI: 0 lượt ở đó là ĐÚNG và TIẾT KIỆM — bảng `#ls-cv-bang`
+   được `window.LAM_MOI_LICHSU_VIEC` vẽ lại từ `CV_DU_LIEU_CUA_TOI` mà
+   `lamMoiCacManLienQuanCv` vừa nạp mới, nên CHỮ TRÊN MÀN HÌNH có đổi mà
+   không tốn thêm lượt gọi nào. Chứng minh bằng chữ: `soi-lichsu-bang-chu.mjs`
+   ca A. Đếm lượt gọi mạng là phép đo GIÁN TIẾP — đúng bài học tôi tự rút ra ở
+   vòng 4 và tự vi phạm ngay trong cùng báo cáo đó. */
+console.log(`   ① ${a === 0 ? 'ĐÚNG — 0 lượt là TIẾT KIỆM, không phải bỏ sót (vẽ lại từ dữ liệu vừa nạp; xem soi-lichsu-bang-chu.mjs ca A)' : 'có gọi ' + a + ' lượt'}`);
+console.log(`   ② ${b > 0 ? 'ĐÚNG lời khai VÒNG 5 — chưa bấm "Tải thêm" nên CÓ nạp lại' : 'không nạp lại'}`);
 console.log(`   ③ ${c > 0 ? 'đối chứng xanh — phép đo có mắt' : '❌ đối chứng ĐỎ — phép đo hỏng, đừng tin ① và ②'}`);
 
 const loi = [...cr.ngoaiLe, ...cr.loiConsole.filter(l => !/favicon|404/.test(l))];
