@@ -1614,6 +1614,21 @@ td .sm.dong-phu, td.cot-chu .sm {
   overflow: hidden;
 }
 
+/* --- Ô CHỨA NHÓM NÚT — `.o-nut` ---------------------------------------------
+   Thay cho `style="white-space:nowrap"` viết thẳng trong JS ở 5 chỗ. Cái
+   nowrap đó giữ ba cái nút trên MỘT dòng, và bề ngang tối thiểu của cột thành
+   tổng bề ngang ba nút cộng lại: đo được ở bảng Đơn hoàn, ô "Kho nhận" rộng
+   432px trong khung 303px và kéo cả bảng tràn +129px @1440, +170px @375 —
+   arm R của `do-bang-that` bắt được trên đường vẽ thật.
+   Nay nhóm nút tự xuống hàng khi hết chỗ. Nút KHÔNG bị gãy đôi (mỗi nút vẫn
+   là một khối), chỉ là hàng thứ hai bắt đầu sớm hơn. Inline style thắng mọi
+   lớp CSS, nên phải bỏ hẳn nó chứ không đè được. */
+td.o-nut {
+  white-space: normal;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px;
+  min-width: 0;
+}
+td.o-nut > * { white-space: nowrap; }
 /* --- LỚP 2: `.cot-phu` — CỘT KHÔNG THAM GIA QUYẾT ĐỊNH ----------------------
    Người giao · ngày tạo · mã nội bộ · email… Không nằm trên bảng ở BẤT KỲ bề
    ngang nào — kể cả 1440px, vì "vừa một màn" là yêu cầu của Sếp chứ không
@@ -1632,7 +1647,8 @@ th.cot-phu, td.cot-phu { display: none; }
    chiều cao cũ. Bàn đo arm G của `do-bang-vua-man` canh chỗ này.
    Màu: xanh lá cho trạng thái đã chọn (docs/BANG-MAU.md), không đỏ. */
 thead th > input[type="checkbox"],
-tbody td > input[type="checkbox"] {
+tbody td > input[type="checkbox"],
+.dk-thanh > input[type="checkbox"] {
   appearance: none; -webkit-appearance: none;
   width: 44px; height: 44px;
   margin: -13px -12px; padding: 0;
@@ -1641,19 +1657,54 @@ tbody td > input[type="checkbox"] {
   vertical-align: middle;
 }
 thead th > input[type="checkbox"]::before,
-tbody td > input[type="checkbox"]::before {
+tbody td > input[type="checkbox"]::before,
+.dk-thanh > input[type="checkbox"]::before {
   content: ""; width: 18px; height: 18px;
   border: 1.5px solid var(--sage); border-radius: 4px;
   background: var(--card);
 }
 thead th > input[type="checkbox"]:checked::before,
-tbody td > input[type="checkbox"]:checked::before {
+tbody td > input[type="checkbox"]:checked::before,
+.dk-thanh > input[type="checkbox"]:checked::before {
   background: var(--sage-dark); border-color: var(--sage-dark);
   box-shadow: inset 0 0 0 2px var(--card), inset 0 0 0 9px var(--sage-dark);
 }
 thead th > input[type="checkbox"]:focus-visible::before,
-tbody td > input[type="checkbox"]:focus-visible::before {
+tbody td > input[type="checkbox"]:focus-visible::before,
+.dk-thanh > input[type="checkbox"]:focus-visible::before {
   outline: 2px solid var(--sage-dark); outline-offset: 2px;
+}
+
+/* --- THANH ĐẦU BẢNG — chỗ đứng cho nút bị `thead{display:none}` nuốt mất ----
+   REV-0059 vòng 2 CAO-2. Chỉ hiện ở chế độ thẻ; JS bật/tắt bằng `hidden`
+   (xem `datChoDieuKhienThead` trong app.js). Nằm NGAY TRÊN bảng — đúng chỗ mắt
+   người ta đi tìm cái "Chọn tất cả", không phải cuối trang. */
+.thanh-dau-bang {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px;
+  margin: 0 0 8px; padding: 4px 12px;
+  border: 1px solid var(--line); border-radius: var(--r-md);
+  background: var(--surface);
+}
+.dk-thanh {
+  display: inline-flex; align-items: center; gap: 6px;
+  min-height: 44px; padding: 0 6px; cursor: pointer;
+}
+/* Ô vuông VẼ LẠI trong nhãn — ô tick thật vẫn nằm trong `<thead>` (đang bị
+   `display:none`), nhãn `for=` mới là thứ ngón tay chạm vào. Cùng hình dạng
+   và cùng màu xanh lá với ô tick trong bảng, để không ai phải học lại. */
+.dk-o {
+  width: 18px; height: 18px; flex: 0 0 18px;
+  border: 1.5px solid var(--sage); border-radius: 4px; background: var(--card);
+}
+.dk-thanh.dk-bat .dk-o {
+  background: var(--sage-dark); border-color: var(--sage-dark);
+  box-shadow: inset 0 0 0 2px var(--card), inset 0 0 0 9px var(--sage-dark);
+}
+.dk-thanh:hover .dk-o { border-color: var(--sage-dark); }
+.dk-thanh > input[type="checkbox"] { margin: 0 0 0 -12px; }
+.dk-chu {
+  font-size: 12px; font-weight: 600; letter-spacing: .04em;
+  text-transform: uppercase; color: var(--text-mute);
 }
 
 /* --- Nút "Chi tiết" + dòng chi tiết ----------------------------------------
@@ -1765,7 +1816,10 @@ tr.dong-chitiet > td {
   /* Trong thẻ có chỗ nằm ngang: nút hiện đủ chữ, không phải đoán mũi tên. */
   /* Nút nằm góc trên phải của thẻ, CÙNG HÀNG với tên — không chiếm thêm một
      hàng 44px cho mỗi thẻ. 96px chừa chỗ cho nút có chữ. */
-  .luoi-bang td.co-chitiet { padding-right: 96px; }
+  /* Ô mang nút phải CHỪA ĐỦ CHIỀU CAO cho nó. Nút cao 44px mà ô chỉ cao một
+     dòng chữ thì phần thừa của nút đổ xuống đè lên trường ngay dưới — ảnh
+     chụp 375px bắt được (tên sản phẩm chui dưới chữ "Chi tiết"). */
+  .luoi-bang td.co-chitiet { padding-right: 96px; min-height: 44px; }
   .luoi-bang .o-chitiet {
     right: 0; top: 0; transform: none;
     width: auto; min-width: 44px; padding: 0 10px; margin: 0; gap: 6px;

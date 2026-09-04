@@ -147,7 +147,13 @@ function apiRieng(duong, u, traJson) {
 const DOI_CHUNG = [
   { ma: 'DC-A', chu: 'bỏ cột nút hành động khỏi dòng việc',
     phai_do: ['toi.batdau', 'toi.nop', 'toi.todo_xong', 'toi.sua', 'giao.duyet', 'giao.tralai', 'giao.sua', 'giao.huy'],
-    be: s => s.replace('`<td style="white-space:nowrap">${nut}</td>`', '`<td></td>`') },
+    /* Chuỗi gài ĐỔI 04/09/2026 theo mã: ô nút không còn viết
+       `style="white-space:nowrap"` thẳng trong JS mà mang lớp `.o-nut` (cái
+       nowrap inline đó giữ ba nút trên MỘT dòng và kéo bảng Đơn hoàn tràn
+       +129px — xem ghi chú `.o-nut` trong style.css). Chuỗi cũ thôi khớp, nên
+       ca đối chứng này "gài mà không gãy" và tự mất răng trong im lặng — đúng
+       kiểu hỏng mà chính nó sinh ra để bắt. Sửa CHUỖI, không nới chốt. */
+    be: s => s.replace('`<td class="o-nut">${nut}</td>`', '`<td></td>`') },
   { ma: 'DC-B', chu: 'giấu dải cắt ở ba phạm vi CỦA TÔI',
     phai_do: ['dai_cat_cua_toi'],
     be: s => s.replace("return veDaiCat('#ls-cv-cat', cat, {", "return veDaiCat('#ls-cv-cat', null, {") },

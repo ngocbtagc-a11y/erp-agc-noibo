@@ -49,7 +49,7 @@ const KHUNG = (css) => `<!doctype html><html lang="vi"><head><meta charset="utf-
       của JS, một dấu backtick lạc là cả file không nạp được — và server cũ
       vẫn chạy code cũ, làm phép đo báo "đạt" trên bản chưa hề đổi.) -->
 <div class="table-wrap"><table><tbody><tr>
-  <td style="white-space:nowrap">
+  <td class="o-nut">
     <button type="button" class="btn-nho btn-primary">Duyệt xong</button>
     <button type="button" class="btn-nho cv-nut-sua" data-cv-sua="1">Sửa</button>
     <button type="button" class="btn-nho" data-cv-huy="1">Huỷ</button>

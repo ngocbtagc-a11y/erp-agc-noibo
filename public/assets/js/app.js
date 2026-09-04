@@ -3809,7 +3809,7 @@ async function khoiDongLichSuViec() {
         `<td class="sm">${hanChotVN(r.han_chot)}</td>` +
         `<td><span class="tag ${tt.mau}">${tt.chu}</span></td>` +
         `<td class="sm">${capNhatVN(r.cap_nhat_luc)}</td>` +
-        `<td style="white-space:nowrap">${nut}</td>`;
+        `<td class="o-nut">${nut}</td>`;
     });
     const oTrong = $('#ls-cv-trong');
     /* BA LÝ DO KHÁC NHAU, BA CÂU KHÁC NHAU. Nói chung một câu là cách chắc
@@ -5883,7 +5883,7 @@ if (TOI.quyen.includes('kinhdoanh')) {
           `<td class="sm">${esc(s.ma_sku)}</td>` +
           `<td class="sm">${esc(s.don_vi)}</td>` +
           `<td>${daKhoa ? '<span class="tag warn">🔒 Đã khoá</span>' : '<span class="tag mute">Nháp</span>'}</td>` +
-          `<td style="white-space:nowrap">${nutSua}${nutKhoa}</td>`;
+          `<td class="o-nut">${nutSua}${nutKhoa}</td>`;
       });
       $('#kdsp-dem').textContent = `${ds.length}/${DS_SP_KD.length} mã hàng`;
       $('#kdsp-trong').hidden = ds.length > 0;
@@ -6923,7 +6923,8 @@ async function khoiDongDoiSoatSan() {
       : `${ds.length} đơn cần đối soát`;
 
     // Mỗi lần vẽ lại bảng là danh sách chọn reset về rỗng (dữ liệu vừa đổi)
-    $('#kd-ds-chontatca').checked = false;
+    const oTatCa = $('#kd-ds-chontatca');   // có thể ĐÃ BỊ XOÁ với vai không có quyền thao tác — xem ghi chú ở listener bên dưới
+    if (oTatCa) oTatCa.checked = false;
     veThanhChon();
   }
 
@@ -6948,13 +6949,23 @@ async function khoiDongDoiSoatSan() {
     if (!e.target.matches('input[data-chon]')) return;
     veThanhChon();
   });
-  $('#kd-ds-chontatca').addEventListener('change', (e) => {
+  /* `?.` — KHÔNG phải cho đẹp. Ngay đầu hàm này, vai KHÔNG có
+     `thao_tac_van_hanh` bị xoá ô tick: `thTick.innerHTML = ''` cuốn luôn
+     `#kd-ds-chontatca`. Dòng dưới trước đây gọi thẳng `.addEventListener` trên
+     `null` → ném TypeError → CẢ mô-đun Đối soát sàn chết giữa chừng và bảng
+     KHÔNG BAO GIỜ được vẽ. Người dùng thấy một bảng rỗng; console chỉ có một
+     dòng "Đối soát sàn: TypeError" mà không ai đọc. Dòng `#kd-ds-dayketoan`
+     ngay dưới đã dùng `?.` từ trước vì đúng lý do này — dòng này bị bỏ sót.
+     Lỗi CÓ SẴN, không phải của bản vá bảng; arm R của `do-bang-that` bắt được
+     vì nó soi trên ĐƯỜNG VẼ THẬT với vai `quan_ly_kho`. */
+  $('#kd-ds-chontatca')?.addEventListener('change', (e) => {
     document.querySelectorAll('#kd-ds-bang input[data-chon]').forEach(o => { o.checked = e.target.checked; });
     veThanhChon();
   });
   $('#kd-ds-huychon').addEventListener('click', () => {
     document.querySelectorAll('#kd-ds-bang input[data-chon]').forEach(o => { o.checked = false; });
-    $('#kd-ds-chontatca').checked = false;
+    const oTatCa = $('#kd-ds-chontatca');   // có thể ĐÃ BỊ XOÁ với vai không có quyền thao tác — xem ghi chú ở listener bên dưới
+    if (oTatCa) oTatCa.checked = false;
     veThanhChon();
   });
   async function dayHangLoat(nut, goi) {
@@ -7486,7 +7497,7 @@ async function khoiDongTaiSan() {
         `<td><span class="tag ${tt.mau}">${esc(tt.chu)}</span></td>` +
         `<td class="sm">${t.nguoi_giu_ten ? esc(t.nguoi_giu_ten) + (t.nguoi_giu_ma ? ' · ' + esc(t.nguoi_giu_ma) : '') : '—'}</td>` +
         `<td class="sm">${esc(t.vi_tri_ten || t.vi_tri || '—')}</td>` +
-        `<td style="white-space:nowrap">${nut}</td>`;
+        `<td class="o-nut">${nut}</td>`;
     });
     veThanhChonTS();
   }
@@ -8962,11 +8973,11 @@ async function khoiDongDonHoan() {
         if (qua12h) cls = 'canh-bao';
         const nhac = qua12h ? '<div class="phu canh-bao-chu">Quá 12h!</div>' : '';
         khoTd = laDonHuy
-          ? `<td style="white-space:nowrap">` +
+          ? `<td class="o-nut">` +
               `<button type="button" class="btn-nho btn-primary" data-phanloai="nhap_kho" data-rsn="${esc(r.return_sn)}">Nhập kho</button> ` +
               `<button type="button" class="btn-nho" data-phanloai="hong_cho_huy" data-rsn="${esc(r.return_sn)}">Hỏng/Chờ Hủy</button> ` +
               `<button type="button" class="btn-nho" data-khieunai="${esc(r.return_sn)}">Cần khiếu nại</button>${nhac}</td>`
-          : `<td style="white-space:nowrap">` +
+          : `<td class="o-nut">` +
               `<select class="sel-tinhtrang" style="margin-right:4px">` +
                 `<option value="con_tot">Còn tốt</option>` +
                 `<option value="hu_hong">Hư hỏng</option>` +
@@ -10410,8 +10421,13 @@ function luoiBang() {
     const tb = t.tBodies[0];
     if (!tb) return;
     const ma = tb.id || t.id || '';
-    if (!BANG_KHONG_THANH_THE.has(ma)) t.classList.add('luoi-bang');
+    /* THOÁT TRƯỚC, GẮN LỚP SAU — REV-0059 vòng 2, THẤP-1.
+       Bản cũ gắn `.luoi-bang` rồi mới kiểm có `<thead>` hay không. Bảng thiếu
+       tiêu đề vẫn nhận lớp, tức vẫn đổi sang THẺ ở ≤980px, mà lại không được
+       dập `data-nhan` — ra một cái thẻ toàn giá trị không tên, đúng lỗi CHẶN-1
+       vừa chữa xong. Hôm nay chưa bảng nào rơi vào; đảo hai dòng là hết cửa. */
     if (!hangTieuDe) return;
+    if (!BANG_KHONG_THANH_THE.has(ma)) t.classList.add('luoi-bang');
     /* HAI DANH SÁCH CỘT, VÀ PHẢI CHỌN ĐÚNG CÁI — REV-0059 CHẶN-1.
        Bản đầu so thẳng số ô với số `<th>` rồi bỏ qua CẢ DÒNG khi lệch. Ý định
        là bỏ dòng gộp ô (dòng "tổng cộng"). Thực tế nó bỏ luôn BỐN bảng mà ứng
@@ -10481,7 +10497,26 @@ function luoiBang() {
            nó là cả câu — bảng phình tới 80.000px.
            Đây là chốt không cần ai nhớ gì cả: ô nào thật sự đang chứa chữ dài
            thì được cấp trần ngay, dù `<th>` của nó có được khai hay không. Chữ
-           ngắn không đụng tới, nên không dòng nào cao thêm oan. */
+           ngắn không đụng tới, nên không dòng nào cao thêm oan.
+
+           ⚠️ CON SỐ 60 LÀ MÉP, KHÔNG PHẢI MỐC AN TOÀN — REV-0059 vòng 2, ③.
+           Hồ Ly đo chính xác cái vách này (`ho-ly-nguong-60-va-tick.mjs`), nhồi
+           đúng n ký tự vào MỌI cột:
+                55 ký tự → 20 bảng tràn @1440 · 22 @1024
+                60 ký tự → 20 bảng tràn @1440 · 22 @1024
+                61 ký tự →  1 bảng  (đúng bảng miễn trừ)
+           Tức chữ 40–60 ký tự KHÔNG được cấp trần, vẫn `nowrap`, và một cột như
+           thế rộng tới 380px. Hôm nay chưa cắn: đo lại bằng chữ THẬT của ngành
+           (`ho-ly-chu-vua-vua.mjs` — "Hạt điều rang muối Bình Phước loại A túi
+           500g" 45 ký tự, "Nguyễn Thị Huyền — Vận hành sàn Shopee & TikTok" 47)
+           thì `ns-bang` và `kd-dhh-bang` vẫn 1134/1134 vừa, vì phải NHIỀU cột
+           cùng lúc mang 45–60 ký tự mới đủ đẩy bảng ra.
+           Vì sao không hạ số xuống 40 luôn: hạ là mọi tên người, mọi mã hàng
+           đều bị cấp trần và kẹp 2 dòng → dòng cao lên, số dòng thấy được giảm,
+           đúng thứ Sếp cấm. Nên để 60 và ghi mép ra đây. Thêm một cột chữ
+           vừa vừa vào `ns-bang` là lật — lúc đó arm R sẽ đỏ trước khi tới tay
+           Sếp, và cách chữa đúng là đánh dấu `.cot-chu` cho cột mới, không phải
+           hạ con số này. */
         if (!td.classList.contains('cot-chu') && !td.classList.contains('num') &&
             td.textContent.trim().length > 60) td.classList.add('cot-chu');
         if (td.classList.contains('cot-chu') && !td.children.length) {
@@ -10548,11 +10583,27 @@ document.addEventListener('click', (e) => {
     nut.setAttribute('aria-expanded', 'false');
     return;
   }
-  /* CỬA QUYỀN. Cột nào đang bị JS ẩn vì QUYỀN (`<th hidden>` — lương, hợp
-     đồng, người gửi góp ý…) thì dòng chi tiết TUYỆT ĐỐI không được mở ra:
-     "xem chi tiết" là đường xem cho cột bị giấu vì CHẬT, không phải cửa sau
-     cho cột bị giấu vì KHÔNG ĐƯỢC XEM. Đọc trạng thái `<th>` ngay lúc bấm,
-     không tin vào lớp đã dập từ trước — quyền có thể đổi giữa chừng. */
+  /* LỚP CHẶN THẬT NẰM Ở ĐÂU — đọc kỹ trước khi đổi cách khớp cột.
+     REV-0059 vòng 2, ④. Ghi chú cũ ở đây nói câu lọc `ths[i].hidden` là cửa
+     quyền. NÓI THẾ LÀ SAI CHỖ, và người sau sẽ tưởng ở đây còn máy canh.
+
+     Ba lớp, xếp theo sức mạnh giảm dần:
+       ① MÁY CHỦ — lớp duy nhất thật sự chặn. Lương: `src/index.js` dùng HAI
+          câu SQL khác nhau, vai không có quyền thì cột `luong` KHÔNG được
+          chọn ra khỏi CSDL. Giá vốn: `src/kho.js` trả thẳng `null`. Không có
+          gì trong trang để mà lộ.
+       ② KHÔNG VẼ Ô — `<th>` bị `remove()` và `<td>` không được render
+          (`NS_XEM_LUONG_DOC ? <td> : ''`). Không có ô thì không có gì để mở.
+       ③ Câu lọc dưới đây — CHỈ LÀ LỚP THỨ BA, và ở nhánh `thHien` nó gần như
+          vô hiệu: `thHien` đã lọc bỏ `<th>` ẩn rồi, nên `ths[i].hidden` luôn
+          false. Nó chỉ còn tác dụng ở nhánh danh sách ĐẦY ĐỦ (khi số ô không
+          khớp cột đang hiện) — Hồ Ly ép đúng ca đó và dòng chi tiết ra RỖNG,
+          bí mật không lọt.
+
+     Nghĩa là: hôm nay an toàn nhờ BẤT BIẾN "cùng một cờ điều khiển cả `<th>`
+     lẫn `<td>`", chứ không nhờ câu lệnh này. Ai vẽ ô mà quên khoá `<th>` sẽ
+     phá bất biến ấy — và lúc đó lớp ① mới là thứ giữ được. Đừng bao giờ đưa
+     một trường nhạy cảm xuống máy rồi trông vào lớp ③. */
   const bang = tr.closest('table');
   const thTatCa = bang ? [...(bang.querySelector('thead tr:last-of-type')?.children || [])] : [];
   /* Khớp ô với cột theo ĐÚNG cách `luoiBang()` đã khớp lúc dập lớp — bảng vẽ ô
@@ -10589,6 +10640,111 @@ document.addEventListener('click', (e) => {
   nut.setAttribute('aria-expanded', 'true');
 });
 
+/* ==========================================================================
+   THANH ĐẦU BẢNG — CỨU MỌI THỨ BẤM ĐƯỢC NẰM TRONG `<thead>` KHI ĐỔI SANG THẺ
+   ---------------------------------------------------------------------------
+   REV-0059 vòng 2, CAO-2. Chế độ thẻ có `.luoi-bang thead { display: none }`,
+   nên MỌI thứ bấm được nằm trong `<thead>` biến mất theo. Đo được ở 375px:
+   bốn ô "Chọn tất cả" đều 0×0px — Đối soát sàn · Kế toán tra soát · Kế toán
+   hàng hoàn (việc HẰNG NGÀY của chị Phan Thị Hằng) và Tài sản (anh Phạm
+   Khương Duy).
+
+   Đây là CHỨC NĂNG MẤT ĐI chứ không phải chưa từng có: trước bản vá bảng vẫn
+   là bảng nên `<thead>` hiện và ô này bấm được. Duyệt hoàn tiền 30 đơn mà
+   phải tick 30 lần thì coi như mất tính năng.
+
+   CÁCH CHỮA — CHUYỂN CHỖ, KHÔNG NHÂN BẢN. Đưa CHÍNH phần tử đó ra một thanh
+   nằm NGOÀI bảng khi màn hẹp, rồi trả về `<thead>` khi màn rộng. Giữ nguyên
+   phần tử nghĩa là giữ nguyên `id`, trạng thái `checked` và mọi trình xử lý
+   đã gắn thẳng vào nó (`$('#kd-ds-chontatca').addEventListener(...)`). Nhân
+   bản thành ô tick thứ hai là đẻ ra hai nguồn sự thật cho cùng một trạng
+   thái — đúng thứ cả đợt này đi xoá.
+
+   KHÔNG chữa bằng cách hiện lại `<thead>`: thế là mất luôn chế độ thẻ, tức
+   mất luôn cái Sếp nhắc hai lần.
+
+   TỔNG QUÁT, không riêng ô tick: quét MỌI `input`/`button`/`select` trong
+   `<thead>`. Mai ai thêm một cái nút khác vào đó thì nó được cứu sẵn, không
+   phải đợi ai nhớ. Bàn đo `do-bang-that` arm T canh đúng lớp này.
+   ========================================================================== */
+const MAN_HEP = window.matchMedia('(max-width: 980px)');
+const DK_THEAD = [];   // {el, kieu:'nhan'|'chuyen', boc, thanh, oCu}
+
+function gomDieuKhienThead() {
+  for (const t of document.querySelectorAll('table.luoi-bang')) {
+    const thead = t.tHead;
+    if (!thead) continue;
+    for (const el of thead.querySelectorAll('input, button, select')) {
+      if (el.dataset.dkThead) continue;
+      el.dataset.dkThead = '1';
+      const khung = t.closest('.table-wrap, .table-wrap-cuon') || t.parentElement;
+      let thanh = khung.previousElementSibling;
+      if (!thanh || !thanh.classList.contains('thanh-dau-bang')) {
+        thanh = document.createElement('div');
+        thanh.className = 'thanh-dau-bang';
+        thanh.hidden = true;
+        khung.before(thanh);
+      }
+      /* Nhãn lấy từ `title`/`aria-label` của CHÍNH phần tử — trong `<thead>` nó
+         không có chữ đi kèm, nên ra ngoài thanh mà không nhãn thì lại thành một
+         ô vuông không tên, đúng lỗi ô tick vòng trước. */
+      const chu = el.title || el.getAttribute('aria-label') ||
+                  (el.type === 'checkbox' ? 'Chọn tất cả' : 'Thao tác');
+      if (!el.title) el.title = chu;
+
+      if ((el.type === 'checkbox' || el.type === 'radio')) {
+        /* Ô tick: KHÔNG chuyển chỗ, mà dựng một `<label for>` ngoài bảng.
+           Đo thật trên Chrome: nhãn `for=` vẫn bật/tắt được ô tick nằm trong
+           vùng `display:none`. Nhờ vậy phần tử gốc ở NGUYÊN trong `<thead>` —
+           `id`, trạng thái `checked`, mọi trình xử lý gắn thẳng vào nó, và cả
+           hình dạng DOM mà mã khác (lẫn bàn dò) đang dựa vào đều không đổi.
+           Đây là chỗ đã đi nhầm một lần: bản đầu CHUYỂN phần tử ra ngoài, và
+           `th.querySelector('input[type=checkbox]')` ở nơi khác lập tức không
+           tìm thấy cột tick nữa. Sửa giao diện không được phép đổi hợp đồng
+           DOM mà người khác đang đọc. */
+        if (!el.id) el.id = 'dk-thead-' + DK_THEAD.length;
+        const nhan = document.createElement('label');
+        nhan.className = 'dk-thanh';
+        nhan.htmlFor = el.id;
+        nhan.innerHTML = '<span class="dk-o" aria-hidden="true"></span>' +
+                         '<span class="dk-chu"></span>';
+        nhan.querySelector('.dk-chu').textContent = chu;
+        thanh.appendChild(nhan);
+        DK_THEAD.push({ el, kieu: 'nhan', boc: nhan, thanh });
+      } else {
+        /* Nút/ô chọn: nhãn `for=` không kích được, nên đành chuyển chỗ. Hôm
+           nay chưa `<thead>` nào có, nhưng để sẵn đường cho mai. */
+        const boc = document.createElement('span');
+        boc.className = 'dk-thanh';
+        thanh.appendChild(boc);
+        DK_THEAD.push({ el, kieu: 'chuyen', boc, thanh, oCu: el.parentElement });
+      }
+    }
+  }
+}
+
+/* Đặt lại theo bề ngang hiện tại, và đồng bộ hình đánh dấu của nhãn.
+   Đồng bộ mỗi lượt chứ không chỉ nghe `change`: mã ứng dụng có chỗ gán thẳng
+   `$('#kt-ts-chontatca').checked = false` — gán tay KHÔNG phát `change`, nên
+   nếu chỉ nghe sự kiện thì cái nhãn ngoài bảng sẽ nói dối. */
+function datChoDieuKhienThead() {
+  const hep = MAN_HEP.matches;
+  for (const d of DK_THEAD) {
+    if (d.kieu === 'chuyen') {
+      if (hep) { if (d.el.parentElement !== d.boc) d.boc.appendChild(d.el); }
+      else if (d.el.parentElement !== d.oCu) d.oCu.appendChild(d.el);
+    } else {
+      const bat = !!d.el.checked;
+      if (d.boc.classList.contains('dk-bat') !== bat) d.boc.classList.toggle('dk-bat', bat);
+    }
+    if (d.thanh.hidden === hep) d.thanh.hidden = !hep;
+  }
+}
+MAN_HEP.addEventListener('change', datChoDieuKhienThead);
+document.addEventListener('change', (e) => {
+  if (e.target && e.target.dataset && e.target.dataset.dkThead) datChoDieuKhienThead();
+});
+
 /* Chạy cùng nhịp với `ganBaoCuonNgang`: một lần lúc dựng, rồi mỗi lần có
    bảng được vẽ lại. `requestAnimationFrame` gộp nhiều lần vẽ liên tiếp thành
    một lượt dập. */
@@ -10600,7 +10756,7 @@ document.addEventListener('click', (e) => {
   const quet = () => {
     if (daHen) return;
     daHen = true;
-    requestAnimationFrame(() => { daHen = false; luoiBang(); });
+    requestAnimationFrame(() => { daHen = false; luoiBang(); gomDieuKhienThead(); datChoDieuKhienThead(); });
   };
   quet();
   new MutationObserver(quet).observe(document.body, { childList: true, subtree: true });
