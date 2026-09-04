@@ -114,6 +114,40 @@ Sau khi dời: file `.sql` thẳng trong `migrations/` = 64, **file lùi = 0**.
 - Worktree mới **thiếu `node_modules`** → nhiều bàn đo báo đỏ oan. Cách vá:
   `cmd /c "mklink /J node_modules C:\Users\Admin\Desktop\AI\crm-agc\node_modules"`
 
+## NỢ MỚI GHI 04/09/2026 — cuối ngày
+
+- **Không cổng nào đo 1024px** (máy tính bảng nằm ngang), trong khi luật CSS
+  `@media (max-width:1100px)` lại **sinh ra từ chính số đo 1024** của bàn dò
+  Hồ Ly. Đo được: bench xanh 75/0 mà thật ra tràn **+12px @1024**. Cây hôm nay
+  sạch ở 1024. **Sửa: thêm `1024` vào `RONGS` — một dòng.** *(REV-0059 vòng 3)*
+- `veTinhTrang` / `veBangDoiSoat` thiếu lớp chắn kiểu `co_bang` khi máy chủ trả
+  thiếu khoá *(REV-0059 vòng 3, VỪA-2)*
+- `do-bang-that --tu-kiem` khai 67/2, **đo được 73/2** — số ĐẠT là số cũ
+- Trên thẻ, giá trị có thể **gãy đôi qua hai dòng** *(số tiền tách khỏi đơn vị)*
+- **Chìa khoá Shopee gia hạn SÁT NÚT**: `src/shopee.js:184` dùng
+  `nowSec() >= token_het_han` — chỉ gia hạn **sau khi hết hạn hẳn**, không gia
+  hạn sớm vài phút. Lệnh đang bay đúng khoảnh khắc giao thời sẽ hỏng một lần
+  rồi mới lấy chìa mới. Tự gia hạn **CÓ chạy thật** — đo được: làm mới lúc
+  14:46 ngày 04/09/2026, hạn 4 tiếng.
+- Cờ "đã bấm Tải thêm" chỉ giữ trang cũ ở phạm vi **Toàn công ty**; ba phạm vi
+  "của tôi" vẫn bị cuốn — đã ghi vào mã cạnh `daBamThemLSCV`
+- **`do-nut-sua-44px` treo** trên máy này *(có sẵn trên `main`, không phải do
+  bản vá nào)*, và **dùng chung cổng 8903 với `do-tai-tep`** nên hai bàn đo
+  không chạy song song được
+
+## CHỜ SẾP — ghi 04/09/2026
+
+- **15/24 nhân viên kho vận CHƯA CÓ tài khoản ERP.** Anh Duy quản 12 fulltime
+  + 17 parttime, mà báo cáo kho vẫn đi qua miệng và tin nhắn. Cố ý *(đang lọc
+  nhân sự)* hay chưa ai làm?
+- **Chị Vũ Lan Hương** làm cả HCNS lẫn CSKH — chờ nhánh nhiều-vị-trí
+- **Chị Dương Thị Hồng Khánh** · **chị Nguyễn Thị Bích Trâm**: hồ sơ **trống ô
+  chức vụ**, không đề xuất được vị trí công việc
+- **"Tạm kiêm" hết hạn thì quyền tự rụng hay giữ nguyên?** Gạo nghiêng về
+  **giữ nguyên + ERP nhắc Sếp** — mất quyền giữa ca làm là phá việc thật
+- **Eshop (MShopKeeper) — tài liệu ghi ngừng hỗ trợ OpenAPI từ 30/06/2026**,
+  đã qua hơn 2 tháng. Cần Sếp thử bấm "TẠO MÃ KẾT NỐI" xem còn không.
+
 ---
 
 ## TÀI LIỆU LUẬT
