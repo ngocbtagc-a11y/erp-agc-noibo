@@ -245,15 +245,30 @@ function docBangGiuCuon() {
   return ds;
 }
 
-/* MẪU HỎNG GIẢ (--tu-kiem): dựng THÊM một bảng mới, kiểu bảng mà người sau
-   này sẽ thêm — bốn cột, hai cột chữ tự do, KHÔNG đánh dấu `.cot-chu` /
-   `.cot-phu`. Đúng thứ bàn đo phải bắt được mà không cần ai nhớ khai báo. */
+/* MẪU HỎNG GIẢ (--tu-kiem): dựng THÊM một bảng mới, kiểu bảng người sau này
+   sẽ thêm mà quên khai cột nào là cột phụ.
+
+   ⚠️ MẪU NÀY ĐÃ PHẢI ĐỔI MỘT LẦN, và lý do đáng ghi lại. Bản đầu gài bốn cột
+   trong đó hai cột chữ tự do dài. Sau khi thêm LƯỚI CHẶN CUỐI trong
+   `luoiBang()` (ô nào chứa >60 ký tự thì TỰ được cấp trần), cái bảng gài đó
+   được lưới cứu và bàn đo in "54 ĐẠT · 0 TRƯỢT" — tự kiểm mất răng mà không
+   ai báo. Đó là tin MỪNG cho ứng dụng và tin XẤU cho bàn đo: mẫu hỏng phải
+   nhắm vào thứ lưới KHÔNG nuốt được, nếu không nó chỉ chứng minh lưới chạy
+   chứ không chứng minh bàn đo còn mắt.
+
+   Nay gài 14 cột chữ NGẮN — ngày tháng, mã, số. Lưới chặn cuối không đụng tới
+   (không ô nào dài quá 60 ký tự), `.cot-phu` thì không ai khai, nên bảng tràn
+   thật. Đây đúng ca "ai đó thêm bảng 14 cột vào ngày mai" mà Sếp cần máy kêu
+   thay vì phải chụp ảnh màn hình. */
 const GAI_BANG_TRAN = `(function(){
   const v = document.querySelector('.view:not([hidden])') || document.body;
   const wrap = document.createElement('div');
   wrap.className = 'table-wrap';
-  wrap.innerHTML = '<table><thead><tr><th>Nội dung bàn giao</th><th>Ghi chú của quản lý</th>' +
-    '<th>Người lập</th><th>Ngày</th></tr></thead><tbody id="bang-gai-tu-kiem"></tbody></table>';
+  const cot = ['Ngày lập','Ngày duyệt','Ngày giao','Ngày nhận','Ngày trả',
+               'Mã phiếu','Mã lô','Mã kho','Mã ca','Số lượng',
+               'Số kiện','Số pallet','Số xe','Số seal'];
+  wrap.innerHTML = '<table><thead><tr>' + cot.map(c => '<th>' + c + '</th>').join('') +
+    '</tr></thead><tbody id="bang-gai-tu-kiem"></tbody></table>';
   v.appendChild(wrap);
   return 1;
 })()`;
