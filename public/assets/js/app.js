@@ -98,6 +98,11 @@ let DS_PHONG_BAN = [], DS_CHUC_DANH = [], DS_DON_VI = [];
 // chung cho cả bảng Nhân sự (hồ sơ) lẫn Quản trị (tài khoản), 1 API duy
 // nhất thay vì mỗi tab tự gọi riêng.
 let DS_NHAN_SU_QT = [], DS_VAI_TRO_QT = [];
+/* HAI Ô (Sếp chốt 04/09/2026) — hai danh sách RIÊNG cho hai ô trên form, lấy
+   thẳng từ máy chủ chứ không lọc lại ở đây (luật thuộc src/quyen.js).
+   QT_CO_COT_VI_TRI = null khi chưa nạp danh sách; false nghĩa là CSDL chưa
+   chạy migration them-vi-tri-cong-viec.sql, ô 2 phải ẩn đi. */
+let DS_VAI_TRO_HE_THONG = [], DS_VI_TRI_CONG_VIEC = [], QT_CO_COT_VI_TRI = null;
 // Người xem thường (không có them_nhan_su) chỉ có bảng hồ sơ, dữ liệu ít hơn
 // (không cột lương nếu không có quyền) — vẫn cần lưu lại để Search/Filter
 // lọc phía client không phải gọi lại API mỗi lần gõ.
@@ -131,9 +136,14 @@ async function taiLaiNhanSuQuanTri() {
     return;
   }
 
-  const { nhan_su, vai_tro } = await API.qtDanhSach();
+  const { nhan_su, vai_tro, vai_tro_he_thong, vi_tri_cong_viec, co_cot_vi_tri } = await API.qtDanhSach();
   DS_NHAN_SU_QT = nhan_su;
   DS_VAI_TRO_QT = vai_tro;
+  // Máy chủ cũ (chưa deploy bản hai ô) không trả hai danh sách này — rơi về
+  // mảng rỗng thay vì nổ, màn hình vẫn vẽ được như trước.
+  DS_VAI_TRO_HE_THONG = vai_tro_he_thong || [];
+  DS_VI_TRI_CONG_VIEC = vi_tri_cong_viec || [];
+  QT_CO_COT_VI_TRI = co_cot_vi_tri === undefined ? null : !!co_cot_vi_tri;
 
   const oLuongTh = $('#ns-thLuong'); if (oLuongTh) oLuongTh.hidden = true;
   napBoLocBoPhanNS(nhan_su);
@@ -463,7 +473,9 @@ function locTaiKhoanQT(ds) {
   const k = boDau(($('#qt-tim')?.value || '').trim());
   const vaiTro = $('#qt-locvaitro')?.value || '';
   return ds.filter(n => {
-    if (vaiTro && n.vai_tro !== vaiTro) return false;
+    // Lọc theo CẢ HAI ô (04/09/2026): chọn "Quản lý kho" ở bộ lọc mà chỉ so
+    // ô 1 thì sau migration ra 0 kết quả, vì vị trí đã dọn sang ô 2.
+    if (vaiTro && n.vai_tro !== vaiTro && n.vi_tri_cong_viec !== vaiTro) return false;
     if (k && !boDau(`${n.ma_nv || ''} ${n.ho_ten} ${n.ten_dang_nhap || ''}`).includes(k)) return false;
     return true;
   });
@@ -480,6 +492,16 @@ function xoaLocQT() {
    Profile Phase 1, 25/08/2026) — Rule 5, không viết lại 2 lần. `n` là 1
    dòng trong DS_NHAN_SU_QT (đã có sẵn tai_khoan_id/ten_dang_nhap/vai_tro/
    kich_hoat/phai_doi_mk qua qtDanhSach, không cần gọi thêm API). */
+/* Tên hai ô gộp lại: "Admin backup · Kế toán trưởng" (Sếp chốt 04/09/2026).
+   Một chỗ duy nhất — bảng Quản trị và khối Tài khoản trong hồ sơ nhân sự
+   dùng chung, khỏi ghép mỗi nơi một kiểu. Đối chiếu tên hiển thị qua
+   DS_VAI_TRO_QT (do máy chủ trả), KHÔNG viết cứng tên tiếng Việt ở đây. */
+function tenHaiO(n, bang) {
+  const ds = bang || DS_VAI_TRO_QT;
+  const ten = (ma) => ma ? ((ds.find(v => v.ma === ma) || {}).ten || ma) : '';
+  return [ten(n.vai_tro), ten(n.vi_tri_cong_viec)].filter(Boolean).join(' · ');
+}
+
 function veCotTaiKhoan(n) {
   if (!n.tai_khoan_id) return '<span class="tag mute">Chưa có</span>';
   if (!n.kich_hoat) return `<span class="tag danger">Đã khoá</span> <span class="sm">${esc(n.ten_dang_nhap)}</span>`;
@@ -500,9 +522,14 @@ function veThaoTacTaiKhoan(n) {
   const nutDuyetGopY = TOI.duyet_gopy
     ? `<button class="btn-nho btn-phu" data-quyenduyetgopy="${n.tai_khoan_id}" data-qdg-bat="${n.duyet_gopy ? 0 : 1}" data-qdg-ten="${esc(n.ho_ten)}">${n.duyet_gopy ? 'Thu quyền duyệt góp ý' : 'Cho duyệt góp ý'}</button> `
     : '';
-  if (!TOI.la_admin) return nutDuyetGopY || '<span class="sm">—</span>';
-  return nutDuyetGopY +
-    `<button class="btn-nho btn-phu" data-doivaitro="${n.tai_khoan_id}" data-doivaitro-ten="${esc(n.ho_ten)}" data-doivaitro-hientai="${esc(n.vai_tro || '')}">Đổi vai trò</button> ` +
+  /* Nút "Đổi vai trò" nay mở cho CẢ người chỉ được đặt VỊ TRÍ (HCNS) — họ
+     thấy đúng ô 2, không thấy ô 1 (xem moHopDoiVaiTro). Trước 04/09/2026
+     nút này chỉ Admin thấy, nên đặt vị trí cho nhân viên mới phải chờ Sếp. */
+  const nutDoiVaiTro = (TOI.la_admin || TOI.duoc_dat_vi_tri)
+    ? `<button class="btn-nho btn-phu" data-doivaitro="${n.tai_khoan_id}" data-doivaitro-ten="${esc(n.ho_ten)}" data-doivaitro-hientai="${esc(n.vai_tro || '')}" data-doivaitro-vitri="${esc(n.vi_tri_cong_viec || '')}">Đổi vai trò</button> `
+    : '';
+  if (!TOI.la_admin) return (nutDuyetGopY + nutDoiVaiTro) || '<span class="sm">—</span>';
+  return nutDuyetGopY + nutDoiVaiTro +
     `<button class="btn-nho btn-phu" data-datlai="${n.tai_khoan_id}">Đặt lại MK</button> ` +
     (n.kich_hoat
       ? `<button class="btn-nho btn-phu" data-khoa="${n.tai_khoan_id}" data-kh="0">Khoá</button>`
@@ -518,7 +545,9 @@ function veBangQtTaiKhoan() {
   veBang('#qtBang', ds, n => {
     const coTK = !!n.tai_khoan_id;
     const tt = TRANG_THAI[n.trang_thai] || { chu: n.trang_thai, mau: 'mute' };
-    const tenVaiTro = coTK ? (vai_tro.find(v => v.ma === n.vai_tro)?.ten || n.vai_tro) : '';
+    // HAI Ô — hiện cả hai, ngăn bằng "·". Hiện mỗi ô 1 thì sau migration cả
+    // bảng toàn chữ "Người dùng" và không ai biết ai làm nghề gì.
+    const tenVaiTro = coTK ? tenHaiO(n, vai_tro) : '';
     const cotTK = veCotTaiKhoan(n);
     const thaoTac = veThaoTacTaiKhoan(n);
     return '' +
@@ -4979,7 +5008,26 @@ if (TOI.quyen.includes('nhansu')) {
       // SPEC-0007 Đợt 1 — hai sự kiện này backend ĐÃ ghi từ vòng trước nhưng
       // từ điển thiếu ⇒ hồ sơ hiện mã thô (N-2 · REV-0013).
       doi_loai_lao_dong: 'Đổi loại lao động', don_ca_khoan_viec: '⚠️ Dọn ca do chuyển Khoán việc',
-      hop_dong: 'Hợp đồng lao động'
+      hop_dong: 'Hợp đồng lao động',
+      /* REV-0058 ③ — LẶP LẠI ĐÚNG LỖI mà chú thích ngay phía trên vừa nói là
+         đã vá vòng trước. Nên quét lại CẢ từ điển thay vì chỉ thêm cái vừa
+         thiếu: máy chủ ghi 14 loại sự kiện vào `nhan_su_lich_su`, từ điển này
+         mới có 9 — SÁU loại hiện mã thô, không phải hai. Bốn loại đầu dưới đây
+         đã hỏng âm thầm từ TRƯỚC bản này; hai loại cuối là của bản này.
+         Bàn đo `scripts/do-tach-vai-tro.mjs` nay đối chiếu từ điển với chuỗi
+         máy chủ THẬT SỰ ghi, qua HAI đường ghi đang có: câu `INSERT` thẳng
+         (đặt cột theo thứ tự nào cũng bắt được) và lời gọi `ghiVetVaiTro()`.
+         Ca đối chứng DC-K/DC-L canh đúng hai đường đó.
+         KHÔNG nói "lần vá cuối" nữa — bản trước nói thế rồi lọt ngay hai
+         đường né. Chốt này CÒN MÙ nếu người sau dựng một hàm ghi vết THỨ BA
+         (không phải `ghiVetVaiTro`, cũng không `INSERT` thẳng). Thêm hàm như
+         thế thì khai thêm tên nó vào vòng quét trong bàn đo. */
+      ky_nang: 'Kỹ năng',
+      doi_ngay_sinh: 'Đổi ngày sinh',
+      mo_ta_cong_viec: 'Mô tả công việc',
+      khoi_phuc_dang_nhap: '🔑 Khôi phục đăng nhập',
+      cap_tai_khoan: '🔑 Cấp tài khoản ERP',
+      doi_vai_tro: 'Đổi vai trò · vị trí công việc'
     };
 
     // Header tổng quan + khối Tài khoản ERP (Employee Profile Phase 1) —
@@ -5002,7 +5050,7 @@ if (TOI.quyen.includes('nhansu')) {
     }
     function veKhoiTaiKhoan(n) {
       $('#nsSua-taikhoan').innerHTML =
-        `<div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap">${veCotTaiKhoan(n)}<span class="sm">${n.tai_khoan_id ? esc((DS_VAI_TRO_QT.find(v => v.ma === n.vai_tro) || {}).ten || n.vai_tro || '') : ''}</span></div>` +
+        `<div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap">${veCotTaiKhoan(n)}<span class="sm">${n.tai_khoan_id ? esc(tenHaiO(n)) : ''}</span></div>` +
         `<div style="margin-top:8px">${veThaoTacTaiKhoan(n)}</div>`;
     }
     async function veLichSuHoSo(id) {
@@ -9579,7 +9627,7 @@ if (TOI.quyen.includes('quantri')) {
         await taiLaiNhanSuQuanTri();
       } catch (err) { alert(err.message); btn.disabled = false; }
     } else if (btn.dataset.doivaitro) {
-      moHopDoiVaiTro(btn.dataset.doivaitro, btn.dataset.doivaitroTen, btn.dataset.doivaitroHientai);
+      moHopDoiVaiTro(btn.dataset.doivaitro, btn.dataset.doivaitroTen, btn.dataset.doivaitroHientai, btn.dataset.doivaitroVitri);
     } else if (btn.dataset.quyenduyetgopy) {
       const bat = btn.dataset.qdgBat === '1';
       const ten = btn.dataset.qdgTen;
@@ -9596,28 +9644,41 @@ if (TOI.quyen.includes('quantri')) {
   $('#qtBang').addEventListener('click', xuLyThaoTacTaiKhoan);
   $('#nsSua-taikhoan').addEventListener('click', xuLyThaoTacTaiKhoan);
 
-  /* Combobox vai trò, giữ 2 nhóm "Vai trò hệ thống" tách khỏi "Vị trí công
-     việc" (Sếp chốt 23/08/2026: 2 thứ khác nhau, không gộp 1 danh sách
-     phẳng) — nhom đến từ src/quyen.js nhomVaiTro(), không suy đoán ở
-     frontend. tienTo = "taoTkVaiTro" | "doiVaiTroMoi", khớp id các phần tử
-     combo (${tienTo}HienThi/Panel/Tim/GoiY) + input hidden ${tienTo}. */
-  function veTuyChonVaiTro(tienTo, hienTai) {
+  /* HAI COMBOBOX, KHÔNG PHẢI MỘT (Sếp Ngọc chốt 04/09/2026: "gộp 2 vai trò
+     như này ko biết phân quyền kiểu gì nhé, tách ra 2 vai trò đi").
+     Trước bản này CHỈ CÓ MỘT combobox, bên trong chia 2 tiêu đề nhóm cho dễ
+     nhìn — nhưng vẫn chọn được ĐÚNG MỘT, nên ai cũng phải bỏ một nửa.
+     Danh sách của từng ô lấy THẲNG từ máy chủ (VAI_TRO_HE_THONG /
+     VI_TRI_CONG_VIEC trong src/quyen.js) — frontend KHÔNG tự đoán mã nào
+     thuộc ô nào. tienTo khớp id các phần tử combo (${tienTo}HienThi/Panel/
+     Tim/GoiY) + input hidden ${tienTo}. */
+  function veComboVaiTro(tienTo, danhSach, hienTai, chuRong, chuTrong) {
     const oGiaTri = $('#' + tienTo);
-    if (hienTai) oGiaTri.value = hienTai;
+    if (!oGiaTri) return null;
+    oGiaTri.value = hienTai || '';
     return ganCombo({
       hienThi: $('#' + tienTo + 'HienThi'), panel: $('#' + tienTo + 'Panel'),
       tim: $('#' + tienTo + 'Tim'), goiY: $('#' + tienTo + 'GoiY'), giaTri: oGiaTri
-    }, () => DS_VAI_TRO_QT.map(v => ({
-      gia_tri: v.ma, nhan: v.ten, nhom: v.nhom === 'he_thong' ? 'Vai trò hệ thống' : 'Vị trí công việc'
-    })), null, 'Chọn vai trò...');
+    }, () => danhSach().map(v => ({ gia_tri: v.ma, nhan: v.ten })), chuTrong, chuRong);
   }
+  const veComboO1 = (tienTo, hienTai) =>
+    veComboVaiTro(tienTo, () => DS_VAI_TRO_HE_THONG, hienTai, 'Chọn vai trò...', null);
+  /* Ô 2 CÓ lựa chọn rỗng "— Chưa gán —": bỏ vị trí của một người là việc
+     thật (chuyển bộ phận, tạm ngưng), phải bấm được, không phải chỉ đặt vào
+     mà không gỡ ra được. */
+  const veComboO2 = (tienTo, hienTai) =>
+    veComboVaiTro(tienTo, () => DS_VI_TRI_CONG_VIEC, hienTai, 'Chưa gán vị trí', '— Chưa gán —');
 
   // Hộp tạo tài khoản
   function moHopTaoTaiKhoan(nhanSuId, tenGoiY, hoTen) {
     $('#taoTkHoTen').textContent = hoTen || '';
     $('#taoTkTen').value = tenGoiY || '';
-    $('#taoTkVaiTro').value = '';
-    veTuyChonVaiTro('taoTkVaiTro');
+    veComboO1('taoTkVaiTro', '');
+    veComboO2('taoTkViTri', '');
+    // Chưa nạp migration thì ô 2 không lưu được gì — nói thẳng ra thay vì để
+    // Sếp chọn xong rồi mới báo lỗi (máy chủ vẫn chặn, đây chỉ là báo sớm).
+    const oO2 = $('#taoTkViTri')?.closest('.field');
+    if (oO2) oO2.hidden = QT_CO_COT_VI_TRI === false;
     $('#taoTkLoi').textContent = '';
     $('#taoTkForm').dataset.nhanSuId = nhanSuId;
     $('#taoTkModalNen').hidden = false;
@@ -9628,18 +9689,29 @@ if (TOI.quyen.includes('quantri')) {
     e.preventDefault();
     const oLoi = $('#taoTkLoi'); oLoi.textContent = '';
     try {
-      const kq = await API.qtTaoTaiKhoan($('#taoTkForm').dataset.nhanSuId, $('#taoTkTen').value.trim(), $('#taoTkVaiTro').value);
+      const kq = await API.qtTaoTaiKhoan(
+        $('#taoTkForm').dataset.nhanSuId, $('#taoTkTen').value.trim(),
+        $('#taoTkVaiTro').value, $('#taoTkViTri').value);
       $('#taoTkModalNen').hidden = true;
       hienMatKhauTam('Đã tạo tài khoản', kq.ten_dang_nhap, kq.mat_khau_tam);
       await taiLaiNhanSuQuanTri();
     } catch (err) { oLoi.textContent = err.message || 'Không tạo được, thử lại nhé.'; }
   });
 
-  // Hộp đổi vai trò
-  function moHopDoiVaiTro(taiKhoanId, hoTen, vaiTroHienTai) {
+  // Hộp đổi vai trò — nay đổi được CẢ HAI ô trong một lần bấm
+  function moHopDoiVaiTro(taiKhoanId, hoTen, vaiTroHienTai, viTriHienTai) {
     $('#doiVaiTroHoTen').textContent = hoTen || '';
-    $('#doiVaiTroHienTai').textContent = (DS_VAI_TRO_QT.find(v => v.ma === vaiTroHienTai) || {}).ten || vaiTroHienTai || '—';
-    veTuyChonVaiTro('doiVaiTroMoi', vaiTroHienTai);
+    const ten = (ma) => (DS_VAI_TRO_QT.find(v => v.ma === ma) || {}).ten || ma || '';
+    $('#doiVaiTroHienTai').textContent =
+      [ten(vaiTroHienTai), ten(viTriHienTai)].filter(Boolean).join(' · ') || '—';
+    veComboO1('doiVaiTroMoi', vaiTroHienTai);
+    veComboO2('doiViTri', viTriHienTai);
+    /* Ai chỉ được đặt VỊ TRÍ (HCNS) thì không thấy ô 1 — và quan trọng hơn,
+       không GỬI ô 1 lên (xem submit bên dưới), nên không có đường nào tự
+       nâng mình lên Admin qua màn này. Máy chủ vẫn chặn độc lập. */
+    const chinhO1 = !!TOI.duoc_tao_tai_khoan;
+    const oO1 = $('#doiVaiTroO1'); if (oO1) oO1.hidden = !chinhO1;
+    const oO2 = $('#doiVaiTroO2'); if (oO2) oO2.hidden = QT_CO_COT_VI_TRI === false;
     $('#doiVaiTroLoi').textContent = '';
     $('#doiVaiTroForm').dataset.taiKhoanId = taiKhoanId;
     $('#doiVaiTroModalNen').hidden = false;
@@ -9650,7 +9722,11 @@ if (TOI.quyen.includes('quantri')) {
     e.preventDefault();
     const oLoi = $('#doiVaiTroLoi'); oLoi.textContent = '';
     try {
-      await API.qtSuaVaiTro(parseInt($('#doiVaiTroForm').dataset.taiKhoanId, 10), $('#doiVaiTroMoi').value);
+      // `undefined` = KHÔNG gửi ô đó lên = máy chủ giữ nguyên.
+      await API.qtSuaVaiTro(
+        parseInt($('#doiVaiTroForm').dataset.taiKhoanId, 10),
+        TOI.duoc_tao_tai_khoan ? $('#doiVaiTroMoi').value : undefined,
+        QT_CO_COT_VI_TRI === false ? undefined : $('#doiViTri').value);
       $('#doiVaiTroModalNen').hidden = true;
       await taiLaiNhanSuQuanTri();
     } catch (err) { oLoi.textContent = err.message || 'Không lưu được, thử lại nhé.'; }

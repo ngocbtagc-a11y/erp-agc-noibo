@@ -117,15 +117,33 @@ async function daGuiTrongThang(env, loai, thang) {
  *  trò mới (CTL-0015 §4.C.2) và KHÔNG đụng `src/quyen.js`.
  *  Không có ai mang vai trò `hcns` thì rơi về Admin — nếu không, tính năng
  *  sẽ IM LẶNG TUYỆT ĐỐI mà không ai biết (BH-21). */
-async function nguoiNhanHCNS(env) {
-  const { results } = await env.DB.prepare(`
-    SELECT t.nhan_su_id, t.vai_tro FROM tai_khoan t
+/* Xuất ra để bàn đo do-tach-vai-tro.mjs gọi được thẳng (ca đối chứng DC-H:
+   soi mỗi ô 1 thì chị Vũ Lan Hương mất hết tin nhắc mà im lặng tuyệt đối). */
+export async function nguoiNhanHCNS(env) {
+  /* HAI Ô (Sếp chốt 04/09/2026): sau migration them-vi-tri-cong-viec.sql thì
+     `hcns` là một VỊ TRÍ (ô 2), không còn nằm ở cột `vai_tro`. Soi mỗi ô 1 là
+     chị Vũ Lan Hương không nhận được MỘT tin nhắc nhân sự nào nữa, mà lại im
+     lặng tuyệt đối — đúng bẫy BH-21 câu chú thích trên vừa nhắc. Soi CẢ HAI.
+     Cột ô 2 có thể chưa nạp: thiếu thì lùi về đúng câu cũ, không ném lỗi. */
+  const cau = (coViTri) => `
+    SELECT t.nhan_su_id, t.vai_tro,
+           ${coViTri ? 't.vi_tri_cong_viec' : "'' AS vi_tri_cong_viec"}
+      FROM tai_khoan t
       JOIN nhan_su n ON n.id = t.nhan_su_id
      WHERE t.kich_hoat = 1 AND n.dang_lam = 1
-       AND t.vai_tro IN ('hcns', 'admin', 'admin_backup')
-  `).all();
+       AND (t.vai_tro IN ('hcns', 'admin', 'admin_backup')
+            ${coViTri ? "OR t.vi_tri_cong_viec = 'hcns'" : ''})
+  `;
+  let results;
+  try {
+    ({ results } = await env.DB.prepare(cau(true)).all());
+  } catch (e) {
+    if (!/no such column/i.test(String(e && e.message))) throw e;
+    ({ results } = await env.DB.prepare(cau(false)).all());
+  }
   const ds = results || [];
-  const hcns = ds.filter(x => x.vai_tro === 'hcns').map(x => x.nhan_su_id);
+  const laHcns = (x) => x.vai_tro === 'hcns' || x.vi_tri_cong_viec === 'hcns';
+  const hcns = ds.filter(laHcns).map(x => x.nhan_su_id);
   return hcns.length ? hcns : ds.map(x => x.nhan_su_id);
 }
 

@@ -771,7 +771,7 @@ export async function luuTaiLieu(env, phien, body) {
   /* ⚠️ CẮT Ở MÁY CHỦ. Đây là chỗ chặn thật — giao diện có ẩn nút hay không
      cũng không liên quan. Gọi thẳng API bằng tư cách kế toán để lưu vào nhóm
      `nhan_su` thì dừng ở đúng dòng này. */
-  if (!duocLuuNhomTaiLieu(phien.vai_tro, nhom)) {
+  if (!duocLuuNhomTaiLieu(phien, nhom)) {
     return loi(`Bạn không có quyền lưu tài liệu vào nhóm "${NHOM_TAI_LIEU[nhom].ten}"`, 403);
   }
 
@@ -1119,7 +1119,7 @@ export async function luuTaiLieu(env, phien, body) {
    5. TRA CỨU  —  GET /api/tai-lieu
    ========================================================================== */
 export async function danhSachTaiLieu(env, phien, thamSo) {
-  const duocXem = nhomTaiLieuXemDuoc(phien.vai_tro);
+  const duocXem = nhomTaiLieuXemDuoc(phien);
 
   /* ---- MỘT KHO, HAI CỬA NHÌN  ·  CTL-0025 Đợt 2 -------------------------
      `gan_id` có mặt = đang nhìn qua cửa HỒ SƠ MỘT NGƯỜI (chỉ giấy của người
@@ -1137,7 +1137,7 @@ export async function danhSachTaiLieu(env, phien, thamSo) {
      thẳng, KHÔNG trả danh sách rỗng. Rỗng làm người ta tưởng người này chưa có
      giấy tờ nào và đi quét lại từ đầu — che quyền bằng cách nói dối về dữ liệu
      là chỗ tệ nhất để tiết kiệm một dòng chữ. */
-  if (ganId && !duocXemNhomTaiLieu(phien.vai_tro, NHOM_CUA_NHAN_SU)) {
+  if (ganId && !duocXemNhomTaiLieu(phien, NHOM_CUA_NHAN_SU)) {
     return loi('Bạn không có quyền xem giấy tờ nhân sự. Chỉ HCNS và Ban giám ' +
                'đốc mở được hồ sơ giấy tờ của người khác.', 403);
   }
@@ -1158,7 +1158,7 @@ export async function danhSachTaiLieu(env, phien, thamSo) {
      lấy hết là dữ liệu đã rời máy chủ, và chỉ cần một lần quên lọc là lộ. */
   const nhomHoi = String(thamSo.get('nhom') || '').trim();
   if (nhomHoi) {
-    if (!duocXemNhomTaiLieu(phien.vai_tro, nhomHoi)) {
+    if (!duocXemNhomTaiLieu(phien, nhomHoi)) {
       return loi('Bạn không có quyền xem nhóm giấy tờ này', 403);
     }
     dieuKien.push('nhom = ?'); bien.push(nhomHoi);
@@ -1283,12 +1283,12 @@ export async function danhSachTaiLieu(env, phien, thamSo) {
     cat,
     tran: GH,
     nhom: duocXem.map(m => ({ ma: m, ...NHOM_TAI_LIEU[m] })),
-    nhom_luu_duoc: nhomTaiLieuLuuDuoc(phien.vai_tro),
+    nhom_luu_duoc: nhomTaiLieuLuuDuoc(phien),
     /* Cửa hồ sơ nhân sự: trả kèm bộ loại giấy tờ + quyền quét, để giao diện
        KHÔNG giữ bản chép tay nào của hai thứ đó. Một chỗ khai, một đường đi. */
     gan_id: ganId || null,
     loai_goi_y: ganId ? LOAI_GIAY_NHAN_SU : [],
-    duoc_quet_nhan_su: duocLuuNhomTaiLieu(phien.vai_tro, NHOM_CUA_NHAN_SU),
+    duoc_quet_nhan_su: duocLuuNhomTaiLieu(phien, NHOM_CUA_NHAN_SU),
     canh_bao: CANH_BAO_PHAP_LY + (ganId ? ' ' + CANH_BAO_TRA_GIAY : '')
   });
 }
@@ -1305,7 +1305,7 @@ async function layVaKiemQuyen(env, phien, id) {
   /* ⚠️ ĐÂY LÀ CHỖ CHẶN THẬT (BH-16 sẽ dựng ca đối chứng đúng dòng này):
      kế toán gọi thẳng API xin một tài liệu nhóm `nhan_su` → dừng ở đây, 403.
      Bỏ dòng này thì phép kiểm PHẢI đỏ. */
-  if (!duocXemNhomTaiLieu(phien.vai_tro, tl.nhom)) {
+  if (!duocXemNhomTaiLieu(phien, tl.nhom)) {
     return { loi: loi('Bạn không có quyền xem nhóm giấy tờ này', 403) };
   }
   return { tl };
@@ -1381,7 +1381,7 @@ export async function moTaiLieu(env, phien, id) {
       chu_nguon: tl.chu_nguon || null,
       /* Ai được bấm nút sửa số hiệu / tên. MÁY CHỦ trả lời, giao diện không tự
          đoán — và máy chủ vẫn kiểm lại lần nữa ở `suaTaiLieu`. */
-      sua_duoc: duocLuuNhomTaiLieu(phien.vai_tro, tl.nhom)
+      sua_duoc: duocLuuNhomTaiLieu(phien, tl.nhom)
     },
     canh_bao: CANH_BAO_PHAP_LY
   });
@@ -1435,7 +1435,7 @@ export async function suaTaiLieu(env, phien, body) {
   /* ⚠️ CẮT Ở MÁY CHỦ, THEO ĐÚNG QUYỀN NHÓM. Giao diện có ẩn nút hay không cũng
      không liên quan: kế toán gọi thẳng API để sửa một tờ giấy nhóm `nhan_su`
      thì dừng ở đúng dòng này. Cùng một chốt với `anTaiLieu`. */
-  if (!duocLuuNhomTaiLieu(phien.vai_tro, tl.nhom)) {
+  if (!duocLuuNhomTaiLieu(phien, tl.nhom)) {
     return loi(`Bạn không có quyền sửa tài liệu nhóm "${NHOM_TAI_LIEU[tl.nhom]?.ten || tl.nhom}"`, 403);
   }
 
@@ -1609,7 +1609,7 @@ export async function tepTaiLieu(env, phien, id) {
 /** Nhật ký ai đã mở — chỉ Admin. Người thường xem được nhật ký truy cập của
  *  người khác thì chính cái nhật ký lại thành chỗ rò thông tin. */
 export async function nhatKyTaiLieu(env, phien, id) {
-  if (!laAdmin(phien.vai_tro)) return loi('Chỉ Admin xem được nhật ký truy cập', 403);
+  if (!laAdmin(phien)) return loi('Chỉ Admin xem được nhật ký truy cập', 403);
   if (!id) return loi('Thiếu mã tài liệu');
   /* `k.luc` là giờ mở ĐẦU TIÊN trong ngày — nhật ký gộp theo ngày, xem
      `ghiNhatKy()`. Đặt tên cột trả về cho đúng nghĩa để màn hình không lỡ
@@ -1644,7 +1644,7 @@ export async function nhatKyTaiLieu(env, phien, id) {
 export async function anTaiLieu(env, phien, body) {
   const { tl, loi: l } = await layVaKiemQuyen(env, phien, body.id);
   if (l) return l;
-  if (!duocLuuNhomTaiLieu(phien.vai_tro, tl.nhom)) {
+  if (!duocLuuNhomTaiLieu(phien, tl.nhom)) {
     return loi('Bạn không có quyền sửa tài liệu nhóm này', 403);
   }
   await env.DB.prepare('UPDATE tai_lieu SET an = 1 WHERE id = ?').bind(tl.id).run();
@@ -1701,15 +1701,29 @@ export async function quetNhacHetHanTaiLieu(env, guiThongBao, luc = new Date()) 
   /* Gửi cho ai: người có quyền XEM nhóm đó và đang đi làm. Dùng đúng bảng
      phân quyền ở `src/quyen.js`, không viết luật thứ hai — quản lý kho không
      xem được nhóm nhân sự thì cũng KHÔNG nhận tin nhắc hạn của nhóm đó. */
-  const { results: tk } = await env.DB.prepare(`
-    SELECT t.nhan_su_id, t.vai_tro FROM tai_khoan t
+  /* Lấy CẢ HAI ô (Sếp chốt 04/09/2026) rồi truyền nguyên dòng vào
+     duocXemNhomTaiLieu — hàm đó hợp hai ô. Truyền mỗi `vai_tro` là sau
+     migration chị Phan Thị Hằng (nguoi_dung + ke_toan_truong) mất hết tin
+     nhắc hạn giấy tờ kế toán. Cột ô 2 có thể chưa nạp: thiếu thì lùi về câu
+     cũ, cron nhắc hạn không được phép chết vì một cột. */
+  const cau = (coViTri) => `
+    SELECT t.nhan_su_id, t.vai_tro,
+           ${coViTri ? 't.vi_tri_cong_viec' : "'' AS vi_tri_cong_viec"}
+      FROM tai_khoan t
       JOIN nhan_su n ON n.id = t.nhan_su_id
      WHERE t.kich_hoat = 1 AND n.dang_lam = 1
-  `).all();
+  `;
+  let tk;
+  try {
+    ({ results: tk } = await env.DB.prepare(cau(true)).all());
+  } catch (e) {
+    if (!/no such column/i.test(String(e && e.message))) throw e;
+    ({ results: tk } = await env.DB.prepare(cau(false)).all());
+  }
 
   const theoNguoi = new Map();
   for (const nguoi of (tk || [])) {
-    const cua = canNhac.filter(t => duocXemNhomTaiLieu(nguoi.vai_tro, t.nhom));
+    const cua = canNhac.filter(t => duocXemNhomTaiLieu(nguoi, t.nhom));
     if (cua.length) theoNguoi.set(nguoi.nhan_su_id, cua);
   }
 
