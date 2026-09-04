@@ -1563,6 +1563,18 @@ th.cot-chu, td.cot-chu {
 /* Trong cửa sổ bật lên khung chỉ rộng ~588px trên máy và ~295px trên điện
    thoại — trần 300px của bảng thường là quá rộng, hai cột chữ đã ăn hết chỗ. */
 .modal th.cot-chu, .modal td.cot-chu { max-width: 160px; min-width: 100px; }
+/* Từ 1100px xuống, khung bảng chỉ còn ~718px (máy tính bảng nằm ngang) — bốn
+   bảng vẫn tràn 15–62px với trần 240px. Hạ trần thay vì bỏ thêm cột: chữ vẫn
+   đọc được 2 dòng, và không cột nào phải rời bảng ở một bề ngang trung gian.
+   Đo bằng `node scripts/ho-ly-soi-luoi.mjs` (bàn dò của Hồ Ly, có mốc 1024px
+   mà bàn đo của tôi không có). */
+@media (max-width: 1100px) {
+  th.cot-chu, td.cot-chu { max-width: 180px; min-width: 90px; }
+  /* Chỗ THẬT SỰ chặn ở bề ngang này là `min-width`, không phải `max-width`:
+     bảng đã co hết cỡ rồi mà sàn của từng cột cộng lại vẫn vượt khung. Hạ sàn
+     mới cứu được, hạ trần thì không đổi gì cả (thử rồi, +36px vẫn nguyên). */
+  td.cot-chu.co-chitiet { min-width: 150px; }
+}
 /* CÁI KẸP 2 DÒNG NẰM Ở LỚP CON, TUYỆT ĐỐI KHÔNG NẰM TRÊN Ô.
    Bẫy đã dính một lần và bàn đo bắt được: đặt `display:-webkit-box` thẳng
    lên `<td>` thì ô đó THÔI LÀ Ô BẢNG — bố cục hàng vỡ, chiều cao một dòng
@@ -1609,6 +1621,41 @@ td .sm.dong-phu, td.cot-chu .sm {
    ra đúng những ô này, đọc thẳng từ DOM nên không thể lệch với bảng. */
 th.cot-phu, td.cot-phu { display: none; }
 
+/* --- Ô TICK CHỌN DÒNG — 44px cho ngón tay -----------------------------------
+   REV-0059 CAO-2. Ô tick mặc định của trình duyệt là 13×13px — chưa tới một
+   phần ba luật nhà (≥44px). Bốn bảng dính: Đối soát sàn · Kế toán tra soát ·
+   Kế toán hàng hoàn (việc HẰNG NGÀY của chị Phan Thị Hằng) và Tài sản.
+
+   Cách làm: bỏ hình vẽ mặc định (`appearance:none`) rồi tự vẽ ô vuông 18px ở
+   giữa một vùng chạm 44×44. Vùng chạm to nhưng CHIỀU CAO DÒNG KHÔNG ĐỔI — lề
+   âm 13px trên/dưới đúng bằng đệm dọc của ô bảng, nên 44 − 26 = 18px, y hệt
+   chiều cao cũ. Bàn đo arm G của `do-bang-vua-man` canh chỗ này.
+   Màu: xanh lá cho trạng thái đã chọn (docs/BANG-MAU.md), không đỏ. */
+thead th > input[type="checkbox"],
+tbody td > input[type="checkbox"] {
+  appearance: none; -webkit-appearance: none;
+  width: 44px; height: 44px;
+  margin: -13px -12px; padding: 0;
+  display: inline-grid; place-content: center;
+  background: none; border: none; cursor: pointer;
+  vertical-align: middle;
+}
+thead th > input[type="checkbox"]::before,
+tbody td > input[type="checkbox"]::before {
+  content: ""; width: 18px; height: 18px;
+  border: 1.5px solid var(--sage); border-radius: 4px;
+  background: var(--card);
+}
+thead th > input[type="checkbox"]:checked::before,
+tbody td > input[type="checkbox"]:checked::before {
+  background: var(--sage-dark); border-color: var(--sage-dark);
+  box-shadow: inset 0 0 0 2px var(--card), inset 0 0 0 9px var(--sage-dark);
+}
+thead th > input[type="checkbox"]:focus-visible::before,
+tbody td > input[type="checkbox"]:focus-visible::before {
+  outline: 2px solid var(--sage-dark); outline-offset: 2px;
+}
+
 /* --- Nút "Chi tiết" + dòng chi tiết ----------------------------------------
    NÚT ĐẶT TUYỆT ĐỐI, KHÔNG NẰM TRONG DÒNG CHỮ. Bản đầu để nút inline ngay sau
    tên: ở khung hẹp nó tụt xuống dòng thứ hai và chiều cao mỗi dòng bảng nhảy
@@ -1648,7 +1695,7 @@ tr.dong-chitiet > td {
 }
 .chitiet-tri { font-size: 13.5px; color: var(--ink); overflow-wrap: anywhere; }
 
-/* --- LỚP 3: ≤780px BẢNG THÀNH THẺ -----------------------------------------
+/* --- LỚP 3: ≤980px BẢNG THÀNH THẺ -----------------------------------------
    Một dòng = một thẻ, nhãn cột đi kèm giá trị nên không mất nghĩa. Đây là
    cách DUY NHẤT bỏ hẳn kéo ngang trên điện thoại: bảng 8 cột không thể vừa
    341px mà chữ vẫn đọc được. `data-nhan` do `luoiBang()` dập từ `<th>`.
@@ -1694,8 +1741,18 @@ tr.dong-chitiet > td {
      đây. Không nhắc thì thẻ điện thoại xổ ra đủ 9 trường, mất hẳn ý "mỗi thẻ
      3–4 trường" và ảnh chụp 375px lộ ngay. */
   .luoi-bang tbody td.cot-phu { display: none; }
-  /* Dấu chấm giữa ngăn hai trường chạy nối nhau — không có nó thì
-     "Bùi Thị Ngọc HẠN CHÓT" đọc thành một cụm. */
+  /* TÊN NGƯỜI PHẢI XUỐNG DÒNG TRONG THẺ — REV-0059 CHẶN-1.
+     `td .nm { white-space: nowrap }` đúng cho BẢNG (thà cuộn còn hơn bóp tên
+     người xuống nhiều dòng), nhưng trong THẺ thì không còn cột nào để cuộn:
+     một họ tên 80 ký tự (đúng trần ô nhập) kéo thẻ rộng 711px trong khung
+     341px và thanh kéo ngang quay lại — đúng thứ Sếp nhắc hai lần. Trong thẻ,
+     xuống dòng là cách duy nhất. */
+  .luoi-bang tbody .nm, .luoi-bang tbody .sm { white-space: normal; }
+  /* Ô tick đứng riêng một hàng đầu thẻ, kèm nhãn "CHỌN DÒNG" — trong thẻ mọi
+     trường đều có tên, ô tick không được là ngoại lệ (REV-0059 CAO-2). Vùng
+     chạm 44px giữ nguyên: trên điện thoại nó càng cần thiết. */
+  .luoi-bang tbody td.o-tick { display: block; margin: 0 0 2px; }
+  .luoi-bang tbody td.o-tick > input[type="checkbox"] { margin: 0 4px 0 -12px; }
   /* Ô không có nhãn (cột nút) thì không đặt chỗ trống cho nhãn. */
   .luoi-bang tbody td[data-nhan=""]::before,
   .luoi-bang tbody td:not([data-nhan])::before { content: none; }

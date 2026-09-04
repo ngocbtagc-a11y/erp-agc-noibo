@@ -48,9 +48,30 @@ const TOI = {
   quyen: ['tongquan', 'congviec', 'lichsuviec', 'danhba', 'chat', 'gopy']
 };
 
+/* ---- CHỮ DÀI NHẤT Ô NHẬP CHO PHÉP, KHÔNG PHẢI CHỮ MẪU -------------------
+   REV-0059 CAO-1. Bàn đo này từng dùng tiêu đề 18–27 ký tự, trong khi máy chủ
+   nhận tới 200 (src/index.js:3065) và đầu ra tới 1000 (:3066). Chiều cao một
+   cái THẺ do chữ dài nhất quyết định, y như bề ngang một cái BẢNG — đo bằng
+   dữ liệu không ai có thì ra con số không ai gặp. Đó đúng là lý do
+   do-bang-that.mjs phải ra đời; bàn đo này khi ấy chưa được chữa theo.
+
+   `toiTran()` GIỮ NGUYÊN phần đầu mỗi tiêu đề rồi chèn thêm cho đủ trần, nên
+   mấy arm tìm kiếm/lọc theo tên việc vẫn khớp y như trước. */
+const TRAN_TIEU_DE = 200;      // src/index.js:3065
+const TRAN_DAU_RA = 1000;      // src/index.js:3066
+const DUOI = ' — kèm đối chiếu chứng từ kho Hà Nội, biên bản chênh lệch có chữ ký ' +
+             'quản lý kho và kế toán trưởng, nộp trước 15h ngày làm việc kế tiếp';
+function toiTran(s, tran) {
+  let r = String(s);
+  while (r.length < tran) r += DUOI;
+  return r.slice(0, tran);
+}
+
 function viec(id, o) {
   return {
-    id, tieu_de: o.tieu_de, dau_ra: o.dau_ra || 'Bảng khớp 100%, có biên bản',
+    id,
+    tieu_de: toiTran(o.tieu_de, TRAN_TIEU_DE),
+    dau_ra: toiTran(o.dau_ra || 'Bảng khớp 100%, có biên bản', TRAN_DAU_RA),
     mo_ta: o.mo_ta || null, phoi_hop_ids: null, phoi_hop_ten: o.phoi_hop_ten || null,
     nguoi_giao_id: o.giao, nguoi_giao_ten: o.giao_ten, nguoi_nhan_id: o.nhan,
     nguoi_nhan_ten: o.nhan_ten, han_chot: o.han || '2026-09-05',
@@ -476,11 +497,20 @@ for (const rong of CAC_RONG) {
      là 5 — chừa đúng một thẻ dung sai, không hơn), VÀ bảng không còn kéo ngang
      (npm run do-bang-that arm A canh việc đó: 0 bảng tràn ở 375px).
 
-     ĐỪNG hạ con số 4 này xuống nữa. Muốn nhét thêm thẻ thì bỏ bớt TRƯỜNG trên
-     thẻ — đừng bóp chữ, đừng hạ mốc. Hạ mốc đúng là cách MOC_TRAN của
-     do-bang-vua-man.mjs biến thành giấy phép và để lọt chuyện này tới tận tay
-     Sếp. */
-  const THE_TOI_THIEU = 4;
+     CON SỐ NÀY ĐO Ở CA XẤU NHẤT, và đó là chủ ý. Dữ liệu mẫu của bàn đo nay
+     dùng tiêu đề ĐÚNG 200 ký tự và đầu ra ĐÚNG 1000 ký tự cho MỌI dòng — trần
+     ô nhập, không phải chữ mẫu (xem `toiTran` ở đầu tệp). Số đo 04/09/2026:
+
+       375px  ·  "Việc của tôi" 3 thẻ  ·  "Toàn công ty" 4 thẻ
+       1440px ·  8 dòng và 8 dòng — bằng đúng bản trước, không mất dòng nào
+
+     Với dữ liệu THƯỜNG (tiêu đề 20–40 ký tự) thì 375px cho 5 thẻ. Mốc để ở 3
+     vì mốc phải là SÀN của ca xấu nhất, không phải số đẹp của ca dễ. Ra 3 thì
+     ghi 3 — ép cho đủ 4 đúng là cách người ta làm ra `MOC_TRAN`.
+
+     ĐỪNG hạ con số này xuống nữa. Muốn nhét thêm thẻ thì bỏ bớt TRƯỜNG trên
+     thẻ — đừng bóp chữ, đừng hạ mốc. */
+  const THE_TOI_THIEU = 3;
   const cheDoThe = rong <= 980;
   const khongGiam = cheDoThe
     ? (sau.so_dong['gop.toi'] >= THE_TOI_THIEU && sau.so_dong['gop.congty'] >= THE_TOI_THIEU)
