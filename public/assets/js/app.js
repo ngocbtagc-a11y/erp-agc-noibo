@@ -5011,12 +5011,17 @@ if (TOI.quyen.includes('nhansu')) {
       hop_dong: 'Hợp đồng lao động',
       /* REV-0058 ③ — LẶP LẠI ĐÚNG LỖI mà chú thích ngay phía trên vừa nói là
          đã vá vòng trước. Nên quét lại CẢ từ điển thay vì chỉ thêm cái vừa
-         thiếu: máy chủ ghi 15 loại sự kiện vào `nhan_su_lich_su`, từ điển này
+         thiếu: máy chủ ghi 14 loại sự kiện vào `nhan_su_lich_su`, từ điển này
          mới có 9 — SÁU loại hiện mã thô, không phải hai. Bốn loại đầu dưới đây
          đã hỏng âm thầm từ TRƯỚC bản này; hai loại cuối là của bản này.
-         Bàn đo `scripts/do-tach-vai-tro.mjs` nay đối chiếu từ điển với mọi
-         chuỗi máy chủ THẬT SỰ ghi — thêm loại mới mà quên khai là ĐỎ ngay,
-         nên đây là lần vá cuối cho lớp lỗi này. */
+         Bàn đo `scripts/do-tach-vai-tro.mjs` nay đối chiếu từ điển với chuỗi
+         máy chủ THẬT SỰ ghi, qua HAI đường ghi đang có: câu `INSERT` thẳng
+         (đặt cột theo thứ tự nào cũng bắt được) và lời gọi `ghiVetVaiTro()`.
+         Ca đối chứng DC-K/DC-L canh đúng hai đường đó.
+         KHÔNG nói "lần vá cuối" nữa — bản trước nói thế rồi lọt ngay hai
+         đường né. Chốt này CÒN MÙ nếu người sau dựng một hàm ghi vết THỨ BA
+         (không phải `ghiVetVaiTro`, cũng không `INSERT` thẳng). Thêm hàm như
+         thế thì khai thêm tên nó vào vòng quét trong bàn đo. */
       ky_nang: 'Kỹ năng',
       doi_ngay_sinh: 'Đổi ngày sinh',
       mo_ta_cong_viec: 'Mô tả công việc',

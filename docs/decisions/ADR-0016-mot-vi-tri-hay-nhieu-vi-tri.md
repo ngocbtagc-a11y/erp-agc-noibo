@@ -94,6 +94,63 @@ Phải chuyển sang **soi theo TÍNH CHẤT**, không theo tổ hợp. Ba tính
 Ba tính chất này kiểm được bằng cách sinh tập con ngẫu nhiên (property-based),
 không cần bảng 384 dòng.
 
+#### Ba tính chất trên ĐỦ CHO ĐẠI SỐ, THIẾU CHO NGHIỆP VỤ
+
+Hồ Ly soi lại phần này và chỉ ra hai chỗ — đáng ghi vì nó sửa cả phần tôi tự
+đánh giá, theo cả hai chiều:
+
+**Mạnh hơn tôi tự nhận.** Tính chất 1 + 2 cộng lại không chỉ "chặn bớt" mà
+**chứng minh được đẳng thức** `q(T) = ∪ q({v})` với mọi tập T. Nghĩa là chúng
+thay được **trọn 384 dòng** cho câu hỏi *"phép hợp có đúng là phép hợp không"*.
+
+**Nhưng chúng không phủ lớp nở to nhất.** Cả ba đều nói về *cách hợp*, không
+nói về *hợp ra cái gì thì nguy hiểm*. Hai lớp dưới đây có mọi quyền đến **hợp
+lệ** từ một phần tử, nên **đi thẳng qua cả ba**:
+
+| | Lớp | Hôm nay | Với nhiều vị trí |
+|---|---|---|---|
+| **N1** | Vừa cấp được danh tính, vừa xem được lương | 1 tổ hợp | **64** |
+| **N2** | Ôm cả ba chặng luồng tiền (kho · vận hành sàn · kế toán) | 2 | **152** |
+
+Và cả ba tính chất sống ở **tầng bảng quyền**, không chạm cửa API — nơi **bẫy
+số 1 của chính ADR này** (chốt lương kiểm phần tử đầu) đang sống. Nên phải ghi
+kèm phạm vi: **kiểm qua cửa API bằng phiên thật**, không chỉ gọi hàm thuần.
+
+#### Tính chất 4 — không ai vừa cấp được danh tính vừa xem được lương *do vô tình*
+
+Người vừa tạo được tài khoản (`duocTaoTaiKhoan`) vừa xem được lương
+(`duocXemLuong`) là người tự cấp cho mình một danh tính rồi tự đọc bảng lương
+bằng danh tính đó — hai quyền lẽ ra nằm ở hai người.
+
+⚠️ **KHÔNG được viết thành lệnh cấm tuyệt đối.** Đo trên mã hôm nay, đúng **một**
+tổ hợp có cả hai: `admin_backup + ke_toan_truong` — và **đó chính là tổ hợp Sếp
+Ngọc yêu cầu cho chị Phan Thị Hằng** ("vừa là Kế toán trưởng vừa là Admin
+backup"). Cấm thẳng là bàn đo đỏ ngay trên chỉ đạo của Sếp.
+
+Phát biểu đúng: **cả hai nửa chỉ đến được từ tay một Admin thật.** Hôm nay đúng
+vậy — ô 1 `admin_backup` chỉ Admin gán được, ô 2 `ke_toan_truong` cũng chỉ Admin
+gán được (chốt "không phải Admin thì không trao vị trí có lương"). Cái phải
+chặn là tổ hợp này **mọc lên từ quyền đặt vị trí của HCNS**, tức không ai cố ý
+trao. Kiểm: với mọi tập vị trí mà một người **không phải Admin** gán được,
+không tập nào cho ra đồng thời hai quyền đó.
+
+#### Tính chất 5 — không ai ôm cả ba chặng luồng tiền
+
+Luồng đơn hoàn ba chặng Kho → Vận hành sàn → Kế toán là một chốt tách nhiệm vụ
+thật: người nhận hàng không phải người tra soát tiền. Một chủ thể có đồng thời
+`duocThaoTacKho` + `duocThaoTacVanHanh` + tab `ketoan` là tự duyệt được cả
+đường đi của tiền.
+
+🔴 **TÍNH CHẤT NÀY HÔM NAY ĐỎ — và cứ để nó đỏ.** Đo được: `nguoi_dung + nv_test`
+ôm đủ cả ba chặng (`kho: true · vận hành: true · kế toán: true`). Vai trò
+`nv_test` (Sếp chốt 19/08/2026, cho nhân viên bấm thử để hiểu luồng ba chặng)
+ôm ba chặng là **cố ý** — nhưng nó cũng là một tài khoản đăng nhập thật.
+
+Đừng tắt phép đo cho xanh. Để đỏ có ích hơn: nó biến câu hỏi đang treo *"vai
+trò `nv_test` còn dùng nữa không, ai đang giữ"* thành **một cái cổng có người
+canh**, thay vì một câu hỏi không ai trả lời. Khi nào Sếp chốt bỏ `nv_test`
+hoặc thu hẹp nó, phép đo tự xanh — và đó mới là lúc nó nên xanh.
+
 ## Hệ quả đã chấp nhận
 
 - Chị **Vũ Lan Hương** tạm thời chỉ có **một** vị trí. Sếp chọn `hcns` hay

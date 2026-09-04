@@ -150,9 +150,16 @@ export async function coCotViTri(db) {
        không mở được tab nào của nghề mình — đúng cái triệu chứng bản vá này
        sinh ra để chữa, nay tự tay dựng lại.
        Ném ra thì cửa gọi trả 500 và người dùng bấm lại — mất một lượt bấm còn
-       hơn im lặng ghi hỏng. Cùng khuôn với docPhien() ngay bên dưới. */
+       hơn im lặng ghi hỏng. Cùng khuôn với docPhien() ngay bên dưới.
+
+       CHỈ SO MỘT VẾ (REV-0058 vòng 2 ③). Bản trước còn đòi thông báo lỗi phải
+       chứa cả tên cột `vi_tri_cong_viec`. Vế đó KHÔNG phân biệt thêm được gì:
+       câu thăm dò ngay trên tham chiếu ĐÚNG MỘT cột, nên mọi "no such column"
+       phát ra từ nó tất yếu nói về đúng cột ấy. Đổi lại nó nhân đôi bề mặt
+       phụ thuộc vào CÂU CHỮ của Cloudflare — đo được: thông báo lỗi không kèm
+       tên cột thì 4/5 cửa sập 500. Ít vế so chuỗi = ít chỗ gãy. */
     const tin = String(e && e.message);
-    if (!/no such column/i.test(tin) || !/vi_tri_cong_viec/i.test(tin)) throw e;
+    if (!/no such column/i.test(tin)) throw e;
     _nhoCotViTri.set(db, { co: false, hetHan: Date.now() + 60000 });
     return false;
   }

@@ -37,6 +37,10 @@
      DC-F  đọc phiên không phòng thủ         → phải bắt (thiếu cột là 500 cả hệ thống)
      DC-G  danh bạ chỉ soi ô 1               → phải bắt (tài khoản test lòi ra)
      DC-H  cron HCNS chỉ soi ô 1             → phải bắt (chị Hương mất hết tin nhắc)
+     DC-I  catch trần nuốt lỗi D1 tạm thời   → phải bắt (REV-0058 ①: mất ô 2 mà vẫn trả 200)
+     DC-J  dấu thời gian ghi vết lệch 7 tiếng→ phải bắt (REV-0058 ②), ở MỌI mốc giờ
+     DC-K  loại sự kiện mới qua ghiVetVaiTro→ phải bắt (REV-0058 vòng 2 ②, né A)
+     DC-L  INSERT đặt `luc` trước loại sự kiện→ phải bắt (REV-0058 vòng 2 ②, né B)
 
    Chạy:  node scripts/do-tach-vai-tro.mjs
    MÃ THOÁT: 0 = xanh, 1 = đỏ.
@@ -206,28 +210,42 @@ async function doDanhSachKhopMigration(thuMucSrc) {
    tay ở `LOAI_QUA_BIEN` kèm chỗ sinh ra, và bàn đo đòi chúng cũng phải có
    nhãn. ================================================================= */
 const LOAI_QUA_BIEN = [
-  // src/index.js — mảng `suKien` dựng động lúc sửa hồ sơ nhân sự
-  'doi_phong_ban', 'doi_chuc_danh', 'doi_quan_ly', 'doi_trang_thai', 'doi_loai_lao_dong',
-  // src/index.js — ghiVetVaiTro(), tham số `loaiSuKien`
-  'doi_vai_tro', 'cap_tai_khoan',
-  // nghi_viec: khai trong schema, chưa có chỗ ghi — vẫn phải có nhãn sẵn
-  'nghi_viec'
+  /* src/index.js — mảng `suKien` dựng động lúc sửa hồ sơ nhân sự. ĐÂY là ca
+     duy nhất còn phải khai tay: loại sự kiện nằm trong biến, không có chuỗi
+     nào để quét. `doi_vai_tro`/`cap_tai_khoan` ĐÃ BỎ khỏi danh sách này —
+     chúng nay bị bắt tự động qua lời gọi ghiVetVaiTro() (xem dưới), nên khai
+     tay nữa là che mất chính phép đo đó. */
+  'doi_phong_ban', 'doi_chuc_danh', 'doi_quan_ly', 'doi_trang_thai', 'doi_loai_lao_dong'
+  /* `nghi_viec` KHÔNG có trong danh sách này: REV-0058 vòng 2 ④ — nó chỉ sống
+     trong một chú thích SQL, KHÔNG chỗ nào ghi ra. Kể nó vào là thổi con số
+     "máy chủ ghi N loại" lên một đơn vị. Từ điển vẫn giữ nhãn cho nó (thừa
+     nhãn thì vô hại, thiếu nhãn mới hỏng). */
 ];
-function doTuDienNhan() {
-  const thuMuc = path.join(GOC, 'src');
+function doTuDienNhan(thuMucSrc) {
+  const thuMuc = thuMucSrc || path.join(GOC, 'src');
   const ghiRa = new Set(LOAI_QUA_BIEN);
   for (const f of readdirSync(thuMuc).filter(f => f.endsWith('.js'))) {
-    const s = readFileSync(path.join(thuMuc, f), 'utf8');
-    // Chỉ soi câu INSERT vào ĐÚNG bảng nhan_su_lich_su, không quét bừa cả tệp.
-    for (const m of s.matchAll(/INSERT INTO nhan_su_lich_su[\s\S]{0,400}?VALUES\s*\(([\s\S]{0,200}?)\)/g)) {
-      /* Gọt `datetime('now', '+7 hours')` đi TRƯỚC khi bóc chuỗi — không thì
-         'now' bị đọc thành một loại sự kiện và bàn đo đòi khai nhãn cho nó.
-         Cắt từ `datetime(` tới hết chứ không khớp cả cặp ngoặc: phần bắt được
-         ở trên dừng ở dấu `)` ĐẦU TIÊN, tức ngay giữa lời gọi datetime, nên
-         không bao giờ có ngoặc đóng để khớp. Cột `luc` luôn đứng cuối danh
-         sách VALUES nên cắt tới hết là an toàn. */
-      const than = m[1].replace(/datetime\([\s\S]*$/, '');
-      for (const t of than.matchAll(/'([a-z_]{3,})'/g)) ghiRa.add(t[1]);
+    const goc = readFileSync(path.join(thuMuc, f), 'utf8');
+    /* Gọt MỌI lời gọi datetime(...) khỏi cả tệp TRƯỚC khi soi — không thì
+       'now' bị đọc thành một loại sự kiện. Gọt trước ở tầng tệp (chứ không
+       cắt-tới-hết trong từng câu như bản trước) là chỗ vá đường né (B) của
+       REV-0058 vòng 2: khi `luc` đặt TRƯỚC `loai_su_kien`, cách cắt-tới-hết
+       xoá luôn tên sự kiện và chốt lọt êm. */
+    const s = goc.replace(/datetime\([^)]*\)/g, 'DATETIME');
+
+    // (1) Câu INSERT thẳng vào bảng — thứ tự cột nào cũng bắt được.
+    for (const m of s.matchAll(/INSERT INTO nhan_su_lich_su[\s\S]{0,400}?VALUES\s*\(([\s\S]{0,300}?)\)/g)) {
+      for (const t of m[1].matchAll(/'([a-z_]{3,})'/g)) ghiRa.add(t[1]);
+    }
+
+    /* (2) Lời gọi ghiVetVaiTro() — ĐƯỜNG NÉ (A), và là đường TỰ NHIÊN NHẤT
+       người sau sẽ thêm một loại sự kiện mới, vì bản này vừa dựng ra đúng cái
+       hàm đó làm lối ghi vết dùng chung. Chốt chỉ soi câu INSERT thì thêm
+       `ghiVetVaiTro(env, phien, id, 'loai_moi', …)` là lọt hoàn toàn.
+       Chuỗi ghi_chu tiếng Việt không lọt vào đây: mẫu đòi cả chuỗi CHỈ gồm
+       chữ thường ASCII và gạch dưới. */
+    for (const m of s.matchAll(/ghiVetVaiTro\s*\(([\s\S]{0,300}?)\)/g)) {
+      for (const t of m[1].matchAll(/'([a-z_]{3,})'/g)) ghiRa.add(t[1]);
     }
   }
   const app = readFileSync(path.join(GOC, 'public', 'assets', 'js', 'app.js'), 'utf8');
@@ -237,6 +255,62 @@ function doTuDienNhan() {
      dòng và bàn đo báo thiếu oan đúng 5 khoá đang có sẵn. */
   const coNhan = new Set(khoi ? [...khoi[1].matchAll(/([a-z_]{3,})\s*:/g)].map(m => m[1]) : []);
   return { ghiRa: [...ghiRa].sort(), thieu: [...ghiRa].filter(v => !coNhan.has(v)).sort(), soNhan: coNhan.size };
+}
+
+/* ======================================================================
+   PHÉP ĐO 2c — DẤU THỜI GIAN GHI VẾT ĐÚNG GIỜ VN, Ở MỌI GIỜ CHẠY
+   ----------------------------------------------------------------------
+   REV-0058 vòng 2 ①: bản trước là một PHÉP ĐO RỖNG. Nó so hai vế bằng HAI
+   ĐỒNG HỒ KHÁC NHAU — `vet.luc` do worker ghi nên đi qua vỏ D1 (đồng hồ ĐÓNG
+   BĂNG bởi datDongHo), còn mốc đối chiếu lại đọc bằng `db.prepare` RAW (đồng
+   hồ THẬT của máy). Chênh lệch đo được vì thế là "giờ thật trừ giờ đóng
+   băng", chẳng liên quan gì tới cái đang đo:
+
+     đóng băng 03:00Z → lệch   38 phút → false ✅ (may mà đúng)
+     đóng băng 20:00Z → lệch  982 phút → TRUE  ⚠ mã LÀNH mà vẫn kêu "bắt được"
+
+   Tức nó chỉ đúng khi bàn đo tình cờ chạy trong khung 09:00–11:00 giờ VN.
+   Chạy lúc 3 giờ sáng là DC-J xanh vĩnh viễn ⇒ bản vá ② coi như không ai canh.
+   Đây đúng cái bẫy DC-I vừa thoát, ở biến thể khó thấy hơn: phép đo bắt được
+   lỗi NHỜ GIỜ CHẠY, không nhờ lỗi.
+
+   NAY: cả hai vế đọc qua CÙNG một vỏ D1 (`d1.prepare`), nên cùng một đồng hồ.
+   Mã lành ⇒ lệch ~0 phút. Mã hỏng (bỏ '+7 hours') ⇒ lệch ĐÚNG 420 phút. Cả
+   hai kết luận không còn phụ thuộc lúc chạy — và để chứng minh chứ không nói
+   suông, đo ở BỐN mốc giờ trải khắp ngày, kể cả hai mốc mà bản cũ sai. */
+const MOC_GIO_THU = [
+  '2026-09-03T20:00:00Z',   // 03:00 sáng giờ VN — bản cũ SAI ở đây
+  '2026-09-04T03:00:00Z',   // 10:00 giờ VN — mốc chuẩn của bàn đo
+  '2026-09-04T13:00:00Z',   // 20:00 giờ VN — bản cũ SAI ở đây
+  '2026-09-04T17:00:00Z'    // 00:00 nửa đêm giờ VN, sang ngày mới
+];
+
+async function doLechGio(thuMucSrc) {
+  const ra = [];
+  for (const moc of MOC_GIO_THU) {
+    datDongHo(moc);
+    const { db, d1 } = dungDB();
+    moi(db, { DUY: 'quan_ly_kho' });
+    const env = dungEnv(d1);
+    const worker = await napWorker(thuMucSrc);
+    const token = await taoPhienThat(env, CHI_SO.SEP);
+    const idTk = db.prepare("SELECT id FROM tai_khoan WHERE nhan_su_id='DUY'").get().id;
+    await goiAPI(worker, env, '/api/quan-tri/sua-vai-tro', token,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tai_khoan_id: idTk, vi_tri_cong_viec: 'nhan_vien_kho' }) });
+    /* CẢ HAI VẾ QUA `d1` — đây là toàn bộ bản vá. Đọc vế nào bằng `db` raw là
+       dựng lại đúng phép đo rỗng. */
+    const vet = await d1.prepare(
+      "SELECT luc FROM nhan_su_lich_su WHERE loai_su_kien='doi_vai_tro' ORDER BY id DESC LIMIT 1").first();
+    const mocVN = await d1.prepare("SELECT datetime('now','+7 hours') AS t").first();
+    if (!vet || !mocVN) continue;
+    ra.push({
+      moc,
+      lechPhut: Math.round(Math.abs(new Date(vet.luc + 'Z') - new Date(mocVN.t + 'Z')) / 60000)
+    });
+  }
+  datDongHo('2026-09-04T03:00:00Z');       // trả đồng hồ về mốc chuẩn
+  return ra;
 }
 
 /* ======================================================================
@@ -384,7 +458,15 @@ function banSrcHong(ten, sua) {
   mkdirSync(thuMuc, { recursive: true });
   for (const f of readdirSync(SRC)) {
     if (!f.endsWith('.js')) continue;
-    writeFileSync(path.join(thuMuc, f), sua(f, readFileSync(path.join(SRC, f), 'utf8')), 'utf8');
+    /* ĐỔI CRLF → LF TRƯỚC KHI TIÊM. `src/*.js` trên máy này lưu bằng CRLF
+       (git tự đổi lúc lấy về), còn chuỗi neo viết trong tệp bàn đo này là LF.
+       Mọi neo NHIỀU DÒNG vì thế KHÔNG BAO GIỜ khớp — ca đối chứng chép ra một
+       bản y hệt bản lành rồi báo "LỌT", nghe như bàn đo mù trong khi thật ra
+       mũi tiêm chưa từng găm vào. Đã mất DC-L đúng vì lẽ này.
+       Ít nhất nó hỏng theo chiều AN TOÀN (báo đỏ, không báo xanh) — nhưng đỏ
+       sai địa chỉ cũng tốn đúng một vòng truy như đỏ đúng. */
+    const noi = readFileSync(path.join(SRC, f), 'utf8').replace(/\r\n/g, '\n');
+    writeFileSync(path.join(thuMuc, f), sua(f, noi), 'utf8');
   }
   return thuMuc;
 }
@@ -505,6 +587,13 @@ ok('Admin thật đặt được CẢ HAI ô trong một lần bấm',
    k.duySauCung.vi_tri_cong_viec === 'quan_ly_kho');
 ok('Admin thật sửa được ô của chính mình', k.adminTuSua.status === 200, 'status ' + k.adminTuSua.status);
 
+console.log('\n— ④ GHI VẾT: DẤU THỜI GIAN ĐÚNG GIỜ VN Ở MỌI GIỜ CHẠY —');
+const lg = await doLechGio(SRC);
+for (const x of lg) console.log(`  đóng băng ${x.moc} → lệch ${x.lechPhut} phút`);
+ok(`Dấu thời gian khớp giờ VN ở CẢ ${MOC_GIO_THU.length} mốc giờ (không phụ thuộc lúc chạy)`,
+   lg.length === MOC_GIO_THU.length && lg.every(x => x.lechPhut <= 1),
+   lg.map(x => x.lechPhut + 'p').join(' · '));
+
 console.log('\n— ④ GHI VẾT —');
 ok('Mỗi cú đổi thật để lại đúng một dòng nhật ký', k.soDongVet === 4, `${k.soDongVet} dòng`);
 ok('Dòng nhật ký có ĐỦ cũ → mới → ai đổi',
@@ -555,8 +644,13 @@ const DC = [
                 "if (!VAI_TRO_HOP_LE.includes(vaiTroMoi)) return loi('Vai trò không hợp lệ');"),
     async (t) => { const kk = await doCuaAPI(t); return kk.o1NhanViTri.status === 200; }],
   ['F', 'đọc phiên không phòng thủ (thiếu cột là 500 cả hệ thống)',
+    /* NEO THEO ĐỘ THỤT ĐẦU DÒNG (REV-0058 vòng 2 ③). Sau khi bỏ vế thừa ở
+       coCotViTri, hai chốt trong auth.js ĐỌC GIỐNG HỆT NHAU; `String.replace`
+       chỉ thay chỗ ĐẦU TIÊN nên mũi này găm nhầm sang coCotViTri và DC-F hoá
+       ra đo nhầm hàm. docPhien thụt 6 dấu cách, coCotViTri thụt 4 — neo cả
+       phần thụt là phân biệt được, không phải đổi mã sản phẩm cho dễ đo. */
     (f, s) => f !== 'auth.js' ? s :
-      s.replace("if (!/no such column/i.test(tin)) throw e;", 'throw e;'),
+      s.replace('\n      if (!/no such column/i.test(tin)) throw e;', '\n      throw e;'),
     async (t) => {
       try { const r = await doThieuCot(t); return r.toiLaAi.status >= 500; }
       catch { return true; }
@@ -570,8 +664,9 @@ const DC = [
      D1 KHÔNG PHẢI thiếu cột và đòi cửa tạo tài khoản phải HỎNG TO, không được
      âm thầm ghi thiếu. */
   ['I', 'catch trần nuốt lỗi D1 tạm thời thành "chưa có cột"',
+    // Neo 4 dấu cách = coCotViTri (xem chú thích ở DC-F).
     (f, s) => f !== 'auth.js' ? s
-      : s.replace("if (!/no such column/i.test(tin) || !/vi_tri_cong_viec/i.test(tin)) throw e;", ''),
+      : s.replace('\n    if (!/no such column/i.test(tin)) throw e;', ''),
     async (t) => {
       const { db, d1 } = dungDB();
       moi(db, { HUONG: 'hcns' });
@@ -612,23 +707,29 @@ const DC = [
     (f, s) => f !== 'index.js' ? s
       : s.replace(`VALUES (?, ?, ?, ?, ?, ?, datetime('now','+7 hours'))`,
                   `VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`),
+    // Đo ở NHIỀU mốc giờ giả và đòi ĐỎ Ở TẤT CẢ — xem doLechGio() phía trên.
     async (t) => {
-      const { db, d1 } = dungDB();
-      moi(db, { DUY: 'quan_ly_kho' });
-      const env = dungEnv(d1);
-      const worker = await napWorker(t);
-      const token = await taoPhienThat(env, CHI_SO.SEP);
-      const idTk = db.prepare("SELECT id FROM tai_khoan WHERE nhan_su_id='DUY'").get().id;
-      await goiAPI(worker, env, '/api/quan-tri/sua-vai-tro', token,
-        { method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ tai_khoan_id: idTk, vi_tri_cong_viec: 'nhan_vien_kho' }) });
-      const vet = db.prepare(
-        "SELECT luc FROM nhan_su_lich_su WHERE loai_su_kien='doi_vai_tro' ORDER BY id DESC LIMIT 1").get();
-      const mocVN = db.prepare("SELECT datetime('now','+7 hours') AS t").get().t;
-      if (!vet) return false;
-      // Lệch quá 1 tiếng so với giờ VN ⇒ đang ghi bằng múi giờ khác.
-      return Math.abs(new Date(vet.luc + 'Z') - new Date(mocVN + 'Z')) > 3600 * 1000;
+      const ds = await doLechGio(t);
+      return ds.length === MOC_GIO_THU.length && ds.every(x => x.lechPhut > 60);
     }],
+  /* REV-0058 vòng 2 ② — HAI ĐƯỜNG NÉ chốt từ điển. Bản trước bắt được ca
+     thẳng nhưng lọt cả hai đường này, nên câu "lần vá cuối cho lớp lỗi này"
+     là quá lời. Hai ca dưới canh đúng hai đường đó.
+     Lưu ý: hai ca này soi TỆP, không chạy worker — nên `chay` bỏ qua thư mục
+     bản hỏng và gọi doTuDienNhan() trên bản đã sửa tại chỗ tạm. */
+  ['K', 'thêm loại sự kiện qua ghiVetVaiTro() — đường tự nhiên nhất (né A)',
+    (f, s) => f !== 'index.js' ? s
+      : s.replace("await ghiVetVaiTro(env, phien, tk.nhan_su_id, 'doi_vai_tro',",
+                  "await ghiVetVaiTro(env, phien, tk.nhan_su_id, 'doi_vai_tro_moi_toanh',"),
+    async (t) => doTuDienNhan(t).thieu.includes('doi_vai_tro_moi_toanh')],
+  ['L', 'INSERT đặt cột `luc` TRƯỚC `loai_su_kien` (né B)',
+    (f, s) => f !== 'index.js' ? s
+      : s.replace(
+          `INSERT INTO nhan_su_lich_su (nhan_su_id, loai_su_kien, gia_tri_moi, nguoi_thuc_hien_id, luc)
+      VALUES (?, 'vao_lam', ?, ?, datetime('now','+7 hours'))`,
+          `INSERT INTO nhan_su_lich_su (nhan_su_id, luc, loai_su_kien, gia_tri_moi, nguoi_thuc_hien_id)
+      VALUES (?, datetime('now','+7 hours'), 'vao_lam_kieu_moi', ?, ?)`),
+    async (t) => doTuDienNhan(t).thieu.includes('vao_lam_kieu_moi')],
   ['H', 'cron nhắc nhân sự chỉ soi ô 1 (chị Hương mất hết tin nhắc)',
     (f, s) => f !== 'nhac-nhan-su.js' ? s :
       s.replace("${coViTri ? \"OR t.vi_tri_cong_viec = 'hcns'\" : ''}", ''),
