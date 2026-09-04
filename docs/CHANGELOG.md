@@ -8,6 +8,71 @@ Format: `Date | Feature | Domain | Decision | Migration | Breaking impact | Stat
 
 ---
 
+## 2026-09-04
+
+| Feature | Domain | Decision | Migration | Breaking impact | Status |
+|---|---|---|---|---|---|
+| **Tách VAI TRÒ HỆ THỐNG khỏi VỊ TRÍ CÔNG VIỆC — hai ô, không phải một** (`src/quyen.js` · `src/auth.js` · `src/index.js` · `src/nhac-nhan-su.js` · `src/tai-lieu.js` · và mọi cửa phân quyền trong `ca.js`/`kho.js`/`nhansu.js`/`shopee.js`/`tiktok.js`/`taisan.js`/`dulieunen.js` · `app.html` · `app.js` · `api.js` · `style.css` · `migrations/them-vi-tri-cong-viec.sql` MỚI · `migrations/lui/lui-vi-tri-cong-viec.sql` MỚI · `scripts/do-tach-vai-tro.mjs` MỚI · `scripts/do-hai-o-tren-man.mjs` MỚI) | Phân quyền | Sếp Bùi Thị Ngọc chốt 04/09/2026, nguyên văn: *"gộp 2 vai trò như này ko biết phân quyền kiểu gì nhé, tách ra 2 vai trò đi"*. Ô **"Vai trò \*"** là MỘT danh sách thả xuống gộp hai khái niệm khác hẳn nhau — VAI TRÒ HỆ THỐNG (Admin · Admin backup · Người dùng) và VỊ TRÍ CÔNG VIỆC (Kế toán trưởng · Quản lý kho · …). Chọn được một, nên ai cũng phải bỏ một nửa. **ĐÂY KHÔNG PHẢI LỖI GIAO DIỆN — đo trên CSDL thật: 5/8 tài khoản đang là `nguoi_dung`**, tức đã bỏ mất vị trí để giữ tài khoản thường: anh Phạm Khương Duy (TP. Kho vận) KHÔNG mở được tab Kho vận, chị Phan Thị Hằng (Kế toán trưởng) KHÔNG mở được tab Kế toán, chị Nguyễn Thị Huyền KHÔNG mở được tab Kinh doanh. Việc "nâng vai trò anh Duy + chị Hương" nằm trong hàng đợi nhiều ngày — **đây là nguyên nhân gốc**. **NAY:** `tai_khoan.vai_tro` giữ ô 1, `tai_khoan.vi_tri_cong_viec` là ô 2, **quyền cuối cùng = HỢP hai ô, chỉ CỘNG không bao giờ TRỪ**. Chị Hằng vừa là *Kế toán trưởng* vừa là *Admin backup* được — đúng thực tế. **BA CHỐT CHẶN TỰ NÂNG QUYỀN, kiểm ở MÁY CHỦ:** ① ô 2 chỉ nhận mã trong `VI_TRI_CONG_VIEC` (nhét `admin` vào là `boVaiTro()` vứt đi, và cửa API chặn thêm lần nữa) — cần thiết vì ô 2 là ô HCNS sửa hằng ngày; ② KHÔNG AI tự sửa ô của chính mình trừ Admin thật (thiếu chốt này thì HCNS tự đặt mình thành Kế toán trưởng là xem được lương, phá ranh giới cứng "HCNS không xem lương"); ③ người không phải Admin thật không gán được vị trí có `xem_luong` cho bất kỳ ai. **AI SỬA Ô NÀO:** ô 1 = Admin + Admin backup (luật cũ giữ nguyên); ô 2 = thêm HCNS — đặt vị trí cho người mới là việc hành chính hằng ngày, không phải chờ Sếp. **GHI VẾT** vào sổ `nhan_su_lich_su` đã có (`loai_su_kien='doi_vai_tro'`, cũ → mới → ai đổi → lúc nào) — không đẻ bảng mới. **Kèm theo:** `.combo1-hienthi` lên `min-height:44px` — nút combobox đo được 38px ở 375px tại CẢ 20 chỗ đang dùng `.combo1`, dưới ngưỡng ngón tay; vá ở lớp dùng chung chứ không chỉ nống hai ô mới. | **BẮT BUỘC, CHẠY TRƯỚC KHI GỘP.** `deploy.yml` KHÔNG tự chạy migration.<br>`node scripts/chay-migration.mjs them-vi-tri-cong-viec.sql --remote`<br>Lùi (chạy tay, đọc `migrations/lui/README.md` trước): `npx wrangler d1 execute crm-agc --remote --file=migrations/lui/lui-vi-tri-cong-viec.sql` | **KHÔNG AI MẤT QUYỀN.** Bộ tab của `nguoi_dung` là TẬP CON bộ tab của MỌI vị trí, và cả ba cờ của `nguoi_dung` đều false ⇒ `nguoi_dung ∪ <vị trí>` = đúng bằng `<vị trí>` một mình. Bàn đo chốt điều này trên cả 10 vai trò, so từng khoá của 13 bảng quyền. **Chưa nạp migration cũng KHÔNG sập:** `docPhien()` bỏ dần từng cột thiếu rồi chạy lại (hai cột tuỳ chọn, có thể thiếu đồng thời), `coCotViTri()` chọn giữa hai bản câu lệnh — đo được `/api/toi-la-ai`, `/api/danh-ba`, `/api/quan-tri/danh-sach`, `/api/kho/san-pham` đều 200, và quyền đúng bằng bản cũ. Màn Quản trị nói thẳng "chưa có cột" thay vì im lặng; Telegram bắn 1 tin/ngày. | ✅ Xong — `do-tach-vai-tro` **55 ĐẠT / 0 TRƯỢT** (8/8 ca đối chứng bắt được) · `do-hai-o-tren-man` **12 ĐẠT / 0 TRƯỢT** (3/3 ca đối chứng) · cổng khói 1440px & 375px XANH · ba màu ĐẠT · `do-quyen-duyet-gopy` 192/0 · `do-bang-vua-man` 42/0 · `do-moc-noi` 9/0 · `do-cat-im-lang` SẠCH · `do-chu-dai` XANH · `do-quet-375` ĐẠT |
+
+### ⚠️ CHỜ SẾP NGỌC DUYỆT — gán vị trí công việc cho 5 người
+
+Migration **KHÔNG tự gán vị trí cho ai**: 5 người dưới đây đang là `nguoi_dung`
+thật, nên migration để nguyên. Gán vị trí là **business policy — chỉ Sếp quyết**.
+
+| Người | Chức vụ thật (`chuc_vu`) | Vị trí đề xuất | Mở thêm được tab |
+|---|---|---|---|
+| Phạm Khương Duy | TP. Kho Vận - Sản Xuất | `quan_ly_kho` | **Kho vận · Nhân sự · Dữ liệu nền** (+ sửa mã hàng, xem giá vốn) |
+| Phan Thị Hằng | Trưởng nhóm Kế toán - Tài chính | `ke_toan_truong` | **Kho vận · Đơn hoàn · Kế toán** (+ **xem lương**, xem giá vốn) |
+| Nguyễn Thị Huyền | NV Vận hành TMĐT | `van_hanh_san` | **Kinh doanh · Đơn hoàn** (+ thao tác chặng Vận hành sàn, sửa/khoá mã hàng) |
+| Vũ Lan Hương | NV Chăm sóc Khách hàng | ⚠️ `hcns` **hoặc** `cskh` — Sếp chọn | `hcns` → **Nhân sự · Dữ liệu nền · Quản trị** (+ thêm nhân sự, KHÔNG xem lương)<br>`cskh` → **Kinh doanh · Đơn hoàn** (chỉ xem, không thao tác) |
+| Đinh Mạnh Linh | Nhân viên Kho Vận | `nhan_vien_kho` | **Kho vận** (nhập/xuất kho; KHÔNG xem giá vốn, KHÔNG sửa mã hàng) |
+
+**Ca cần Sếp quyết — chị Vũ Lan Hương làm HAI việc** (Hành chính nhân sự **và**
+CSKH) mà **ô 2 chỉ chứa được MỘT vị trí**. Không tự chọn hộ. Hai bộ quyền lệch
+hẳn nhau: `hcns` mở Nhân sự + Quản trị (cấp được hồ sơ, thêm được nhân sự),
+`cskh` mở Kinh doanh + Đơn hoàn (trả lời khách). Nếu chị cần cả hai thì đó là
+một yêu cầu MỚI (nhiều vị trí một người) — không nhét vào bản này.
+
+**Lệnh chép–dán, chạy SAU khi đã nạp migration** (sửa dòng của chị Hương theo
+đúng lựa chọn của Sếp, rồi mới chạy cả khối):
+
+```
+npx wrangler d1 execute crm-agc --remote --command "UPDATE tai_khoan SET vi_tri_cong_viec = CASE (SELECT ho_ten FROM nhan_su WHERE id = tai_khoan.nhan_su_id) WHEN 'Phạm Khương Duy' THEN 'quan_ly_kho' WHEN 'Phan Thị Hằng' THEN 'ke_toan_truong' WHEN 'Nguyễn Thị Huyền' THEN 'van_hanh_san' WHEN 'Vũ Lan Hương' THEN 'hcns' WHEN 'Đinh Mạnh Linh' THEN 'nhan_vien_kho' ELSE vi_tri_cong_viec END WHERE (SELECT ho_ten FROM nhan_su WHERE id = tai_khoan.nhan_su_id) IN ('Phạm Khương Duy','Phan Thị Hằng','Nguyễn Thị Huyền','Vũ Lan Hương','Đinh Mạnh Linh')"
+```
+
+Xem lại kết quả:
+
+```
+npx wrangler d1 execute crm-agc --remote --command "SELECT n.ho_ten, n.chuc_vu, t.vai_tro, t.vi_tri_cong_viec FROM tai_khoan t JOIN nhan_su n ON n.id = t.nhan_su_id ORDER BY n.ho_ten"
+```
+
+Lệnh này **chỉ đụng ô 2** — không sửa vai trò hệ thống, mật khẩu, hay bất kỳ
+cột nào khác. Chạy lại nhiều lần cũng ra cùng một kết quả.
+
+**Lượt ghi/đọc D1** (bản thật đang có 8 tài khoản):
+· *Migration*: 4 câu — 1 dòng vào `schema_migrations`, 1 `ALTER TABLE ADD COLUMN`
+  (SQLite chỉ sửa siêu dữ liệu, không viết lại dòng nào), 1 `UPDATE` chạm đúng
+  số tài khoản đang mang mã vị trí (hôm nay là 0–1 dòng, vì 5/8 đã là
+  `nguoi_dung` và 2 là `admin`), 1 `CREATE INDEX` trên 8 dòng.
+  **Tổng ≈ 10–20 lượt ghi, ≈ 8–16 lượt đọc. Một lần duy nhất.**
+· *Mỗi lần đổi vai trò/vị trí*: **2 lượt ghi** (1 `UPDATE tai_khoan` + 1 dòng
+  ghi vết `nhan_su_lich_su`) + **1–2 lượt đọc** (đọc tài khoản; thêm 1 câu đếm
+  Admin CHỈ khi đang hạ một Admin xuống).
+· *Màn danh sách tài khoản*: **+0 lượt đọc** — cột `vi_tri_cong_viec` đi kèm
+  câu `SELECT` đã có, không thêm câu nào.
+· *Mỗi request bất kỳ*: **+0 lượt đọc** — cột đi kèm câu đọc phiên đã có trong
+  `docPhien()`. Riêng phép dò "đã có cột chưa" tốn **1 lượt đọc/isolate, một
+  lần duy nhất** (nhớ vĩnh viễn khi đã thấy cột); trong quãng CHƯA nạp
+  migration thì tối đa 1 lượt/phút/isolate.
+
+**Vai trò lạ còn sót trong CSDL:** migration chỉ đụng đúng 7 mã vị trí đã khai
+trong `src/quyen.js`. Mã lạ (vd `giam_doc`/`pho_giam_doc` từ trước lần gộp
+23/08/2026 — còn thấy trong `seed.sql` bản máy) **không bị đụng tới** và giữ
+nguyên trạng thái hôm nay. Nếu bản thật còn dòng nào như thế thì nó ĐANG hỏng
+sẵn từ trước, không liên quan bản này — nên kiểm bằng câu `SELECT` ở trên.
+
+---
+
 ## 2026-09-03
 
 | Feature | Domain | Decision | Migration | Breaking impact | Status |

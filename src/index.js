@@ -9,13 +9,17 @@
 import {
   bamMatKhau, kiemTraMatKhau, sinhMatKhauTam, taoPhien, docPhien, xoaPhien, xoaPhienHetHan,
   dangBiKhoa, ghiNhanSai, xoaLanSai,
-  cookieDangNhap, cookieDangXuat, layTokenTuCookie, layCoThieuCotDuyetGopY
+  cookieDangNhap, cookieDangXuat, layTokenTuCookie, layCoThieuCotDuyetGopY,
+  layCoThieuCotViTri, coCotViTri
 } from './auth.js';
 
 import {
   quyenCua, duocXemTab, duocXemLuong, laAdmin, duocThemNhanSu, duocQuanLyChinhSachCa, duocTaoTaiKhoan, nhomVaiTro,
   quyenKho, quyenShopee, duocThaoTacKho, duocQuanLyKho, duocXemDonHoan, duocThaoTacVanHanh, TEN_VAI_TRO, VAI_TRO_HOP_LE,
-  duocDuyetGopY
+  duocDuyetGopY,
+  // Hai ô — vai trò hệ thống tách khỏi vị trí công việc (Sếp chốt 04/09/2026)
+  VAI_TRO_HE_THONG, VI_TRI_CONG_VIEC, laVaiTroHeThong, laViTriCongViec,
+  duocDatViTriCongViec, viTriCoXemLuong, moTaVaiTro, boVaiTro
 } from './quyen.js';
 import { kiemTraMatKhauDat, DAI_TOI_THIEU } from './mat-khau.js';
 import * as kho from './kho.js';
@@ -67,6 +71,7 @@ async function batBuocDangNhap(req, env) {
   // LẤY CỜ TRƯỚC KHI RETURN — kể cả khi phiên không hợp lệ. Lấy là xoá, nên
   // bỏ sót một nhánh là kẹt cờ sang lượt sau và cảnh báo lệch người.
   if (layCoThieuCotDuyetGopY()) await canhBaoThieuCotDuyetGopY(env);
+  if (layCoThieuCotViTri()) await canhBaoThieuCotViTri(env);
   if (!phien) return { loi: json({ loi: 'Chưa đăng nhập' }, 401) };
   return { phien };
 }
@@ -129,6 +134,18 @@ async function canhBaoThieuCotDuyetGopY(env) {
     'Cách sửa: node scripts/chay-migration.mjs them-quyen-duyet-gopy.sql --remote');
 }
 
+/* Cùng khuôn, cho ô 2 — vị trí công việc (Sếp chốt 04/09/2026). Thiếu cột là
+   hỏng theo chiều AN TOÀN (quyền đúng bằng bản cũ, không ai mất đăng nhập),
+   nhưng im lặng thì anh Duy vẫn không vào được tab Kho vận và không ai biết
+   vì sao — đúng cái bẫy BH-21 đã trả giá một lần. */
+async function canhBaoThieuCotViTri(env) {
+  return canhBaoMotLanMoiNgay(env, 'thieu-cot-vi-tri-cong-viec',
+    '🟠 [ERP] THIẾU CỘT tai_khoan.vi_tri_cong_viec trong CSDL.\n\n' +
+    'Hệ thống vẫn chạy bình thường và KHÔNG ai mất quyền — nhưng ô "Vị trí công việc" ' +
+    'chưa có tác dụng, nên ai đang là "Người dùng" thì vẫn chưa mở được tab của bộ phận mình.\n\n' +
+    'Cách sửa: node scripts/chay-migration.mjs them-vi-tri-cong-viec.sql --remote');
+}
+
 /* ---- Các đầu việc ------------------------------------------------------- */
 
 async function dangNhap(req, env) {
@@ -179,7 +196,7 @@ async function toiLaAi(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
 
-  const q = quyenCua(phien.vai_tro);
+  const q = quyenCua(phien);
   const ns = await env.DB.prepare('SELECT (anh_chan_dung IS NOT NULL) AS co_anh, phong_ban_id, loai_lao_dong FROM nhan_su WHERE id = ?')
                          .bind(phien.nhan_su_id).first();
   const trangThai = await docTrangThaiHienDien(env, phien.nhan_su_id);
@@ -204,8 +221,12 @@ async function toiLaAi(req, env) {
     id: phien.nhan_su_id,
     ten: phien.ho_ten,
     viet_tat: phien.viet_tat,
-    chuc_vu: phien.chuc_vu || TEN_VAI_TRO[phien.vai_tro] || '',
+    chuc_vu: phien.chuc_vu || moTaVaiTro(phien.vai_tro, phien.vi_tri_cong_viec) || '',
     vai_tro: phien.vai_tro,
+    // Ô 2 — vị trí công việc. null nghĩa là chưa gán (hoặc DB chưa nạp
+    // migration them-vi-tri-cong-viec.sql); giao diện chỉ hiển thị, chặn thật
+    // vẫn ở máy chủ như mọi cửa khác.
+    vi_tri_cong_viec: phien.vi_tri_cong_viec || null,
     phai_doi_mk: !!phien.phai_doi_mk,
     co_anh: !!ns?.co_anh,
     phong_ban_id: ns ? ns.phong_ban_id : null,
@@ -216,16 +237,19 @@ async function toiLaAi(req, env) {
     phong_ban_quan_ly: phongBanQuanLy,
     quyen: q.tab,
     xem_luong: q.xem_luong,
-    la_admin: laAdmin(phien.vai_tro),
-    them_nhan_su: duocThemNhanSu(phien.vai_tro),
-    quan_ly_chinh_sach_ca: duocQuanLyChinhSachCa(phien.vai_tro),
-    duoc_tao_tai_khoan: duocTaoTaiKhoan(phien.vai_tro),
+    la_admin: laAdmin(phien),
+    them_nhan_su: duocThemNhanSu(phien),
+    quan_ly_chinh_sach_ca: duocQuanLyChinhSachCa(phien),
+    duoc_tao_tai_khoan: duocTaoTaiKhoan(phien),
+    // Ai được sửa Ô 2 (vị trí công việc) — rộng hơn ô 1 một bậc: HCNS đặt vị
+    // trí cho người mới hằng ngày, không phải chờ Sếp. Luật thật ở qtSuaVaiTro.
+    duoc_dat_vi_tri: duocDatViTriCongViec(phien),
     // Cờ duyệt góp ý ERP ở cấp cuối — KHÔNG đi theo vai trò (Sếp Ngọc chốt
     // 28/08/2026). Giao diện dùng để vẽ nút; luật thật ở gopYDuyet().
     duyet_gopy: duocDuyetGopY(phien),
-    kho: quyenKho(phien.vai_tro),           // { thao_tac, quan_ly, gia_von } cho tab Kho
-    shopee: quyenShopee(phien.vai_tro),     // { xem, quan_ly } cho tab Đơn hoàn
-    thao_tac_van_hanh: duocThaoTacVanHanh(phien.vai_tro),   // được bấm nút ở bước Vận hành sàn (Cần đối soát) hay chỉ xem
+    kho: quyenKho(phien),           // { thao_tac, quan_ly, gia_von } cho tab Kho
+    shopee: quyenShopee(phien),     // { xem, quan_ly } cho tab Đơn hoàn
+    thao_tac_van_hanh: duocThaoTacVanHanh(phien),   // được bấm nút ở bước Vận hành sàn (Cần đối soát) hay chỉ xem
     // Để giao diện khỏi ghi cứng con số, sau này đổi một chỗ là xong
     mat_khau_dai_toi_thieu: DAI_TOI_THIEU
   });
@@ -272,13 +296,16 @@ async function layDanhBa(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
 
-  if (!duocXemTab(phien.vai_tro, 'danhba')) return loi('Không có quyền', 403);
+  if (!duocXemTab(phien, 'danhba')) return loi('Không có quyền', 403);
 
   // Chỉ chọn đúng các cột liên lạc. Cột lương không nằm trong câu lệnh này,
   // nên dữ liệu lương không có đường nào rời khỏi máy chủ qua đây.
   // Ẩn tài khoản vai trò "nv_test" (test/Shopee reviewer) khỏi danh bạ —
   // đây là tài khoản bấm thử, không phải nhân sự thật, không để lẫn vào
   // danh sách chọn người (Chat, Người nhận/Người phối hợp ở Trạm Việc...).
+  // Từ 04/09/2026 `nv_test` là một VỊ TRÍ (ô 2), nên phải soi CẢ HAI cột —
+  // soi mỗi `vai_tro` là sau migration tài khoản test lòi ra danh bạ chung.
+  const coViTri = await coCotViTri(env.DB);
   const { results } = await env.DB.prepare(`
     SELECT n.id, n.ma_nv, n.ho_ten, n.viet_tat, n.chuc_vu, n.bo_phan, n.sdt, n.email,
            (n.anh_chan_dung IS NOT NULL) AS co_anh,
@@ -289,6 +316,7 @@ async function layDanhBa(req, env) {
       LEFT JOIN tai_khoan t ON t.nhan_su_id = n.id
       LEFT JOIN nhan_su_trang_thai tt ON tt.nhan_su_id = n.id
      WHERE n.dang_lam = 1 AND (t.vai_tro IS NULL OR t.vai_tro != 'nv_test')
+       ${coViTri ? "AND (t.vi_tri_cong_viec IS NULL OR t.vi_tri_cong_viec != 'nv_test')" : ''}
      ORDER BY n.bo_phan, n.ho_ten
   `).all();
 
@@ -313,9 +341,9 @@ async function layNhanSu(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
 
-  if (!duocXemTab(phien.vai_tro, 'nhansu')) return loi('Không có quyền', 403);
+  if (!duocXemTab(phien, 'nhansu')) return loi('Không có quyền', 403);
 
-  const xemLuong = duocXemLuong(phien.vai_tro);
+  const xemLuong = duocXemLuong(phien);
 
   // ĐÂY LÀ CHỖ QUAN TRỌNG NHẤT CỦA CẢ HỆ THỐNG:
   // hai câu lệnh khác nhau tuỳ vai trò. Người không có quyền thì cột lương
@@ -345,7 +373,7 @@ async function layNhanSu(req, env) {
 async function nsLichSu(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
-  if (!duocXemTab(phien.vai_tro, 'nhansu')) return loi('Không có quyền', 403);
+  if (!duocXemTab(phien, 'nhansu')) return loi('Không có quyền', 403);
 
   const u = new URL(req.url);
   const nhanSuId = String(u.searchParams.get('id') || '').trim();
@@ -773,7 +801,7 @@ async function chatTepDinhKem(req, env) {
 async function batBuocAdmin(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return { loi: l };
-  if (!laAdmin(phien.vai_tro)) return { loi: loi('Chỉ Admin mới được cấp/khoá tài khoản', 403) };
+  if (!laAdmin(phien)) return { loi: loi('Chỉ Admin mới được cấp/khoá tài khoản', 403) };
   return { phien };
 }
 
@@ -783,7 +811,7 @@ async function batBuocAdmin(req, env) {
 async function batBuocTaoTaiKhoan(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return { loi: l };
-  if (!duocTaoTaiKhoan(phien.vai_tro)) return { loi: loi('Bạn không có quyền tạo tài khoản', 403) };
+  if (!duocTaoTaiKhoan(phien)) return { loi: loi('Bạn không có quyền tạo tài khoản', 403) };
   return { phien };
 }
 
@@ -791,7 +819,7 @@ async function batBuocTaoTaiKhoan(req, env) {
 async function batBuocThemNhanSu(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return { loi: l };
-  if (!duocThemNhanSu(phien.vai_tro)) return { loi: loi('Bạn không có quyền quản lý nhân sự', 403) };
+  if (!duocThemNhanSu(phien)) return { loi: loi('Bạn không có quyền quản lý nhân sự', 403) };
   return { phien };
 }
 
@@ -809,12 +837,18 @@ async function qtDanhSach(req, env) {
   const { phien, loi: l } = await batBuocThemNhanSu(req, env);
   if (l) return l;
 
+  // Ô 2 (vị trí công việc) chỉ có sau migration them-vi-tri-cong-viec.sql.
+  // Chưa nạp thì trả NULL — bảng vẫn vẽ, cột "Vị trí" để trống, KHÔNG chết
+  // cả màn Quản trị vì một cột hiển thị (cùng lý do với khối hợp đồng bên
+  // dưới). +0 lượt đọc D1 khi đã có cột: coCotViTri nhớ vĩnh viễn.
+  const coViTri = await coCotViTri(env.DB);
   const { results } = await env.DB.prepare(`
     SELECT n.id, n.ma_nv, n.ho_ten, n.viet_tat, n.chuc_vu, n.bo_phan, n.phong_ban_id, n.chuc_danh_id,
            n.sdt, n.email, n.quan_ly_id, n.trang_thai_dl, n.loai_lao_dong,
            n.phap_nhan, n.trang_thai, n.dang_lam, (n.anh_chan_dung IS NOT NULL) AS co_anh,
            t.id AS tai_khoan_id, t.ten_dang_nhap, t.vai_tro, t.kich_hoat, t.phai_doi_mk,
-           t.duyet_gopy
+           t.duyet_gopy,
+           ${coViTri ? 't.vi_tri_cong_viec' : 'NULL AS vi_tri_cong_viec'}
       FROM nhan_su n
       LEFT JOIN tai_khoan t ON t.nhan_su_id = n.id
      ORDER BY n.dang_lam DESC, n.bo_phan, n.ho_ten
@@ -859,7 +893,15 @@ async function qtDanhSach(req, env) {
 
   return json({
     nhan_su: results,
-    vai_tro: VAI_TRO_HOP_LE.map(v => ({ ma: v, ten: TEN_VAI_TRO[v], nhom: nhomVaiTro(v) }))
+    // `vai_tro` giữ nguyên (cả 10 mã, kèm nhóm) để màn hình cũ và bộ lọc còn
+    // chạy. Hai danh sách mới bên dưới là thứ hai ô trên form đọc — giao diện
+    // KHÔNG tự đoán mã nào thuộc ô nào, luật ở src/quyen.js.
+    vai_tro: VAI_TRO_HOP_LE.map(v => ({ ma: v, ten: TEN_VAI_TRO[v], nhom: nhomVaiTro(v) })),
+    vai_tro_he_thong: VAI_TRO_HE_THONG.map(v => ({ ma: v, ten: TEN_VAI_TRO[v] })),
+    vi_tri_cong_viec: VI_TRI_CONG_VIEC.map(v => ({ ma: v, ten: TEN_VAI_TRO[v] })),
+    // Chưa nạp migration thì nói thẳng ra, để màn hình bảo "cần nạp CSDL"
+    // thay vì im lặng hiện một ô không lưu được gì.
+    co_cot_vi_tri: coViTri
   });
 }
 
@@ -907,7 +949,7 @@ async function qtThemNhanSu(req, env) {
 
   // RANH GIỚI LƯƠNG: chỉ admin mới được đặt lương. HCNS gửi lương lên cũng
   // bị bỏ qua ở đây — máy chủ ép NULL, không tin giao diện.
-  const luong = laAdmin(phien.vai_tro)
+  const luong = laAdmin(phien)
     ? ((b.luong === '' || b.luong == null) ? null : parseInt(String(b.luong).replace(/\D/g, ''), 10) || null)
     : null;
 
@@ -960,7 +1002,7 @@ async function qtSuaNhanSu(req, env) {
   if (!hienCo) return loi('Không tìm thấy nhân sự', 404);
 
   // Đã khoá thì chỉ Admin sửa được (Data Lock — xem migration them-khoa-danhmuc-nen.sql)
-  if (hienCo.trang_thai_dl === 'da_khoa' && !laAdmin(phien.vai_tro)) {
+  if (hienCo.trang_thai_dl === 'da_khoa' && !laAdmin(phien)) {
     return loi('Hồ sơ này đã khoá — cần Admin sửa hoặc mở khoá lại', 403);
   }
 
@@ -972,7 +1014,7 @@ async function qtSuaNhanSu(req, env) {
   const chucVuMoi = cd ? cd.ten : String(b.chuc_vu || '').trim();
   const boPhanMoi = pb ? pb.ten : String(b.bo_phan || '').trim();
 
-  const coCapNhatLuong = laAdmin(phien.vai_tro) && b.luong !== undefined;
+  const coCapNhatLuong = laAdmin(phien) && b.luong !== undefined;
   const luong = coCapNhatLuong
     ? ((b.luong === '' || b.luong == null) ? null : parseInt(String(b.luong).replace(/\D/g, ''), 10) || null)
     : null;
@@ -981,7 +1023,7 @@ async function qtSuaNhanSu(req, env) {
   // Admin mới sửa lại được, dùng cho trường hợp cấp nhầm (VD chọn nhầm Loại
   // lao động lúc tạo nên sai tiền tố). Luôn ghi lịch sử vì đây là hành động
   // hiếm, nhạy cảm — không chờ hồ sơ đã khoá mới ghi như các trường khác.
-  const coCapNhatMaNv = laAdmin(phien.vai_tro) && b.ma_nv !== undefined && String(b.ma_nv).trim() && String(b.ma_nv).trim() !== hienCo.ma_nv;
+  const coCapNhatMaNv = laAdmin(phien) && b.ma_nv !== undefined && String(b.ma_nv).trim() && String(b.ma_nv).trim() !== hienCo.ma_nv;
   const maNvMoi = coCapNhatMaNv ? String(b.ma_nv).trim() : null;
 
   try {
@@ -1139,7 +1181,7 @@ async function qtKhoaNhanSu(req, env) {
   const id = String(b.id || '').trim();
   if (!id) return loi('Thiếu id nhân sự');
   const muon = b.trang_thai_dl === 'da_khoa' ? 'da_khoa' : 'nhap';
-  if (muon === 'nhap' && !laAdmin(phien.vai_tro)) {
+  if (muon === 'nhap' && !laAdmin(phien)) {
     return loi('Chỉ Admin mới mở khoá lại được', 403);
   }
 
@@ -1161,14 +1203,27 @@ async function qtTaoTaiKhoan(req, env) {
   // Bỏ khoảng trắng — tên đăng nhập thường là số điện thoại
   const ten = String(b.ten_dang_nhap || '').replace(/\s+/g, '').toLowerCase();
   const vaiTro = String(b.vai_tro || '').trim();
+  const viTri  = String(b.vi_tri_cong_viec || '').trim();   // ô 2, để trống được
 
   if (!nhanSuId) return loi('Thiếu nhân sự');
   if (!/^[a-z0-9._-]{3,20}$/.test(ten)) {
     return loi('Tên đăng nhập (số điện thoại) 3–20 ký tự, chỉ gồm số, chữ thường không dấu, dấu . _ -');
   }
-  if (!VAI_TRO_HOP_LE.includes(vaiTro)) return loi('Vai trò không hợp lệ');
-  if (!laAdmin(phien.vai_tro) && (vaiTro === 'admin' || vaiTro === 'admin_backup')) {
+  /* Ô 1 CHỈ nhận vai trò hệ thống. Trước 04/09/2026 chỗ này nhận cả 10 mã
+     (VAI_TRO_HOP_LE) vì hai khái niệm còn chung một cột — nay nhận "Kế toán
+     trưởng" vào ô 1 là dựng lại đúng cái lỗi vừa sửa. */
+  if (!laVaiTroHeThong(vaiTro)) return loi('Vai trò hệ thống không hợp lệ');
+  if (!laAdmin(phien) && (vaiTro === 'admin' || vaiTro === 'admin_backup')) {
     return loi('Bạn không có quyền tạo tài khoản Admin/Admin backup — cần Admin thật', 403);
+  }
+  /* Ô 2 CHỈ nhận vị trí công việc — chốt chặn tự nâng quyền: nếu ô này nhận
+     được 'admin' thì bất kỳ ai đặt được vị trí cũng tự phong Admin. */
+  if (viTri && !laViTriCongViec(viTri)) return loi('Vị trí công việc không hợp lệ');
+  /* Lương là ranh giới cứng — chỉ Admin thật trao. Admin backup cấp được tài
+     khoản nhưng KHÔNG bổ nhiệm được Kế toán trưởng (vị trí duy nhất kéo theo
+     quyền xem lương). Việc đó hiếm và nặng, để Sếp bấm. */
+  if (viTri && !laAdmin(phien) && viTriCoXemLuong(viTri)) {
+    return loi(`Chỉ Admin mới đặt được vị trí "${TEN_VAI_TRO[viTri]}" — vị trí này xem được lương`, 403);
   }
 
   const ns = await env.DB.prepare('SELECT id FROM nhan_su WHERE id = ?').bind(nhanSuId).first();
@@ -1180,15 +1235,56 @@ async function qtTaoTaiKhoan(req, env) {
   const trungTen = await env.DB.prepare('SELECT id FROM tai_khoan WHERE ten_dang_nhap = ?').bind(ten).first();
   if (trungTen) return loi('Tên đăng nhập này đã có người dùng');
 
+  /* Cột `vi_tri_cong_viec` có thể CHƯA nạp (deploy.yml không tự chạy
+     migration). Chưa có thì tạo tài khoản đúng như bản cũ — chỉ ô 1 — chứ
+     KHÔNG chặn việc cấp tài khoản cho nhân viên mới vì lý do kỹ thuật. */
+  const coViTri = await coCotViTri(env.DB);
   const matKhauTam = sinhMatKhauTam(10);
-  await env.DB.prepare(`
-    INSERT INTO tai_khoan (nhan_su_id, ten_dang_nhap, mat_khau_hash, vai_tro, phai_doi_mk)
-    VALUES (?, ?, ?, ?, 1)
-  `).bind(nhanSuId, ten, await bamMatKhau(matKhauTam), vaiTro).run();
+  if (coViTri) {
+    await env.DB.prepare(`
+      INSERT INTO tai_khoan (nhan_su_id, ten_dang_nhap, mat_khau_hash, vai_tro, vi_tri_cong_viec, phai_doi_mk)
+      VALUES (?, ?, ?, ?, ?, 1)
+    `).bind(nhanSuId, ten, await bamMatKhau(matKhauTam), vaiTro, viTri || null).run();
+  } else {
+    await env.DB.prepare(`
+      INSERT INTO tai_khoan (nhan_su_id, ten_dang_nhap, mat_khau_hash, vai_tro, phai_doi_mk)
+      VALUES (?, ?, ?, ?, 1)
+    `).bind(nhanSuId, ten, await bamMatKhau(matKhauTam), vaiTro).run();
+  }
+
+  await ghiVetVaiTro(env, phien, nhanSuId, 'cap_tai_khoan', null,
+    moTaVaiTro(vaiTro, coViTri ? viTri : '') || vaiTro,
+    coViTri ? null : 'CSDL chưa có cột vị trí công việc — chỉ lưu được vai trò hệ thống');
 
   // Trả mật khẩu tạm về ĐÚNG MỘT LẦN để admin chép cho nhân viên.
   // Máy chủ chỉ lưu hash, sau này không ai xem lại được mật khẩu này.
   return json({ ok: true, ten_dang_nhap: ten, mat_khau_tam: matKhauTam });
+}
+
+/* ---- GHI VẾT ĐỔI VAI TRÒ / VỊ TRÍ (ràng buộc ④) -------------------------
+   Cũ → mới → ai đổi → lúc nào, vào `nhan_su_lich_su` — SỔ SỰ KIỆN ĐÃ CÓ
+   (migrations/them-nhansu-lichsu.sql), không đẻ bảng mới. Cùng sổ với
+   đổi phòng ban / đổi chức danh / nghỉ việc, nên mở hồ sơ một người là thấy
+   cả dòng đời làm việc ở một chỗ.
+
+   KHÔNG ĐƯỢC LÀM HỎNG VIỆC CHÍNH: bảng có thể chưa nạp trên một CSDL cũ.
+   Ghi hỏng thì kêu lên console (Workers Logs đọc được) rồi đi tiếp — mất một
+   dòng nhật ký còn hơn Sếp bấm "Lưu" mà báo lỗi đỏ trong khi vai trò đã đổi
+   xong. Đây là ghi thêm, không phải nguồn sự thật của quyền. */
+async function ghiVetVaiTro(env, phien, nhanSuId, loaiSuKien, cu, moi, ghiChu) {
+  if (!nhanSuId) return false;
+  try {
+    await env.DB.prepare(`
+      INSERT INTO nhan_su_lich_su (nhan_su_id, loai_su_kien, gia_tri_cu, gia_tri_moi,
+                                   nguoi_thuc_hien_id, ghi_chu, luc)
+      VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+    `).bind(nhanSuId, loaiSuKien, cu || null, moi || null,
+            phien.nhan_su_id, ghiChu || null).run();
+    return true;
+  } catch (e) {
+    console.error('[ERP] Không ghi được vết đổi vai trò/vị trí:', e && e.message);
+    return false;
+  }
 }
 
 /* ==========================================================================
@@ -1541,36 +1637,100 @@ async function qtKhoaTaiKhoan(req, env) {
    được LÚC tạo tài khoản, không sửa lại được sau. Chặn hạ vai trò Admin
    cuối cùng còn hoạt động xuống vai trò thường (giữ nguyên logic chặn ở
    qtXoaTaiKhoan — tránh hệ thống mất hết người quản trị). */
+/* HAI Ô (Sếp chốt 04/09/2026) — thân gửi lên có thể mang `vai_tro` (ô 1),
+   `vi_tri_cong_viec` (ô 2), hoặc cả hai. Ô nào KHÔNG gửi thì giữ nguyên,
+   nên màn cũ chỉ gửi `vai_tro` vẫn chạy y như trước.
+
+   AI SỬA ĐƯỢC Ô NÀO — kiểm ở đây, không phải ẩn nút:
+     · Ô 1: Admin + Admin backup (duocTaoTaiKhoan). Admin backup không gán
+       được Admin/Admin backup cho ai, kể cả mình (luật cũ, giữ nguyên).
+     · Ô 2: thêm HCNS (duocDatViTriCongViec) — đặt vị trí cho người mới là
+       việc hành chính hằng ngày.
+     · KHÔNG AI SỬA Ô CỦA CHÍNH MÌNH, trừ Admin thật. Thiếu chốt này thì HCNS
+       tự đặt mình thành "Kế toán trưởng" và XEM ĐƯỢC LƯƠNG — phá thẳng ranh
+       giới cứng "HCNS không xem lương" ghi ở đầu src/quyen.js. Đo bằng cách
+       gọi API trực tiếp, không qua giao diện (do-tach-vai-tro.mjs, DC-B). */
 async function qtSuaVaiTro(req, env) {
-  const { phien, loi: l } = await batBuocTaoTaiKhoan(req, env);
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
+  if (!duocDatViTriCongViec(phien)) {
+    return loi('Bạn không có quyền đổi vai trò hay vị trí công việc', 403);
+  }
 
   let b;
   try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
 
   const tkId = parseInt(b.tai_khoan_id, 10);
-  const vaiTroMoi = String(b.vai_tro || '').trim();
   if (!tkId) return loi('Thiếu tài khoản');
-  if (!VAI_TRO_HOP_LE.includes(vaiTroMoi)) return loi('Vai trò không hợp lệ');
 
-  // Admin backup KHÔNG được tự gán vai trò Admin/Admin backup cho ai (kể cả
-  // chính mình) — tránh tự nâng quyền. Chỉ Admin thật mới gán được vai trò
-  // hệ thống cấp cao.
-  if (!laAdmin(phien.vai_tro) && (vaiTroMoi === 'admin' || vaiTroMoi === 'admin_backup')) {
-    return loi('Bạn không có quyền gán vai trò Admin/Admin backup — cần Admin thật', 403);
+  const suaO1 = b.vai_tro !== undefined;
+  const suaO2 = b.vi_tri_cong_viec !== undefined;
+  if (!suaO1 && !suaO2) return loi('Chưa chọn vai trò hệ thống hay vị trí công việc');
+
+  const vaiTroMoi = String(b.vai_tro || '').trim();
+  const viTriMoi  = String(b.vi_tri_cong_viec || '').trim();   // '' = bỏ vị trí
+
+  if (suaO1) {
+    if (!duocTaoTaiKhoan(phien)) {
+      return loi('Bạn chỉ đổi được vị trí công việc — vai trò hệ thống cần Admin', 403);
+    }
+    if (!laVaiTroHeThong(vaiTroMoi)) return loi('Vai trò hệ thống không hợp lệ');
+    // Admin backup KHÔNG được tự gán vai trò Admin/Admin backup cho ai (kể cả
+    // chính mình) — tránh tự nâng quyền. Chỉ Admin thật mới gán được vai trò
+    // hệ thống cấp cao.
+    if (!laAdmin(phien) && (vaiTroMoi === 'admin' || vaiTroMoi === 'admin_backup')) {
+      return loi('Bạn không có quyền gán vai trò Admin/Admin backup — cần Admin thật', 403);
+    }
+  }
+  if (suaO2) {
+    if (viTriMoi && !laViTriCongViec(viTriMoi)) return loi('Vị trí công việc không hợp lệ');
+    if (viTriMoi && !laAdmin(phien) && viTriCoXemLuong(viTriMoi)) {
+      return loi(`Chỉ Admin mới đặt được vị trí "${TEN_VAI_TRO[viTriMoi]}" — vị trí này xem được lương`, 403);
+    }
   }
 
-  const tk = await env.DB.prepare('SELECT id, vai_tro FROM tai_khoan WHERE id = ?').bind(tkId).first();
+  const coViTri = await coCotViTri(env.DB);
+  if (suaO2 && !coViTri) {
+    return loi('CSDL chưa có ô Vị trí công việc — cần nạp migration them-vi-tri-cong-viec.sql trước', 409);
+  }
+
+  const tk = await env.DB.prepare(
+    `SELECT id, nhan_su_id, vai_tro, ${coViTri ? 'vi_tri_cong_viec' : 'NULL AS vi_tri_cong_viec'}
+       FROM tai_khoan WHERE id = ?`).bind(tkId).first();
   if (!tk) return loi('Không tìm thấy tài khoản', 404);
 
-  if (laAdmin(tk.vai_tro) && !laAdmin(vaiTroMoi)) {
+  /* TỰ SỬA CHÍNH MÌNH — chặn cho mọi người trừ Admin thật. */
+  if (tk.nhan_su_id === phien.nhan_su_id && !laAdmin(phien)) {
+    return loi('Bạn không tự đổi được vai trò hay vị trí của chính mình — nhờ Admin', 403);
+  }
+
+  const o1Cu = tk.vai_tro, o2Cu = tk.vi_tri_cong_viec || '';
+  const o1Sau = suaO1 ? vaiTroMoi : o1Cu;
+  const o2Sau = suaO2 ? viTriMoi  : o2Cu;
+
+  /* Không hạ Admin CUỐI CÙNG còn hoạt động. Xét theo Ô 1 vì cờ `admin` chỉ
+     nằm ở ô 1 — không vị trí công việc nào mang nó. */
+  if (laAdmin(o1Cu) && !laAdmin(o1Sau)) {
     const { results } = await env.DB.prepare('SELECT vai_tro FROM tai_khoan WHERE kich_hoat = 1 AND id != ?').bind(tkId).all();
     if (!results.some(x => laAdmin(x.vai_tro))) {
       return loi('Không thể đổi — đây là tài khoản Admin cuối cùng còn hoạt động', 409);
     }
   }
 
-  await env.DB.prepare('UPDATE tai_khoan SET vai_tro = ? WHERE id = ?').bind(vaiTroMoi, tkId).run();
+  if (o1Sau === o1Cu && o2Sau === o2Cu) return json({ ok: true, khong_doi: true });
+
+  if (coViTri) {
+    await env.DB.prepare('UPDATE tai_khoan SET vai_tro = ?, vi_tri_cong_viec = ? WHERE id = ?')
+                .bind(o1Sau, o2Sau || null, tkId).run();
+  } else {
+    await env.DB.prepare('UPDATE tai_khoan SET vai_tro = ? WHERE id = ?').bind(o1Sau, tkId).run();
+  }
+
+  /* MỘT dòng ghi vết cho MỘT cú bấm — không tách đôi, để đọc lại là thấy
+     nguyên trạng thái trước và sau, đúng như Sếp nhìn trên màn hình. */
+  await ghiVetVaiTro(env, phien, tk.nhan_su_id, 'doi_vai_tro',
+    moTaVaiTro(o1Cu, o2Cu) || o1Cu, moTaVaiTro(o1Sau, o2Sau) || o1Sau, null);
+
   return json({ ok: true });
 }
 
@@ -1670,7 +1830,7 @@ async function qtXoaTaiKhoan(req, env) {
 async function batBuocXemKho(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return { loi: l };
-  if (!duocXemTab(phien.vai_tro, 'khovan')) return { loi: loi('Bạn không có quyền xem Kho vận', 403) };
+  if (!duocXemTab(phien, 'khovan')) return { loi: loi('Bạn không có quyền xem Kho vận', 403) };
   return { phien };
 }
 
@@ -1683,7 +1843,7 @@ async function batBuocXemKho(req, env) {
 async function batBuocXemSanPham(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return { loi: l };
-  if (!duocXemTab(phien.vai_tro, 'khovan') && !duocXemTab(phien.vai_tro, 'kinhdoanh')) {
+  if (!duocXemTab(phien, 'khovan') && !duocXemTab(phien, 'kinhdoanh')) {
     return { loi: loi('Bạn không có quyền xem Sản phẩm/SKU', 403) };
   }
   return { phien };
@@ -1769,7 +1929,7 @@ async function khoKhoaSP(req, env) {
 async function batBuocXemDuLieuNen(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return { loi: l };
-  if (!duocXemTab(phien.vai_tro, 'dulieunen')) return { loi: loi('Bạn không có quyền xem Dữ liệu nền', 403) };
+  if (!duocXemTab(phien, 'dulieunen')) return { loi: loi('Bạn không có quyền xem Dữ liệu nền', 403) };
   return { phien };
 }
 
@@ -1958,7 +2118,7 @@ async function dlnSuaKho(req, env) {
 async function batBuocXemTaiSan(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return { loi: l };
-  if (!duocXemTab(phien.vai_tro, 'taisan')) return { loi: loi('Bạn không có quyền xem Tài sản', 403) };
+  if (!duocXemTab(phien, 'taisan')) return { loi: loi('Bạn không có quyền xem Tài sản', 403) };
   return { phien };
 }
 
@@ -2039,7 +2199,7 @@ async function tsThanhLy(req, env) {
 async function batBuocXemXepCa(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return { loi: l };
-  if (!duocXemTab(phien.vai_tro, 'xepca')) return { loi: loi('Bạn không có quyền xem Xếp ca', 403) };
+  if (!duocXemTab(phien, 'xepca')) return { loi: loi('Bạn không có quyền xem Xếp ca', 403) };
   return { phien };
 }
 
@@ -2209,7 +2369,7 @@ async function hoanDanhSach(req, env) {
 async function hoanLichSu(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
-  if (!duocXemDonHoan(phien.vai_tro)) return loi('Bạn không có quyền', 403);
+  if (!duocXemDonHoan(phien)) return loi('Bạn không có quyền', 403);
   const coTT = await shopee.coCotTinhTrangHang(env);
   // 523 dòng / trần 500 — màn này ĐANG cắt mất 23 đơn hoàn và ô đếm `#ls-dem`
   // lại in "500/500", tức KHẲNG ĐỊNH SAI là đã hiện hết. Giữ trần (bảng còn
@@ -2262,7 +2422,7 @@ const TINH_TRANG_HOP_LE = ['con_tot', 'hu_hong', 'thieu_hang', 'sai_hang'];
 async function hoanDaNhan(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
-  if (!duocThaoTacKho(phien.vai_tro)) return loi('Bạn không có quyền xác nhận nhận hàng', 403);
+  if (!duocThaoTacKho(phien)) return loi('Bạn không có quyền xác nhận nhận hàng', 403);
   let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
   const rsn = (b.return_sn || '').trim();
   const tinhTrang = (b.tinh_trang || '').trim();
@@ -2308,7 +2468,7 @@ async function hoanDaNhan(req, env) {
 async function hoanPhanLoai(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
-  if (!duocThaoTacKho(phien.vai_tro)) return loi('Bạn không có quyền', 403);
+  if (!duocThaoTacKho(phien)) return loi('Bạn không có quyền', 403);
   let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
   const rsn = (b.return_sn || '').trim();
   const phanLoai = String(b.phan_loai || '').trim();
@@ -2336,13 +2496,21 @@ async function hoanPhanLoai(req, env) {
 }
 
 /* ---- Thông báo trong ERP (chuông 🔔) ------------------------------------
-   Nhóm nhận: kho roles -> 'kho'; vận hành sàn -> 'van_hanh'; ban giám đốc -> cả hai. */
-function nhomCua(vaiTro) {
-  if (vaiTro === 'nhan_vien_kho' || vaiTro === 'quan_ly_kho') return ['kho'];
-  if (vaiTro === 'van_hanh_san') return ['van_hanh'];
-  if (vaiTro === 'ke_toan_truong') return ['ke_toan'];
-  if (laAdmin(vaiTro)) return ['kho', 'van_hanh', 'ke_toan'];
-  return [];
+   Nhóm nhận: kho roles -> 'kho'; vận hành sàn -> 'van_hanh'; ban giám đốc -> cả hai.
+
+   HAI Ô (04/09/2026): nhận cả phiên lẫn chuỗi vai trò, và HỢP hai ô — nếu
+   chỉ soi ô 1 thì sau migration anh Duy là `nguoi_dung` + `quan_ly_kho` và
+   sẽ KHÔNG nhận được thông báo nào của nhóm kho nữa. Một người có thể thuộc
+   nhiều nhóm (vd Admin backup + Kế toán trưởng), nên gộp chứ không chọn một. */
+function nhomCua(chuThe) {
+  const ra = new Set();
+  for (const v of boVaiTro(chuThe)) {
+    if (v === 'nhan_vien_kho' || v === 'quan_ly_kho') ra.add('kho');
+    else if (v === 'van_hanh_san') ra.add('van_hanh');
+    else if (v === 'ke_toan_truong') ra.add('ke_toan');
+    else if (laAdmin(v)) { ra.add('kho'); ra.add('van_hanh'); ra.add('ke_toan'); }
+  }
+  return [...ra];
 }
 
 /* nguoiNhanId (tuỳ chọn): báo cho ĐÚNG 1 người thay vì cả nhóm phòng ban —
@@ -2448,7 +2616,7 @@ const GIOI_HAN_ANH_BYTE_KN = 1_500_000;   // ~1.1MB gốc sau khi mã hoá base6
 async function hoanKhieuNai(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
-  if (!duocThaoTacKho(phien.vai_tro)) return loi('Bạn không có quyền', 403);
+  if (!duocThaoTacKho(phien)) return loi('Bạn không có quyền', 403);
   let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
   const rsn = (b.return_sn || '').trim();
   const ghiChu = (b.ghi_chu || '').trim().slice(0, 300);
@@ -2481,7 +2649,7 @@ async function hoanKhieuNai(req, env) {
 async function hoanKhieuNaiVideo(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
-  if (!duocThaoTacKho(phien.vai_tro)) return loi('Bạn không có quyền', 403);
+  if (!duocThaoTacKho(phien)) return loi('Bạn không có quyền', 403);
   if (!env.MINH_CHUNG) {
     return loi('Máy chủ chưa cấu hình lưu trữ video (R2) — báo Sếp Ngọc tạo bucket. Lý do + ảnh vẫn lưu được bình thường.', 409);
   }
@@ -2517,7 +2685,7 @@ async function hoanKhieuNaiVideo(req, env) {
 async function hoanKhieuNaiVideoXem(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
-  if (!duocXemDonHoan(phien.vai_tro) && !duocThaoTacKho(phien.vai_tro)) return loi('Bạn không có quyền', 403);
+  if (!duocXemDonHoan(phien) && !duocThaoTacKho(phien)) return loi('Bạn không có quyền', 403);
   if (!env.MINH_CHUNG) return loi('Chưa cấu hình lưu trữ video trên máy chủ', 409);
 
   const id = new URL(req.url).searchParams.get('id');
@@ -2560,7 +2728,7 @@ async function hoanKhieuNaiVideoXem(req, env) {
 async function hoanKhieuNaiMinhChung(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
-  if (!duocXemDonHoan(phien.vai_tro) && !duocThaoTacKho(phien.vai_tro)) return loi('Bạn không có quyền', 403);
+  if (!duocXemDonHoan(phien) && !duocThaoTacKho(phien)) return loi('Bạn không có quyền', 403);
   const rsn = new URL(req.url).searchParams.get('return_sn');
   if (!rsn) return loi('Thiếu mã đơn hoàn');
   const { results } = await env.DB.prepare(
@@ -2576,7 +2744,7 @@ async function hoanKhieuNaiMinhChung(req, env) {
 async function hoanChuaNhan(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
-  if (!duocThaoTacKho(phien.vai_tro)) return loi('Bạn không có quyền', 403);
+  if (!duocThaoTacKho(phien)) return loi('Bạn không có quyền', 403);
   let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
   const rsn = (b.return_sn || '').trim();
   if (!rsn) return loi('Thiếu mã đơn hoàn');
@@ -2589,7 +2757,7 @@ async function hoanChuaNhan(req, env) {
 async function layThongBao(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
-  const nhom = nhomCua(phien.vai_tro);
+  const nhom = nhomCua(phien);
   // Gộp 2 nguồn: thông báo theo NHÓM phòng ban (như cũ) + thông báo nhắm
   // ĐÚNG cá nhân (vd Tác vụ giao việc) — ai cũng có thể nhận loại sau dù
   // vai trò không thuộc nhóm phòng ban nào (vd hcns không có trong nhomCua).
@@ -2722,8 +2890,8 @@ async function cvHomNay(req, env) {
      phải tin rằng cả 10 vai đều đang có nó (BH-43: hỏi ràng buộc áp cho
      NHÁNH NÀO, không chỉ hỏi nó có mặt chưa). Ngày nào Sếp gỡ `lichsuviec`
      của một vai, chỗ này tự khoá theo. */
-  if (!duocXemTab(phien.vai_tro, 'congviec')) return loi('Bạn không có quyền', 403);
-  const xemToanCty = duocXemTab(phien.vai_tro, 'lichsuviec');
+  if (!duocXemTab(phien, 'congviec')) return loi('Bạn không có quyền', 403);
+  const xemToanCty = duocXemTab(phien, 'lichsuviec');
   const toiId = phien.nhan_su_id;
 
   // `nhan_viec_luc` chỉ có sau `va-nhacviec-rev0019.sql`; chưa nạp thì chạy ở
@@ -2784,7 +2952,7 @@ async function cvHomNay(req, env) {
      Anh Duy dùng CÙNG màn này, chỉ khác phạm vi — đúng kênh Kho → anh Duy →
      Sếp, không đẻ định nghĩa "quản lý" thứ hai. */
   const duoiQuyen = new Set((nsDs.results || []).filter(n => n.quan_ly_id === toiId && n.id !== toiId).map(n => n.id));
-  const laOwner = laAdmin(phien.vai_tro);
+  const laOwner = laAdmin(phien);
   let quanLy = null;
   // `xemToanCty` = có tab `lichsuviec`. Đây là NGUỒN quyền của khối này, xem
   // ghi chú ở đầu hàm (REV-0019 L8).
@@ -2873,7 +3041,7 @@ async function cvHomNay(req, env) {
 async function cvNhacTat(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
-  if (!duocXemTab(phien.vai_tro, 'congviec')) return loi('Bạn không có quyền', 403);  // REV-0019 L8
+  if (!duocXemTab(phien, 'congviec')) return loi('Bạn không có quyền', 403);  // REV-0019 L8
   let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
   const tat = b.tat ? 1 : 0;
   // Chỉ đổi được cờ CỦA CHÍNH MÌNH — không có tham số nhận id người khác.
@@ -2961,7 +3129,7 @@ async function cvCapNhat(req, env) {
   // phối hợp làm" (đã thử cho phối hợp thao tác, Sếp yêu cầu hoàn tác lại,
   // giữ đúng 1 đầu mối chịu trách nhiệm báo cáo cho mỗi việc — tinh thần MBOs).
   const laNguoiNhan = cv.nguoi_nhan_id === phien.nhan_su_id;
-  const laNguoiGiao = cv.nguoi_giao_id === phien.nhan_su_id || laAdmin(phien.vai_tro);
+  const laNguoiGiao = cv.nguoi_giao_id === phien.nhan_su_id || laAdmin(phien);
   const laTodoCaNhan = cv.nguoi_nhan_id === cv.nguoi_giao_id;
 
   // TODO CÁ NHÂN: tự giao cho mình thì được đánh dấu XONG thẳng từ bất kỳ đâu
@@ -3235,7 +3403,7 @@ async function suaLichSu(req, env) {
      minh bạch toàn công ty (tinh thần MBOs) — ai xem được việc thì xem được
      lịch sử sửa của việc đó. Cái phải siết là quyền SỬA, không phải quyền
      BIẾT ai đã sửa; giấu vết sửa đi thì đúng bằng không ghi vết. */
-  if (!duocXemTab(phien.vai_tro, 'congviec')) return loi('Bạn không có quyền', 403);
+  if (!duocXemTab(phien, 'congviec')) return loi('Bạn không có quyền', 403);
 
   /* CẮT THÌ PHẢI NÓI LÀ ĐÃ CẮT — và ở ĐÂY thì gắt hơn mọi màn khác.
      Đây là SỔ BẰNG CHỨNG: cả nhánh CTL-0017 đứng trên lời hứa "sửa được
@@ -3275,7 +3443,7 @@ async function suaLichSu(req, env) {
 async function cvSua(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
-  if (!duocXemTab(phien.vai_tro, 'congviec')) return loi('Bạn không có quyền', 403);
+  if (!duocXemTab(phien, 'congviec')) return loi('Bạn không có quyền', 403);
   let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
   const id = parseInt(b.id, 10);
   if (!id) return loi('Thiếu id công việc');
@@ -3303,7 +3471,7 @@ async function cvSua(req, env) {
        thoát nhắc quá hạn. Cả hai đều làm số "đúng hạn" thành vô nghĩa.
      · TODO CÁ NHÂN (tự giao cho mình) rơi vào nhánh "người giao" ở trên —
        tự sửa todo của mình thoải mái, không phiền ai. */
-  const laNguoiGiao = cv.nguoi_giao_id === phien.nhan_su_id || laAdmin(phien.vai_tro);
+  const laNguoiGiao = cv.nguoi_giao_id === phien.nhan_su_id || laAdmin(phien);
   const laQuanLy = !laNguoiGiao && await laCapTrenCua(env, phien.nhan_su_id, cv.nguoi_nhan_id);
   if (!laNguoiGiao && !laQuanLy) {
     return loi(cv.nguoi_nhan_id === phien.nhan_su_id
@@ -3527,7 +3695,7 @@ async function cvSua(req, env) {
 async function cvLichSu(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
-  if (!duocXemTab(phien.vai_tro, 'lichsuviec')) return loi('Bạn không có quyền', 403);
+  if (!duocXemTab(phien, 'lichsuviec')) return loi('Bạn không có quyền', 403);
   // Đây là màn ta CHỈ NGƯỜI KHÁC sang để "xem việc toàn công ty" — nó mà cắt
   // im lặng thì lời chỉ đường thành lời hứa suông. Hỏi 501 để biết có cắt.
   //
@@ -3568,7 +3736,7 @@ async function cvLichSu(req, env) {
 async function cvTongQuanCongTy(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
-  if (!laAdmin(phien.vai_tro)) return loi('Bạn không có quyền', 403);
+  if (!laAdmin(phien)) return loi('Bạn không có quyền', 403);
 
   const homNay = new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
 
@@ -3735,7 +3903,7 @@ async function mtTao(req, env) {
 
   const cap = String(b.cap || '').trim();
   if (!['cong_ty', 'phong_ban', 'ca_nhan'].includes(cap)) return loi('Cấp mục tiêu không hợp lệ');
-  if (cap === 'cong_ty' && !laAdmin(phien.vai_tro)) {
+  if (cap === 'cong_ty' && !laAdmin(phien)) {
     return loi('Chỉ Admin mới được đặt mục tiêu cấp công ty', 403);
   }
 
@@ -3764,7 +3932,7 @@ async function mtTao(req, env) {
 async function mtChot(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
-  if (!laAdmin(phien.vai_tro)) return loi('Chỉ Admin mới được chốt mục tiêu công ty', 403);
+  if (!laAdmin(phien)) return loi('Chỉ Admin mới được chốt mục tiêu công ty', 403);
 
   let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
   const id = parseInt(b.id, 10);
@@ -3800,7 +3968,7 @@ async function mtCapNhat(req, env) {
        đổi `cap` là đổi AI NHÌN THẤY nó, đó là quyền của chủ, không phải
        quyền điều phối (cùng lẽ với `dau_ra` ở `cvSua`).
      · người ngoài — không gì cả. */
-  const laChu = mt.nguoi_tao_id === phien.nhan_su_id || laAdmin(phien.vai_tro);
+  const laChu = mt.nguoi_tao_id === phien.nhan_su_id || laAdmin(phien);
   const laQuanLy = !laChu && await laCapTrenCua(env, phien.nhan_su_id, mt.nguoi_tao_id);
   if (!laChu && !laQuanLy) {
     return loi('Chỉ người đặt mục tiêu, quản lý cấp trên của họ, hoặc Admin mới sửa được mục tiêu này', 403);
@@ -3885,7 +4053,7 @@ async function mtCapNhat(req, env) {
     if (!laChu) {
       return loi('Chỉ người đặt mục tiêu hoặc Admin mới đổi được CẤP — đổi cấp là đổi ai nhìn thấy mục tiêu này', 403);
     }
-    if (capMoi === 'cong_ty' && !laAdmin(phien.vai_tro)) {
+    if (capMoi === 'cong_ty' && !laAdmin(phien)) {
       return loi('Chỉ Admin mới được đặt mục tiêu cấp công ty', 403);
     }
     doi.push({ truong: 'cap', cu: mt.cap, moi: capMoi }); cot.cap = capMoi;
@@ -4162,7 +4330,7 @@ async function vdSua(req, env) {
   const v = await env.DB.prepare('SELECT * FROM vinh_danh WHERE id = ?').bind(id).first();
   if (!v) return loi('Không tìm thấy lời khen này', 404);
 
-  const laNguoiGui = v.nguoi_gui_id === phien.nhan_su_id || laAdmin(phien.vai_tro);
+  const laNguoiGui = v.nguoi_gui_id === phien.nhan_su_id || laAdmin(phien);
   if (!laNguoiGui) return loi('Chỉ người gửi lời khen (hoặc Admin) mới sửa/gỡ được', 403);
 
   const qua24h = await env.DB.prepare(
@@ -4357,7 +4525,7 @@ async function kiemTraLyDoNghiemTrong(env) {
 async function kdCanDoiSoat(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
-  if (!duocXemDonHoan(phien.vai_tro)) return loi('Bạn không có quyền', 403);
+  if (!duocXemDonHoan(phien)) return loi('Bạn không có quyền', 403);
 
   // Luồng (Sếp Ngọc chốt): MỌI đơn hoàn, bất kể trạng thái trên sàn, hễ KHO
   // CHƯA XÁC NHẬN "Đã nhận" (kho_nhan_luc IS NULL) đều vào danh sách tra soát —
@@ -4411,7 +4579,7 @@ async function kdCanDoiSoat(req, env) {
 async function kdDonHuy(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
-  if (!duocXemDonHoan(phien.vai_tro)) return loi('Bạn không có quyền', 403);
+  if (!duocXemDonHoan(phien)) return loi('Bạn không có quyền', 403);
 
   const { results } = await env.DB.prepare(`
     SELECT d.return_sn, d.order_sn, d.ma_van_don, d.san_pham, d.san_pham_ten,
@@ -4434,7 +4602,7 @@ async function kdDonHuy(req, env) {
 async function kdKhachHoanNhieu(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
-  if (!duocXemDonHoan(phien.vai_tro)) return loi('Bạn không có quyền', 403);
+  if (!duocXemDonHoan(phien)) return loi('Bạn không có quyền', 403);
 
   const gioNay = new Date();
   const vn = new Date(gioNay.getTime() + 7 * 3600 * 1000);
@@ -4469,7 +4637,7 @@ async function kdKhachHoanNhieu(req, env) {
 async function kdDaDoiSoat(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
-  if (!duocThaoTacVanHanh(phien.vai_tro)) return loi('Bạn không có quyền — thao tác này chỉ dành cho Vận hành sàn', 403);
+  if (!duocThaoTacVanHanh(phien)) return loi('Bạn không có quyền — thao tác này chỉ dành cho Vận hành sàn', 403);
 
   let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
   const rsn = (b.return_sn || '').trim();
@@ -4496,7 +4664,7 @@ async function kdDaDoiSoat(req, env) {
 async function kdDayKho(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
-  if (!duocThaoTacVanHanh(phien.vai_tro)) return loi('Bạn không có quyền — thao tác này chỉ dành cho Vận hành sàn', 403);
+  if (!duocThaoTacVanHanh(phien)) return loi('Bạn không có quyền — thao tác này chỉ dành cho Vận hành sàn', 403);
 
   let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
   const dsRsn = Array.isArray(b.return_sn) ? b.return_sn.map(s => String(s).trim()).filter(Boolean) : [];
@@ -4528,7 +4696,7 @@ async function kdDayKho(req, env) {
 async function kdDayKeToan(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
-  if (!duocThaoTacVanHanh(phien.vai_tro)) return loi('Bạn không có quyền — thao tác này chỉ dành cho Vận hành sàn', 403);
+  if (!duocThaoTacVanHanh(phien)) return loi('Bạn không có quyền — thao tác này chỉ dành cho Vận hành sàn', 403);
   let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
   const dsRsn = Array.isArray(b.return_sn) ? b.return_sn.map(s => String(s).trim()).filter(Boolean)
               : (b.return_sn ? [String(b.return_sn).trim()] : []);
@@ -4553,7 +4721,7 @@ async function kdDayKeToan(req, env) {
 async function ktCanTraSoat(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
-  if (!duocXemTab(phien.vai_tro, 'ketoan')) return loi('Bạn không có quyền', 403);
+  if (!duocXemTab(phien, 'ketoan')) return loi('Bạn không có quyền', 403);
   const { results } = await env.DB.prepare(`
     SELECT d.return_sn, d.order_sn, d.ma_van_don, d.san_pham_ten,
            COALESCE(d.san_pham_sku, m.ma_sku) AS san_pham_sku, d.so_luong,
@@ -4574,7 +4742,7 @@ async function ktCanTraSoat(req, env) {
 async function ktDaTraSoat(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
-  if (!duocXemTab(phien.vai_tro, 'ketoan')) return loi('Bạn không có quyền', 403);
+  if (!duocXemTab(phien, 'ketoan')) return loi('Bạn không có quyền', 403);
   let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
   const dsRsn = Array.isArray(b.return_sn) ? b.return_sn.map(s => String(s).trim()).filter(Boolean)
               : (b.return_sn ? [String(b.return_sn).trim()] : []);
@@ -4602,7 +4770,7 @@ async function ktDaTraSoat(req, env) {
 async function kdDongBoDonHang(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
-  if (!duocXemTab(phien.vai_tro, 'kinhdoanh')) return loi('Bạn không có quyền', 403);
+  if (!duocXemTab(phien, 'kinhdoanh')) return loi('Bạn không có quyền', 403);
 
   const ket = { shopee: null, tiktok: null, loi: [] };
   try { ket.shopee = await shopee.dongBoDonHangNen(env); }
@@ -4621,7 +4789,7 @@ async function kdDongBoDonHang(req, env) {
 async function kdTongQuanDoanhThu(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
-  if (!duocXemTab(phien.vai_tro, 'kinhdoanh')) return loi('Bạn không có quyền', 403);
+  if (!duocXemTab(phien, 'kinhdoanh')) return loi('Bạn không có quyền', 403);
 
   const _vn = new Date(Date.now() + 7 * 3600 * 1000);
   const dauThangSec = Math.floor(Date.UTC(_vn.getUTCFullYear(), _vn.getUTCMonth(), 1) / 1000) - 7 * 3600;
@@ -4656,7 +4824,7 @@ async function kdTongQuanDoanhThu(req, env) {
 async function donHangHuy(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
-  if (!duocXemTab(phien.vai_tro, 'kinhdoanh')) return loi('Bạn không có quyền', 403);
+  if (!duocXemTab(phien, 'kinhdoanh')) return loi('Bạn không có quyền', 403);
 
   const _vn = new Date(Date.now() + 7 * 3600 * 1000);
   const dauThangSec = Math.floor(Date.UTC(_vn.getUTCFullYear(), _vn.getUTCMonth(), 1) / 1000) - 7 * 3600;
@@ -4692,7 +4860,7 @@ async function donHangHuy(req, env) {
 async function ktHangHong(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
-  if (!duocXemTab(phien.vai_tro, 'ketoan')) return loi('Bạn không có quyền', 403);
+  if (!duocXemTab(phien, 'ketoan')) return loi('Bạn không có quyền', 403);
   const { results } = await env.DB.prepare(`
     SELECT d.return_sn, d.order_sn, d.ma_van_don, d.san_pham_ten,
            COALESCE(d.san_pham_sku, m.ma_sku) AS san_pham_sku, d.so_luong,
@@ -4709,7 +4877,7 @@ async function ktHangHong(req, env) {
 async function ktLapBienBan(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
-  if (!duocXemTab(phien.vai_tro, 'ketoan')) return loi('Bạn không có quyền', 403);
+  if (!duocXemTab(phien, 'ketoan')) return loi('Bạn không có quyền', 403);
   let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
   const dsRsn = Array.isArray(b.return_sn) ? b.return_sn.map(s => String(s).trim()).filter(Boolean) : [];
   if (!dsRsn.length) return loi('Chưa chọn đơn nào');
@@ -4736,7 +4904,7 @@ async function ktLapBienBan(req, env) {
 async function hoanSkuMapDanhSach(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
-  if (!duocXemDonHoan(phien.vai_tro)) return loi('Bạn không có quyền', 403);
+  if (!duocXemDonHoan(phien)) return loi('Bạn không có quyền', 403);
 
   // Tên còn thiếu SKU: sàn không trả SKU (san_pham_sku NULL) và chưa ghép
   // trong sku_map — kèm số đơn đang bị ảnh hưởng để biết nên ưu tiên ghép gì.
@@ -4758,14 +4926,14 @@ async function hoanSkuMapDanhSach(req, env) {
 
   return json({
     thieu: thieu.results, da_gan: daGan.results, san_pham: sanPham.results,
-    quyen: { gan: duocQuanLyKho(phien.vai_tro) }
+    quyen: { gan: duocQuanLyKho(phien) }
   });
 }
 
 async function hoanSkuMapGan(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
-  if (!duocQuanLyKho(phien.vai_tro)) return loi('Bạn không có quyền gán SKU', 403);
+  if (!duocQuanLyKho(phien)) return loi('Bạn không có quyền gán SKU', 403);
 
   let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
   const ten = String(b.ten_san_pham || '').trim();
@@ -5329,7 +5497,7 @@ async function gopYDanhSach(req, env) {
      `|| duocDuyetGopY(phien)`: người được Sếp tạm uỷ quyền duyệt mà KHÔNG
      phải admin thì cũng phải nhìn thấy thứ mình sắp duyệt — nếu không, cờ
      uỷ quyền bật lên mà màn hình trống. */
-  const laAd = laAdmin(phien.vai_tro) || duocDuyetGopY(phien);
+  const laAd = laAdmin(phien) || duocDuyetGopY(phien);
   const dieuKien = laAd ? '' : `WHERE g.nguoi_gui_id = ?1 OR ${GOPY_SQL_QL1} = ?1`;
 
   const stmt = env.DB.prepare(`
@@ -5737,7 +5905,7 @@ async function gopYDoiTrangThai(req, env) {
      vẫn phân loại, giao người phụ trách, gỡ chặn, mở lại bản ghi sai, đẩy
      việc qua các bước làm–kiểm–nghiệm thu như trước. Cắt rộng hơn thế là
      cắt quá tay. */
-  const laOwner = laAdmin(phien.vai_tro);
+  const laOwner = laAdmin(phien);
 
   /* NHƯNG hàm này có HAI ĐƯỜNG VÒNG ra đúng cái cổng vừa khoá — phải bịt,
      nếu không thì khoá cửa trước mà bỏ ngỏ cửa sau (REV-0018):
@@ -6039,7 +6207,7 @@ async function gopYNhacSlaVoi(env, NGAY_CHO) {
 /* Ai được xem chi tiết 1 góp ý: người gửi · QUẢN LÝ CẤP 1 của người gửi
    (quyền mới của SPEC-0002) · Admin. Một chỗ duy nhất cho cả lịch sử lẫn ảnh. */
 async function gopYDuocXem(env, phien, id) {
-  if (laAdmin(phien.vai_tro)) return true;
+  if (laAdmin(phien)) return true;
   const r = await env.DB.prepare(`
     SELECT g.nguoi_gui_id, ${GOPY_SQL_QL1} AS ql_id
       FROM gop_y g JOIN nhan_su n ON n.id = g.nguoi_gui_id WHERE g.id = ?`).bind(id).first();
@@ -6069,7 +6237,7 @@ async function gopYLichSu(req, env) {
      "góp ý của tôi đi tới đâu rồi" vẫn trả lời được. Còn lý do từ chối
      CÔNG KHAI nằm ở `gop_y.ly_do_tu_choi`, trả riêng ở danh sách, không
      dính bản cắt này. */
-  const xemGhiChu = laAdmin(phien.vai_tro)
+  const xemGhiChu = laAdmin(phien)
     || (await nguoiDuyetCap1(env, g.nguoi_gui_id)).id === phien.nhan_su_id;
 
   const { results } = await env.DB.prepare(`
@@ -6142,7 +6310,7 @@ async function nsSinhNhatDoc(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
   const dich = String(new URL(req.url).searchParams.get('id') || '').trim() || phien.nhan_su_id;
-  if (dich !== phien.nhan_su_id && !duocThemNhanSu(phien.vai_tro)) {
+  if (dich !== phien.nhan_su_id && !duocThemNhanSu(phien)) {
     return loi('Không đủ quyền xem ngày sinh của người khác', 403);
   }
   try {
@@ -6214,7 +6382,7 @@ async function nsSinhNhatCongKhai(req, env) {
   let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
 
   const dich = String(b.id || '').trim() || phien.nhan_su_id;
-  if (dich !== phien.nhan_su_id && !duocThemNhanSu(phien.vai_tro)) {
+  if (dich !== phien.nhan_su_id && !duocThemNhanSu(phien)) {
     return loi('Bạn chỉ đổi được công tắc sinh nhật của chính mình', 403);
   }
   const bat = b.bat ? 1 : 0;
@@ -6328,13 +6496,13 @@ async function knCham(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
   let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
-  return kynang.cham(env, phien, b, duocThemNhanSu(phien.vai_tro));
+  return kynang.cham(env, phien, b, duocThemNhanSu(phien));
 }
 async function knGo(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
   let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
-  return kynang.go(env, phien, b, duocThemNhanSu(phien.vai_tro));
+  return kynang.go(env, phien, b, duocThemNhanSu(phien));
 }
 async function knAiLamDuoc(req, env) {
   const { loi: l } = await batBuocDangNhap(req, env);
@@ -6354,7 +6522,7 @@ async function knQuyenCham(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
   const q = await kynang.duocChamCho(env, phien,
-    new URL(req.url).searchParams.get('id'), duocThemNhanSu(phien.vai_tro));
+    new URL(req.url).searchParams.get('id'), duocThemNhanSu(phien));
   return json(q);
 }
 

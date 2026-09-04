@@ -217,9 +217,15 @@ export const API = {
     method: 'POST', body: JSON.stringify(ns)
   }),
 
-  qtTaoTaiKhoan: (nhanSuId, tenDangNhap, vaiTro) => goi('/api/quan-tri/tao-tai-khoan', {
+  // HAI Ô (Sếp chốt 04/09/2026): `vaiTro` = ô 1 (vai trò hệ thống),
+  // `viTri` = ô 2 (vị trí công việc, để trống được). Quyền cuối cùng là HỢP
+  // của hai ô — luật ở src/quyen.js, chặn thật ở src/index.js.
+  qtTaoTaiKhoan: (nhanSuId, tenDangNhap, vaiTro, viTri) => goi('/api/quan-tri/tao-tai-khoan', {
     method: 'POST',
-    body: JSON.stringify({ nhan_su_id: nhanSuId, ten_dang_nhap: tenDangNhap, vai_tro: vaiTro })
+    body: JSON.stringify({
+      nhan_su_id: nhanSuId, ten_dang_nhap: tenDangNhap,
+      vai_tro: vaiTro, vi_tri_cong_viec: viTri || ''
+    })
   }),
 
   qtDatLaiMatKhau: (taiKhoanId) => goi('/api/quan-tri/dat-lai-mat-khau', {
@@ -234,9 +240,15 @@ export const API = {
     method: 'POST', body: JSON.stringify({ tai_khoan_id: taiKhoanId })
   }),
 
-  qtSuaVaiTro: (taiKhoanId, vaiTro) => goi('/api/quan-tri/sua-vai-tro', {
-    method: 'POST', body: JSON.stringify({ tai_khoan_id: taiKhoanId, vai_tro: vaiTro })
-  }),
+  /* Ô nào KHÔNG gửi lên thì máy chủ GIỮ NGUYÊN ô đó — cố ý, để người chỉ
+     được sửa vị trí (HCNS) không vô tình ghi đè vai trò hệ thống bằng một
+     giá trị cũ đọc từ màn hình. Truyền `undefined` là "không đụng tới". */
+  qtSuaVaiTro: (taiKhoanId, vaiTro, viTri) => {
+    const than = { tai_khoan_id: taiKhoanId };
+    if (vaiTro !== undefined) than.vai_tro = vaiTro;
+    if (viTri !== undefined) than.vi_tri_cong_viec = viTri;
+    return goi('/api/quan-tri/sua-vai-tro', { method: 'POST', body: JSON.stringify(than) });
+  },
 
   // Cờ "được duyệt góp ý ERP ở cấp cuối" — chỉ người ĐANG GIỮ quyền mới
   // cấp/thu được (máy chủ kiểm, xem qtQuyenDuyetGopY trong src/index.js).

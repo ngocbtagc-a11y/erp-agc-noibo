@@ -101,6 +101,52 @@ export function layCoThieuCotDuyetGopY() {
   return c;
 }
 
+/* Cùng cơ chế, cho cột `vi_tri_cong_viec` (ô 2 — vị trí công việc, tách
+   04/09/2026). Thiếu cột thì phiên chỉ có ô 1 ⇒ quyền đúng bằng bản trước
+   khi tách, KHÔNG mất đăng nhập của ai — nhưng vẫn phải KÊU LÊN, vì im lặng
+   ở đây nghĩa là anh Duy tiếp tục không mở được tab Kho vận mà không ai biết
+   vì sao (đúng lỗi BH-21/REV-0030 lỗi 5 đã trả giá một lần). */
+let thieuCotViTri = false;
+export function layCoThieuCotViTri() {
+  const c = thieuCotViTri;
+  thieuCotViTri = false;
+  return c;
+}
+
+/* ĐÃ CÓ CỘT `vi_tri_cong_viec` CHƯA — cho các câu SQL KHÁC (danh bạ, danh
+   sách tài khoản, cron nhắc HCNS) phải chọn giữa hai bản câu lệnh. docPhien
+   ở trên tự lùi được vì nó chỉ có một câu; những chỗ kia thì hỏi hàm này.
+
+   PRAGMA table_info không dùng được qua binding D1 trong Worker — thử SELECT
+   thật, cột không tồn tại thì ném lỗi (đúng khuôn coCotTinhTrangHang trong
+   src/shopee.js).
+
+   NHỚ CÓ, KHÔNG NHỚ KHÔNG: đã thấy cột thì nhớ vĩnh viễn (0 lượt đọc thêm).
+   CHƯA thấy thì chỉ nhớ 60 giây rồi hỏi lại — nếu nhớ luôn thì sau khi nạp
+   migration, ERP vẫn chạy như cũ cho tới lúc Cloudflare thay isolate, và
+   không ai hiểu vì sao "đã nạp DB rồi mà anh Duy vẫn không vào được". Giá
+   phải trả: tối đa 1 lượt đọc D1 mỗi phút mỗi isolate, và CHỈ trong quãng
+   chưa nạp migration.
+
+   NHỚ THEO TỪNG BINDING (WeakMap), không nhớ một biến chung cho cả module:
+   một biến chung thì hai CSDL khác nhau trong cùng tiến trình dùng chung câu
+   trả lời — bàn đo đã bắt được đúng ca này (đo "chưa có cột" trước rồi đo
+   "đã có cột" sau, cả loạt phép sau trả 409). Cùng lỗi ấy có thật ngoài đời
+   khi đo/khôi phục trên một CSDL thứ hai. WeakMap không giữ binding sống. */
+const _nhoCotViTri = new WeakMap();
+export async function coCotViTri(db) {
+  const nho = _nhoCotViTri.get(db);
+  if (nho && (nho.co || Date.now() < nho.hetHan)) return nho.co;
+  try {
+    await db.prepare('SELECT vi_tri_cong_viec FROM tai_khoan LIMIT 1').first();
+    _nhoCotViTri.set(db, { co: true, hetHan: 0 });
+    return true;
+  } catch {
+    _nhoCotViTri.set(db, { co: false, hetHan: Date.now() + 60000 });
+    return false;
+  }
+}
+
 export async function docPhien(db, token) {
   if (!token) return null;
 
@@ -124,9 +170,19 @@ export async function docPhien(db, token) {
   // lại với `0 AS duyet_gopy`: thiếu cột thì cờ về false — hỏng theo chiều AN
   // TOÀN (đúng khuôn KHONG_QUYEN của src/quyen.js), không sập cả công ty.
   // CHỈ nuốt đúng lỗi thiếu cột đó; mọi lỗi DB khác vẫn ném ra như cũ.
-  const cauPhien = (cotDuyet) => `
+  // vi_tri_cong_viec: ô 2 — vị trí công việc (Sếp Ngọc chốt 04/09/2026, xem
+  // khối "HAI Ô" ở src/quyen.js). Đọc thẳng vào phiên vì MỌI cửa phân quyền
+  // đều cần nó; hỏi thêm một câu DB mỗi lượt là +1 lượt đọc D1 cho từng
+  // request, không đáng.
+  //
+  // HAI CỘT TUỲ CHỌN, KHÔNG PHẢI MỘT: `deploy.yml` không tự chạy migration,
+  // nên bất kỳ cột nào trong hai cột này cũng có thể chưa tồn tại, và có thể
+  // thiếu ĐỒNG THỜI. Vòng lặp dưới đây bỏ dần từng cột thiếu rồi chạy lại —
+  // viết lồng hai try/catch thì ca "thiếu cả hai" rơi vào nhánh ném lỗi và
+  // cả công ty mất đăng nhập, đúng loại lỗi REV-0027 L4 đã trả giá.
+  const cauPhien = (cotDuyet, cotViTri) => `
     SELECT p.tai_khoan_id, p.het_han,
-           t.ten_dang_nhap, t.vai_tro, t.kich_hoat, t.phai_doi_mk, ${cotDuyet},
+           t.ten_dang_nhap, t.vai_tro, t.kich_hoat, t.phai_doi_mk, ${cotDuyet}, ${cotViTri},
            n.id AS nhan_su_id, n.ho_ten, n.viet_tat, n.chuc_vu, n.phong_ban_id
       FROM phien p
       JOIN tai_khoan t ON t.id = p.tai_khoan_id
@@ -134,26 +190,43 @@ export async function docPhien(db, token) {
      WHERE p.token_hash = ?
   `;
   const bam = await bamToken(token);
-  let d;
-  try {
-    d = await db.prepare(cauPhien('t.duyet_gopy')).bind(bam).first();
-  } catch (e) {
-    if (!/no such column/i.test(String(e && e.message)) ||
-        !/duyet_gopy/i.test(String(e && e.message))) throw e;
-    /* IM LẶNG VĨNH VIỄN LÀ LỖI THỨ HAI (REV-0030 lỗi 5).
-       Hỏng theo chiều an toàn thì đúng — nhưng KHÔNG AI ĐƯỢC BÁO thì cả công
-       ty chạy tiếp ở mức không-quyền, cả hàng góp ý đứng, và không ai biết vì
-       sao. Đo được trước bản vá: thong_bao +0 · Telegram +0 · console 0 dòng.
-       Nay:
-         · console.warn NGAY TẠI ĐÂY — `[observability]` đang bật trong
-           wrangler.toml nên dòng này đọc được trên Workers Logs;
-         · dựng cờ cho batBuocDangNhap() bắn MỘT tin Telegram/ngày. Hàm này
-           chỉ nhận `db`, không có `env` để gọi guiTelegram, và cũng KHÔNG
-           được import ngược từ index.js (vòng tròn) — nên phải đi bằng cờ. */
-    thieuCotDuyetGopY = true;
-    console.warn('[ERP] Thiếu cột tai_khoan.duyet_gopy — phiên đang chạy ở mức không-quyền. ' +
-                 'Nạp migrations/them-quyen-duyet-gopy.sql rồi deploy lại.');
-    d = await db.prepare(cauPhien('0 AS duyet_gopy')).bind(bam).first();
+  let coDuyet = true, coViTri = true, d = null;
+  for (let lan = 0; lan < 3; lan++) {
+    try {
+      d = await db.prepare(cauPhien(
+        coDuyet ? 't.duyet_gopy' : '0 AS duyet_gopy',
+        coViTri ? 't.vi_tri_cong_viec' : 'NULL AS vi_tri_cong_viec'
+      )).bind(bam).first();
+      break;
+    } catch (e) {
+      const tin = String(e && e.message);
+      if (!/no such column/i.test(tin)) throw e;
+      /* IM LẶNG VĨNH VIỄN LÀ LỖI THỨ HAI (REV-0030 lỗi 5).
+         Hỏng theo chiều an toàn thì đúng — nhưng KHÔNG AI ĐƯỢC BÁO thì cả công
+         ty chạy tiếp ở mức không-quyền, cả hàng góp ý đứng, và không ai biết vì
+         sao. Đo được trước bản vá: thong_bao +0 · Telegram +0 · console 0 dòng.
+         Nay:
+           · console.warn NGAY TẠI ĐÂY — `[observability]` đang bật trong
+             wrangler.toml nên dòng này đọc được trên Workers Logs;
+           · dựng cờ cho batBuocDangNhap() bắn MỘT tin Telegram/ngày. Hàm này
+             chỉ nhận `db`, không có `env` để gọi guiTelegram, và cũng KHÔNG
+             được import ngược từ index.js (vòng tròn) — nên phải đi bằng cờ. */
+      if (coDuyet && /duyet_gopy/i.test(tin)) {
+        coDuyet = false;
+        thieuCotDuyetGopY = true;
+        console.warn('[ERP] Thiếu cột tai_khoan.duyet_gopy — phiên đang chạy ở mức không-quyền. ' +
+                     'Nạp migrations/them-quyen-duyet-gopy.sql rồi deploy lại.');
+        continue;
+      }
+      if (coViTri && /vi_tri_cong_viec/i.test(tin)) {
+        coViTri = false;
+        thieuCotViTri = true;
+        console.warn('[ERP] Thiếu cột tai_khoan.vi_tri_cong_viec — vị trí công việc chưa có tác dụng, ' +
+                     'quyền đang đúng bằng bản cũ. Nạp migrations/them-vi-tri-cong-viec.sql rồi deploy lại.');
+        continue;
+      }
+      throw e;   // thiếu một cột KHÁC — đó là lỗi thật, không nuốt
+    }
   }
 
   if (!d) return null;

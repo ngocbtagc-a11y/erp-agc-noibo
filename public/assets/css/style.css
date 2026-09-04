@@ -1726,8 +1726,18 @@ tr.canh-bao:hover > td { background: #fbdbd6; }
    chọn, bấm vào mới mở khung tìm+chọn (không tách ô tìm với dropdown thành
    2 control riêng). */
 .combo1 { position: relative; }
+/* min-height 44px — LUẬT NHÀ VỀ NGÓN TAY, không phải trang trí.
+   Đo được 04/09/2026 khi tách vai trò khỏi vị trí: nút combobox này cao đúng
+   38px ở 375px (đệm 9px + chữ 14px), tức DƯỚI ngưỡng chạm ở CẢ HAI MƯƠI chỗ
+   đang dùng `.combo1` — không riêng gì hai ô mới. Thêm ô thứ hai làm số nút
+   hụt ngưỡng trên màn Tạo tài khoản tăng gấp đôi, nên vá ở ĐÚNG MỘT CHỖ (lớp
+   dùng chung) thay vì chỉ nống hai ô mới lên rồi để mười tám chỗ kia nguyên
+   trạng — làm thế mới là chữa triệu chứng (docs/LUAT-GOP-Y-LA-TRIEU-CHUNG.md).
+   Chỉ +6px mỗi ô; dùng `min-height` chứ không `height` để combo có chữ dài
+   xuống dòng vẫn tự cao thêm được. */
 .combo1-hienthi {
   width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  min-height: 44px;
   padding: 9px 12px; border: 1px solid var(--line); border-radius: var(--r-sm);
   background: var(--white); font-family: inherit; font-size: 14px; color: var(--text);
   cursor: pointer; text-align: left;

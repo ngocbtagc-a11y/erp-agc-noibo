@@ -62,6 +62,96 @@ const QUYEN_THEO_VAI_TRO = {
   nv_test:         { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'kinhdoanh', 'khovan', 'donhoan', 'ketoan', 'taisan', 'xepca', 'khotailieu', 'gopy'],                      xem_luong: false, admin: false, them_nhan_su: false }
 };
 
+/* ==========================================================================
+   HAI Ô, KHÔNG PHẢI MỘT  ·  Sếp Ngọc chốt 04/09/2026
+   ---------------------------------------------------------------------------
+   Nguyên văn: "gộp 2 vai trò như này ko biết phân quyền kiểu gì nhé, tách ra
+   2 vai trò đi".
+
+   Trước bản này `tai_khoan.vai_tro` là MỘT cột, mà bảng trên lại chứa HAI
+   khái niệm khác hẳn nhau:
+     · Vai trò HỆ THỐNG  — được làm gì với TÀI KHOẢN và DỮ LIỆU
+                           (admin · admin_backup · nguoi_dung)
+     · VỊ TRÍ công việc  — làm NGHỀ gì, mở được tab nào
+                           (ke_toan_truong · quan_ly_kho · ...)
+   Chọn một là mất một nửa. Hậu quả ĐO ĐƯỢC trên CSDL thật 04/09/2026: 5/8 tài
+   khoản đang là `nguoi_dung` — anh Phạm Khương Duy (TP. Kho vận) KHÔNG mở
+   được tab Kho vận, chị Phan Thị Hằng (Kế toán trưởng) KHÔNG mở được tab Kế
+   toán. Không phải lỗi giao diện: người ta buộc phải bỏ vị trí để giữ tài
+   khoản thường.
+
+   Nay hai ô: `tai_khoan.vai_tro` giữ ô 1, `tai_khoan.vi_tri_cong_viec` là ô 2.
+   QUYỀN CUỐI CÙNG = HỢP của hai ô — chỉ CỘNG, không bao giờ TRỪ.
+
+   ⚠️ HAI RÀNG BUỘC CỨNG, cắt Ở ĐÂY chứ không ẩn nút ngoài giao diện:
+   ① Ô 2 CHỈ nhận mã trong `VI_TRI_CONG_VIEC`. Nhét 'admin' vào ô 2 thì
+      `boVaiTro()` VỨT ĐI, không cộng quyền gì. Đây là chốt chặn tự nâng
+      quyền: HCNS được sửa ô 2 hằng ngày (xem duocDatViTriCongViec), nên nếu
+      ô 2 nhận được 'admin' thì HCNS tự phong Admin trong 5 giây.
+   ② Ô 1 CHỈ nhận mã trong `VAI_TRO_HE_THONG`. Cùng lý do, chiều ngược lại.
+   Cửa API còn chặn lần nữa (qtTaoTaiKhoan/qtSuaVaiTro) — hai lớp, cố ý.
+
+   TƯƠNG THÍCH NGƯỢC: mọi hàm dưới đây nhận CẢ HAI kiểu tham số —
+     · một CHUỖI vai trò  → y hệt hành vi cũ, dùng cho các dòng `tai_khoan`
+       đọc thẳng từ DB (vd laAdmin(tk.vai_tro) lúc đếm Admin cuối cùng);
+     · một ĐỐI TƯỢNG phiên/dòng tài khoản có `vai_tro` + `vi_tri_cong_viec`
+       → hợp hai ô.
+   Nhờ vậy cột `vi_tri_cong_viec` CHƯA CÓ trong DB (deploy.yml không tự chạy
+   migration) thì trường đó là undefined ⇒ hợp một ô ⇒ đúng bằng hành vi cũ.
+   Không ném lỗi, không mất quyền của ai.
+   ========================================================================== */
+
+/* Ô 1 — vai trò hệ thống. Ô 2 — vị trí công việc. Cả hai suy ra từ CHÍNH
+   bảng quyền phía trên, không gõ tay lần thứ hai (gõ tay là ngày nào đó
+   thêm một vị trí mới mà quên khai ở đây, rồi nó rơi thẳng vào ô 1). */
+const NHOM_VAI_TRO_HE_THONG = new Set(['admin', 'admin_backup', 'nguoi_dung']);
+export const VAI_TRO_HE_THONG = Object.keys(QUYEN_THEO_VAI_TRO).filter(v => NHOM_VAI_TRO_HE_THONG.has(v));
+export const VI_TRI_CONG_VIEC = Object.keys(QUYEN_THEO_VAI_TRO).filter(v => !NHOM_VAI_TRO_HE_THONG.has(v));
+const NHOM_VI_TRI = new Set(VI_TRI_CONG_VIEC);
+
+export function laVaiTroHeThong(ma) { return NHOM_VAI_TRO_HE_THONG.has(String(ma || '')); }
+export function laViTriCongViec(ma) { return NHOM_VI_TRI.has(String(ma || '')); }
+
+/* Chủ thể quyền → danh sách mã vai trò cần hợp lại. ĐÂY là chỗ cắt ①.
+   Trả mảng rỗng nghĩa là không quyền gì — thà chặn nhầm còn hơn mở nhầm.
+
+   HAI Ô KHÔNG ĐỐI XỨNG — CỐ Ý, và đây là chỗ dễ đọc nhầm nhất cả file:
+
+   · Ô 2 cắt CỨNG. Mã không nằm trong VI_TRI_CONG_VIEC thì VỨT, kể cả 'admin'.
+     Vì ô 2 là ô HCNS sửa hằng ngày: nhận được 'admin' là HCNS tự phong Admin.
+
+   · Ô 1 thì DUNG THỨ với mã vị trí. Lý do KHÔNG phải "cho tiện": trước
+     migration them-vi-tri-cong-viec.sql, cột `vai_tro` ĐANG THẬT SỰ chứa mã
+     vị trí (anh Duy = 'quan_ly_kho'), và `deploy.yml` KHÔNG tự chạy migration.
+     Cắt cứng ô 1 thì trong quãng "code mới, DB cũ" MỌI người mang mã vị trí
+     rơi về không-quyền — mất luôn cả tab Danh bạ. Đo được: /api/danh-ba trả
+     403 cho anh Duy. Dung thứ ở đây KHÔNG mở thêm quyền gì: không vị trí công
+     việc nào mang cờ `admin`, nên đường này tuyệt đối không phong được Admin
+     — nó chỉ giữ nguyên đúng hành vi của bản trước khi tách.
+     Việc GHI mã vị trí vào ô 1 thì vẫn bị cửa API chặn (laVaiTroHeThong trong
+     qtTaoTaiKhoan/qtSuaVaiTro) — không tạo thêm được dòng kiểu cũ nào nữa. */
+export function boVaiTro(chuThe) {
+  if (chuThe == null) return [];
+  if (typeof chuThe === 'string') return chuThe ? [chuThe] : [];
+  if (typeof chuThe !== 'object') return [];
+  const ra = [];
+  const o1 = String(chuThe.vai_tro || '').trim();
+  const o2 = String(chuThe.vi_tri_cong_viec || '').trim();
+  if (o1 && (NHOM_VAI_TRO_HE_THONG.has(o1) || NHOM_VI_TRI.has(o1))) ra.push(o1);
+  if (o2 && NHOM_VI_TRI.has(o2) && o2 !== o1) ra.push(o2);   // cắt ①
+  return ra;
+}
+
+/* Hợp một CỜ đúng/sai qua nhiều bảng quyền — chỉ cộng, không trừ. */
+function hopCo(chuThe, bang, ten) {
+  for (const v of boVaiTro(chuThe)) if (bang[v] && bang[v][ten] === true) return true;
+  return false;
+}
+/* Có mã nào của chủ thể nằm trong tập này không (dùng cho các Set quyền). */
+function coTrongTap(chuThe, tap) {
+  return boVaiTro(chuThe).some(v => tap.has(v));
+}
+
 /* ---- Quyền trong module Kho --------------------------------------------
    Tách 3 mức, giống cách lương được tách riêng ở trên:
    - thao_tac : được nhập/xuất kho (ghi vào sổ cái). Cả quản lý kho lẫn
@@ -83,20 +173,30 @@ const QUYEN_KHO = {
 
 const KHONG_QUYEN_KHO = { thao_tac: false, quan_ly: false, gia_von: false };
 
-export function quyenKho(vaiTro) {
-  return QUYEN_KHO[vaiTro] || KHONG_QUYEN_KHO;
+/* HỢP hai ô (xem khối "HAI Ô" phía trên): anh Duy = nguoi_dung + quan_ly_kho
+   thì phải ra đúng bộ quyền của quan_ly_kho, vì `nguoi_dung` không có mặt
+   trong QUYEN_KHO nên không cộng thêm gì. */
+export function quyenKho(chuThe) {
+  const ds = boVaiTro(chuThe);
+  if (!ds.length) return KHONG_QUYEN_KHO;
+  if (ds.length === 1) return QUYEN_KHO[ds[0]] || KHONG_QUYEN_KHO;
+  return {
+    thao_tac: hopCo(chuThe, QUYEN_KHO, 'thao_tac'),
+    quan_ly:  hopCo(chuThe, QUYEN_KHO, 'quan_ly'),
+    gia_von:  hopCo(chuThe, QUYEN_KHO, 'gia_von')
+  };
 }
 
-export function duocThaoTacKho(vaiTro) {
-  return quyenKho(vaiTro).thao_tac === true;
+export function duocThaoTacKho(chuThe) {
+  return quyenKho(chuThe).thao_tac === true;
 }
 
-export function duocQuanLyKho(vaiTro) {
-  return quyenKho(vaiTro).quan_ly === true;
+export function duocQuanLyKho(chuThe) {
+  return quyenKho(chuThe).quan_ly === true;
 }
 
-export function duocXemGiaVon(vaiTro) {
-  return quyenKho(vaiTro).gia_von === true;
+export function duocXemGiaVon(chuThe) {
+  return quyenKho(chuThe).gia_von === true;
 }
 
 /* ---- Quyền Sản phẩm/SKU — TÁCH RIÊNG khỏi "quan_ly" kho nói chung
@@ -113,16 +213,19 @@ const QUYEN_SAN_PHAM = {
 };
 const KHONG_QUYEN_SAN_PHAM = { sua: false, khoa: false };
 
-export function quyenSanPham(vaiTro) {
-  return QUYEN_SAN_PHAM[vaiTro] || KHONG_QUYEN_SAN_PHAM;
+export function quyenSanPham(chuThe) {
+  const ds = boVaiTro(chuThe);
+  if (!ds.length) return KHONG_QUYEN_SAN_PHAM;
+  if (ds.length === 1) return QUYEN_SAN_PHAM[ds[0]] || KHONG_QUYEN_SAN_PHAM;
+  return { sua: hopCo(chuThe, QUYEN_SAN_PHAM, 'sua'), khoa: hopCo(chuThe, QUYEN_SAN_PHAM, 'khoa') };
 }
 
-export function duocSuaSanPham(vaiTro) {
-  return quyenSanPham(vaiTro).sua === true;
+export function duocSuaSanPham(chuThe) {
+  return quyenSanPham(chuThe).sua === true;
 }
 
-export function duocKhoaSanPham(vaiTro) {
-  return quyenSanPham(vaiTro).khoa === true;
+export function duocKhoaSanPham(chuThe) {
+  return quyenSanPham(chuThe).khoa === true;
 }
 
 /* ---- Quyền module Tài sản -----------------------------------------------
@@ -133,8 +236,8 @@ export function duocKhoaSanPham(vaiTro) {
    Riêng "Báo hỏng" cho phép TỰ báo với tài sản đang giữ (self-service, xem
    src/taisan.js), không cần nằm trong nhóm này. */
 const CO_QUAN_LY_TAI_SAN = new Set(['admin', 'admin_backup', 'hcns']);
-export function duocQuanLyTaiSan(vaiTro) {
-  return CO_QUAN_LY_TAI_SAN.has(vaiTro);
+export function duocQuanLyTaiSan(chuThe) {
+  return coTrongTap(chuThe, CO_QUAN_LY_TAI_SAN);
 }
 
 /* ---- Quyền module Đăng ký ca / Xếp ca ------------------------------------
@@ -146,8 +249,8 @@ export function duocQuanLyTaiSan(vaiTro) {
    XEM tab 'xepca' mở cho MỌI vai trò — nhân viên part-time/thời vụ tự đăng
    ký; ai không phải trưởng phòng/admin thì chỉ thấy phần đăng ký của mình. */
 const CO_QUAN_LY_CHINH_SACH_CA = new Set(['admin', 'admin_backup', 'hcns']);
-export function duocQuanLyChinhSachCa(vaiTro) {
-  return CO_QUAN_LY_CHINH_SACH_CA.has(vaiTro);
+export function duocQuanLyChinhSachCa(chuThe) {
+  return coTrongTap(chuThe, CO_QUAN_LY_CHINH_SACH_CA);
 }
 
 /* ---- Quyền module Đơn hoàn (Shopee) ------------------------------------
@@ -169,16 +272,19 @@ const QUYEN_SHOPEE = {
 
 const KHONG_QUYEN_SHOPEE = { xem: false, quan_ly: false };
 
-export function quyenShopee(vaiTro) {
-  return QUYEN_SHOPEE[vaiTro] || KHONG_QUYEN_SHOPEE;
+export function quyenShopee(chuThe) {
+  const ds = boVaiTro(chuThe);
+  if (!ds.length) return KHONG_QUYEN_SHOPEE;
+  if (ds.length === 1) return QUYEN_SHOPEE[ds[0]] || KHONG_QUYEN_SHOPEE;
+  return { xem: hopCo(chuThe, QUYEN_SHOPEE, 'xem'), quan_ly: hopCo(chuThe, QUYEN_SHOPEE, 'quan_ly') };
 }
 
-export function duocXemDonHoan(vaiTro) {
-  return quyenShopee(vaiTro).xem === true;
+export function duocXemDonHoan(chuThe) {
+  return quyenShopee(chuThe).xem === true;
 }
 
-export function duocQuanLyShopee(vaiTro) {
-  return quyenShopee(vaiTro).quan_ly === true;
+export function duocQuanLyShopee(chuThe) {
+  return quyenShopee(chuThe).quan_ly === true;
 }
 
 /* ---- Ranh giới bộ phận trong luồng đơn hoàn 3 chặng Kho <-> Vận hành sàn <->
@@ -191,8 +297,8 @@ export function duocQuanLyShopee(vaiTro) {
      toán trưởng lỡ thao tác được cả bước của vận hành sàn).
    - Kế toán: chỉ "Đã tra soát tiền" (duocXemTab(vaiTro,'ketoan'), đã có sẵn). */
 const CO_THAO_TAC_VAN_HANH = new Set(['admin', 'van_hanh_san', 'nv_test']);
-export function duocThaoTacVanHanh(vaiTro) {
-  return CO_THAO_TAC_VAN_HANH.has(vaiTro);
+export function duocThaoTacVanHanh(chuThe) {
+  return coTrongTap(chuThe, CO_THAO_TAC_VAN_HANH);
 }
 
 /* ---- DUYỆT GÓP Ý Ở CẤP CUỐI (cổng ERP Owner) ----------------------------
@@ -272,8 +378,22 @@ const QUYEN_NHOM_TAI_LIEU = {
 
 const KHONG_QUYEN_TAI_LIEU = { xem: [], luu: [] };
 
-function quyenTaiLieu(vaiTro) {
-  return QUYEN_NHOM_TAI_LIEU[vaiTro] || KHONG_QUYEN_TAI_LIEU;
+/* HỢP hai ô — cùng luật "chỉ cộng" như mọi bảng quyền khác. Ranh giới cứng
+   "quản lý kho KHÔNG xem nhóm nhân sự" (CTL-0025 Mục 4, CCCD nhân viên) vẫn
+   nguyên: `nguoi_dung` + `quan_ly_kho` ra đúng ['nhap_khau','attp','noi_bo'],
+   không có 'nhan_su'. Cách duy nhất để một quản lý kho thấy nhóm nhân sự là
+   Sếp CHỦ ĐỘNG đặt ô 1 của người đó thành Admin — tức là trao tay, không
+   phải lọt cửa. Bàn đo `scripts/do-tach-vai-tro.mjs` chốt cả 24 tổ hợp. */
+function quyenTaiLieu(chuThe) {
+  const ds = boVaiTro(chuThe);
+  if (!ds.length) return KHONG_QUYEN_TAI_LIEU;
+  if (ds.length === 1) return QUYEN_NHOM_TAI_LIEU[ds[0]] || KHONG_QUYEN_TAI_LIEU;
+  const gop = (truong) => {
+    const ra = new Set();
+    for (const v of ds) for (const n of (QUYEN_NHOM_TAI_LIEU[v]?.[truong] || [])) ra.add(n);
+    return ra.has('*') ? ['*'] : [...ra];
+  };
+  return { xem: gop('xem'), luu: gop('luu') };
 }
 
 function coTrong(ds, nhom) {
@@ -281,30 +401,30 @@ function coTrong(ds, nhom) {
 }
 
 /** Được MỞ tài liệu thuộc nhóm này không. Kiểm ở máy chủ, mọi lối vào. */
-export function duocXemNhomTaiLieu(vaiTro, nhom) {
+export function duocXemNhomTaiLieu(chuThe, nhom) {
   if (!NHOM_TAI_LIEU[nhom]) return false;      // nhóm lạ → chặn, đừng đoán
-  return coTrong(quyenTaiLieu(vaiTro).xem, nhom);
+  return coTrong(quyenTaiLieu(chuThe).xem, nhom);
 }
 
 /** Được QUÉT THÊM tài liệu vào nhóm này không. */
-export function duocLuuNhomTaiLieu(vaiTro, nhom) {
+export function duocLuuNhomTaiLieu(chuThe, nhom) {
   if (!NHOM_TAI_LIEU[nhom]) return false;
-  return coTrong(quyenTaiLieu(vaiTro).luu, nhom);
+  return coTrong(quyenTaiLieu(chuThe).luu, nhom);
 }
 
 /** Danh sách nhóm người này xem được — dùng để dựng câu SQL lọc NGAY TỪ ĐẦU,
  *  chứ không lấy hết rồi lọc sau (lấy hết là dữ liệu đã rời máy chủ rồi). */
-export function nhomTaiLieuXemDuoc(vaiTro) {
-  const ds = quyenTaiLieu(vaiTro).xem;
-  return ds.includes('*') ? MA_NHOM_TAI_LIEU.slice() : ds.filter(n => !!NHOM_TAI_LIEU[n]);
+export function nhomTaiLieuXemDuoc(chuThe) {
+  const ds = quyenTaiLieu(chuThe).xem;
+  return ds.includes('*') ? MA_NHOM_TAI_LIEU.slice() : MA_NHOM_TAI_LIEU.filter(n => ds.includes(n));
 }
 
 /** Danh sách nhóm người này lưu được — giao diện dùng để chỉ hiện đúng các
  *  ô chọn bấm được. ĐÂY KHÔNG PHẢI CHỖ CHẶN: chặn thật ở `duocLuuNhomTaiLieu`
  *  trong `src/tai-lieu.js`, gọi API thẳng cũng không lách được. */
-export function nhomTaiLieuLuuDuoc(vaiTro) {
-  const ds = quyenTaiLieu(vaiTro).luu;
-  return ds.includes('*') ? MA_NHOM_TAI_LIEU.slice() : ds.filter(n => !!NHOM_TAI_LIEU[n]);
+export function nhomTaiLieuLuuDuoc(chuThe) {
+  const ds = quyenTaiLieu(chuThe).luu;
+  return ds.includes('*') ? MA_NHOM_TAI_LIEU.slice() : MA_NHOM_TAI_LIEU.filter(n => ds.includes(n));
 }
 
 /** Nhóm này có phải giấy tờ nhạy cảm không (bắt buộc ghi nhận đồng ý + nhật
@@ -315,24 +435,47 @@ export function nhomTaiLieuNhayCam(nhom) {
 
 /* Vai trò lạ (do gõ sai trong database) → không có quyền gì cả.
    Thà chặn nhầm còn hơn mở nhầm. */
-const KHONG_QUYEN = { tab: [], xem_luong: false };
+const KHONG_QUYEN = { tab: [], xem_luong: false, admin: false, them_nhan_su: false };
 
-export function quyenCua(vaiTro) {
-  return QUYEN_THEO_VAI_TRO[vaiTro] || KHONG_QUYEN;
+/* HỢP hai ô. Chứng minh KHÔNG AI MẤT QUYỀN khi chuyển đổi (ràng buộc ② của
+   yêu cầu 04/09/2026): bộ tab của `nguoi_dung` là TẬP CON của bộ tab MỌI vị
+   trí công việc, và cả ba cờ của `nguoi_dung` đều false — nên
+   `nguoi_dung ∪ <vị trí>` = đúng bằng `<vị trí>` một mình, không hơn không
+   kém. Migration đổi `vai_tro='ke_toan_truong'` thành
+   `vai_tro='nguoi_dung' + vi_tri_cong_viec='ke_toan_truong'` vì thế là
+   ĐỔI CHỖ CẤT, không đổi quyền. Bàn đo chốt lại điều này trên cả 10 vai trò
+   (`scripts/do-tach-vai-tro.mjs`, mục "TRƯỚC = SAU"). */
+export function quyenCua(chuThe) {
+  const ds = boVaiTro(chuThe);
+  if (!ds.length) return KHONG_QUYEN;
+  if (ds.length === 1) return QUYEN_THEO_VAI_TRO[ds[0]] || KHONG_QUYEN;
+  const co = new Set();
+  let xemLuong = false, laAd = false, themNs = false;
+  for (const v of ds) {
+    const q = QUYEN_THEO_VAI_TRO[v];
+    if (!q) continue;
+    for (const t of q.tab) co.add(t);
+    xemLuong = xemLuong || q.xem_luong === true;
+    laAd     = laAd     || q.admin === true;
+    themNs   = themNs   || q.them_nhan_su === true;
+  }
+  // Lọc qua TAB để giữ ĐÚNG thứ tự menu và vứt tab lạ nếu bảng trên gõ sai.
+  return { tab: TAB.filter(t => co.has(t)), xem_luong: xemLuong, admin: laAd, them_nhan_su: themNs };
 }
 
-export function duocXemTab(vaiTro, tab) {
-  return quyenCua(vaiTro).tab.includes(tab);
+export function duocXemTab(chuThe, tab) {
+  return quyenCua(chuThe).tab.includes(tab);
 }
 
-export function duocXemLuong(vaiTro) {
-  return quyenCua(vaiTro).xem_luong === true;
+export function duocXemLuong(chuThe) {
+  return quyenCua(chuThe).xem_luong === true;
 }
 
 /* Admin = người được cấp/khoá/đặt lại/xoá tài khoản, đổi vai trò, thêm
-   nhân sự có cả lương. Chỉ vai trò hệ thống "Admin". */
-export function laAdmin(vaiTro) {
-  return quyenCua(vaiTro).admin === true;
+   nhân sự có cả lương. Chỉ vai trò hệ thống "Admin" (ô 1) — không vị trí
+   công việc nào mang cờ này, nên ô 2 KHÔNG BAO GIỜ phong được Admin. */
+export function laAdmin(chuThe) {
+  return quyenCua(chuThe).admin === true;
 }
 
 /* Được TẠO/SỬA vai trò tài khoản (không phải toàn bộ quyền Admin) — Admin
@@ -341,27 +484,59 @@ export function laAdmin(vaiTro) {
    dùng quyền này mà KHÔNG phải Admin thật thì CHỈ được tạo/gán vai trò
    thường — không được tự tạo/tự gán tài khoản Admin hay Admin backup khác
    (chặn ở qtTaoTaiKhoan/qtSuaVaiTro — tránh tự nâng quyền). */
-export function duocTaoTaiKhoan(vaiTro) {
-  return laAdmin(vaiTro) || vaiTro === 'admin_backup';
+export function duocTaoTaiKhoan(chuThe) {
+  return laAdmin(chuThe) || boVaiTro(chuThe).includes('admin_backup');
 }
 
 /* Được thêm nhân sự vào hồ sơ (admin + HCNS). KHÔNG kéo theo quyền xem lương
    hay cấp tài khoản — hai thứ đó kiểm tra riêng. */
-export function duocThemNhanSu(vaiTro) {
-  return quyenCua(vaiTro).them_nhan_su === true;
+export function duocThemNhanSu(chuThe) {
+  return quyenCua(chuThe).them_nhan_su === true;
+}
+
+/* ---- AI SỬA ĐƯỢC Ô NÀO (ràng buộc ③ của yêu cầu 04/09/2026) -------------
+   Ô 1 (vai trò hệ thống) là việc NẶNG: cấp/khoá tài khoản, xem lương. Giữ
+   nguyên luật cũ — chỉ Admin và Admin backup, và Admin backup KHÔNG gán được
+   Admin/Admin backup cho ai (kể cả mình).
+   Ô 2 (vị trí công việc) là việc HÀNH CHÍNH HẰNG NGÀY: người mới vào kho thì
+   HCNS đặt "Nhân viên kho", không phải chờ Sếp. Nên mở thêm cho HCNS.
+
+   BA CHỐT ĐI KÈM, kiểm ở cửa API (qtSuaVaiTro) chứ không phải ẩn nút:
+     · Ô 2 chỉ nhận mã trong VI_TRI_CONG_VIEC (đã cắt lần nữa ở boVaiTro).
+     · KHÔNG AI tự sửa ô của CHÍNH MÌNH, trừ Admin thật. Không có chốt này
+       thì HCNS tự đặt mình thành "Kế toán trưởng" là XEM ĐƯỢC LƯƠNG — phá
+       thẳng ranh giới cứng "HCNS không xem lương" đã ghi ở đầu file.
+     · Người KHÔNG phải Admin thật không gán được vị trí có xem_luong cho
+       BẤT KỲ ai. Lương là ranh giới cứng, chỉ Admin trao. Cái giá: Admin
+       backup không tự bổ nhiệm Kế toán trưởng được — đúng, việc đó hiếm và
+       nặng, để Sếp bấm. */
+export function duocDatViTriCongViec(chuThe) {
+  return duocTaoTaiKhoan(chuThe) || duocThemNhanSu(chuThe);
+}
+
+/* Vị trí này có kéo theo quyền xem lương không — dùng ở cửa API để chặn
+   người không phải Admin trao lương cho người khác. */
+export function viTriCoXemLuong(ma) {
+  return QUYEN_THEO_VAI_TRO[ma]?.xem_luong === true;
 }
 
 /* Các vai trò hợp lệ để admin chọn khi tạo tài khoản mới */
 export const VAI_TRO_HOP_LE = Object.keys(QUYEN_THEO_VAI_TRO);
 
-/* Nhóm vai trò CHỈ để hiển thị đúng chỗ trên UI (Vai trò hệ thống tách
-   khỏi Vị trí công việc, không gộp 1 danh sách phẳng) — KHÔNG phải quyền
-   thật, quyền thật vẫn nằm ở QUYEN_THEO_VAI_TRO/QUYEN_KHO/... phía trên.
-   Sếp chốt 23/08/2026: "các vai trò kia cũng là vị trí nhân viên chứ
-   không phải vai trò hệ thống nữa". */
-const NHOM_VAI_TRO_HE_THONG = new Set(['admin', 'admin_backup', 'nguoi_dung']);
+/* Nhóm vai trò để giao diện vẽ ĐÚNG HAI Ô (không còn là "chỉ để hiển thị"
+   như trước 04/09/2026 — nay nó là luật thật, xem boVaiTro()). */
 export function nhomVaiTro(vaiTro) {
   return NHOM_VAI_TRO_HE_THONG.has(vaiTro) ? 'he_thong' : 'vi_tri';
+}
+
+/* Câu mô tả gọn cho màn hình: "Admin backup · Kế toán trưởng". Một chỗ duy
+   nhất để hai màn (bảng Quản trị và hồ sơ nhân sự) không tự ghép mỗi nơi
+   một kiểu. */
+export function moTaVaiTro(vaiTro, viTri) {
+  const phan = [];
+  if (vaiTro && TEN_VAI_TRO[vaiTro]) phan.push(TEN_VAI_TRO[vaiTro]);
+  if (viTri && TEN_VAI_TRO[viTri]) phan.push(TEN_VAI_TRO[viTri]);
+  return phan.join(' · ');
 }
 
 /* Tên hiển thị của vai trò */

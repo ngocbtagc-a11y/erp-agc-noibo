@@ -63,7 +63,7 @@ const NGAY_CAN_HAN = 30;
    ========================================================================== */
 
 export async function danhSachSanPham(env, phien) {
-  const xemGiaVon = duocXemGiaVon(phien.vai_tro);
+  const xemGiaVon = duocXemGiaVon(phien);
 
   // (A) Danh mục sản phẩm đang bán
   const { results: sps } = await env.DB.prepare(`
@@ -135,11 +135,11 @@ export async function danhSachSanPham(env, phien) {
     xem_gia_von: xemGiaVon,
     tong_gia_tri_ton: xemGiaVon ? tongGiaTri : null,
     quyen: {
-      thao_tac: duocThaoTacKho(phien.vai_tro),
-      quan_ly: duocQuanLyKho(phien.vai_tro),
+      thao_tac: duocThaoTacKho(phien),
+      quan_ly: duocQuanLyKho(phien),
       gia_von: xemGiaVon,
-      sua_san_pham: duocSuaSanPham(phien.vai_tro),
-      khoa_san_pham: duocKhoaSanPham(phien.vai_tro)
+      sua_san_pham: duocSuaSanPham(phien),
+      khoa_san_pham: duocKhoaSanPham(phien)
     }
   });
 }
@@ -160,7 +160,7 @@ async function donViTuId(env, donViId) {
 }
 
 export async function themSanPham(env, phien, body) {
-  if (!duocSuaSanPham(phien.vai_tro)) return loi('Bạn không có quyền thêm mã hàng', 403);
+  if (!duocSuaSanPham(phien)) return loi('Bạn không có quyền thêm mã hàng', 403);
 
   const maSku = String(body.ma_sku || '').trim().toUpperCase();
   const ten = String(body.ten || '').trim();
@@ -194,7 +194,7 @@ export async function themSanPham(env, phien, body) {
    đang trỏ theo id chứ không theo mã, nên thực ra đổi mã vẫn an toàn về mặt
    dữ liệu — nhưng CỐ TÌNH khoá lại để tránh gõ nhầm mã đang dùng thật). */
 export async function suaSanPham(env, phien, body) {
-  if (!duocSuaSanPham(phien.vai_tro)) return loi('Bạn không có quyền sửa mã hàng', 403);
+  if (!duocSuaSanPham(phien)) return loi('Bạn không có quyền sửa mã hàng', 403);
 
   const id = String(body.id || '').trim();
   if (!id) return loi('Thiếu id sản phẩm');
@@ -203,7 +203,7 @@ export async function suaSanPham(env, phien, body) {
   if (!hienCo) return loi('Không tìm thấy sản phẩm', 404);
 
   // Đã khoá thì chỉ Admin sửa được (Data Lock — xem migration them-khoa-danhmuc-nen.sql)
-  if (hienCo.trang_thai === 'da_khoa' && !laAdmin(phien.vai_tro)) {
+  if (hienCo.trang_thai === 'da_khoa' && !laAdmin(phien)) {
     return loi('Mã hàng này đã khoá — cần Admin sửa hoặc mở khoá lại', 403);
   }
 
@@ -238,7 +238,7 @@ export async function suaSanPham(env, phien, body) {
    Ẩn/hiện KHÔNG bị chặn bởi khoá — đây là việc vận hành (còn bán hay
    không), không phải đổi định nghĩa mã hàng. */
 export async function anHienSanPham(env, phien, body) {
-  if (!duocSuaSanPham(phien.vai_tro)) return loi('Bạn không có quyền ẩn/hiện mã hàng', 403);
+  if (!duocSuaSanPham(phien)) return loi('Bạn không có quyền ẩn/hiện mã hàng', 403);
 
   const id = String(body.id || '').trim();
   if (!id) return loi('Thiếu id sản phẩm');
@@ -253,12 +253,12 @@ export async function anHienSanPham(env, phien, body) {
    KHÔNG phải người khoá, vì Kinh doanh mới là chủ sở hữu định nghĩa sản
    phẩm) / Mở khoá (chỉ Admin). */
 export async function khoaSanPham(env, phien, body) {
-  if (!duocKhoaSanPham(phien.vai_tro)) return loi('Bạn không có quyền khoá/mở khoá mã hàng — chỉ Kinh doanh/Admin', 403);
+  if (!duocKhoaSanPham(phien)) return loi('Bạn không có quyền khoá/mở khoá mã hàng — chỉ Kinh doanh/Admin', 403);
 
   const id = String(body.id || '').trim();
   if (!id) return loi('Thiếu id sản phẩm');
   const muon = body.trang_thai === 'da_khoa' ? 'da_khoa' : 'nhap';
-  if (muon === 'nhap' && !laAdmin(phien.vai_tro)) {
+  if (muon === 'nhap' && !laAdmin(phien)) {
     return loi('Chỉ Admin mới mở khoá lại được', 403);
   }
 
@@ -271,7 +271,7 @@ export async function khoaSanPham(env, phien, body) {
    ========================================================================== */
 
 export async function nhapKho(env, phien, body) {
-  if (!duocThaoTacKho(phien.vai_tro)) return loi('Bạn không có quyền nhập kho', 403);
+  if (!duocThaoTacKho(phien)) return loi('Bạn không có quyền nhập kho', 403);
 
   const spId = String(body.san_pham_id || '').trim();
   const soLuong = soNguyenDuong(body.so_luong);
@@ -288,7 +288,7 @@ export async function nhapKho(env, phien, body) {
 
   // Đơn giá (giá vốn) chỉ ghi nhận khi người nhập có quyền xem giá vốn —
   // giống cách máy chủ ép NULL cột lương với người không có quyền.
-  const donGia = duocXemGiaVon(phien.vai_tro) ? soNguyenDuong(body.don_gia) : null;
+  const donGia = duocXemGiaVon(phien) ? soNguyenDuong(body.don_gia) : null;
   const doiTac = String(body.doi_tac || '').trim() || null;
   const ghiChu = String(body.ghi_chu || '').trim() || null;
   const phieuId = 'pn_' + crypto.randomUUID().slice(0, 12);
@@ -320,7 +320,7 @@ export async function nhapKho(env, phien, body) {
    ========================================================================== */
 
 export async function xuatKho(env, phien, body) {
-  if (!duocThaoTacKho(phien.vai_tro)) return loi('Bạn không có quyền xuất kho', 403);
+  if (!duocThaoTacKho(phien)) return loi('Bạn không có quyền xuất kho', 403);
 
   const spId = String(body.san_pham_id || '').trim();
   const soLuong = soNguyenDuong(body.so_luong);
@@ -449,7 +449,7 @@ export async function lichSu(env, phien, spId, gioiHan) {
   spId = String(spId || '').trim();
   if (!spId) return loi('Thiếu mã sản phẩm');
   const gh = Math.min(Math.max(parseInt(gioiHan, 10) || 30, 1), 200);
-  const xemGiaVon = duocXemGiaVon(phien.vai_tro);
+  const xemGiaVon = duocXemGiaVon(phien);
 
   const { results } = await env.DB.prepare(`
     SELECT g.loai, g.so_luong, ${xemGiaVon ? 'g.don_gia' : 'NULL AS don_gia'},

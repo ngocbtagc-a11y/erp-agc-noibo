@@ -95,6 +95,8 @@
     "do-bang-vua-man-truoc": "node scripts/do-bang-vua-man.mjs --commit 755d556",
     "do-bang-vua-man-tu-kiem": "node scripts/do-bang-vua-man.mjs --tu-kiem",
     "ban-tai-tep": "node scripts/ban-tai-tep.mjs",
+    "do-tach-vai-tro": "node scripts/do-tach-vai-tro.mjs",
+    "do-hai-o-tren-man": "node scripts/do-hai-o-tren-man.mjs",
     "do-tai-tep": "node scripts/ban-tai-tep.mjs --tu-dong"
   },
   "devDependencies": {
