@@ -15,7 +15,7 @@
 import { dungMayGia, moChrome, TOI_ID } from './lib/ban-do-chrome.mjs';
 
 const QUYEN = ['tongquan', 'chat', 'congviec', 'muctieu', 'kinhdoanh', 'khovan',
-               'ketoan', 'donhoan', 'xepca', 'nhansu'];
+               'ketoan', 'donhoan', 'xepca', 'nhansu', 'dulieunen', 'quantri'];
 const dem = new Map();
 const may = await dungMayGia({
   tatHoatAnh: true,
@@ -78,6 +78,21 @@ await thu('③ Đối chứng: bảng Đối soát sàn (CÓ đăng ký nghe) �
   'kinhdoanh', `kdDaDoiSoat('RS2')`, '/api/kinh-doanh/can-doi-soat',
   'Khối này nằm trong bảng 26 → phải CÓ tự nạp lại. Nếu nó xanh mà ① đỏ thì\n' +
   '     khác biệt là ở CHỖ ĐĂNG KÝ NGHE, không phải ở phép đo.');
+
+/* ---- VÒNG 3: ba khối còn lại trong rổ A mà Khỉ Đột nói "không sao" ---- */
+console.log('\nVÒNG 3 — BA KHỐI RỔ A CÒN LẠI: có thật sự không sao không?\n');
+
+await thu('④ Dropdown Phòng ban ở màn Xếp ca (khoiDongXepCa) — CỐ Ý để lại',
+  'xepca', `dlnSuaPhongBan(1, { ten: 'Kho vận ĐỔI TÊN' })`, '/api/du-lieu-nen/phong-ban',
+  'Đổi tên phòng ban thì ô chọn phòng ban ở Xếp ca có đổi theo không.');
+
+await thu('⑤ Bảng Kho (khoiDongKho xếp rổ A) — khối THẬT là taiLaiKho, đã nối dây',
+  'khovan', `khoSuaSanPham({ id: 1, ten: 'x' })`, '/api/kho/san-pham',
+  'Nếu CÓ nạp lại thì "khoiDongKho ở rổ A" chỉ là nhiễu của phép dò, không phải bệnh.');
+
+await thu('⑥ Bảng Nhân sự (veLaiBangNs xếp rổ A) — khối THẬT là taiLaiNhanSuQuanTri',
+  'nhansu', `qtSuaNhanSu({ id: 'NS-DUY' })`, '/api/quan-tri/danh-sach',
+  'Cùng lý do với ⑤.');
 
 const loi = [...cr.ngoaiLe, ...cr.loiConsole.filter(l => !/favicon|404/.test(l))];
 console.log('\nNgoại lệ/console lỗi:', loi.length ? loi.slice(0, 3).join(' | ') : 'sạch');

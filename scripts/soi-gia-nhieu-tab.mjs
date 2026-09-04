@@ -45,6 +45,19 @@ async function do1(nhan, commit, soTab) {
     phu.push(t.targetId);
     await cr.doi(2600);
   }
+  /* VÒNG 3 — SỬA LỖI CỦA CHÍNH BÀN SOI NÀY. `Target.createTarget` đưa tab MỚI
+     ra TRƯỚC, nên tab 1 (chỗ tôi bấm) tụt xuống NỀN. Người dùng thật không bao
+     giờ bấm nút trong một tab đang nằm nền — đo như vậy là đo một cảnh không có
+     thật, và nó làm con số ra 8 thay vì 5. Kéo tab 1 về trước rồi mới bấm.
+     (Khỉ Đột báo đúng chỗ này ở ca ⑪ của nó; tôi vấp đúng cái hố đó.) */
+  await cr.goi('Page.bringToFront', {}, cr.sessionId);
+  await cr.doi(800);
+  const tabPhuAn = [];
+  for (const t of phu) {
+    const { sessionId: sp } = await cr.goi('Target.attachToTarget', { targetId: t, flatten: true });
+    const r = await cr.goi('Runtime.evaluate', { expression: 'document.hidden', returnByValue: true }, sp);
+    tabPhuAn.push(r.result.value);
+  }
   dem.clear();
   /* Đường NÚT THẬT: ghi rồi gọi tay hàm làm mới (y như app.js làm) */
   await cr.chay(`(async () => {
@@ -57,7 +70,8 @@ async function do1(nhan, commit, soTab) {
   const tong = bo.reduce((a, [, n]) => a + n, 0);
   for (const t of phu) { try { await cr.goi('Target.closeTarget', { targetId: t }); } catch { /* kệ */ } }
   cr.dong(); may.dong();
-  return { nhan, soTab, tong, chiTiet: bo.map(([d, n]) => `${d.replace('/api/', '')}×${n}`).join(' · ') };
+  return { nhan, soTab, tong, tabPhuAn,
+    chiTiet: bo.map(([d, n]) => `${d.replace('/api/', '')}×${n}`).join(' · ') };
 }
 
 console.log('\nMỘT CÚ BẤM "DUYỆT XONG" TỐN BAO NHIÊU LỆNH GỌI MÁY CHỦ');
@@ -67,7 +81,10 @@ bang.push(await do1('TRƯỚC (origin/main)', MAIN, 1));
 bang.push(await do1('TRƯỚC (origin/main)', MAIN, 3));
 for (const n of [1, 2, 3, 4]) bang.push(await do1('SAU  (bản vá)', null, n));
 for (const r of bang) {
-  console.log(`${r.nhan.padEnd(22)} ${r.soTab} tab → ${String(r.tong).padStart(3)} lệnh gọi   ${r.chiTiet}`);
+  const dk = r.soTab > 1
+    ? (r.tabPhuAn.every(x => x === true) ? ' [tab phụ đều ở NỀN ✔]' : ' [⚠ tab phụ KHÔNG ở nền: ' + JSON.stringify(r.tabPhuAn) + ']')
+    : '';
+  console.log(`${r.nhan.padEnd(22)} ${r.soTab} tab → ${String(r.tong).padStart(3)} lệnh gọi${dk}   ${r.chiTiet}`);
 }
 const t1 = bang.find(r => r.nhan.startsWith('SAU') && r.soTab === 1).tong;
 const m1 = bang.find(r => r.nhan.startsWith('TRƯỚC') && r.soTab === 1).tong;
