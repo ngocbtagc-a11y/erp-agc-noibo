@@ -7374,15 +7374,28 @@ async function khoiDongTongQuanSan() {
   async function chayTachBu() {
     if (!TOI.la_admin) return;
     const box = $('#kd-sku-canhbao');
-    let tong = 0, vong = 0;
+    let tong = 0, vong = 0, tongViec = null;
     try {
       while (vong < 200) {
-        const kq = await API.kdTachDongHang();
+        // Chỉ lô ĐẦU mới xin đếm tổng số việc; các lô sau tự trừ dần. Trước
+        // đây lô nào cũng hỏi lại, mà mỗi lần hỏi là database đếm lại cả bảng
+        // — chính chỗ này đã làm cạn hạn mức đọc của cả ngày 06/09/2026.
+        const kq = await API.kdTachDongHang(vong === 0);
         tong += kq.da_xu_ly;
         vong++;
+
+        if (vong === 1 && kq.con_lai != null) tongViec = kq.con_lai + kq.da_xu_ly;
+        const conLai = tongViec != null ? Math.max(tongViec - tong, 0) : null;
+
         box.innerHTML = `<div class="list-item"><div class="bullet"></div><div class="body">` +
-          `<b>Đang bóc chi tiết mặt hàng…</b><span>Đã xong ${tienVN(tong)} đơn · còn ${tienVN(kq.con_lai)} đơn</span></div></div>`;
-        if (!kq.con_lai || !kq.da_xu_ly) break;
+          `<b>Đang bóc chi tiết mặt hàng…</b><span>Đã xong ${tienVN(tong)} đơn` +
+          (conLai != null ? ` · còn ${tienVN(conLai)} đơn` : '') +
+          `</span></div></div>`;
+
+        // con_nua do máy chủ suy ra từ số đơn lấy được, không phải từ một câu
+        // đếm riêng. Giữ kiểm tra con_lai cho bản máy chủ cũ chưa có con_nua.
+        const conNua = kq.con_nua != null ? kq.con_nua : !!kq.con_lai;
+        if (!conNua || !kq.da_xu_ly) break;
       }
     } catch (e) {
       box.innerHTML = `<div class="list-item"><div class="bullet danger"></div><div class="body">` +

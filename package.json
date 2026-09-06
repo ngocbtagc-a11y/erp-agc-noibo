@@ -105,7 +105,8 @@
     "ban-tai-tep": "node scripts/ban-tai-tep.mjs",
     "do-tach-vai-tro": "node scripts/do-tach-vai-tro.mjs",
     "do-hai-o-tren-man": "node scripts/do-hai-o-tren-man.mjs",
-    "do-tai-tep": "node scripts/ban-tai-tep.mjs --tu-dong"
+    "do-tai-tep": "node scripts/ban-tai-tep.mjs --tu-dong",
+    "do-loc-don-hoan": "node scripts/do-loc-don-hoan.mjs"
   },
   "devDependencies": {
     "wrangler": "^4.0.0"

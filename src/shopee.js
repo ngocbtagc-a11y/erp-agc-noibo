@@ -20,7 +20,7 @@
 
 import { duocQuanLyShopee, duocXemDonHoan, duocXemTab } from './quyen.js';
 import * as donHangItem from './don-hang-item.js';
-import { locDoi, COT_DON_HOAN, COT_DON_HANG } from './chi-ghi-khi-doi.js';
+import { locDoi, locDonHoanCanGhi, COT_DON_HOAN, COT_DON_HANG } from './chi-ghi-khi-doi.js';
 import { demGhi } from './canh-bao-ghi.js';
 
 /* ---- Trả lời JSON ------------------------------------------------------- */
@@ -239,7 +239,7 @@ export async function apiCallback(env, urlObj) {
     await doiCodeLayToken(env, code, shopId);
     // Kết nối xong là KÉO ĐƠN HOÀN VỀ NGAY, khỏi phải bấm "Đồng bộ" (Sếp Ngọc
     // 19/08/2026). Lỗi đồng bộ không chặn — cron 5 phút sẽ tự thử lại.
-    try { await dongBoNen(env); } catch (e) { console.error('Đồng bộ ngay sau kết nối Shopee:', e.message); }
+    try { await dongBoNen(env, { batLoc: false }); } catch (e) { console.error('Đồng bộ ngay sau kết nối Shopee:', e.message); }
     // Ủy quyền xong → đưa người dùng về app, gắn cờ để giao diện báo thành công
     return new Response(null, { status: 302, headers: { Location: '/app?shopee=ok' } });
   } catch (e) {
@@ -248,8 +248,12 @@ export async function apiCallback(env, urlObj) {
 }
 
 /* Đồng bộ đơn hoàn Shopee về DB — dùng cho CẢ nút bấm lẫn lịch chạy nền.
-   Trả về số đơn; null nếu chưa cấu hình/chưa kết nối; ném lỗi nếu API lỗi. */
-export async function dongBoNen(env) {
+   Trả về số đơn; null nếu chưa cấu hình/chưa kết nối; ném lỗi nếu API lỗi.
+
+   batLoc = true (mặc định, cho lịch 5 phút): chỉ gửi lệnh ghi cho đơn thật sự
+   mới hoặc đã đổi — xem locDonHoanCanGhi trong chi-ghi-khi-doi.js.
+   batLoc = false (nút bấm tay, lượt quét đối soát hằng ngày): ghi đè tất. */
+export async function dongBoNen(env, { batLoc = true } = {}) {
   if (!daCauHinh(env)) return null;
   const kn = await ketNoiConHan(env);
   if (!kn) return null;
@@ -262,6 +266,7 @@ export async function dongBoNen(env) {
   const dauThang = Math.floor(Date.UTC(_vn.getUTCFullYear(), _vn.getUTCMonth(), 1) / 1000) - 7 * 3600;
   let them = 0;
   const cauLenh = [];   // gom lệnh ghi để chạy BATCH (tránh vượt trần subrequest Worker)
+  const dauMoi = [];    // song song với cauLenh: mã đơn + mốc đổi, để lọc trước khi ghi
   for (let tuLuc = dauThang; tuLuc < gioNay; tuLuc += 15 * 86400) {
     const denLuc = Math.min(tuLuc + 15 * 86400 - 1, gioNay);
     let pageNo = 0, con = true;
@@ -308,15 +313,28 @@ export async function dongBoNen(env) {
         r.update_time ? String(r.update_time) : null,
         JSON.stringify(r)
       ));
+      dauMoi.push({
+        rsn: String(r.return_sn),
+        up: r.update_time != null ? String(r.update_time) : null,
+        st: r.status || null
+      });
       them++;
     }
       con = !!(kq.response && kq.response.more);
       pageNo++;
     }
   }
+
+  /* Bỏ bớt lệnh ghi cho những đơn sàn trả về y nguyên như đang có. Một câu
+     SELECT hai cột cho cả lô rẻ hơn nhiều so với việc gửi hàng trăm lệnh
+     INSERT để mỗi lệnh lại tự đọc dòng cũ ra so — xem giải thích dài trong
+     chi-ghi-khi-doi.js. */
+  const canGhi = await locDonHoanCanGhi(env, dauMoi, { batLoc });
+  const lenhGhi = cauLenh.filter((_, i) => canGhi[i]);
+
   // Ghi hàng loạt theo lô 50 lệnh/batch — mỗi batch chỉ tính 1 subrequest
-  for (let i = 0; i < cauLenh.length; i += 50) {
-    demGhi(await env.DB.batch(cauLenh.slice(i, i + 50)));
+  for (let i = 0; i < lenhGhi.length; i += 50) {
+    demGhi(await env.DB.batch(lenhGhi.slice(i, i + 50)));
   }
   return them;
 }
@@ -328,7 +346,8 @@ export async function apiDongBo(env, phien) {
   const co = await env.DB.prepare('SELECT shop_id FROM shopee_ket_noi LIMIT 1').first();
   if (!co) return loi('Chưa kết nối shop Shopee. Hãy bấm “Kết nối Shopee” trước.', 409);
   try {
-    const so = await dongBoNen(env);
+    // Người bấm nút là muốn chắc chắn tươi -> ghi đè tất, không lọc.
+    const so = await dongBoNen(env, { batLoc: false });
     return json({ ok: true, so_don: so || 0 });
   } catch (e) {
     return loi(e.message, 502);

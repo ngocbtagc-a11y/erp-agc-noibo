@@ -448,7 +448,10 @@ export const API = {
      (xem khối TỔNG QUAN 2 SÀN trong src/index.js). ky = hom_nay|7ngay|30ngay|thang_nay */
   kdTongQuanKenh: (ky) => goi('/api/kinh-doanh/tong-quan-kenh?ky=' + encodeURIComponent(ky || 'hom_nay')),
   kdXepHangSku: (ky) => goi('/api/kinh-doanh/xep-hang-sku?ky=' + encodeURIComponent(ky || 'thang_nay')),
-  kdTachDongHang: () => goi('/api/kinh-doanh/tach-dong-hang', { method: 'POST' }),
+  /* dem = true chỉ dùng cho LÔ ĐẦU, để biết tổng số đơn phải bóc. Các lô sau
+     tự trừ dần — hỏi lại máy chủ sau mỗi lô là bắt nó đếm lại cả bảng. */
+  kdTachDongHang: (dem = false) =>
+    goi('/api/kinh-doanh/tach-dong-hang' + (dem ? '?dem=1' : ''), { method: 'POST' }),
 
   /* ---- Kế toán: đơn hoàn cần tra soát tiền ---- */
   ktCanTraSoat: () => goi('/api/ke-toan/can-tra-soat'),

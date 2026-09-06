@@ -25,7 +25,7 @@
 
 import { duocXemDonHoan, duocQuanLyShopee, duocXemTab } from './quyen.js';
 import * as donHangItem from './don-hang-item.js';
-import { locDoi, COT_DON_HOAN, COT_DON_HANG } from './chi-ghi-khi-doi.js';
+import { locDoi, locDonHoanCanGhi, COT_DON_HOAN, COT_DON_HANG } from './chi-ghi-khi-doi.js';
 import { demGhi } from './canh-bao-ghi.js';
 
 function json(d, status = 200) {
@@ -180,7 +180,7 @@ export async function apiCallback(env, urlObj) {
   try {
     await doiCodeLayToken(env, code);
     // Kết nối xong là kéo đơn hoàn về ngay, khỏi phải bấm "Đồng bộ".
-    try { await dongBoNen(env); } catch (e) { console.error('Đồng bộ ngay sau kết nối TikTok:', e.message); }
+    try { await dongBoNen(env, { batLoc: false }); } catch (e) { console.error('Đồng bộ ngay sau kết nối TikTok:', e.message); }
     return new Response(null, { status: 302, headers: { Location: '/app?tiktok=ok' } });
   } catch (e) {
     return new Response('Kết nối TikTok thất bại: ' + e.message, { status: 502 });
@@ -189,7 +189,10 @@ export async function apiCallback(env, urlObj) {
 
 /* Đồng bộ đơn hoàn TikTok về DB — dùng cho CẢ nút bấm lẫn lịch chạy nền.
    Trả về số đơn cập nhật; null nếu chưa cấu hình/chưa kết nối; ném lỗi nếu API lỗi. */
-export async function dongBoNen(env) {
+/* batLoc = true (mặc định, lịch 5 phút): bỏ qua đơn sàn trả về y nguyên như
+   đang có, khỏi gửi lệnh ghi thừa. batLoc = false (nút bấm tay, lượt quét đối
+   soát hằng ngày): ghi đè tất. Xem chi-ghi-khi-doi.js. */
+export async function dongBoNen(env, { batLoc = true } = {}) {
   if (!daCauHinh(env)) return null;
   let kn = await ketNoiConHan(env);
   if (!kn) return null;
@@ -228,10 +231,33 @@ export async function dongBoNen(env) {
   if (kq.code && kq.code !== 0) throw new Error('TikTok báo lỗi: ' + (kq.message || kq.code));
 
   const ds = (kq.data && (kq.data.return_orders || kq.data.returns)) || [];
+
+  /* Hỏi MỘT lần xem đơn nào trong lô này thật sự mới hoặc đã đổi, thay vì gửi
+     từng lệnh ghi để mỗi lệnh tự đọc dòng cũ ra so. Đơn không đổi thì bỏ qua
+     luôn ở vòng dưới — xem giải thích trong chi-ghi-khi-doi.js. */
+  const dauMoi = ds.map(r => ({
+    rsn: String(r.return_id || r.return_sn || r.id || ''),
+    up: r.update_time != null ? String(r.update_time) : null,
+    st: r.return_status || r.status || null
+  }));
+  const canGhi = await locDonHoanCanGhi(env, dauMoi.filter(d => d.rsn), { batLoc });
+  const boQua = new Set();
+  let viTri = 0;
+  for (const d of dauMoi) {
+    if (!d.rsn) continue;
+    if (!canGhi[viTri]) boQua.add(d.rsn);
+    viTri++;
+  }
+
   let them = 0;
   for (const r of ds) {
     const returnId = r.return_id || r.return_sn || r.id;
     if (!returnId) continue;
+    // Đếm theo số đơn LẤY VỀ (giữ đúng ý nghĩa cũ của con số báo ra giao diện),
+    // rồi mới bỏ qua đơn không đổi — nếu đếm sau, số hiện ra sẽ tụt gần về 0
+    // và người dùng tưởng đồng bộ hỏng.
+    them++;
+    if (boQua.has(String(returnId))) continue;
     const soTien = r.refund_amount && (r.refund_amount.refund_total || r.refund_amount.total);
     // Tách tên / SKU / số lượng riêng để kho hiển thị: tên dòng chính, SKU dòng phụ.
     const tenArr = [], skuArr = [];
@@ -272,7 +298,6 @@ export async function dongBoNen(env) {
       r.update_time ? String(r.update_time) : null,
       JSON.stringify(r)
     ).run());
-    them++;
   }
   // Đặt mốc đếm 12h: đơn nào sàn báo "khách đã gửi hàng về" (BUYER_SHIPPED_ITEM)
   // mà chưa có mốc và kho chưa nhận → ghi mốc = bây giờ (giờ VN). Chỉ ghi 1 lần.
@@ -291,7 +316,8 @@ export async function apiDongBo(env, phien) {
   const co = await env.DB.prepare('SELECT shop_id FROM tiktok_ket_noi LIMIT 1').first();
   if (!co) return loi('Chưa kết nối shop TikTok. Hãy bấm “Kết nối TikTok” trước.', 409);
   try {
-    const so = await dongBoNen(env);
+    // Người bấm nút là muốn chắc chắn tươi -> ghi đè tất, không lọc.
+    const so = await dongBoNen(env, { batLoc: false });
     return json({ ok: true, so_don: so || 0 });
   } catch (e) {
     return loi(e.message, 502);

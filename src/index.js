@@ -5046,8 +5046,12 @@ async function kdXepHangSku(req, env) {
 }
 
 /* POST /api/kinh-doanh/tach-dong-hang — bóc dòng hàng từ `du_lieu_json` của
-   các đơn cũ, theo lô. Giao diện gọi lại tới khi `con_lai = 0`.
-   Chỉ ĐỌC `du_lieu_json` rồi GHI sang bảng mới — không sửa/xoá dữ liệu đơn. */
+   các đơn cũ, theo lô. Giao diện gọi lại tới khi `con_nua = false`.
+   Chỉ ĐỌC `du_lieu_json` rồi GHI sang bảng mới — không sửa/xoá dữ liệu đơn.
+
+   ?dem=1 thì mới đếm số đơn còn lại. Giao diện chỉ xin đếm ở LÔ ĐẦU rồi tự trừ
+   dần — đếm sau mỗi lô là đếm lại cả bảng, và chính chỗ đó đã làm cạn hạn mức
+   đọc của cả ngày hôm 06/09/2026. */
 async function kdTachDongHang(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
@@ -5057,8 +5061,9 @@ async function kdTachDongHang(req, env) {
   }
   try {
     // 100 đơn/lượt: mỗi đơn sinh 1 câu lệnh/dòng hàng + 1 câu đánh dấu, để
-    // 1 lô D1 không phình quá to. Giao diện tự gọi lại tới khi con_lai = 0.
-    return json(await donHangItem.tachBu(env, 100));
+    // 1 lô D1 không phình quá to.
+    const dem = new URL(req.url).searchParams.get('dem') === '1';
+    return json(await donHangItem.tachBu(env, 100, { dem }));
   } catch (e) {
     return loi(e.message, 500);
   }
@@ -7091,8 +7096,16 @@ export default {
     // token khi sắp hết hạn — nên Sếp không phải bấm tay, không phải nối lại.
     ctx.waitUntil((async () => {
       // --- MỖI 5 PHÚT (nhẹ, cần tươi cho luồng đơn hoàn) ---
-      try { await shopee.dongBoNen(env); } catch (e) { console.error('Cron Shopee:', e.message); }
-      try { await tiktok.dongBoNen(env); } catch (e) { console.error('Cron TikTok:', e.message); }
+      /* Lượt thường chỉ ghi đơn thật sự mới/đổi (batLoc). Mỗi ngày một lượt
+         ĐỐI SOÁT lúc 3h sáng giờ VN thì ghi đè tất, để vá trường hợp hi hữu
+         sàn đổi dữ liệu mà không đổi cả update_time lẫn trạng thái.
+         KHÔNG thêm lịch thứ hai vào wrangler.toml — chỉ là một điều kiện giờ
+         trên đúng cron 5 phút đang có. */
+      const _vnCron = new Date(Date.now() + 7 * 3600 * 1000);
+      const doiSoatNgay = _vnCron.getUTCHours() === 3 && _vnCron.getUTCMinutes() < 5;
+      const _dongBo = { batLoc: !doiSoatNgay };
+      try { await shopee.dongBoNen(env, _dongBo); } catch (e) { console.error('Cron Shopee:', e.message); }
+      try { await tiktok.dongBoNen(env, _dongBo); } catch (e) { console.error('Cron TikTok:', e.message); }
       try { await kiemTraCanhBaoHoan(env); } catch (e) { console.error('Cron cảnh báo:', e.message); }
       try { await kiemTraLyDoNghiemTrong(env); } catch (e) { console.error('Cron cảnh báo nghiêm trọng:', e.message); }
       try { await hoLyTuDongTriage(env); } catch (e) { console.error('Cron Hồ Ly triage:', e.message); }
