@@ -12556,22 +12556,23 @@ function tenRieng(t) {
   return (l && td && l !== td) ? td : '';
 }
 /* ==========================================================================
-   SƠ ĐỒ TỔ CHỨC
+   SƠ ĐỒ TỔ CHỨC KÉO THẢ ĐƯỢC
    ---------------------------------------------------------------------------
-   Sếp Ngọc 06/09/2026: "thiết kế thành sơ đồ để tôi dễ làm."
+   Sếp Ngọc 06/09/2026: "kéo thả là cho phép thiết kế lại sơ đồ tổ chức, tên
+   phòng ban..."
 
-   Ba danh sách phẳng bên dưới vẫn giữ nguyên — đó là chỗ THÊM và ĐỔI TÊN. Sơ đồ
-   là chỗ NHÌN: ai thuộc phòng nào, phòng nào chưa có trưởng, phòng nào phình,
-   phòng nào trống. Đọc danh sách phẳng thì mấy thứ đó không bao giờ hiện ra.
+   Ba việc làm được ngay trên sơ đồ:
+     · KÉO một hộp thả lên hộp khác  → phòng đó trực thuộc phòng kia
+     · KÉO thả vào dải "Cấp cao nhất" → tách ra khỏi phòng cha
+     · BẤM ĐÚP vào tên            → sửa tên tại chỗ, Enter là lưu
 
-   HIỆN CẢ SỐ NGƯỜI, vì đó là chỗ sơ đồ nói được điều mà danh sách không nói:
-   đo trên dữ liệu thật hôm nay ra Kho Vận 17 người còn Kinh Doanh - MKT 0
-   người — trong khi Kinh Doanh là phòng gánh mục tiêu 120 tỷ. Một cái sơ đồ
-   không có số thì chỉ là mấy cái hộp xếp cạnh nhau.
+   GỬI CẢ SƠ ĐỒ MỘT LẦN, không gửi từng thao tác: kéo một hộp thường làm đổi
+   thứ tự mấy hộp bên cạnh; gửi lẻ thì nửa chừng rớt mạng là sơ đồ mắc kẹt dở
+   dang mà không ai biết đúng sai.
 
-   KHÔNG vẽ tới từng nhân viên: 22 người trong một sơ đồ thì thành đám rối, mà
-   đây là màn để SỬA CƠ CẤU, không phải để tra ai ngồi đâu. Muốn xem người thì
-   sang tab Nhân sự.
+   CÓ ĐƯỜNG CHO ĐIỆN THOẠI. HTML5 drag KHÔNG chạy trên màn cảm ứng — kho vận
+   dùng ERP bằng điện thoại, làm mỗi kéo thả là cắt họ khỏi tính năng. Nên mỗi
+   hộp có thêm ô chọn "Trực thuộc" làm đúng việc đó bằng một cú chạm.
    ========================================================================== */
 function veSoDoToChuc(dsPhongBan) {
   const o = document.getElementById('dln-sodo');
@@ -12586,36 +12587,184 @@ function veSoDoToChuc(dsPhongBan) {
   }
 
   const tongNguoi = ds.reduce((m, p) => m + (Number(p.so_nguoi) || 0), 0);
-  const chuaCoTruong = ds.filter(p => !p.truong_phong_ten).length;
+  const chuaTruong = ds.filter(p => !p.truong_phong_ten).length;
   if (tom) {
     tom.textContent = ds.length + ' phòng · ' + tongNguoi + ' người'
-      + (chuaCoTruong ? ' · ' + chuaCoTruong + ' phòng chưa có trưởng' : '');
+      + (chuaTruong ? ' · ' + chuaTruong + ' phòng chưa có trưởng' : '')
+      + ' · kéo hộp để xếp lại, bấm đúp vào tên để sửa';
   }
 
+  const conCua = (chaId) => ds
+    .filter(p => (p.cha_id == null ? null : Number(p.cha_id)) === chaId)
+    .sort((a, b) => (a.thu_tu || 0) - (b.thu_tu || 0));
+
+  const oChon = (p) => '<select class="sodo-chon" data-cha-cua="' + esc(p.id) + '">'
+    + '<option value="">— Cấp cao nhất —</option>'
+    + ds.filter(x => Number(x.id) !== Number(p.id))
+        .map(x => '<option value="' + esc(x.id) + '"'
+          + (Number(p.cha_id) === Number(x.id) ? ' selected' : '') + '>Thuộc ' + esc(x.ten) + '</option>')
+        .join('')
+    + '</select>';
+
+  const veHop = (p) => {
+    const so = Number(p.so_nguoi) || 0;
+    return '<li class="sodo-nhanh">'
+      + '<div class="sodo-o' + (so === 0 ? ' trong' : '') + '" draggable="true" data-pb="' + esc(p.id) + '">'
+      +   '<b class="sodo-ten" data-sua-ten="' + esc(p.id) + '" title="Bấm đúp để sửa tên">' + esc(p.ten) + '</b>'
+      +   '<div class="sodo-tp">'
+      +     (p.truong_phong_ten ? 'Trưởng phòng: <b>' + esc(p.truong_phong_ten) + '</b>'
+                                : '<i>Chưa có trưởng phòng</i>')
+      +   '</div>'
+      +   '<div class="sodo-so">' + so + ' người'
+      +     (so === 0 ? ' <span class="sodo-canh">chưa ai được gán</span>' : '') + '</div>'
+      +   '<div class="sodo-hanh">'
+      +     '<button type="button" class="btn-nho sodo-nut" data-gan-truong="' + esc(p.id) + '">'
+      +       (p.truong_phong_ten ? 'Đổi trưởng phòng' : 'Gán trưởng phòng') + '</button>'
+      +     oChon(p)
+      +   '</div>'
+      + '</div>'
+      + veCon(Number(p.id))
+      + '</li>';
+  };
+
+  const veCon = (chaId) => {
+    const con = conCua(chaId);
+    return con.length ? '<ul class="sodo-con">' + con.map(veHop).join('') + '</ul>' : '';
+  };
+
   o.innerHTML =
-    '<div class="sodo-goc"><b>' + 'Alpha Green Commerce' + '</b><span>' + tongNguoi + ' người đang làm</span></div>'
-    + '<div class="sodo-cot"></div>'
-    + '<div class="sodo-hang">'
-    + ds.map(p => {
-        const so = Number(p.so_nguoi) || 0;
-        /* Phòng 0 người được đánh dấu — đó là thứ Sếp cần thấy ngay, không phải
-           một con số 0 nằm lẫn trong đám chữ. */
-        const canhBao = so === 0 ? ' trong' : '';
-        return '<div class="sodo-o' + canhBao + '" data-pb="' + esc(p.id) + '">'
-          + '<div class="sodo-noi"></div>'
-          + '<b>' + esc(p.ten) + '</b>'
-          + '<div class="sodo-tp">'
-          +   (p.truong_phong_ten
-                ? 'Trưởng phòng: <b>' + esc(p.truong_phong_ten) + '</b>'
-                : '<i>Chưa có trưởng phòng</i>')
-          + '</div>'
-          + '<div class="sodo-so">' + so + ' người'
-          +   (so === 0 ? ' <span class="sodo-canh">chưa ai được gán</span>' : '')
-          + '</div>'
-          + '<button type="button" class="btn-nho sodo-nut" data-gan-truong="' + esc(p.id) + '">'
-          +   (p.truong_phong_ten ? 'Đổi trưởng phòng' : 'Gán trưởng phòng')
-          + '</button>'
-          + '</div>';
-      }).join('')
-    + '</div>';
+    '<div class="sodo-goc" data-tha-goc="1">Alpha Green Commerce · ' + tongNguoi + ' người'
+    + '<span>Thả một hộp vào đây để tách nó ra cấp cao nhất</span></div>'
+    + '<ul class="sodo-cay">' + conCua(null).map(veHop).join('') + '</ul>';
+
+  ganKeoThaSoDo(o, ds);
+}
+
+
+/* ==========================================================================
+   KÉO THẢ + SỬA TÊN TRÊN SƠ ĐỒ TỔ CHỨC
+   ---------------------------------------------------------------------------
+   Tách khỏi hàm vẽ để hàm vẽ chỉ lo dựng HTML. Gắn lại sau mỗi lần vẽ vì
+   innerHTML thay hết phần tử cũ — bộ bắt sự kiện cũ chết theo.
+   ========================================================================== */
+function ganKeoThaSoDo(goc, ds) {
+  let dangKeo = null;
+
+  /* ---- Kéo bằng chuột ---------------------------------------------------- */
+  goc.querySelectorAll('.sodo-o[draggable="true"]').forEach(hop => {
+    hop.addEventListener('dragstart', e => {
+      dangKeo = hop.dataset.pb;
+      hop.classList.add('dang-keo');
+      e.dataTransfer.effectAllowed = 'move';
+      /* Firefox không bắt đầu kéo nếu không đặt dữ liệu */
+      try { e.dataTransfer.setData('text/plain', dangKeo); } catch (err) {}
+    });
+    hop.addEventListener('dragend', () => {
+      dangKeo = null;
+      goc.querySelectorAll('.dang-keo,.sap-tha').forEach(x => x.classList.remove('dang-keo', 'sap-tha'));
+    });
+    hop.addEventListener('dragover', e => {
+      if (!dangKeo || dangKeo === hop.dataset.pb) return;
+      e.preventDefault();
+      hop.classList.add('sap-tha');
+    });
+    hop.addEventListener('dragleave', () => hop.classList.remove('sap-tha'));
+    hop.addEventListener('drop', async e => {
+      e.preventDefault();
+      hop.classList.remove('sap-tha');
+      const con = dangKeo, cha = hop.dataset.pb;
+      if (!con || con === cha) return;
+      await doiCha(ds, con, cha);
+    });
+  });
+
+  /* Thả vào hộp công ty = tách ra cấp cao nhất */
+  const oGoc = goc.querySelector('[data-tha-goc]');
+  if (oGoc) {
+    oGoc.addEventListener('dragover', e => {
+      if (!dangKeo) return;
+      e.preventDefault();
+      oGoc.classList.add('sap-tha');
+    });
+    oGoc.addEventListener('dragleave', () => oGoc.classList.remove('sap-tha'));
+    oGoc.addEventListener('drop', async e => {
+      e.preventDefault();
+      oGoc.classList.remove('sap-tha');
+      if (dangKeo) await doiCha(ds, dangKeo, null);
+    });
+  }
+
+  /* ---- Đường cho điện thoại: ô chọn "trực thuộc" -------------------------
+     HTML5 drag KHÔNG chạy trên màn cảm ứng. Kho vận dùng ERP bằng điện thoại,
+     làm mỗi kéo thả là cắt họ khỏi tính năng này. */
+  goc.querySelectorAll('.sodo-chon').forEach(o => {
+    o.addEventListener('change', () => doiCha(ds, o.dataset.chaCua, o.value || null));
+  });
+
+  /* ---- Bấm đúp để sửa tên tại chỗ ---------------------------------------- */
+  goc.querySelectorAll('[data-sua-ten]').forEach(b => {
+    b.addEventListener('dblclick', () => {
+      if (b.querySelector('input')) return;
+      const cu = b.textContent.trim();
+      b.innerHTML = '<input class="sodo-o-ten" maxlength="60" value="' + esc(cu) + '">';
+      const o = b.querySelector('input');
+      o.focus(); o.select();
+      const luu = async () => {
+        const moi = o.value.trim();
+        if (!moi || moi === cu) { b.textContent = cu; return; }
+        try {
+          await API.dlnSuaPhongBan(b.dataset.suaTen, { ten: moi });
+          b.textContent = moi;
+          lamMoiManVuaMo();
+        } catch (e) {
+          b.textContent = cu;
+          alert('Không đổi được tên: ' + e.message);
+        }
+      };
+      o.addEventListener('blur', luu);
+      o.addEventListener('keydown', e => {
+        if (e.key === 'Enter') { e.preventDefault(); o.blur(); }
+        if (e.key === 'Escape') { o.value = cu; o.blur(); }
+      });
+    });
+  });
+}
+
+/* Đổi phòng cha rồi gửi CẢ SƠ ĐỒ lên máy chủ một lần.
+   Chặn vòng lặp ngay ở trình duyệt để người dùng biết ngay vì sao không được,
+   thay vì đợi máy chủ trả lỗi — máy chủ vẫn kiểm lại lần nữa, đây chỉ là để
+   nói sớm. */
+async function doiCha(ds, conId, chaId) {
+  const con = Number(conId);
+  const cha = chaId === null || chaId === '' ? null : Number(chaId);
+
+  if (cha !== null) {
+    let p = cha, vong = new Set([con]);
+    while (p !== null && p !== undefined) {
+      if (vong.has(p)) {
+        alert('Không xếp được: phòng này đang là cấp trên của phòng kia, xếp thế thành vòng tròn.');
+        return;
+      }
+      vong.add(p);
+      const nut = ds.find(x => Number(x.id) === p);
+      p = nut && nut.cha_id != null ? Number(nut.cha_id) : null;
+    }
+  }
+
+  /* CHỈ GỬI DÒNG VỪA ĐỔI. Bản đầu gửi cả sơ đồ và đo ra hỏng ngay: bản chụp
+     trong bộ nhớ trình duyệt cũ hơn database, nên đổi một phòng lại ghi đè cấp
+     cha của phòng khác. Máy chủ tự đọc cây thật để soi vòng lặp. */
+  const moi = [{ id: con, cha_id: cha }];
+
+  try {
+    await API.dlnSapXepPhongBan(moi);
+    /* Vẽ lại NGAY bằng dữ liệu vừa lấy về, không đợi bộ làm mới chung: bộ đó
+       làm mới cả tab và không phải lúc nào cũng chạm tới sơ đồ, nên người kéo
+       xong thấy y như cũ và tưởng thao tác trượt. */
+    const kq = await API.dlnPhongBan();
+    veSoDoToChuc(kq.ds || []);
+    lamMoiManVuaMo();
+  } catch (e) {
+    alert('Không lưu được sơ đồ: ' + e.message);
+  }
 }

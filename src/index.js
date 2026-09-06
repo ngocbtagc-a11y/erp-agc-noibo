@@ -2000,6 +2000,14 @@ async function dlnThemPhongBan(req, env) {
   let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
   return dulieunen.themPhongBan(env, phien, b);
 }
+/* Nhận kết quả kéo thả sơ đồ tổ chức — cả sơ đồ một lần, không từng thao tác lẻ. */
+async function dlnSapXepPhongBan(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return dulieunen.sapXepPhongBan(env, phien, b);
+}
+
 async function dlnSuaPhongBan(req, env) {
   const { phien, loi: l } = await batBuocXemDuLieuNen(req, env);
   if (l) return l;
@@ -7221,6 +7229,7 @@ const DUONG_DAN = {
   'GET  /api/dulieunen/phong-ban':      dlnDanhSachPhongBan,
   'POST /api/dulieunen/phong-ban/them': dlnThemPhongBan,
   'POST /api/dulieunen/phong-ban/sua':  dlnSuaPhongBan,
+  'POST /api/dulieunen/phong-ban/sap-xep': dlnSapXepPhongBan,
   'POST /api/dulieunen/phong-ban/khoa': dlnKhoaPhongBan,
   'POST /api/dulieunen/phong-ban/gan-truong-phong': dlnGanTruongPhong,
   'GET  /api/dulieunen/chuc-danh':      dlnDanhSachChucDanh,

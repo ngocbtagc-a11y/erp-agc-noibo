@@ -162,9 +162,10 @@ export const danhSachPhongBan = async (env) => {
               nào trống: đo trên dữ liệu thật 06/09/2026 ra Kho Vận 17 người còn
               Kinh Doanh - MKT 0 người, thứ không ai thấy khi đọc danh sách phẳng. */
            (SELECT COUNT(*) FROM nhan_su n
-             WHERE n.phong_ban_id = pb.id AND n.dang_lam = 1) AS so_nguoi
+             WHERE n.phong_ban_id = pb.id AND n.dang_lam = 1) AS so_nguoi,
+           pb.thu_tu, pb.cha_id
       FROM phong_ban pb LEFT JOIN nhan_su ns ON ns.id = pb.truong_phong_id
-     ORDER BY pb.hoat_dong DESC, pb.ten
+     ORDER BY pb.hoat_dong DESC, COALESCE(pb.thu_tu, 9999), pb.ten
   `).all();
   return json({ ds: results || [] });
 };
@@ -413,3 +414,71 @@ export async function tinhTrangSanSang(env) {
 
   return json({ muc, viec_tiep_theo: viecTiepTheo });
 }
+
+/* ==========================================================================
+   SẮP XẾP LẠI SƠ ĐỒ — nhận kết quả kéo thả
+   ---------------------------------------------------------------------------
+   Sếp Ngọc 06/09/2026: kéo thả để thiết kế lại sơ đồ tổ chức.
+
+   Nhận CẢ SƠ ĐỒ một lần, không nhận từng thao tác lẻ. Kéo một hộp thường làm
+   đổi thứ tự của mấy hộp bên cạnh; gửi từng cái một thì có lúc nửa chừng mạng
+   rớt và sơ đồ mắc kẹt ở trạng thái dở dang, không ai biết đúng sai.
+
+   CHỐNG VÒNG LẶP: kéo Ban Giám đốc vào trong chính phòng con của nó thì sơ đồ
+   thành vòng tròn — truy vấn cây sẽ chạy mãi không dừng. Kiểm bằng cách đi
+   ngược lên gốc trước khi ghi; gặp lại chính mình thì từ chối cả lệnh.
+   ========================================================================== */
+export const sapXepPhongBan = async (env, phien, body) => {
+  const chan = batBuocToChuc(phien);
+  if (chan) return chan;
+
+  const ds = Array.isArray(body?.ds) ? body.ds : null;
+  if (!ds || !ds.length) return loi('Không có gì để sắp xếp');
+  if (ds.length > 200) return loi('Sơ đồ dài bất thường, không nhận');
+
+  /* ⚠️ KIỂM VÒNG LẶP DỰA TRÊN CÂY THẬT TRONG DATABASE, không dựa vào danh sách
+     trình duyệt gửi lên.
+
+     Bản đầu tôi cho trình duyệt gửi CẢ sơ đồ mỗi lần đổi một hộp, rồi kiểm vòng
+     lặp trong chính danh sách đó. Đo ra hỏng ngay: bản chụp trong bộ nhớ trình
+     duyệt cũ hơn database, nên đổi một phòng lại GHI ĐÈ cấp cha của phòng khác
+     — chỉ đổi id 3 mà id 4 cũng bị kéo theo.
+
+     Giờ trình duyệt chỉ gửi ĐÚNG dòng vừa đổi, còn máy chủ tự đọc cây hiện tại
+     để soi vòng lặp. Máy chủ là nơi duy nhất biết sự thật mới nhất. */
+  const { results: hienCo } = await env.DB
+    .prepare('SELECT id, cha_id FROM phong_ban').all();
+  const chaHienCo = new Map((hienCo || []).map(r => [Number(r.id), r.cha_id == null ? null : Number(r.cha_id)]));
+
+  for (const m of ds) {
+    const id = Number(m.id);
+    if (!Number.isInteger(id) || !chaHienCo.has(id)) return loi('Mã phòng ban không hợp lệ');
+    const cha = (m.cha_id === null || m.cha_id === undefined || m.cha_id === '') ? null : Number(m.cha_id);
+    if (cha !== null && !chaHienCo.has(cha)) return loi('Mã phòng ban cấp trên không hợp lệ');
+    if (cha === id) return loi('Một phòng ban không thể trực thuộc chính nó');
+    chaHienCo.set(id, cha);          // áp thay đổi lên bản đồ rồi mới soi
+  }
+
+  for (const [id] of chaHienCo) {
+    const daQua = new Set([id]);
+    let cha = chaHienCo.get(id);
+    while (cha !== null && cha !== undefined) {
+      if (daQua.has(cha)) return loi('Sắp xếp này tạo thành vòng tròn — một phòng ban vòng lại nằm dưới chính nó');
+      daQua.add(cha);
+      cha = chaHienCo.get(cha);
+    }
+  }
+
+  /* Chỉ ghi những dòng gửi lên. thu_tu chỉ ghi khi có gửi — không tự đặt lại,
+     vì đặt lại là lặng lẽ xoá thứ tự người ta đã sắp. */
+  const lenh = ds.map(m => {
+    const cha = (m.cha_id === null || m.cha_id === undefined || m.cha_id === '') ? null : Number(m.cha_id);
+    return (m.thu_tu === undefined || m.thu_tu === null)
+      ? env.DB.prepare('UPDATE phong_ban SET cha_id = ? WHERE id = ?').bind(cha, Number(m.id))
+      : env.DB.prepare('UPDATE phong_ban SET cha_id = ?, thu_tu = ? WHERE id = ?')
+              .bind(cha, Number(m.thu_tu), Number(m.id));
+  });
+  await env.DB.batch(lenh);
+
+  return json({ ok: true, so: ds.length });
+};

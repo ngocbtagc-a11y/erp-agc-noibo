@@ -320,6 +320,9 @@ export const API = {
   dlnPhongBan: () => goi('/api/dulieunen/phong-ban'),
   dlnThemPhongBan: (ten, xacNhan) => goi('/api/dulieunen/phong-ban/them', { method: 'POST', body: JSON.stringify({ ten, xac_nhan: !!xacNhan }) }),
   dlnSuaPhongBan: (id, d) => goi('/api/dulieunen/phong-ban/sua', { method: 'POST', body: JSON.stringify({ id, ...d }) }),
+  dlnSapXepPhongBan: (ds) => goi('/api/dulieunen/phong-ban/sap-xep', {
+    method: 'POST', body: JSON.stringify({ ds })
+  }),
   dlnGanTruongPhong: (id, truongPhongId) => goi('/api/dulieunen/phong-ban/gan-truong-phong', { method: 'POST', body: JSON.stringify({ id, truong_phong_id: truongPhongId }) }),
   dlnKhoaPhongBan: (id, trangThai) => goi('/api/dulieunen/phong-ban/khoa', { method: 'POST', body: JSON.stringify({ id, trang_thai: trangThai }) }),
 
