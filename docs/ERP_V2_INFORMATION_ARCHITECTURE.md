@@ -1,5 +1,13 @@
 # ERP V2 — Information Architecture (theo 4 phòng ban thật)
 
+> ⚠️ **PHẦN CẤU TRÚC MENU TRONG TÀI LIỆU NÀY ĐÃ LỖI THỜI (06/09/2026).**
+> Sơ đồ cơ cấu tổ chức chính thức (Phụ lục 01, QĐ-AGC 2026) là **2 phòng**,
+> không phải 4 — Kho vận nay là một nhóm thuộc Phòng Vận hành và Hỗ trợ.
+> Điều hướng thật đang chạy theo
+> [IA-DIEU-HUONG-THEO-PHONG-BAN.md](./IA-DIEU-HUONG-THEO-PHONG-BAN.md).
+> Các phần phân tích khác trong tài liệu này (Dữ liệu nền gom sai, quyền sở
+> hữu Sản phẩm/SKU…) vẫn còn giá trị, giữ lại để tra.
+
 Tài liệu thiết kế, chưa code. Cấu trúc dưới đây bám theo **4 phòng ban thật
 Sếp đã tự nhập và khoá trong Dữ liệu nền** (không phải mô hình doanh nghiệp
 lớn lý thuyết):

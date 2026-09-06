@@ -77,25 +77,109 @@ function layMocNoi(ten, quyenCan) {
   return null;
 }
 
-/* ---- Danh mục tab -------------------------------------------------------
-   "nhom" = nhóm cha hiện trên sidebar, bám theo 4 phòng ban thật của công ty
-   (xem docs/ERP_V2_INFORMATION_ARCHITECTURE.md). null = không có nhóm cha,
-   hiện ngay đầu sidebar (dùng chung mọi vai trò). */
+/* ==========================================================================
+   THANH ĐIỀU HƯỚNG — bám ĐÚNG sơ đồ cơ cấu tổ chức (Phụ lục 01, QĐ 2026)
+
+     GIÁM ĐỐC — điều hành chung
+       ├─ PHÒNG KINH DOANH VÀ PHÁT TRIỂN THỊ TRƯỜNG  (GĐ trực tiếp phụ trách)
+       │    ├─ Nhóm Marketing – Bán hàng
+       │    └─ Nhóm CSKH và Phát triển cung ứng
+       └─ PHÒNG VẬN HÀNH VÀ HỖ TRỢ                   (PGĐ trực tiếp phụ trách)
+            ├─ Nhóm Kế toán – Tài chính
+            ├─ Nhóm HCNS – Admin
+            └─ Nhóm Kho vận – Sản xuất
+
+   ĐỔI GÌ SO VỚI TRƯỚC (Sếp Ngọc chốt 06/09/2026, nguyên văn: "đừng ngồi nhét
+   quá nhiều dữ liệu vào cùng 1 tab, ưu tiên trải nghiệm người dùng, dễ tìm,
+   dễ làm"):
+   - Tab "Kinh doanh" trước đây nhét 4 màn (Vận hành sàn · Sản phẩm · R&D ·
+     CSKH) sau một dải nút nhỏ mà chỉ ai biết mới bấm. Nay MỖI MÀN LÀ MỘT MỤC
+     RIÊNG trên thanh bên — nhìn là thấy, không phải mò.
+   - Nhóm cha đổi từ 4 phòng cũ sang ĐÚNG 2 phòng trong sơ đồ tổ chức.
+   - Thêm 3 màn Tổng quan (công ty · Kinh doanh · Vận hành), hiện theo quyền.
+
+   CÁCH HOẠT ĐỘNG — đọc kỹ trước khi sửa:
+     id    : mã mục trên thanh bên (DUY NHẤT). Không nhất thiết là tên màn.
+     man   : id màn thật `#v-<man>` sẽ bật. Bỏ trống thì lấy luôn `id`.
+     pane  : mở đúng màn con bên trong (dải `#kdSeg`). Bỏ trống thì không đụng.
+     quyen : khoá quyền cần có. Bỏ trống thì lấy luôn `man`.
+     hien  : hàm tự quyết có hiện không — dùng cho 3 màn Tổng quan (chúng
+             KHÔNG có khoá quyền riêng trong `src/quyen.js`; hiện hay không
+             suy ra từ quyền chức năng người đó đã có. Nhờ vậy KHÔNG phải
+             đụng vào bảng phân quyền vừa làm lại hôm 04/09).
+
+   ⚠️ 3 màn Tổng quan chỉ ĐỌC, và đọc qua đúng các API cũ vốn đã tự kiểm
+   quyền ở máy chủ. Có ai đó ép mở được màn cũng không lấy thêm được gì —
+   API sẽ trả 403 và thẻ chỉ trống, không rò dữ liệu.
+   ========================================================================== */
+const I = {
+  muctieu:  'M3 12l9-9 9 9M5 10v10h14V10',
+  lichsu:   'M12 8v4l3 3M21 12a9 9 0 11-9-9 9 9 0 019 9z',
+  danhba:   'M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8',
+  gopy:     'M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z',
+  toanCanh: 'M3 3v18h18M7 16l4-6 4 3 5-8',
+  bieuDo:   'M23 6l-9.5 9.5-5-5L1 18M17 6h6v6',
+  ketNoi:   'M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71',
+  cskh:     'M18 8a6 6 0 00-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0',
+  hopHang:  'M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16zM3.27 6.96L12 12.01l8.73-5.05M12 22.08V12',
+  binh:     'M9 2v6l-3 5v7a2 2 0 002 2h8a2 2 0 002-2v-7l-3-5V2M9 2h6M6 13h12',
+  nhanSu:   'M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75',
+  tien:     'M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6',
+  caTap:    'M20 7h-3V6a3 3 0 00-3-3h-4a3 3 0 00-3 3v1H4a1 1 0 00-1 1v11a2 2 0 002 2h14a2 2 0 002-2V8a1 1 0 00-1-1zM9 6a1 1 0 011-1h4a1 1 0 011 1v1H9V6z',
+  lich:     'M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V6a2 2 0 012-2z',
+  hoSo:     'M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8zM14 2v6h6M16 13H8M16 17H8M10 9H8',
+  banhRang: 'M12 15a3 3 0 100-6 3 3 0 000 6zM19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-2.82 1.17V21a2 2 0 01-4 0v-.09A1.65 1.65 0 006 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.6 14a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 7.6a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z'
+};
+
+/* Ai được thấy màn Tổng quan nào — suy từ quyền chức năng đã có, không đẻ
+   khoá quyền mới. Trưởng phòng thật (phong_ban_quan_ly) cũng được thấy
+   Tổng quan phòng dù vai trò hệ thống chỉ là "người dùng" — đúng bài học
+   Rule D2 đã ghi trong ERP-CONSTITUTION.md. */
+const coQuyenNao = (q, ...ds) => ds.some(x => q.includes(x));
+const laTruongPhong = () => (TOI.phong_ban_quan_ly || []).length > 0;
+
 const TAB = [
-  { id: 'tongquan',  ten: 'Trạm Mục Tiêu', nhom: null, icon: 'M3 12l9-9 9 9M5 10v10h14V10' },
-  { id: 'lichsuviec', ten: 'Lịch sử làm việc', nhom: null, icon: 'M12 8v4l3 3M21 12a9 9 0 11-9-9 9 9 0 019 9z' },
-  { id: 'danhba',    ten: 'Danh bạ',    nhom: null, icon: 'M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8' },
-  { id: 'gopy',      ten: 'Góp ý ERP',  nhom: null, icon: 'M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z' },
-  { id: 'kinhdoanh', ten: 'Kinh doanh', nhom: 'Kinh doanh & MKT', icon: 'M23 6l-9.5 9.5-5-5L1 18M17 6h6v6' },
-  { id: 'donhoan',   ten: 'Kết nối sàn', nhom: 'Kinh doanh & MKT', icon: 'M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71' },
-  { id: 'khovan',    ten: 'Kho vận',    nhom: 'Kho vận & Sản xuất', icon: 'M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16zM3.27 6.96L12 12.01l8.73-5.05M12 22.08V12' },
-  { id: 'nhansu',    ten: 'Nhân sự',    nhom: 'Support', icon: 'M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75' },
-  { id: 'ketoan',    ten: 'Kế toán',    nhom: 'Support', icon: 'M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6' },
-  { id: 'taisan',    ten: 'Tài sản',    nhom: 'Support', icon: 'M20 7h-3V6a3 3 0 00-3-3h-4a3 3 0 00-3 3v1H4a1 1 0 00-1 1v11a2 2 0 002 2h14a2 2 0 002-2V8a1 1 0 00-1-1zM9 6a1 1 0 011-1h4a1 1 0 011 1v1H9V6z' },
-  { id: 'xepca',     ten: 'Xếp ca',     nhom: 'Support', icon: 'M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V6a2 2 0 012-2z' },
-  { id: 'khotailieu', ten: 'Kho tài liệu', nhom: 'Quản trị doanh nghiệp', icon: 'M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8zM14 2v6h6M16 13H8M16 17H8M10 9H8' },
-  { id: 'quantri',   ten: 'Quản trị',   nhom: 'Quản trị doanh nghiệp', icon: 'M12 15a3 3 0 100-6 3 3 0 000 6zM19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-2.82 1.17V21a2 2 0 01-4 0v-.09A1.65 1.65 0 006 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.6 14a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 7.6a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z' }
+  /* ---- Dùng chung: ai cũng cần, không thuộc phòng nào ---- */
+  { id: 'tongquan',   ten: 'Trạm Mục Tiêu',     nhom: null, icon: I.muctieu },
+  { id: 'lichsuviec', ten: 'Lịch sử làm việc',  nhom: null, icon: I.lichsu },
+  { id: 'danhba',     ten: 'Danh bạ',           nhom: null, icon: I.danhba },
+  { id: 'gopy',       ten: 'Góp ý ERP',         nhom: null, icon: I.gopy },
+
+  /* ---- GIÁM ĐỐC — điều hành chung ---- */
+  { id: 'tqcongty',   ten: 'Tổng quan công ty', nhom: 'Điều hành chung', icon: I.toanCanh,
+    hien: () => TOI.la_admin },
+
+  /* ---- PHÒNG KINH DOANH VÀ PHÁT TRIỂN THỊ TRƯỜNG ---- */
+  { id: 'tqkinhdoanh', ten: 'Tổng quan phòng',  nhom: 'Kinh doanh & Phát triển thị trường', icon: I.toanCanh,
+    hien: q => coQuyenNao(q, 'kinhdoanh') },
+  // Nhóm Marketing – Bán hàng
+  { id: 'kdvanhanh',  ten: 'Vận hành sàn',      man: 'kinhdoanh', pane: 'vanhanh', quyen: 'kinhdoanh', icon: I.bieuDo },
+  { id: 'donhoan',    ten: 'Kết nối sàn',       icon: I.ketNoi },
+  // Nhóm CSKH và Phát triển cung ứng
+  { id: 'kdcskh',     ten: 'Chăm sóc khách hàng', man: 'kinhdoanh', pane: 'cskh',    quyen: 'kinhdoanh', icon: I.cskh },
+  { id: 'kdsanpham',  ten: 'Sản phẩm & Nguồn cung', man: 'kinhdoanh', pane: 'sanpham', quyen: 'kinhdoanh', icon: I.hopHang },
+  { id: 'kdrnd',      ten: 'R&D sản phẩm',      man: 'kinhdoanh', pane: 'rnd',     quyen: 'kinhdoanh', icon: I.binh },
+
+  /* ---- PHÒNG VẬN HÀNH VÀ HỖ TRỢ ---- */
+  { id: 'tqvanhanh',  ten: 'Tổng quan phòng',   nhom: 'Vận hành & Hỗ trợ', icon: I.toanCanh,
+    hien: q => coQuyenNao(q, 'ketoan', 'khovan', 'nhansu', 'taisan') || laTruongPhong() },
+  { id: 'ketoan',     ten: 'Kế toán – Tài chính', icon: I.tien },
+  { id: 'khovan',     ten: 'Kho vận – Sản xuất',  icon: I.hopHang },
+  { id: 'nhansu',     ten: 'Nhân sự',           icon: I.nhanSu },
+  { id: 'xepca',      ten: 'Xếp ca',            icon: I.lich },
+  { id: 'taisan',     ten: 'Tài sản',           icon: I.caTap },
+  { id: 'khotailieu', ten: 'Kho tài liệu',      icon: I.hoSo },
+
+  /* ---- Quản trị hệ thống ---- */
+  { id: 'quantri',    ten: 'Tài khoản & Phân quyền', nhom: 'Quản trị hệ thống', icon: I.banhRang }
 ];
+
+/* Khoá quyền của 1 mục (mục Tổng quan tự quyết bằng `hien`) */
+const quyenCuaMuc = t => t.quyen || t.man || t.id;
+/* Màn thật mà mục này bật */
+const manCuaMuc = t => t.man || t.id;
+/* Danh sách màn thật, không trùng — dùng để ẩn hết trước khi bật 1 màn */
+const MOI_MAN = [...new Set(TAB.map(manCuaMuc))];
 
 /* ---- Danh mục nền dùng chung (Phòng ban/Chức danh/Đơn vị tính) ----------
    Nạp 1 lần, dùng lại cho cả dropdown ở Nhân sự, Kho vận, VÀ 2 màn tự quản
@@ -1651,12 +1735,17 @@ $('#ngayHomNay').textContent = 'Hôm nay, ' +
 const nav = $('#dieuHuong');
 let nhomVuaVe = null;
 TAB.forEach(t => {
+  // Mục Tổng quan tự quyết bằng `hien`; mục thường theo khoá quyền.
+  const duocXem = t.hien ? t.hien(TOI.quyen) : TOI.quyen.includes(quyenCuaMuc(t));
+  // Mục Tổng quan KHÔNG hiện mờ khoá như tab thường — người không phụ trách
+  // mảng đó thì màn tổng quan chẳng có nghĩa gì, hiện ra chỉ thêm nhiễu.
+  if (!duocXem && t.hien) return;
+
   if (t.nhom && t.nhom !== nhomVuaVe) {
     nav.appendChild(el('div', 'sb-nhom', esc(t.nhom)));
   }
-  nhomVuaVe = t.nhom;
+  if (t.nhom) nhomVuaVe = t.nhom;
 
-  const duocXem = TOI.quyen.includes(t.id);
   const b = el('button', 'sb-item' + (duocXem ? '' : ' locked'));
   b.innerHTML =
     `<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ` +
@@ -1672,24 +1761,41 @@ TAB.forEach(t => {
 });
 
 function moTab(id) {
-  if (!TOI.quyen.includes(id)) return;
+  const t = TAB.find(x => x.id === id);
+  if (!t) return;
+  const duocXem = t.hien ? t.hien(TOI.quyen) : TOI.quyen.includes(quyenCuaMuc(t));
+  if (!duocXem) return;
 
-  TAB.forEach(t => {
-    const v = document.getElementById('v-' + t.id);
-    if (v) v.hidden = (t.id !== id);
+  // Ẩn MỌI màn thật rồi bật đúng 1 màn. Phải duyệt theo danh sách MÀN
+  // (MOI_MAN), KHÔNG theo id mục — nhiều mục cùng trỏ về một màn (Vận hành
+  // sàn · CSKH · Sản phẩm · R&D đều là màn `kinhdoanh`), duyệt theo id mục
+  // sẽ tự ẩn mất chính màn vừa bật.
+  const man = manCuaMuc(t);
+  MOI_MAN.forEach(m => {
+    const v = document.getElementById('v-' + m);
+    if (v) v.hidden = (m !== man);
   });
 
   document.querySelectorAll('.sb-item[data-tab]').forEach(b => {
     b.classList.toggle('active', b.dataset.tab === id);
   });
 
-  const t = TAB.find(x => x.id === id);
-  $('#tieuDe').textContent = t ? t.ten : '';
+  // Mục có màn con thì mở đúng màn con đó. Bấm thẳng vào nút của dải `#kdSeg`
+  // để dùng lại nguyên bộ chuyển màn đã có, không viết logic ẩn/hiện thứ hai
+  // (Rule 5 — cách này đã có tiền lệ ở chỗ mở đơn cần đối soát từ thông báo).
+  if (t.pane) {
+    const nut = document.querySelector(`#kdSeg .seg-nut[data-kd="${t.pane}"]`);
+    if (nut) nut.click();
+  }
+
+  $('#tieuDe').textContent = t.ten;
 
   /* Màn này lúc nãy đang ẩn nên đài cho NGỦ thay vì gọi máy chủ. Mở ra là
      đánh thức — người dùng chuyển tab sang phải thấy số MỚI, không phải số
      của lúc mở trang. Màn nào không ngủ thì hàm này không tốn gì cả. */
   lamMoiManVuaMo();
+  // Màn Tổng quan tự nạp lại mỗi lần mở (số liệu điều hành phải mới)
+  if (man.startsWith('tq')) goiMocNoi('LAM_MOI_TONGQUAN', null, man);
 
   dongThanhBen();
   window.scrollTo(0, 0);
@@ -2796,7 +2902,7 @@ async function veTongQuanTheoVaiTro() {
             ? `${t.so_don} đơn`
             : `${t.so_don} đơn · ${lech >= 0 ? '+' : ''}${lech}% so với giờ này hôm qua`,
           dir: lech === null ? '' : (lech < 0 ? 'down' : 'up'),
-          onClick: () => moTab('kinhdoanh')
+          onClick: () => moTab('kdvanhanh')
         });
       }
     } catch (e) { console.error('Tổng quan 2 sàn (Home):', e); }
@@ -5933,6 +6039,254 @@ if (TOI.quyen.includes('nhansu')) {
 }
 
 /* -- Kinh doanh -- */
+/* ==========================================================================
+   BA MÀN TỔNG QUAN — Công ty · Kinh doanh · Vận hành
+   Sếp Ngọc chốt 06/09/2026: "Phòng kinh doanh có 1 dashboard, Phòng vận hành
+   có 1 dashboard vì đang có người chịu trách nhiệm, công ty có 1 dashboard
+   tổng và dựa trên sự phân quyền chức năng cho từng người để hiển thị".
+
+   BA NGUYÊN TẮC KHI SỬA KHỐI NÀY:
+   1. KHÔNG viết API mới. Mọi con số ghép từ đúng các API nghiệp vụ đang chạy
+      (Rule 5). Nhờ vậy số trên tổng quan KHÔNG BAO GIỜ lệch số trong màn
+      nghiệp vụ — vì là cùng một nguồn, không phải hai đường tính.
+   2. Người xem thiếu quyền mảng nào thì BỎ HẲN mảng đó, không hiện thẻ rỗng.
+      Máy chủ vẫn tự chặn; đây chỉ là cho đỡ nhiễu mắt.
+   3. Mỗi thẻ/cảnh báo phải bấm được về đúng chỗ xử lý (Rule D5 — dashboard
+      không được là ngõ cụt).
+   ========================================================================== */
+async function khoiDongTongQuan() {
+  const coQ = (...ds) => ds.some(x => TOI.quyen.includes(x));
+  // Lấy dữ liệu mà KHÔNG cho 1 API hỏng kéo sập cả màn: thiếu mảng nào thì
+  // mảng đó vắng mặt, phần còn lại vẫn hiện.
+  const thu = async (dieuKien, f) => {
+    if (!dieuKien) return null;
+    try { return await f(); } catch (e) { console.error('Tổng quan:', e); return null; }
+  };
+  const pct = (nay, truoc) => (truoc ? Math.round((nay - truoc) / truoc * 100) : null);
+  const kemPct = p => (p === null ? '—' : `${p >= 0 ? '+' : ''}${p}%`);
+  const diToi = id => () => moTab(id);
+
+  /* ---------- Số liệu dùng lại cho nhiều màn (nạp 1 lần mỗi lần mở) ------- */
+  async function soLieuKinhDoanh() {
+    const [kenh, doiSoat, huy] = await Promise.all([
+      thu(coQ('kinhdoanh'), () => API.kdTongQuanKenh('thang_nay')),
+      thu(coQ('donhoan'),   () => API.kdCanDoiSoat()),
+      thu(coQ('kinhdoanh'), () => API.kdDonHangHuy())
+    ]);
+    return { kenh, doiSoat, huy };
+  }
+  async function soLieuVanHanh() {
+    const [kho, traSoat, hangHong, taiSan] = await Promise.all([
+      thu(coQ('khovan', 'kinhdoanh'), () => API.khoSanPham()),
+      thu(coQ('ketoan'),  () => API.ktCanTraSoat()),
+      thu(coQ('ketoan'),  () => API.ktHangHong()),
+      thu(coQ('taisan'),  () => API.taiSanDanhSach())
+    ]);
+    return { kho, traSoat, hangHong, taiSan };
+  }
+
+  /* ---------- Thẻ kho dùng chung cho Vận hành và Công ty ------------------ */
+  function theKho(kho) {
+    if (!kho) return [];
+    const ds = kho.san_pham || [];
+    const duoiMin = ds.filter(s => s.trang_thai === 'sap_het' || s.trang_thai === 'het').length;
+    const canHan = ds.filter(s => s.trang_thai === 'can_han').length;
+    const the = [
+      { k: 'Mã hàng đang bán', v: tienVN(ds.length), d: 'Trong danh mục kho', onClick: diToi('khovan') },
+      { k: 'Dưới mức tối thiểu', v: tienVN(duoiMin), d: duoiMin ? 'Cần nhập bổ sung' : 'Ổn',
+        dir: duoiMin ? 'down' : '', onClick: diToi('khovan') },
+      { k: 'Sắp hết hạn (≤30n)', v: tienVN(canHan), d: canHan ? 'Ưu tiên xả hàng' : 'Không có',
+        dir: canHan ? 'down' : '', onClick: diToi('khovan') }
+    ];
+    // Giá trị tồn chỉ hiện với người có quyền giá vốn — cùng một luật đã áp
+    // ở tab Kho vận, KHÔNG nới lỏng ở màn tổng quan (đây là ranh giới cứng).
+    if (kho.xem_gia_von && kho.tong_gia_tri_ton != null) {
+      the.push({ k: 'Giá trị tồn kho', v: tienVN(kho.tong_gia_tri_ton) + ' đ', d: 'Theo giá nhập gần nhất' });
+    }
+    return the;
+  }
+
+  /* ====================== TỔNG QUAN PHÒNG KINH DOANH ====================== */
+  async function veKinhDoanh() {
+    const { kenh, doiSoat, huy } = await soLieuKinhDoanh();
+    const the = [], cb = [], loiTat = [];
+
+    if (kenh && kenh.co_bang) {
+      const t = kenh.tong;
+      const p = pct(t.doanh_thu, t.truoc_doanh_thu);
+      const duSo = t.truoc_du_du_lieu !== false;
+      the.push({ k: 'Doanh thu tạm tính tháng này', v: tienVN(t.doanh_thu) + ' đ',
+        d: duSo && p !== null ? `${kemPct(p)} so với cùng kỳ tháng trước` : 'Chưa đủ dữ liệu để so sánh',
+        dir: duSo && p !== null ? (p < 0 ? 'down' : 'up') : '',
+        onClick: diToi('kdvanhanh') });
+      the.push({ k: 'Đơn đặt tháng này', v: tienVN(t.so_don), d: 'Cả 2 sàn', onClick: diToi('kdvanhanh') });
+      if (t.gmv > 0) {
+        const mat = t.tien_huy + t.tien_hoan;
+        const tl = Math.round(mat / t.gmv * 100);
+        the.push({ k: 'Hủy + Hoàn', v: tienVN(mat) + ' đ', d: `${tl}% giá trị đơn đặt`,
+          dir: tl >= 10 ? 'down' : '', onClick: diToi('kdvanhanh') });
+        if (tl >= 10) cb.push({ m: 'warn', t: 'Hủy/Hoàn',
+          b: `Mất ${tl}% giá trị đơn vì hủy và hoàn`,
+          s: `${tienVN(mat)} đ trên tổng ${tienVN(t.gmv)} đ — mở Vận hành sàn để xem chi tiết`,
+          onClick: diToi('kdvanhanh') });
+      }
+      if (duSo && p !== null && p <= -20) cb.push({ m: 'danger', t: 'Doanh thu',
+        b: `Doanh thu tháng này đang thấp hơn cùng kỳ ${Math.abs(p)}%`,
+        s: 'Mở Vận hành sàn để xem sàn nào kéo xuống', onClick: diToi('kdvanhanh') });
+      // Sàn im lặng hẳn là tín hiệu xấu nhất, phải nói riêng
+      (kenh.kenh || []).forEach(k => {
+        if (k.so_don === 0 && k.truoc_so_don > 0 && k.truoc_du_du_lieu !== false) {
+          cb.push({ m: 'danger', t: k.nguon === 'tiktok' ? 'TikTok Shop' : 'Shopee',
+            b: `Không có đơn nào tháng này`,
+            s: 'Kiểm tra kết nối sàn hoặc gian hàng có bị khoá không', onClick: diToi('donhoan') });
+        }
+      });
+    }
+
+    const soDoiSoat = doiSoat ? (doiSoat.can_doi_soat || []).length : null;
+    if (soDoiSoat !== null) {
+      the.push({ k: 'Đơn chờ đối soát', v: tienVN(soDoiSoat),
+        d: soDoiSoat ? 'Vận hành sàn cần phân loại' : 'Đã xử lý hết',
+        dir: soDoiSoat ? 'down' : '', onClick: diToi('kdvanhanh') });
+      if (soDoiSoat > 0) cb.push({ m: soDoiSoat > 20 ? 'danger' : 'warn', t: 'Đối soát',
+        b: `${soDoiSoat} đơn hoàn đang chờ phân loại`,
+        s: 'Bấm để mở màn Vận hành sàn', onClick: diToi('kdvanhanh') });
+    }
+    if (huy && huy.co_bang) {
+      const n = (huy.don_huy || []).length;
+      the.push({ k: 'Đơn bị hủy tháng này', v: tienVN(n), d: 'Đã đóng gói rồi mới hủy',
+        dir: n ? 'down' : '', onClick: diToi('kdvanhanh') });
+    }
+
+    loiTat.push(
+      { m: '', t: 'Marketing – Bán hàng', b: 'Vận hành sàn', s: 'Đối soát đơn hoàn, đơn hủy, tổng quan 2 sàn, xếp hạng SKU', onClick: diToi('kdvanhanh') },
+      { m: '', t: 'Marketing – Bán hàng', b: 'Kết nối sàn', s: 'Nối Shopee/TikTok, đồng bộ đơn', onClick: diToi('donhoan') },
+      { m: '', t: 'CSKH & Cung ứng', b: 'Chăm sóc khách hàng', s: 'Khách hoàn/hủy nhiều, xử lý khiếu nại', onClick: diToi('kdcskh') },
+      { m: '', t: 'CSKH & Cung ứng', b: 'Sản phẩm & Nguồn cung', s: 'Danh mục SKU, nhà cung cấp', onClick: diToi('kdsanpham') },
+      { m: '', t: 'CSKH & Cung ứng', b: 'R&D sản phẩm', s: 'Dự án phát triển sản phẩm mới', onClick: diToi('kdrnd') }
+    );
+
+    veThe('#tqkinhdoanh-the', the);
+    veDanhSach('#tqkinhdoanh-loi-tat', loiTat);
+    $('#tqkinhdoanh-cb-panel').hidden = !cb.length;
+    if (cb.length) veDanhSach('#tqkinhdoanh-canhbao', cb);
+    $('#tqkinhdoanh-ghichu').textContent =
+      'Doanh thu tạm tính = đơn đặt trong kỳ trừ hủy và hoàn đã phát sinh thật, chưa trừ phí sàn. ' +
+      'Định nghĩa đầy đủ xem docs/METRIC-DEFINITIONS.md.';
+  }
+
+  /* ======================= TỔNG QUAN PHÒNG VẬN HÀNH ======================= */
+  async function veVanHanh() {
+    const { kho, traSoat, hangHong, taiSan } = await soLieuVanHanh();
+    const the = [...theKho(kho)], cb = [], loiTat = [];
+
+    if (traSoat) {
+      const n = (traSoat.can_tra_soat || []).length;
+      the.push({ k: 'Chờ tra soát tiền', v: tienVN(n), d: n ? 'Kế toán cần đối chiếu' : 'Đã xong',
+        dir: n ? 'down' : '', onClick: diToi('ketoan') });
+      if (n > 0) cb.push({ m: n > 20 ? 'danger' : 'warn', t: 'Kế toán',
+        b: `${n} đơn chờ tra soát tiền`, s: 'Bấm để mở tab Kế toán', onClick: diToi('ketoan') });
+    }
+    if (hangHong) {
+      const n = (hangHong.hang_hong || []).length;
+      if (n > 0) cb.push({ m: 'warn', t: 'Kế toán',
+        b: `${n} đơn hàng hỏng chờ lập biên bản`, s: 'Bấm để mở tab Kế toán', onClick: diToi('ketoan') });
+    }
+    if (taiSan) {
+      const ds = taiSan.ds || [];
+      const hong = ds.filter(t => t.trang_thai === 'bao_hong').length;
+      const mat = ds.filter(t => t.trang_thai === 'mat').length;
+      the.push({ k: 'Tài sản đang quản lý', v: tienVN(ds.length),
+        d: hong || mat ? `${hong} báo hỏng · ${mat} mất` : 'Không có sự cố',
+        dir: hong || mat ? 'down' : '', onClick: diToi('taisan') });
+      if (hong > 0) cb.push({ m: 'warn', t: 'Tài sản',
+        b: `${hong} tài sản đang báo hỏng`, s: 'Bấm để mở tab Tài sản', onClick: diToi('taisan') });
+    }
+
+    if (coQ('ketoan'))     loiTat.push({ m: '', t: 'Kế toán – Tài chính', b: 'Kế toán', s: 'Tra soát tiền, hàng hỏng, biên bản', onClick: diToi('ketoan') });
+    if (coQ('khovan'))     loiTat.push({ m: '', t: 'Kho vận – Sản xuất', b: 'Kho vận', s: 'Nhập, xuất, tồn, lô hạn sử dụng', onClick: diToi('khovan') });
+    if (coQ('nhansu'))     loiTat.push({ m: '', t: 'HCNS – Admin', b: 'Nhân sự', s: 'Hồ sơ, hợp đồng, kỹ năng', onClick: diToi('nhansu') });
+    if (coQ('xepca'))      loiTat.push({ m: '', t: 'HCNS – Admin', b: 'Xếp ca', s: 'Mở ca, đăng ký, duyệt ca', onClick: diToi('xepca') });
+    if (coQ('taisan'))     loiTat.push({ m: '', t: 'HCNS – Admin', b: 'Tài sản', s: 'Cấp phát, thu hồi, tem QR', onClick: diToi('taisan') });
+    if (coQ('khotailieu')) loiTat.push({ m: '', t: 'HCNS – Admin', b: 'Kho tài liệu', s: 'Văn thư, giấy tờ công ty', onClick: diToi('khotailieu') });
+
+    veThe('#tqvanhanh-the', the);
+    veDanhSach('#tqvanhanh-loi-tat', loiTat);
+    $('#tqvanhanh-cb-panel').hidden = !cb.length;
+    if (cb.length) veDanhSach('#tqvanhanh-canhbao', cb);
+    $('#tqvanhanh-ghichu').textContent =
+      'Màn này chỉ hiện những mảng bạn được phân quyền — thiếu mảng nào nghĩa là chức vụ của bạn không phụ trách mảng đó.';
+  }
+
+  /* ========================= TỔNG QUAN CÔNG TY ========================== */
+  async function veCongTy() {
+    const [kenh, viec, mt, kho] = await Promise.all([
+      thu(coQ('kinhdoanh'), () => API.kdTongQuanKenh('thang_nay')),
+      thu(true,             () => API.cvTongQuanCongTy()),
+      thu(true,             () => API.mtDanhSach()),
+      thu(coQ('khovan', 'kinhdoanh'), () => API.khoSanPham())
+    ]);
+    const the = [], cb = [], loiTat = [];
+
+    if (kenh && kenh.co_bang) {
+      const t = kenh.tong;
+      const p = pct(t.doanh_thu, t.truoc_doanh_thu);
+      const duSo = t.truoc_du_du_lieu !== false;
+      the.push({ k: 'Doanh thu tạm tính tháng này', v: tienVN(t.doanh_thu) + ' đ',
+        d: duSo && p !== null ? `${kemPct(p)} so với cùng kỳ tháng trước` : `${tienVN(t.so_don)} đơn`,
+        dir: duSo && p !== null ? (p < 0 ? 'down' : 'up') : '',
+        onClick: diToi('tqkinhdoanh') });
+      (kenh.kenh || []).forEach(k => the.push({
+        k: k.nguon === 'tiktok' ? 'TikTok Shop' : 'Shopee', v: tienVN(k.doanh_thu) + ' đ',
+        d: `${tienVN(k.so_don)} đơn tháng này`, onClick: diToi('tqkinhdoanh') }));
+    }
+    if (viec) {
+      the.push({ k: 'Việc đang mở toàn công ty', v: tienVN(viec.dang_mo || 0),
+        d: `${tienVN(viec.qua_han || 0)} quá hạn · ${tienVN(viec.cho_duyet || 0)} chờ duyệt`,
+        dir: viec.qua_han ? 'down' : '', onClick: diToi('lichsuviec') });
+      if (viec.qua_han > 0) cb.push({ m: 'danger', t: 'Công việc',
+        b: `${viec.qua_han} việc đang quá hạn`, s: 'Bấm để mở Lịch sử làm việc', onClick: diToi('lichsuviec') });
+      if (viec.cho_duyet > 0) cb.push({ m: 'warn', t: 'Công việc',
+        b: `${viec.cho_duyet} việc chờ duyệt kết quả`, s: 'Bấm để mở Lịch sử làm việc', onClick: diToi('lichsuviec') });
+    }
+    if (mt) {
+      (mt.cong_ty || []).filter(m => m.trang_thai === 'dang_thuc_hien' && !m.da_chot)
+        .forEach(m => cb.push({ m: 'warn', t: 'Mục tiêu',
+          b: `Mục tiêu công ty "${m.tieu_de}" chưa chốt`,
+          s: 'Bấm để mở Trạm Mục Tiêu', onClick: diToi('tongquan') }));
+    }
+    if (kho && kho.xem_gia_von && kho.tong_gia_tri_ton != null) {
+      the.push({ k: 'Giá trị tồn kho', v: tienVN(kho.tong_gia_tri_ton) + ' đ', d: 'Theo giá nhập gần nhất',
+        onClick: diToi('tqvanhanh') });
+    }
+
+    loiTat.push(
+      { m: '', t: 'Phòng', b: 'Kinh doanh & Phát triển thị trường', s: 'Doanh thu 2 sàn, đối soát, CSKH, sản phẩm, R&D', onClick: diToi('tqkinhdoanh') },
+      { m: '', t: 'Phòng', b: 'Vận hành & Hỗ trợ', s: 'Kế toán, kho vận, nhân sự, tài sản', onClick: diToi('tqvanhanh') }
+    );
+
+    veThe('#tqcongty-the', the);
+    veDanhSach('#tqcongty-loi-tat', loiTat);
+    $('#tqcongty-cb-panel').hidden = !cb.length;
+    if (cb.length) veDanhSach('#tqcongty-canhbao', cb);
+    $('#tqcongty-ghichu').textContent =
+      'Mọi con số ở đây lấy thẳng từ màn nghiệp vụ tương ứng, không tính lại đường thứ hai — nên không bao giờ lệch với số trong tab gốc.';
+  }
+
+  const VE = { tqcongty: veCongTy, tqkinhdoanh: veKinhDoanh, tqvanhanh: veVanHanh };
+  // moTab gọi vào đây mỗi lần mở 1 màn tổng quan — số điều hành phải là số
+  // MỚI, không phải số của lúc đăng nhập.
+  window.LAM_MOI_TONGQUAN = (man) => { const f = VE[man]; if (f) f().catch(e => console.error('Tổng quan:', e)); };
+}
+
+/* Chỉ nạp khi người này thật sự thấy ít nhất 1 màn Tổng quan — người không
+   phụ trách mảng nào thì mô-đun này cố ý không chạy, khỏi tốn lượt đọc. */
+if (TOI.la_admin || TOI.quyen.includes('kinhdoanh') ||
+    ['ketoan', 'khovan', 'nhansu', 'taisan'].some(x => TOI.quyen.includes(x)) ||
+    (TOI.phong_ban_quan_ly || []).length > 0) {
+  try { await khoiDongTongQuan(); } catch (e) { console.error('Tổng quan:', e); }
+}
+
 if (TOI.quyen.includes('kinhdoanh')) {
   // Chuyển màn Vận hành sàn / R&D (giống bộ pills của Kho vận)
   $('#kdSeg')?.addEventListener('click', e => {
@@ -7523,8 +7877,8 @@ if (TOI.shopee && TOI.shopee.xem) {
       const b = document.querySelector('#kvSeg .seg-nut[data-kv="donhoan"]'); if (b) b.click();
       if (window.LAM_MOI_DONHOAN) window.LAM_MOI_DONHOAN();
     } else if (it.dataset.loai === 'khieu_nai') {
-      moTab('kinhdoanh');
-      const b = document.querySelector('#kdSeg .seg-nut[data-kd="vanhanh"]'); if (b) b.click();
+      // moTab('kdvanhanh') tự mở luôn màn con Vận hành sàn — khỏi bấm tay nút dải
+      moTab('kdvanhanh');
       if (window.LAM_MOI_DOISOAT) window.LAM_MOI_DOISOAT();
     } else if (it.dataset.loai === 'day_ke_toan') {
       moTab('ketoan');
@@ -11211,5 +11565,10 @@ document.addEventListener('change', (e) => {
   new MutationObserver(quet).observe(document.body, { childList: true, subtree: true });
 })();
 
-/* ---- Mở tab đầu tiên người dùng được xem -------------------------------- */
-moTab(TOI.quyen[0]);
+/* ---- Mở màn đầu tiên người dùng được xem --------------------------------
+   KHÔNG dùng TOI.quyen[0]: đó là khoá QUYỀN, mà có khoá không phải mục điều
+   hướng nào cả ('chat', 'congviec', 'dulieunen'…) — rơi vào đó là màn trắng.
+   Lấy đúng mục ĐẦU TIÊN thật sự hiện trên thanh bên. */
+const mucDauTien = document.querySelector('.sb-item[data-tab]');
+if (mucDauTien) moTab(mucDauTien.dataset.tab);
+else console.error('Không có mục điều hướng nào hiện được — kiểm tra phân quyền tài khoản này.');

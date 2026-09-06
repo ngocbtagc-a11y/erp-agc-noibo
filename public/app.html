@@ -332,6 +332,62 @@
     <!-- ---------- Lịch sử làm việc — kho lưu trữ TOÀN CỤC mọi việc trong Trạm
          Mục Tiêu, ai làm gì, xong khi nào, kết quả ra sao. Sếp Ngọc yêu cầu
          21/08/2026, mở cho mọi vai trò xem (đúng tinh thần minh bạch MBOs). ---------- -->
+    <!-- ================= TỔNG QUAN CÔNG TY (Giám đốc / Admin) =================
+         Decision First — vấn đề cần quyết trước, không phải biểu đồ đẹp trước
+         (Dashboard Rule D2/D3, xem docs/ERP-CONSTITUTION.md). -->
+    <section class="view" id="v-tqcongty" hidden>
+      <div class="view-head">
+        <h3>Tổng quan công ty</h3>
+        <p>Bức tranh toàn công ty. Số liệu lấy trực tiếp từ các mảng nghiệp vụ — không nhập tay ở đâu cả.</p>
+      </div>
+      <div class="stats" id="tqcongty-the"></div>
+      <div class="panel" id="tqcongty-cb-panel" hidden>
+        <div class="panel-head"><h4>Cần chú ý</h4></div>
+        <div class="panel-body"><div class="list" id="tqcongty-canhbao"></div></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h4>Đi tới phòng ban</h4></div>
+        <div class="panel-body"><div class="list" id="tqcongty-loi-tat"></div></div>
+      </div>
+      <p class="hint" id="tqcongty-ghichu"></p>
+    </section>
+
+    <!-- ============ TỔNG QUAN PHÒNG KINH DOANH & PT THỊ TRƯỜNG ============ -->
+    <section class="view" id="v-tqkinhdoanh" hidden>
+      <div class="view-head">
+        <h3>Tổng quan phòng Kinh doanh &amp; Phát triển thị trường</h3>
+        <p>Marketing – Bán hàng · CSKH và Phát triển cung ứng. Bấm vào thẻ hoặc dòng cảnh báo để sang thẳng chỗ xử lý.</p>
+      </div>
+      <div class="stats" id="tqkinhdoanh-the"></div>
+      <div class="panel" id="tqkinhdoanh-cb-panel" hidden>
+        <div class="panel-head"><h4>Cần chú ý</h4></div>
+        <div class="panel-body"><div class="list" id="tqkinhdoanh-canhbao"></div></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h4>Việc của phòng</h4></div>
+        <div class="panel-body"><div class="list" id="tqkinhdoanh-loi-tat"></div></div>
+      </div>
+      <p class="hint" id="tqkinhdoanh-ghichu"></p>
+    </section>
+
+    <!-- ================ TỔNG QUAN PHÒNG VẬN HÀNH & HỖ TRỢ ================ -->
+    <section class="view" id="v-tqvanhanh" hidden>
+      <div class="view-head">
+        <h3>Tổng quan phòng Vận hành &amp; Hỗ trợ</h3>
+        <p>Kế toán – Tài chính · HCNS – Admin · Kho vận – Sản xuất. Chỉ hiện những mảng bạn được phân quyền.</p>
+      </div>
+      <div class="stats" id="tqvanhanh-the"></div>
+      <div class="panel" id="tqvanhanh-cb-panel" hidden>
+        <div class="panel-head"><h4>Cần chú ý</h4></div>
+        <div class="panel-body"><div class="list" id="tqvanhanh-canhbao"></div></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h4>Việc của phòng</h4></div>
+        <div class="panel-body"><div class="list" id="tqvanhanh-loi-tat"></div></div>
+      </div>
+      <p class="hint" id="tqvanhanh-ghichu"></p>
+    </section>
+
     <section class="view" id="v-lichsuviec" hidden>
       <div class="view-head">
         <h3>Lịch sử làm việc</h3>
