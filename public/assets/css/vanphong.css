@@ -1248,3 +1248,49 @@ body.vp-dang-keo { cursor: col-resize; user-select: none; }
 }
 .vp-thu-tele:hover { border-color: var(--sage); color: var(--ink); }
 .vp-thu-tele:disabled { opacity: .6; cursor: wait; }
+
+/* ---------------------------------------------------------------------------
+   THANH KÉO BỀ NGANG MENU
+   ---------------------------------------------------------------------------
+   Một thanh kéo, cả ERP linh hoạt — vì --sidebar-w là biến duy nhất dùng cho
+   mọi màn. Đây là chỗ DUY NHẤT trong ERP có bố cục "hai vùng cạnh tranh nhau
+   chỗ" ngoài văn phòng ảo; các màn khác chỉ có một bảng chiếm hết bề ngang,
+   gắn thanh kéo vào đó là thêm thứ để bấm nhầm chứ không thêm giá trị.
+
+   Nó chữa một khó chịu thấy được ngay: nhãn menu tiếng Việt dài
+   ("Kinh doanh & Phát triển thị trường", "Sản phẩm & Nguồn cung") bị xuống
+   dòng ở bề ngang mặc định 244px.
+
+   Nằm ĐÈ lên mép phải thanh bên chứ không chiếm chỗ: thanh bên là `position:
+   fixed` nên thêm một cột vào đó là phải tính lại margin của cả vùng nội dung.
+   --------------------------------------------------------------------------- */
+.sb-keo {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  width: 7px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 41;
+  touch-action: none;
+}
+.sb-keo::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 2px;
+  width: 2px;
+  height: 46px;
+  margin-top: -23px;
+  border-radius: 2px;
+  background: transparent;
+  transition: background .15s ease, height .15s ease;
+}
+.sb-keo:hover::before,
+.sb-keo.dang-keo::before {
+  background: var(--sage);
+  height: 84px;
+  margin-top: -42px;
+}
+
+@media (max-width: 900px) { .sb-keo { display: none; } }

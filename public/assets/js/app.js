@@ -12,6 +12,7 @@
 
 import { API } from './api.js';
 import { veChibi, veChibiNguoi, veNoiThat, veQuayLeTan, veKhuVuc } from './chibi.js';
+import { ganThanhKeo, kep } from './keo-cot.js';
 import { tinhTrangThaiTB, veGiaoDienTB, hoanDuoc } from './tbd-trangthai.js';
 import { nenChayVongLap, nenDongDau } from './nhip-tim-chat.js';
 /* Nén ảnh dùng chung — CTL-0011 gộp 3 hàm về 1, CTL-0026 dời sang file riêng
@@ -11687,6 +11688,43 @@ document.addEventListener('change', (e) => {
    Nhịp 20 giây chỉ chạy khi tab này đang mở: người dùng ở tab khác mà nền vẫn
    gọi máy chủ 3 lần/phút thì tốn pin điện thoại và tốn lượt đọc database.
    ========================================================================== */
+
+/* ==========================================================================
+   KÉO ĐỔI BỀ NGANG MENU — áp cho TOÀN ERP
+   --------------------------------------------------------------------------
+   `--sidebar-w` là biến duy nhất dùng cho mọi màn, nên một thanh kéo là đủ cho
+   cả hệ thống. Đây cũng là chỗ DUY NHẤT ngoài văn phòng ảo có bố cục "hai vùng
+   cạnh tranh nhau chỗ" — các màn khác chỉ có một bảng chiếm hết bề ngang.
+
+   Chặn 190–360px: hẹp hơn 190 thì nhãn dài như "Kinh doanh & Phát triển thị
+   trường" vỡ vụn; rộng hơn 360 thì menu ăn hết chỗ của bảng số liệu.
+   ========================================================================== */
+const KHOA_MENU_RONG = 'agc_menu_rong';
+const MENU_MIN = 190, MENU_MAX = 360;
+
+(function ganKeoMenu() {
+  const tay = document.getElementById('sb-keo');
+  if (!tay) return;
+
+  const dat = px => {
+    const goc = document.documentElement;
+    if (px === undefined) {
+      return parseInt(getComputedStyle(goc).getPropertyValue('--sidebar-w'), 10) || 0;
+    }
+    const rong = kep(px, MENU_MIN, MENU_MAX);
+    goc.style.setProperty('--sidebar-w', rong + 'px');
+    return rong;
+  };
+
+  ganThanhKeo({
+    tay,
+    tinhTuChuot: e => e.clientX,       // menu dính mép trái nên toạ độ chuột CHÍNH LÀ bề ngang
+    dat,
+    khoaLuu: KHOA_MENU_RONG,
+    veMacDinh: () => document.documentElement.style.removeProperty('--sidebar-w')
+  });
+})();
+
 if (TOI.quyen.includes('vanphong')) {
   khoiDongVanPhong();
 }
@@ -12088,60 +12126,30 @@ async function khoiDongVanPhong() {
 
   function datChatRong(px) {
     const boCuc = $('.vp-bo-cuc');
-    if (!boCuc) return;
+    if (!boCuc) return 0;
+    // Gọi không tham số = đọc giá trị hiện tại (bộ dùng chung cần để lưu lại)
+    if (px === undefined) {
+      return parseInt(boCuc.style.getPropertyValue('--vp-chat-rong'), 10) || 0;
+    }
     const tong = boCuc.getBoundingClientRect().width;
     const tran = Math.min(CHAT_MAX, Math.max(CHAT_MIN, tong - SAN_MIN - 7));
-    const rong = Math.round(Math.min(tran, Math.max(CHAT_MIN, px)));
+    const rong = kep(px, CHAT_MIN, tran);
     boCuc.style.setProperty('--vp-chat-rong', rong + 'px');
     return rong;
   }
 
-  (function ganThanhKeo() {
+  (function ganKeoVanPhong() {
     const tay = $('#vp-keo');
     const boCuc = $('.vp-bo-cuc');
     if (!tay || !boCuc) return;
 
-    // Nhớ theo máy — mở lại vẫn đúng bề ngang mình đã chỉnh
-    try {
-      const cu = parseInt(localStorage.getItem(KHOA_CHAT_RONG) || '', 10);
-      if (cu > 0) datChatRong(cu);
-    } catch (e) { /* trình duyệt chặn localStorage thì dùng mặc định */ }
-
-    let dangKeo = false;
-
-    tay.addEventListener('pointerdown', e => {
-      dangKeo = true;
-      tay.setPointerCapture(e.pointerId);
-      tay.classList.add('dang-keo');
-      document.body.classList.add('vp-dang-keo');
-      e.preventDefault();
-    });
-
-    tay.addEventListener('pointermove', e => {
-      if (!dangKeo) return;
-      // Bề ngang chat = từ con trỏ tới mép phải của bố cục
-      const phai = boCuc.getBoundingClientRect().right;
-      datChatRong(phai - e.clientX);
-    });
-
-    const thoi = e => {
-      if (!dangKeo) return;
-      dangKeo = false;
-      try { tay.releasePointerCapture(e.pointerId); } catch (err) {}
-      tay.classList.remove('dang-keo');
-      document.body.classList.remove('vp-dang-keo');
-      try {
-        const rong = boCuc.style.getPropertyValue('--vp-chat-rong');
-        if (rong) localStorage.setItem(KHOA_CHAT_RONG, parseInt(rong, 10));
-      } catch (err) {}
-    };
-    tay.addEventListener('pointerup', thoi);
-    tay.addEventListener('pointercancel', thoi);
-
-    /* Bấm đúp về mặc định — kéo lỡ tay thành hẹp quá thì không phải mò lại */
-    tay.addEventListener('dblclick', () => {
-      boCuc.style.removeProperty('--vp-chat-rong');
-      try { localStorage.removeItem(KHOA_CHAT_RONG); } catch (e) {}
+    ganThanhKeo({
+      tay,
+      // Cột chat nằm bên PHẢI nên bề ngang của nó = từ con trỏ tới mép phải
+      tinhTuChuot: e => boCuc.getBoundingClientRect().right - e.clientX,
+      dat: datChatRong,
+      khoaLuu: KHOA_CHAT_RONG,
+      veMacDinh: () => boCuc.style.removeProperty('--vp-chat-rong')
     });
   })();
 
