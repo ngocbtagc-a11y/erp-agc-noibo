@@ -29,7 +29,9 @@
 
 .vp-bo-cuc {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 330px;
+  /* Chat 300px chứ không 330: mỗi pixel cắt ở đây là một pixel mặt bằng giữ
+     lại, mà mặt bằng mới là thứ cần bề ngang để xếp bốn buồng một hàng. */
+  grid-template-columns: minmax(0, 1fr) 300px;
   gap: 18px;
   align-items: start;
 }
@@ -43,8 +45,15 @@
      đè hàng giữa (đã dính đúng lỗi đó lúc dựng, đo ra chồng 38px). */
   /* Bốn hàng: Điều hành 13% · Trưởng phòng 38% và 63% · quầy lễ tân 88%.
      Thẻ cao 163px nên bốn hàng cộng khoảng hở cần tối thiểu ~684px. */
-  min-height: 820px;
-  aspect-ratio: 16 / 18;
+  /* Bốn hàng thẻ ~115px + khoảng hở. Trước để 820px vì thẻ cao 163px; thu nhỏ
+     thẻ rồi mà giữ 820 là chừa một khoảng trống vô ích, bắt người dùng cuộn
+     xuống mới thấy ô chat. */
+  /* TRẦN chiều cao là thứ quan trọng nhất ở đây. Chỉ đặt aspect-ratio thì màn
+     hình càng rộng sàn càng cao — đo ra 800px trên cửa sổ 985px, và người dùng
+     lại phải cuộn. Trần 660px giữ cả mặt bằng lẫn ô chat trong một màn. */
+  min-height: 520px;
+  max-height: 660px;
+  aspect-ratio: 16 / 13;
   border-radius: var(--r-lg);
   overflow: hidden;
   border: 1px solid var(--line);
@@ -82,12 +91,12 @@
 /* Buồng làm việc: bo tròn phía trên, chân đậm hơn để có cảm giác đứng trên sàn */
 .vp-phong-khung {
   position: relative;
-  width: 116px;
-  min-height: 88px;
+  width: 96px;
+  min-height: 70px;
   display: grid;
   align-items: end;
   justify-items: center;
-  padding: 12px 8px 8px;
+  padding: 8px 6px 6px;
   border-radius: 16px 16px 10px 10px;
   background: linear-gradient(180deg, var(--card) 0%, #f7f7f4 100%);
   border: 1px solid var(--line);
@@ -102,7 +111,7 @@
 .vp-phong.khoa .vp-phong-khung { opacity: .5; filter: grayscale(.6); }
 .vp-phong.khoa:hover { transform: translate(-50%, -50%); }
 
-.vp-phong-nguoi { width: 62px; }
+.vp-phong-nguoi { width: 46px; }
 .vp-phong-nguoi .chibi { width: 100%; height: auto; display: block; }
 
 /* Đồng nghiệp đang đứng trong phòng, xếp chồng nhau ở góc như ảnh nhóm */
@@ -146,10 +155,10 @@
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: var(--r-pill);
-  padding: 5px 13px;
+  padding: 3px 9px;
   box-shadow: var(--shadow-sm);
-  width: 132px;
-  max-width: 132px;
+  width: 108px;
+  max-width: 108px;
   box-sizing: border-box;
 }
 .vp-bien span {
@@ -157,14 +166,16 @@
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  min-height: 28px;
+  font-size: 9.5px;
+  line-height: 1.25;
+  min-height: 24px;
 }
 .vp-bien b {
   display: block;
   font-family: var(--serif);
-  font-size: 13.5px;
+  font-size: 12px;
   color: var(--ink);
-  line-height: 1.25;
+  line-height: 1.2;
 }
 .vp-bien span { font-size: 11px; color: var(--text-mute); }
 
@@ -375,13 +386,15 @@
    Kho và Vận hành sàn dùng ERP này trên điện thoại, nên mặt bằng phải co lại
    được mà vẫn bấm trúng cửa phòng. */
 
-@media (max-width: 980px) {
+/* Ngưỡng 900px chứ không 980: ở 980 thì cửa sổ cỡ vừa đã bị xếp một cột, đẩy ô
+   chat xuống dưới mặt bằng và bắt cuộn. */
+@media (max-width: 900px) {
   .vp-bo-cuc { grid-template-columns: 1fr; }
   /* 520px chứ không phải 430: ba hàng thẻ ở khổ này cao ~135px, cộng khoảng
      hở thì hàng dưới cùng tràn khỏi sàn nếu thấp hơn. */
-  .vp-san { min-height: 810px; aspect-ratio: 4 / 5; }
-  .vp-phong-khung { width: 104px; min-height: 92px; }
-  .vp-phong-nguoi { width: 62px; }
+  .vp-san { min-height: 560px; aspect-ratio: 4 / 3.6; }
+  .vp-phong-khung { width: 92px; min-height: 66px; }
+  .vp-phong-nguoi { width: 44px; }
   .vp-bien { max-width: 132px; padding: 4px 10px; }
   .vp-bien b { font-size: 12px; }
   .vp-bien span { font-size: 10px; }
@@ -490,7 +503,7 @@
 .vp-quay {
   position: absolute;
   transform: translate(-50%, -50%);
-  width: 188px;
+  width: 140px;
   z-index: 3;
 }
 
@@ -506,8 +519,8 @@
 
 /* Người đứng sau quầy: chibi nằm dưới, quầy vẽ đè lên nửa thân dưới */
 .vp-may-nguoi {
-  width: 76px;
-  margin-bottom: -34px;
+  width: 52px;
+  margin-bottom: -24px;
   position: relative;
   z-index: 1;
   transition: transform .18s ease;
@@ -526,13 +539,13 @@
 .vp-may:hover .vp-may-nguoi { transform: translateY(-4px); }
 
 .vp-bien-may {
-  margin-top: 7px;
-  width: 148px;
-  max-width: 148px;
+  margin-top: 5px;
+  width: 124px;
+  max-width: 124px;
   border-color: var(--sage-pale);
   background: linear-gradient(180deg, var(--card) 0%, #f4f6ef 100%);
 }
-.vp-bien-may b { font-size: 15px; }
+.vp-bien-may b { font-size: 13px; }
 
 /* Khổ hẹp: quầy co lại cho vừa, vẫn giữ dáng quầy */
 @media (max-width: 980px) {
@@ -638,11 +651,11 @@
 /* Hai trợ lý cấp trên ngồi hàng đầu — thẻ nhỉnh hơn một chút để cấp bậc đọc
    được ngay từ kích thước, không phải đọc chức danh mới biết. */
 .vp-phong[data-khoi="dieuhanh"] .vp-phong-khung {
-  width: 126px;
-  min-height: 96px;
+  width: 104px;
+  min-height: 78px;
   box-shadow: var(--shadow-lg, 0 6px 18px rgba(63, 77, 51, .16));
 }
-.vp-phong[data-khoi="dieuhanh"] .vp-phong-nguoi { width: 70px; }
+.vp-phong[data-khoi="dieuhanh"] .vp-phong-nguoi { width: 54px; }
 
 /* ---------------------------------------------------------------------------
    XƯỞNG ERP — Hồ Ly + Khỉ Đột đứng chung một buồng
@@ -869,3 +882,57 @@
 }
 
 @media (max-width: 620px) { .vp-day-tructhuoc { display: none; } }
+
+/* ---------------------------------------------------------------------------
+   HỎI MÂY — CỘT PHẢI, CAO CỐ ĐỊNH, CUỘN BÊN TRONG
+   ---------------------------------------------------------------------------
+   Sếp Ngọc 06/09/2026: "giao diện to quá cứ phải cuộn xuống dưới, thu nhỏ bớt
+   và cho chat sang bên phải".
+
+   Nguyên nhân thật đo được: khung chat cao 4.842px. Danh sách hội thoại không
+   có trần chiều cao nên nó dài thêm theo TỪNG tin nhắn — hỏi càng nhiều thì cả
+   trang càng dài, và mặt bằng bị đẩy tuột lên trên.
+
+   Chữa đúng chỗ: khung chat cao bằng mặt bằng, phần hội thoại cuộn BÊN TRONG
+   nó. Ô nhập luôn dính đáy, không bao giờ phải cuộn đi tìm.
+   --------------------------------------------------------------------------- */
+.vp-ben > .vp-hoi-khung {
+  display: flex;
+  flex-direction: column;
+  height: 660px;
+  max-height: calc(100vh - 150px);
+  position: sticky;
+  top: 12px;
+}
+.vp-ben > .vp-hoi-khung > .panel-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;          /* thiếu dòng này thì flex con không chịu co, và cuộn không bao giờ xuất hiện */
+  gap: 8px;
+}
+.vp-ben > .vp-hoi-khung #vp-chat {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scroll-behavior: smooth;
+  padding-right: 4px;
+}
+.vp-ben > .vp-hoi-khung .vp-nhap { flex: none; }
+.vp-ben > .vp-hoi-khung .vp-goi-y { flex: none; }
+
+/* Cột phải rộng hơn: 300px đủ cho danh sách việc, nhưng câu trả lời của trợ lý
+   thường dài — đọc trong ống 300px thì mỗi dòng được vài chữ, mỏi mắt. */
+@media (min-width: 901px) {
+  .vp-bo-cuc { grid-template-columns: minmax(0, 1fr) 380px; }
+}
+
+/* Khổ hẹp: xếp một cột, chat vẫn giới hạn chiều cao chứ không thả cho dài vô tận */
+@media (max-width: 900px) {
+  .vp-ben > .vp-hoi-khung {
+    height: auto;
+    max-height: none;
+    position: static;
+  }
+  .vp-ben > .vp-hoi-khung #vp-chat { max-height: 420px; overflow-y: auto; }
+}
