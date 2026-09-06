@@ -11,7 +11,7 @@
    ========================================================================== */
 
 import { API } from './api.js';
-import { veChibi, veChibiNguoi } from './chibi.js';
+import { veChibi, veChibiNguoi, veNoiThat, veQuayLeTan, veKhuVuc } from './chibi.js';
 import { tinhTrangThaiTB, veGiaoDienTB, hoanDuoc } from './tbd-trangthai.js';
 import { nenChayVongLap, nenDongDau } from './nhip-tim-chat.js';
 /* Nén ảnh dùng chung — CTL-0011 gộp 3 hàm về 1, CTL-0026 dời sang file riêng
@@ -11620,9 +11620,21 @@ async function khoiDongVanPhong() {
   function veMatBang() {
     // Mây đứng quầy giữa sảnh
     const may = duLieu.may;
+
+    // Nội thất vẽ TRƯỚC và nằm ở lớp nền — bàn ghế cây cối mà đè lên người thì
+    // che mất thứ duy nhất người dùng cần nhìn.
+    const lopKhu = $('#vp-khu-lop');
+    if (lopKhu) lopKhu.innerHTML = veKhuVuc();
+    const lopDo = $('#vp-do-lop');
+    if (lopDo) lopDo.innerHTML = veNoiThat();
+
+    // Mây đứng sau quầy, giữa hàng dưới, ngay chỗ người ta bước vào.
+    oQuay.style.left = may.vi_tri.x + '%';
+    oQuay.style.top  = may.vi_tri.y + '%';
     oQuay.innerHTML =
-      `<div class="vp-may" id="vp-may">
+      `<div class="vp-may" id="vp-may" title="Xem hồ sơ của Mây">
          <div class="vp-may-nguoi">${veChibi(may.chibi)}</div>
+         ${veQuayLeTan()}
          <div class="vp-bien vp-bien-may">
            <b>${esc(may.ten)}</b><span>${esc(may.chuc_danh)}</span>
          </div>
@@ -11635,6 +11647,9 @@ async function khoiDongVanPhong() {
       o.style.left = a.vi_tri.x + '%';
       o.style.top  = a.vi_tri.y + '%';
       o.dataset.agent = a.id;
+      // Màu thẻ theo khối — nhìn màu là biết phòng nào cùng khối với nhau,
+      // không phải đọc từng cái biển tên.
+      o.dataset.khoi = a.khoi || '';
 
       const huyHieu = a.viec_dang_mo
         ? `<span class="vp-huyhieu" title="${a.viec_dang_mo} việc đang mở">${a.viec_dang_mo}</span>`
@@ -11653,6 +11668,51 @@ async function khoiDongVanPhong() {
       o.addEventListener('click', () => moHoSo(a));
       lopPhong.appendChild(o);
     });
+
+    /* ---- Xưởng ERP: Hồ Ly + Khỉ Đột, trực thuộc phòng IT ----------------
+       Hai bạn này dựng chính cái ERP đang chạy. Cho hiện mặt để người dùng
+       biết ai làm ra thứ mình đang dùng — nhưng phải ghi rõ HỎI Ở ĐÂY HỌ
+       KHÔNG NGHE THẤY, vì họ chạy ngoài ERP (Claude Code / GitHub Actions),
+       không phải qua Mây. Thấy mặt mà tưởng hỏi được thì tệ hơn không hiện. */
+    const doiIT = duLieu.doi_it || [];
+    if (doiIT.length) {
+      const x = el('button', 'vp-phong vp-xuong');
+      x.style.left = '88%';
+      x.style.top  = '65%';
+      x.dataset.agent = 'xuong';
+      x.dataset.khoi = 'hotro';
+      x.innerHTML =
+        `<div class="vp-phong-khung vp-xuong-khung">
+           <div class="vp-xuong-doi">
+             ${doiIT.map(a => `<div class="vp-xuong-nguoi" title="${esc(a.ten)} — ${esc(a.chuc_danh)}">${veChibi(a.chibi)}</div>`).join('')}
+           </div>
+         </div>
+         <div class="vp-bien"><b>Xưởng ERP</b><span>${doiIT.map(a => esc(a.ten)).join(' · ')}</span></div>`;
+      x.title = 'Xem đội dựng ERP';
+      x.addEventListener('click', () => moHoSoXuong(doiIT, duLieu.doi_it_cach_goi));
+      lopPhong.appendChild(x);
+    }
+  }
+
+  /* Hồ sơ của cả xưởng — một khối, vì hai bạn này luôn làm việc theo cặp:
+     Hồ Ly viết đặc tả rồi soi lỗi, Khỉ Đột dựng theo đặc tả đó. */
+  function moHoSoXuong(doi, cachGoi) {
+    const than = doi.map(a => `
+      <div class="vp-hoso-nguoi">
+        <div class="vp-hoso-anh">${veChibi(a.chibi)}</div>
+        <div>
+          <h4>${esc(a.ten)}</h4>
+          <p class="vp-hoso-chuc">${esc(a.chuc_danh)}</p>
+          <p class="vp-hoso-mota">${esc(a.mo_ta)}</p>
+          <p class="vp-hoso-nhan">Làm được</p>
+          <ul>${(a.nang_luc?.lam_duoc || []).map(v => `<li>${esc(v)}</li>`).join('')}</ul>
+          <p class="vp-hoso-nhan vp-hoso-nhan-do">Không làm</p>
+          <ul>${(a.nang_luc?.khong_lam || []).map(v => `<li>${esc(v)}</li>`).join('')}</ul>
+        </div>
+      </div>`).join('');
+
+    moHoSoTho('Xưởng ERP', 'Đội dựng phần mềm, trực thuộc Trưởng phòng IT',
+      than + `<div class="vp-hoso-luu-y">${esc(cachGoi || '')}</div>`);
   }
 
   /* Làm nổi chibi đang được Mây giao việc */
@@ -11665,6 +11725,16 @@ async function khoiDongVanPhong() {
   }
 
   /* ---- Hồ sơ năng lực --------------------------------------------------- */
+
+  /* Mở hộp hồ sơ với nội dung tự do — dùng cho Xưởng ERP, nơi một hộp phải
+     chứa hai người chứ không phải một. */
+  function moHoSoTho(ten, chuc, thanHtml) {
+    $('#vp-hoso-ten').textContent = ten;
+    $('#vp-hoso-chuc').textContent = chuc;
+    $('#vp-hoso-chibi').innerHTML = '';
+    $('#vp-hoso-than').innerHTML = thanHtml;
+    hoSoNen.hidden = false;
+  }
 
   function moHoSo(a) {
     const nl = a.nang_luc || { lam_duoc: [], khong_lam: [], hoi_thu: [] };

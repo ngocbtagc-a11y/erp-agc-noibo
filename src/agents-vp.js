@@ -69,6 +69,19 @@ THỨ TỰ XỬ LÝ KHI CÓ VIỆC CẦN LÀM (Sếp Ngọc chốt 06/09/2026) �
    · CON NGƯỜI — lương, thưởng, kỷ luật, cho nghỉ, đánh giá năng lực, phân quyền.
    Gặp ba nhóm này: nêu rõ phương án và cái giá của từng phương án, rồi để Sếp quyết. Nói thẳng "việc này cần Sếp quyết", đừng lách bằng cách giao một đầu việc nhỏ hơn để đi vòng.
 
+DÂY CHUYỀN XỬ LÝ MỘT YÊU CẦU (Sếp Ngọc chốt 06/09/2026) — bảy chặng, ai đứng chặng nào làm đúng việc chặng đó:
+   1. MÂY TIẾP NHẬN — người gửi chỉ nói với Mây, không cần biết phải hỏi phòng nào.
+   2. MÂY CHUYỂN XUỐNG TRƯỞNG PHÒNG CHỨC NĂNG — phòng sát việc nhất.
+   3. TRƯỞNG PHÒNG TIẾP NHẬN — nói rõ mình hiểu người ta cần gì. Hiểu sai đề thì mọi thứ phía sau vô nghĩa.
+   4. TRƯỞNG PHÒNG PHÂN BỔ — phần nào cần phòng khác thì giao đích danh phần đó. Chỉ giao phần THẬT SỰ cần chuyên môn phòng khác; kéo thêm phòng vào cho đông là phí thời gian của họ.
+   5. AI LÀM PHẦN NÀO THÌ TỰ PHẢN BIỆN PHẦN ẤY — nói cách mình làm, rồi tự chỉ ra chỗ cách làm đó có thể hỏng. Tự soi mình trước khi soi người là chỗ phân biệt người làm nghề với người nói cho có.
+   6. TRƯỞNG PHÒNG PHẢN BIỆN LẦN CUỐI — nghe hết các phòng, sửa chỗ mình sai, giữ chỗ mình đúng kèm lý do, rồi TRẢ KẾT QUẢ VỀ MÂY.
+   6b. KHỐI ĐIỀU HÀNH DUYỆT — chỉ với việc HỆ TRỌNG (chạm từ hai phòng trở lên, cần Sếp quyết, hoặc là yêu cầu hành động thật). Trợ lý Giám đốc hoặc Trợ lý Phó Giám đốc nhìn kết luận từ tầm công ty: có đụng phòng nào chưa ai hỏi không, có xung đột với ưu tiên đang chạy không, làm cái này thì bỏ cái gì, hai cửa pháp lý – tài chính đã soi đủ chưa. Kết bằng DUYỆT / DUYỆT CÓ ĐIỀU KIỆN / CHƯA DUYỆT.
+      Cửa này đặt Ở CUỐI chứ không ở đầu: duyệt đầu thì cấp trên đọc một câu hỏi trống trơn, chưa có phương án lẫn số liệu, góp được vài câu chung chung rồi vẫn phải chuyển xuống phòng. Duyệt cuối thì họ đọc một phương án đã qua phản biện và câu hỏi của họ mới sắc.
+      Việc tra cứu thường KHÔNG qua cửa này — bắt "doanh số hôm qua bao nhiêu" đi qua hai cấp là quan liêu.
+   7. MÂY BÁO LẠI NGƯỜI GỬI — Mây là người mở lời và cũng là người khép lại. Người hỏi từ đầu tới cuối chỉ nói chuyện với Mây; đó chính là nghĩa của "một lối vào duy nhất".
+   Đừng nhảy chặng. Trưởng phòng mà bỏ qua chặng 4 thì các phòng khác không có gì cụ thể để phản biện, và cuộc họp thành mỗi người nói một câu chung chung.
+
 BÀN NHIỀU VÒNG RỒI MỚI CHỐT (Sếp Ngọc chốt 06/09/2026). Việc đáng bàn thì văn phòng họp thật, không phải mỗi phòng nói một câu rồi thôi:
    · Vòng 1 — phòng chủ trì đưa PHƯƠNG ÁN, không phải đưa cảm nghĩ.
    · Vòng 2 — các phòng liên quan soi thẳng vào phương án đó, chỉ đúng chỗ hổng. Đây là phản biện, không phải trả lời lại câu hỏi theo cách của mình.
@@ -242,8 +255,8 @@ export const AGENTS = [
     chuc_danh: 'Trưởng phòng Kinh doanh',
     phong: 'Phòng Kinh doanh',
     mo_ta: 'Doanh số hai sàn, đơn hàng, hàng bán chạy và bán kém.',
-    vi_tri: { x: 14, y: 20 },
-    chibi: { da: '#f2d0b0', toc: '#3b2a1e', ao: '#c07a5a', phu_kien: 'tai_nghe' },
+    khoi: 'kinhdoanh', vi_tri: { x: 12, y: 41 },
+    chibi: { gioi_tinh: 'nam', kieu_toc: 0, net_rieng: 'ca_vat', da: '#f2d0b0', toc: '#3b2a1e', ao: '#c07a5a', phu_kien: 'tai_nghe' },
     vao_duoc: ['admin', 'admin_backup', 'ke_toan_truong', 'van_hanh_san', 'cskh', 'nv_test'],
     cong_cu: ['doanh_so', 'so_sanh_doanh_so', 'top_san_pham', 'don_hoan_ton_dong',
               'tra_ton_kho', 'hang_duoi_muc', 'danh_sach_nhan_su', 'giao_viec', 'viec_dang_mo'],
@@ -263,12 +276,12 @@ Lưu ý khi nói về tiền: doanh số ở đây là giá trị đơn hàng tr
 
   {
     id: 'mkt',
-    ten: 'Kiệt',
+    ten: 'Nhã',
     chuc_danh: 'Trưởng phòng Marketing',
     phong: 'Phòng Marketing',
     mo_ta: 'Nội dung, quảng cáo, nhãn hàng, hiệu quả từng mã.',
-    vi_tri: { x: 38, y: 20 },
-    chibi: { da: '#f6d5b8', toc: '#5a4232', ao: '#8c7ba0', phu_kien: null },
+    khoi: 'kinhdoanh', vi_tri: { x: 37, y: 41 },
+    chibi: { gioi_tinh: 'nu', kieu_toc: 1, net_rieng: 'kep_toc', da: '#f6d5b8', toc: '#5a4232', ao: '#8c7ba0', phu_kien: null },
     vao_duoc: ['admin', 'admin_backup', 'van_hanh_san', 'cskh', 'nv_test'],
     cong_cu: ['top_san_pham', 'doanh_so', 'so_sanh_doanh_so', 'tra_ton_kho',
               'danh_sach_nhan_su', 'giao_viec', 'viec_dang_mo'],
@@ -290,8 +303,8 @@ RANH GIỚI PHÁP LÝ — nhớ mỗi khi viết nội dung: thực phẩm KHÔN
     chuc_danh: 'Trưởng phòng Kho vận',
     phong: 'Phòng Kho vận',
     mo_ta: 'Tồn kho, hạn sử dụng, xuất nhập, kiểm kê.',
-    vi_tri: { x: 62, y: 20 },
-    chibi: { da: '#e8b98d', toc: '#1f1a17', ao: '#8a9a6b', phu_kien: 'mu_bao_ho' },
+    khoi: 'vanhanh', vi_tri: { x: 63, y: 41 },
+    chibi: { gioi_tinh: 'nam', kieu_toc: 0, net_rieng: 'rau_quai', da: '#e8b98d', toc: '#1f1a17', ao: '#8a9a6b', phu_kien: 'mu_bao_ho' },
     vao_duoc: ['admin', 'admin_backup', 'ke_toan_truong', 'quan_ly_kho', 'nhan_vien_kho', 'nv_test'],
     cong_cu: ['tra_ton_kho', 'hang_can_han', 'hang_duoi_muc', 'don_hoan_ton_dong',
               'danh_sach_nhan_su', 'giao_viec', 'viec_dang_mo'],
@@ -311,8 +324,8 @@ Thấy hàng cận hạn hay thiếu hàng thì đừng chỉ liệt kê: nói r
     chuc_danh: 'Trưởng phòng Kế toán - Tài chính',
     phong: 'Phòng Kế toán',
     mo_ta: 'Giá vốn, giá trị tồn kho, tiền treo ở đơn hoàn.',
-    vi_tri: { x: 86, y: 20 },
-    chibi: { da: '#eec5a2', toc: '#241d19', ao: '#6b7f9e', phu_kien: 'may_tinh' },
+    khoi: 'vanhanh', vi_tri: { x: 88, y: 41 },
+    chibi: { gioi_tinh: 'nam', kieu_toc: 5, net_rieng: 'but_sau_tai', da: '#eec5a2', toc: '#241d19', ao: '#6b7f9e', phu_kien: 'may_tinh' },
     vao_duoc: ['admin', 'admin_backup', 'ke_toan_truong'],
     cong_cu: ['gia_tri_ton_kho', 'tra_ton_kho', 'hang_can_han', 'doanh_so',
               'don_hoan_ton_dong', 'danh_sach_nhan_su', 'giao_viec', 'viec_dang_mo'],
@@ -335,8 +348,8 @@ Khi nói về doanh số, luôn nhắc rằng đó là giá trị đơn hàng ch
     chuc_danh: 'Trưởng phòng Pháp chế',
     phong: 'Phòng Pháp chế',
     mo_ta: 'Hợp đồng, công bố sản phẩm, nhãn mác, quảng cáo, luật lao động.',
-    vi_tri: { x: 14, y: 62 },
-    chibi: { da: '#f0c9a8', toc: '#2f2a26', ao: '#5b6b8c', phu_kien: 'kinh' },
+    khoi: 'hotro', vi_tri: { x: 12, y: 65 },
+    chibi: { gioi_tinh: 'nam', kieu_toc: 0, net_rieng: 'ca_vat', da: '#f0c9a8', toc: '#2f2a26', ao: '#5b6b8c', phu_kien: 'kinh' },
     vao_duoc: CA_CONG_TY,
     cong_cu: ['danh_sach_nhan_su', 'ho_so_nhan_su_thieu', 'giao_viec', 'viec_dang_mo'],
     prompt: `Bạn là Luật, trưởng phòng Pháp chế của Alpha Green Commerce. Cả công ty hỏi bạn mỗi khi có chuyện dính tới luật và giấy tờ.
@@ -356,8 +369,8 @@ Cách trả lời: nói rõ điều luật nào, điều khoản mấy, mức ph
     chuc_danh: 'Trưởng phòng Hành chính Nhân sự',
     phong: 'Phòng HCNS',
     mo_ta: 'Hồ sơ nhân sự, hợp đồng, thử việc, giấy tờ còn thiếu.',
-    vi_tri: { x: 38, y: 62 },
-    chibi: { da: '#f6d5b8', toc: '#4a3226', ao: '#a8b892', phu_kien: 'kep_ho_so' },
+    khoi: 'hotro', vi_tri: { x: 37, y: 65 },
+    chibi: { gioi_tinh: 'nu', kieu_toc: 2, net_rieng: 'hoa_tai', da: '#f6d5b8', toc: '#4a3226', ao: '#a8b892', phu_kien: 'kep_ho_so' },
     vao_duoc: CA_CONG_TY,
     cong_cu: ['danh_sach_nhan_su', 'ho_so_nhan_su_thieu', 'giao_viec', 'viec_dang_mo'],
     prompt: `Bạn là Nhân, trưởng phòng Hành chính Nhân sự của Alpha Green Commerce.
@@ -378,8 +391,8 @@ Chuyện luật lao động chi tiết (mức phạt, điều khoản) thì đ�
     chuc_danh: 'Trưởng phòng IT',
     phong: 'Phòng IT',
     mo_ta: 'Hệ thống ERP, tài khoản, dữ liệu, sự cố kỹ thuật.',
-    vi_tri: { x: 62, y: 62 },
-    chibi: { da: '#e8b98d', toc: '#2f2a26', ao: '#5f9ea0', phu_kien: 'kinh' },
+    khoi: 'hotro', vi_tri: { x: 63, y: 65 },
+    chibi: { gioi_tinh: 'nam', kieu_toc: 6, net_rieng: 'ao_hoodie', da: '#e8b98d', toc: '#2f2a26', ao: '#5f9ea0', phu_kien: 'kinh' },
     vao_duoc: CA_CONG_TY,
     cong_cu: ['danh_sach_nhan_su', 'giao_viec', 'viec_dang_mo'],
     prompt: `Bạn là Tuấn, trưởng phòng IT của Alpha Green Commerce. Bạn lo hệ thống ERP nội bộ này và mọi thứ kỹ thuật quanh nó.
@@ -403,8 +416,8 @@ Một giới hạn phải nói thật: bạn KHÔNG nhìn được nhật ký m�
     chuc_danh: 'Trợ lý Giám đốc',
     phong: 'Phòng Giám đốc',
     mo_ta: 'Phản biện kế hoạch, soi giả định, đòi con số.',
-    vi_tri: { x: 30, y: 88 },
-    chibi: { da: '#f0c9a8', toc: '#241d19', ao: '#3f4d33', phu_kien: 'kinh' },
+    khoi: 'dieuhanh', vi_tri: { x: 35, y: 15 },
+    chibi: { gioi_tinh: 'nu', kieu_toc: 3, net_rieng: 'khan_quang', da: '#f0c9a8', toc: '#241d19', ao: '#3f4d33', phu_kien: 'kinh' },
     vao_duoc: BAN_GIAM_DOC,
     cong_cu: ['doanh_so', 'so_sanh_doanh_so', 'top_san_pham', 'gia_tri_ton_kho',
               'hang_can_han', 'hang_duoi_muc', 'don_hoan_ton_dong',
@@ -428,8 +441,8 @@ Bạn tra được số liệu thật trong ERP nên phải dùng nó: đừng p
     chuc_danh: 'Trợ lý Phó Giám đốc',
     phong: 'Phòng Phó Giám đốc',
     mo_ta: 'Phản biện từ phía vận hành: ai làm, làm bằng gì, hỏng thì sao.',
-    vi_tri: { x: 70, y: 88 },
-    chibi: { da: '#f6d5b8', toc: '#3b2a1e', ao: '#7d8f68', phu_kien: 'kep_ho_so' },
+    khoi: 'dieuhanh', vi_tri: { x: 65, y: 15 },
+    chibi: { gioi_tinh: 'nu', kieu_toc: 4, net_rieng: 'hoa_tai', da: '#f6d5b8', toc: '#3b2a1e', ao: '#7d8f68', phu_kien: 'kep_ho_so' },
     vao_duoc: BAN_GIAM_DOC,
     cong_cu: ['tra_ton_kho', 'hang_can_han', 'hang_duoi_muc', 'don_hoan_ton_dong',
               'gia_tri_ton_kho', 'danh_sach_nhan_su', 'ho_so_nhan_su_thieu',
@@ -659,8 +672,8 @@ export const MAY = {
   chuc_danh: 'Lễ tân · Điều phối văn phòng',
   phong: 'Quầy lễ tân',
   mo_ta: 'Nghe mọi yêu cầu, phân loại và chuyền cho đúng chuyên gia.',
-  vi_tri: { x: 50, y: 50 },              // giữa sảnh, ai bước vào cũng gặp đầu tiên
-  chibi: { da: '#f6d5b8', toc: '#2f2a26', ao: '#9aab86', phu_kien: 'tai_nghe' },
+  khoi: 'letan', vi_tri: { x: 50, y: 88 },              // quầy lễ tân giữa hàng dưới, hai trợ lý cấp trên ngồi hai bên
+  chibi: { gioi_tinh: 'nu', kieu_toc: 2, net_rieng: 'kep_toc', da: '#f6d5b8', toc: '#2f2a26', ao: '#9aab86', phu_kien: 'tai_nghe' },
   nang_luc: {
     lam_duoc: [
       'Nghe câu hỏi nói tự nhiên, không cần biết phải hỏi phòng nào',
@@ -702,7 +715,7 @@ export function duocVaoPhong(vaiTro, agentId) {
 export function hoSoCongKhai(a) {
   return {
     id: a.id, ten: a.ten, chuc_danh: a.chuc_danh, phong: a.phong,
-    mo_ta: a.mo_ta, vi_tri: a.vi_tri, chibi: a.chibi,
+    mo_ta: a.mo_ta, vi_tri: a.vi_tri, khoi: a.khoi, chibi: a.chibi,
     nang_luc: nangLucCua(a.id)     // hồ sơ năng lực hiện cho người đọc
   };
 }
@@ -834,3 +847,75 @@ export function ghepPrompt(agent, nguoi, homNay) {
     `Người đang trò chuyện với bạn: ${nguoi.ho_ten} — ${nguoi.chuc_vu}. Hôm nay là ${homNay}.`
   ].filter(x => x !== null).join('\n');
 }
+
+/* ==========================================================================
+   ĐỘI DỰNG ERP — HỒ LY & KHỈ ĐỘT (trực thuộc Trưởng phòng IT)
+   ---------------------------------------------------------------------------
+   Hai bạn này CÓ THẬT và đã chạy trong repo này từ 08/2026 — xem
+   docs/AGENT-ROLES.md và các dòng của họ trong docs/ACTIVE-WORK.md. Họ không
+   phải nhân vật trang trí thêm cho vui.
+
+   VÌ SAO TÁCH RIÊNG, KHÔNG NẰM TRONG `AGENTS`:
+   Mọi tên trong `AGENTS` là người Mây có thể chuyền câu hỏi tới, và Mây chạy
+   bằng Workers AI ngay trong Worker này. Hồ Ly và Khỉ Đột thì KHÔNG chạy ở đây
+   — họ chạy bằng Claude Code trên máy hoặc trong GitHub Actions, xác thực bằng
+   gói thuê bao. Nhét họ vào `AGENTS` sẽ khiến Mây tưởng chuyền việc được cho
+   họ, rồi trả lời như thể đã giao — đúng kiểu "giả vờ automation" mà Sếp cấm.
+
+   Nên trên mặt bằng họ hiện ở Xưởng ERP cạnh phòng IT: thấy được, xem được hồ
+   sơ, biết ai đang dựng cái ERP mình đang dùng — nhưng hỏi thì hỏi anh Tuấn.
+   ========================================================================== */
+export const DOI_IT = [
+  {
+    id: 'holy',
+    ten: 'Hồ Ly',
+    chuc_danh: 'Phân tích & Kiểm thử ERP',
+    phong: 'Xưởng ERP',
+    truc_thuoc: 'it',
+    mo_ta: 'Viết đặc tả tính năng, soi lỗi trước khi code, chặn cửa nghiệm thu.',
+    chibi: { gioi_tinh: 'nu', kieu_toc: 1, net_rieng: 'kep_toc',
+             da: '#f6d5b8', toc: '#b8863b', ao: '#c07a5a', phu_kien: 'kep_ho_so' },
+    nang_luc: {
+      lam_duoc: [
+        'Viết đặc tả tính năng (SPEC) trước khi ai code một dòng nào',
+        'Phân tích nghiệp vụ và trải nghiệm người dùng cho từng màn hình ERP',
+        'Soi lỗi và tình huống hỏng mà người đề xuất chưa nghĩ tới (QA / Red Team)',
+        'Chặn cửa nghiệm thu: chưa đạt thì không cho merge'
+      ],
+      khong_lam: [
+        'KHÔNG tự viết code tính năng — đó là việc của Khỉ Đột',
+        'KHÔNG tự phát hành bản mới lên production'
+      ],
+      hoi_thu: []
+    }
+  },
+  {
+    id: 'khidot',
+    ten: 'Khỉ Đột',
+    chuc_danh: 'Thợ dựng chính ERP',
+    phong: 'Xưởng ERP',
+    truc_thuoc: 'it',
+    mo_ta: 'Viết code, đổi cấu trúc dữ liệu, chạy kiểm thử, bàn giao.',
+    chibi: { gioi_tinh: 'nam', kieu_toc: 6, net_rieng: 'ao_hoodie',
+             da: '#e8b98d', toc: '#241d19', ao: '#5b6b8c', phu_kien: 'may_tinh' },
+    nang_luc: {
+      lam_duoc: [
+        'Viết code tính năng theo đúng đặc tả Hồ Ly đã chốt',
+        'Đổi cấu trúc dữ liệu (migration) và tự viết kiểm thử đi kèm',
+        'Bàn giao kèm hướng dẫn chạy thử cho người tiếp nhận'
+      ],
+      khong_lam: [
+        'KHÔNG tự đổi quy tắc nghiệp vụ — quy tắc là của Sếp và các trưởng phòng',
+        'KHÔNG tự mở rộng phạm vi việc được giao'
+      ],
+      hoi_thu: []
+    }
+  }
+];
+
+/* Cách gọi hai bạn này — nói thẳng để không ai tưởng hỏi Mây là họ chạy. */
+export const CACH_GOI_DOI_IT =
+  'Hồ Ly và Khỉ Đột KHÔNG chạy trong ERP này. Họ được gọi từ luồng dựng phần ' +
+  'mềm (Claude Code trên máy hoặc GitHub Actions), do Trưởng phòng IT điều. ' +
+  'Cần sửa hay thêm tính năng ERP thì nói với anh Tuấn — Trưởng phòng IT — ' +
+  'chứ hỏi ở đây thì hai bạn không nghe thấy.';

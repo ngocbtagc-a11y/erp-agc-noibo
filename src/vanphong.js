@@ -23,7 +23,8 @@
    ========================================================================== */
 
 import {
-  AGENTS, agentTheoId, agentChoVaiTro, duocVaoPhong, hoSoCongKhai, ghepPrompt
+  AGENTS, agentTheoId, agentChoVaiTro, duocVaoPhong, hoSoCongKhai, ghepPrompt,
+  DOI_IT, CACH_GOI_DOI_IT
 } from './agents-vp.js';
 import { congCuCuaAgent, chayCongCu } from './vp-cong-cu.js';
 import { MAY } from './agents-vp.js';
@@ -110,7 +111,15 @@ export async function tongQuan(env, phien) {
     nguoi_co_mat: coMat,
     viec_cua_toi: viecCuaToi,
     hoi_dap_bat_chua: !!env.AI,
-    may: MAY
+    may: MAY,
+    /* Đội dựng ERP: hiện trên mặt bằng ở Xưởng ERP cạnh phòng IT. Gửi kèm cả
+       CACH_GOI để giao diện nói thẳng "hỏi ở đây hai bạn không nghe thấy" —
+       thấy mặt mà tưởng hỏi được thì còn tệ hơn không hiện. */
+    doi_it: DOI_IT.map(a => ({
+      id: a.id, ten: a.ten, chuc_danh: a.chuc_danh, phong: a.phong,
+      mo_ta: a.mo_ta, chibi: a.chibi, nang_luc: a.nang_luc, truc_thuoc: a.truc_thuoc
+    })),
+    doi_it_cach_goi: CACH_GOI_DOI_IT
   });
 }
 

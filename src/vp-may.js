@@ -202,6 +202,25 @@ function promptTraLoi(agent, nguoi, homNay, cauHoi, duLieu, lichSu, yKienPhu) {
     ? lichSuGan.map(t => `${t.vai === 'nguoi' ? 'Người hỏi' : 'Bạn'}: ${t.noi_dung}`).join('\n')
     : '(Đây là câu đầu tiên của cuộc trò chuyện.)';
 
+  /* Trưởng phòng chức năng TIẾP NHẬN rồi PHÂN BỔ — đúng luồng Sếp Ngọc chốt
+     06/09/2026: Mây tiếp nhận → chuyển xuống trưởng phòng → trưởng phòng phân
+     bổ → làm và tự phản biện → trưởng phòng phản biện lần cuối → trả về Mây →
+     Mây báo người gửi.
+
+     Bắt nói rõ phân bổ phần nào cho phòng nào là chỗ then chốt: có phân bổ thì
+     vòng sau mới có cái CỤ THỂ để phản biện. Không có thì các phòng chỉ bình
+     luận chung chung về một ý tưởng chung chung. */
+  const phanPhanBo = (yKienPhu === null)
+    ? `
+
+Bạn là trưởng phòng chức năng vừa được Mây chuyển việc này xuống. Trước khi trả lời, làm đủ hai việc:
+1. TIẾP NHẬN — nói rõ bạn hiểu người ta đang cần gì. Hiểu sai đề thì mọi thứ sau đó vô nghĩa.
+2. PHÂN BỔ — kết thúc bằng đúng một dòng:
+   PHÂN BỔ: <tên phòng> lo <phần việc gì>; <tên phòng khác> lo <phần việc gì>
+   Việc nào bạn tự làm hết thì ghi "PHÂN BỔ: tự làm trong phòng".
+   Chỉ phân bổ phần THẬT SỰ cần chuyên môn phòng khác — kéo thêm phòng vào cho đông là phí thời gian của họ.`
+    : '';
+
   const phanPhu = yKienPhu && yKienPhu.length
     ? '\n\n## Ý KIẾN CÁC PHÒNG KHÁC (Mây đã hỏi giúp)\n' +
       yKienPhu.map(y => `### ${y.chuc_danh}\n${y.noi_dung}`).join('\n\n') +
@@ -231,7 +250,7 @@ CÂU HỎI LÚC NÀY
 
 ${cauHoi}
 
-Trả lời bằng tiếng Việt, đi thẳng vào việc.`;
+Trả lời bằng tiếng Việt, đi thẳng vào việc.${phanPhanBo}`;
 }
 
 /* ==========================================================================
@@ -261,8 +280,14 @@ BẠN ĐANG NGỒI HỌP — VIỆC CỦA BẠN LÀ PHẢN BIỆN
 Người hỏi: ${nguoi.ho_ten || nguoi.tai_khoan}
 Câu hỏi gốc: ${cauHoi}
 
-${agentChinh.chuc_danh} vừa đưa ra phương án dưới đây. Bạn KHÔNG trả lời lại câu
-hỏi gốc theo cách của bạn. Bạn soi thẳng vào phương án này, từ góc ${agentPhu.chuc_danh}.
+${agentChinh.chuc_danh} vừa tiếp nhận việc này và PHÂN BỔ một phần cho bạn.
+Phương án và phần phân bổ ở dưới. Bạn làm hai việc, theo thứ tự:
+
+A. NHẬN PHẦN CỦA MÌNH — nói rõ phần được phân bổ cho ${agentPhu.chuc_danh} thì làm thế nào,
+   rồi TỰ PHẢN BIỆN chính cách làm đó: chỗ nào trong cách làm của bạn có thể hỏng?
+   Tự soi mình trước khi soi người là thứ phân biệt người làm nghề với người nói cho có.
+B. SOI PHƯƠNG ÁN CHUNG — sau đó mới soi phương án của ${agentChinh.chuc_danh}, từ góc
+   ${agentPhu.chuc_danh}. KHÔNG trả lời lại câu hỏi gốc theo cách riêng của bạn.
 
 --- PHƯƠNG ÁN CỦA ${agentChinh.chuc_danh.toUpperCase()} ---
 ${phuongAn}
@@ -325,7 +350,9 @@ ${phanPhanBien}
 DỮ LIỆU THẬT:
 ${phanDuLieu}
 
-Giờ viết câu trả lời CUỐI CÙNG gửi người hỏi. Yêu cầu:
+Đây là lượt PHẢN BIỆN LẦN CUỐI của bạn với tư cách trưởng phòng chức năng: soi lại
+toàn bộ phương án sau khi đã nghe các phòng, rồi TRẢ KẾT QUẢ VỀ CHO MÂY để Mây báo
+lại người gửi. Yêu cầu:
 
 1. Ý phản biện nào ĐÚNG thì sửa phương án theo, đừng bảo vệ cái sai của mình.
 2. Ý phản biện nào SAI thì nói rõ vì sao bạn không theo — có quyền giữ ý kiến,
@@ -347,8 +374,9 @@ Giờ viết câu trả lời CUỐI CÙNG gửi người hỏi. Yêu cầu:
      rồi ghi rõ CẦN ĐO GÌ để biết: cần giá vốn mã nào, cần doanh số kỳ nào.
    Nói "chưa đo được" là câu trả lời hợp lệ. Bịa một con số cho tròn ý thì không.
 
-Viết cho người hỏi đọc, không viết như biên bản họp. Nhưng ở cuối thêm một dòng
-ngắn: "Đã hỏi thêm: <tên các phòng>" để người ta biết việc này đã được bàn.
+Viết cho người hỏi đọc, không viết như biên bản họp. KHÔNG cần tự giới thiệu và
+KHÔNG cần ghi "đã hỏi thêm phòng nào" ở cuối — Mây sẽ nói phần đó khi báo lại
+người gửi, bạn ghi nữa là lặp.
 
 Tiếng Việt, đi thẳng vào việc.`;
 }
@@ -359,6 +387,92 @@ Tiếng Việt, đi thẳng vào việc.`;
    Trả về:
      { tom_tat, loai, agent, agent_phu, can_owner_gate, tra_loi, da_tra_cuu }
    ========================================================================== */
+/* ==========================================================================
+   MÂY THÔNG BÁO LẠI CHO NGƯỜI GỬI
+   --------------------------------------------------------------------------
+   Khâu cuối của luồng Sếp Ngọc chốt 06/09/2026: trưởng phòng trả kết quả về
+   Mây, Mây báo lại người đã gửi yêu cầu. Người hỏi chỉ nói chuyện với Mây từ
+   đầu tới cuối — đó là ý nghĩa của "một lối vào duy nhất".
+
+   VÌ SAO GHÉP BẰNG CODE, KHÔNG GỌI THÊM MỘT LƯỢT AI:
+   · Tốn thêm ~4.000 token mỗi câu hỏi, trong khi Sếp đã chốt văn phòng ảo bắt
+     buộc tiết kiệm token.
+   · Nguy hiểm hơn: bắt Mây viết lại lời trưởng phòng là mở đường cho tam sao
+     thất bản đúng chỗ chết người nhất — con số. Trưởng phòng nói "tồn 412
+     thùng", Mây kể lại thành "hơn 400" hoặc tệ hơn là một số khác.
+   Nên Mây chỉ nói phần của Mây — ai xử lý, đã bàn với ai — còn nội dung chuyên
+   môn giữ NGUYÊN VĂN của trưởng phòng.
+   ========================================================================== */
+function mayBaoLai({ agent, dsPhuTen, soVong, coOwnerGate, noiDung, nguoiDuyet }) {
+  const dan = [];
+  dan.push(`Em đã chuyển việc này cho **${agent.chuc_danh}**`);
+  if (dsPhuTen.length) {
+    dan.push(soVong > 1
+      ? `, và phòng bên đã họp ${soVong} vòng với ${dsPhuTen.join(', ')}`
+      : `, có hỏi thêm ${dsPhuTen.join(', ')}`);
+  }
+  if (nguoiDuyet) dan.push(`, rồi **${nguoiDuyet}** duyệt lại`);
+  dan.push('. Đây là kết quả:');
+
+  const dau = `_${dan.join('')}_\n\n`;
+  const cuoi = coOwnerGate
+    ? '\n\n---\n_Việc này em không tự chốt được, đang chờ Sếp quyết. Sếp bảo một câu là em cho chạy tiếp._'
+    : '\n\n---\n_Cần em hỏi rõ thêm chỗ nào thì Sếp cứ nhắn tiếp ạ._';
+
+  return dau + noiDung + cuoi;
+}
+
+/* ==========================================================================
+   CHẶNG DUYỆT CỦA KHỐI ĐIỀU HÀNH
+   --------------------------------------------------------------------------
+   Sếp Ngọc hỏi 06/09/2026: có nên đi qua khối điều hành trước không?
+
+   Đặt cửa duyệt Ở CUỐI chứ không phải ở đầu. Duyệt đầu thì cấp trên đọc một
+   câu hỏi trống trơn, chưa có phương án, chưa có số — góp được đúng vài câu
+   chung chung rồi vẫn phải chuyển xuống phòng. Duyệt cuối thì họ đọc một
+   phương án đã qua phản biện, có dữ liệu, và câu hỏi của họ trở nên sắc:
+   "phòng chốt vậy nhưng có ai lo phần này chưa?"
+
+   Và CHỈ MỞ CỬA NÀY VỚI VIỆC HỆ TRỌNG — chạm nhiều phòng, cần Sếp quyết, hoặc
+   là yêu cầu hành động thật. Bắt "doanh số hôm qua bao nhiêu" đi qua hai cấp
+   thì thành quan liêu, mà mỗi lượt duyệt tốn thêm khoảng 4.000 token — trái
+   đúng cái rule tiết kiệm Sếp vừa đặt.
+   ========================================================================== */
+function promptDuyet(capTren, nguoi, homNay, cauHoi, ketLuan, agentChinh, dsPhuTen) {
+  const heThong = ghepPromptNgan(capTren, nguoi, homNay);
+
+  return `${heThong}
+
+==================================================
+BẠN DUYỆT LẦN CUỐI TRƯỚC KHI TRẢ VỀ NGƯỜI GỬI
+==================================================
+
+Người gửi: ${nguoi.ho_ten || nguoi.tai_khoan}
+Yêu cầu gốc: ${cauHoi}
+
+${agentChinh.chuc_danh} đã tiếp nhận, phân bổ${dsPhuTen.length ? ", họp với " + dsPhuTen.join(", ") : ""},
+phản biện lần cuối và chốt như dưới đây. Việc của bạn KHÔNG phải viết lại kết luận
+này — mà là nhìn nó từ tầm công ty, chỗ trưởng phòng không nhìn tới.
+
+--- KẾT LUẬN CỦA ${agentChinh.chuc_danh.toUpperCase()} ---
+${ketLuan}
+--- HẾT ---
+
+Soi đúng bốn chỗ, viết thật ngắn, tối đa 6 dòng:
+1. Việc này có đụng phòng nào mà chưa ai hỏi không?
+2. Có xung đột với ưu tiên khác của công ty đang chạy không? Alpha Green đang nhắm
+   Shopee 120 tỷ và TikTok Shop 20 tỷ trong 12 tháng — việc này đẩy hay kéo mục tiêu đó?
+3. Nguồn lực: công ty có 15 người và họ đã kín việc. Làm cái này thì bỏ cái gì?
+4. Hai cửa pháp lý và tài chính đã được soi đủ chưa, hay còn chỗ hở?
+
+Kết bằng ĐÚNG MỘT trong ba dòng sau:
+DUYỆT: đồng ý, làm được.
+DUYỆT CÓ ĐIỀU KIỆN: <điều kiện cụ thể phải có trước khi làm>
+CHƯA DUYỆT: <thiếu gì, cần ai làm rõ trước>
+
+Kết luận ổn thì DUYỆT thẳng. KHÔNG bịa ra điều kiện để tỏ ra mình có soi.`;
+}
+
 export async function hoiMay({ env, phien, cauHoi, lichSu = [], homNay }) {
   if (!env.AI) {
     const e = new Error('Máy chủ chưa bật AI. Cần binding [ai] trong wrangler.toml.');
@@ -482,6 +596,29 @@ export async function hoiMay({ env, phien, cauHoi, lichSu = [], homNay }) {
         env, promptChot(agent, nguoi, homNay, cauHoi, phuongAn, phanBien, daTraCuu), 1600
       );
       bienBan.push({ vong: 3, agent: agent.id, chuc_danh: agent.chuc_danh, vai: 'chốt', noi_dung: String(traLoi || '').trim() });
+
+      /* --- Vòng 4: khối Điều hành duyệt, CHỈ với việc hệ trọng --- */
+      const capTren = (agent.id === 'trolygd' || agent.id === 'trolypgd')
+        ? null                                   // chủ trì đã là cấp trên rồi, duyệt chính mình là vô nghĩa
+        : (duocGap.find(a => a.id === 'trolygd') || duocGap.find(a => a.id === 'trolypgd'));
+
+      if (heTrong && capTren) {
+        try {
+          const yDuyet = String(await goiAI(env,
+            promptDuyet(capTren, nguoi, homNay, cauHoi, String(traLoi || ''), agent,
+              bienBan.filter(b => b.vong === 2).map(b => b.chuc_danh)), 600) || '').trim();
+          if (yDuyet) {
+            /* Ghép thành một khối riêng, KHÔNG bắt cấp trên viết lại kết luận
+               của trưởng phòng — viết lại là mở đường cho sai lệch số liệu, mà
+               giá trị của chặng này nằm ở góc nhìn công ty, không ở câu chữ. */
+            traLoi = String(traLoi || '') +
+              '\n\n---\n**' + capTren.chuc_danh + ' duyệt**\n\n' + yDuyet;
+            bienBan.push({ vong: 4, agent: capTren.id, chuc_danh: capTren.chuc_danh, vai: 'duyệt', noi_dung: yDuyet });
+          }
+        } catch (e) {
+          console.error('Chặng duyệt khối Điều hành lỗi:', e.message);
+        }
+      }
     }
   } catch (e) {
     console.error('Văn phòng bàn bạc lỗi:', e.message);
@@ -525,6 +662,21 @@ export async function hoiMay({ env, phien, cauHoi, lichSu = [], homNay }) {
         vanBan += `\n\n---\nViệc này đã được giao trước đó và vẫn đang mở, tôi không tạo trùng.`;
       }
     }
+  }
+
+  /* Khâu cuối của luồng: trưởng phòng trả về Mây, Mây báo lại người gửi.
+     Câu tra cứu đơn giản (CHAT, một phòng, không họp) thì KHÔNG khoác lời dẫn —
+     hỏi "doanh số hôm qua bao nhiêu" mà phải đọc hai câu thủ tục mới tới con số
+     là làm phiền người đang vội. */
+  if (dangBan || loai !== 'CHAT') {
+    vanBan = mayBaoLai({
+      agent,
+      dsPhuTen: bienBan.filter(b => b.vong === 2).map(b => b.chuc_danh),
+      soVong: dangBan ? (bienBan.some(b => b.vong === 4) ? 4 : 3) : 1,
+      nguoiDuyet: (bienBan.find(b => b.vong === 4) || {}).chuc_danh || null,
+      coOwnerGate: !!dinh.can_owner_gate,
+      noiDung: vanBan
+    });
   }
 
   return {
