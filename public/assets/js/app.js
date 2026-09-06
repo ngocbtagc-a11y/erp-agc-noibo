@@ -6713,6 +6713,17 @@ async function khoiDongGopY() {
       case 'OWNER':     return 'Sếp (ERP Owner)';
       case 'NGUOI_GUI': return g.nguoi_gui_ten || 'Người gửi';
       case 'NONE':      return '—';
+      /* HOLY và KHIDOT KHÔNG được gộp chung nữa. Trước bản này cả hai đều hiện
+         "Máy đang xử lý" — đúng với Hồ Ly (bộ chấm tự động có chạy trong cron,
+         đo được), nhưng SAI với Khỉ Đột: bộ chạy tự động của nó (src/runner.js)
+         viết xong từ 27/08 mà chưa từng được nối vào Worker, không một dòng nào
+         gọi tới, bảng cấu hình còn chưa tồn tại trên production.
+
+         Sếp Ngọc nhìn bốn phiếu nằm im dưới nhãn "Máy đang xử lý" tám ngày rồi
+         hỏi "sao đã duyệt rồi không tự làm đi". Nhãn nói dối thì người ta chờ
+         một cái không bao giờ tới. Thà ghi thẳng là chưa có máy. */
+      case 'HOLY':      return 'Máy đang phân tích';
+      case 'KHIDOT':    return 'Chờ dựng — chưa có máy tự làm bước này';
       default:          return 'Máy đang xử lý';
     }
   }
@@ -7127,6 +7138,15 @@ async function khoiDongGopY() {
       $('#gyCtDeXuatLoai').textContent = GOPY_LOAI[g.de_xuat_loai] || 'Chưa rõ phân loại';
       $('#gyCtDeXuatLyDo').textContent = g.de_xuat_ly_do || '';
       $('#gyCtDeXuatSpec').textContent = g.de_xuat_spec || '';
+
+      /* Kế hoạch thi công — chỉ hiện khi ĐÃ CÓ. Hiện khối rỗng thì người đọc
+         tưởng máy soạn hỏng, trong khi thật ra chưa tới lượt phiếu này. */
+      const coKH = !!(g.ke_hoach_thi_cong || '').trim();
+      $('#gyCtKeHoachKhoi').hidden = !coKH;
+      if (coKH) {
+        $('#gyCtKeHoach').textContent = g.ke_hoach_thi_cong;
+        $('#gyCtKeHoachLuc').textContent = g.ke_hoach_luc ? ('Soạn lúc ' + g.ke_hoach_luc) : '';
+      }
     } else if (laAd && g.trang_thai === 'moi') {
       deXuatBox.hidden = true; choXuLy.hidden = false;
     } else {

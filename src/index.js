@@ -37,6 +37,7 @@ import * as kynang from './ky-nang.js';
 import { quetNhacNhanSu, thangKeTiep, gioVN } from './nhac-nhan-su.js';
 import * as vanphong from './vanphong.js';
 import { tuDayViecNhe } from './vp-gopy.js';
+import { soanKeHoach } from './vp-kehoach.js';
 /* CTL-0026 — Kho tài liệu quản trị. Lõi dùng chung với CTL-0025 (quét giấy tờ
    nhân sự): một kho, hai cửa vào. Đợt 1 mở cửa KHO CHUNG. */
 import * as tailieu from './tai-lieu.js';
@@ -4460,7 +4461,10 @@ async function vdSua(req, env) {
    vô dụng đúng lúc Sếp không đăng nhập được. Mở rộng một tham số của hàm đã
    chạy thật là đường rẻ nhất và ít mặt hỏng nhất. Chi phí 0. */
 async function guiTelegram(env, text, chatId = null) {
-  const token = env.TELEGRAM_BOT_TOKEN;
+  /* Cắt khoảng trắng: dán token lẫn dấu cách hoặc xuống dòng cho ra đúng lỗi
+     404 giống hệt token sai, mà hai thứ đó chữa khác nhau. Cắt ở đây thì bớt
+     hẳn một loại nhầm lẫn. */
+  const token = String(env.TELEGRAM_BOT_TOKEN || '').trim();
   /* Lùi về chat riêng của Sếp khi chưa cấu hình chat chung. Trước bản này,
      thiếu TELEGRAM_CHAT_ID là hàm lặng lẽ return false — và MỌI cảnh báo của
      ERP im bặt mà không ai biết: đơn hoàn quá hạn, SLA góp ý, và cảnh báo sắp
@@ -4469,7 +4473,7 @@ async function guiTelegram(env, text, chatId = null) {
      Một cảnh báo im lặng nguy hơn không có cảnh báo, vì người ta tưởng mình
      đang được canh. Không có địa chỉ chung thì gửi về Sếp còn hơn gửi vào hư
      không. */
-  const dich = chatId || env.TELEGRAM_CHAT_ID || env.TELEGRAM_CHAT_ID_SEP;   // lui ve chat rieng cua Sep
+  const dich = String(chatId || env.TELEGRAM_CHAT_ID || env.TELEGRAM_CHAT_ID_SEP || '').trim();   // lui ve chat rieng cua Sep
   if (!token || !dich) return false;
   try {
     const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
@@ -5815,6 +5819,10 @@ async function gopYDanhSach(req, env) {
            g.nguoi_gui_id, g.nguoi_phu_trach_id, pt.ho_ten AS nguoi_phu_trach_ten, g.spec_reference,
            g.tao_luc, g.cap_nhat_luc,
            g.de_xuat_loai, g.de_xuat_risk, g.de_xuat_trang_thai, g.de_xuat_ly_do, g.de_xuat_spec,
+           /* Kế hoạch thi công do TP IT (văn phòng ảo) soạn. CHỈ THÊM HAI TÊN CỘT,
+              không đụng logic nào của câu này — vùng gopYDanhSach thuộc SPEC-0002
+              của Hồ Ly, xem docs/ACTIVE-WORK.md. */
+           g.ke_hoach_thi_cong, g.ke_hoach_luc,
            g.risk, g.duyet_cap1_luc, g.duyet_cap1_nguon, g.duyet_owner_luc,
            g.bang_chung_url, g.ly_do_tu_choi, g.so_lan_gui_lai, g.can_xac_minh_lai,
            g.current_owner, g.next_owner,
@@ -6961,7 +6969,7 @@ async function vpTongQuan(req, env) {
 
    KHÔNG trả token ra ngoài, chỉ trả mô tả lỗi của Telegram. */
 async function telegramNoiRoLoi(env, text, chatId) {
-  const token = env.TELEGRAM_BOT_TOKEN;
+  const token = String(env.TELEGRAM_BOT_TOKEN || '').trim();
   if (!token) return { ok: false, vi_sao: 'Chưa nạp TELEGRAM_BOT_TOKEN' };
   if (!chatId) return { ok: false, vi_sao: 'Chưa nạp chat id' };
   try {
@@ -6972,7 +6980,19 @@ async function telegramNoiRoLoi(env, text, chatId) {
     });
     const d = await res.json().catch(() => ({}));
     if (res.ok && d.ok) return { ok: true };
-    return { ok: false, ma: d.error_code || res.status, vi_sao: d.description || 'Telegram từ chối, không rõ lý do' };
+
+    /* "Not Found" của Telegram nghĩa là không có bot nào ứng với token — chứ
+       không phải "không tìm thấy người nhận" như đa số người đọc sẽ hiểu. Dịch
+       ra tiếng Việt kèm cách chữa, chứ ném nguyên văn tiếng Anh của Telegram
+       thì người bấm vẫn phải đi tra. */
+    const ma = d.error_code || res.status;
+    const goc = d.description || '';
+    let noi = goc;
+    if (ma === 404) noi = 'Token bot sai — Telegram không tìm thấy bot nào ứng với token này. Lấy lại ở @BotFather (/mybots → chọn bot → API Token), dán đủ cả đoạn có dấu hai chấm.';
+    else if (ma === 401) noi = 'Token bot không còn hiệu lực — có thể đã bị thu hồi. Lấy token mới ở @BotFather.';
+    else if (ma === 403) noi = 'Bot chưa được phép nhắn cho Sếp. Mở chat với chính bot này và gõ /start, rồi thử lại.';
+    else if (/chat not found/i.test(goc)) noi = 'Chat id sai. Chat riêng là số DƯƠNG; số bắt đầu bằng dấu trừ là id nhóm.';
+    return { ok: false, ma, vi_sao: noi, goc: goc || null };
   } catch (e) {
     return { ok: false, vi_sao: 'Không gọi được Telegram: ' + (e.message || 'lỗi mạng') };
   }
@@ -7330,6 +7350,11 @@ export default {
       /* Văn phòng ảo tự cho phiếu RỦI RO THẤP đi tiếp — Sếp Ngọc chốt: việc
          nhẹ thì nhân viên ảo tự làm, đừng bắt Sếp bấm từng cái. Phiếu rủi ro
          trung bình/cao vẫn dừng chờ Sếp. */
+      /* Phiếu đã duyệt thì Trưởng phòng IT soạn sẵn kế hoạch thi công — khi
+         người bắt tay vào làm thì phần suy nghĩ đã xong. */
+      try { const k = await soanKeHoach(env);
+            if (k) console.log('TP IT soạn kế hoạch cho ' + k + ' phiếu'); }
+      catch (e) { console.error('Cron soạn kế hoạch:', e.message); }
       try { const n = await tuDayViecNhe(env);
             if (n) console.log('Văn phòng ảo tự đẩy ' + n + ' góp ý rủi ro thấp'); }
       catch (e) { console.error('Cron tự đẩy góp ý:', e.message); }
