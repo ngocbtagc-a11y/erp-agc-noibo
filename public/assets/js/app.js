@@ -7937,6 +7937,27 @@ if (TOI.quyen.includes('xepca')) {
   try { await khoiDongXepCa(); } catch (e) { console.error('Xếp ca:', e); }
 }
 
+/* ==========================================================================
+   ⚠️ KHAI BÁO PHẢI NẰM TRÊN CHỖ GỌI — đừng dời xuống dưới cho "gần chỗ dùng".
+   --------------------------------------------------------------------------
+   Dòng `await khoiDongKhoTaiLieu()` ngay dưới đây là AWAIT Ở CẤP CAO NHẤT: nó
+   TẠM DỪNG việc chạy cả file để chờ Kho tài liệu nạp xong. Trong lúc dừng đó,
+   `napKhoTaiLieu()` ghi vào biến này — mà nếu biến còn khai ở cuối file thì nó
+   chưa tồn tại, và cả màn vỡ với "Cannot access TL_NHOM_LUU_DUOC before
+   initialization".
+
+   Lỗi này NGỦ ĐÔNG nhiều tháng: lệnh gọi máy chủ vốn hỏng sớm (thiếu bảng
+   sao_luu_thu_muc trên production) nên code không bao giờ chạy tới dòng ghi.
+   Vá xong bảng ngày 06/09/2026 thì nó thức dậy ngay. Bài học: một lỗi im lặng
+   ở tầng dưới có thể đang che một lỗi khác ở tầng trên.
+
+   Nhóm giấy tờ người này LƯU được — máy chủ trả (`nhom_luu_duoc`), giao diện
+   không tự đoán. Cả hai cửa (Kho tài liệu và hồ sơ nhân sự) cùng ghi vào đây.
+   Ẩn nút khi không sửa được là để KHÔNG HỨA SUÔNG (REV-0040 #8): máy chủ vẫn
+   chặn 403 thật, nhưng bày một cái nút bấm vào là ăn lỗi thì tệ.
+   ========================================================================== */
+let TL_NHOM_LUU_DUOC = [];
+
 /* -- Kho tài liệu quản trị (CTL-0026 Đợt 1) -- */
 if (TOI.quyen.includes('khotailieu')) {
   try { await khoiDongKhoTaiLieu(); } catch (e) { console.error('Kho tài liệu:', e); }
@@ -10807,11 +10828,6 @@ function veChuCoSo(chu, viTri, nhan) {
    được xem — một quyết định về quyền, không phải sửa chính tả).
    ========================================================================== */
 
-/** Nhóm giấy tờ người này LƯU được — máy chủ trả (`nhom_luu_duoc`), giao diện
- *  không tự đoán. Cả hai cửa cùng ghi vào đây sau mỗi lượt nạp.
- *  Ẩn nút khi không sửa được là để KHÔNG HỨA SUÔNG (bài học REV-0040 #8): máy
- *  chủ vẫn chặn 403 thật, nhưng bày một cái nút bấm vào là ăn lỗi thì tệ. */
-let TL_NHOM_LUU_DUOC = [];
 
 function nutSuaTaiLieu(t) {
   if (!TL_NHOM_LUU_DUOC.includes(t.nhom)) return '';

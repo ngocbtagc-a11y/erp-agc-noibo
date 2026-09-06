@@ -155,7 +155,14 @@ function batBuocHangHoa(phien) {
    ========================================================================== */
 export const danhSachPhongBan = async (env) => {
   const { results } = await env.DB.prepare(`
-    SELECT pb.id, pb.ten, pb.hoat_dong, pb.trang_thai, pb.truong_phong_id, ns.ho_ten AS truong_phong_ten
+    SELECT pb.id, pb.ten, pb.hoat_dong, pb.trang_thai, pb.truong_phong_id,
+           ns.ho_ten AS truong_phong_ten,
+           /* Số người ĐANG LÀM của phòng — sơ đồ tổ chức mà không có con số thì
+              chỉ là mấy cái hộp. Đây là chỗ nhìn ra ngay phòng nào phình, phòng
+              nào trống: đo trên dữ liệu thật 06/09/2026 ra Kho Vận 17 người còn
+              Kinh Doanh - MKT 0 người, thứ không ai thấy khi đọc danh sách phẳng. */
+           (SELECT COUNT(*) FROM nhan_su n
+             WHERE n.phong_ban_id = pb.id AND n.dang_lam = 1) AS so_nguoi
       FROM phong_ban pb LEFT JOIN nhan_su ns ON ns.id = pb.truong_phong_id
      ORDER BY pb.hoat_dong DESC, pb.ten
   `).all();
