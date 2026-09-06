@@ -11685,15 +11685,23 @@ async function khoiDongVanPhong() {
       x.style.top  = '65%';
       x.dataset.agent = 'xuong';
       x.dataset.khoi = 'hotro';
+      /* Đường trực thuộc IT → Xưởng. Không có nó thì Xưởng trông như một phòng
+         độc lập đứng cạnh phòng IT, chứ không phải đội quân của phòng IT. */
+      const day = el('div', 'vp-day-tructhuoc');
+      day.style.left = '63%';
+      day.style.top  = '65%';
+      day.style.width = '25%';
+      day.innerHTML = '<span>trực thuộc</span>';
+      lopPhong.appendChild(day);
       x.innerHTML =
         `<div class="vp-phong-khung vp-xuong-khung">
-           <span class="vp-ngoai" title="Hai bạn này chạy ngoài ERP — hỏi ở đây họ không nghe thấy">ngoài ERP</span>
+           <span class="vp-ngoai" title="Hồ Ly và Khỉ Đột nhận việc từ Trưởng phòng IT (Tuấn), không nhận trực tiếp qua Mây">nhận việc qua Tuấn</span>
            <div class="vp-xuong-doi">
              ${doiIT.map(a => `<div class="vp-xuong-nguoi" title="${esc(a.ten)} — ${esc(a.chuc_danh)}">${veChibi(a.chibi)}</div>`).join('')}
            </div>
          </div>
          <div class="vp-bien"><b>Xưởng ERP</b><span>${doiIT.map(a => esc(a.ten)).join(' · ')}</span></div>`;
-      x.title = 'Đội dựng ERP — chạy ngoài hệ thống này, không nhận việc qua Mây. Bấm để xem họ làm gì.';
+      x.title = 'Đội dựng ERP — trực thuộc Trưởng phòng IT. Cần sửa hay thêm gì trên ERP thì nói với Mây, Mây chuyển cho Tuấn, Tuấn giao xuống đây. Bấm để xem họ làm gì.';
       x.addEventListener('click', () => moHoSoXuong(doiIT, duLieu.doi_it_cach_goi));
       lopPhong.appendChild(x);
     }
@@ -11861,6 +11869,9 @@ async function khoiDongVanPhong() {
         .concat((kq.agent_phu || []).map(x => x.id))
         .concat((kq.bien_ban || []).map(b => b.agent))
         .filter(Boolean);
+      /* Tuấn tham gia thì Xưởng cũng nháy: việc tới Hồ Ly và Khỉ Đột đi qua
+         tay Trưởng phòng IT, nên anh ấy động vào là xưởng có liên quan. */
+      if (daThamGia.includes('it')) daThamGia.push('xuong');
       lopPhong.querySelectorAll('.vp-phong').forEach(o => {
         o.classList.toggle('vua-lam', daThamGia.includes(o.dataset.agent));
       });

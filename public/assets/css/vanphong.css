@@ -822,3 +822,50 @@
    phải đục hẳn ra, vì chữ mà mờ thì thà đừng ghi. */
 .vp-khu     { pointer-events: none; }
 .vp-khu-ten { position: absolute; z-index: 1; }
+
+/* ---------------------------------------------------------------------------
+   ĐƯỜNG TRỰC THUỘC — phòng IT chỉ huy Xưởng ERP
+   ---------------------------------------------------------------------------
+   Sếp Ngọc 06/09/2026: "2 đứa erp kia phải nhận nhiệm vụ qua Tuấn".
+
+   Nhãn cũ chỉ ghi "ngoài ERP — không nhận việc qua Mây": nói được vế CẤM mà
+   không nói vế ĐI ĐƯỜNG NÀO, đọc xong vẫn tắc. Giờ nhãn ghi thẳng "nhận việc
+   qua Tuấn", và có một sợi dây nối buồng IT sang Xưởng.
+
+   Không có sợi dây này thì Xưởng trông như một phòng độc lập tình cờ đứng cạnh
+   phòng IT, chứ không phải đội quân của phòng IT.
+   --------------------------------------------------------------------------- */
+.vp-day-tructhuoc {
+  position: absolute;
+  transform: translateY(-50%);
+  height: 0;
+  border-top: 2px dashed color-mix(in srgb, var(--k-hotro) 46%, transparent);
+  pointer-events: none;
+  z-index: 0;
+}
+.vp-day-tructhuoc span {
+  position: absolute;
+  left: 50%;
+  top: -8px;
+  transform: translateX(-50%);
+  font-size: 9.5px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--text-mute);
+  background: #f2f4ec;
+  padding: 0 6px;
+  white-space: nowrap;
+}
+
+/* Mũi tên chỉ chiều: việc chảy TỪ phòng IT SANG Xưởng, không phải ngược lại */
+.vp-day-tructhuoc::after {
+  content: '';
+  position: absolute;
+  right: -1px;
+  top: -4px;
+  border-left: 7px solid color-mix(in srgb, var(--k-hotro) 46%, transparent);
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+}
+
+@media (max-width: 620px) { .vp-day-tructhuoc { display: none; } }

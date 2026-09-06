@@ -62,6 +62,43 @@ const CON_TRONG_PHONG = '-60 seconds';
 /* ==========================================================================
    TỔNG QUAN — vẽ mặt bằng văn phòng
    ========================================================================== */
+/* ==========================================================================
+   TẢI VIỆC CỦA XƯỞNG ERP
+   --------------------------------------------------------------------------
+   Sếp Ngọc 06/09/2026: việc vẫn tới Hồ Ly và Khỉ Đột, chỉ là đi vòng qua
+   Trưởng phòng IT — nên hai bạn cũng phải có cảnh báo bận như mọi phòng khác.
+
+   Hàng đợi thật của họ KHÔNG nằm ở bảng cong_viec mà ở bảng gop_y: mỗi phiếu
+   góp ý ERP đi qua một chuỗi trạng thái, và src/index.js đã khai sẵn trạng thái
+   nào đang thuộc tay ai (GOPY_OWNER_THEO_TT). Lấy đúng nguồn đó chứ không tự
+   nghĩ ra một thước đo mới — hai chỗ đếm hai kiểu thì sớm muộn cũng lệch nhau,
+   rồi không ai biết tin cái nào.
+
+   Chỉ ĐỌC gop_y, không ghi. Vùng gop_y đang có phiên khác làm dở.
+   ========================================================================== */
+const TAI_XUONG_THEO_TT = {
+  holy:   ['cho_phan_tich', 'dang_phan_tich'],
+  khidot: ['dang_lam', 'dang_kiem_tra', 'can_chinh_sua', 'nghiem_thu_chua_dat']
+};
+
+async function taiCuaXuong(env) {
+  const ra = { holy: 0, khidot: 0 };
+  try {
+    const { results } = await env.DB.prepare(
+      'SELECT trang_thai, COUNT(*) AS so FROM gop_y GROUP BY trang_thai'
+    ).all();
+    for (const d of results || []) {
+      for (const [ai, ds] of Object.entries(TAI_XUONG_THEO_TT)) {
+        if (ds.includes(d.trang_thai)) ra[ai] += Number(d.so) || 0;
+      }
+    }
+  } catch (e) {
+    // Thiếu bảng gop_y thì coi như rảnh, KHÔNG làm hỏng cả mặt bằng vì một cái chấm.
+    console.error('Đếm tải Xưởng ERP lỗi:', e.message);
+  }
+  return ra;
+}
+
 export async function tongQuan(env, phien) {
   const cuaToi = agentChoVaiTro(phien.vai_tro);
 
@@ -83,6 +120,10 @@ export async function tongQuan(env, phien) {
      GROUP BY nguoi_giao_id
   `).all();
   const dem = Object.fromEntries(demViec.map(r => [String(r.nguoi_giao_id).slice(3), r.so]));
+
+  // Tải của Xưởng ERP đếm từ hàng đợi góp ý, không phải từ cong_viec —
+  // xem chú thích ở taiCuaXuong().
+  const taiXuong = await taiCuaXuong(env);
 
   // Việc của chính người đang xem — kể cả việc do người khác giao, để họ nhìn
   // một chỗ là thấy hết, không phải mở hai nơi.
@@ -117,7 +158,8 @@ export async function tongQuan(env, phien) {
        thấy mặt mà tưởng hỏi được thì còn tệ hơn không hiện. */
     doi_it: DOI_IT.map(a => ({
       id: a.id, ten: a.ten, chuc_danh: a.chuc_danh, phong: a.phong,
-      mo_ta: a.mo_ta, chibi: a.chibi, nang_luc: a.nang_luc, truc_thuoc: a.truc_thuoc
+      mo_ta: a.mo_ta, chibi: a.chibi, nang_luc: a.nang_luc, truc_thuoc: a.truc_thuoc,
+      viec_dang_mo: taiXuong[a.id] || 0
     })),
     doi_it_cach_goi: CACH_GOI_DOI_IT
   });
