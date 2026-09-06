@@ -172,6 +172,50 @@ async function viecDangTreo(env) {
   return ra;
 }
 
+
+/* ==========================================================================
+   NHẮC SẾP QUA TELEGRAM — việc đang chờ chính Sếp quyết
+   --------------------------------------------------------------------------
+   Sếp Ngọc 06/09/2026: "nối thẳng với bot Telegram của tôi để tôi duyệt trên
+   điện thoại khi không ngồi máy tính".
+
+   Sếp chốt: BÁO KÈM LINK, bấm duyệt trong ERP — KHÔNG làm nút duyệt ngay trong
+   Telegram. Nút trong Telegram thì nhanh hơn thật, nhưng phải mở một cửa
+   webhook công khai ra Internet để nhận cú bấm. Đổi một cửa vào hệ thống lấy
+   vài giây thao tác là không đáng, nhất là với thứ đang duyệt là thay đổi ERP.
+
+   MỘT TIN MỘT NGÀY, KHÔNG HƠN. Cửa sổ 8h sáng giờ VN, giống nhịp nhắc việc sẵn
+   có. Không cần cột đánh dấu đã gửi: cron chạy 5 phút một lần nhưng hàm tự đóng
+   cửa ngoài khung 8h00–8h05 nên mỗi ngày đúng một lượt. Nhắc nhiều lần trong
+   ngày thì vài hôm là Sếp tắt thông báo, và lúc đó cái nhắc thành vô dụng.
+   ========================================================================== */
+export async function nhacSepViecTreo(env, guiTelegram) {
+  const gio = new Date(Date.now() + 7 * 3600 * 1000);
+  if (gio.getUTCHours() !== 8 || gio.getUTCMinutes() >= 5) return 0;
+
+  const dich = env.TELEGRAM_CHAT_ID_SEP;
+  if (!dich || !env.TELEGRAM_BOT_TOKEN) return 0;   // chưa nạp khoá thì thôi, không báo lỗi ầm ĩ
+
+  const treo = await viecDangTreo(env);
+  if (!treo.length) return 0;
+
+  const dong = [];
+  dong.push('VĂN PHÒNG ẢO AGC — việc đang treo');
+  dong.push('');
+  for (const v of treo) {
+    dong.push(v.tieu_de + ': ' + v.so + ' phiếu, lâu nhất ' + v.lau_nhat + ' ngày');
+    dong.push('   đang chờ ' + v.viec_cua);
+    for (const g of (v.chi_tiet || []).slice(0, 4)) {
+      dong.push('   · GY-' + String(g.id).padStart(4, '0') + ' ' + g.tieu_de + ' (' + g.so_ngay + ' ngày)');
+    }
+    dong.push('');
+  }
+  dong.push('Mở ERP để duyệt: https://erp-agc.noiboagc.workers.dev/app');
+
+  const xong = await guiTelegram(env, dong.join(String.fromCharCode(10)), dich);
+  return xong ? treo.length : 0;
+}
+
 export async function tongQuan(env, phien) {
   const cuaToi = agentChoVaiTro(phien.vai_tro);
 

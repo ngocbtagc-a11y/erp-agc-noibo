@@ -7275,6 +7275,12 @@ export default {
       // SLA cổng duyệt góp ý (SPEC-0002) — thêm 1 hàm vào chuỗi cron đã có,
       // KHÔNG tạo cron mới. Lỗi ở đây không được chặn các việc nền khác.
       try { await gopYNhacSla(env); } catch (e) { console.error('Cron SLA góp ý:', e.message); }
+      /* Nhắc Sếp qua Telegram những việc đang chờ CHÍNH SẾP quyết — chủ yếu
+         là đề xuất máy đã phân tích xong mà chưa ai bấm áp dụng. Hàm tự đóng
+         cửa ngoài khung 8h sáng nên gọi mỗi 5 phút vẫn đúng 1 tin/ngày, và tự
+         im nếu chưa nạp khoá Telegram. */
+      try { await vanphong.nhacSepViecTreo(env, guiTelegram); }
+      catch (e) { console.error('Cron nhắc Sếp việc treo:', e.message); }
 
       // KHÔNG CÒN AI DUYỆT ĐƯỢC GÓP Ý — tự phát hiện, tối đa 1 tin/ngày.
       // Ca thật đã lường (REV-0030): khôi phục một bản sao lưu CSV chụp TRƯỚC
