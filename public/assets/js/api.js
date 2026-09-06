@@ -520,6 +520,10 @@ export const API = {
   /* ---- Văn phòng ảo: một cửa duy nhất là Hỏi Mây ---- */
   vpTongQuan: () => goi('/api/van-phong/tong-quan'),
   vpNangSuat: () => goi('/api/van-phong/nang-suat'),
+  vpKyNang: () => goi('/api/van-phong/ky-nang'),
+  vpKyNangDoi: (id, dangDung) => goi('/api/van-phong/ky-nang', {
+    method: 'POST', body: JSON.stringify({ id, dang_dung: dangDung })
+  }),
 
   /* Báo "tôi còn ở đây" mỗi 20 giây, để người khác thấy mình trong văn phòng */
   vpCoMat: (dangO) => goi('/api/van-phong/co-mat', {
@@ -529,8 +533,8 @@ export const API = {
   vpHoiThoai: () => goi('/api/van-phong/hoi-thoai'),
 
   /* KHÔNG truyền id trợ lý — người dùng không phải chọn ai, Mây tự định tuyến */
-  vpHoi: (noiDung) => goi('/api/van-phong/hoi', {
-    method: 'POST', body: JSON.stringify({ noi_dung: noiDung })
+  vpHoi: (noiDung, anh) => goi('/api/van-phong/hoi', {
+    method: 'POST', body: JSON.stringify({ noi_dung: noiDung, anh: anh || null })
   })
   // Bản PDF mở thẳng bằng /api/tai-lieu/tep?id=... (máy chủ trả file kèm kiểm
   // quyền + ghi nhật ký), không qua lớp fetch này.

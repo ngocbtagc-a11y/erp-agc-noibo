@@ -11867,6 +11867,7 @@ async function khoiDongVanPhong() {
            `<button type="button" class="vp-chip">${esc(x)}</button>`).join('')}</div>
        </div>
        <p class="vp-hoso-nhac">Mọi câu hỏi đều gửi qua Mây — Mây sẽ tự chuyển cho ${esc(a.ten)} nếu đúng việc.</p>`;
+    veKyNangTrongHoSo(a.id, $('#vp-hoso-than'));
     hoSoNen.hidden = false;
   }
 
@@ -11961,7 +11962,128 @@ async function khoiDongVanPhong() {
     });
   });
 
+
+  /* ---- Kỹ năng đã dạy thêm, hiện trong hồ sơ từng trợ lý ------------------
+     Dạy được thì phải GỠ được. Một bài học sai mà không tắt đi thì nó lặng lẽ
+     làm lệch mọi câu trả lời về sau, và càng để lâu càng khó lần ra vì sao. */
+  let dsKyNang = null;
+
+  async function veKyNangTrongHoSo(agentId, oCho) {
+    if (!oCho) return;
+    try {
+      if (!dsKyNang) dsKyNang = (await API.vpKyNang()).ky_nang || [];
+    } catch (e) { return; }
+
+    const cua = dsKyNang.filter(k => k.agent_id === agentId);
+    if (!cua.length) return;
+
+    oCho.insertAdjacentHTML('beforeend',
+      '<div class="vp-hoso-muc vp-kn-muc"><h5>Kỹ năng Sếp dạy thêm</h5>' +
+      cua.map(k =>
+        '<div class="vp-kn" data-id="' + esc(k.id) + '"' +
+        (k.dang_dung ? '' : ' data-tat="1"') + '>' +
+          '<div class="vp-kn-dau">' +
+            '<b>' + esc(k.tieu_de) + '</b>' +
+            '<button type="button" class="vp-kn-nut">' +
+              (k.dang_dung ? 'Tắt bài này' : 'Bật lại') +
+            '</button>' +
+          '</div>' +
+          '<div class="vp-kn-noi">' + esc(k.noi_dung).replace(/\n/g, '<br>') + '</div>' +
+          '<div class="vp-kn-chan">' + esc(k.nguoi_day || '') + ' dạy ' + esc(k.tao_luc || '') + '</div>' +
+        '</div>').join('') + '</div>');
+  }
+
+  /* Bật/tắt một bài học. Tắt chứ không xoá: giữ lại để còn đối chiếu "hôm đó
+     Sếp dạy gì mà ra kết luận này". */
+  document.addEventListener('click', async e => {
+    const nut = e.target.closest('.vp-kn-nut');
+    if (!nut) return;
+    const o = nut.closest('.vp-kn');
+    const id = o.dataset.id;
+    const dangTat = o.dataset.tat === '1';
+    nut.disabled = true;
+    try {
+      await API.vpKyNangDoi(id, dangTat);
+      if (dangTat) { delete o.dataset.tat; nut.textContent = 'Tắt bài này'; }
+      else { o.dataset.tat = '1'; nut.textContent = 'Bật lại'; }
+      const k = (dsKyNang || []).find(x => x.id === id);
+      if (k) k.dang_dung = dangTat ? 1 : 0;
+    } catch (err) {
+      nut.textContent = 'Không đổi được';
+    }
+    nut.disabled = false;
+  });
+
   /* ---- Khung trò chuyện với Mây ----------------------------------------- */
+
+  /* ---- Ảnh đính kèm khi hỏi Mây ------------------------------------------
+     Dùng lại bộ nén và bộ nhận ảnh dán sẵn có của ERP (anh-chung.js +
+     dangKyNhanAnhDan) chứ không viết bộ thứ tư — repo từng có ba hàm nén ảnh
+     gần trùng nhau và đã phải gộp lại một lần rồi.
+
+     ⚠️ MÂY KHÔNG XEM ĐƯỢC ẢNH. Model chạy văn phòng ảo chỉ đọc chữ. Ảnh ở đây
+     là để NGƯỜI xem lại và để đi kèm khi việc được giao ra người thật. Trợ lý
+     được báo rõ là có ảnh mà mình không xem được, nên nó sẽ hỏi lại Sếp mô tả
+     thay vì bình luận về thứ chưa từng nhìn thấy. */
+  let anhDangKem = null;
+
+  function hienAnhKem(dataUrl) {
+    anhDangKem = dataUrl || null;
+    const o = $('#vp-anh-kem');
+    if (!o) return;
+    if (anhDangKem) {
+      $('#vp-anh-xem').src = anhDangKem;
+      o.hidden = false;
+    } else {
+      o.hidden = true;
+      $('#vp-anh-xem').removeAttribute('src');
+    }
+  }
+
+  async function nhanAnhChoMay(tep) {
+    if (!tep) return;
+    try {
+      /* Nén xuống cạnh dài 1400px: ảnh chụp màn hình ERP hay bảng số của sàn
+         vẫn đọc được chữ ở cỡ này, mà một dòng D1 không phình lên vài MB. */
+      const nho = await nenAnhChung(tep, { canhDai: 1400, chatLuong: 0.72 });
+      if (coByteCuaDataUrl(nho) > 850000) {
+        oNhap.placeholder = 'Ảnh nặng quá, Sếp chụp gọn lại giúp tôi';
+        return;
+      }
+      hienAnhKem(nho);
+    } catch (e) {
+      oNhap.placeholder = 'Không đọc được ảnh này';
+    }
+  }
+
+  $('#vp-anh-nut')?.addEventListener('click', () => $('#vp-anh-chon').click());
+  $('#vp-anh-chon')?.addEventListener('change', e => {
+    nhanAnhChoMay(e.target.files && e.target.files[0]);
+    e.target.value = '';
+  });
+  $('#vp-anh-bo')?.addEventListener('click', () => hienAnhKem(null));
+
+  /* Dán Ctrl+V ngay trong tab Văn phòng ảo */
+  const khungHoi = $('.vp-hoi-khung');
+  if (khungHoi) {
+    dangKyNhanAnhDan({
+      vung: khungHoi,
+      dangBat: () => !$('#v-vanphong').hidden,
+      nhan: nhanAnhChoMay,
+      uuTien: 5
+    });
+
+    /* Kéo thả thẳng vào khung chat */
+    khungHoi.addEventListener('dragover', e => { e.preventDefault(); khungHoi.classList.add('dang-keo'); });
+    khungHoi.addEventListener('dragleave', () => khungHoi.classList.remove('dang-keo'));
+    khungHoi.addEventListener('drop', e => {
+      e.preventDefault();
+      khungHoi.classList.remove('dang-keo');
+      const tep = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+      if (tep && /^image\//.test(tep.type)) nhanAnhChoMay(tep);
+    });
+  }
+
 
   const TEN_CONG_CU = {
     doanh_so: 'doanh số', so_sanh_doanh_so: 'so sánh kỳ', top_san_pham: 'hàng bán chạy',
@@ -11971,7 +12093,7 @@ async function khoiDongVanPhong() {
     giao_viec: 'giao việc', viec_dang_mo: 'việc đang mở'
   };
 
-  function bongBong(vai, noiDung, dauVet) {
+  function bongBong(vai, noiDung, dauVet, anh) {
     let chu = '';
     if (dauVet) {
       const phan = [];
@@ -11999,7 +12121,10 @@ async function khoiDongVanPhong() {
                 </details>`;
       }
     }
-    return `<div class="vp-tin ${vai === 'nguoi' ? 'nguoi' : 'agent'}">
+    const khoiAnh = anh
+      ? `<a class="vp-tin-anh" href="${anh}" target="_blank" rel="noopener"><img src="${anh}" alt="Ảnh đính kèm"></a>`
+      : '';
+    return `<div class="vp-tin ${vai === 'nguoi' ? 'nguoi' : 'agent'}">${khoiAnh}
               <div class="vp-tin-noi">${esc(noiDung).replace(/\n/g, '<br>')}</div>${chu}
             </div>`;
   }
@@ -12019,7 +12144,7 @@ async function khoiDongVanPhong() {
     $('#vp-goi-y').innerHTML = '';
 
     // Hiện câu vừa gõ ngay, rồi mới chờ — đỡ cảm giác trang bị đơ.
-    oChat.insertAdjacentHTML('beforeend', bongBong('nguoi', cauHoi));
+    oChat.insertAdjacentHTML('beforeend', bongBong('nguoi', cauHoi, null, anhDangKem));
     oChat.insertAdjacentHTML('beforeend',
       `<div class="vp-tin agent" id="vp-dangnghi"><div class="vp-tin-noi">` +
       `<span class="vp-cham"></span><span class="vp-cham"></span><span class="vp-cham"></span>` +
@@ -12028,7 +12153,8 @@ async function khoiDongVanPhong() {
     xuongCuoi();
 
     try {
-      const kq = await API.vpHoi(cauHoi);
+      const kq = await API.vpHoi(cauHoi, anhDangKem);
+      hienAnhKem(null);   // gửi xong thì bỏ ảnh, tránh gửi nhầm lần sau
 
       /* Tắt vòng quay của Mây, rồi nháy TẤT CẢ phòng vừa tham gia — chủ trì,
          các phòng vào phản biện, và phòng duyệt. Chỉ nháy mỗi phòng chủ trì thì
@@ -12128,7 +12254,7 @@ async function khoiDongVanPhong() {
     const kq = await API.vpHoiThoai();
     oChat.innerHTML = kq.tin_nhan.length
       ? kq.tin_nhan.map(t => bongBong(t.vai, t.noi_dung,
-          t.cong_cu ? JSON.parse(t.cong_cu) : null)).join('')
+          t.cong_cu ? JSON.parse(t.cong_cu) : null, t.anh)).join('')
       : `<div class="vp-chao"><b>Mây</b> đang trực quầy lễ tân.
            <span>Cứ hỏi tự nhiên, tôi tự tìm đúng người trong văn phòng.</span></div>`;
     if (!kq.tin_nhan.length) {

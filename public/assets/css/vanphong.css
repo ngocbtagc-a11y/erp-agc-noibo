@@ -51,9 +51,11 @@
   /* TRẦN chiều cao là thứ quan trọng nhất ở đây. Chỉ đặt aspect-ratio thì màn
      hình càng rộng sàn càng cao — đo ra 800px trên cửa sổ 985px, và người dùng
      lại phải cuộn. Trần 660px giữ cả mặt bằng lẫn ô chat trong một màn. */
-  min-height: 520px;
-  max-height: 660px;
-  aspect-ratio: 16 / 13;
+  /* KHÔNG dùng aspect-ratio kèm trần chiều cao. Đặt cả hai thì trình duyệt
+     rút BỀ NGANG lại cho khớp tỉ lệ — sàn chỉ rộng 812px trong khi cột trái
+     rộng 1400px, chừa một mảng trắng to đùng bên phải. Ghim thẳng chiều cao,
+     bề ngang cứ để nó ăn hết cột. */
+  height: 660px;
   border-radius: var(--r-lg);
   overflow: hidden;
   border: 1px solid var(--line);
@@ -392,7 +394,7 @@
   .vp-bo-cuc { grid-template-columns: 1fr; }
   /* 520px chứ không phải 430: ba hàng thẻ ở khổ này cao ~135px, cộng khoảng
      hở thì hàng dưới cùng tràn khỏi sàn nếu thấp hơn. */
-  .vp-san { min-height: 560px; aspect-ratio: 4 / 3.6; }
+  .vp-san { height: 620px; }
   .vp-phong-khung { width: 92px; min-height: 66px; }
   .vp-phong-nguoi { width: 44px; }
   .vp-bien { max-width: 132px; padding: 4px 10px; }
@@ -1025,4 +1027,124 @@
 @media (max-width: 620px) {
   .vp-ns-dong { grid-template-columns: 1fr; }
   .vp-ns-ai { grid-row: auto; }
+}
+
+/* ---------------------------------------------------------------------------
+   KỸ NĂNG SẾP DẠY THÊM — hiện trong hồ sơ từng trợ lý
+   ---------------------------------------------------------------------------
+   Đặt trong hồ sơ chứ không phải một màn riêng: người ta chỉ thắc mắc "sao trợ
+   lý này tư vấn thế" ngay lúc đang đọc về trợ lý đó. Bắt họ đi tìm ở màn khác
+   là gần như không ai tìm.
+
+   Bài đã tắt vẫn hiện, chỉ mờ đi — xoá hẳn khỏi mắt thì mất luôn manh mối
+   "hôm đó Sếp dạy gì mà ra kết luận này".
+   --------------------------------------------------------------------------- */
+.vp-kn-muc { margin-top: 6px; }
+
+.vp-kn {
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--sage);
+  border-radius: var(--r-md);
+  padding: 10px 12px;
+  margin-bottom: 9px;
+  background: var(--card);
+}
+.vp-kn[data-tat="1"] {
+  opacity: .5;
+  border-left-color: var(--line);
+  background: #f6f6f3;
+}
+
+.vp-kn-dau {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 5px;
+}
+.vp-kn-dau b { font-family: var(--serif); font-size: 13.5px; color: var(--ink); }
+
+.vp-kn-nut {
+  flex: none;
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  padding: 2px 10px;
+  font-size: 11px;
+  color: var(--text-mute);
+  cursor: pointer;
+  font-family: inherit;
+}
+.vp-kn-nut:hover { border-color: var(--sage); color: var(--ink); }
+.vp-kn-nut:disabled { opacity: .5; cursor: wait; }
+
+.vp-kn-noi { font-size: 12.5px; line-height: 1.6; color: var(--text); }
+.vp-kn-chan { margin-top: 6px; font-size: 10.5px; color: var(--text-mute); }
+
+/* ---------------------------------------------------------------------------
+   ẢNH ĐÍNH KÈM TRONG HỘI THOẠI VỚI MÂY
+   ---------------------------------------------------------------------------
+   ⚠️ Mây KHÔNG xem được ảnh — model chạy văn phòng ảo chỉ đọc chữ. Ảnh ở đây
+   để NGƯỜI xem lại và đi kèm khi việc được giao ra người thật. Trợ lý được báo
+   rõ điều đó nên nó hỏi lại Sếp mô tả, chứ không bình luận về thứ chưa nhìn.
+   --------------------------------------------------------------------------- */
+.vp-anh-kem {
+  position: relative;
+  margin-bottom: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 6px;
+  background: var(--card);
+}
+.vp-anh-kem img {
+  display: block;
+  width: 100%;
+  max-height: 150px;
+  object-fit: contain;
+  border-radius: 6px;
+}
+.vp-anh-bo {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--text-mute);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+.vp-anh-bo:hover { color: #c0603f; border-color: #c0603f; }
+
+/* Nút đính kèm nằm trong ô nhập, cạnh nút Hỏi */
+.vp-nhap-anh {
+  flex: none;
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 6px 8px;
+  color: var(--text-mute);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+.vp-nhap-anh:hover { color: var(--ink); border-color: var(--sage); }
+
+/* Ảnh trong bong bóng đã gửi */
+.vp-tin-anh { display: block; margin-bottom: 6px; }
+.vp-tin-anh img {
+  display: block;
+  max-width: 100%;
+  max-height: 220px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+}
+
+/* Kéo ảnh vào khung chat — viền sáng lên để biết thả được */
+.vp-hoi-khung.dang-keo {
+  outline: 2px dashed var(--sage);
+  outline-offset: -4px;
 }

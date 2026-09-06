@@ -26,6 +26,7 @@
      CHAT           tra cứu, hỏi đáp. Không tạo gì cả.
      ANALYSIS       cần chuyên gia phân tích. Trả lời sâu, vẫn không tạo task.
      ACTION_REQUEST cần thay đổi/thực thi. Mới tạo yêu cầu vào hàng đợi.
+     HUAN_LUYEN     dạy nghề cho trợ lý ảo. Ghi kỹ năng vào hồ sơ phòng đó.
 
    MÂY KHÔNG LÀM: không trở thành chuyên gia của mọi lĩnh vực, không tự quyết
    thay Owner, không tự đổi trạng thái yêu cầu rủi ro cao.
@@ -153,12 +154,24 @@ PHÂN LOẠI TƯƠNG TÁC — chọn đúng một:
 - CHAT: hỏi đáp, tra cứu đơn giản. Không cần tạo việc gì.
 - ANALYSIS: cần chuyên gia phân tích sâu, so sánh, phản biện. Vẫn không tạo việc.
 - ACTION_REQUEST: người ta muốn THAY ĐỔI thứ gì đó trong hệ thống hoặc cách làm việc, cần ai đó thực thi.
+- HUAN_LUYEN: người ta muốn DẠY NGHỀ cho đội trợ lý ảo — "cần học soạn thảo văn bản", "học cách đọc hợp đồng nhà cung cấp", "dạy cách xử lý khiếu nại". Dấu hiệu: nói về NĂNG LỰC CỦA TRỢ LÝ chứ không hỏi số liệu hay xin làm việc gì.
+  Việc DUY NHẤT của bạn với loại này: nhận ra nó, rồi chọn đúng phòng sở hữu kỹ năng đó.
+    · soạn thảo công văn, quyết định, nội quy, hồ sơ nhân sự → hcns
+    · hợp đồng, điều khoản, tuân thủ, công bố sản phẩm, quảng cáo → phapche
+    · bán hàng, chăm khách, xử lý khiếu nại, vận hành gian hàng → kinhdoanh
+    · nội dung, hình ảnh, chiến dịch, thương hiệu → mkt
+    · nhập xuất, kiểm kê, đóng gói, giao vận, hạn dùng → khovan
+    · hoá đơn, thuế, công nợ, giá vốn, dòng tiền → ketoan
+    · phần mềm, dữ liệu, tự động hoá, tính năng ERP → it
+    · chiến lược, ưu tiên, cơ cấu tổ chức → trolygd
+  KHÔNG tự phán kỹ năng đó học được hay không, KHÔNG tự nghĩ nội dung bài học —
+  đó là việc của trưởng phòng, họ mới biết nghề. Bạn là lễ tân: nhận và chuyển đúng cửa.
 
 RỦI RO CAO (can_owner_gate = true) nếu câu hỏi dính tới: ${VIEC_RUI_RO_CAO.join(', ')}.
 
 CHỈ trả về JSON đúng khuôn sau, không chào hỏi, không giải thích thêm:
 {
-  "loai": "CHAT" | "ANALYSIS" | "ACTION_REQUEST",
+  "loai": "CHAT" | "ANALYSIS" | "ACTION_REQUEST" | "HUAN_LUYEN",
   "agent": "<id chuyên gia phù hợp nhất>",
   "agent_phu": ["<id chuyên gia khác nên hỏi thêm, tối đa 2, để [] nếu không cần>"],
   "cong_cu": ["<tên công cụ cần chạy, để [] nếu không cần tra số>"],
@@ -185,8 +198,8 @@ Quy tắc chọn công cụ:
    LƯỢT 2 — CHUYÊN GIA TRẢ LỜI
    ========================================================================== */
 
-function promptTraLoi(agent, nguoi, homNay, cauHoi, duLieu, lichSu, yKienPhu) {
-  const heThong = ghepPrompt(agent, nguoi, homNay);
+function promptTraLoi(agent, nguoi, homNay, cauHoi, duLieu, lichSu, yKienPhu, kyNang = [], coAnhKem = false) {
+  const heThong = ghepPrompt(agent, nguoi, homNay, kyNang);
 
   const phanDuLieu = duLieu.length
     ? duLieu.map(d =>
@@ -210,6 +223,25 @@ function promptTraLoi(agent, nguoi, homNay, cauHoi, duLieu, lichSu, yKienPhu) {
      Bắt nói rõ phân bổ phần nào cho phòng nào là chỗ then chốt: có phân bổ thì
      vòng sau mới có cái CỤ THỂ để phản biện. Không có thì các phòng chỉ bình
      luận chung chung về một ý tưởng chung chung. */
+  /* Ảnh: nói THẲNG là không xem được. Bỏ trống chỗ này thì mô hình thấy chữ
+     "ảnh" trong câu hỏi và bắt đầu bình luận về thứ nó chưa từng thấy — đúng
+     kiểu bịa mà hiến pháp cấm. Thà hỏi lại người gửi một câu. */
+  const phanAnh = coAnhKem
+    ? `
+==================================================
+NGƯỜI GỬI CÓ ĐÍNH KÈM MỘT ẢNH
+==================================================
+
+Bạn KHÔNG XEM ĐƯỢC ảnh đó — bạn chỉ đọc được chữ. Tuyệt đối không suy đoán
+trong ảnh có gì.
+
+Nếu câu hỏi phải nhìn ảnh mới trả lời được thì nói thẳng: bạn không xem được
+ảnh, và nhờ người gửi gõ ra vài dòng ảnh đang hiện cái gì (con số nào, màn hình
+nào, thông báo lỗi ra sao). Ảnh vẫn được lưu lại trong hội thoại để NGƯỜI đọc,
+và sẽ đi kèm nếu việc này được giao ra cho người thật.
+`
+    : '';
+
   const phanPhanBo = (yKienPhu === null)
     ? `
 
@@ -250,6 +282,7 @@ CÂU HỎI LÚC NÀY
 
 ${cauHoi}
 
+${phanAnh}
 Trả lời bằng tiếng Việt, đi thẳng vào việc.${phanPhanBo}`;
 }
 
@@ -320,8 +353,8 @@ Không có dữ liệu để khẳng định thì nói "chưa đủ dữ liệu"
    VÒNG 3 — CHUYÊN GIA CHÍNH NGHE PHẢN BIỆN RỒI CHỐT
    ========================================================================== */
 
-function promptChot(agent, nguoi, homNay, cauHoi, phuongAn, phanBien, duLieu) {
-  const heThong = ghepPrompt(agent, nguoi, homNay);
+function promptChot(agent, nguoi, homNay, cauHoi, phuongAn, phanBien, duLieu, kyNang = []) {
+  const heThong = ghepPrompt(agent, nguoi, homNay, kyNang);
 
   const phanDuLieu = duLieu.length
     ? duLieu.map(d => `### Kết quả công cụ "${d.ten}"\n${JSON.stringify(d.ket_qua)}`).join('\n\n')
@@ -473,7 +506,158 @@ CHƯA DUYỆT: <thiếu gì, cần ai làm rõ trước>
 Kết luận ổn thì DUYỆT thẳng. KHÔNG bịa ra điều kiện để tỏ ra mình có soi.`;
 }
 
-export async function hoiMay({ env, phien, cauHoi, lichSu = [], homNay }) {
+/* ==========================================================================
+   HUẤN LUYỆN — TRƯỞNG PHÒNG TỰ SOẠN BÀI CHO CHÍNH MÌNH
+   --------------------------------------------------------------------------
+   Sếp Ngọc chốt 06/09/2026: "Mây chỉ đơn thuần là lễ tân tiếp nhận và phân
+   loại thôi". Nên Mây dừng ở chỗ nhận ra đây là buổi dạy nghề và chuyển đúng
+   cửa. Từ đó trở đi là việc của trưởng phòng.
+
+   TRƯỞNG PHÒNG PHẢI TRẢ LỜI HAI CÂU, THEO THỨ TỰ:
+
+   1. Kỹ năng này CÓ CẦN CÔNG CỤ KHÔNG?
+
+      ĐỪNG hiểu câu này thành "tôi đã biết chưa" — dĩ nhiên là chưa, đó chính
+      là lý do buổi dạy này diễn ra. Câu hỏi là: giả sử bây giờ bạn ngồi viết
+      ra cách làm, bạn viết được không, hay phải mở ERP tra số mới viết nổi?
+      Học được: nó là CÁCH LÀM, là quy tắc nghề. "Công văn phải có số hiệu và
+      nơi nhận", "hợp đồng nhà cung cấp phải có điều khoản đổi trả hàng cận
+      hạn". Đọc xong là làm được, không cần tra gì thêm.
+      KHÔNG học được: nó cần DỮ LIỆU hoặc cần thao tác lên hệ thống. "Biết
+      tính điểm đặt hàng lại từ tốc độ bán" nghe như kỹ năng, nhưng muốn làm
+      thì phải đọc được lịch sử bán của từng mã — mà đó là một công cụ, phải
+      có người viết code.
+
+      Đây là chỗ dễ sai nhất và sai thì nguy: nhận bừa một kỹ năng cần dữ liệu
+      rồi ghi vào hồ sơ, trợ lý sẽ TIN LÀ MÌNH BIẾT và bắt đầu bịa số ở những
+      câu sau. Thà nói "cái này em phải nhờ phòng IT dựng công cụ" — chậm một
+      nhịp còn hơn nói sai một cách tự tin.
+
+   2. Nếu học được thì SOẠN BÀI. Trưởng phòng tự viết, vì họ là người biết
+      nghề — Mây hay bất cứ ai khác viết hộ thì ra bài học chung chung.
+   ========================================================================== */
+function promptHocNghe(agent, nguoi, homNay, yeuCau, kyNangDaCo) {
+  const heThong = ghepPrompt(agent, nguoi, homNay, kyNangDaCo);
+
+  const daCo = kyNangDaCo.length
+    ? kyNangDaCo.map(k => '- ' + k.tieu_de).join('\n')
+    : '(Chưa được dạy thêm kỹ năng nào ngoài hồ sơ gốc.)';
+
+  return `${heThong}
+
+==================================================
+BẠN ĐANG ĐƯỢC DẠY NGHỀ
+==================================================
+
+${nguoi.ho_ten || nguoi.tai_khoan} muốn đội trợ lý học thêm một kỹ năng, và Mây
+xác định kỹ năng này thuộc phòng bạn.
+
+NGUYÊN VĂN YÊU CẦU: ${yeuCau}
+
+KỸ NĂNG BẠN ĐÃ ĐƯỢC DẠY TRƯỚC ĐÓ:
+${daCo}
+
+Trả lời DUY NHẤT một khối JSON, không thêm chữ nào ngoài nó:
+
+{
+  "can_cong_cu": xem quy tắc ngay dưới đây trước khi điền,
+  "ly_do": "chỉ điền khi can_cong_cu=true: cần công cụ đọc dữ liệu gì. Còn lại để chuỗi rỗng",
+  "trung_lap": true nếu kỹ năng này đã có trong danh sách trên, false nếu chưa,
+  "tieu_de": "tên kỹ năng, dưới 60 ký tự, gọi đúng như người trong nghề gọi",
+  "noi_dung": "bài học, viết cho chính bạn đọc lại mỗi lần làm việc"
+}
+
+KHI NÀO can_cong_cu = true — CHỈ ĐÚNG HAI TRƯỜNG HỢP, ngoài ra luôn là false:
+  (a) Muốn làm được thì phải đọc SỐ LIỆU KINH DOANH ĐANG SỐNG trong ERP: tồn kho
+      hiện tại, doanh số, đơn hàng, công nợ, danh sách nhân sự, giá vốn.
+  (b) Muốn làm được thì phải THAO TÁC lên hệ thống: sửa dữ liệu, tạo bản ghi,
+      gọi sang Shopee hay TikTok Shop.
+
+KHÔNG PHẢI cần công cụ, những thứ sau đều học suông được hết:
+  · "cần mẫu biểu, cần quy định của công ty" — mẫu và quy định là KIẾN THỨC, và
+    đây chính là buổi để Sếp truyền nó cho bạn. Bạn cứ viết theo chuẩn nghề phổ
+    thông; chỗ nào Alpha Green làm khác thì Sếp sẽ dạy tiếp.
+  · "tôi chưa được đào tạo cái này" — đúng, nên mới có buổi dạy này.
+  · "cần thêm thông tin chi tiết" — cứ viết bản đủ dùng đã, thiếu thì bổ sau.
+
+PHÂN VÂN THÌ CHỌN false. Từ chối nhầm một kỹ năng học được thì Sếp mất công đi
+một vòng vô ích; còn nhận bừa một kỹ năng cần dữ liệu thì bạn sẽ bịa số ở những
+câu sau — nhưng chuyện đó chỉ xảy ra với (a) và (b) ở trên, không phải với việc
+soạn thảo, quy trình, cách viết, cách kiểm tra.
+
+QUY TẮC VIẾT noi_dung — bỏ qua là bài học vô dụng:
+- Viết CÁCH LÀM theo bước, không viết định nghĩa. "Soạn thảo văn bản là việc
+  tạo ra văn bản" là câu vô nghĩa; "công văn gồm 9 phần theo thứ tự: quốc hiệu,
+  số hiệu, địa danh và ngày, tên loại và trích yếu, nơi nhận..." mới dùng được.
+- Nêu rõ CHỖ HAY SAI. Bài học không có cảnh báo thì chỉ là mục lục.
+- Gắn vào Alpha Green: thực phẩm sạch và hàng mẹ & bé, bán trên Shopee và
+  TikTok Shop, 15 người. Bài chung chung thì lên mạng đọc còn nhanh hơn.
+- TUYỆT ĐỐI KHÔNG nhét số liệu kinh doanh vào (tồn kho, doanh số, giá vốn).
+  Số thì phải tra ERP mới đúng; viết vào bài học là hôm sau đã sai mà bạn vẫn
+  nói chắc nịch.
+- Dài vừa đủ, khoảng 150 đến 400 chữ. Bài này sẽ được nạp vào MỌI câu trả lời
+  của bạn sau này, viết dài là mỗi câu hỏi về sau đều phải trả giá.`;
+}
+
+/* Kỹ năng đã dạy cho một trợ lý — đọc ở MỌI câu hỏi gửi tới trợ lý đó, nên có
+   chỉ mục một phần riêng (xem migrations/them-vp-kynang.sql) và có trần 12 bài.
+   Trần không phải để tiết kiệm chỗ lưu mà để tiết kiệm token: mỗi bài học đều
+   được nạp vào prompt ở mọi lượt hỏi về sau, dạy vô tội vạ là mỗi câu hỏi từ
+   đó trở đi đều đắt thêm. */
+async function docKyNang(env, agentId) {
+  try {
+    const { results } = await env.DB.prepare(
+      'SELECT id, tieu_de, noi_dung FROM vp_ky_nang ' +
+      'WHERE agent_id = ? AND dang_dung = 1 ORDER BY tao_luc DESC LIMIT 12'
+    ).bind(agentId).all();
+    return results || [];
+  } catch (e) {
+    console.error('Đọc kỹ năng lỗi:', e.message);
+    return [];
+  }
+}
+
+/* ==========================================================================
+   DẠY NGHỀ — chặng của trưởng phòng, sau khi Mây đã chuyển đúng cửa
+   ========================================================================== */
+async function dayNghe(env, agent, nguoi, homNay, yeuCau) {
+  const daCo = await docKyNang(env, agent.id);
+
+  let kq;
+  try {
+    kq = bocJson(await goiAI(env, promptHocNghe(agent, nguoi, homNay, yeuCau, daCo), 900));
+  } catch (e) {
+    console.error('Dạy nghề lỗi:', e.message);
+    return { loi: true };
+  }
+  if (!kq) return { loi: true };
+
+  if (kq.can_cong_cu === true) {
+    return { tu_choi: true, ly_do: String(kq.ly_do || "").trim() };
+  }
+  if (kq.trung_lap === true) {
+    return { trung_lap: true, tieu_de: String(kq.tieu_de || "").trim() };
+  }
+
+  const tieuDe = String(kq.tieu_de || "").trim().slice(0, 60);
+  const noiDung = String(kq.noi_dung || "").trim().slice(0, 2400);
+  if (!tieuDe || noiDung.length < 40) return { loi: true };
+
+  if (daCo.length >= 12) {
+    return { day_roi: true, tieu_de: tieuDe, noi_dung: noiDung,
+             qua_tai: true, dang_co: daCo.length };
+  }
+
+  const id = "kn_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  await env.DB.prepare(
+    "INSERT INTO vp_ky_nang (id, agent_id, tieu_de, noi_dung, yeu_cau_goc, nguoi_day_id) " +
+    "VALUES (?, ?, ?, ?, ?, ?)"
+  ).bind(id, agent.id, tieuDe, noiDung, String(yeuCau).slice(0, 500), nguoi.nhan_su_id || null).run();
+
+  return { day_roi: true, id, tieu_de: tieuDe, noi_dung: noiDung, dang_co: daCo.length + 1 };
+}
+
+export async function hoiMay({ env, phien, cauHoi, lichSu = [], homNay, coAnhKem = false }) {
   if (!env.AI) {
     const e = new Error('Máy chủ chưa bật AI. Cần binding [ai] trong wrangler.toml.');
     e.thieu_ai = true;
@@ -557,20 +741,54 @@ export async function hoiMay({ env, phien, cauHoi, lichSu = [], homNay }) {
     .filter(id => id !== agent.id && duocGap.some(a => a.id === id))
     .slice(0, heTrong ? 2 : 1);
 
-  const dangBan = dinh.loai !== 'CHAT' && dsPhu.length > 0;
+  /* Dạy nghề KHÔNG họp ba vòng. Họp là để chọn giữa nhiều phương án; còn dạy
+     nghề thì phòng sở hữu kỹ năng tự viết bài cho mình, các phòng khác ngồi vào
+     chỉ tốn lượt gọi AI mà không thêm được gì. */
+  const laDayNghe = dinh.loai === 'HUAN_LUYEN';
+
+  /* Đọc kỹ năng dạy thêm MỘT LẦN rồi dùng lại cho cả ba vòng. Đọc ở từng vòng
+     là ba lượt truy vấn cho cùng một thứ không đổi giữa chừng. */
+  const kyNangCuaAgent = laDayNghe ? [] : await docKyNang(env, agent.id);
+  const dangBan = !laDayNghe && dinh.loai !== 'CHAT' && dsPhu.length > 0;
   const bienBan = [];        // ghi lại cuộc họp, để người đọc biết đã bàn những gì
   let traLoi;
 
+  let ketQuaDay = null;
+
   try {
-    if (!dangBan) {
+    if (laDayNghe) {
+      ketQuaDay = await dayNghe(env, agent, nguoi, homNay, cauHoi);
+      if (ketQuaDay.loi) {
+        traLoi = 'Tôi chưa ghi được kỹ năng này. Sếp thử nói lại rõ hơn giúp tôi.';
+      } else if (ketQuaDay.tu_choi) {
+        /* Trưởng phòng từ chối vì kỹ năng cần dữ liệu — đây là câu trả lời ĐÚNG,
+           không phải lỗi. Nói thẳng đường đi tiếp thay vì để Sếp tắc. */
+        traLoi = 'Kỹ năng này tôi không học suông được.' + '\n\n' + ketQuaDay.ly_do
+          + '\n\nĐể làm được, cần phòng IT dựng thêm công cụ tra dữ liệu. '
+          + 'Sếp nói với Mây "nhờ anh Tuấn xem việc này" là tôi chuyển sang đó.';
+      } else if (ketQuaDay.trung_lap) {
+        traLoi = 'Kỹ năng này tôi đã được dạy rồi — "' + ketQuaDay.tieu_de
+          + '". Tôi không ghi trùng. Sếp muốn sửa lại nội dung thì nói rõ chỗ cần sửa.';
+      } else if (ketQuaDay.qua_tai) {
+        traLoi = 'Tôi đang giữ 12 kỹ năng dạy thêm — đã kịch trần.'
+          + '\n\nTrần này không phải để tiết kiệm chỗ lưu, mà vì mỗi bài học đều được '
+          + 'nạp vào MỌI câu trả lời của tôi sau này. Nhiều quá thì câu nào cũng nặng và chậm.'
+          + '\n\nSếp vào hồ sơ của tôi, tắt bớt bài không còn dùng, rồi dạy lại.';
+      } else {
+        traLoi = 'Tôi đã học xong và ghi vào hồ sơ: **' + ketQuaDay.tieu_de + '**'
+          + '\n\n' + ketQuaDay.noi_dung
+          + '\n\n---\nTừ giờ mọi câu Sếp hỏi tới tôi đều có phần này trong đầu. '
+          + 'Thấy tôi hiểu sai chỗ nào thì vào hồ sơ tắt bài này đi rồi dạy lại.';
+      }
+    } else if (!dangBan) {
       /* Việc đơn giản: một chuyên gia trả lời thẳng. */
       traLoi = await goiAI(
-        env, promptTraLoi(agent, nguoi, homNay, cauHoi, daTraCuu, lichSu, null), 1500
+        env, promptTraLoi(agent, nguoi, homNay, cauHoi, daTraCuu, lichSu, null, kyNangCuaAgent, coAnhKem), 1500
       );
     } else {
       /* --- Vòng 1: phương án đầu --- */
       const phuongAn = String(await goiAI(
-        env, promptTraLoi(agent, nguoi, homNay, cauHoi, daTraCuu, lichSu, null), 1200
+        env, promptTraLoi(agent, nguoi, homNay, cauHoi, daTraCuu, lichSu, null, kyNangCuaAgent, coAnhKem), 1200
       ) || '').trim();
       bienBan.push({ vong: 1, agent: agent.id, chuc_danh: agent.chuc_danh, vai: 'đề xuất', noi_dung: phuongAn });
 
@@ -593,7 +811,7 @@ export async function hoiMay({ env, phien, cauHoi, lichSu = [], homNay }) {
 
       /* --- Vòng 3: chuyên gia chính chỉnh lại rồi chốt --- */
       traLoi = await goiAI(
-        env, promptChot(agent, nguoi, homNay, cauHoi, phuongAn, phanBien, daTraCuu), 1600
+        env, promptChot(agent, nguoi, homNay, cauHoi, phuongAn, phanBien, daTraCuu, kyNangCuaAgent), 1600
       );
       bienBan.push({ vong: 3, agent: agent.id, chuc_danh: agent.chuc_danh, vai: 'chốt', noi_dung: String(traLoi || '').trim() });
 
@@ -627,7 +845,7 @@ export async function hoiMay({ env, phien, cauHoi, lichSu = [], homNay }) {
 
   const yKienPhu = bienBan.filter(b => b.vong === 2).map(b => ({ id: b.agent, chuc_danh: b.chuc_danh }));
 
-  const loai = ['CHAT', 'ANALYSIS', 'ACTION_REQUEST'].includes(dinh.loai) ? dinh.loai : 'CHAT';
+  const loai = ['CHAT', 'ANALYSIS', 'ACTION_REQUEST', 'HUAN_LUYEN'].includes(dinh.loai) ? dinh.loai : 'CHAT';
   let vanBan = String(traLoi || '').trim() ||
     'Tôi chưa trả lời được câu này. Sếp hỏi lại cụ thể hơn giúp tôi.';
   let viecDaGiao = null;

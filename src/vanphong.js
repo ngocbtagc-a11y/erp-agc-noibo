@@ -252,6 +252,41 @@ export async function nangSuat(env, phien) {
   });
 }
 
+
+/* ==========================================================================
+   KỸ NĂNG ĐÃ DẠY — xem lại và tắt
+   --------------------------------------------------------------------------
+   Dạy được thì phải GỠ được. Một bài học sai mà không tắt đi thì nó lặng lẽ
+   làm hỏng mọi câu trả lời về sau, và càng lâu càng khó lần ra vì sao trợ lý
+   tự nhiên tư vấn lệch.
+
+   Tắt chứ không xoá: giữ lại để còn đối chiếu "hôm đó Sếp dạy gì mà ra kết
+   luận này". Xoá trắng là mất luôn manh mối.
+   ========================================================================== */
+export async function kyNangDs(env, phien) {
+  if (!duocXemTab(phien, 'vanphong')) return loi('Bạn chưa được vào văn phòng ảo.', 403);
+  const { results } = await env.DB.prepare(
+    'SELECT k.id, k.agent_id, k.tieu_de, k.noi_dung, k.yeu_cau_goc, k.dang_dung, k.tao_luc, ' +
+    '       ns.ho_ten AS nguoi_day ' +
+    '  FROM vp_ky_nang k LEFT JOIN nhan_su ns ON ns.id = k.nguoi_day_id ' +
+    ' ORDER BY k.tao_luc DESC LIMIT 200'
+  ).all();
+  return json({ ky_nang: results || [] });
+}
+
+export async function kyNangDoiTrangThai(env, phien, body) {
+  if (!duocXemTab(phien, 'vanphong')) return loi('Bạn chưa được vào văn phòng ảo.', 403);
+  const id = String(body?.id || '').trim();
+  const bat = body?.dang_dung ? 1 : 0;
+  if (!id) return loi('Thiếu mã kỹ năng');
+
+  const co = await env.DB.prepare('SELECT id FROM vp_ky_nang WHERE id = ?').bind(id).first();
+  if (!co) return loi('Không có kỹ năng này', 404);
+
+  await env.DB.prepare('UPDATE vp_ky_nang SET dang_dung = ? WHERE id = ?').bind(bat, id).run();
+  return json({ ok: true, dang_dung: bat });
+}
+
 /* ==========================================================================
    CÓ MẶT — giao diện gọi mỗi 20 giây
    ========================================================================== */
@@ -287,7 +322,7 @@ export async function hoiThoai(env, phien) {
      nằm trong dấu vết của từng câu trả lời. */
   const ht = await layHoacTaoHoiThoai(env, phien.nhan_su_id, 'may');
   const { results } = await env.DB.prepare(`
-    SELECT vai, noi_dung, cong_cu, luc
+    SELECT vai, noi_dung, cong_cu, anh, luc
       FROM vp_tin_nhan WHERE hoi_thoai_id = ?
      ORDER BY id DESC LIMIT 60
   `).bind(ht.id).all();
@@ -322,8 +357,20 @@ async function layHoacTaoHoiThoai(env, nhanSuId, agentId) {
    ========================================================================== */
 export async function hoi(env, phien, body) {
   const noiDung = String(body?.noi_dung || '').trim();
-  if (!noiDung) return loi('Chưa nhập nội dung');
+  const anh = String(body?.anh || '').trim();
+
+  /* Có ảnh thì cho phép chữ rỗng — nhiều lúc người ta chỉ chụp màn hình rồi
+     hỏi "cái này là sao", chữ nghĩa nằm hết trong ảnh. */
+  if (!noiDung && !anh) return loi('Chưa nhập nội dung');
   if (noiDung.length > 4000) return loi('Câu hỏi dài quá, Sếp rút gọn giúp tôi');
+
+  /* Ảnh lưu thẳng vào D1 dạng data URL đã nén ở trình duyệt. Chặn ở đây một
+     lần nữa: trình duyệt nén hỏng hoặc ai đó gọi thẳng API thì một dòng D1
+     phình lên vài MB, và bảng hội thoại sẽ chậm dần mà không ai hiểu vì sao. */
+  if (anh) {
+    if (!anh.startsWith('data:image/')) return loi('Ảnh không hợp lệ');
+    if (anh.length > 900000) return loi('Ảnh nặng quá, Sếp chụp gọn lại giúp tôi');
+  }
 
   const ht = await layHoacTaoHoiThoai(env, phien.nhan_su_id, 'may');
 
@@ -337,7 +384,8 @@ export async function hoi(env, phien, body) {
   let kq;
   try {
     kq = await hoiMay({
-      env, phien, cauHoi: noiDung, lichSu, homNay: homNayVN()
+      env, phien, cauHoi: noiDung || '(Sếp gửi ảnh, không kèm chữ)',
+      lichSu, homNay: homNayVN(), coAnhKem: !!anh
     });
   } catch (e) {
     if (e.thieu_ai) return loi(e.message, 503);
@@ -371,11 +419,11 @@ export async function hoi(env, phien, body) {
   };
 
   const chen = env.DB.prepare(
-    'INSERT INTO vp_tin_nhan (hoi_thoai_id, vai, noi_dung, cong_cu) VALUES (?, ?, ?, ?)'
+    'INSERT INTO vp_tin_nhan (hoi_thoai_id, vai, noi_dung, cong_cu, anh) VALUES (?, ?, ?, ?, ?)'
   );
   await env.DB.batch([
-    chen.bind(ht.id, 'nguoi', noiDung, null),
-    chen.bind(ht.id, 'agent', kq.tra_loi, JSON.stringify(dauVet)),
+    chen.bind(ht.id, 'nguoi', noiDung, null, anh || null),
+    chen.bind(ht.id, 'agent', kq.tra_loi, JSON.stringify(dauVet), null),
     env.DB.prepare("UPDATE vp_hoi_thoai SET cap_nhat_luc = datetime('now', '+7 hours') WHERE id = ?")
       .bind(ht.id)
   ]);

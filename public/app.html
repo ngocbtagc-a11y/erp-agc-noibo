@@ -529,7 +529,16 @@
             <div class="panel-body">
               <div class="vp-chat" id="vp-chat"></div>
               <div class="vp-goi-y" id="vp-goi-y"></div>
+              <!-- Ảnh đính kèm: hiện ngay trên ô nhập, bỏ được trước khi gửi -->
+              <div class="vp-anh-kem" id="vp-anh-kem" hidden>
+                <img id="vp-anh-xem" alt="Ảnh sắp gửi">
+                <button type="button" class="vp-anh-bo" id="vp-anh-bo" title="Bỏ ảnh">×</button>
+              </div>
               <form class="vp-nhap" id="vp-nhap-form">
+                <input type="file" id="vp-anh-chon" accept="image/*" hidden>
+                <button type="button" class="vp-nhap-anh" id="vp-anh-nut" title="Đính kèm ảnh — dán Ctrl+V hoặc kéo thả cũng được">
+                  <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M3 17l5-4 4 3 4-4 5 4"/></svg>
+                </button>
                 <textarea id="vp-nhap" rows="1"
                           placeholder="Ví dụ: doanh số tuần này tụt vì sao?"
                           autocomplete="off"></textarea>

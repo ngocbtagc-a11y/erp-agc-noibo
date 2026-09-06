@@ -6944,6 +6944,20 @@ async function vpTongQuan(req, env) {
   return vanphong.tongQuan(env, phien);
 }
 
+/* Kỹ năng đã dạy cho trợ lý ảo — xem lại và tắt bài dạy sai */
+async function vpKyNangDs(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  return vanphong.kyNangDs(env, phien);
+}
+
+async function vpKyNangDoi(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return vanphong.kyNangDoiTrangThai(env, phien, b);
+}
+
 /* Năng suất đội trợ lý ảo — tab phụ trong Văn phòng ảo */
 async function vpNangSuat(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
@@ -7170,6 +7184,8 @@ const DUONG_DAN = {
   /* ---- Văn phòng ảo: 9 trợ lý AI ---- */
   'GET  /api/van-phong/tong-quan': vpTongQuan,
   'GET  /api/van-phong/nang-suat': vpNangSuat,
+  'GET  /api/van-phong/ky-nang':   vpKyNangDs,
+  'POST /api/van-phong/ky-nang':   vpKyNangDoi,
   'POST /api/van-phong/co-mat':    vpCoMat,
   'GET  /api/van-phong/hoi-thoai': vpHoiThoai,
   'POST /api/van-phong/hoi':       vpHoi

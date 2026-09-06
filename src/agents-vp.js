@@ -813,7 +813,10 @@ export function ghepPromptNgan(agent, nguoi, homNay) {
   ].filter(x => x !== null).join('\n');
 }
 
-export function ghepPrompt(agent, nguoi, homNay) {
+/* Tham số thứ tư: những kỹ năng Sếp đã dạy thêm cho trợ lý này, đọc từ bảng
+   vp_ky_nang. Để MẶC ĐỊNH rỗng nên mọi chỗ gọi cũ không phải sửa — và quan
+   trọng hơn, thiếu database thì trợ lý vẫn chạy bằng hồ sơ gốc chứ không gãy. */
+export function ghepPrompt(agent, nguoi, homNay, kyNangDayThem = []) {
   const laCapTren = agent.id === 'trolygd' || agent.id === 'trolypgd';
   const hoSo = roleProfileCua(agent.id);
 
@@ -840,6 +843,21 @@ export function ghepPrompt(agent, nguoi, homNay) {
     '',
     agent.prompt,
     '',
+    /* Kỹ năng dạy thêm đặt SAU hồ sơ gốc và TRƯỚC cách làm việc: nó bổ sung
+       nghề, không được đè lên hiến pháp. Trợ lý học được cách soạn công văn
+       thì vẫn phải tuân thủ cấm bịa số và hai cửa pháp lý – tài chính. */
+    kyNangDayThem.length ? [
+      '==================================================',
+      'KỸ NĂNG ĐÃ ĐƯỢC DẠY THÊM',
+      '==================================================',
+      '',
+      'Đây là nghề Sếp dạy riêng cho bạn, áp dụng khi gặp đúng việc. Nó KHÔNG',
+      'thay thế hiến pháp bên trên: vẫn cấm bịa số, vẫn phải qua hai cửa pháp lý',
+      'và tài chính trước khi kết luận.',
+      '',
+      kyNangDayThem.map(k => '### ' + k.tieu_de + '\n' + k.noi_dung).join('\n\n')
+    ].join('\n') : null,
+    kyNangDayThem.length ? '' : null,
     laCapTren ? CACH_PHAN_BIEN : null,
     laCapTren ? '' : null,
     CACH_LAM_VIEC,
