@@ -11712,6 +11712,7 @@ async function khoiDongVanPhong() {
     // Nội thất vẽ TRƯỚC và nằm ở lớp nền — bàn ghế cây cối mà đè lên người thì
     // che mất thứ duy nhất người dùng cần nhìn.
     const lopKhu = $('#vp-khu-lop');
+    veViecTreo(duLieu.viec_treo);
     if (lopKhu) lopKhu.innerHTML = veKhuVuc();
     const lopDo = $('#vp-do-lop');
     if (lopDo) lopDo.innerHTML = veNoiThat();
@@ -11924,7 +11925,9 @@ async function khoiDongVanPhong() {
     /* Xếp theo tổng lượt tham gia, nhiều nhất lên trên — nhưng KHÔNG đánh số
        thứ hạng: đánh số là biến bảng đếm thành bảng thi đua, mà "ít ai hỏi tới
        mảng đó" không phải lỗi của trợ lý. */
-    const tong = r => r.chu_tri + r.phan_bien + r.duyet;
+    /* Lễ tân KHÔNG xếp chung thanh so sánh với trưởng phòng: hai thước đo khác
+       nhau, vẽ chung một thanh là so số quýt với số cam. */
+    const tong = r => r.la_le_tan ? 0 : (r.chu_tri + r.phan_bien + r.duyet);
     const ds = [...d.dong].sort((a, b) => tong(b) - tong(a));
     const caoNhat = Math.max(1, ...ds.map(tong));
 
@@ -11941,11 +11944,17 @@ async function khoiDongVanPhong() {
           <i style="width:${Math.round(tong(r) / caoNhat * 100)}%"></i>
         </div>
         <div class="vp-ns-so">
-          ${COT_NS.map(c => `
-            <span title="${esc(c.giai_thich)}">
-              <b class="${c.khoa === 'chan_lai' && r[c.khoa] ? 'tot' : ''}">${r[c.khoa] || 0}</b>
-              <em>${c.ten}</em>
-            </span>`).join('')}
+          ${r.la_le_tan
+            ? `<span title="Số lượt Mây nhận và phân về đúng phòng">
+                 <b>${r.tiep_nhan || 0}</b><em>Tiếp nhận</em>
+               </span>
+               <span class="vp-ns-khongdo">Mây không chủ trì, không phản biện, không duyệt —
+                 nên sáu cột kia không áp cho cô ấy.</span>`
+            : COT_NS.map(c => `
+                <span title="${esc(c.giai_thich)}">
+                  <b class="${c.khoa === 'chan_lai' && r[c.khoa] ? 'tot' : ''}">${r[c.khoa] || 0}</b>
+                  <em>${c.ten}</em>
+                </span>`).join('')}
         </div>
       </div>`).join('');
   }
@@ -12013,6 +12022,35 @@ async function khoiDongVanPhong() {
     }
     nut.disabled = false;
   });
+
+
+  /* ---- Việc đang treo -----------------------------------------------------
+     Không phải thông báo, không phải chuông. Nó nằm chắn ngang đầu tab: mỗi
+     lần Sếp bước vào văn phòng là thấy ngay còn gì đang chờ chính mình.
+
+     Nói rõ VIỆC CỦA AI. Bốn phiếu treo 8 ngày vừa rồi treo đúng vì không ai
+     biết nó đang chờ mình — máy làm xong phần của nó rồi đứng im, người thì
+     không biết mình đang phải quyết. */
+  function veViecTreo(ds) {
+    const o = $('#vp-treo');
+    if (!o) return;
+    if (!ds || !ds.length) { o.hidden = true; return; }
+
+    o.innerHTML = ds.map(v => `
+      <div class="vp-treo-muc">
+        <div class="vp-treo-dau">
+          <b>${esc(v.tieu_de)}</b>
+          <span class="vp-treo-dem">${v.so} phiếu · lâu nhất ${v.lau_nhat} ngày</span>
+        </div>
+        <div class="vp-treo-cua">Đang chờ: ${esc(v.viec_cua)}</div>
+        <ul class="vp-treo-ds">
+          ${(v.chi_tiet || []).map(g =>
+            `<li><b>GY-${String(g.id).padStart(4, "0")}</b> ${esc(g.tieu_de)}
+               <em>${g.so_ngay} ngày</em></li>`).join("")}
+        </ul>
+      </div>`).join("");
+    o.hidden = false;
+  }
 
   /* ---- Khung trò chuyện với Mây ----------------------------------------- */
 

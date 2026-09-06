@@ -100,6 +100,78 @@ async function taiCuaXuong(env) {
   return ra;
 }
 
+
+/* ==========================================================================
+   VIỆC ĐANG TREO — văn phòng ảo tự rà và thúc
+   --------------------------------------------------------------------------
+   Sếp Ngọc 06/09/2026: "vì sao list này vẫn treo việc, liên tục rà soát và
+   thúc đẩy nhân sự làm đi chứ" — và "văn phòng ảo chịu trách nhiệm check list
+   đúng việc của mình và hoàn thành".
+
+   ĐIỀU TRA RA GÌ: bốn phiếu treo 8 ngày KHÔNG phải vì máy chết. Hồ Ly đã chấm
+   xong cả bốn từ 28–29/08, mỗi phiếu đã có sẵn phân loại, mức rủi ro và bản
+   đặc tả đề xuất. Máy CỐ Ý dừng ở đó — nó chỉ ghi các cột de_xuat_*, không có
+   đường nào tự đổi trang_thai, vì bước tiếp theo cần Sếp bấm "Áp dụng đề xuất".
+   Đó là Owner Gate, đúng theo hiến pháp.
+
+   LỖ HỔNG THẬT: KHÔNG AI BÁO CHO SẾP BIẾT là có đề xuất đang chờ bấm. Máy làm
+   xong rồi đứng im, người thì không biết mình đang phải quyết. Việc nằm giữa
+   hai bên, không bên nào sai, và nó treo mãi.
+
+   Nên văn phòng ảo tự rà và hiện ngay khi Sếp mở cửa vào — không phải gửi
+   thông báo (một cái chuông nữa thì bị lờ như mọi cái chuông khác), mà nằm
+   ngay trên mặt bằng, mỗi lần bước vào văn phòng là thấy.
+   ========================================================================== */
+async function viecDangTreo(env) {
+  const ra = [];
+  try {
+    /* 1) Đề xuất máy chấm xong, đang chờ Sếp bấm áp dụng */
+    const { results: cho } = await env.DB.prepare(`
+      SELECT id, tieu_de,
+             CAST(julianday(datetime('now', '+7 hours')) - julianday(tu_dong_xu_luc) AS INTEGER) AS so_ngay
+        FROM gop_y
+       WHERE trang_thai IN ('moi', 'cho_phan_tich')
+         AND tu_dong_xu_luc IS NOT NULL
+         AND de_xuat_spec IS NOT NULL
+       ORDER BY tu_dong_xu_luc ASC LIMIT 20
+    `).all();
+    if ((cho || []).length) {
+      ra.push({
+        loai: 'gop_y_cho_ap_dung',
+        so: cho.length,
+        lau_nhat: Math.max(...cho.map(g => g.so_ngay || 0)),
+        tieu_de: 'Đề xuất đã phân tích xong, đang chờ Sếp bấm áp dụng',
+        viec_cua: 'Sếp — máy không tự quyết được bước này',
+        chi_tiet: cho.slice(0, 5).map(g => ({ id: g.id, tieu_de: g.tieu_de, so_ngay: g.so_ngay }))
+      });
+    }
+
+    /* 2) Phiếu đã duyệt nhưng chưa ai dựng — chặng của Khỉ Đột, mà Khỉ Đột
+       KHÔNG chạy tự động (src/runner.js chưa nối vào Worker). Nói thẳng ra
+       thay vì để nó nằm im dưới nhãn "máy đang xử lý". */
+    const { results: dung } = await env.DB.prepare(`
+      SELECT id, tieu_de,
+             CAST(julianday(datetime('now', '+7 hours')) - julianday(COALESCE(cap_nhat_luc, tao_luc)) AS INTEGER) AS so_ngay
+        FROM gop_y
+       WHERE trang_thai IN ('da_duyet', 'dang_lam', 'can_chinh_sua')
+       ORDER BY COALESCE(cap_nhat_luc, tao_luc) ASC LIMIT 20
+    `).all();
+    if ((dung || []).length) {
+      ra.push({
+        loai: 'gop_y_cho_dung',
+        so: dung.length,
+        lau_nhat: Math.max(...dung.map(g => g.so_ngay || 0)),
+        tieu_de: 'Phiếu đã duyệt, đang chờ dựng',
+        viec_cua: 'Xưởng ERP — chạy bằng tay, chưa có tự động',
+        chi_tiet: dung.slice(0, 5).map(g => ({ id: g.id, tieu_de: g.tieu_de, so_ngay: g.so_ngay }))
+      });
+    }
+  } catch (e) {
+    console.error('Rà việc treo lỗi:', e.message);
+  }
+  return ra;
+}
+
 export async function tongQuan(env, phien) {
   const cuaToi = agentChoVaiTro(phien.vai_tro);
 
@@ -162,7 +234,8 @@ export async function tongQuan(env, phien) {
       mo_ta: a.mo_ta, chibi: a.chibi, nang_luc: a.nang_luc, truc_thuoc: a.truc_thuoc,
       viec_dang_mo: taiXuong[a.id] || 0
     })),
-    doi_it_cach_goi: CACH_GOI_DOI_IT
+    doi_it_cach_goi: CACH_GOI_DOI_IT,
+    viec_treo: await viecDangTreo(env)
   });
 }
 
@@ -233,10 +306,23 @@ export async function nangSuat(env, phien) {
   `).all();
   for (const d of dsViec || []) lay(String(d.nguoi_giao_id).slice(3)).viec_dang_mo = d.so;
 
+  /* MÂY KHÔNG ĐO BẰNG THƯỚC CỦA TRƯỞNG PHÒNG.
+     Cô ấy không chủ trì, không phản biện, không duyệt — việc của cô ấy là tiếp
+     nhận và phân đúng cửa. Đếm cô ấy bằng sáu cột kia thì lúc nào cũng ra 0 ở
+     cả sáu, và bảng số đọc thành "Mây làm kém" trong khi thực tế cô ấy chạm vào
+     MỌI câu hỏi. Số 0 sai chỗ còn tệ hơn không có số.
+
+     Thước đúng của lễ tân là SỐ LƯỢT TIẾP NHẬN. Còn "phân có đúng cửa không"
+     thì không đo được bằng dữ liệu đang có — muốn đo thì phải có người chấm
+     lại từng lượt, và đó là việc khác. Không bịa ra một con số cho đủ cột. */
+  const soTiepNhan = (results || []).length;
+
   const dong = [...AGENTS, MAY]
     .filter(a => a.id === 'may' || duocVaoPhong(phien.vai_tro, a.id))
     .map(a => ({
       id: a.id, ten: a.ten, chuc_danh: a.chuc_danh, khoi: a.khoi, chibi: a.chibi,
+      la_le_tan: a.id === 'may',
+      tiep_nhan: a.id === 'may' ? soTiepNhan : null,
       ...lay(a.id)
     }));
 
@@ -248,7 +334,9 @@ export async function nangSuat(env, phien) {
        động hiểu là bảng xếp hạng, rồi kết luận sai về trợ lý ít việc. */
     ghi_chu: 'Đây là số việc đã làm trong 60 ngày, không phải điểm xếp hạng. ' +
              'Trợ lý ít lượt không có nghĩa là kém — có thể đơn giản là ít ai hỏi tới mảng đó. ' +
-             'Riêng cột "chặn lại" là điểm cộng: trợ lý biết dừng để Sếp quyết mới là trợ lý dùng được.'
+             'Riêng cột "chặn lại" là điểm cộng: trợ lý biết dừng để Sếp quyết mới là trợ lý dùng được. ' +
+             'Mây đo bằng số lượt TIẾP NHẬN, không đo bằng thước của trưởng phòng — cô ấy ' +
+             'không chủ trì cũng không phản biện, việc của cô ấy là nhận đúng và phân đúng cửa.'
   });
 }
 

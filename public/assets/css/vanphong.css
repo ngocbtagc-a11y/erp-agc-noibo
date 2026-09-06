@@ -1185,3 +1185,51 @@
 body.vp-dang-keo { cursor: col-resize; user-select: none; }
 
 @media (max-width: 900px) { .vp-keo { display: none; } }
+
+/* Lễ tân đo bằng thước khác — nói rõ vì sao không có sáu cột kia, thay vì để
+   sáu số 0 nằm đó cho người đọc tự hiểu nhầm là "Mây làm kém". */
+.vp-ns-khongdo {
+  font-size: 11px;
+  color: var(--text-mute);
+  font-style: italic;
+  line-height: 1.5;
+  max-width: 420px;
+}
+
+/* ---------------------------------------------------------------------------
+   VIỆC ĐANG TREO
+   ---------------------------------------------------------------------------
+   Cố ý KHÔNG làm thành cái chuông. Chuông thì bị lờ như mọi cái chuông khác,
+   và bốn phiếu vừa rồi treo tám ngày chính vì không ai biết nó đang chờ mình.
+   Khối này chắn ngang đầu tab: bước vào văn phòng là thấy.
+
+   Màu hổ phách chứ không đỏ: đây là việc đang chờ, không phải sự cố. Đỏ dùng
+   cho thứ đang cháy, dùng sai màu vài lần là người ta hết sợ màu đỏ.
+   --------------------------------------------------------------------------- */
+.vp-treo {
+  margin-bottom: 14px;
+  border: 1px solid #e8d2a4;
+  border-left: 3px solid #d9a334;
+  border-radius: var(--r-md);
+  background: #fdf6e8;
+  padding: 12px 14px;
+}
+.vp-treo-muc + .vp-treo-muc {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed #e8d2a4;
+}
+.vp-treo-dau {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.vp-treo-dau b { font-family: var(--serif); font-size: 14px; color: #7a5f2a; }
+.vp-treo-dem { font-size: 11.5px; color: #9a7c3a; }
+.vp-treo-cua { font-size: 12px; color: #8a6c2f; margin-top: 2px; }
+
+.vp-treo-ds { margin: 7px 0 0; padding-left: 18px; }
+.vp-treo-ds li { font-size: 12.5px; color: var(--text); line-height: 1.7; }
+.vp-treo-ds b { font-variant-numeric: tabular-nums; color: #7a5f2a; }
+.vp-treo-ds em { font-style: normal; font-size: 11px; color: var(--text-mute); }
