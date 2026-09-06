@@ -706,15 +706,44 @@ button { cursor: pointer; border: none; background: none; }
 /* Xếp Ca — kho đọc hằng ngày. #8a6d00 trên nền đầu bảng chỉ 4.04:1. */
 .xc-ngay-tt.du_thua{ color: var(--warn-dark); }
 
+/* Tiêu đề nhóm — nay là NÚT gập/mở, không còn là nhãn chết.
+   Giữ nguyên cỡ chữ, màu và khoảng đệm cũ để thanh bên không đổi dáng. */
 .sb-nhom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
   font-size: 11px;
   font-weight: 600;
   letter-spacing: .04em;
   text-transform: uppercase;
   color: var(--text-mute);   /* 5.30:1 trên thanh bên sáng — xem chú thích .sb-label */
   padding: 16px 11px 4px;
+  border-radius: var(--r-sm);
 }
 .sb-nhom:first-child { padding-top: 4px; }
+.sb-nhom:hover { color: var(--ink); }
+.sb-nhom.mo    { color: var(--ink); }
+
+/* Mũi tên: chỉ sang phải khi gập, chúc xuống khi mở */
+.sb-mui {
+  width: 13px;
+  height: 13px;
+  flex: none;
+  transition: transform .16s ease;
+}
+.sb-nhom.mo .sb-mui { transform: rotate(90deg); }
+
+/* Thân nhóm: gập lại là khuất hẳn, không chiếm chỗ */
+.sb-nhom-con { display: none; }
+.sb-nhom-con.mo { display: block; }
+
+/* Máy nào đặt giảm chuyển động thì thôi xoay mũi tên */
+@media (prefers-reduced-motion: reduce) {
+  .sb-mui { transition: none; }
+}
 
 .sb-item {
   display: flex;

@@ -1733,18 +1733,98 @@ $('#ngayHomNay').textContent = 'Hôm nay, ' +
 /* ---- Thanh điều hướng --------------------------------------------------- */
 
 const nav = $('#dieuHuong');
-let nhomVuaVe = null;
+
+/* Nhóm gập lại được. Trước đây mọi mục của mọi nhóm đều xổ hết ra một lượt,
+   thanh bên dài tới mức phải cuộn mới thấy mục cuối — Ban Giám đốc thấy đủ
+   bốn nhóm là hơn chục dòng liền nhau, tìm một mục mất công hơn là đáng.
+   Nay mỗi nhóm gập vào được, chỉ nhóm đang dùng mới mở.
+
+   Nhớ trạng thái trong máy người dùng: ai quen mở sẵn nhóm nào thì sáng mai
+   vào vẫn thấy y như lúc rời đi, không phải mở lại từ đầu mỗi ngày. Nhớ theo
+   từng máy, không đụng tới database. */
+const KHOA_NHOM_MO = 'agc_nhom_mo';
+
+function docNhomMo() {
+  try { return new Set(JSON.parse(localStorage.getItem(KHOA_NHOM_MO) || '[]')); }
+  catch { return new Set(); }   // trình duyệt chặn lưu trữ thì coi như chưa mở nhóm nào
+}
+function luuNhomMo(tap) {
+  try { localStorage.setItem(KHOA_NHOM_MO, JSON.stringify([...tap])); } catch { /* kệ */ }
+}
+
+const nhomMo = docNhomMo();
+const oNhom = new Map();        // tên nhóm -> { dau, than }
+const nhomCuaMuc = new Map();   // id mục -> tên nhóm chứa nó
+
+/* QUY ƯỚC CỦA MẢNG TAB — đọc kỹ trước khi sửa:
+   chỉ mục ĐẦU mỗi nhóm mới khai `nhom`, những mục sau nó không khai gì và
+   NGẦM thuộc nhóm đó theo thứ tự đứng trong mảng. Còn `nhom: null` (khai rõ)
+   nghĩa là mục cố ý đứng ngoài mọi nhóm — bốn mục dùng chung ở đầu danh sách.
+   Vậy nên: `undefined` = kế thừa nhóm phía trên, `null` = thoát khỏi nhóm.
+   Gom nhóm mà chỉ nhìn thuộc tính `nhom` thì mỗi nhóm chỉ nhặt được đúng một
+   mục, phần còn lại rơi hết ra ngoài. */
+
+/* Mũi tên chỉ trạng thái gập/mở, xoay 90 độ khi mở (xem .sb-mui trong CSS) */
+const MUI_TEN =
+  `<svg class="sb-mui" viewBox="0 0 24 24" fill="none" stroke="currentColor" ` +
+  `stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>`;
+
+function dungNhom(ten) {
+  const dau = el('button', 'sb-nhom');
+  dau.type = 'button';
+  dau.innerHTML = `<span>${esc(ten)}</span>${MUI_TEN}`;
+  dau.setAttribute('aria-expanded', 'false');
+
+  const than = el('div', 'sb-nhom-con');
+
+  dau.addEventListener('click', () => {
+    const dangMo = than.classList.toggle('mo');
+    dau.classList.toggle('mo', dangMo);
+    dau.setAttribute('aria-expanded', dangMo ? 'true' : 'false');
+    if (dangMo) nhomMo.add(ten); else nhomMo.delete(ten);
+    luuNhomMo(nhomMo);
+  });
+
+  nav.appendChild(dau);
+  nav.appendChild(than);
+  const o = { dau, than };
+  oNhom.set(ten, o);
+
+  if (nhomMo.has(ten)) {
+    than.classList.add('mo');
+    dau.classList.add('mo');
+    dau.setAttribute('aria-expanded', 'true');
+  }
+  return o;
+}
+
+/* Mở nhóm chứa một mục — gọi khi chuyển tab, để mục đang xem không bị nằm
+   trong nhóm đóng (nhìn vào thanh bên sẽ không thấy mình đang đứng ở đâu). */
+function moNhomChua(idMuc) {
+  const ten = nhomCuaMuc.get(idMuc);
+  if (!ten) return;
+  const o = oNhom.get(ten);
+  if (!o || o.than.classList.contains('mo')) return;
+  o.than.classList.add('mo');
+  o.dau.classList.add('mo');
+  o.dau.setAttribute('aria-expanded', 'true');
+  nhomMo.add(ten);
+  luuNhomMo(nhomMo);
+}
+
+let nhomHienTai = null;
 TAB.forEach(t => {
+  /* Cập nhật nhóm đang đứng TRƯỚC mọi việc khác — kể cả khi mục này bị ẩn vì
+     thiếu quyền. Nếu đặt sau bước lọc quyền thì mục "Tổng quan phòng" bị ẩn
+     sẽ kéo theo cả nhóm mất tên, và những mục dưới nó nhảy sang nhóm trước đó. */
+  if (t.nhom !== undefined) nhomHienTai = t.nhom;   // null = thoát nhóm, chuỗi = vào nhóm mới
+  if (nhomHienTai) nhomCuaMuc.set(t.id, nhomHienTai);
+
   // Mục Tổng quan tự quyết bằng `hien`; mục thường theo khoá quyền.
   const duocXem = t.hien ? t.hien(TOI.quyen) : TOI.quyen.includes(quyenCuaMuc(t));
   // Mục Tổng quan KHÔNG hiện mờ khoá như tab thường — người không phụ trách
   // mảng đó thì màn tổng quan chẳng có nghĩa gì, hiện ra chỉ thêm nhiễu.
   if (!duocXem && t.hien) return;
-
-  if (t.nhom && t.nhom !== nhomVuaVe) {
-    nav.appendChild(el('div', 'sb-nhom', esc(t.nhom)));
-  }
-  if (t.nhom) nhomVuaVe = t.nhom;
 
   const b = el('button', 'sb-item' + (duocXem ? '' : ' locked'));
   b.innerHTML =
@@ -1757,7 +1837,11 @@ TAB.forEach(t => {
   } else {
     b.title = 'Chức vụ của bạn không được xem mục này';
   }
-  nav.appendChild(b);
+
+  // Mục không thuộc nhóm nào thì đứng thẳng ngoài thanh bên như cũ.
+  if (!nhomHienTai) { nav.appendChild(b); return; }
+
+  (oNhom.get(nhomHienTai) || dungNhom(nhomHienTai)).than.appendChild(b);
 });
 
 function moTab(id) {
@@ -1779,6 +1863,10 @@ function moTab(id) {
   document.querySelectorAll('.sb-item[data-tab]').forEach(b => {
     b.classList.toggle('active', b.dataset.tab === id);
   });
+
+  // Mục đang xem mà nằm trong nhóm đang gập thì bung nhóm đó ra — nếu không,
+  // nhìn vào thanh bên sẽ không thấy mình đang đứng ở đâu.
+  moNhomChua(id);
 
   // Mục có màn con thì mở đúng màn con đó. Bấm thẳng vào nút của dải `#kdSeg`
   // để dùng lại nguyên bộ chuyển màn đã có, không viết logic ẩn/hiện thứ hai
