@@ -455,20 +455,15 @@ export function veQuayLeTan() {
 
    Chia theo đúng cơ cấu tổ chức Sếp đã dựng ở thanh điều hướng ERP.
    ========================================================================== */
-const KHU_VUC = [
-  { ten: 'Khối Điều hành',  khoi: 'dieuhanh',  x: 1,    y: 3,  w: 98,   h: 22 },
-  { ten: 'Khối Kinh doanh', khoi: 'kinhdoanh', x: 1,    y: 28, w: 48.5, h: 22 },
-  { ten: 'Khối Vận hành',   khoi: 'vanhanh',   x: 50.5, y: 28, w: 48.5, h: 22 },
-  { ten: 'Khối Hỗ trợ',     khoi: 'hotro',     x: 1,    y: 53, w: 98,   h: 22 },
-  { ten: 'Sảnh lễ tân',     khoi: 'letan',     x: 1,    y: 78, w: 98,   h: 21 }
-];
 
-export function veKhuVuc() {
-  // Màu lấy từ biến CSS theo khối, để thẻ nhân sự và vách khu luôn cùng tông —
-  // sửa màu một chỗ là đổi cả hai, không bao giờ lệch nhau.
-  return KHU_VUC.map(k =>
-    `<div class="vp-khu" data-khoi="${k.khoi}"
-          style="left:${k.x}%;top:${k.y}%;width:${k.w}%;height:${k.h}%">
+export function veKhuVuc(dsKhu) {
+  /* Danh sách khu do MÁY CHỦ gửi xuống, dựng từ bảng phong_ban thật — không
+     còn bảng viết cứng trong file này nữa. Đổi cơ cấu trong ERP thì mặt bằng
+     tự đúng theo, không phải sửa code. */
+  if (!Array.isArray(dsKhu) || !dsKhu.length) return '';
+  return dsKhu.map((k, i) =>
+    `<div class="vp-khu" data-khoi="k${i % 5}"
+          style="left:1%;top:${k.y_tren}%;width:98%;height:${k.cao}%">
        <span class="vp-khu-ten">${k.ten}</span>
      </div>`).join('');
 }

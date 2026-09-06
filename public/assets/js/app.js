@@ -5876,7 +5876,27 @@ if (TOI.quyen.includes('nhansu')) {
       return `
         <article class="tl-the">
           <div class="tl-the-dau">
-            <b class="tl-ten">${esc(t.tieu_de)}</b>
+/* Tên hiển thị của một tài liệu — Sếp Ngọc 06/09/2026: "dòng đen để tên văn
+   bản, đừng để tên file".
+
+   Ô "Tên tài liệu" người ta hay gõ theo thói quen đặt tên file: "Certificate
+   ALPHA GREEN 1st". Đọc dòng đó không biết đây là giấy gì. Còn ô "Loại giấy"
+   mới là TÊN VĂN BẢN đúng nghĩa: "Giấy chứng nhận đăng ký doanh nghiệp".
+
+   Nên dòng đậm lấy loại giấy; tên người dùng tự đặt lùi xuống dòng phụ — vẫn
+   giữ, vì đó là cách họ nhận ra bản của mình giữa nhiều bản cùng loại. Chưa
+   điền loại giấy thì quay về dùng tiêu đề: thà hiện tên file còn hơn dòng trống. */
+function tenVanBan(t) {
+  return (t.loai && String(t.loai).trim()) || t.tieu_de || '(chưa đặt tên)';
+}
+
+/* Tên riêng người dùng đặt — chỉ hiện khi KHÁC tên văn bản, không lặp lại */
+function tenRieng(t) {
+  const l = String(t.loai || '').trim(), td = String(t.tieu_de || '').trim();
+  return (l && td && l !== td) ? td : '';
+}
+
+            <b class="tl-ten">${esc(tenVanBan(t))}</b>
             ${t.nhay_cam ? '<span class="tl-dai tl-dai-kin">Nhạy cảm</span>' : ''}
             ${dai}
           </div>
@@ -5895,8 +5915,7 @@ if (TOI.quyen.includes('nhansu')) {
             ${t.han_luu ? ' · hạn lưu bản giấy: ' + esc(t.han_luu) : ''}
           </div>
           <div class="tl-the-nut">
-            <a class="tl-nut-mo" href="/api/tai-lieu/tep?id=${encodeURIComponent(t.id)}"
-               target="_blank" rel="noopener">Mở bản quét</a>
+               <button type="button" class="tl-nut-mo" data-mo-quet="${esc(t.id)}" data-ten="${esc(tenVanBan(t))}">Mở bản quét</button>
             ${/* Vá REV-0046 #4. Nhãn "n trang chữ CHƯA KIỂM" ngay phía trên chỉ
                   có nghĩa khi MỞ RA KIỂM ĐƯỢC — mà người vừa quét, đứng ngay ở
                   màn này, là người DUY NHẤT còn cầm tờ giấy để đối chiếu.
@@ -11019,12 +11038,12 @@ async function khoiDongKhoTaiLieu() {
     return `
       <article class="tl-the">
         <div class="tl-the-dau">
-          <b class="tl-ten">${esc(t.tieu_de)}</b>
+          <b class="tl-ten">${esc(tenVanBan(t))}</b>
           ${t.nhay_cam ? '<span class="tl-dai tl-dai-kin">Nhạy cảm</span>' : ''}
           ${dai}
         </div>
         <div class="tl-the-phu">
-          ${esc(tenNhom(t.nhom))}${t.loai ? ' · ' + esc(t.loai) : ''}${t.so_hieu ? ' · ' + esc(t.so_hieu) : ''}
+          ${esc(tenNhom(t.nhom))}${tenRieng(t) ? ' · ' + esc(tenRieng(t)) : ''}${t.so_hieu ? ' · ' + esc(t.so_hieu) : ''}
           ${/* MỘT KHO, HAI CỬA NHÌN (CTL-0025 Đợt 2). Giấy quét ở cửa hồ sơ vẫn
                 nằm trong kho chung — nhưng phải NÓI RA nó thuộc hồ sơ của ai,
                 không thì kho chung hiện thêm một tờ "Quyết định" trôi nổi mà
@@ -11057,7 +11076,7 @@ async function khoiDongKhoTaiLieu() {
                 '"Xem chữ đã bóc", và mỗi lượt xem đều được ghi nhật ký.</i></p>'
               : '')}
         <div class="tl-the-nut">
-          <a class="tl-nut-mo" href="/api/tai-lieu/tep?id=${encodeURIComponent(t.id)}" target="_blank" rel="noopener">Mở bản quét</a>
+          <button type="button" class="tl-nut-mo" data-mo-quet="${esc(t.id)}" data-ten="${esc(tenVanBan(t))}">Mở bản quét</button>
           ${nutXemChuTaiLieu(t.id)}
           ${/* ⚠️ VÁ REV-0040 · LỖI #7 — NHẬT KÝ GHI MÀ KHÔNG AI XEM ĐƯỢC.
                 `API.tlNhatKy` có sẵn từ đợt trước nhưng KHÔNG chỗ nào gọi. Nhật
@@ -11771,7 +11790,7 @@ async function khoiDongVanPhong() {
     // che mất thứ duy nhất người dùng cần nhìn.
     const lopKhu = $('#vp-khu-lop');
     veViecTreo(duLieu.viec_treo);
-    if (lopKhu) lopKhu.innerHTML = veKhuVuc();
+    if (lopKhu) lopKhu.innerHTML = veKhuVuc(duLieu.khu);
     const lopDo = $('#vp-do-lop');
     if (lopDo) lopDo.innerHTML = veNoiThat();
 
@@ -11797,7 +11816,10 @@ async function khoiDongVanPhong() {
       o.dataset.agent = a.id;
       // Màu thẻ theo khối — nhìn màu là biết phòng nào cùng khối với nhau,
       // không phải đọc từng cái biển tên.
-      o.dataset.khoi = a.khoi || '';
+      /* Màu theo PHÒNG BAN THẬT: tìm khu của trợ lý này trong danh sách máy
+         chủ gửi xuống, lấy đúng chỉ số để màu thẻ khớp màu vách khu. */
+      const iKhu = (duLieu.khu || []).findIndex(k => k.id === 'pb' + a.phong_ban_id);
+      o.dataset.khoi = iKhu >= 0 ? 'k' + (iKhu % 5) : '';
       o.dataset.ban = mucTai(a.viec_dang_mo).muc;
 
       const huyHieu = a.viec_dang_mo
@@ -12111,7 +12133,7 @@ async function khoiDongVanPhong() {
   }
 
 
-  /* Nút bắn thử Telegram — chỉ Quản trị thấy. Đường báo chỉ chạy 8h sáng mỗi
+  /* Nút bắn thử thông báo — chỉ Quản trị thấy. Đường báo chỉ chạy 8h sáng mỗi
      ngày; không thử được thì hỏng cũng phải mất một ngày mới lộ, mà lúc đó là
      đúng ngày cần nó nhất. */
   (function ganNutThuTele() {
@@ -12123,11 +12145,11 @@ async function khoiDongVanPhong() {
       const cu = nut.textContent;
       nut.textContent = 'Đang gửi…';
       try {
-        const kq = await API.vpThuTelegram();
+        const kq = await API.vpThuThongBao();
         /* Nói rõ hỏng vì sao. Ba nguyên nhân hay gặp — sai chat id, sai token,
            bot bị chặn — chữa theo ba cách khác hẳn nhau, nên gộp thành một câu
            "không gửi được" là bắt người bấm đi đoán. */
-        if (kq.da_gui) { nut.textContent = 'Đã gửi — xem Telegram'; }
+        if (kq.da_gui) { nut.textContent = 'Đã gửi — xem điện thoại'; }
         else {
           nut.textContent = 'Hỏng: ' + (kq.vi_sao || 'không rõ') + (kq.ma ? ' (mã ' + kq.ma + ')' : '');
           nut.classList.add('vp-thu-loi');
@@ -12446,3 +12468,64 @@ async function khoiDongVanPhong() {
 const mucDauTien = document.querySelector('.sb-item[data-tab]');
 if (mucDauTien) moTab(mucDauTien.dataset.tab);
 else console.error('Không có mục điều hướng nào hiện được — kiểm tra phân quyền tài khoản này.');
+
+/* ==========================================================================
+   MỞ BẢN QUÉT TRONG CỬA SỔ PHỤ
+   --------------------------------------------------------------------------
+   Sếp Ngọc 06/09/2026: "khi mở thì nhảy cửa sổ phụ chứ đừng mở trang trình
+   duyệt mới."
+
+   Mở tab mới thì mất mạch: xem xong phải nhớ đóng tab, quay lại tab cũ, tìm
+   lại đúng chỗ đang đứng trong danh sách. Xem vài tờ giấy là có cả chục tab.
+
+   ⚠️ VẪN GIỮ ĐƯỜNG MỞ TAB MỚI BÊN TRONG cửa sổ phụ. Nhiều trình duyệt trên
+   điện thoại KHÔNG hiện được PDF trong khung nhúng — Chrome Android tải file
+   về thay vì mở. Bỏ hẳn đường cũ là biến thứ đang chạy được thành thứ không
+   xem được trên đúng thiết bị Sếp hay dùng.
+   ========================================================================== */
+function moBanQuet(id, ten) {
+  let nen = document.getElementById('tlXemNen');
+  if (!nen) {
+    nen = document.createElement('div');
+    nen.id = 'tlXemNen';
+    nen.className = 'tl-xem-nen';
+    nen.innerHTML =
+      '<div class="tl-xem" role="dialog" aria-modal="true">' +
+        '<div class="tl-xem-dau">' +
+          '<b id="tlXemTen"></b>' +
+          '<div class="tl-xem-nut">' +
+            '<a id="tlXemTab" class="tl-nut-mo" target="_blank" rel="noopener">Mở tab mới</a>' +
+            '<button type="button" class="tl-xem-dong" id="tlXemDong" aria-label="Đóng">×</button>' +
+          '</div>' +
+        '</div>' +
+        '<iframe id="tlXemKhung" title="Bản quét tài liệu"></iframe>' +
+      '</div>';
+    document.body.appendChild(nen);
+    nen.addEventListener('click', e => { if (e.target === nen) dongBanQuet(); });
+    nen.querySelector('#tlXemDong').addEventListener('click', dongBanQuet);
+  }
+  const url = '/api/tai-lieu/tep?id=' + encodeURIComponent(id);
+  nen.querySelector('#tlXemTen').textContent = ten || 'Bản quét';
+  nen.querySelector('#tlXemTab').href = url;
+  nen.querySelector('#tlXemKhung').src = url;
+  nen.classList.add('mo');
+  document.body.classList.add('tl-dang-xem');
+}
+
+function dongBanQuet() {
+  const nen = document.getElementById('tlXemNen');
+  if (!nen) return;
+  nen.classList.remove('mo');
+  document.body.classList.remove('tl-dang-xem');
+  /* Xoá src để trình duyệt thả file PDF ra — không thì bản quét vài chục MB
+     nằm lại trong bộ nhớ, mở vài tờ là máy ì. */
+  nen.querySelector('#tlXemKhung').src = 'about:blank';
+}
+
+document.addEventListener('click', e => {
+  const nut = e.target.closest('[data-mo-quet]');
+  if (!nut) return;
+  e.preventDefault();
+  moBanQuet(nut.dataset.moQuet, nut.dataset.ten || '');
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape') dongBanQuet(); });

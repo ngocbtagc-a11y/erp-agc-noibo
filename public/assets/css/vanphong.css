@@ -1303,3 +1303,18 @@ body.vp-dang-keo { cursor: col-resize; user-select: none; }
   text-align: left;
   line-height: 1.4;
 }
+
+/* ---------------------------------------------------------------------------
+   MÀU THEO PHÒNG BAN THẬT
+   ---------------------------------------------------------------------------
+   Trước đây màu gắn cứng vào tên khối tôi tự đặt (dieuhanh, kinhdoanh...).
+   Nhưng khu vực nay dựng từ bảng phong_ban thật, mà tên phòng thì Sếp đổi lúc
+   nào cũng được — nên màu phải bám THỨ TỰ phòng, không bám tên. k0..k4 là năm
+   ô màu quay vòng; thêm phòng thứ sáu thì nó dùng lại màu đầu, chấp nhận được
+   vì mặt bằng cùng lúc hiếm khi quá năm hàng.
+   --------------------------------------------------------------------------- */
+.vp-khu[data-khoi="k0"],  .vp-phong[data-khoi="k0"]  { --k: var(--k-dieuhanh); }
+.vp-khu[data-khoi="k1"],  .vp-phong[data-khoi="k1"]  { --k: var(--k-hotro); }
+.vp-khu[data-khoi="k2"],  .vp-phong[data-khoi="k2"]  { --k: var(--k-kinhdoanh); }
+.vp-khu[data-khoi="k3"],  .vp-phong[data-khoi="k3"]  { --k: var(--k-vanhanh); }
+.vp-khu[data-khoi="k4"],  .vp-phong[data-khoi="k4"]  { --k: var(--k-letan); }

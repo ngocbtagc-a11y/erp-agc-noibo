@@ -29,6 +29,7 @@ import {
 import { congCuCuaAgent, chayCongCu } from './vp-cong-cu.js';
 import { MAY } from './agents-vp.js';
 import { hoiMay } from './vp-may.js';
+import { xepChoTheoCoCau } from './vp-mat-bang.js';
 import { duocXemTab } from './quyen.js';
 
 /* ---- Trả lời JSON (bản riêng, để file tự đứng được) --------------------- */
@@ -174,57 +175,63 @@ async function viecDangTreo(env) {
 
 
 /* ==========================================================================
-   NHẮC SẾP QUA TELEGRAM — việc đang chờ chính Sếp quyết
+   NHẮC SẾP QUA THÔNG BÁO TRÊN ĐIỆN THOẠI
    --------------------------------------------------------------------------
-   Sếp Ngọc 06/09/2026: "nối thẳng với bot Telegram của tôi để tôi duyệt trên
-   điện thoại khi không ngồi máy tính".
+   Sếp Ngọc 06/09/2026: "bỏ cách báo về Telegram đi, báo thẳng về thông báo trên
+   app điện thoại là được, có yêu cầu thì tao vào duyệt là xong."
 
-   Sếp chốt: BÁO KÈM LINK, bấm duyệt trong ERP — KHÔNG làm nút duyệt ngay trong
-   Telegram. Nút trong Telegram thì nhanh hơn thật, nhưng phải mở một cửa
-   webhook công khai ra Internet để nhận cú bấm. Đổi một cửa vào hệ thống lấy
-   vài giây thao tác là không đáng, nhất là với thứ đang duyệt là thay đổi ERP.
+   Đúng hơn hẳn đường Telegram, ba lý do:
+     · ERP đã có sẵn hệ thống đẩy thông báo (khoá VAPID nạp từ trước) — không
+       phải dựng thêm gì, không phải giữ thêm khoá của bên thứ ba.
+     · Bấm vào thông báo là mở thẳng ERP, đúng chỗ Sếp duyệt. Telegram thì báo
+       một nơi, duyệt một nơi khác.
+     · Bớt hẳn một điểm hỏng. Mấy tiếng vừa rồi loay hoay với token Telegram là
+       thời gian mất vào một mắt xích lẽ ra không cần có.
 
-   MỘT TIN MỘT NGÀY, KHÔNG HƠN. Cửa sổ 8h sáng giờ VN, giống nhịp nhắc việc sẵn
-   có. Không cần cột đánh dấu đã gửi: cron chạy 5 phút một lần nhưng hàm tự đóng
-   cửa ngoài khung 8h00–8h05 nên mỗi ngày đúng một lượt. Nhắc nhiều lần trong
-   ngày thì vài hôm là Sếp tắt thông báo, và lúc đó cái nhắc thành vô dụng.
+   MỘT TIN MỘT NGÀY. Cửa sổ 8h sáng giờ VN; cron chạy 5 phút/lần nhưng hàm tự
+   đóng cửa ngoài khung 8h00–8h05 nên không cần cột đánh dấu đã gửi. Nhắc nhiều
+   lần trong ngày thì vài hôm là Sếp tắt thông báo — lúc đó cái nhắc thành vô dụng.
    ========================================================================== */
-export async function nhacSepViecTreo(env, guiTelegram, boQuaGio = false) {
-  /* boQuaGio: chỉ dùng cho nút bắn thử của admin. Không đợi 8h sáng mai mới
-     biết đường báo có thông không — thứ chỉ chạy mỗi ngày một lần mà không thử
-     được thì hỏng cũng phải mất một ngày mới lộ. */
+export async function nhacSepViecTreo(env, dayToiNguoi, boQuaGio = false) {
   if (!boQuaGio) {
     const gio = new Date(Date.now() + 7 * 3600 * 1000);
     if (gio.getUTCHours() !== 8 || gio.getUTCMinutes() >= 5) return 0;
   }
 
-  const dich = env.TELEGRAM_CHAT_ID_SEP;
-  if (!dich || !env.TELEGRAM_BOT_TOKEN) return 0;   // chưa nạp khoá thì thôi, không báo lỗi ầm ĩ
+  /* Gửi cho MỌI tài khoản Quản trị — Sếp Phong và chị Ngọc. Gửi mỗi một người
+     thì hôm người đó bận là việc lại nằm im. */
+  const { results: dsAdmin } = await env.DB.prepare(`
+    SELECT DISTINCT tk.nhan_su_id
+      FROM tai_khoan tk
+     WHERE tk.vai_tro = 'admin' AND tk.kich_hoat = 1 AND tk.nhan_su_id IS NOT NULL
+  `).all();
+  if (!(dsAdmin || []).length) return 0;
 
   const treo = await viecDangTreo(env);
+
+  let tieuDe, noiDung;
   if (!treo.length) {
     if (!boQuaGio) return 0;
-    const ok = await guiTelegram(env,
-      'VĂN PHÒNG ẢO AGC — bắn thử.' + String.fromCharCode(10) +
-      'Đường báo Telegram thông. Hiện không có việc nào đang treo.', dich);
-    return ok ? 1 : 0;
+    tieuDe = 'Văn phòng ảo — bắn thử';
+    noiDung = 'Đường báo lên điện thoại đã thông. Hiện không có việc nào đang treo.';
+  } else {
+    const tong = treo.reduce((m, v) => m + v.so, 0);
+    const lauNhat = Math.max(...treo.map(v => v.lau_nhat));
+    tieuDe = 'Văn phòng ảo: ' + tong + ' việc đang chờ Sếp';
+    noiDung = treo.map(v => v.tieu_de + ' (' + v.so + ' phiếu)').join(' · ')
+            + ' — lâu nhất ' + lauNhat + ' ngày. Bấm để vào duyệt.';
   }
 
-  const dong = [];
-  dong.push('VĂN PHÒNG ẢO AGC — việc đang treo');
-  dong.push('');
-  for (const v of treo) {
-    dong.push(v.tieu_de + ': ' + v.so + ' phiếu, lâu nhất ' + v.lau_nhat + ' ngày');
-    dong.push('   đang chờ ' + v.viec_cua);
-    for (const g of (v.chi_tiet || []).slice(0, 4)) {
-      dong.push('   · GY-' + String(g.id).padStart(4, '0') + ' ' + g.tieu_de + ' (' + g.so_ngay + ' ngày)');
+  let gui = 0;
+  for (const a of dsAdmin) {
+    try {
+      const kq = await dayToiNguoi(env, a.nhan_su_id, { tieu_de: tieuDe, noi_dung: noiDung, duong_dan: '/app' });
+      gui += (kq && kq.gui) || 0;
+    } catch (e) {
+      console.error('Đẩy thông báo việc treo lỗi:', e.message);
     }
-    dong.push('');
   }
-  dong.push('Mở ERP để duyệt: https://erp-agc.noiboagc.workers.dev/app');
-
-  const xong = await guiTelegram(env, dong.join(String.fromCharCode(10)), dich);
-  return xong ? treo.length : 0;
+  return gui;
 }
 
 export async function tongQuan(env, phien) {
@@ -253,6 +260,10 @@ export async function tongQuan(env, phien) {
   // xem chú thích ở taiCuaXuong().
   const taiXuong = await taiCuaXuong(env);
 
+  /* Khu vực và chỗ ngồi tính từ bảng phong_ban THẬT, không viết cứng toạ độ —
+     đổi cơ cấu trong ERP thì mặt bằng tự đúng theo. Xem src/vp-mat-bang.js. */
+  const matBang = await xepChoTheoCoCau(env, AGENTS, MAY);
+
   // Việc của chính người đang xem — kể cả việc do người khác giao, để họ nhìn
   // một chỗ là thấy hết, không phải mở hai nơi.
   const { results: viecCuaToi } = await env.DB.prepare(`
@@ -275,12 +286,13 @@ export async function tongQuan(env, phien) {
     agent: AGENTS.map(a => ({
       ...hoSoCongKhai(a),
       vao_duoc: cuaToi.some(x => x.id === a.id),
-      viec_dang_mo: dem[a.id] || 0
+      viec_dang_mo: dem[a.id] || 0,
+      vi_tri: matBang.vi_tri[a.id] || a.vi_tri
     })),
     nguoi_co_mat: coMat,
     viec_cua_toi: viecCuaToi,
     hoi_dap_bat_chua: !!env.AI,
-    may: MAY,
+    may: { ...MAY, vi_tri: matBang.vi_tri[MAY.id] || MAY.vi_tri },
     /* Đội dựng ERP: hiện trên mặt bằng ở Xưởng ERP cạnh phòng IT. Gửi kèm cả
        CACH_GOI để giao diện nói thẳng "hỏi ở đây hai bạn không nghe thấy" —
        thấy mặt mà tưởng hỏi được thì còn tệ hơn không hiện. */
@@ -290,6 +302,7 @@ export async function tongQuan(env, phien) {
       viec_dang_mo: taiXuong[a.id] || 0
     })),
     doi_it_cach_goi: CACH_GOI_DOI_IT,
+    khu: matBang.khu,
     viec_treo: await viecDangTreo(env)
   });
 }

@@ -4411,3 +4411,76 @@ tr.kd-sku-chet td:first-child { font-weight: 600; }
    chung (đụng cả Kho vận/Công việc/Kinh doanh — việc đó cần ERP Owner). */
 #kd-tq-ky .seg-nut { min-height: 44px; }
 #kd-tq-canhbao:not([hidden]), #kd-sku-canhbao:not([hidden]) { margin-bottom: 16px; }
+
+/* ---------------------------------------------------------------------------
+   XEM BẢN QUÉT TRONG CỬA SỔ PHỤ
+   ---------------------------------------------------------------------------
+   Sếp Ngọc 06/09/2026: mở bản quét thì nhảy cửa sổ phụ, đừng mở tab trình duyệt
+   mới. Mở tab mới thì mất mạch: xem xong phải nhớ đóng tab, quay lại tab cũ,
+   tìm lại chỗ đang đứng trong danh sách. Xem vài tờ là có cả chục tab.
+
+   Vẫn giữ nút "Mở tab mới" BÊN TRONG cửa sổ này: nhiều trình duyệt trên điện
+   thoại không hiện được PDF trong khung nhúng, Chrome Android tải file về thay
+   vì mở. Bỏ hẳn đường cũ là biến thứ đang chạy được thành thứ không xem được
+   trên đúng thiết bị Sếp hay dùng.
+   --------------------------------------------------------------------------- */
+.tl-xem-nen {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: rgba(31, 28, 24, .55);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+}
+.tl-xem-nen.mo { display: flex; }
+body.tl-dang-xem { overflow: hidden; }
+
+.tl-xem {
+  background: var(--card, #fff);
+  border-radius: var(--r-lg, 14px);
+  box-shadow: 0 18px 48px rgba(31, 28, 24, .3);
+  width: min(1100px, 100%);
+  height: min(88vh, 100%);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.tl-xem-dau {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--line, #e5e2da);
+}
+.tl-xem-dau b {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tl-xem-nut { display: flex; align-items: center; gap: 8px; flex: none; }
+.tl-xem-dong {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px solid var(--line, #e5e2da);
+  background: none;
+  font-size: 19px;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--text-mute, #6b6459);
+}
+.tl-xem-dong:hover { border-color: #c0603f; color: #c0603f; }
+
+/* Khung xem chiếm hết phần còn lại — PDF cần chiều cao, cắt ngắn là phải cuộn
+   hai lớp lồng nhau, thao tác trên điện thoại thành cực hình. */
+#tlXemKhung { flex: 1; width: 100%; border: 0; background: #f4f2ec; }
+
+@media (max-width: 620px) {
+  .tl-xem-nen { padding: 0; }
+  .tl-xem { height: 100%; border-radius: 0; }
+}

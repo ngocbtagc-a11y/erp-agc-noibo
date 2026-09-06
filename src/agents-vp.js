@@ -255,7 +255,7 @@ export const AGENTS = [
     chuc_danh: 'Trưởng phòng Kinh doanh',
     phong: 'Phòng Kinh doanh',
     mo_ta: 'Doanh số hai sàn, đơn hàng, hàng bán chạy và bán kém.',
-    khoi: 'kinhdoanh', vi_tri: { x: 12, y: 41 },
+    phong_ban_id: 3, vi_tri: { x: 12, y: 41 },
     chibi: { gioi_tinh: 'nam', kieu_toc: 0, net_rieng: 'ca_vat', da: '#f2d0b0', toc: '#3b2a1e', ao: '#c07a5a', phu_kien: 'tai_nghe' },
     vao_duoc: ['admin', 'admin_backup', 'ke_toan_truong', 'van_hanh_san', 'cskh', 'nv_test'],
     cong_cu: ['doanh_so', 'so_sanh_doanh_so', 'top_san_pham', 'don_hoan_ton_dong',
@@ -280,7 +280,7 @@ Lưu ý khi nói về tiền: doanh số ở đây là giá trị đơn hàng tr
     chuc_danh: 'Trưởng phòng Marketing',
     phong: 'Phòng Marketing',
     mo_ta: 'Nội dung, quảng cáo, nhãn hàng, hiệu quả từng mã.',
-    khoi: 'kinhdoanh', vi_tri: { x: 37, y: 41 },
+    phong_ban_id: 3, vi_tri: { x: 37, y: 41 },
     chibi: { gioi_tinh: 'nu', kieu_toc: 1, net_rieng: 'kep_toc', da: '#f6d5b8', toc: '#5a4232', ao: '#8c7ba0', phu_kien: null },
     vao_duoc: ['admin', 'admin_backup', 'van_hanh_san', 'cskh', 'nv_test'],
     cong_cu: ['top_san_pham', 'doanh_so', 'so_sanh_doanh_so', 'tra_ton_kho',
@@ -303,7 +303,7 @@ RANH GIỚI PHÁP LÝ — nhớ mỗi khi viết nội dung: thực phẩm KHÔN
     chuc_danh: 'Trưởng phòng Kho vận',
     phong: 'Phòng Kho vận',
     mo_ta: 'Tồn kho, hạn sử dụng, xuất nhập, kiểm kê.',
-    khoi: 'vanhanh', vi_tri: { x: 63, y: 41 },
+    phong_ban_id: 4, vi_tri: { x: 63, y: 41 },
     chibi: { gioi_tinh: 'nam', kieu_toc: 0, net_rieng: 'rau_quai', da: '#e8b98d', toc: '#1f1a17', ao: '#8a9a6b', phu_kien: 'mu_bao_ho' },
     vao_duoc: ['admin', 'admin_backup', 'ke_toan_truong', 'quan_ly_kho', 'nhan_vien_kho', 'nv_test'],
     cong_cu: ['tra_ton_kho', 'hang_can_han', 'hang_duoi_muc', 'don_hoan_ton_dong',
@@ -324,7 +324,7 @@ Thấy hàng cận hạn hay thiếu hàng thì đừng chỉ liệt kê: nói r
     chuc_danh: 'Trưởng phòng Kế toán - Tài chính',
     phong: 'Phòng Kế toán',
     mo_ta: 'Giá vốn, giá trị tồn kho, tiền treo ở đơn hoàn.',
-    khoi: 'vanhanh', vi_tri: { x: 88, y: 41 },
+    phong_ban_id: 2, vi_tri: { x: 88, y: 41 },
     chibi: { gioi_tinh: 'nam', kieu_toc: 5, net_rieng: 'but_sau_tai', da: '#eec5a2', toc: '#241d19', ao: '#6b7f9e', phu_kien: 'may_tinh' },
     vao_duoc: ['admin', 'admin_backup', 'ke_toan_truong'],
     cong_cu: ['gia_tri_ton_kho', 'tra_ton_kho', 'hang_can_han', 'doanh_so',
@@ -348,7 +348,7 @@ Khi nói về doanh số, luôn nhắc rằng đó là giá trị đơn hàng ch
     chuc_danh: 'Trưởng phòng Pháp chế',
     phong: 'Phòng Pháp chế',
     mo_ta: 'Hợp đồng, công bố sản phẩm, nhãn mác, quảng cáo, luật lao động.',
-    khoi: 'hotro', vi_tri: { x: 12, y: 65 },
+    phong_ban_id: 2, vi_tri: { x: 12, y: 65 },
     chibi: { gioi_tinh: 'nam', kieu_toc: 0, net_rieng: 'ca_vat', da: '#f0c9a8', toc: '#2f2a26', ao: '#5b6b8c', phu_kien: 'kinh' },
     vao_duoc: CA_CONG_TY,
     cong_cu: ['danh_sach_nhan_su', 'ho_so_nhan_su_thieu', 'giao_viec', 'viec_dang_mo'],
@@ -369,7 +369,7 @@ Cách trả lời: nói rõ điều luật nào, điều khoản mấy, mức ph
     chuc_danh: 'Trưởng phòng Hành chính Nhân sự',
     phong: 'Phòng HCNS',
     mo_ta: 'Hồ sơ nhân sự, hợp đồng, thử việc, giấy tờ còn thiếu.',
-    khoi: 'hotro', vi_tri: { x: 37, y: 65 },
+    phong_ban_id: 2, vi_tri: { x: 37, y: 65 },
     chibi: { gioi_tinh: 'nu', kieu_toc: 2, net_rieng: 'hoa_tai', da: '#f6d5b8', toc: '#4a3226', ao: '#a8b892', phu_kien: 'kep_ho_so' },
     vao_duoc: CA_CONG_TY,
     cong_cu: ['danh_sach_nhan_su', 'ho_so_nhan_su_thieu', 'giao_viec', 'viec_dang_mo'],
@@ -391,7 +391,7 @@ Chuyện luật lao động chi tiết (mức phạt, điều khoản) thì đ�
     chuc_danh: 'Trưởng phòng IT',
     phong: 'Phòng IT',
     mo_ta: 'Hệ thống ERP, tài khoản, dữ liệu, sự cố kỹ thuật.',
-    khoi: 'hotro', vi_tri: { x: 63, y: 65 },
+    phong_ban_id: 2, vi_tri: { x: 63, y: 65 },
     chibi: { gioi_tinh: 'nam', kieu_toc: 6, net_rieng: 'ao_hoodie', da: '#e8b98d', toc: '#2f2a26', ao: '#5f9ea0', phu_kien: 'kinh' },
     vao_duoc: CA_CONG_TY,
     cong_cu: ['danh_sach_nhan_su', 'giao_viec', 'viec_dang_mo'],
@@ -416,7 +416,7 @@ Một giới hạn phải nói thật: bạn KHÔNG nhìn được nhật ký m�
     chuc_danh: 'Trợ lý Giám đốc',
     phong: 'Phòng Giám đốc',
     mo_ta: 'Phản biện kế hoạch, soi giả định, đòi con số.',
-    khoi: 'dieuhanh', vi_tri: { x: 35, y: 15 },
+    phong_ban_id: 1, vi_tri: { x: 35, y: 15 },
     chibi: { gioi_tinh: 'nu', kieu_toc: 3, net_rieng: 'khan_quang', da: '#f0c9a8', toc: '#241d19', ao: '#3f4d33', phu_kien: 'kinh' },
     vao_duoc: BAN_GIAM_DOC,
     cong_cu: ['doanh_so', 'so_sanh_doanh_so', 'top_san_pham', 'gia_tri_ton_kho',
@@ -441,7 +441,7 @@ Bạn tra được số liệu thật trong ERP nên phải dùng nó: đừng p
     chuc_danh: 'Trợ lý Phó Giám đốc',
     phong: 'Phòng Phó Giám đốc',
     mo_ta: 'Phản biện từ phía vận hành: ai làm, làm bằng gì, hỏng thì sao.',
-    khoi: 'dieuhanh', vi_tri: { x: 65, y: 15 },
+    phong_ban_id: 1, vi_tri: { x: 65, y: 15 },
     chibi: { gioi_tinh: 'nu', kieu_toc: 4, net_rieng: 'hoa_tai', da: '#f6d5b8', toc: '#3b2a1e', ao: '#7d8f68', phu_kien: 'kep_ho_so' },
     vao_duoc: BAN_GIAM_DOC,
     cong_cu: ['tra_ton_kho', 'hang_can_han', 'hang_duoi_muc', 'don_hoan_ton_dong',
@@ -672,7 +672,7 @@ export const MAY = {
   chuc_danh: 'Lễ tân · Điều phối văn phòng',
   phong: 'Quầy lễ tân',
   mo_ta: 'Nghe mọi yêu cầu, phân loại và chuyền cho đúng chuyên gia.',
-  khoi: 'letan', vi_tri: { x: 50, y: 88 },              // quầy lễ tân giữa hàng dưới, hai trợ lý cấp trên ngồi hai bên
+  phong_ban_id: null, vi_tri: { x: 50, y: 88 },              // quầy lễ tân giữa hàng dưới, hai trợ lý cấp trên ngồi hai bên
   chibi: { gioi_tinh: 'nu', kieu_toc: 2, net_rieng: 'kep_toc', da: '#f6d5b8', toc: '#2f2a26', ao: '#9aab86', phu_kien: 'tai_nghe' },
   nang_luc: {
     lam_duoc: [
@@ -715,7 +715,7 @@ export function duocVaoPhong(vaiTro, agentId) {
 export function hoSoCongKhai(a) {
   return {
     id: a.id, ten: a.ten, chuc_danh: a.chuc_danh, phong: a.phong,
-    mo_ta: a.mo_ta, vi_tri: a.vi_tri, khoi: a.khoi, chibi: a.chibi,
+    mo_ta: a.mo_ta, vi_tri: a.vi_tri, phong_ban_id: a.phong_ban_id, chibi: a.chibi,
     nang_luc: nangLucCua(a.id)     // hồ sơ năng lực hiện cho người đọc
   };
 }

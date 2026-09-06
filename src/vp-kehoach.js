@@ -98,3 +98,30 @@ export async function soanKeHoach(env) {
   }
   return xong;
 }
+
+/* Bản chẩn đoán — trả về LÝ DO không soạn được, thay vì im lặng return 0.
+   Cron nuốt lỗi vào console mà console thì không ai đọc được từ xa. */
+export async function soanKeHoachChanDoan(env) {
+  if (!env.AI) return { ok: false, vi_sao: 'Worker khong co binding AI' };
+  let ds;
+  try {
+    const r = await env.DB.prepare().all();
+    ds = r.results || [];
+  } catch (e) { return { ok: false, vi_sao: 'Loi doc gop_y: ' + e.message }; }
+
+  if (!ds.length) return { ok: true, so: 0, vi_sao: 'Khong con phieu nao can soan ke hoach' };
+
+  const g = ds[0];
+  let ban;
+  try {
+    const kq = await env.AI.run(MODEL, { messages: [{ role: 'user', content: nhacViec(g) }], max_tokens: 800 });
+    ban = String(kq?.response || '').trim();
+  } catch (e) { return { ok: false, phieu: g.id, vi_sao: 'Loi goi AI: ' + e.message }; }
+
+  if (ban.length < 120) return { ok: false, phieu: g.id, vi_sao: 'AI tra ve qua ngan (' + ban.length + ' ky tu)', mau: ban.slice(0,150) };
+
+  try {
+    const r = await env.DB.prepare().bind(ban.slice(0,4000), g.id).run();
+    return { ok: true, phieu: g.id, da_ghi: !!r?.meta?.changes, dai: ban.length };
+  } catch (e) { return { ok: false, phieu: g.id, vi_sao: 'Loi ghi: ' + e.message }; }
+}

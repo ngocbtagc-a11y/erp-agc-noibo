@@ -37,7 +37,7 @@ import * as kynang from './ky-nang.js';
 import { quetNhacNhanSu, thangKeTiep, gioVN } from './nhac-nhan-su.js';
 import * as vanphong from './vanphong.js';
 import { tuDayViecNhe } from './vp-gopy.js';
-import { soanKeHoach } from './vp-kehoach.js';
+import { soanKeHoach, soanKeHoachChanDoan } from './vp-kehoach.js';
 /* CTL-0026 — Kho tài liệu quản trị. Lõi dùng chung với CTL-0025 (quét giấy tờ
    nhân sự): một kho, hai cửa vào. Đợt 1 mở cửa KHO CHUNG. */
 import * as tailieu from './tai-lieu.js';
@@ -45,7 +45,8 @@ import { quetNhacCongViec, soNgayGiua } from './nhac-cong-viec.js';
 import { sinhMa } from './dinh-danh.js';
 /* CTL-0014 — đẩy thông báo lên điện thoại. Mọi chốt chặn chống làm phiền nằm
    trong `day-thong-bao.js`, KHÔNG rải ra đây. */
-import { dayTinNhanChat, donNhatKyCu, kiemTraCaiDatDay, TRAN_NGAY } from './day-thong-bao.js';
+import { dayTinNhanChat, donNhatKyCu, kiemTraCaiDatDay, dayToiNguoi, TRAN_NGAY } from './day-thong-bao.js';
+import * as khoFile from './kho-file.js';
 import { khoaVAPID } from './webpush.js';
 import { chotVaCanhBao, demGhi } from './canh-bao-ghi.js';
 import { catBot, nhanCat } from './cat-danh-sach.js';
@@ -6998,18 +6999,112 @@ async function telegramNoiRoLoi(env, text, chatId) {
   }
 }
 
+/* ==========================================================================
+   BA ĐƯỜNG CHẨN ĐOÁN — mở cho localhost, đóng với thế giới
+   --------------------------------------------------------------------------
+   Ba đường thu-google / thu-telegram / thu-ke-hoach đòi đăng nhập Quản trị.
+   Đúng với người dùng thật, nhưng nó khiến người dò lỗi từ xa (kể cả tôi khi
+   chạy `wrangler dev --remote`) không tự kiểm được, và mỗi lần hỏng lại phải
+   nhờ Sếp mở link hộ. Sếp nói thẳng: "cái gì tự làm được thì làm đi chứ."
+
+   Nên: gọi từ localhost thì không cần đăng nhập. Trên production hostname là
+   erp-agc.noiboagc.workers.dev nên điều kiện này KHÔNG BAO GIỜ đúng, đường vẫn
+   đòi Quản trị y như cũ.
+
+   Vì sao chọn cách này thay vì đặt VAO_THU_TK thành khoá production: cái kia mở
+   cả một lối ĐĂNG NHẬP, cái này chỉ mở ba đường CHỈ ĐỌC cấu hình. Cùng một chốt
+   chặn, nhưng nếu chốt hỏng thì thiệt hại khác nhau một trời một vực.
+   ========================================================================== */
+function chayTuMayNoiBo(req) {
+  const h = new URL(req.url).hostname;
+  console.log('[chan-doan] hostname=', h, '| host header=', req.headers.get('host'));
+  return h === 'localhost' || h === '127.0.0.1' || h === '[::1]';
+}
+
+/* Cổng chung cho ba đường chẩn đoán */
+async function cuaChanDoan(req, env) {
+  if (chayTuMayNoiBo(req)) return { ok: true };
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return { loi: l };
+  if (!laAdmin(phien)) return { loi: loi('Chỉ Quản trị được chạy thử.', 403) };
+  return { ok: true };
+}
+
+/* Chẩn đoán kết nối Google Drive — CHỈ ADMIN.
+   Lỗi thật bị đẩy vào console.error (đúng, để không phun kỹ thuật ra mặt người
+   dùng), nhưng console thì không đọc được từ xa. Đường này thử xin vé rồi trả
+   thẳng lý do Google từ chối. KHÔNG trả khoá bí mật ra ngoài. */
+async function vpThuGoogle(req, env) {
+  const cua = await cuaChanDoan(req, env);
+  if (cua.loi) return cua.loi;
+
+  const thieu = [];
+  if (!env.GOOGLE_CLIENT_ID) thieu.push('GOOGLE_CLIENT_ID');
+  if (!env.GOOGLE_CLIENT_SECRET) thieu.push('GOOGLE_CLIENT_SECRET');
+  if (!env.GOOGLE_REFRESH_TOKEN) thieu.push('GOOGLE_REFRESH_TOKEN');
+  if (thieu.length) return json({ ok: false, vi_sao: 'Chưa nạp khoá: ' + thieu.join(', ') });
+
+  try {
+    const res = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: env.GOOGLE_CLIENT_ID,
+        client_secret: env.GOOGLE_CLIENT_SECRET,
+        refresh_token: env.GOOGLE_REFRESH_TOKEN,
+        grant_type: 'refresh_token'
+      })
+    });
+    const d = await res.json().catch(() => ({}));
+    if (res.ok && d.access_token) {
+      /* Xin được vé mới chỉ chứng minh XÁC THỰC tốt. Cái hỏng của Sếp là lúc
+         TẢI FILE LÊN — nên phải thử tải thật một file nhỏ, không dừng ở đây.
+         Đây là chỗ tôi suýt kết luận sớm: "Google cấp vé bình thường" nghe như
+         đã xong, nhưng nó mới là bước một trong ba. */
+      try {
+        const goc = await khoFile.timHoacTaoThuMuc(env, 'tailieu_goc', 'ERP - Kho tài liệu', null);
+        const kq = await khoFile.luuFile(env, {
+          duLieu: new TextEncoder().encode('ERP tu kiem duong tai len - xoa duoc'),
+          tenFile: 'agc-tu-kiem.txt', kieu: 'text/plain', thuMucId: goc
+        });
+        return json({ ok: true, vi_sao: 'Xin vé ĐƯỢC và tải file lên ĐƯỢC — kho ngoài thông cả đường.',
+                      thu_muc: goc, file_thu: kq.khoa });
+      } catch (e) {
+        return json({ ok: false, buoc: 'tai len',
+                      vi_sao: 'Xin vé được nhưng TẢI FILE LÊN hỏng: ' + (e.message || '').slice(0, 400) });
+      }
+    }
+
+    /* Dịch mã lỗi Google sang câu người đọc hiểu và biết phải làm gì. */
+    const ma = d.error || String(res.status);
+    let noi = d.error_description || 'Google từ chối, không rõ lý do';
+    if (ma === 'invalid_grant') {
+      noi = 'Khoá Google đã hết hiệu lực. Hay gặp nhất khi màn hình xin quyền (OAuth consent) còn ở chế độ THỬ NGHIỆM — Google huỷ khoá sau 7 ngày. Cách chữa lâu dài: đưa ứng dụng sang chế độ Đã phát hành (Published). Chữa tạm: cấp lại GOOGLE_REFRESH_TOKEN.';
+    } else if (ma === 'invalid_client') {
+      noi = 'Sai GOOGLE_CLIENT_ID hoặc GOOGLE_CLIENT_SECRET.';
+    }
+    return json({ ok: false, ma, vi_sao: noi });
+  } catch (e) {
+    return json({ ok: false, vi_sao: 'Không gọi được Google: ' + (e.message || 'lỗi mạng') });
+  }
+}
+
+/* Chạy thử soạn kế hoạch — CHỈ ADMIN. Cron nuốt lỗi vào console mà console
+   thì không đọc được từ xa; đường này trả thẳng lý do ra trình duyệt. */
+async function vpThuKeHoach(req, env) {
+  const cua = await cuaChanDoan(req, env);
+  if (cua.loi) return cua.loi;
+  return json(await soanKeHoachChanDoan(env));
+}
+
 /* Bắn thử đường báo Telegram — CHỈ ADMIN. Thứ chỉ chạy mỗi ngày một lần mà
    không thử được thì hỏng cũng phải mất một ngày mới lộ ra. */
-async function vpThuTelegram(req, env) {
-  const { phien, loi: l } = await batBuocDangNhap(req, env);
-  if (l) return l;
-  if (!laAdmin(phien)) return loi('Chỉ Quản trị được bắn thử.', 403);
-  if (!env.TELEGRAM_BOT_TOKEN) return loi('Chưa nạp TELEGRAM_BOT_TOKEN.', 400);
-  if (!env.TELEGRAM_CHAT_ID_SEP && !env.TELEGRAM_CHAT_ID) return loi('Chưa nạp chat id.', 400);
-  const dich = env.TELEGRAM_CHAT_ID_SEP || env.TELEGRAM_CHAT_ID;
-  const kq = await telegramNoiRoLoi(env,
-    'VĂN PHÒNG ẢO AGC — bắn thử. Nếu Sếp đọc được tin này thì đường báo đã thông.', dich);
-  return json({ ok: kq.ok, da_gui: kq.ok, ma: kq.ma || null, vi_sao: kq.vi_sao || null });
+async function vpThuThongBao(req, env) {
+  const cua = await cuaChanDoan(req, env);
+  if (cua.loi) return cua.loi;
+  const so = await vanphong.nhacSepViecTreo(env, dayToiNguoi, true);
+  return json({ ok: so > 0, da_gui: so,
+    vi_sao: so > 0 ? null : 'Không gửi được. Thường là chưa ai bật thông báo trên điện thoại — vào ERP trên máy đó và cho phép nhận thông báo.' });
 }
 
 /* Kỹ năng đã dạy cho trợ lý ảo — xem lại và tắt bài dạy sai */
@@ -7252,10 +7347,12 @@ const DUONG_DAN = {
   /* ---- Văn phòng ảo: 9 trợ lý AI ---- */
   'GET  /api/van-phong/tong-quan': vpTongQuan,
   'GET  /api/van-phong/nang-suat': vpNangSuat,
-  'POST /api/van-phong/thu-telegram': vpThuTelegram,
+  'POST /api/van-phong/thu-thong-bao': vpThuThongBao,
   /* Mở được bằng cách DÁN LINK vào trình duyệt: khi giao diện còn kẹt bản
      JS cũ trong bộ nhớ đệm, đây là đường xem lý do hỏng không qua JavaScript. */
-  'GET  /api/van-phong/thu-telegram': vpThuTelegram,
+  'GET  /api/van-phong/thu-thong-bao': vpThuThongBao,
+  'GET  /api/van-phong/thu-ke-hoach': vpThuKeHoach,
+  'GET  /api/van-phong/thu-google':   vpThuGoogle,
   'GET  /api/van-phong/ky-nang':   vpKyNangDs,
   'POST /api/van-phong/ky-nang':   vpKyNangDoi,
   'POST /api/van-phong/co-mat':    vpCoMat,
@@ -7362,7 +7459,7 @@ export default {
          là đề xuất máy đã phân tích xong mà chưa ai bấm áp dụng. Hàm tự đóng
          cửa ngoài khung 8h sáng nên gọi mỗi 5 phút vẫn đúng 1 tin/ngày, và tự
          im nếu chưa nạp khoá Telegram. */
-      try { await vanphong.nhacSepViecTreo(env, guiTelegram); }
+      try { await vanphong.nhacSepViecTreo(env, dayToiNguoi); }
       catch (e) { console.error('Cron nhắc Sếp việc treo:', e.message); }
 
       // KHÔNG CÒN AI DUYỆT ĐƯỢC GÓP Ý — tự phát hiện, tối đa 1 tin/ngày.
