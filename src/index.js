@@ -30,6 +30,7 @@ import * as dulieunen from './dulieunen.js';
 import * as taisan from './taisan.js';
 import * as saoLuu from './sao-luu.js';
 import * as ca from './ca.js';
+import * as donHangItem from './don-hang-item.js';
 import * as hopdong from './hopdong.js';
 import * as motacv from './mota-cv.js';
 import * as kynang from './ky-nang.js';
@@ -4792,33 +4793,275 @@ async function kdDongBoDonHang(req, env) {
   return json({ ok: ket.loi.length === 0, so_don: soDon, loi: ket.loi });
 }
 
-/* Tổng quan doanh thu/số đơn cho thẻ + biểu đồ tab Kinh doanh */
-async function kdTongQuanDoanhThu(req, env) {
+/* ==========================================================================
+   TỔNG QUAN 2 SÀN — Dashboard Marketplace (Home/Dashboard Phase 3)
+   Audit: docs/audit/AUDIT-DASHBOARD-MARKETPLACE.md
+   Định nghĩa metric: docs/METRIC-DEFINITIONS.md (doanh_thu_tam_tinh)
+
+   ⚠️ KHÁC QUY ƯỚC CHUNG VỀ TIỀN: các API cũ trả `tong_tien`/`so_tien` ở dạng
+   số nguyên ×100000 rồi để giao diện tự chia lại. Quy ước đó vừa gây đúng 1
+   sự cố thật: thẻ "Doanh thu hôm nay" trên Home CEO quên chia nên hiện sai
+   gấp 100.000 lần (audit mục D). Các API MỚI trong khối này trả thẳng số
+   tiền VNĐ đã chia sẵn — giao diện KHÔNG chia lại lần nữa.
+   ========================================================================== */
+
+const HE_SO_TIEN = 100000;              // xem migrations/them-donhang.sql
+const tienVnd = n => Math.round((Number(n) || 0) / HE_SO_TIEN);
+
+/* Trạng thái đơn hoàn (don_hoan.trang_thai — giá trị do SÀN trả về) được coi
+   là ĐÃ HOÀN THẬT, tức đã trừ tiền của mình. ERP Owner chốt: chỉ trừ khi
+   "phát sinh hoàn hủy THỰC", nên đơn khách mới bấm yêu cầu / sàn đang xử lý
+   thì CHƯA trừ.
+
+   ⚠️ Hai tập dưới đây CHƯA đối chiếu được với dữ liệu production (token
+   Cloudflare bị từ chối lúc viết — audit mục E). Vì vậy trạng thái nào KHÔNG
+   nằm trong cả hai tập sẽ được báo lên giao diện dưới dạng cảnh báo "trạng
+   thái lạ" thay vì âm thầm bỏ qua. Gặp cảnh báo đó -> bổ sung vào đúng tập ở
+   ĐÂY (một chỗ duy nhất, Rule D4) rồi cập nhật METRIC-DEFINITIONS.md. */
+const HOAN_THAT = new Set([
+  'ACCEPTED', 'COMPLETED', 'REFUND_COMPLETE', 'REFUNDED', 'SUCCESS',
+  'RETURN_OR_REFUND_REQUEST_COMPLETE'
+]);
+const HOAN_CHUA_TINH = new Set([
+  'REQUESTED', 'PROCESSING', 'JUDGING', 'SELLER_DISPUTE', 'PENDING',
+  'CANCELLED', 'CLOSED', 'REJECTED', 'RETURN_OR_REFUND_REQUEST_PENDING',
+  // TikTok: khách đã gửi hàng trả về nhưng chưa hoàn tất hoàn tiền — CHƯA
+  // phải "hoàn thực". Thấy thật trên production 06/09/2026 (4 đơn).
+  'BUYER_SHIPPED_ITEM'
+]);
+
+/* Mốc thời gian theo giờ VN (UTC+7), trả về giây unix để so với tao_luc_san.
+
+   Kỳ trước = DỊCH LÙI đúng 1 bước tự nhiên của kỳ (lùi 1 ngày / 7 ngày /
+   30 ngày / 1 tháng), GIỮ NGUYÊN độ dài đã trôi qua. Nghĩa là "hôm nay tới
+   giờ này" được so với "hôm qua tới đúng giờ này".
+
+   ⚠️ KHÔNG dùng cách "cửa sổ liền trước cùng độ dài" (tu − độ_dài). Cách đó
+   nghe thì hợp lý nhưng cho kết quả vô nghĩa: lúc 9h sáng, "kỳ trước" của
+   hôm nay sẽ thành 9 tiếng CUỐI ngày hôm qua (từ 15h đến nửa đêm) — khung
+   giờ mua hàng hoàn toàn khác, so sánh ra số sai lệch. Đã phát hiện khi
+   chạy thử với dữ liệu mẫu, đừng "đơn giản hoá" lại về cách cũ. */
+function mocKy(ma) {
+  const nay = Math.floor(Date.now() / 1000);
+  const vn = new Date(Date.now() + 7 * 3600 * 1000);
+  const dauNgay = Math.floor(Date.UTC(vn.getUTCFullYear(), vn.getUTCMonth(), vn.getUTCDate()) / 1000) - 7 * 3600;
+  const dauThang = Math.floor(Date.UTC(vn.getUTCFullYear(), vn.getUTCMonth(), 1) / 1000) - 7 * 3600;
+  const dauThangTruoc = Math.floor(Date.UTC(vn.getUTCFullYear(), vn.getUTCMonth() - 1, 1) / 1000) - 7 * 3600;
+
+  let tu, buoc, nhan, truocNhan;
+  if (ma === '7ngay') {
+    tu = dauNgay - 6 * 86400;  buoc = 7 * 86400;
+    nhan = '7 ngày gần nhất';  truocNhan = '7 ngày liền trước';
+  } else if (ma === '30ngay') {
+    tu = dauNgay - 29 * 86400; buoc = 30 * 86400;
+    nhan = '30 ngày gần nhất'; truocNhan = '30 ngày liền trước';
+  } else if (ma === 'thang_nay') {
+    // Tháng dài ngắn khác nhau nên bước lùi = đúng độ dài THÁNG TRƯỚC, để
+    // ngày 5 tháng này soi đúng ngày 5 tháng trước.
+    tu = dauThang;             buoc = dauThang - dauThangTruoc;
+    nhan = 'Tháng này';        truocNhan = 'cùng kỳ tháng trước';
+  } else {
+    ma = 'hom_nay';
+    tu = dauNgay;              buoc = 86400;
+    nhan = 'Hôm nay';          truocNhan = 'hôm qua cùng giờ này';
+  }
+
+  return { ma, nhan, tu, den: nay, truoc: { tu: tu - buoc, den: nay - buoc, nhan: truocNhan } };
+}
+
+/* Số liệu 1 cửa sổ thời gian, tách theo sàn. Dùng lại cho cả kỳ này lẫn kỳ
+   trước — KHÔNG chép công thức ra 2 chỗ (Rule D4). */
+async function soLieuKy(env, tu, den) {
+  const dsHoanThat = [...HOAN_THAT];
+  const oHoan = dsHoanThat.map(() => '?').join(',');
+
+  const [don, hoan] = await Promise.all([
+    env.DB.prepare(`
+      SELECT nguon,
+             COUNT(*)                                                                AS so_don,
+             COALESCE(SUM(tong_tien), 0)                                             AS gmv,
+             COALESCE(SUM(CASE WHEN trang_thai = 'CANCELLED' THEN tong_tien END), 0) AS tien_huy,
+             COALESCE(SUM(CASE WHEN trang_thai = 'CANCELLED' THEN 1 END), 0)         AS so_don_huy
+        FROM don_hang
+       WHERE CAST(tao_luc_san AS INTEGER) >= ? AND CAST(tao_luc_san AS INTEGER) < ?
+       GROUP BY nguon
+    `).bind(tu, den).all(),
+    env.DB.prepare(`
+      SELECT h.nguon                     AS nguon,
+             COUNT(*)                    AS so_don_hoan,
+             COALESCE(SUM(r.so_tien), 0) AS tien_hoan
+        FROM don_hoan r
+        JOIN don_hang h ON h.order_sn = r.order_sn
+       WHERE CAST(h.tao_luc_san AS INTEGER) >= ? AND CAST(h.tao_luc_san AS INTEGER) < ?
+         AND UPPER(COALESCE(r.trang_thai, '')) IN (${oHoan})
+       GROUP BY h.nguon
+    `).bind(tu, den, ...dsHoanThat).all()
+  ]);
+
+  const theoSan = new Map();
+  const lay = ng => {
+    const k = ng || 'khac';
+    if (!theoSan.has(k)) theoSan.set(k, { nguon: k, so_don: 0, gmv: 0, tien_huy: 0, so_don_huy: 0, tien_hoan: 0, so_don_hoan: 0 });
+    return theoSan.get(k);
+  };
+  for (const r of don.results || []) {
+    const o = lay(r.nguon);
+    o.so_don = r.so_don;  o.gmv = tienVnd(r.gmv);
+    o.tien_huy = tienVnd(r.tien_huy);  o.so_don_huy = r.so_don_huy;
+  }
+  for (const r of hoan.results || []) {
+    const o = lay(r.nguon);
+    o.tien_hoan = tienVnd(r.tien_hoan);  o.so_don_hoan = r.so_don_hoan;
+  }
+  // doanh_thu_tam_tinh = GMV đơn đặt − tiền hủy − tiền hoàn thật (METRIC-DEFINITIONS.md)
+  for (const o of theoSan.values()) o.doanh_thu = o.gmv - o.tien_huy - o.tien_hoan;
+  return [...theoSan.values()];
+}
+
+/* Chẩn đoán: liệt kê ĐÚNG các giá trị trạng thái mà sàn thật sự trả về, để
+   phát hiện trạng thái chưa phân loại thay vì tính sai âm thầm. */
+async function chanDoanKy(env, tu, den) {
+  const [donTt, hoanTt] = await Promise.all([
+    env.DB.prepare(`
+      SELECT nguon, COALESCE(trang_thai, '(trống)') AS trang_thai, COUNT(*) AS n
+        FROM don_hang
+       WHERE CAST(tao_luc_san AS INTEGER) >= ? AND CAST(tao_luc_san AS INTEGER) < ?
+       GROUP BY nguon, trang_thai ORDER BY n DESC
+    `).bind(tu, den).all(),
+    env.DB.prepare(`
+      SELECT COALESCE(r.trang_thai, '(trống)') AS trang_thai, COUNT(*) AS n,
+             COALESCE(SUM(r.so_tien), 0) AS tien
+        FROM don_hoan r
+        JOIN don_hang h ON h.order_sn = r.order_sn
+       WHERE CAST(h.tao_luc_san AS INTEGER) >= ? AND CAST(h.tao_luc_san AS INTEGER) < ?
+       GROUP BY r.trang_thai ORDER BY n DESC
+    `).bind(tu, den).all()
+  ]);
+
+  const hoan = (hoanTt.results || []).map(r => {
+    const tt = String(r.trang_thai).toUpperCase();
+    return {
+      trang_thai: r.trang_thai, n: r.n, tien: tienVnd(r.tien),
+      xep: HOAN_THAT.has(tt) ? 'da_tru' : (HOAN_CHUA_TINH.has(tt) ? 'chua_tru' : 'chua_phan_loai')
+    };
+  });
+  return { trang_thai_don: donTt.results || [], hoan };
+}
+
+/* GET /api/kinh-doanh/tong-quan-kenh?ky=hom_nay|7ngay|30ngay|thang_nay */
+async function kdTongQuanKenh(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
   if (!duocXemTab(phien, 'kinhdoanh')) return loi('Bạn không có quyền', 403);
 
-  const _vn = new Date(Date.now() + 7 * 3600 * 1000);
-  const dauThangSec = Math.floor(Date.UTC(_vn.getUTCFullYear(), _vn.getUTCMonth(), 1) / 1000) - 7 * 3600;
-  const dauNgaySec  = Math.floor(Date.UTC(_vn.getUTCFullYear(), _vn.getUTCMonth(), _vn.getUTCDate()) / 1000) - 7 * 3600;
-
-  let coBang = true, homNay = { so_don: 0, tong_tien: 0 }, thangNay = [];
+  const ky = mocKy(new URL(req.url).searchParams.get('ky') || 'hom_nay');
   try {
-    homNay = await env.DB.prepare(`
-      SELECT COUNT(*) AS so_don, COALESCE(SUM(tong_tien),0) AS tong_tien
-        FROM don_hang WHERE CAST(tao_luc_san AS INTEGER) >= ?
-    `).bind(dauNgaySec).first();
+    const [nay, truoc, chanDoan, mocDau] = await Promise.all([
+      soLieuKy(env, ky.tu, ky.den),
+      soLieuKy(env, ky.truoc.tu, ky.truoc.den),
+      chanDoanKy(env, ky.tu, ky.den),
+      env.DB.prepare(
+        'SELECT nguon, MIN(CAST(tao_luc_san AS INTEGER)) AS som_nhat FROM don_hang GROUP BY nguon'
+      ).all()
+    ]);
 
-    const kq = await env.DB.prepare(`
-      SELECT nguon, COUNT(*) AS so_don, COALESCE(SUM(tong_tien),0) AS tong_tien
-        FROM don_hang WHERE CAST(tao_luc_san AS INTEGER) >= ? GROUP BY nguon
-    `).bind(dauThangSec).all();
-    thangNay = kq.results || [];
+    /* ⚠️ Chặn so sánh với kỳ mà ERP CHƯA đồng bộ dữ liệu về.
+       Đồng bộ Shopee mới bắt đầu 03/08/2026, TikTok từ 12/02/2026 — nên xem
+       "Tháng này" thì cùng kỳ tháng trước của Shopee gần như trống, chia ra
+       sẽ thành "+335.000%". Một con số như thế xuất hiện 1 lần là Sếp mất
+       niềm tin vào cả cái bảng. Kỳ trước nào bắt đầu TRƯỚC mốc dữ liệu đầu
+       tiên thì đánh dấu không đủ dữ liệu, giao diện hiện "—" thay vì bịa %. */
+    const somNhat = new Map((mocDau.results || []).map(r => [r.nguon, Number(r.som_nhat) || 0]));
+    const duDuLieu = ng => {
+      const s = somNhat.get(ng);
+      return !!s && ky.truoc.tu >= s;
+    };
+
+    const mapTruoc = new Map(truoc.map(o => [o.nguon, o]));
+    const kenh = nay.map(o => {
+      const t = mapTruoc.get(o.nguon);
+      return { ...o, truoc_doanh_thu: t ? t.doanh_thu : 0, truoc_so_don: t ? t.so_don : 0,
+               truoc_du_du_lieu: duDuLieu(o.nguon) };
+    });
+    // Sàn có bán ở kỳ trước nhưng kỳ này im lặng hẳn -> vẫn phải hiện (0 đơn
+    // là tín hiệu xấu nhất, giấu đi thì đúng kiểu dashboard nói dối).
+    for (const t of truoc) {
+      if (!kenh.some(o => o.nguon === t.nguon)) {
+        kenh.push({ nguon: t.nguon, so_don: 0, gmv: 0, tien_huy: 0, so_don_huy: 0, tien_hoan: 0,
+                    so_don_hoan: 0, doanh_thu: 0, truoc_doanh_thu: t.doanh_thu, truoc_so_don: t.so_don,
+                    truoc_du_du_lieu: duDuLieu(t.nguon) });
+      }
+    }
+    kenh.sort((a, b) => b.doanh_thu - a.doanh_thu);
+
+    const cong = (ds, f) => ds.reduce((s, o) => s + f(o), 0);
+    return json({
+      co_bang: true,
+      ky: { ma: ky.ma, nhan: ky.nhan, tu: ky.tu, den: ky.den, truoc_nhan: ky.truoc.nhan },
+      kenh,
+      tong: {
+        so_don: cong(kenh, o => o.so_don), gmv: cong(kenh, o => o.gmv),
+        tien_huy: cong(kenh, o => o.tien_huy), so_don_huy: cong(kenh, o => o.so_don_huy),
+        tien_hoan: cong(kenh, o => o.tien_hoan), so_don_hoan: cong(kenh, o => o.so_don_hoan),
+        doanh_thu: cong(kenh, o => o.doanh_thu),
+        truoc_doanh_thu: cong(kenh, o => o.truoc_doanh_thu), truoc_so_don: cong(kenh, o => o.truoc_so_don),
+        // Chỉ 1 sàn thiếu dữ liệu kỳ trước là con số TỔNG đã không so được
+        truoc_du_du_lieu: kenh.length > 0 && kenh.every(o => o.truoc_du_du_lieu)
+      },
+      chan_doan: chanDoan
+    });
   } catch {
-    coBang = false;   // chưa nạp migration them-donhang.sql trên máy chủ này
+    return json({ co_bang: false });   // chưa nạp migration đơn hàng ở môi trường này
   }
+}
 
-  return json({ co_bang: coBang, hom_nay: homNay, thang_nay: thangNay });
+/* GET /api/kinh-doanh/xep-hang-sku?ky=...  — 10 SKU bán chạy nhất và 10 SKU
+   bán kém nhất toàn công ty trong kỳ. Dùng chung mốc thời gian `mocKy()` với
+   Tổng quan 2 sàn để 2 khối trên cùng màn hình không bao giờ lệch kỳ nhau. */
+async function kdXepHangSku(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  if (!duocXemTab(phien, 'kinhdoanh')) return loi('Bạn không có quyền', 403);
+
+  if (!(await donHangItem.coBangDong(env))) {
+    return json({ co_bang: false, ly_do: 'Chưa nạp migration them-donhang-dong.sql trên máy chủ' });
+  }
+  const ky = mocKy(new URL(req.url).searchParams.get('ky') || 'thang_nay');
+  try {
+    const kq = await donHangItem.xepHangSku(env, ky.tu, ky.den, 10);
+    // Còn đơn chưa bóc dòng thì bảng xếp hạng đang THIẾU dữ liệu — phải nói ra,
+    // không được để Sếp tưởng đã đủ rồi ra quyết định cắt/đẩy hàng.
+    const chuaTach = await env.DB.prepare(
+      'SELECT COUNT(*) AS n FROM don_hang WHERE da_tach_dong = 0'
+    ).first();
+    return json({
+      co_bang: true,
+      ky: { ma: ky.ma, nhan: ky.nhan, tu: ky.tu, den: ky.den },
+      ...kq,
+      chua_tach: (chuaTach && chuaTach.n) || 0
+    });
+  } catch (e) {
+    return json({ co_bang: false, ly_do: e.message });
+  }
+}
+
+/* POST /api/kinh-doanh/tach-dong-hang — bóc dòng hàng từ `du_lieu_json` của
+   các đơn cũ, theo lô. Giao diện gọi lại tới khi `con_lai = 0`.
+   Chỉ ĐỌC `du_lieu_json` rồi GHI sang bảng mới — không sửa/xoá dữ liệu đơn. */
+async function kdTachDongHang(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  if (!laAdmin(phien)) return loi('Chỉ Admin mới chạy được việc bóc dữ liệu này', 403);
+  if (!(await donHangItem.coBangDong(env))) {
+    return loi('Chưa nạp migration them-donhang-dong.sql trên máy chủ', 409);
+  }
+  try {
+    // 100 đơn/lượt: mỗi đơn sinh 1 câu lệnh/dòng hàng + 1 câu đánh dấu, để
+    // 1 lô D1 không phình quá to. Giao diện tự gọi lại tới khi con_lai = 0.
+    return json(await donHangItem.tachBu(env, 100));
+  } catch (e) {
+    return loi(e.message, 500);
+  }
 }
 
 /* ==========================================================================
@@ -6813,7 +7056,9 @@ const DUONG_DAN = {
   'POST /api/kinh-doanh/da-doi-soat':  kdDaDoiSoat,
   'POST /api/kinh-doanh/day-kho':      kdDayKho,
   'POST /api/kinh-doanh/day-ke-toan':  kdDayKeToan,
-  'GET  /api/kinh-doanh/tong-quan-doanh-thu': kdTongQuanDoanhThu,
+  'GET  /api/kinh-doanh/tong-quan-kenh':      kdTongQuanKenh,
+  'GET  /api/kinh-doanh/xep-hang-sku':        kdXepHangSku,
+  'POST /api/kinh-doanh/tach-dong-hang':      kdTachDongHang,
   'POST /api/kinh-doanh/dong-bo-don-hang':    kdDongBoDonHang,
   'GET  /api/kinh-doanh/don-hang-huy':        donHangHuy,
   'GET  /api/ke-toan/can-tra-soat':    ktCanTraSoat,

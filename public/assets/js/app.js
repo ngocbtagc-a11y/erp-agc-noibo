@@ -2774,12 +2774,32 @@ async function veTongQuanTheoVaiTro() {
     if (choDuyetGiao > 0) canhBao.push({ m: 'warn', b: `${choDuyetGiao} việc đang chờ Sếp duyệt`, s: 'Bấm để xem ở Lịch sử làm việc — phạm vi "Tôi giao"', t: 'Công việc',
       onClick: () => window.MO_DEN_VIEC_CUA_TOI && window.MO_DEN_VIEC_CUA_TOI('giao') });
 
+    // Doanh thu tạm tính hôm nay (định nghĩa: docs/METRIC-DEFINITIONS.md) kèm
+    // mức chênh so với ĐÚNG GIỜ NÀY hôm qua — Decision First: Sếp cần biết
+    // "hôm nay đang hơn hay kém hôm qua", một con số trơ trọi không dẫn tới
+    // quyết định nào (Rule D1). Bấm vào để sang tab Kinh doanh xem chi tiết
+    // theo từng sàn (Rule D5 — không để thẻ là ngõ cụt).
+    // ⚠️ catch ở đây KHÔNG được nuốt im lặng nữa: chính chỗ này từng che một
+    // lỗi lập trình thật — gọi `API.kdTongQuanDoanhThu()` trong khi api.js
+    // không hề định nghĩa hàm đó, nên thẻ doanh thu chưa từng hiện lên lần
+    // nào mà không ai biết (audit 06/09/2026).
     try {
-      const dt = await API.kdTongQuanDoanhThu();
+      const dt = await API.kdTongQuanKenh('hom_nay');
       if (dt.co_bang) {
-        the.push({ k: 'Doanh thu hôm nay', v: tienVN(dt.hom_nay.tong_tien) + ' đ', d: `${dt.hom_nay.so_don} đơn` });
+        const t = dt.tong;
+        const lech = t.truoc_doanh_thu
+          ? Math.round((t.doanh_thu - t.truoc_doanh_thu) / t.truoc_doanh_thu * 100) : null;
+        the.push({
+          k: 'Doanh thu tạm tính hôm nay',
+          v: tienVN(t.doanh_thu) + ' đ',
+          d: lech === null
+            ? `${t.so_don} đơn`
+            : `${t.so_don} đơn · ${lech >= 0 ? '+' : ''}${lech}% so với giờ này hôm qua`,
+          dir: lech === null ? '' : (lech < 0 ? 'down' : 'up'),
+          onClick: () => moTab('kinhdoanh')
+        });
       }
-    } catch { /* chưa nạp migration đơn hàng ở môi trường này — im lặng bỏ qua */ }
+    } catch (e) { console.error('Tổng quan 2 sàn (Home):', e); }
   } else if (laManager) {
     // Exception First cho trưởng phòng — TEAM của họ, không phải việc cá
     // nhân (cá nhân vẫn thấy tiếp ở khối Việc cần làm bên dưới như Employee).
@@ -6047,6 +6067,9 @@ if (TOI.quyen.includes('kinhdoanh')) {
       { ten: 'Bảng Khách hoàn nhiều', goc: oTab('kinhdoanh') });
     try { await lamMoiCSKH(); } catch (e) { console.error('CSKH:', e); }
   }
+  // Tổng quan 2 sàn + xếp hạng SKU — ai xem được tab Kinh doanh đều thấy
+  // (bức tranh toàn công ty, không riêng Vận hành sàn).
+  try { await khoiDongTongQuanSan(); } catch (e) { console.error('Tổng quan 2 sàn:', e); }
   try { await khoiDongDonHangHuy(); } catch (e) { console.error('Đơn hàng bị hủy:', e); }
 }
 
@@ -6772,6 +6795,259 @@ async function khoiDongGopY() {
   });
 
   await taiLai();
+}
+
+/* ==========================================================================
+   TỔNG QUAN 2 SÀN + xếp hạng SKU (Dashboard Marketplace)
+   Định nghĩa số: docs/METRIC-DEFINITIONS.md · Audit: docs/audit/AUDIT-DASHBOARD-MARKETPLACE.md
+
+   ⚠️ Mọi số tiền từ API.kdTongQuanKenh/kdXepHangSku ĐÃ ở đơn vị VNĐ — KHÔNG
+   chia 100000 lần nữa (khác các API đơn hoàn/đơn hủy cũ).
+   ========================================================================== */
+
+async function khoiDongTongQuanSan() {
+  // Ngưỡng gọi là "sụt bất thường". Đặt tên rõ, không rải số ma trong code —
+  // đổi ngưỡng là đổi 1 chỗ (Rule D1: cảnh báo phải đáng tin, kêu suốt ngày
+  // thì người ta ngừng nhìn).
+  // ⚠️ ĐỂ TRONG HÀM, đừng đưa ra ngoài: khối bootstrap tab Kinh doanh nằm
+  // TRƯỚC khối này trong file, mà `const` ở phạm vi module thì chưa khởi tạo
+  // lúc đó -> "Cannot access before initialization", cả khối Tổng quan chết
+  // câm. Đã vấp thật khi mở bằng trình duyệt 06/09/2026.
+  const SUT_TONG_PCT = 20;    // toàn công ty giảm ≥ 20% so kỳ trước
+  const SUT_SAN_PCT  = 30;    // riêng 1 sàn giảm ≥ 30%
+  const TEN_SAN = { shopee: 'Shopee', tiktok: 'TikTok Shop', khac: 'Khác' };
+
+  const oPanel = $('#kd-tq-panel');
+  const oSku = $('#kd-sku-panel');
+  if (!oPanel) return;
+
+  let ky = 'hom_nay';
+
+  // % thay đổi so kỳ trước. Trả null (hiện "—") trong 2 trường hợp: kỳ trước
+  // bằng 0 (không quy ra "+∞%" được), hoặc ERP chưa đồng bộ dữ liệu về suốt
+  // kỳ trước đó (`truoc_du_du_lieu`) — so với khoảng trống sẽ ra % khổng lồ
+  // vô nghĩa. Một con số vô lý xuất hiện 1 lần là mất niềm tin cả bảng.
+  const phanTram = (nay, truoc, duDuLieu = true) =>
+    (duDuLieu && truoc ? Math.round((nay - truoc) / truoc * 100) : null);
+  const kemPhanTram = p => (p === null ? '—' : `${p >= 0 ? '+' : ''}${p}%`);
+  const lyDoKhongSo = o => (o.truoc_du_du_lieu === false
+    ? 'Chưa có dữ liệu suốt kỳ trước để so sánh'
+    : 'Kỳ trước không có đơn');
+
+  function veBangKenh(dt) {
+    const tbody = $('#kd-tq-bang');
+    tbody.innerHTML = '';
+    if (!dt.kenh.length) {
+      tbody.innerHTML = `<tr><td colspan="7" class="empty">Chưa có đơn nào trong kỳ này.</td></tr>`;
+      return;
+    }
+    dt.kenh.forEach(k => {
+      const p = phanTram(k.doanh_thu, k.truoc_doanh_thu, k.truoc_du_du_lieu);
+      const mau = p === null ? '' : (p < 0 ? 'd down' : 'd up');
+      const tr = el('tr', '');
+      tr.innerHTML =
+        `<td><b>${esc(TEN_SAN[k.nguon] || k.nguon)}</b></td>` +
+        `<td class="num">${tienVN(k.so_don)}</td>` +
+        `<td class="num">${tienVN(k.gmv)} đ</td>` +
+        `<td class="num">${k.so_don_huy ? tienVN(k.tien_huy) + ' đ<br><span class="hint">' + k.so_don_huy + ' đơn</span>' : '—'}</td>` +
+        `<td class="num">${k.so_don_hoan ? tienVN(k.tien_hoan) + ' đ<br><span class="hint">' + k.so_don_hoan + ' đơn</span>' : '—'}</td>` +
+        `<td class="num"><b>${tienVN(k.doanh_thu)} đ</b></td>` +
+        `<td class="num"><span class="${mau}" title="${p === null ? esc(lyDoKhongSo(k)) : ''}">${kemPhanTram(p)}</span></td>`;
+      tbody.appendChild(tr);
+    });
+  }
+
+  function veCanhBao(dt) {
+    const ds = [];
+    const t = dt.tong;
+    const pTong = phanTram(t.doanh_thu, t.truoc_doanh_thu, t.truoc_du_du_lieu);
+
+    if (pTong !== null && pTong <= -SUT_TONG_PCT) {
+      ds.push({
+        m: 'danger', t: 'Doanh thu',
+        b: `Doanh thu toàn công ty giảm ${Math.abs(pTong)}% so với kỳ trước`,
+        s: `${tienVN(t.doanh_thu)} đ so với ${tienVN(t.truoc_doanh_thu)} đ — xem bảng theo sàn bên dưới để biết sàn nào kéo xuống`
+      });
+    }
+    dt.kenh.forEach(k => {
+      // Kỳ trước chưa có dữ liệu thì KHÔNG cảnh báo gì cả — im lặng còn hơn
+      // báo động giả (Rule D3: bình thường phải "yên").
+      if (k.truoc_du_du_lieu === false) return;
+      const p = phanTram(k.doanh_thu, k.truoc_doanh_thu, k.truoc_du_du_lieu);
+      const ten = TEN_SAN[k.nguon] || k.nguon;
+      if (k.so_don === 0 && k.truoc_so_don > 0) {
+        ds.push({ m: 'danger', t: ten,
+          b: `${ten} KHÔNG có đơn nào trong kỳ này`,
+          s: `Kỳ trước vẫn có ${k.truoc_so_don} đơn — kiểm tra kết nối sàn hoặc gian hàng có bị khoá không` });
+      } else if (p !== null && p <= -SUT_SAN_PCT) {
+        ds.push({ m: 'warn', t: ten,
+          b: `${ten} giảm ${Math.abs(p)}% so với kỳ trước`,
+          s: `${tienVN(k.doanh_thu)} đ so với ${tienVN(k.truoc_doanh_thu)} đ` });
+      }
+    });
+
+    // Tỷ lệ hủy/hoàn — chỉ kêu khi thật sự đáng nhìn, không tô đỏ mọi thứ (Rule D3)
+    const matTien = t.tien_huy + t.tien_hoan;
+    if (t.gmv > 0 && matTien / t.gmv >= 0.1) {
+      ds.push({ m: 'warn', t: 'Hủy/Hoàn',
+        b: `Mất ${Math.round(matTien / t.gmv * 100)}% giá trị đơn vì hủy và hoàn`,
+        s: `${tienVN(matTien)} đ trên tổng ${tienVN(t.gmv)} đ đơn đặt — bấm để xem danh sách đơn hủy`,
+        onClick: () => $('#kd-donhanghuy-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) });
+    }
+
+    // Trạng thái đơn hoàn mà máy chủ chưa biết xếp vào đâu — số doanh thu
+    // đang THIẾU phần trừ này, phải nói ra thay vì im lặng (audit mục E).
+    const la = (dt.chan_doan?.hoan || []).filter(h => h.xep === 'chua_phan_loai');
+    if (la.length) {
+      ds.push({ m: 'warn', t: 'Cần kiểm tra',
+        b: `Có ${la.length} trạng thái đơn hoàn chưa được phân loại`,
+        s: `${la.map(h => `${h.trang_thai} (${h.n} đơn)`).join(' · ')} — chưa bị trừ khỏi doanh thu. Báo kỹ thuật cập nhật HOAN_THAT trong src/index.js` });
+    }
+
+    const box = $('#kd-tq-canhbao');
+    if (ds.length) { veDanhSach('#kd-tq-canhbao', ds); box.hidden = false; }
+    else box.hidden = true;
+  }
+
+  async function taiLaiTongQuan() {
+    let dt;
+    try { dt = await API.kdTongQuanKenh(ky); }
+    catch (e) { console.error('Tổng quan 2 sàn:', e); return; }
+    if (!dt.co_bang) { oPanel.hidden = true; return; }
+    oPanel.hidden = false;
+
+    const t = dt.tong;
+    const pTong = phanTram(t.doanh_thu, t.truoc_doanh_thu, t.truoc_du_du_lieu);
+    $('#kd-tq-kynhan').textContent = `${dt.ky.nhan} · so với ${dt.ky.truoc_nhan.toLowerCase()}`;
+
+    veThe('#kd-tq-the', [
+      { k: 'Doanh thu tạm tính', v: tienVN(t.doanh_thu) + ' đ',
+        d: pTong === null ? lyDoKhongSo(t) : `${kemPhanTram(pTong)} so với kỳ trước`,
+        dir: pTong === null ? '' : (pTong < 0 ? 'down' : 'up') },
+      { k: 'GMV đơn đặt', v: tienVN(t.gmv) + ' đ', d: `${tienVN(t.so_don)} đơn — chưa trừ hủy/hoàn` },
+      { k: 'Hủy + Hoàn', v: tienVN(t.tien_huy + t.tien_hoan) + ' đ',
+        d: t.gmv ? `${Math.round((t.tien_huy + t.tien_hoan) / t.gmv * 100)}% giá trị đơn đặt` : 'Chưa có đơn',
+        dir: t.gmv && (t.tien_huy + t.tien_hoan) / t.gmv >= 0.1 ? 'down' : '',
+        onClick: () => $('#kd-donhanghuy-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) },
+      { k: 'Số đơn đặt', v: tienVN(t.so_don),
+        d: t.truoc_so_don && t.truoc_du_du_lieu
+          ? `${kemPhanTram(phanTram(t.so_don, t.truoc_so_don, t.truoc_du_du_lieu))} so với kỳ trước`
+          : lyDoKhongSo(t),
+        dir: t.truoc_so_don && t.truoc_du_du_lieu && t.so_don < t.truoc_so_don ? 'down' : '' }
+    ]);
+
+    veBangKenh(dt);
+    veCanhBao(dt);
+
+    $('#kd-tq-ghichu').innerHTML =
+      '<b>Doanh thu tạm tính</b> = tổng đơn ĐẶT trong kỳ, trừ đơn hủy và tiền hoàn đã thực sự phát sinh. ' +
+      'Đơn đang trên đường giao vẫn được tính. Số này <b>chưa trừ</b> phí sàn, voucher và phí vận chuyển — ' +
+      'nên đây không phải tiền thực nhận về tài khoản. Hoàn phát sinh muộn sẽ bị trừ ngược vào kỳ ĐẶT đơn, ' +
+      'nên số của kỳ cũ có thể giảm dần theo thời gian.';
+  }
+
+  /* ---------- 10 SKU bán chạy / bán kém ---------- */
+  function veBangSku(dich, ds) {
+    const tbody = $(dich);
+    tbody.innerHTML = '';
+    if (!ds.length) {
+      tbody.innerHTML = `<tr><td colspan="4" class="empty">Chưa có dữ liệu.</td></tr>`;
+      return;
+    }
+    ds.forEach(s => {
+      const tr = el('tr', s.so_luong === 0 ? 'kd-sku-chet' : '');
+      tr.innerHTML =
+        `<td><b>${esc(s.sku)}</b></td>` +
+        `<td>${esc(s.ten || '')}</td>` +
+        `<td class="num">${tienVN(s.so_luong)}</td>` +
+        `<td class="num">${s.doanh_thu ? tienVN(s.doanh_thu) + ' đ' : '—'}</td>`;
+      tbody.appendChild(tr);
+    });
+  }
+
+  async function taiLaiSku() {
+    let kq;
+    try { kq = await API.kdXepHangSku(ky); }
+    catch (e) { console.error('Xếp hạng SKU:', e); return; }
+    if (!kq.co_bang) { oSku.hidden = true; return; }
+    oSku.hidden = false;
+
+    $('#kd-sku-kynhan').textContent = kq.nguon_xep_hang === 'danh_muc'
+      ? `${kq.ky.nhan} · ${kq.so_ma_ban_duoc}/${kq.so_ma_hang} mã hàng có đơn`
+      : `${kq.ky.nhan} · ${kq.so_ma_hang} mã hàng bán được`;
+    veBangSku('#kd-sku-chay', kq.ban_chay);
+    veBangSku('#kd-sku-kem', kq.ban_kem);
+
+    const ds = [];
+    // Danh mục sản phẩm trống -> KHÔNG xếp được nhóm bán 0 cái, tức là thiếu
+    // đúng nửa quan trọng của "bán kém nhất". Phải nói ra, không để Sếp tưởng
+    // bảng đã đủ (đúng hiện trạng 06/09/2026: bảng san_pham chưa có dòng nào).
+    if (kq.nguon_xep_hang !== 'danh_muc') {
+      ds.push({ m: 'warn', t: 'Thiếu danh mục',
+        b: 'Danh mục sản phẩm trong Kho vận đang trống',
+        s: 'Bảng dưới chỉ xếp được các mã ĐÃ bán ra. Mã đang kinh doanh mà bán được 0 cái — nhóm cần xử lý nhất — chưa hiện ra được. Nhập danh mục sản phẩm ở tab Kho vận là bảng tự đủ.' });
+    }
+    // Đơn chưa bóc dòng -> bảng xếp hạng đang thiếu dữ liệu. Nói thẳng, kèm
+    // nút chạy bù cho Admin — không để Sếp ra quyết định trên số thiếu.
+    if (kq.chua_tach > 0) {
+      ds.push({ m: 'warn', t: 'Thiếu dữ liệu',
+        b: `Còn ${tienVN(kq.chua_tach)} đơn chưa bóc chi tiết mặt hàng`,
+        s: TOI.la_admin
+          ? 'Bảng xếp hạng đang thiếu phần này. Bấm vào đây để chạy bóc bù (chạy được nhiều lần, không hỏng dữ liệu).'
+          : 'Bảng xếp hạng đang thiếu phần này — nhờ Admin chạy bóc bù dữ liệu.',
+        onClick: TOI.la_admin ? chayTachBu : null });
+    }
+    if (kq.chua_khop?.length) {
+      ds.push({ m: 'warn', t: 'SKU lạ',
+        b: `${kq.chua_khop.length} mã SKU bán trên sàn không khớp mã nào trong kho`,
+        s: `${kq.chua_khop.slice(0, 5).map(x => x.sku).join(' · ')}${kq.chua_khop.length > 5 ? '…' : ''} — doanh số của các mã này KHÔNG vào bảng xếp hạng. Cần sửa mã SKU trên sàn hoặc thêm mã vào kho.` });
+    }
+    const box = $('#kd-sku-canhbao');
+    if (ds.length) { veDanhSach('#kd-sku-canhbao', ds); box.hidden = false; }
+    else box.hidden = true;
+
+    $('#kd-sku-ghichu').textContent =
+      'Doanh thu mỗi mã được chia từ tổng tiền của đơn theo tỷ lệ giá trị — cộng mọi mã trong 1 ' +
+      'đơn đúng bằng doanh thu đơn đó. ĐÃ loại đơn hủy, nhưng CHƯA trừ tiền hoàn (sàn trả tiền hoàn ' +
+      'theo đơn, không tách được về từng mã hàng mà không bịa) — nên số ở đây nhỉnh hơn Doanh thu ' +
+      'tạm tính bên trên. ' + (kq.nguon_xep_hang === 'danh_muc'
+        ? '"Bán kém nhất" tính trên TOÀN BỘ mã hàng đang kinh doanh, nên mã không bán được cái nào vẫn hiện ở đây (dòng mờ) — đó mới là nhóm cần xử lý trước.'
+        : '"Bán kém nhất" hiện chỉ xếp trong số mã ĐÃ bán được, vì danh mục Kho vận còn trống.');
+  }
+
+  // Bóc bù chạy theo lô, gọi lại tới khi hết. Hiện tiến độ để Sếp biết còn
+  // bao nhiêu, không phải nhìn màn hình đứng im đoán già đoán non.
+  async function chayTachBu() {
+    if (!TOI.la_admin) return;
+    const box = $('#kd-sku-canhbao');
+    let tong = 0, vong = 0;
+    try {
+      while (vong < 200) {
+        const kq = await API.kdTachDongHang();
+        tong += kq.da_xu_ly;
+        vong++;
+        box.innerHTML = `<div class="list-item"><div class="bullet"></div><div class="body">` +
+          `<b>Đang bóc chi tiết mặt hàng…</b><span>Đã xong ${tienVN(tong)} đơn · còn ${tienVN(kq.con_lai)} đơn</span></div></div>`;
+        if (!kq.con_lai || !kq.da_xu_ly) break;
+      }
+    } catch (e) {
+      box.innerHTML = `<div class="list-item"><div class="bullet danger"></div><div class="body">` +
+        `<b>Bóc dữ liệu lỗi</b><span>${esc(e.message || 'Thử lại sau')}</span></div></div>`;
+      return;
+    }
+    await taiLaiSku();
+  }
+
+  $('#kd-tq-ky').addEventListener('click', e => {
+    const nut = e.target.closest('[data-ky]');
+    if (!nut || nut.dataset.ky === ky) return;
+    ky = nut.dataset.ky;
+    document.querySelectorAll('#kd-tq-ky .seg-nut').forEach(b => b.classList.toggle('active', b === nut));
+    taiLaiTongQuan();
+    taiLaiSku();
+  });
+
+  await Promise.all([taiLaiTongQuan(), taiLaiSku()]);
 }
 
 /* Vận hành sàn — đơn hàng bị HỦY trước khi giao (Order API, khác Đơn hoàn) */
