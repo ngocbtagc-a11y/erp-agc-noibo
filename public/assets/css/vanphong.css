@@ -667,3 +667,95 @@
 .vp-hoso-nguoi { display: flex; gap: 14px; margin-bottom: 18px; }
 .vp-hoso-anh { width: 76px; flex: none; }
 .vp-hoso-anh .chibi { width: 100%; height: auto; display: block; }
+
+/* ---------------------------------------------------------------------------
+   AI ĐANG LÀM, AI ĐANG RẢNH
+   ---------------------------------------------------------------------------
+   Sếp Ngọc 06/09/2026: cần nhìn phát biết ai đang bận để còn giao việc.
+
+   Hai tín hiệu KHÁC NHAU, cố ý không gộp:
+   · VÒNG TRÒN QUAY = đang xử lý một việc NGAY LÚC NÀY. Có chuyển động, hút mắt.
+   · CHẤM TRẠNG THÁI = tải việc đang mở của phòng đó. Đứng yên, liếc qua là biết.
+
+   Gộp hai thứ vào một dấu hiệu thì mất khả năng phân biệt "đang bận tay lúc này"
+   với "đang ôm 5 đầu việc" — mà hai cái đó dẫn tới hai quyết định giao việc
+   hoàn toàn khác nhau.
+   --------------------------------------------------------------------------- */
+.vp-vong {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--k, var(--sage)) 26%, transparent);
+  border-top-color: var(--k, var(--sage));
+  opacity: 0;
+  transition: opacity .2s ease;
+  pointer-events: none;
+}
+.vp-phong.dang-lam .vp-vong,
+.vp-may.dang-nghi .vp-vong {
+  opacity: 1;
+  animation: vp-quay 0.75s linear infinite;
+}
+@keyframes vp-quay { to { transform: rotate(360deg); } }
+
+/* Thẻ đang làm việc thì nhô lên và đậm viền — vòng tròn nhỏ quá, cần thêm một
+   tín hiệu nhìn được từ xa. */
+.vp-phong.dang-lam .vp-phong-khung {
+  box-shadow: 0 8px 20px rgba(63, 77, 51, .22);
+  transform: translateY(-3px);
+  border-color: color-mix(in srgb, var(--k, var(--sage)) 55%, var(--line));
+}
+.vp-phong .vp-phong-khung { transition: transform .2s ease, box-shadow .2s ease; }
+
+/* Vừa tham gia xử lý xong — nháy nhẹ vài giây rồi tắt, đủ để mắt kịp thấy
+   "à, mấy phòng này vừa cùng làm việc đó". */
+.vp-phong.vua-lam .vp-phong-khung { animation: vp-nhay 1.1s ease-out 3; }
+@keyframes vp-nhay {
+  0%, 100% { box-shadow: var(--shadow-md); }
+  50%      { box-shadow: 0 0 0 4px color-mix(in srgb, var(--k, var(--sage)) 24%, transparent); }
+}
+
+/* Chấm trạng thái tải việc */
+.vp-cham {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1.5px solid var(--card);
+}
+.vp-phong[data-ban="ranh"]  .vp-cham { background: #5f9a5f; }   /* rảnh */
+.vp-phong[data-ban="vua"]   .vp-cham { background: #d9a334; }   /* có việc */
+.vp-phong[data-ban="nhieu"] .vp-cham { background: #c0603f; }   /* quá tải */
+
+/* Chú thích dưới mặt bằng — không ai đoán ra màu chấm nghĩa gì nếu không nói */
+.vp-chugiai {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: center;
+  margin-top: 10px;
+  padding: 0 4px;
+  font-size: 11.5px;
+  color: var(--text-mute);
+}
+.vp-chugiai i {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  margin-right: 5px;
+  vertical-align: -1px;
+}
+.vp-chugiai .cg-ranh  { background: #5f9a5f; }
+.vp-chugiai .cg-vua   { background: #d9a334; }
+.vp-chugiai .cg-nhieu { background: #c0603f; }
+.vp-chugiai .cg-quay {
+  width: 11px; height: 11px; border-radius: 50%;
+  border: 2px solid rgba(122,143,104,.28); border-top-color: #7a8f68;
+  animation: vp-quay .75s linear infinite;
+}

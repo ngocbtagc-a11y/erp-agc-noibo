@@ -11633,6 +11633,7 @@ async function khoiDongVanPhong() {
     oQuay.style.top  = may.vi_tri.y + '%';
     oQuay.innerHTML =
       `<div class="vp-may" id="vp-may" title="Xem hồ sơ của Mây">
+         <span class="vp-vong"></span>
          <div class="vp-may-nguoi">${veChibi(may.chibi)}</div>
          ${veQuayLeTan()}
          <div class="vp-bien vp-bien-may">
@@ -11650,6 +11651,7 @@ async function khoiDongVanPhong() {
       // Màu thẻ theo khối — nhìn màu là biết phòng nào cùng khối với nhau,
       // không phải đọc từng cái biển tên.
       o.dataset.khoi = a.khoi || '';
+      o.dataset.ban = mucTai(a.viec_dang_mo).muc;
 
       const huyHieu = a.viec_dang_mo
         ? `<span class="vp-huyhieu" title="${a.viec_dang_mo} việc đang mở">${a.viec_dang_mo}</span>`
@@ -11658,6 +11660,8 @@ async function khoiDongVanPhong() {
       o.innerHTML =
         `<div class="vp-phong-khung">
            ${huyHieu}
+           <span class="vp-vong"></span>
+           <span class="vp-cham" title="${esc(mucTai(a.viec_dang_mo).chu)}"></span>
            <div class="vp-phong-nguoi">${veChibi(a.chibi)}</div>
          </div>
          <div class="vp-bien"><b>${esc(a.ten)}</b><span>${esc(a.chuc_danh)}</span></div>`;
@@ -11713,6 +11717,16 @@ async function khoiDongVanPhong() {
 
     moHoSoTho('Xưởng ERP', 'Đội dựng phần mềm, trực thuộc Trưởng phòng IT',
       than + `<div class="vp-hoso-luu-y">${esc(cachGoi || '')}</div>`);
+  }
+
+  /* Ba mức tải, ngưỡng đặt theo quy mô thật của Alpha Green: 15 người, mỗi
+     phòng thường ôm vài đầu việc. Từ 5 việc đang mở trở lên là chỗ nên nghĩ
+     lại trước khi chất thêm. */
+  function mucTai(so) {
+    const n = Number(so) || 0;
+    if (n === 0) return { muc: 'ranh',  chu: 'Đang rảnh — giao việc được' };
+    if (n < 5)   return { muc: 'vua',   chu: n + ' việc đang mở' };
+    return { muc: 'nhieu', chu: n + ' việc đang mở — đang quá tải' };
   }
 
   /* Làm nổi chibi đang được Mây giao việc */
@@ -11837,7 +11851,20 @@ async function khoiDongVanPhong() {
 
     try {
       const kq = await API.vpHoi(cauHoi);
-      sangDen(kq.agent, true);
+
+      /* Tắt vòng quay của Mây, rồi nháy TẤT CẢ phòng vừa tham gia — chủ trì,
+         các phòng vào phản biện, và phòng duyệt. Chỉ nháy mỗi phòng chủ trì thì
+         Sếp không thấy được việc này đã qua tay mấy người. */
+      sangDen(null, false);
+      const daThamGia = [kq.agent]
+        .concat((kq.agent_phu || []).map(x => x.id))
+        .concat((kq.bien_ban || []).map(b => b.agent))
+        .filter(Boolean);
+      lopPhong.querySelectorAll('.vp-phong').forEach(o => {
+        o.classList.toggle('vua-lam', daThamGia.includes(o.dataset.agent));
+      });
+      setTimeout(() => lopPhong.querySelectorAll('.vua-lam')
+        .forEach(o => o.classList.remove('vua-lam')), 3600);
       $('#vp-dangnghi').outerHTML = bongBong('agent', kq.tra_loi, kq);
       // Giao việc xong thì cột phải phải cập nhật ngay, không đợi nhịp sau.
       if (kq.viec_da_giao?.da_tao) taiLai().catch(() => {});
