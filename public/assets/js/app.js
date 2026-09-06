@@ -12104,7 +12104,14 @@ async function khoiDongVanPhong() {
       nut.textContent = 'Đang gửi…';
       try {
         const kq = await API.vpThuTelegram();
-        nut.textContent = kq.da_gui ? 'Đã gửi — xem Telegram' : 'Không gửi được';
+        /* Nói rõ hỏng vì sao. Ba nguyên nhân hay gặp — sai chat id, sai token,
+           bot bị chặn — chữa theo ba cách khác hẳn nhau, nên gộp thành một câu
+           "không gửi được" là bắt người bấm đi đoán. */
+        if (kq.da_gui) { nut.textContent = 'Đã gửi — xem Telegram'; }
+        else {
+          nut.textContent = 'Hỏng: ' + (kq.vi_sao || 'không rõ') + (kq.ma ? ' (mã ' + kq.ma + ')' : '');
+          nut.classList.add('vp-thu-loi');
+        }
       } catch (e) {
         nut.textContent = 'Lỗi: ' + (e.message || 'không rõ');
       }

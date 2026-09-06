@@ -1294,3 +1294,12 @@ body.vp-dang-keo { cursor: col-resize; user-select: none; }
 }
 
 @media (max-width: 900px) { .sb-keo { display: none; } }
+/* Nút bắn thử khi hỏng: nới rộng để đọc được nguyên câu lý do, không cắt cụt */
+.vp-thu-tele.vp-thu-loi {
+  border-color: #c0603f;
+  color: #a04a30;
+  white-space: normal;
+  max-width: 460px;
+  text-align: left;
+  line-height: 1.4;
+}

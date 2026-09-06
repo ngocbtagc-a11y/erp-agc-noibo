@@ -36,6 +36,7 @@ import * as motacv from './mota-cv.js';
 import * as kynang from './ky-nang.js';
 import { quetNhacNhanSu, thangKeTiep, gioVN } from './nhac-nhan-su.js';
 import * as vanphong from './vanphong.js';
+import { tuDayViecNhe } from './vp-gopy.js';
 /* CTL-0026 — Kho tài liệu quản trị. Lõi dùng chung với CTL-0025 (quét giấy tờ
    nhân sự): một kho, hai cửa vào. Đợt 1 mở cửa KHO CHUNG. */
 import * as tailieu from './tai-lieu.js';
@@ -6952,6 +6953,31 @@ async function vpTongQuan(req, env) {
   return vanphong.tongQuan(env, phien);
 }
 
+/* Gửi Telegram và NÓI RÕ HỎNG VÌ SAO — chỉ dùng cho nút bắn thử của admin.
+   guiTelegram() thường nuốt lỗi (`return res.ok`) vì nó chạy trong cron, chỗ
+   không ai đọc. Nhưng nút bắn thử mà cũng chỉ nói "không gửi được" thì đúng là
+   cái bệnh im lặng vừa mới chê: người bấm không biết sai chat id, sai token,
+   hay bot bị chặn — ba nguyên nhân đó chữa theo ba cách khác hẳn nhau.
+
+   KHÔNG trả token ra ngoài, chỉ trả mô tả lỗi của Telegram. */
+async function telegramNoiRoLoi(env, text, chatId) {
+  const token = env.TELEGRAM_BOT_TOKEN;
+  if (!token) return { ok: false, vi_sao: 'Chưa nạp TELEGRAM_BOT_TOKEN' };
+  if (!chatId) return { ok: false, vi_sao: 'Chưa nạp chat id' };
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, text, disable_web_page_preview: true })
+    });
+    const d = await res.json().catch(() => ({}));
+    if (res.ok && d.ok) return { ok: true };
+    return { ok: false, ma: d.error_code || res.status, vi_sao: d.description || 'Telegram từ chối, không rõ lý do' };
+  } catch (e) {
+    return { ok: false, vi_sao: 'Không gọi được Telegram: ' + (e.message || 'lỗi mạng') };
+  }
+}
+
 /* Bắn thử đường báo Telegram — CHỈ ADMIN. Thứ chỉ chạy mỗi ngày một lần mà
    không thử được thì hỏng cũng phải mất một ngày mới lộ ra. */
 async function vpThuTelegram(req, env) {
@@ -6960,8 +6986,10 @@ async function vpThuTelegram(req, env) {
   if (!laAdmin(phien)) return loi('Chỉ Quản trị được bắn thử.', 403);
   if (!env.TELEGRAM_BOT_TOKEN) return loi('Chưa nạp TELEGRAM_BOT_TOKEN.', 400);
   if (!env.TELEGRAM_CHAT_ID_SEP && !env.TELEGRAM_CHAT_ID) return loi('Chưa nạp chat id.', 400);
-  const so = await vanphong.nhacSepViecTreo(env, guiTelegram, true);
-  return json({ ok: so > 0, da_gui: so > 0 });
+  const dich = env.TELEGRAM_CHAT_ID_SEP || env.TELEGRAM_CHAT_ID;
+  const kq = await telegramNoiRoLoi(env,
+    'VĂN PHÒNG ẢO AGC — bắn thử. Nếu Sếp đọc được tin này thì đường báo đã thông.', dich);
+  return json({ ok: kq.ok, da_gui: kq.ok, ma: kq.ma || null, vi_sao: kq.vi_sao || null });
 }
 
 /* Kỹ năng đã dạy cho trợ lý ảo — xem lại và tắt bài dạy sai */
@@ -7205,6 +7233,9 @@ const DUONG_DAN = {
   'GET  /api/van-phong/tong-quan': vpTongQuan,
   'GET  /api/van-phong/nang-suat': vpNangSuat,
   'POST /api/van-phong/thu-telegram': vpThuTelegram,
+  /* Mở được bằng cách DÁN LINK vào trình duyệt: khi giao diện còn kẹt bản
+     JS cũ trong bộ nhớ đệm, đây là đường xem lý do hỏng không qua JavaScript. */
+  'GET  /api/van-phong/thu-telegram': vpThuTelegram,
   'GET  /api/van-phong/ky-nang':   vpKyNangDs,
   'POST /api/van-phong/ky-nang':   vpKyNangDoi,
   'POST /api/van-phong/co-mat':    vpCoMat,
@@ -7296,6 +7327,12 @@ export default {
       // SLA cổng duyệt góp ý (SPEC-0002) — thêm 1 hàm vào chuỗi cron đã có,
       // KHÔNG tạo cron mới. Lỗi ở đây không được chặn các việc nền khác.
       try { await gopYNhacSla(env); } catch (e) { console.error('Cron SLA góp ý:', e.message); }
+      /* Văn phòng ảo tự cho phiếu RỦI RO THẤP đi tiếp — Sếp Ngọc chốt: việc
+         nhẹ thì nhân viên ảo tự làm, đừng bắt Sếp bấm từng cái. Phiếu rủi ro
+         trung bình/cao vẫn dừng chờ Sếp. */
+      try { const n = await tuDayViecNhe(env);
+            if (n) console.log('Văn phòng ảo tự đẩy ' + n + ' góp ý rủi ro thấp'); }
+      catch (e) { console.error('Cron tự đẩy góp ý:', e.message); }
       /* Nhắc Sếp qua Telegram những việc đang chờ CHÍNH SẾP quyết — chủ yếu
          là đề xuất máy đã phân tích xong mà chưa ai bấm áp dụng. Hàm tự đóng
          cửa ngoài khung 8h sáng nên gọi mỗi 5 phút vẫn đúng 1 tin/ngày, và tự
