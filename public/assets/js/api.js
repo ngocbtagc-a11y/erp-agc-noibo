@@ -520,6 +520,7 @@ export const API = {
   /* ---- Văn phòng ảo: một cửa duy nhất là Hỏi Mây ---- */
   vpTongQuan: () => goi('/api/van-phong/tong-quan'),
   vpNangSuat: () => goi('/api/van-phong/nang-suat'),
+  vpThuTelegram: () => goi('/api/van-phong/thu-telegram', { method: 'POST' }),
   vpKyNang: () => goi('/api/van-phong/ky-nang'),
   vpKyNangDoi: (id, dangDung) => goi('/api/van-phong/ky-nang', {
     method: 'POST', body: JSON.stringify({ id, dang_dung: dangDung })

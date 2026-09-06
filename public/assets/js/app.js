@@ -12052,6 +12052,28 @@ async function khoiDongVanPhong() {
     o.hidden = false;
   }
 
+
+  /* Nút bắn thử Telegram — chỉ Quản trị thấy. Đường báo chỉ chạy 8h sáng mỗi
+     ngày; không thử được thì hỏng cũng phải mất một ngày mới lộ, mà lúc đó là
+     đúng ngày cần nó nhất. */
+  (function ganNutThuTele() {
+    const nut = $('#vp-thu-tele');
+    if (!nut || !TOI.la_admin) return;
+    nut.hidden = false;
+    nut.addEventListener('click', async () => {
+      nut.disabled = true;
+      const cu = nut.textContent;
+      nut.textContent = 'Đang gửi…';
+      try {
+        const kq = await API.vpThuTelegram();
+        nut.textContent = kq.da_gui ? 'Đã gửi — xem Telegram' : 'Không gửi được';
+      } catch (e) {
+        nut.textContent = 'Lỗi: ' + (e.message || 'không rõ');
+      }
+      setTimeout(() => { nut.textContent = cu; nut.disabled = false; }, 6000);
+    });
+  })();
+
   /* ---- Khung trò chuyện với Mây ----------------------------------------- */
 
   /* ---- Kéo đổi bề ngang hai cột ------------------------------------------

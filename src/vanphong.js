@@ -189,15 +189,26 @@ async function viecDangTreo(env) {
    cửa ngoài khung 8h00–8h05 nên mỗi ngày đúng một lượt. Nhắc nhiều lần trong
    ngày thì vài hôm là Sếp tắt thông báo, và lúc đó cái nhắc thành vô dụng.
    ========================================================================== */
-export async function nhacSepViecTreo(env, guiTelegram) {
-  const gio = new Date(Date.now() + 7 * 3600 * 1000);
-  if (gio.getUTCHours() !== 8 || gio.getUTCMinutes() >= 5) return 0;
+export async function nhacSepViecTreo(env, guiTelegram, boQuaGio = false) {
+  /* boQuaGio: chỉ dùng cho nút bắn thử của admin. Không đợi 8h sáng mai mới
+     biết đường báo có thông không — thứ chỉ chạy mỗi ngày một lần mà không thử
+     được thì hỏng cũng phải mất một ngày mới lộ. */
+  if (!boQuaGio) {
+    const gio = new Date(Date.now() + 7 * 3600 * 1000);
+    if (gio.getUTCHours() !== 8 || gio.getUTCMinutes() >= 5) return 0;
+  }
 
   const dich = env.TELEGRAM_CHAT_ID_SEP;
   if (!dich || !env.TELEGRAM_BOT_TOKEN) return 0;   // chưa nạp khoá thì thôi, không báo lỗi ầm ĩ
 
   const treo = await viecDangTreo(env);
-  if (!treo.length) return 0;
+  if (!treo.length) {
+    if (!boQuaGio) return 0;
+    const ok = await guiTelegram(env,
+      'VĂN PHÒNG ẢO AGC — bắn thử.' + String.fromCharCode(10) +
+      'Đường báo Telegram thông. Hiện không có việc nào đang treo.', dich);
+    return ok ? 1 : 0;
+  }
 
   const dong = [];
   dong.push('VĂN PHÒNG ẢO AGC — việc đang treo');

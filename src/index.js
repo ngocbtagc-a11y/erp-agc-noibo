@@ -4460,7 +4460,15 @@ async function vdSua(req, env) {
    chạy thật là đường rẻ nhất và ít mặt hỏng nhất. Chi phí 0. */
 async function guiTelegram(env, text, chatId = null) {
   const token = env.TELEGRAM_BOT_TOKEN;
-  const dich = chatId || env.TELEGRAM_CHAT_ID;
+  /* Lùi về chat riêng của Sếp khi chưa cấu hình chat chung. Trước bản này,
+     thiếu TELEGRAM_CHAT_ID là hàm lặng lẽ return false — và MỌI cảnh báo của
+     ERP im bặt mà không ai biết: đơn hoàn quá hạn, SLA góp ý, và cảnh báo sắp
+     hết hạn mức ghi D1. Đúng cái cảnh báo lẽ ra đã báo trước khi cả công ty
+     mất truy cập sáng 06/09/2026.
+     Một cảnh báo im lặng nguy hơn không có cảnh báo, vì người ta tưởng mình
+     đang được canh. Không có địa chỉ chung thì gửi về Sếp còn hơn gửi vào hư
+     không. */
+  const dich = chatId || env.TELEGRAM_CHAT_ID || env.TELEGRAM_CHAT_ID_SEP;   // lui ve chat rieng cua Sep
   if (!token || !dich) return false;
   try {
     const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
@@ -6944,6 +6952,18 @@ async function vpTongQuan(req, env) {
   return vanphong.tongQuan(env, phien);
 }
 
+/* Bắn thử đường báo Telegram — CHỈ ADMIN. Thứ chỉ chạy mỗi ngày một lần mà
+   không thử được thì hỏng cũng phải mất một ngày mới lộ ra. */
+async function vpThuTelegram(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  if (!laAdmin(phien)) return loi('Chỉ Quản trị được bắn thử.', 403);
+  if (!env.TELEGRAM_BOT_TOKEN) return loi('Chưa nạp TELEGRAM_BOT_TOKEN.', 400);
+  if (!env.TELEGRAM_CHAT_ID_SEP && !env.TELEGRAM_CHAT_ID) return loi('Chưa nạp chat id.', 400);
+  const so = await vanphong.nhacSepViecTreo(env, guiTelegram, true);
+  return json({ ok: so > 0, da_gui: so > 0 });
+}
+
 /* Kỹ năng đã dạy cho trợ lý ảo — xem lại và tắt bài dạy sai */
 async function vpKyNangDs(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
@@ -7184,6 +7204,7 @@ const DUONG_DAN = {
   /* ---- Văn phòng ảo: 9 trợ lý AI ---- */
   'GET  /api/van-phong/tong-quan': vpTongQuan,
   'GET  /api/van-phong/nang-suat': vpNangSuat,
+  'POST /api/van-phong/thu-telegram': vpThuTelegram,
   'GET  /api/van-phong/ky-nang':   vpKyNangDs,
   'POST /api/van-phong/ky-nang':   vpKyNangDoi,
   'POST /api/van-phong/co-mat':    vpCoMat,
