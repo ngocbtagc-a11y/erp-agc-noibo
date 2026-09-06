@@ -5876,32 +5876,13 @@ if (TOI.quyen.includes('nhansu')) {
       return `
         <article class="tl-the">
           <div class="tl-the-dau">
-/* Tên hiển thị của một tài liệu — Sếp Ngọc 06/09/2026: "dòng đen để tên văn
-   bản, đừng để tên file".
-
-   Ô "Tên tài liệu" người ta hay gõ theo thói quen đặt tên file: "Certificate
-   ALPHA GREEN 1st". Đọc dòng đó không biết đây là giấy gì. Còn ô "Loại giấy"
-   mới là TÊN VĂN BẢN đúng nghĩa: "Giấy chứng nhận đăng ký doanh nghiệp".
-
-   Nên dòng đậm lấy loại giấy; tên người dùng tự đặt lùi xuống dòng phụ — vẫn
-   giữ, vì đó là cách họ nhận ra bản của mình giữa nhiều bản cùng loại. Chưa
-   điền loại giấy thì quay về dùng tiêu đề: thà hiện tên file còn hơn dòng trống. */
-function tenVanBan(t) {
-  return (t.loai && String(t.loai).trim()) || t.tieu_de || '(chưa đặt tên)';
-}
-
-/* Tên riêng người dùng đặt — chỉ hiện khi KHÁC tên văn bản, không lặp lại */
-function tenRieng(t) {
-  const l = String(t.loai || '').trim(), td = String(t.tieu_de || '').trim();
-  return (l && td && l !== td) ? td : '';
-}
 
             <b class="tl-ten">${esc(tenVanBan(t))}</b>
             ${t.nhay_cam ? '<span class="tl-dai tl-dai-kin">Nhạy cảm</span>' : ''}
             ${dai}
           </div>
           <div class="tl-the-phu">
-            ${esc(t.loai || 'chưa ghi loại')}
+            ${tenRieng(t) ? esc(tenRieng(t)) : ''}
             ${t.so_hieu ? ' · ' + esc(t.so_hieu) : ''}
             ${t.ngay_ban_hanh ? ' · ban hành ' + esc(ngayIsoVN(t.ngay_ban_hanh)) : ''}
             · ${Number(t.so_trang) || 0} trang
@@ -12529,3 +12510,30 @@ document.addEventListener('click', e => {
   moBanQuet(nut.dataset.moQuet, nut.dataset.ten || '');
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') dongBanQuet(); });
+
+
+/* ⚠️ ĐẶT Ở CUỐI FILE CÓ CHỦ Ý. Lần đầu tôi chèn hai hàm này ngay trước chỗ
+   dựng thẻ tài liệu cho "gần chỗ dùng" — nhưng chỗ đó nằm GIỮA MỘT CHUỖI
+   TEMPLATE, và cả màn Kho tài liệu vỡ với lỗi khó đọc "Cannot access
+   TL_NHOM_LUU_DUOC before initialization". Khai báo `function` được nâng lên
+   đầu phạm vi module nên đặt cuối file vẫn gọi được từ mọi nơi, mà chắc chắn
+   không rơi vào giữa một chuỗi. */
+/* Tên hiển thị của một tài liệu — Sếp Ngọc 06/09/2026: "dòng đen để tên văn
+   bản, đừng để tên file".
+
+   Ô "Tên tài liệu" người ta hay gõ theo thói quen đặt tên file: "Certificate
+   ALPHA GREEN 1st". Đọc dòng đó không biết đây là giấy gì. Còn ô "Loại giấy"
+   mới là TÊN VĂN BẢN đúng nghĩa: "Giấy chứng nhận đăng ký doanh nghiệp".
+
+   Nên dòng đậm lấy loại giấy; tên người dùng tự đặt lùi xuống dòng phụ — vẫn
+   giữ, vì đó là cách họ nhận ra bản của mình giữa nhiều bản cùng loại. Chưa
+   điền loại giấy thì quay về dùng tiêu đề: thà hiện tên file còn hơn dòng trống. */
+function tenVanBan(t) {
+  return (t.loai && String(t.loai).trim()) || t.tieu_de || '(chưa đặt tên)';
+}
+
+/* Tên riêng người dùng đặt — chỉ hiện khi KHÁC tên văn bản, không lặp lại */
+function tenRieng(t) {
+  const l = String(t.loai || '').trim(), td = String(t.tieu_de || '').trim();
+  return (l && td && l !== td) ? td : '';
+}
