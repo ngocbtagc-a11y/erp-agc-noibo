@@ -27,6 +27,7 @@
      ANALYSIS       cần chuyên gia phân tích. Trả lời sâu, vẫn không tạo task.
      ACTION_REQUEST cần thay đổi/thực thi. Mới tạo yêu cầu vào hàng đợi.
      HUAN_LUYEN     dạy nghề cho trợ lý ảo. Ghi kỹ năng vào hồ sơ phòng đó.
+     GOP_Y_ERP      góp ý về chính phần mềm ERP. Mở phiếu có mã số để theo dõi.
 
    MÂY KHÔNG LÀM: không trở thành chuyên gia của mọi lĩnh vực, không tự quyết
    thay Owner, không tự đổi trạng thái yêu cầu rủi ro cao.
@@ -34,6 +35,7 @@
 
 import { AGENTS, agentTheoId, agentChoVaiTro, ghepPrompt, ghepPromptNgan } from './agents-vp.js';
 import { congCuCuaAgent, chayCongCu, CONG_CU } from './vp-cong-cu.js';
+import { taoPhieuGopY } from './vp-gopy.js';
 
 /* Cùng model Hồ Ly đang dùng thật trong production. Đổi model là đổi một chỗ. */
 export const MAY_MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
@@ -154,6 +156,10 @@ PHÂN LOẠI TƯƠNG TÁC — chọn đúng một:
 - CHAT: hỏi đáp, tra cứu đơn giản. Không cần tạo việc gì.
 - ANALYSIS: cần chuyên gia phân tích sâu, so sánh, phản biện. Vẫn không tạo việc.
 - ACTION_REQUEST: người ta muốn THAY ĐỔI thứ gì đó trong hệ thống hoặc cách làm việc, cần ai đó thực thi.
+- GOP_Y_ERP: người ta nói về CHÍNH PHẦN MỀM ERP NÀY — báo lỗi, xin thêm nút, xin sửa màn hình, chê chỗ khó dùng. Dấu hiệu: nói về giao diện, thao tác, chức năng của ERP, không phải về hàng hoá hay đơn hàng.
+  Ví dụ: "màn kho load chậm quá", "muốn thêm nút xuất Excel ở đơn hoàn", "nhập liệu chỗ này bấm nhiều bước quá", "bấm lưu mà không thấy gì".
+  KHÔNG nhầm với ANALYSIS: "doanh số tụt vì sao" là hỏi việc kinh doanh, không phải góp ý phần mềm.
+  Loại này luôn chuyển cho phòng IT (agent = "it").
 - HUAN_LUYEN: người ta muốn DẠY NGHỀ cho đội trợ lý ảo — "cần học soạn thảo văn bản", "học cách đọc hợp đồng nhà cung cấp", "dạy cách xử lý khiếu nại". Dấu hiệu: nói về NĂNG LỰC CỦA TRỢ LÝ chứ không hỏi số liệu hay xin làm việc gì.
   Việc DUY NHẤT của bạn với loại này: nhận ra nó, rồi chọn đúng phòng sở hữu kỹ năng đó.
     · soạn thảo công văn, quyết định, nội quy, hồ sơ nhân sự → hcns
@@ -171,7 +177,7 @@ RỦI RO CAO (can_owner_gate = true) nếu câu hỏi dính tới: ${VIEC_RUI_RO
 
 CHỈ trả về JSON đúng khuôn sau, không chào hỏi, không giải thích thêm:
 {
-  "loai": "CHAT" | "ANALYSIS" | "ACTION_REQUEST" | "HUAN_LUYEN",
+  "loai": "CHAT" | "ANALYSIS" | "ACTION_REQUEST" | "HUAN_LUYEN" | "GOP_Y_ERP",
   "agent": "<id chuyên gia phù hợp nhất>",
   "agent_phu": ["<id chuyên gia khác nên hỏi thêm, tối đa 2, để [] nếu không cần>"],
   "cong_cu": ["<tên công cụ cần chạy, để [] nếu không cần tra số>"],
@@ -657,6 +663,45 @@ async function dayNghe(env, agent, nguoi, homNay, yeuCau) {
   return { day_roi: true, id, tieu_de: tieuDe, noi_dung: noiDung, dang_co: daCo.length + 1 };
 }
 
+/* ==========================================================================
+   GÓP Ý ERP — Trưởng phòng IT bóc câu nói thành một phiếu đủ thông tin
+   --------------------------------------------------------------------------
+   Sếp Ngọc bỏ tab Góp ý, người dùng nói thẳng với Mây. Nhưng phiếu góp ý cần
+   bốn phần rõ ràng (bối cảnh, vướng ở đâu, mong muốn, khu vực) — mà người ta
+   nói chuyện thì chỉ buông một câu: "màn kho load chậm quá".
+
+   Việc của Trưởng phòng IT là bóc câu đó ra thành phiếu. KHÔNG BỊA THÊM:
+   thiếu phần nào thì ghi thẳng là người gửi chưa nói, để người phân tích biết
+   mà hỏi lại — chứ đừng tự nghĩ ra bối cảnh nghe cho đầy đủ, vì phiếu đầy đủ
+   mà sai còn tốn công hơn phiếu thiếu mà thật.
+   ========================================================================== */
+function promptGopY(agent, nguoi, homNay, cauHoi) {
+  const heThong = ghepPromptNgan(agent, nguoi, homNay);
+
+  return `${heThong}
+
+==================================================
+BÓC MỘT CÂU GÓP Ý THÀNH PHIẾU
+==================================================
+
+${nguoi.ho_ten || nguoi.tai_khoan} vừa góp ý về chính phần mềm ERP này.
+
+NGUYÊN VĂN: ${cauHoi}
+
+Trả lời DUY NHẤT một khối JSON, không thêm chữ nào ngoài nó:
+
+{
+  "tieu_de": "một câu ngắn dưới 100 ký tự, gọi đúng vấn đề",
+  "boi_canh": "họ đang làm gì thì gặp chuyện này. Chưa nói thì ghi: Người gửi chưa mô tả bối cảnh.",
+  "vuong_o_dau": "cụ thể chỗ nào khó/lỗi. Chưa rõ thì ghi: Người gửi chưa nói rõ, cần hỏi lại.",
+  "mong_muon": "họ muốn thành ra thế nào. Chưa nói thì suy ra điều hiển nhiên nhất và ghi kèm chữ (suy đoán).",
+  "khu_vuc": "tên màn hình trong ERP, ví dụ Kho vận, Đơn hoàn, Nhân sự, Kinh doanh. Không rõ thì để chuỗi rỗng"
+}
+
+KHÔNG BỊA. Người gửi không nói thì ghi là chưa nói. Phiếu đầy đủ mà sai còn
+tốn công của người phân tích hơn là phiếu thiếu mà thật.`;
+}
+
 export async function hoiMay({ env, phien, cauHoi, lichSu = [], homNay, coAnhKem = false }) {
   if (!env.AI) {
     const e = new Error('Máy chủ chưa bật AI. Cần binding [ai] trong wrangler.toml.');
@@ -664,7 +709,16 @@ export async function hoiMay({ env, phien, cauHoi, lichSu = [], homNay, coAnhKem
     throw e;
   }
 
-  const nguoi = { ho_ten: phien.ho_ten, chuc_vu: phien.chuc_vu || '' };
+  /* nhan_su_id PHẢI có mặt: nó là người gửi khi mở phiếu góp ý và là người
+     giao khi tạo đầu việc. Thiếu nó thì D1 ném D1_TYPE_ERROR ngay lúc ghi —
+     đã dính đúng lỗi này ở chặng tạo phiếu góp ý, và chặng giao việc thật cũng
+     mang sẵn cùng lỗi mà chưa lộ vì công tắc tự giao việc đang tắt. */
+  const nguoi = {
+    ho_ten: phien.ho_ten,
+    chuc_vu: phien.chuc_vu || '',
+    nhan_su_id: phien.nhan_su_id,
+    tai_khoan: phien.ten_dang_nhap || phien.tai_khoan || null
+  };
 
   /* Chỉ đưa cho Mây những chuyên gia mà NGƯỜI NÀY được gặp. Mây không được
      route sang phòng người ta không có quyền vào — chặn ngay từ khâu chọn,
@@ -745,18 +799,43 @@ export async function hoiMay({ env, phien, cauHoi, lichSu = [], homNay, coAnhKem
      nghề thì phòng sở hữu kỹ năng tự viết bài cho mình, các phòng khác ngồi vào
      chỉ tốn lượt gọi AI mà không thêm được gì. */
   const laDayNghe = dinh.loai === 'HUAN_LUYEN';
+  const laGopY = dinh.loai === 'GOP_Y_ERP';
 
   /* Đọc kỹ năng dạy thêm MỘT LẦN rồi dùng lại cho cả ba vòng. Đọc ở từng vòng
      là ba lượt truy vấn cho cùng một thứ không đổi giữa chừng. */
-  const kyNangCuaAgent = laDayNghe ? [] : await docKyNang(env, agent.id);
-  const dangBan = !laDayNghe && dinh.loai !== 'CHAT' && dsPhu.length > 0;
+  const kyNangCuaAgent = (laDayNghe || laGopY) ? [] : await docKyNang(env, agent.id);
+  const dangBan = !laDayNghe && !laGopY && dinh.loai !== 'CHAT' && dsPhu.length > 0;
   const bienBan = [];        // ghi lại cuộc họp, để người đọc biết đã bàn những gì
   let traLoi;
 
   let ketQuaDay = null;
 
   try {
-    if (laDayNghe) {
+    if (dinh.loai === 'GOP_Y_ERP') {
+      /* Góp ý ERP: bóc thành phiếu có mã số. Không họp, không phản biện —
+         phiếu vào hàng đợi rồi Hồ Ly phân tích, đó là việc của quy trình góp
+         ý sẵn có chứ không phải của cuộc họp văn phòng. */
+      let phieu = null;
+      try {
+        const bo = bocJson(await goiAI(env, promptGopY(agent, nguoi, homNay, cauHoi), 700));
+        if (bo) {
+          phieu = await taoPhieuGopY(env, {
+            nguoiGuiId: nguoi.nhan_su_id,
+            tieuDe: bo.tieu_de, boiCanh: bo.boi_canh,
+            vuongODau: bo.vuong_o_dau, mongMuon: bo.mong_muon, khuVuc: bo.khu_vuc
+          });
+        }
+      } catch (e) {
+        console.error('Tạo phiếu góp ý lỗi:', e.message);
+      }
+
+      traLoi = phieu
+        ? 'Tôi đã ghi thành phiếu góp ý **#' + phieu.id + '** — "' + phieu.tieu_de + '".'
+          + '\n\nPhiếu vào hàng đợi của đội dựng ERP: Hồ Ly phân tích trước, '
+          + 'Khỉ Đột dựng sau khi có đặc tả. Sếp hỏi tôi bất cứ lúc nào để biết phiếu đang ở đâu.'
+        : 'Tôi chưa ghi được thành phiếu. Sếp nói rõ hơn giúp tôi: đang ở màn nào, '
+          + 'bấm gì thì gặp chuyện, và Sếp muốn nó thành ra thế nào.';
+    } else if (laDayNghe) {
       ketQuaDay = await dayNghe(env, agent, nguoi, homNay, cauHoi);
       if (ketQuaDay.loi) {
         traLoi = 'Tôi chưa ghi được kỹ năng này. Sếp thử nói lại rõ hơn giúp tôi.';
@@ -845,7 +924,7 @@ export async function hoiMay({ env, phien, cauHoi, lichSu = [], homNay, coAnhKem
 
   const yKienPhu = bienBan.filter(b => b.vong === 2).map(b => ({ id: b.agent, chuc_danh: b.chuc_danh }));
 
-  const loai = ['CHAT', 'ANALYSIS', 'ACTION_REQUEST', 'HUAN_LUYEN'].includes(dinh.loai) ? dinh.loai : 'CHAT';
+  const loai = ['CHAT', 'ANALYSIS', 'ACTION_REQUEST', 'HUAN_LUYEN', 'GOP_Y_ERP'].includes(dinh.loai) ? dinh.loai : 'CHAT';
   let vanBan = String(traLoi || '').trim() ||
     'Tôi chưa trả lời được câu này. Sếp hỏi lại cụ thể hơn giúp tôi.';
   let viecDaGiao = null;
