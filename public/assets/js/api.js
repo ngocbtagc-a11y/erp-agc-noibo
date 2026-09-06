@@ -515,7 +515,22 @@ export const API = {
      lại, mà quét lại nghĩa là đi tìm lại tờ giấy thật. */
   tlSua: (du) => goi('/api/tai-lieu/sua', { method: 'POST', body: JSON.stringify(du) }),
   tlLichSu: (id) => goi('/api/tai-lieu/lich-su?id=' + encodeURIComponent(id)),
-  tlAn: (id) => goi('/api/tai-lieu/an', { method: 'POST', body: JSON.stringify({ id }) })
+  tlAn: (id) => goi('/api/tai-lieu/an', { method: 'POST', body: JSON.stringify({ id }) }),
+
+  /* ---- Văn phòng ảo: một cửa duy nhất là Hỏi Mây ---- */
+  vpTongQuan: () => goi('/api/van-phong/tong-quan'),
+
+  /* Báo "tôi còn ở đây" mỗi 20 giây, để người khác thấy mình trong văn phòng */
+  vpCoMat: (dangO) => goi('/api/van-phong/co-mat', {
+    method: 'POST', body: JSON.stringify({ dang_o: dangO || null })
+  }),
+
+  vpHoiThoai: () => goi('/api/van-phong/hoi-thoai'),
+
+  /* KHÔNG truyền id trợ lý — người dùng không phải chọn ai, Mây tự định tuyến */
+  vpHoi: (noiDung) => goi('/api/van-phong/hoi', {
+    method: 'POST', body: JSON.stringify({ noi_dung: noiDung })
+  })
   // Bản PDF mở thẳng bằng /api/tai-lieu/tep?id=... (máy chủ trả file kèm kiểm
   // quyền + ghi nhật ký), không qua lớp fetch này.
   // Lưu ý: kết nối Shopee đi thẳng bằng chuyển trang tới /api/shopee/connect

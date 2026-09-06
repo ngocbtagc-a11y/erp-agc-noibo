@@ -23,6 +23,9 @@ enabled = true
 # Tài khoản đã có sẵn quyền AI, không cần khai thêm khóa.
 [ai]
 binding = "AI"
+# Workers AI khong chay trong may ao local — wrangler dev phai goi ra ha tang that.
+# Co nay chi anh huong luc dev; ban deploy khong dung den.
+experimental_remote = true
 
 # R2 — lưu VIDEO minh chứng khiếu nại đơn hoàn (ảnh thì nén nhỏ, lưu D1).
 # ⚠️ ĐANG TẠM KHOÁ vì R2 CHƯA được bật trên tài khoản Cloudflare (21/08/2026).

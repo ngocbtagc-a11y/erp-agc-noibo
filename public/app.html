@@ -22,6 +22,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/css/style.css">
+<link rel="stylesheet" href="assets/css/vanphong.css">
 </head>
 <body>
 
@@ -461,6 +462,90 @@
         <div class="dai-cat" id="ls-cv-cat" hidden></div>
       </div>
     </section>
+
+    <!-- ---------- Văn phòng ảo ---------- -->
+    <section class="view" id="v-vanphong" hidden>
+      <div class="view-head">
+        <h3>Văn phòng ảo</h3>
+        <p>Chín trợ lý AI, mỗi người một phòng. Bấm vào cửa để xem hồ sơ năng lực và hỏi việc.
+           Trợ lý tra thẳng dữ liệu thật trong ERP, và mỗi sáng tự đặt việc lên bàn người phụ trách.</p>
+      </div>
+
+      <!-- Băng nhắc khi phần hỏi–đáp chưa bật -->
+      <div class="vp-nhac" id="vp-nhac" hidden></div>
+
+      <div class="vp-bo-cuc">
+        <div>
+          <!-- Mặt bằng văn phòng: KHÔNG phải menu để chọn người.
+               Đây là màn hình theo dõi Mây điều phối — ai đang được giao việc
+               thì chibi người đó sáng lên. -->
+          <div class="vp-san" id="vp-san">
+            <div class="vp-san-nen"></div>
+            <div class="vp-phong-lop" id="vp-phong-lop"></div>
+            <div class="vp-quay" id="vp-quay"></div>
+          </div>
+
+          <!-- HỎI MÂY — lối vào duy nhất -->
+          <div class="panel vp-hoi-khung">
+            <div class="panel-head">
+              <h4>Hỏi Mây</h4>
+              <span class="hint">Cứ nói tự nhiên, Mây tự tìm đúng người</span>
+            </div>
+            <div class="panel-body">
+              <div class="vp-chat" id="vp-chat"></div>
+              <div class="vp-goi-y" id="vp-goi-y"></div>
+              <form class="vp-nhap" id="vp-nhap-form">
+                <textarea id="vp-nhap" rows="1"
+                          placeholder="Ví dụ: doanh số tuần này tụt vì sao?"
+                          autocomplete="off"></textarea>
+                <button type="submit" class="btn-primary btn-nho" id="vp-gui">Hỏi</button>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <!-- Cột phải -->
+        <aside class="vp-ben">
+          <div class="panel">
+            <div class="panel-head">
+              <h4>Việc của tôi</h4>
+              <span class="hint" id="vp-viec-dem"></span>
+            </div>
+            <div class="panel-body">
+              <div class="vp-viec-ds" id="vp-viec-ds"></div>
+              <div class="empty" id="vp-viec-trong" hidden>Chưa có việc nào đang mở.</div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-head">
+              <h4>Đang ở văn phòng</h4>
+              <span class="hint" id="vp-comat-dem"></span>
+            </div>
+            <div class="panel-body"><div class="vp-comat" id="vp-comat"></div></div>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- Hồ sơ năng lực một trợ lý: bấm vào chibi để xem, KHÔNG phải để chat
+         riêng — mọi câu hỏi đều đi qua Mây. -->
+    <div class="modal-nen" id="vpHoSoNen" hidden>
+      <div class="modal vp-hoso-modal">
+        <div class="vp-phong-dau">
+          <div class="vp-phong-chibi" id="vp-hoso-chibi"></div>
+          <div class="vp-phong-ten">
+            <h4 id="vp-hoso-ten">Trợ lý</h4>
+            <p id="vp-hoso-chuc"></p>
+          </div>
+          <button class="vp-dong" id="vp-hoso-dong" aria-label="Đóng">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+        <div class="vp-hoso-than" id="vp-hoso-than"></div>
+      </div>
+    </div>
 
     <!-- ---------- Danh bạ ---------- -->
     <section class="view" id="v-danhba" hidden>

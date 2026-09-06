@@ -1,0 +1,10 @@
+# Những file trong public/ KHÔNG được đưa lên production.
+#
+# .gitignore không cứu được ở đây: wrangler đóng gói thư mục public/ từ ổ đĩa,
+# không đọc git. File bị gitignore vẫn lên máy chủ như thường. Đây là chốt chặn
+# thật sự — sửa file này phải cân nhắc.
+#
+# vao-thu.html: trang tự đăng nhập để chạy thử ở máy. Trong đó có mật khẩu tài
+# khoản admin viết thẳng ra. Nó có chặn chạy ngoài localhost, nhưng ai mở mã
+# nguồn trang vẫn đọc được mật khẩu. Lên production một lần là phải đổi mật khẩu.
+vao-thu.html

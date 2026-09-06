@@ -35,6 +35,7 @@ import * as hopdong from './hopdong.js';
 import * as motacv from './mota-cv.js';
 import * as kynang from './ky-nang.js';
 import { quetNhacNhanSu, thangKeTiep, gioVN } from './nhac-nhan-su.js';
+import * as vanphong from './vanphong.js';
 /* CTL-0026 — Kho tài liệu quản trị. Lõi dùng chung với CTL-0025 (quét giấy tờ
    nhân sự): một kho, hai cửa vào. Đợt 1 mở cửa KHO CHUNG. */
 import * as tailieu from './tai-lieu.js';
@@ -6889,6 +6890,36 @@ async function tlAn(req, env) {
   return tailieu.anTaiLieu(env, phien, b);
 }
 
+/* ---- Văn phòng ảo -------------------------------------------------------
+   Tab mở cho mọi vai trò, nhưng CỬA TỪNG PHÒNG kiểm riêng theo vai trò —
+   việc đó nằm trong src/vanphong.js + src/agents-vp.js, không lặp lại ở đây. */
+
+async function vpTongQuan(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  return vanphong.tongQuan(env, phien);
+}
+
+async function vpCoMat(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { b = {}; }
+  return vanphong.coMat(env, phien, b);
+}
+
+async function vpHoiThoai(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  return vanphong.hoiThoai(env, phien);
+}
+
+async function vpHoi(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return vanphong.hoi(env, phien, b);
+}
+
 /* ---- Bộ định tuyến ------------------------------------------------------ */
 
 const DUONG_DAN = {
@@ -7083,7 +7114,12 @@ const DUONG_DAN = {
   'GET  /api/tai-lieu/nhat-ky':  tlNhatKy,
   'GET  /api/tai-lieu/lich-su':  tlLichSu,
   'POST /api/tai-lieu/sua':      tlSua,
-  'POST /api/tai-lieu/an':       tlAn
+  'POST /api/tai-lieu/an':       tlAn,
+  /* ---- Văn phòng ảo: 9 trợ lý AI ---- */
+  'GET  /api/van-phong/tong-quan': vpTongQuan,
+  'POST /api/van-phong/co-mat':    vpCoMat,
+  'GET  /api/van-phong/hoi-thoai': vpHoiThoai,
+  'POST /api/van-phong/hoi':       vpHoi
 };
 
 export default {
@@ -7115,6 +7151,26 @@ export default {
          tin/loại/người/ngày. Truyền thẳng `guiThongBao` đang chạy vào để
          không sinh ra bản sao thứ hai của cơ chế gửi. */
       try { await quetNhacNhanSu(env, guiThongBao); } catch (e) { console.error('Cron nhắc nhân sự:', e.message); }
+      /* VĂN PHÒNG ẢO — đội trợ lý tự soi dữ liệu rồi đặt việc lên bàn người
+         phụ trách. ĐÚNG MỘT DÒNG thêm vào cron đã có, wrangler.toml KHÔNG đổi,
+         KHÔNG có lịch thứ hai. Hàm tự đóng cửa ngoài khung 8h sáng giờ VN nên
+         gọi mỗi 5 phút vẫn đúng 1 lượt/ngày. Phần này chạy bằng LUẬT SQL,
+         không gọi AI, không tốn tiền. */
+      try {
+        /* GIAI ĐOẠN GOLIVE DẦN — MẶC ĐỊNH TẮT (Sếp Ngọc chốt 06/09/2026).
+           Tab văn phòng ảo hiện chỉ Sếp thấy, nhưng cron thì không nhìn tab: nó
+           ghi thẳng đầu việc vào hàng việc của TẤT CẢ nhân sự. Nhân sự nhận việc
+           từ một hệ thống họ còn chưa biết là có, do máy tự đẻ ra, thì rất khó
+           gỡ — họ sẽ đi làm thật.
+           BẬT KHI SẴN SÀNG (không cần deploy):
+               npx wrangler secret put VP_NHAC_VIEC     → nhập 1
+           Bật thử một phòng trước thì sửa luật lọc trong vanphong.quetNhacViec. */
+        const _vp = new Date(Date.now() + 7 * 3600 * 1000);
+        if (env.VP_NHAC_VIEC === '1' && _vp.getUTCHours() === 8 && _vp.getUTCMinutes() < 5) {
+          const so = await vanphong.quetNhacViec(env);
+          if (so) console.log('Văn phòng ảo: đội trợ lý giao ' + so + ' việc mới');
+        }
+      } catch (e) { console.error('Cron văn phòng ảo:', e.message); }
       /* Nhắc việc Trạm Mục Tiêu (SPEC-0004) — ĐÚNG MỘT DÒNG thêm vào cron đã
          có, `wrangler.toml` KHÔNG đổi, không có lịch thứ hai. Hàm tự đóng cửa
          ngoài 8h–18h và Chủ nhật (ADR-0013 — thứ Bảy vẫn nhắc), tự gộp một

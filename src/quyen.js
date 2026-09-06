@@ -18,7 +18,7 @@
    (enforced ở src/index.js, không phải ở đây — tab mở nghĩa là "vào được
    trang", còn dữ liệu bên trong lọc theo laAdmin() để phân Employee/
    Reviewer, xem nsTrangThaiHD-style pattern). */
-export const TAB = ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'nhansu', 'kinhdoanh', 'khovan', 'donhoan', 'ketoan', 'dulieunen', 'quantri', 'taisan', 'xepca', 'khotailieu', 'gopy'];
+export const TAB = ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'nhansu', 'kinhdoanh', 'khovan', 'donhoan', 'ketoan', 'dulieunen', 'quantri', 'taisan', 'xepca', 'khotailieu', 'gopy', 'vanphong'];
 
 /* Vai trò → được xem mảng nào và làm được gì.
    Danh bạ VÀ Chat nội bộ mở cho tất cả (Sếp Ngọc yêu cầu: ai cũng tra được
@@ -29,12 +29,27 @@ export const TAB = ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'nha
    - them_nhan_su : thêm nhân sự vào hồ sơ (KHÔNG đụng tới lương, KHÔNG cấp
                     được tài khoản). HCNS có mức này.
    - xem_luong    : xem cột lương. HCNS KHÔNG có — đây là ranh giới cứng. */
+/* ---------------------------------------------------------------------------
+   VĂN PHÒNG ẢO ('vanphong') — GIAI ĐOẠN 1: CHỈ ADMIN
+   ---------------------------------------------------------------------------
+   Sếp Ngọc chốt 06/09/2026: golive dần. Vòng đầu chỉ Sếp thấy tab này.
+
+   ĐÂY LÀ CÓ CHỦ Ý, KHÔNG PHẢI SÓT. Mây trả lời bằng AI dựa trên dữ liệu ERP
+   thật; nếu nó hiểu sai câu hỏi hoặc đọc nhầm số thì nhân sự có thể hành động
+   theo trước khi ai kịp phát hiện. Cho Sếp chạy thật vài ngày, đối chiếu câu
+   trả lời với số trên dashboard, rồi mới mở rộng.
+
+   MỞ RỘNG THẾ NÀO: thêm chuỗi 'vanphong' vào mảng tab của vai trò cần mở.
+   Danh sách vai trò từng được mở trong bản nháp: admin_backup, ke_toan_truong,
+   van_hanh_san, cskh, quan_ly_kho, nhan_vien_kho, hcns, nguoi_dung, nv_test.
+   Mở theo thứ tự nào là quyết định của Sếp, không phải mở lại hết một lượt.
+   --------------------------------------------------------------------------- */
 const QUYEN_THEO_VAI_TRO = {
   // ---- Vai trò HỆ THỐNG (nhomVaiTro='he_thong') — Sếp chốt 23/08/2026 ----
   // Admin = toàn quyền (gộp Giám đốc + Phó Giám đốc + Admin hệ thống cũ
   // thành 1 vai trò hệ thống duy nhất — chức danh thật của người đó vẫn ở
   // hồ sơ nhân sự (chuc_vu), KHÔNG còn gắn cứng vào vai trò đăng nhập).
-  admin:           { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'nhansu', 'kinhdoanh', 'khovan', 'donhoan', 'ketoan', 'dulieunen', 'quantri', 'taisan', 'xepca', 'khotailieu', 'gopy'], xem_luong: true,  admin: true,  them_nhan_su: true  },
+  admin:           { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'nhansu', 'kinhdoanh', 'khovan', 'donhoan', 'ketoan', 'dulieunen', 'quantri', 'taisan', 'xepca', 'khotailieu', 'gopy', 'vanphong'], xem_luong: true,  admin: true,  them_nhan_su: true  },
   // Admin backup = "quyền tạo tài khoản, phân quyền" — KHÔNG phải toàn
   // quyền Admin (không unlock dữ liệu khoá, không khoá/xoá tài khoản người
   // khác, không xem lương). Dùng khi Admin vắng mặt cần người tạo gấp tài

@@ -11,6 +11,7 @@
    ========================================================================== */
 
 import { API } from './api.js';
+import { veChibi, veChibiNguoi } from './chibi.js';
 import { tinhTrangThaiTB, veGiaoDienTB, hoanDuoc } from './tbd-trangthai.js';
 import { nenChayVongLap, nenDongDau } from './nhip-tim-chat.js';
 /* Nén ảnh dùng chung — CTL-0011 gộp 3 hàm về 1, CTL-0026 dời sang file riêng
@@ -141,6 +142,9 @@ const laTruongPhong = () => (TOI.phong_ban_quan_ly || []).length > 0;
 const TAB = [
   /* ---- Dùng chung: ai cũng cần, không thuộc phòng nào ---- */
   { id: 'tongquan',   ten: 'Trạm Mục Tiêu',     nhom: null, icon: I.muctieu },
+  // Văn phòng ảo đứng ngay dưới Trạm Mục Tiêu vì đây là lối vào chung cho mọi
+  // câu hỏi — ai cũng dùng, không thuộc phòng ban nào.
+  { id: 'vanphong',   ten: 'Văn phòng ảo',      nhom: null, icon: 'M3 21h18M5 21V7l7-4 7 4v14M9 21v-5h6v5M9 11h.01M15 11h.01' },
   { id: 'lichsuviec', ten: 'Lịch sử làm việc',  nhom: null, icon: I.lichsu },
   { id: 'danhba',     ten: 'Danh bạ',           nhom: null, icon: I.danhba },
   { id: 'gopy',       ten: 'Góp ý ERP',         nhom: null, icon: I.gopy },
@@ -11582,6 +11586,294 @@ document.addEventListener('change', (e) => {
    KHÔNG dùng TOI.quyen[0]: đó là khoá QUYỀN, mà có khoá không phải mục điều
    hướng nào cả ('chat', 'congviec', 'dulieunen'…) — rơi vào đó là màn trắng.
    Lấy đúng mục ĐẦU TIÊN thật sự hiện trên thanh bên. */
+
+/* ==========================================================================
+   VĂN PHÒNG ẢO — giao diện
+   --------------------------------------------------------------------------
+   MỘT CỬA DUY NHẤT: người dùng chỉ hỏi Mây, không phải chọn trợ lý nào
+   (Sếp Ngọc 06/09/2026). Mặt bằng chibi phía trên KHÔNG phải menu — nó là
+   màn hình theo dõi: Mây nhận câu hỏi, chuyền cho ai thì chibi người đó sáng
+   lên và hiện "đang tra". Bấm vào một chibi chỉ để xem HỒ SƠ NĂNG LỰC, biết
+   người đó làm được gì — không mở chat riêng.
+
+   Nhịp 20 giây chỉ chạy khi tab này đang mở: người dùng ở tab khác mà nền vẫn
+   gọi máy chủ 3 lần/phút thì tốn pin điện thoại và tốn lượt đọc database.
+   ========================================================================== */
+if (TOI.quyen.includes('vanphong')) {
+  khoiDongVanPhong();
+}
+
+async function khoiDongVanPhong() {
+  const lopPhong = $('#vp-phong-lop');
+  const oQuay    = $('#vp-quay');
+  const oChat    = $('#vp-chat');
+  const oNhap    = $('#vp-nhap');
+  const hoSoNen  = $('#vpHoSoNen');
+
+  let duLieu = null;
+  let dangGui = false;
+
+  const dangXem = () => !$('#v-vanphong').hidden;
+
+  /* ---- Vẽ mặt bằng ------------------------------------------------------ */
+
+  function veMatBang() {
+    // Mây đứng quầy giữa sảnh
+    const may = duLieu.may;
+    oQuay.innerHTML =
+      `<div class="vp-may" id="vp-may">
+         <div class="vp-may-nguoi">${veChibi(may.chibi)}</div>
+         <div class="vp-bien vp-bien-may">
+           <b>${esc(may.ten)}</b><span>${esc(may.chuc_danh)}</span>
+         </div>
+       </div>`;
+    oQuay.querySelector('#vp-may').addEventListener('click', () => moHoSo(may));
+
+    lopPhong.innerHTML = '';
+    duLieu.agent.forEach(a => {
+      const o = el('button', 'vp-phong' + (a.vao_duoc ? '' : ' khoa'));
+      o.style.left = a.vi_tri.x + '%';
+      o.style.top  = a.vi_tri.y + '%';
+      o.dataset.agent = a.id;
+
+      const huyHieu = a.viec_dang_mo
+        ? `<span class="vp-huyhieu" title="${a.viec_dang_mo} việc đang mở">${a.viec_dang_mo}</span>`
+        : '';
+
+      o.innerHTML =
+        `<div class="vp-phong-khung">
+           ${huyHieu}
+           <div class="vp-phong-nguoi">${veChibi(a.chibi)}</div>
+         </div>
+         <div class="vp-bien"><b>${esc(a.ten)}</b><span>${esc(a.chuc_danh)}</span></div>`;
+
+      o.title = a.vao_duoc
+        ? 'Xem hồ sơ năng lực'
+        : 'Chức vụ của bạn chưa được gặp trợ lý này';
+      o.addEventListener('click', () => moHoSo(a));
+      lopPhong.appendChild(o);
+    });
+  }
+
+  /* Làm nổi chibi đang được Mây giao việc */
+  function sangDen(agentId, dangLam) {
+    lopPhong.querySelectorAll('.vp-phong').forEach(p => {
+      p.classList.toggle('dang-lam', dangLam && p.dataset.agent === agentId);
+    });
+    const may = $('#vp-may');
+    if (may) may.classList.toggle('dang-nghi', !!dangLam && !agentId);
+  }
+
+  /* ---- Hồ sơ năng lực --------------------------------------------------- */
+
+  function moHoSo(a) {
+    const nl = a.nang_luc || { lam_duoc: [], khong_lam: [], hoi_thu: [] };
+    $('#vp-hoso-ten').textContent = a.ten;
+    $('#vp-hoso-chuc').textContent = a.chuc_danh;
+    $('#vp-hoso-chibi').innerHTML = veChibi(a.chibi);
+    $('#vp-hoso-than').innerHTML =
+      `<div class="vp-hoso-muc">
+         <h5>Hỏi được gì</h5>
+         <ul>${nl.lam_duoc.map(x => `<li>${esc(x)}</li>`).join('')}</ul>
+       </div>
+       <div class="vp-hoso-muc gioihan">
+         <h5>Không làm được</h5>
+         <ul>${nl.khong_lam.map(x => `<li>${esc(x)}</li>`).join('')}</ul>
+       </div>
+       <div class="vp-hoso-muc">
+         <h5>Thử hỏi</h5>
+         <div class="vp-goi-y">${nl.hoi_thu.map(x =>
+           `<button type="button" class="vp-chip">${esc(x)}</button>`).join('')}</div>
+       </div>
+       <p class="vp-hoso-nhac">Mọi câu hỏi đều gửi qua Mây — Mây sẽ tự chuyển cho ${esc(a.ten)} nếu đúng việc.</p>`;
+    hoSoNen.hidden = false;
+  }
+
+  $('#vp-hoso-dong').addEventListener('click', () => { hoSoNen.hidden = true; });
+  hoSoNen.addEventListener('click', e => { if (e.target === hoSoNen) hoSoNen.hidden = true; });
+  $('#vp-hoso-than').addEventListener('click', e => {
+    const chip = e.target.closest('.vp-chip');
+    if (!chip) return;
+    hoSoNen.hidden = true;
+    oNhap.value = chip.textContent;
+    $('#vp-nhap-form').requestSubmit();
+  });
+
+  /* ---- Khung trò chuyện với Mây ----------------------------------------- */
+
+  const TEN_CONG_CU = {
+    doanh_so: 'doanh số', so_sanh_doanh_so: 'so sánh kỳ', top_san_pham: 'hàng bán chạy',
+    tra_ton_kho: 'tồn kho', hang_can_han: 'hàng cận hạn', hang_duoi_muc: 'hàng dưới mức',
+    gia_tri_ton_kho: 'giá trị tồn kho', don_hoan_ton_dong: 'đơn hoàn',
+    danh_sach_nhan_su: 'danh sách nhân sự', ho_so_nhan_su_thieu: 'hồ sơ nhân sự',
+    giao_viec: 'giao việc', viec_dang_mo: 'việc đang mở'
+  };
+
+  function bongBong(vai, noiDung, dauVet) {
+    let chu = '';
+    if (dauVet) {
+      const phan = [];
+      if (dauVet.agent_chuc_danh) phan.push(esc(dauVet.agent_chuc_danh));
+      if (dauVet.agent_phu?.length) {
+        phan.push((dauVet.so_vong > 1 ? 'họp với ' : 'hỏi thêm ')
+          + dauVet.agent_phu.map(p => esc(p.chuc_danh)).join(', '));
+      }
+      if (dauVet.da_tra_cuu?.length) {
+        const t = [...new Set(dauVet.da_tra_cuu.map(c => TEN_CONG_CU[c.ten] || c.ten))];
+        phan.push('tra ' + t.join(' · '));
+      }
+      if (phan.length) chu = `<div class="vp-datra">Mây chuyền cho ${phan.join(' — ')}</div>`;
+
+      if (dauVet.bien_ban?.length > 1) {
+        const VAI = { 'đề xuất': 'đề xuất', 'phản biện': 'phản biện', 'chốt': 'chốt lại' };
+        const dong = dauVet.bien_ban.map(b =>
+          `<div class="vp-bb-luot">
+             <div class="vp-bb-ai">Vòng ${b.vong} · ${esc(b.chuc_danh)} ${VAI[b.vai] || esc(b.vai)}</div>
+             <div class="vp-bb-noi">${esc(b.noi_dung).replace(/\n/g, '<br>')}</div>
+           </div>`).join('');
+        chu += `<details class="vp-bienban">
+                  <summary>Xem văn phòng đã bàn gì (${dauVet.bien_ban.length} lượt)</summary>
+                  ${dong}
+                </details>`;
+      }
+    }
+    return `<div class="vp-tin ${vai === 'nguoi' ? 'nguoi' : 'agent'}">
+              <div class="vp-tin-noi">${esc(noiDung).replace(/\n/g, '<br>')}</div>${chu}
+            </div>`;
+  }
+
+  const xuongCuoi = () => { oChat.scrollTop = oChat.scrollHeight; };
+
+  $('#vp-nhap-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    if (dangGui) return;
+    const cauHoi = oNhap.value.trim();
+    if (!cauHoi) return;
+
+    dangGui = true;
+    $('#vp-gui').disabled = true;
+    oNhap.value = '';
+    oNhap.style.height = 'auto';
+    $('#vp-goi-y').innerHTML = '';
+
+    // Hiện câu vừa gõ ngay, rồi mới chờ — đỡ cảm giác trang bị đơ.
+    oChat.insertAdjacentHTML('beforeend', bongBong('nguoi', cauHoi));
+    oChat.insertAdjacentHTML('beforeend',
+      `<div class="vp-tin agent" id="vp-dangnghi"><div class="vp-tin-noi">` +
+      `<span class="vp-cham"></span><span class="vp-cham"></span><span class="vp-cham"></span>` +
+      ` <i>Mây đang tìm đúng người…</i></div></div>`);
+    sangDen(null, true);
+    xuongCuoi();
+
+    try {
+      const kq = await API.vpHoi(cauHoi);
+      sangDen(kq.agent, true);
+      $('#vp-dangnghi').outerHTML = bongBong('agent', kq.tra_loi, kq);
+      // Giao việc xong thì cột phải phải cập nhật ngay, không đợi nhịp sau.
+      if (kq.viec_da_giao?.da_tao) taiLai().catch(() => {});
+      setTimeout(() => sangDen(null, false), 2500);
+    } catch (err) {
+      const o = $('#vp-dangnghi');
+      if (o) o.innerHTML = `<div class="vp-tin-noi vp-loi">${esc(err.message || 'Mây chưa trả lời được')}</div>`;
+      sangDen(null, false);
+    } finally {
+      dangGui = false;
+      $('#vp-gui').disabled = false;
+      xuongCuoi();
+      oNhap.focus();
+    }
+  });
+
+  // Enter gửi, Shift+Enter xuống dòng — thói quen của mọi ứng dụng chat
+  oNhap.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('#vp-nhap-form').requestSubmit(); }
+  });
+  oNhap.addEventListener('input', () => {
+    oNhap.style.height = 'auto';
+    oNhap.style.height = Math.min(oNhap.scrollHeight, 120) + 'px';
+  });
+
+  $('#vp-goi-y').addEventListener('click', e => {
+    const chip = e.target.closest('.vp-chip');
+    if (!chip) return;
+    oNhap.value = chip.textContent;
+    $('#vp-nhap-form').requestSubmit();
+  });
+
+  /* ---- Cột phải --------------------------------------------------------- */
+
+  function veCotBen() {
+    const ds = duLieu.viec_cua_toi || [];
+    $('#vp-viec-dem').textContent = ds.length ? ds.length + ' việc đang mở' : '';
+    $('#vp-viec-trong').hidden = ds.length > 0;
+    $('#vp-viec-ds').innerHTML = ds.map(v => {
+      const tuTroLy = String(v.nguoi_giao_id || '').startsWith('vp:');
+      const han = v.han_chot ? ` · hạn ${esc(v.han_chot)}` : '';
+      return `<div class="vp-viec${v.trang_thai === 'dang_lam' ? ' dang-lam' : ''}">
+                <div class="vp-viec-dau">
+                  <span class="tag ${tuTroLy ? 'sage' : 'mute'}">${tuTroLy ? 'Trợ lý giao' : 'Người giao'}</span>
+                  <span class="vp-viec-tu">${esc(v.nguoi_giao_ten || '')}${han}</span>
+                </div>
+                <div class="vp-viec-ten">${esc(v.tieu_de)}</div>
+                ${v.dau_ra ? `<div class="vp-viec-mo-ta">Xong là có: ${esc(v.dau_ra)}</div>` : ''}
+              </div>`;
+    }).join('');
+
+    const coMat = duLieu.nguoi_co_mat || [];
+    $('#vp-comat-dem').textContent = coMat.length ? coMat.length + ' người' : 'chỉ có bạn';
+    $('#vp-comat').innerHTML = coMat.map(n =>
+      `<div class="vp-comat-dong">
+         <span class="vp-tihon">${veChibiNguoi(n.ho_ten)}</span>
+         <div><div class="nm">${esc(n.ho_ten)}</div><div class="sm">${esc(n.chuc_vu || '')}</div></div>
+       </div>`).join('');
+  }
+
+  /* ---- Tải và nhịp cập nhật --------------------------------------------- */
+
+  async function taiLai() {
+    duLieu = await API.vpTongQuan();
+    veMatBang();
+    veCotBen();
+
+    const nhac = $('#vp-nhac');
+    if (!duLieu.hoi_dap_bat_chua) {
+      nhac.hidden = false;
+      nhac.innerHTML = '<b>Máy chủ chưa bật AI.</b> Mặt bằng và hàng việc vẫn dùng được, ' +
+        'nhưng chưa hỏi Mây được. Cần bật binding [ai] trong wrangler.toml.';
+    } else {
+      nhac.hidden = true;
+    }
+  }
+
+  try {
+    await taiLai();
+    const kq = await API.vpHoiThoai();
+    oChat.innerHTML = kq.tin_nhan.length
+      ? kq.tin_nhan.map(t => bongBong(t.vai, t.noi_dung,
+          t.cong_cu ? JSON.parse(t.cong_cu) : null)).join('')
+      : `<div class="vp-chao"><b>Mây</b> đang trực quầy lễ tân.
+           <span>Cứ hỏi tự nhiên, tôi tự tìm đúng người trong văn phòng.</span></div>`;
+    if (!kq.tin_nhan.length) {
+      $('#vp-goi-y').innerHTML = (kq.may?.nang_luc?.hoi_thu || [])
+        .map(g => `<button type="button" class="vp-chip">${esc(g)}</button>`).join('');
+    }
+    xuongCuoi();
+  } catch (err) {
+    $('#vp-nhac').hidden = false;
+    $('#vp-nhac').textContent = 'Chưa tải được văn phòng ảo: ' + (err.message || '');
+    return;
+  }
+
+  setInterval(async () => {
+    if (!dangXem() || document.hidden || dangGui) return;
+    try {
+      const { nguoi_co_mat } = await API.vpCoMat(null);
+      duLieu.nguoi_co_mat = nguoi_co_mat;
+      veCotBen();
+    } catch { /* mạng chớp một nhịp thì thôi, nhịp sau bù */ }
+  }, 20000);
+}
+
 const mucDauTien = document.querySelector('.sb-item[data-tab]');
 if (mucDauTien) moTab(mucDauTien.dataset.tab);
 else console.error('Không có mục điều hướng nào hiện được — kiểm tra phân quyền tài khoản này.');

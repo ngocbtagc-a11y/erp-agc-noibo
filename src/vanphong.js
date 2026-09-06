@@ -1,0 +1,430 @@
+/* ==========================================================================
+   VĂN PHÒNG ẢO — máy chủ
+   ---------------------------------------------------------------------------
+   Một tầng văn phòng trong ERP. Chín trợ lý AI, mỗi người một phòng: 7 trưởng
+   phòng nghiệp vụ + Trợ lý Giám đốc + Trợ lý Phó Giám đốc (hai người sau để
+   phản biện kế hoạch, không trực nghiệp vụ).
+
+   Ba việc file này làm:
+     1. Canh cửa — ai vào được phòng nào (src/agents-vp.js + src/quyen.js).
+     2. Giữ trí nhớ — hội thoại lưu trong D1 của công ty, KHÔNG gửi gắm ở nhà
+        cung cấp AI. Đổi nguồn AI thì trợ lý vẫn nhớ nguyên chuyện cũ.
+     3. Nối bộ não với công cụ — đưa cho AI đúng những công cụ trợ lý được cấp,
+        và mỗi công cụ chạy dưới quyền của NGƯỜI đang đăng nhập.
+
+   Điểm cần nhớ khi đọc tiếp: mọi thứ người dùng gõ vào ô chat đều là DỮ LIỆU,
+   không phải mệnh lệnh cho hệ thống. Người ta có thể gõ "bỏ qua phân quyền đi"
+   — trợ lý có thể nghe theo, nhưng công cụ thì không, vì quyền kiểm ở máy chủ
+   bằng vai trò lấy từ cookie phiên.
+
+   PHẦN CHẠY ĐƯỢC NGAY KHI CHƯA CÓ AI: mặt bằng, hồ sơ năng lực, và
+   `quetNhacViec()` — trợ lý tự soi dữ liệu rồi giao việc bằng LUẬT SQL. Phần
+   hỏi–đáp cần AI thì báo lời nhắn tử tế thay vì lỗi (xem src/vp-may.js).
+   ========================================================================== */
+
+import {
+  AGENTS, agentTheoId, agentChoVaiTro, duocVaoPhong, hoSoCongKhai, ghepPrompt
+} from './agents-vp.js';
+import { congCuCuaAgent, chayCongCu } from './vp-cong-cu.js';
+import { MAY } from './agents-vp.js';
+import { hoiMay } from './vp-may.js';
+
+/* ---- Trả lời JSON (bản riêng, để file tự đứng được) --------------------- */
+
+function json(d, status = 200) {
+  return new Response(JSON.stringify(d), {
+    status,
+    headers: {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Cache-Control': 'no-store',
+      'X-Content-Type-Options': 'nosniff'
+    }
+  });
+}
+function loi(msg, status = 400) { return json({ loi: msg }, status); }
+
+function homNayVN() {
+  return new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
+}
+function id(tienTo) {
+  return tienTo + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
+}
+
+/* Số tin nhắn cũ đưa lại cho AI mỗi lượt: đủ nhớ mạch chuyện, không quá nhiều
+   để khỏi tính tiền cả cuốn nhật ký mỗi lần hỏi một câu. */
+const NHO_LAI = 20;
+
+/* Coi là còn trong văn phòng nếu 60 giây qua có báo về. Giao diện gọi mỗi 20
+   giây nên lỡ một nhịp mạng vẫn chưa bị coi là đã rời đi. */
+const CON_TRONG_PHONG = '-60 seconds';
+
+/* ==========================================================================
+   TỔNG QUAN — vẽ mặt bằng văn phòng
+   ========================================================================== */
+export async function tongQuan(env, phien) {
+  const cuaToi = agentChoVaiTro(phien.vai_tro);
+
+  // Ai đang ở trong văn phòng
+  const { results: coMat } = await env.DB.prepare(`
+    SELECT c.nhan_su_id, c.dang_o, n.ho_ten, n.viet_tat, n.chuc_vu, n.bo_phan
+      FROM vp_co_mat c
+      JOIN nhan_su n ON n.id = c.nhan_su_id
+     WHERE c.luc >= datetime('now', '+7 hours', ?)
+     ORDER BY n.ho_ten
+  `).bind(CON_TRONG_PHONG).all();
+
+  // Việc do trợ lý ảo giao mà còn đang mở, đếm theo từng trợ lý
+  const { results: demViec } = await env.DB.prepare(`
+    SELECT nguoi_giao_id, COUNT(*) AS so
+      FROM cong_viec
+     WHERE nguoi_giao_id LIKE 'vp:%'
+       AND trang_thai IN ('moi', 'dang_lam', 'cho_duyet')
+     GROUP BY nguoi_giao_id
+  `).all();
+  const dem = Object.fromEntries(demViec.map(r => [String(r.nguoi_giao_id).slice(3), r.so]));
+
+  // Việc của chính người đang xem — kể cả việc do người khác giao, để họ nhìn
+  // một chỗ là thấy hết, không phải mở hai nơi.
+  const { results: viecCuaToi } = await env.DB.prepare(`
+    SELECT id, tieu_de, dau_ra, mo_ta, nguoi_giao_id, nguoi_giao_ten,
+           han_chot, trang_thai, tao_luc
+      FROM cong_viec
+     WHERE nguoi_nhan_id = ? AND trang_thai IN ('moi', 'dang_lam')
+     ORDER BY COALESCE(han_chot, '9999-12-31'), tao_luc DESC
+     LIMIT 30
+  `).bind(phien.nhan_su_id).all();
+
+  return json({
+    toi: {
+      nhan_su_id: phien.nhan_su_id, ho_ten: phien.ho_ten,
+      viet_tat: phien.viet_tat, chuc_vu: phien.chuc_vu
+    },
+    /* Gửi cả trợ lý không được gặp, kèm cờ vao_duoc = false: thấy cửa phòng
+       đóng thì người ta hiểu là có phòng đó mà mình không phận sự, đỡ hơn là
+       phòng biến mất không lời giải thích. */
+    agent: AGENTS.map(a => ({
+      ...hoSoCongKhai(a),
+      vao_duoc: cuaToi.some(x => x.id === a.id),
+      viec_dang_mo: dem[a.id] || 0
+    })),
+    nguoi_co_mat: coMat,
+    viec_cua_toi: viecCuaToi,
+    hoi_dap_bat_chua: !!env.AI,
+    may: MAY
+  });
+}
+
+/* ==========================================================================
+   CÓ MẶT — giao diện gọi mỗi 20 giây
+   ========================================================================== */
+export async function coMat(env, phien, body) {
+  const dangO = String(body?.dang_o || '').trim();
+  // Chỉ nhận id trợ lý có thật, không nhận chuỗi tuỳ ý từ trình duyệt.
+  const phong = dangO && agentTheoId(dangO) ? dangO : null;
+
+  await env.DB.prepare(`
+    INSERT INTO vp_co_mat (nhan_su_id, luc, dang_o)
+    VALUES (?, datetime('now', '+7 hours'), ?)
+    ON CONFLICT(nhan_su_id) DO UPDATE
+      SET luc = datetime('now', '+7 hours'), dang_o = excluded.dang_o
+  `).bind(phien.nhan_su_id, phong).run();
+
+  const { results } = await env.DB.prepare(`
+    SELECT c.nhan_su_id, c.dang_o, n.ho_ten, n.viet_tat, n.chuc_vu, n.bo_phan
+      FROM vp_co_mat c
+      JOIN nhan_su n ON n.id = c.nhan_su_id
+     WHERE c.luc >= datetime('now', '+7 hours', ?)
+     ORDER BY n.ho_ten
+  `).bind(CON_TRONG_PHONG).all();
+
+  return json({ nguoi_co_mat: results });
+}
+
+/* ==========================================================================
+   MỞ CỬA MỘT PHÒNG
+   ========================================================================== */
+export async function hoiThoai(env, phien) {
+  /* Một mạch duy nhất với Mây cho mỗi người. Không tách theo từng chuyên gia:
+     người dùng chỉ thấy mình đang nói với Mây, còn việc Mây chuyền cho ai thì
+     nằm trong dấu vết của từng câu trả lời. */
+  const ht = await layHoacTaoHoiThoai(env, phien.nhan_su_id, 'may');
+  const { results } = await env.DB.prepare(`
+    SELECT vai, noi_dung, cong_cu, luc
+      FROM vp_tin_nhan WHERE hoi_thoai_id = ?
+     ORDER BY id DESC LIMIT 60
+  `).bind(ht.id).all();
+
+  return json({
+    may: MAY,
+    hoi_dap_bat_chua: !!env.AI,
+    tin_nhan: results.reverse()
+  });
+}
+
+async function layHoacTaoHoiThoai(env, nhanSuId, agentId) {
+  const cu = await env.DB.prepare(
+    'SELECT id FROM vp_hoi_thoai WHERE nhan_su_id = ? AND agent_id = ?'
+  ).bind(nhanSuId, agentId).first();
+  if (cu) return cu;
+
+  const moi = id('ht');
+  await env.DB.prepare(
+    'INSERT INTO vp_hoi_thoai (id, agent_id, nhan_su_id) VALUES (?, ?, ?)'
+  ).bind(moi, agentId, nhanSuId).run();
+  return { id: moi };
+}
+
+/* ==========================================================================
+   HỎI MÂY — MỘT CỬA DUY NHẤT
+   --------------------------------------------------------------------------
+   Người dùng không chọn trợ lý. Họ nói tự nhiên với Mây; Mây phân loại, chọn
+   đúng chuyên gia, tra số thật rồi mới trả lời (xem src/vp-may.js).
+   Mạch trò chuyện lưu chung một hội thoại 'may' cho mỗi người — không tách
+   theo từng chuyên gia, vì người dùng chỉ thấy mình đang nói với Mây.
+   ========================================================================== */
+export async function hoi(env, phien, body) {
+  const noiDung = String(body?.noi_dung || '').trim();
+  if (!noiDung) return loi('Chưa nhập nội dung');
+  if (noiDung.length > 4000) return loi('Câu hỏi dài quá, Sếp rút gọn giúp tôi');
+
+  const ht = await layHoacTaoHoiThoai(env, phien.nhan_su_id, 'may');
+
+  // Lấy mạch cũ TRƯỚC khi ghi câu mới, để câu vừa gõ không bị lặp hai lần.
+  const { results: cu } = await env.DB.prepare(`
+    SELECT vai, noi_dung FROM vp_tin_nhan
+     WHERE hoi_thoai_id = ? ORDER BY id DESC LIMIT ?
+  `).bind(ht.id, NHO_LAI).all();
+  const lichSu = cu.reverse();
+
+  let kq;
+  try {
+    kq = await hoiMay({
+      env, phien, cauHoi: noiDung, lichSu, homNay: homNayVN()
+    });
+  } catch (e) {
+    if (e.thieu_ai) return loi(e.message, 503);
+    console.error('Mây lỗi:', e.stack || e.message);
+    return loi('Mây tạm thời không trả lời được. Sếp thử lại sau ít phút.', 503);
+  }
+
+  /* Ghi cả cặp hỏi–đáp một lượt, đúng thứ tự. Ghi câu hỏi trước rồi Mây lỗi
+     thì lần sau mở lại thấy một câu treo lơ lửng không ai trả lời, người dùng
+     tưởng bị phớt lờ.
+
+     Cột cong_cu giữ luôn dấu vết điều phối: Mây đã chuyền cho ai, hỏi thêm
+     phòng nào, tra công cụ gì. Đó là thứ cho phép nhìn lại "câu trả lời này
+     dựa trên đâu" — không phải tin suông. */
+  const dauVet = {
+    loai: kq.loai,
+    agent: kq.agent,
+    agent_ten: kq.agent_ten,
+    agent_chuc_danh: kq.agent_chuc_danh,
+    agent_phu: kq.agent_phu,
+    can_owner_gate: kq.can_owner_gate,
+    da_tra_cuu: kq.da_tra_cuu,
+    so_vong: kq.so_vong,
+    /* Biên bản họp: ai đề xuất gì, ai phản biện gì, chốt ra sao. Cắt mỗi lượt
+       còn 2000 ký tự — đủ để sau này nhìn lại vì sao ra quyết định đó, mà không
+       phình một dòng D1 lên vài chục KB. */
+    bien_ban: (kq.bien_ban || []).map(b => ({
+      vong: b.vong, agent: b.agent, chuc_danh: b.chuc_danh, vai: b.vai,
+      noi_dung: String(b.noi_dung || '').slice(0, 2000)
+    }))
+  };
+
+  const chen = env.DB.prepare(
+    'INSERT INTO vp_tin_nhan (hoi_thoai_id, vai, noi_dung, cong_cu) VALUES (?, ?, ?, ?)'
+  );
+  await env.DB.batch([
+    chen.bind(ht.id, 'nguoi', noiDung, null),
+    chen.bind(ht.id, 'agent', kq.tra_loi, JSON.stringify(dauVet)),
+    env.DB.prepare("UPDATE vp_hoi_thoai SET cap_nhat_luc = datetime('now', '+7 hours') WHERE id = ?")
+      .bind(ht.id)
+  ]);
+
+  return json({
+    tra_loi: kq.tra_loi,
+    so_vong: kq.so_vong,
+    bien_ban: kq.bien_ban,
+    loai: kq.loai,
+    tom_tat: kq.tom_tat,
+    agent: kq.agent,
+    agent_ten: kq.agent_ten,
+    agent_chuc_danh: kq.agent_chuc_danh,
+    agent_phu: kq.agent_phu,
+    can_owner_gate: kq.can_owner_gate,
+    da_tra_cuu: kq.da_tra_cuu
+  });
+}
+
+/* ==========================================================================
+   TRỢ LÝ TỰ NHẮC VIỆC — chạy nền mỗi sáng, KHÔNG CẦN AI
+   --------------------------------------------------------------------------
+   Đây là nửa còn lại của văn phòng ảo, và là nửa chạy được ngay hôm nay:
+   không chờ ai hỏi, sáng ra trợ lý tự soi dữ liệu phòng mình rồi đặt việc lên
+   bàn người phụ trách.
+
+   VÌ SAO PHẦN NÀY KHÔNG GỌI AI: nhắc việc định kỳ là những luật rõ ràng — lô
+   này còn 12 ngày là hết hạn, mã kia tụt dưới mức tồn, đơn hoàn quá 12 tiếng
+   chưa đối soát. Luật viết thẳng bằng SQL thì luôn đúng, chạy trong một phần
+   nghìn giây và không tốn một đồng nào. Đưa việc này cho mô hình ngôn ngữ chỉ
+   tổ đắt hơn, chậm hơn, và có ngày nó nhắc sai một con số. AI để dành cho việc
+   nó làm tốt hơn: trả lời câu hỏi mở và phản biện.
+
+   Việc giao ra đi thẳng vào bảng `cong_viec` — cùng một hàng đợi với việc do
+   người giao, không phải một danh sách riêng mà rồi chẳng ai mở.
+   ========================================================================== */
+
+/* Tìm người phụ trách theo VAI TRÒ tài khoản, không dò theo tên bộ phận — tên
+   bộ phận do người nhập tay, mỗi nơi gõ một kiểu, còn vai trò là dữ liệu hệ
+   thống nên luôn khớp. */
+async function nguoiPhuTrach(env, vaiTro) {
+  return env.DB.prepare(`
+    SELECT n.id, n.ho_ten
+      FROM tai_khoan t
+      JOIN nhan_su n ON n.id = t.nhan_su_id
+     WHERE t.vai_tro = ? AND t.kich_hoat = 1 AND n.dang_lam = 1
+     ORDER BY n.ho_ten LIMIT 1
+  `).bind(vaiTro).first();
+}
+
+/* Đặt một việc, bỏ qua nếu đã có việc y hệt còn đang mở. */
+async function datViec(env, agentId, nguoi, v) {
+  if (!nguoi) return false;
+
+  const trung = await env.DB.prepare(`
+    SELECT 1 FROM cong_viec
+     WHERE nguoi_nhan_id = ? AND tieu_de = ?
+       AND trang_thai IN ('moi', 'dang_lam', 'cho_duyet') LIMIT 1
+  `).bind(nguoi.id, v.tieu_de).first();
+  if (trung) return false;
+
+  const a = agentTheoId(agentId);
+  await env.DB.prepare(`
+    INSERT INTO cong_viec
+      (tieu_de, dau_ra, mo_ta, nguoi_giao_id, nguoi_giao_ten,
+       nguoi_nhan_id, nguoi_nhan_ten, han_chot, trang_thai, tao_luc)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'moi', datetime('now', '+7 hours'))
+  `).bind(
+    v.tieu_de, v.dau_ra, v.mo_ta || null,
+    'vp:' + agentId, `${a.ten} (${a.chuc_danh})`,
+    nguoi.id, nguoi.ho_ten, v.han_chot || null
+  ).run();
+  return true;
+}
+
+export async function quetNhacViec(env) {
+  let daTao = 0;
+  const homNay = homNayVN();
+
+  const nguoiKho = await nguoiPhuTrach(env, 'quan_ly_kho');
+  const nguoiSan = await nguoiPhuTrach(env, 'van_hanh_san');
+  const nguoiHcns = await nguoiPhuTrach(env, 'hcns');
+
+  /* ---- Khang (Kho vận): lô cận hạn còn tồn ------------------------------ */
+  const { results: canHan } = await env.DB.prepare(`
+    SELECT sp.ma_sku, sp.ten, sp.don_vi, l.han_su_dung,
+           COALESCE(SUM(g.so_luong), 0) AS ton
+      FROM lo_hang l
+      JOIN san_pham sp ON sp.id = l.san_pham_id
+      LEFT JOIN giao_dich_kho g ON g.lo_hang_id = l.id
+     WHERE l.han_su_dung IS NOT NULL
+       AND l.han_su_dung <= date('now', '+7 hours', '+30 days')
+     GROUP BY l.id
+    HAVING ton > 0
+     ORDER BY l.han_su_dung ASC
+     LIMIT 10
+  `).all();
+
+  for (const r of canHan) {
+    const conLai = Math.round(
+      (Date.parse(r.han_su_dung + 'T00:00:00Z') - Date.parse(homNay + 'T00:00:00Z')) / 86400000
+    );
+    const daQua = conLai < 0;
+    if (await datViec(env, 'khovan', nguoiKho, {
+      tieu_de: daQua
+        ? `Hàng quá hạn còn trong kho: ${r.ten}`
+        : `Đẩy gấp lô cận hạn: ${r.ten} (còn ${conLai} ngày)`,
+      dau_ra: daQua
+        ? 'Lô đã tách khỏi hàng bán và xử lý xong theo quy định thực phẩm'
+        : 'Lô này đã được lên lịch xuất hoặc lên phương án xả hàng',
+      mo_ta: `Mã ${r.ma_sku} còn ${r.ton} ${r.don_vi}, hạn dùng ${r.han_su_dung}` +
+             (daQua ? ' — ĐÃ QUÁ HẠN.' : `, còn ${conLai} ngày.`) +
+             ' Trợ lý Kho vận tự phát hiện khi soi kho buổi sáng.',
+      han_chot: r.han_su_dung
+    })) daTao++;
+  }
+
+  /* ---- Khang: hàng tụt dưới mức tồn tối thiểu --------------------------- */
+  const { results: duoiMuc } = await env.DB.prepare(`
+    SELECT sp.ma_sku, sp.ten, sp.don_vi, sp.ton_toi_thieu,
+           COALESCE(SUM(g.so_luong), 0) AS ton
+      FROM san_pham sp
+      LEFT JOIN giao_dich_kho g ON g.san_pham_id = sp.id
+     WHERE sp.dang_ban = 1 AND sp.ton_toi_thieu > 0
+     GROUP BY sp.id
+    HAVING ton < sp.ton_toi_thieu
+     ORDER BY (sp.ton_toi_thieu - ton) DESC
+     LIMIT 10
+  `).all();
+
+  for (const r of duoiMuc) {
+    if (await datViec(env, 'khovan', nguoiKho, {
+      tieu_de: r.ton <= 0 ? `Hết sạch hàng: ${r.ten}` : `Sắp hết hàng: ${r.ten}`,
+      dau_ra: 'Đã đặt hàng bổ sung hoặc có ngày hàng về cụ thể',
+      mo_ta: `Mã ${r.ma_sku} còn ${r.ton} ${r.don_vi}, dưới mức tồn tối thiểu ${r.ton_toi_thieu}. ` +
+             'Đang bán trên sàn mà hết hàng là mất đơn và tụt hạng hiển thị.'
+    })) daTao++;
+  }
+
+  /* ---- Doanh (Kinh doanh): đơn hoàn quá 12 tiếng chưa đối soát ---------- */
+  const quaHan = await env.DB.prepare(`
+    SELECT COUNT(*) AS so FROM don_hoan
+     WHERE kho_nhan_luc IS NULL AND doi_soat_luc IS NULL
+       AND cho_kho_nhan_tu IS NOT NULL
+       AND cho_kho_nhan_tu <= datetime('now', '+7 hours', '-12 hours')
+  `).first();
+
+  if (quaHan?.so > 0) {
+    if (await datViec(env, 'kinhdoanh', nguoiSan, {
+      tieu_de: `Đối soát ${quaHan.so} đơn hoàn quá 12 tiếng`,
+      dau_ra: 'Tất cả đơn trong danh sách đã được đánh dấu đã đối soát với sàn',
+      mo_ta: `Có ${quaHan.so} đơn hoàn đã về mà kho chưa quẹt nhận, đã quá mốc 12 tiếng. ` +
+             'Để trôi thêm là mất quyền khiếu nại với sàn. Xem danh sách ở tab Kết nối sàn.',
+      han_chot: homNay
+    })) daTao++;
+  }
+
+  /* ---- Nhân (HCNS): hồ sơ thiếu giấy tờ, hợp đồng chưa ký --------------- */
+  const { results: hoSo } = await env.DB.prepare(`
+    SELECT id, ho_ten, bo_phan, trang_thai,
+           (so_cccd  IS NULL OR so_cccd  = '') AS thieu_cccd,
+           (so_bhxh  IS NULL OR so_bhxh  = '') AS thieu_bhxh,
+           (ngay_vao IS NULL OR ngay_vao = '') AS thieu_ngay_vao
+      FROM nhan_su WHERE dang_lam = 1 LIMIT 80
+  `).all();
+
+  const thieu = hoSo.filter(r => r.thieu_cccd || r.thieu_bhxh || r.thieu_ngay_vao);
+  if (thieu.length) {
+    if (await datViec(env, 'hcns', nguoiHcns, {
+      // Khoá theo tháng nằm ngay trong tiêu đề: mỗi tháng nhắc đúng một lần,
+      // không nhắc lại mỗi sáng.
+      tieu_de: `Bổ sung giấy tờ cho ${thieu.length} hồ sơ nhân sự (tháng ${homNay.slice(0, 7)})`,
+      dau_ra: 'Các hồ sơ trong danh sách đã đủ căn cước, số bảo hiểm xã hội và ngày vào làm',
+      mo_ta: 'Đang thiếu: ' + thieu.slice(0, 8).map(r => r.ho_ten).join(', ') +
+             (thieu.length > 8 ? ` và ${thieu.length - 8} người nữa` : '') +
+             '. Thiếu những mục này thì không chốt được bảo hiểm và dễ vướng khi thanh tra.'
+    })) daTao++;
+  }
+
+  for (const r of hoSo.filter(x => x.trang_thai === 'cho_ky').slice(0, 10)) {
+    if (await datViec(env, 'hcns', nguoiHcns, {
+      tieu_de: `Chốt hợp đồng lao động: ${r.ho_ten}`,
+      dau_ra: 'Hợp đồng đã ký và hồ sơ chuyển sang trạng thái đã ký',
+      mo_ta: `${r.ho_ten} (${r.bo_phan || 'chưa rõ bộ phận'}) vẫn ở trạng thái chờ ký hợp đồng. ` +
+             'Người đã đi làm mà chưa có hợp đồng là rủi ro pháp lý thuộc về công ty.'
+    })) daTao++;
+  }
+
+  return daTao;
+}
