@@ -29,9 +29,10 @@
 
 .vp-bo-cuc {
   display: grid;
-  /* Chat 300px chứ không 330: mỗi pixel cắt ở đây là một pixel mặt bằng giữ
-     lại, mà mặt bằng mới là thứ cần bề ngang để xếp bốn buồng một hàng. */
-  grid-template-columns: minmax(0, 1fr) 300px;
+  /* Ba cột: mặt bằng · thanh kéo · chat. Bề ngang cột chat nằm trong một biến
+     để thanh kéo đổi được ngay bằng JS, và nhớ theo máy — mỗi người một màn
+     hình, một thói quen; ép chung một con số thì ai cũng thấy hơi sai. */
+  grid-template-columns: minmax(0, 1fr) 7px var(--vp-chat-rong, 300px);
   gap: 18px;
   align-items: start;
 }
@@ -926,7 +927,7 @@
 /* Cột phải rộng hơn: 300px đủ cho danh sách việc, nhưng câu trả lời của trợ lý
    thường dài — đọc trong ống 300px thì mỗi dòng được vài chữ, mỏi mắt. */
 @media (min-width: 901px) {
-  .vp-bo-cuc { grid-template-columns: minmax(0, 1fr) 380px; }
+  .vp-bo-cuc { grid-template-columns: minmax(0, 1fr) 7px var(--vp-chat-rong, 380px); }
 }
 
 /* Khổ hẹp: xếp một cột, chat vẫn giới hạn chiều cao chứ không thả cho dài vô tận */
@@ -1148,3 +1149,39 @@
   outline: 2px dashed var(--sage);
   outline-offset: -4px;
 }
+
+/* ---------------------------------------------------------------------------
+   THANH KÉO CHIA CỘT
+   ---------------------------------------------------------------------------
+   Mỗi người một màn hình và một thói quen: người hay nhìn mặt bằng thì muốn nó
+   rộng, người hay hỏi Mây thì muốn ô chat rộng. Ép chung một con số thì ai cũng
+   thấy hơi sai một chút.
+
+   Vùng bấm rộng hơn vạch nhìn thấy: vạch 2px thì phải rê chuột đúng 2px mới
+   tóm được, bực hơn là không có. Vạch mảnh cho đẹp, vùng bắt 7px cho dễ trúng.
+   --------------------------------------------------------------------------- */
+.vp-keo {
+  position: relative;
+  cursor: col-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: none;
+  user-select: none;
+}
+.vp-keo span {
+  display: block;
+  width: 2px;
+  height: 46px;
+  border-radius: 2px;
+  background: var(--line);
+  transition: background .15s ease, height .15s ease;
+}
+.vp-keo:hover span,
+.vp-keo.dang-keo span { background: var(--sage); height: 84px; }
+
+/* Trong lúc kéo: khoá con trỏ và tắt chọn chữ toàn trang, không thì rê qua ô
+   chat là bôi đen cả đoạn hội thoại. */
+body.vp-dang-keo { cursor: col-resize; user-select: none; }
+
+@media (max-width: 900px) { .vp-keo { display: none; } }

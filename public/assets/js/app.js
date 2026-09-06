@@ -12016,6 +12016,76 @@ async function khoiDongVanPhong() {
 
   /* ---- Khung trò chuyện với Mây ----------------------------------------- */
 
+  /* ---- Kéo đổi bề ngang hai cột ------------------------------------------
+     Người hay nhìn mặt bằng muốn nó rộng; người hay hỏi Mây muốn ô chat rộng.
+     Ép chung một con số thì ai cũng thấy hơi sai một chút.
+
+     Có chặn hai đầu: mặt bằng phải còn tối thiểu 560px, không thì bốn buồng
+     một hàng chen nhau và bấm trượt; ô chat tối thiểu 280px, hẹp hơn nữa thì
+     mỗi dòng trả lời chỉ được vài chữ, đọc mỏi mắt. */
+  const KHOA_CHAT_RONG = 'agc_vp_chat_rong';
+  const CHAT_MIN = 280, CHAT_MAX = 720, SAN_MIN = 560;
+
+  function datChatRong(px) {
+    const boCuc = $('.vp-bo-cuc');
+    if (!boCuc) return;
+    const tong = boCuc.getBoundingClientRect().width;
+    const tran = Math.min(CHAT_MAX, Math.max(CHAT_MIN, tong - SAN_MIN - 7));
+    const rong = Math.round(Math.min(tran, Math.max(CHAT_MIN, px)));
+    boCuc.style.setProperty('--vp-chat-rong', rong + 'px');
+    return rong;
+  }
+
+  (function ganThanhKeo() {
+    const tay = $('#vp-keo');
+    const boCuc = $('.vp-bo-cuc');
+    if (!tay || !boCuc) return;
+
+    // Nhớ theo máy — mở lại vẫn đúng bề ngang mình đã chỉnh
+    try {
+      const cu = parseInt(localStorage.getItem(KHOA_CHAT_RONG) || '', 10);
+      if (cu > 0) datChatRong(cu);
+    } catch (e) { /* trình duyệt chặn localStorage thì dùng mặc định */ }
+
+    let dangKeo = false;
+
+    tay.addEventListener('pointerdown', e => {
+      dangKeo = true;
+      tay.setPointerCapture(e.pointerId);
+      tay.classList.add('dang-keo');
+      document.body.classList.add('vp-dang-keo');
+      e.preventDefault();
+    });
+
+    tay.addEventListener('pointermove', e => {
+      if (!dangKeo) return;
+      // Bề ngang chat = từ con trỏ tới mép phải của bố cục
+      const phai = boCuc.getBoundingClientRect().right;
+      datChatRong(phai - e.clientX);
+    });
+
+    const thoi = e => {
+      if (!dangKeo) return;
+      dangKeo = false;
+      try { tay.releasePointerCapture(e.pointerId); } catch (err) {}
+      tay.classList.remove('dang-keo');
+      document.body.classList.remove('vp-dang-keo');
+      try {
+        const rong = boCuc.style.getPropertyValue('--vp-chat-rong');
+        if (rong) localStorage.setItem(KHOA_CHAT_RONG, parseInt(rong, 10));
+      } catch (err) {}
+    };
+    tay.addEventListener('pointerup', thoi);
+    tay.addEventListener('pointercancel', thoi);
+
+    /* Bấm đúp về mặc định — kéo lỡ tay thành hẹp quá thì không phải mò lại */
+    tay.addEventListener('dblclick', () => {
+      boCuc.style.removeProperty('--vp-chat-rong');
+      try { localStorage.removeItem(KHOA_CHAT_RONG); } catch (e) {}
+    });
+  })();
+
+
   /* ---- Ảnh đính kèm khi hỏi Mây ------------------------------------------
      Dùng lại bộ nén và bộ nhận ảnh dán sẵn có của ERP (anh-chung.js +
      dangKyNhanAnhDan) chứ không viết bộ thứ tư — repo từng có ba hàm nén ảnh
