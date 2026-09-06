@@ -759,3 +759,66 @@
   border: 2px solid rgba(122,143,104,.28); border-top-color: #7a8f68;
   animation: vp-quay .75s linear infinite;
 }
+
+/* ---------------------------------------------------------------------------
+   XƯỞNG ERP — PHẢI TRÔNG KHÁC, VÌ NÓ KHÁC THẬT
+   ---------------------------------------------------------------------------
+   Hồ Ly và Khỉ Đột chạy NGOÀI ERP này (Claude Code / GitHub Actions). Hỏi qua
+   Mây thì họ không nghe thấy.
+
+   Trước đây cảnh báo đó chỉ nằm trong hồ sơ, phải bấm vào mới thấy — mà trên
+   mặt bằng thẻ Xưởng trông y hệt chín phòng kia. Người dùng đọc mặt bằng bằng
+   MẮT chứ không bằng cách bấm thử từng cái: thấy giống nhau thì đinh ninh là
+   hỏi được như nhau, gõ câu hỏi, rồi chưng hửng.
+
+   Nên viền đứt (khác hẳn viền liền của các phòng nhận việc) + một nhãn "ngoài
+   ERP" ngay trên thẻ. Nhìn là biết, không cần bấm.
+   --------------------------------------------------------------------------- */
+.vp-xuong .vp-phong-khung {
+  border-style: dashed;
+  border-left-style: dashed;
+  background: repeating-linear-gradient(
+    135deg, var(--card) 0 9px, #f4f4f0 9px 18px);
+}
+
+.vp-ngoai {
+  position: absolute;
+  top: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 9.5px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: #7a5f2a;
+  background: #fdf1d8;
+  border: 1px solid #e8d2a4;
+  border-radius: var(--r-pill);
+  padding: 1px 8px;
+  white-space: nowrap;
+}
+.vp-chugiai .cg-ngoai {
+  background: #fdf1d8;
+  border: 1px dashed #c9a860;
+  border-radius: 2px;
+}
+
+/* ---------------------------------------------------------------------------
+   THỨ TỰ LỚP TRÊN MẶT BẰNG — đặt tường minh
+   ---------------------------------------------------------------------------
+   Trước đây bốn lớp đều z-index auto, tức là ai khai sau nằm trên. Kết quả:
+   cái bảng trắng (lớp nội thất) đè lên biển tên "KHỐI HỖ TRỢ" (lớp khu vực),
+   che mất một nửa chữ. Loại lỗi này sẽ quay lại mỗi lần thêm một món đồ mới,
+   vì nó phụ thuộc vào thứ tự khai báo chứ không vào ý đồ.
+
+   Từ dưới lên: nội thất → vách khu và biển tên → các buồng làm việc → quầy Mây.
+   Người luôn nằm trên đồ đạc; chữ luôn đọc được.
+   --------------------------------------------------------------------------- */
+.vp-do-lop    { z-index: 0; }
+.vp-khu-lop   { z-index: 1; }
+.vp-phong-lop { z-index: 2; }
+.vp-quay      { z-index: 3; }
+
+/* Vách khu chỉ là mảng nền — không được che đồ đạc bên dưới. Riêng biển tên thì
+   phải đục hẳn ra, vì chữ mà mờ thì thà đừng ghi. */
+.vp-khu     { pointer-events: none; }
+.vp-khu-ten { position: absolute; z-index: 1; }

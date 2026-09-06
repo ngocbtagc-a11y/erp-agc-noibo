@@ -11687,12 +11687,13 @@ async function khoiDongVanPhong() {
       x.dataset.khoi = 'hotro';
       x.innerHTML =
         `<div class="vp-phong-khung vp-xuong-khung">
+           <span class="vp-ngoai" title="Hai bạn này chạy ngoài ERP — hỏi ở đây họ không nghe thấy">ngoài ERP</span>
            <div class="vp-xuong-doi">
              ${doiIT.map(a => `<div class="vp-xuong-nguoi" title="${esc(a.ten)} — ${esc(a.chuc_danh)}">${veChibi(a.chibi)}</div>`).join('')}
            </div>
          </div>
          <div class="vp-bien"><b>Xưởng ERP</b><span>${doiIT.map(a => esc(a.ten)).join(' · ')}</span></div>`;
-      x.title = 'Xem đội dựng ERP';
+      x.title = 'Đội dựng ERP — chạy ngoài hệ thống này, không nhận việc qua Mây. Bấm để xem họ làm gì.';
       x.addEventListener('click', () => moHoSoXuong(doiIT, duLieu.doi_it_cach_goi));
       lopPhong.appendChild(x);
     }

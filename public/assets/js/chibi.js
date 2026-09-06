@@ -388,7 +388,7 @@ const NOI_THAT = {
    x,y tính theo phần trăm sàn; w là bề ngang tính theo phần trăm bề ngang sàn. */
 const BAY_TRI = [
   { mon: 'dong_ho',    x: 50,   y: 4,  w: 5 },
-  { mon: 'bang_trang', x: 5.5,  y: 51, w: 13 },
+  { mon: 'bang_trang', x: 5.5,  y: 58, w: 13 },   // dưới băng tên khu, không nấp sau chữ
   { mon: 'tu_ho_so',   x: 95,   y: 51, w: 8 },
   { mon: 'cay_canh',   x: 5,    y: 84, w: 7 },
   { mon: 'cay_canh',   x: 95,   y: 84, w: 7 },
