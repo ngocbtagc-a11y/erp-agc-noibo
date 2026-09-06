@@ -4484,3 +4484,91 @@ body.tl-dang-xem { overflow: hidden; }
   .tl-xem-nen { padding: 0; }
   .tl-xem { height: 100%; border-radius: 0; }
 }
+
+/* ---------------------------------------------------------------------------
+   SƠ ĐỒ TỔ CHỨC
+   ---------------------------------------------------------------------------
+   Sếp Ngọc 06/09/2026: "thiết kế thành sơ đồ để tôi dễ làm."
+
+   Một hộp công ty ở trên, một đường kẻ xuống, rồi hàng phòng ban. Cố ý KHÔNG vẽ
+   tới từng nhân viên: 22 người trong một sơ đồ thì thành đám rối, mà đây là màn
+   để SỬA CƠ CẤU chứ không phải để tra ai ngồi đâu.
+
+   Phòng chưa có ai được tô riêng — đó là thứ cần nhìn thấy ngay, không phải một
+   con số 0 nằm lẫn trong đám chữ.
+   --------------------------------------------------------------------------- */
+.sodo { padding: 4px 0 2px; }
+
+.sodo-goc {
+  max-width: 300px;
+  margin: 0 auto;
+  text-align: center;
+  padding: 11px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--surface, #faf8f3);
+  box-shadow: var(--shadow-sm);
+}
+.sodo-goc b { display: block; font-family: var(--serif); font-size: 15px; color: var(--ink); }
+.sodo-goc span { display: block; font-size: 11.5px; color: var(--text-mute); margin-top: 2px; }
+
+/* Đường kẻ nối công ty xuống hàng phòng ban */
+.sodo-cot { width: 2px; height: 18px; margin: 0 auto; background: var(--line); }
+
+.sodo-hang {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  justify-content: center;
+  align-items: stretch;
+  padding-top: 2px;
+}
+
+.sodo-o {
+  position: relative;
+  flex: 1 1 200px;
+  max-width: 260px;
+  min-width: 190px;
+  padding: 12px 13px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  border-top: 3px solid var(--sage, #9aab86);
+  background: var(--card, #fff);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+/* Nhánh nối lên đường kẻ chung — vẽ bằng một gạch nhỏ phía trên mỗi hộp */
+.sodo-noi {
+  position: absolute;
+  top: -13px;
+  left: 50%;
+  width: 2px;
+  height: 13px;
+  background: var(--line);
+}
+.sodo-o > b { font-family: var(--serif); font-size: 14px; color: var(--ink); line-height: 1.3; }
+.sodo-tp { font-size: 12px; color: var(--text); }
+.sodo-tp i { color: var(--text-mute); }
+.sodo-so { font-size: 12px; color: var(--text-mute); }
+
+/* Phòng chưa có ai: viền cam đất, không phải đỏ — đây là chỗ cần để mắt, chưa
+   phải sự cố. Đỏ để dành cho thứ đã hỏng. */
+.sodo-o.trong { border-top-color: #c0603f; background: #fdf6f2; }
+.sodo-canh {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 0 7px;
+  border-radius: var(--r-pill, 99px);
+  background: #f6e0d6;
+  color: #a04a30;
+  font-size: 10.5px;
+}
+
+.sodo-nut { align-self: flex-start; margin-top: 3px; }
+
+@media (max-width: 620px) {
+  .sodo-o { flex: 1 1 100%; max-width: none; }
+  .sodo-noi { display: none; }
+}

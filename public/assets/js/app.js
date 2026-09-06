@@ -8083,6 +8083,8 @@ async function khoiDongDuLieuNen() {
        gọi này chỉ rơi vào thao tác của Admin ở màn Cơ cấu tổ chức, không phải
        việc hằng ngày của ai. Muốn bỏ thì phải bỏ KÈM bàn đo. */
     await taiDanhMucNen();   // làm mới cache dùng chung (Nhân sự/Kho vận cũng đọc từ đây)
+    /* Vẽ sơ đồ TRƯỚC danh sách: đây là thứ Sếp nhìn đầu tiên khi mở tab. */
+    veSoDoToChuc(DS_PHONG_BAN);
     veDanhMuc('#dln-pb-list', '#dln-pb-dem', '#dln-pb-trong', DS_PHONG_BAN,
       (id, ten) => API.dlnSuaPhongBan(id, { ten }), (id, hd) => API.dlnSuaPhongBan(id, { hoat_dong: hd }),
       (id, tt) => API.dlnKhoaPhongBan(id, tt),
@@ -12552,4 +12554,68 @@ function tenVanBan(t) {
 function tenRieng(t) {
   const l = String(t.loai || '').trim(), td = String(t.tieu_de || '').trim();
   return (l && td && l !== td) ? td : '';
+}
+/* ==========================================================================
+   SƠ ĐỒ TỔ CHỨC
+   ---------------------------------------------------------------------------
+   Sếp Ngọc 06/09/2026: "thiết kế thành sơ đồ để tôi dễ làm."
+
+   Ba danh sách phẳng bên dưới vẫn giữ nguyên — đó là chỗ THÊM và ĐỔI TÊN. Sơ đồ
+   là chỗ NHÌN: ai thuộc phòng nào, phòng nào chưa có trưởng, phòng nào phình,
+   phòng nào trống. Đọc danh sách phẳng thì mấy thứ đó không bao giờ hiện ra.
+
+   HIỆN CẢ SỐ NGƯỜI, vì đó là chỗ sơ đồ nói được điều mà danh sách không nói:
+   đo trên dữ liệu thật hôm nay ra Kho Vận 17 người còn Kinh Doanh - MKT 0
+   người — trong khi Kinh Doanh là phòng gánh mục tiêu 120 tỷ. Một cái sơ đồ
+   không có số thì chỉ là mấy cái hộp xếp cạnh nhau.
+
+   KHÔNG vẽ tới từng nhân viên: 22 người trong một sơ đồ thì thành đám rối, mà
+   đây là màn để SỬA CƠ CẤU, không phải để tra ai ngồi đâu. Muốn xem người thì
+   sang tab Nhân sự.
+   ========================================================================== */
+function veSoDoToChuc(dsPhongBan) {
+  const o = document.getElementById('dln-sodo');
+  const tom = document.getElementById('dln-sodo-tom');
+  if (!o) return;
+
+  const ds = (dsPhongBan || []).filter(p => p.hoat_dong !== 0);
+  if (!ds.length) {
+    o.innerHTML = '<div class="empty">Chưa có phòng ban nào — thêm ở ô bên dưới.</div>';
+    if (tom) tom.textContent = '';
+    return;
+  }
+
+  const tongNguoi = ds.reduce((m, p) => m + (Number(p.so_nguoi) || 0), 0);
+  const chuaCoTruong = ds.filter(p => !p.truong_phong_ten).length;
+  if (tom) {
+    tom.textContent = ds.length + ' phòng · ' + tongNguoi + ' người'
+      + (chuaCoTruong ? ' · ' + chuaCoTruong + ' phòng chưa có trưởng' : '');
+  }
+
+  o.innerHTML =
+    '<div class="sodo-goc"><b>' + 'Alpha Green Commerce' + '</b><span>' + tongNguoi + ' người đang làm</span></div>'
+    + '<div class="sodo-cot"></div>'
+    + '<div class="sodo-hang">'
+    + ds.map(p => {
+        const so = Number(p.so_nguoi) || 0;
+        /* Phòng 0 người được đánh dấu — đó là thứ Sếp cần thấy ngay, không phải
+           một con số 0 nằm lẫn trong đám chữ. */
+        const canhBao = so === 0 ? ' trong' : '';
+        return '<div class="sodo-o' + canhBao + '" data-pb="' + esc(p.id) + '">'
+          + '<div class="sodo-noi"></div>'
+          + '<b>' + esc(p.ten) + '</b>'
+          + '<div class="sodo-tp">'
+          +   (p.truong_phong_ten
+                ? 'Trưởng phòng: <b>' + esc(p.truong_phong_ten) + '</b>'
+                : '<i>Chưa có trưởng phòng</i>')
+          + '</div>'
+          + '<div class="sodo-so">' + so + ' người'
+          +   (so === 0 ? ' <span class="sodo-canh">chưa ai được gán</span>' : '')
+          + '</div>'
+          + '<button type="button" class="btn-nho sodo-nut" data-gan-truong="' + esc(p.id) + '">'
+          +   (p.truong_phong_ten ? 'Đổi trưởng phòng' : 'Gán trưởng phòng')
+          + '</button>'
+          + '</div>';
+      }).join('')
+    + '</div>';
 }
