@@ -49,5 +49,5 @@ erp-agc-noibo/
 # Thư mục tạm của bàn đo (scripts/do-kho-tai-lieu.mjs) — sinh ra rồi bỏ
 .do-tam/
 
-# L?i v�o nhanh cho b?n ch?y th? � CH?A M?T KH?U, kh�ng l�n b?n th?t
+# Lối vào nhanh cho bản chạy thử ở máy — CHỨA MẬT KHẨU, không đưa lên bản thật
 public/vao-thu.html
