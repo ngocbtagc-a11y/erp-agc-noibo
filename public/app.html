@@ -476,6 +476,14 @@
 
       <div class="vp-bo-cuc">
         <div>
+          <!-- Tab phụ: mặt bằng để NHÌN, năng suất để ĐO. Hai việc khác nhau,
+               nhét chung một màn thì cái nào cũng chật. -->
+          <div class="vp-tabphu" role="tablist">
+            <button type="button" class="vp-tabphu-nut dang-mo" data-man="matbang">Mặt bằng</button>
+            <button type="button" class="vp-tabphu-nut" data-man="nangsuat">Năng suất</button>
+          </div>
+
+          <div class="vp-man" id="vp-man-matbang">
           <!-- Mặt bằng văn phòng: KHÔNG phải menu để chọn người.
                Đây là màn hình theo dõi Mây điều phối — ai đang được giao việc
                thì chibi người đó sáng lên. -->
@@ -492,6 +500,21 @@
             <span><i class="cg-vua"></i>Đang có việc</span>
             <span><i class="cg-nhieu"></i>Quá tải (từ 5 việc)</span>
             <span><i class="cg-ngoai"></i>Xưởng ERP — nhận việc qua Trưởng phòng IT, không qua Mây</span>
+          </div>
+        </div>
+
+
+          <div class="vp-man" id="vp-man-nangsuat" hidden>
+            <div class="panel">
+              <div class="panel-head">
+                <h4>Năng suất đội trợ lý ảo</h4>
+                <span class="hint" id="vp-ns-ky"></span>
+              </div>
+              <div class="panel-body">
+                <div class="vp-ns-bang" id="vp-ns-bang"></div>
+                <p class="vp-ns-ghichu" id="vp-ns-ghichu"></p>
+              </div>
+            </div>
           </div>
         </div>
 

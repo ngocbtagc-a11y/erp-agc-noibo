@@ -186,6 +186,50 @@ async function dangNhap(req, env) {
   return json({ ok: true }, 200, { 'Set-Cookie': cookieDangNhap(token, hetHan) });
 }
 
+/* ==========================================================================
+   VÀO THẲNG KHI CHẠY THỬ Ở MÁY — KHÔNG CÓ MẬT KHẨU Ở BẤT CỨ FILE NÀO
+   --------------------------------------------------------------------------
+   Sếp Ngọc có quy tắc: bản chạy thử phải vào thẳng được, không bắt gõ đăng nhập.
+
+   Bản cũ làm bằng một trang HTML chứa sẵn số điện thoại và mật khẩu. Sai lầm:
+   .gitignore không chặn được deploy (wrangler đóng gói public/ từ ổ đĩa, không
+   đọc git), nên chỉ cần một lần lỡ tay là mật khẩu quản trị nằm công khai trên
+   Internet. Phải chặn bằng .assetsignore — nhưng thứ đó chặn luôn cả lúc chạy
+   thử, thành ra không ai vào nhanh được nữa.
+
+   Cách này không có mật khẩu ở đâu cả: mở thẳng phiên đăng nhập cho một tài
+   khoản, và chỉ mở khi hội đủ HAI điều kiện độc lập:
+     1. Có biến VAO_THU_TK — biến này chỉ nằm trong .dev.vars, mà .dev.vars thì
+        wrangler KHÔNG BAO GIỜ đưa lên máy chủ, kể cả lỡ tay.
+     2. Yêu cầu đến từ localhost / 127.0.0.1.
+   Thiếu một trong hai thì trả 404 y như route không tồn tại — không báo lỗi,
+   không gợi ý gì cho người dò.
+
+   Hai lớp chứ không phải một: giả sử có ngày ai đó vô tình đặt VAO_THU_TK trên
+   production, điều kiện localhost vẫn chặn. Cửa vào hệ thống thì đừng bao giờ
+   chỉ khoá một lần.
+   ========================================================================== */
+async function vaoThuOMay(req, env) {
+  const tenTK = String(env.VAO_THU_TK || '').trim();
+  if (!tenTK) return new Response('Not found', { status: 404 });
+
+  const host = new URL(req.url).hostname;
+  if (host !== 'localhost' && host !== '127.0.0.1' && host !== '[::1]') {
+    return new Response('Not found', { status: 404 });
+  }
+
+  const tk = await env.DB.prepare(
+    'SELECT id FROM tai_khoan WHERE ten_dang_nhap = ? AND kich_hoat = 1'
+  ).bind(tenTK.replace(/s+/g, '').toLowerCase()).first();
+  if (!tk) return new Response('Không có tài khoản ' + tenTK, { status: 404 });
+
+  const { token, hetHan } = await taoPhien(env.DB, tk.id);
+  return new Response(null, {
+    status: 302,
+    headers: { Location: '/app', 'Set-Cookie': cookieDangNhap(token, hetHan) }
+  });
+}
+
 async function dangXuat(req, env) {
   await xoaPhien(env.DB, layTokenTuCookie(req));
   return json({ ok: true }, 200, { 'Set-Cookie': cookieDangXuat() });
@@ -6900,6 +6944,13 @@ async function vpTongQuan(req, env) {
   return vanphong.tongQuan(env, phien);
 }
 
+/* Năng suất đội trợ lý ảo — tab phụ trong Văn phòng ảo */
+async function vpNangSuat(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  return vanphong.nangSuat(env, phien);
+}
+
 async function vpCoMat(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
@@ -6924,6 +6975,7 @@ async function vpHoi(req, env) {
 
 const DUONG_DAN = {
   'POST /api/dang-nhap':     dangNhap,
+  'GET  /api/vao-thu':       vaoThuOMay,   // chỉ sống khi chạy ở máy — xem vaoThuOMay()
   'POST /api/dang-xuat':     dangXuat,
   'GET  /api/toi-la-ai':     toiLaAi,
   'POST /api/doi-mat-khau':  doiMatKhau,
@@ -7117,6 +7169,7 @@ const DUONG_DAN = {
   'POST /api/tai-lieu/an':       tlAn,
   /* ---- Văn phòng ảo: 9 trợ lý AI ---- */
   'GET  /api/van-phong/tong-quan': vpTongQuan,
+  'GET  /api/van-phong/nang-suat': vpNangSuat,
   'POST /api/van-phong/co-mat':    vpCoMat,
   'GET  /api/van-phong/hoi-thoai': vpHoiThoai,
   'POST /api/van-phong/hoi':       vpHoi

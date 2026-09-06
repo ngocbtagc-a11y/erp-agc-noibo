@@ -519,6 +519,7 @@ export const API = {
 
   /* ---- Văn phòng ảo: một cửa duy nhất là Hỏi Mây ---- */
   vpTongQuan: () => goi('/api/van-phong/tong-quan'),
+  vpNangSuat: () => goi('/api/van-phong/nang-suat'),
 
   /* Báo "tôi còn ở đây" mỗi 20 giây, để người khác thấy mình trong văn phòng */
   vpCoMat: (dangO) => goi('/api/van-phong/co-mat', {

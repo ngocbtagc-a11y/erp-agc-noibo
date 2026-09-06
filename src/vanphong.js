@@ -29,6 +29,7 @@ import {
 import { congCuCuaAgent, chayCongCu } from './vp-cong-cu.js';
 import { MAY } from './agents-vp.js';
 import { hoiMay } from './vp-may.js';
+import { duocXemTab } from './quyen.js';
 
 /* ---- Trả lời JSON (bản riêng, để file tự đứng được) --------------------- */
 
@@ -162,6 +163,92 @@ export async function tongQuan(env, phien) {
       viec_dang_mo: taiXuong[a.id] || 0
     })),
     doi_it_cach_goi: CACH_GOI_DOI_IT
+  });
+}
+
+
+/* ==========================================================================
+   NĂNG SUẤT NHÂN SỰ ẢO
+   ---------------------------------------------------------------------------
+   Sếp Ngọc 06/09/2026: cần một tab phụ xem năng suất từng trợ lý.
+
+   ĐẾM TỪ VIỆC ĐÃ LÀM THẬT, KHÔNG CHẤM ĐIỂM.
+   Cám dỗ ở đây là hiện một con số kiểu "hiệu suất 87%" — nhìn rất chuyên nghiệp
+   và hoàn toàn vô nghĩa, vì không có thang nào để chia. Đúng hiến pháp mục
+   FACT ≠ INFERENCE: cái đếm được thì đếm, cái không đo được thì đừng bịa ra
+   một con số cho đẹp bảng.
+
+   Sáu chỉ số, tất cả đều lấy từ dấu vết đã lưu ở cột cong_cu của vp_tin_nhan:
+     · chủ trì      — số việc phòng này đứng ra xử lý chính
+     · phản biện    — số lần được phòng khác mời vào soi phương án
+     · duyệt        — số lần duyệt lần cuối (chỉ hai trợ lý cấp trên có)
+     · tra dữ liệu  — số lượt gọi công cụ ERP, tức số lần trả lời có căn cứ số
+     · chặn lại     — số lần dừng ở Owner Gate thay vì tự quyết. ĐÂY LÀ ĐIỂM
+       CỘNG, không phải điểm trừ: trợ lý biết dừng đúng chỗ mới là trợ lý dùng
+       được. Ai cũng "quyết" hết thì mới đáng lo.
+     · việc đang mở — việc phòng này đã giao ra cho người thật, còn chưa xong
+
+   Chỉ đọc 60 ngày gần nhất: bảng này dài thêm mỗi câu hỏi, quét cả bảng là
+   đúng cái lỗi làm sập ERP sáng 06/09.
+   ========================================================================== */
+export async function nangSuat(env, phien) {
+  if (!duocXemTab(phien, 'vanphong')) return loi('Bạn chưa được vào văn phòng ảo.', 403);
+
+  const { results } = await env.DB.prepare(`
+    SELECT cong_cu, luc
+      FROM vp_tin_nhan
+     WHERE vai = 'agent'
+       AND cong_cu IS NOT NULL
+       AND luc >= datetime('now', '+7 hours', '-60 days')
+  `).all();
+
+  const bang = {};
+  const lay = id => (bang[id] = bang[id] || {
+    chu_tri: 0, phan_bien: 0, duyet: 0, tra_du_lieu: 0, chan_lai: 0, viec_dang_mo: 0
+  });
+
+  for (const d of results || []) {
+    let v;
+    try { v = JSON.parse(d.cong_cu); } catch { continue; }
+    if (v.agent) {
+      const a = lay(v.agent);
+      a.chu_tri++;
+      a.tra_du_lieu += (v.da_tra_cuu || []).length;
+      if (v.can_owner_gate) a.chan_lai++;
+    }
+    for (const b of v.bien_ban || []) {
+      if (!b.agent) continue;
+      if (b.vong === 2) lay(b.agent).phan_bien++;
+      if (b.vong === 4) lay(b.agent).duyet++;
+    }
+  }
+
+  // Việc đã giao ra người thật mà còn đang mở
+  const { results: dsViec } = await env.DB.prepare(`
+    SELECT nguoi_giao_id, COUNT(*) AS so
+      FROM cong_viec
+     WHERE nguoi_giao_id LIKE 'vp:%'
+       AND trang_thai IN ('moi', 'dang_lam', 'cho_duyet')
+     GROUP BY nguoi_giao_id
+  `).all();
+  for (const d of dsViec || []) lay(String(d.nguoi_giao_id).slice(3)).viec_dang_mo = d.so;
+
+  const dong = [...AGENTS, MAY]
+    .filter(a => a.id === 'may' || duocVaoPhong(phien.vai_tro, a.id))
+    .map(a => ({
+      id: a.id, ten: a.ten, chuc_danh: a.chuc_danh, khoi: a.khoi, chibi: a.chibi,
+      ...lay(a.id)
+    }));
+
+  return json({
+    tu_ngay_qua: 60,
+    tong_cau_hoi: (results || []).length,
+    dong,
+    /* Nói thẳng đây là ĐẾM chứ không phải CHẤM ĐIỂM — người đọc bảng số hay tự
+       động hiểu là bảng xếp hạng, rồi kết luận sai về trợ lý ít việc. */
+    ghi_chu: 'Đây là số việc đã làm trong 60 ngày, không phải điểm xếp hạng. ' +
+             'Trợ lý ít lượt không có nghĩa là kém — có thể đơn giản là ít ai hỏi tới mảng đó. ' +
+             'Riêng cột "chặn lại" là điểm cộng: trợ lý biết dừng để Sếp quyết mới là trợ lý dùng được.'
   });
 }
 

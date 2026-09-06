@@ -11880,6 +11880,87 @@ async function khoiDongVanPhong() {
     $('#vp-nhap-form').requestSubmit();
   });
 
+
+  /* ---- Tab phụ: Năng suất -----------------------------------------------
+     Tách khỏi mặt bằng vì hai thứ trả lời hai câu hỏi khác nhau: mặt bằng để
+     NHÌN đang xảy ra gì, năng suất để ĐO đã làm được gì. Nhét chung một màn
+     thì cái nào cũng chật.
+
+     Chỉ tải khi Sếp bấm sang tab đó — nạp sẵn là tốn lượt đọc database cho
+     một bảng phần lớn thời gian không ai mở. */
+  let dsNangSuat = null;
+
+  const COT_NS = [
+    { khoa: 'chu_tri',      ten: 'Chủ trì',     giai_thich: 'Số việc đứng ra xử lý chính' },
+    { khoa: 'phan_bien',    ten: 'Phản biện',   giai_thich: 'Số lần được phòng khác mời vào soi phương án' },
+    { khoa: 'duyet',        ten: 'Duyệt',       giai_thich: 'Số lần duyệt lần cuối (chỉ hai trợ lý cấp trên)' },
+    { khoa: 'tra_du_lieu',  ten: 'Tra số',      giai_thich: 'Số lượt gọi công cụ ERP — trả lời có căn cứ' },
+    { khoa: 'chan_lai',     ten: 'Chặn lại',    giai_thich: 'Số lần dừng để Sếp quyết thay vì tự quyết. Đây là ĐIỂM CỘNG' },
+    { khoa: 'viec_dang_mo', ten: 'Việc mở',     giai_thich: 'Việc đã giao ra người thật, còn chưa xong' }
+  ];
+
+  async function veNangSuat() {
+    const oBang = $('#vp-ns-bang');
+    if (!oBang) return;
+    if (!dsNangSuat) {
+      oBang.innerHTML = '<div class="empty">Đang đếm…</div>';
+      try {
+        dsNangSuat = await API.vpNangSuat();
+      } catch (e) {
+        oBang.innerHTML = '<div class="empty">Chưa lấy được số liệu. Thử lại sau ít phút.</div>';
+        return;
+      }
+    }
+    const d = dsNangSuat;
+    $('#vp-ns-ky').textContent = d.tong_cau_hoi + ' lượt hỏi trong ' + d.tu_ngay_qua + ' ngày gần đây';
+    $('#vp-ns-ghichu').textContent = d.ghi_chu || '';
+
+    if (!d.dong || !d.dong.length) {
+      oBang.innerHTML = '<div class="empty">Chưa có trợ lý nào được hỏi tới.</div>';
+      return;
+    }
+
+    /* Xếp theo tổng lượt tham gia, nhiều nhất lên trên — nhưng KHÔNG đánh số
+       thứ hạng: đánh số là biến bảng đếm thành bảng thi đua, mà "ít ai hỏi tới
+       mảng đó" không phải lỗi của trợ lý. */
+    const tong = r => r.chu_tri + r.phan_bien + r.duyet;
+    const ds = [...d.dong].sort((a, b) => tong(b) - tong(a));
+    const caoNhat = Math.max(1, ...ds.map(tong));
+
+    oBang.innerHTML = ds.map(r => `
+      <div class="vp-ns-dong" data-khoi="${r.khoi || ''}">
+        <div class="vp-ns-ai">
+          <div class="vp-ns-anh">${veChibi(r.chibi)}</div>
+          <div>
+            <b>${esc(r.ten)}</b>
+            <span>${esc(r.chuc_danh)}</span>
+          </div>
+        </div>
+        <div class="vp-ns-thanh" title="${tong(r)} lượt tham gia">
+          <i style="width:${Math.round(tong(r) / caoNhat * 100)}%"></i>
+        </div>
+        <div class="vp-ns-so">
+          ${COT_NS.map(c => `
+            <span title="${esc(c.giai_thich)}">
+              <b class="${c.khoa === 'chan_lai' && r[c.khoa] ? 'tot' : ''}">${r[c.khoa] || 0}</b>
+              <em>${c.ten}</em>
+            </span>`).join('')}
+        </div>
+      </div>`).join('');
+  }
+
+  /* Chuyển tab phụ */
+  document.querySelectorAll('.vp-tabphu-nut').forEach(nut => {
+    nut.addEventListener('click', () => {
+      const man = nut.dataset.man;
+      document.querySelectorAll('.vp-tabphu-nut').forEach(n =>
+        n.classList.toggle('dang-mo', n === nut));
+      $('#vp-man-matbang').hidden  = man !== 'matbang';
+      $('#vp-man-nangsuat').hidden = man !== 'nangsuat';
+      if (man === 'nangsuat') veNangSuat();
+    });
+  });
+
   /* ---- Khung trò chuyện với Mây ----------------------------------------- */
 
   const TEN_CONG_CU = {
