@@ -119,6 +119,38 @@ let DS_VAI_TRO_HE_THONG = [], DS_VI_TRI_CONG_VIEC = [], QT_CO_COT_VI_TRI = null;
 // (không cột lương nếu không có quyền) — vẫn cần lưu lại để Search/Filter
 // lọc phía client không phải gọi lại API mỗi lần gõ.
 let DS_NHAN_SU_DOC = [], NS_XEM_LUONG_DOC = true;
+
+/* ==========================================================================
+   BIẾN DÙNG LÚC KHỞI ĐỘNG — PHẢI KHAI Ở ĐÂY, KHÔNG KHAI CẠNH CHỖ DÙNG
+   ---------------------------------------------------------------------------
+   VÌ SAO. Tệp này chạy từ trên xuống, và giữa chừng có một dãy
+   `await khoiDong…()` ở TẦNG TOP-LEVEL (Danh bạ · Kho vận · Kho tài liệu ·
+   Đơn hoàn…). Hàm `function` được cẩu lên nên gọi từ trên vẫn chạy; nhưng
+   biến `let`/`const` thì KHÔNG — chạm vào nó trước dòng khai là ném
+   `Cannot access 'X' before initialization` (vùng chết TDZ).
+
+   ĐÃ MẤT TIỀN HAI LẦN VÌ ĐÚNG CHUYỆN NÀY:
+     · `TBDay` — chat CHẾT HOÀN TOÀN nhiều tuần, hai vòng soi không thấy
+       (chính là lý do có `scripts/cong-khoi.mjs`).
+     · `TL_NHOM_LUU_DUOC` — Kho tài liệu CHẾT HOÀN TOÀN: khai ở dòng ~10334
+       trong khi `await khoiDongKhoTaiLieu()` chạy ở dòng ~7462. Mỗi lần mở
+       ERP, tab Kho tài liệu chỉ hiện một dòng chữ
+       "Không tải được kho tài liệu: Cannot access 'TL_NHOM_LUU_DUOC' before
+       initialization" và KHÔNG có tài liệu nào — đúng góp ý GY-0007 của Sếp
+       ("không xem được, không kéo xuống được": danh sách rỗng thì lấy gì mà
+       kéo). Lỗi bị `catch` nuốt thành một dòng chữ nên cổng khói vẫn XANH.
+
+   LUẬT: biến top-level nào bị mã khởi động đụng tới thì khai TRONG khối này.
+   Bàn đo `scripts/do-man-mo-ra-xem-duoc.mjs` canh cả lớp này.
+   ========================================================================== */
+
+/** Nhóm giấy tờ người này LƯU được — máy chủ trả (`nhom_luu_duoc`), giao diện
+ *  không tự đoán. Cả hai cửa (kho chung · hồ sơ nhân sự) cùng ghi vào đây sau
+ *  mỗi lượt nạp.
+ *  Ẩn nút khi không sửa được là để KHÔNG HỨA SUÔNG (bài học REV-0040 #8): máy
+ *  chủ vẫn chặn 403 thật, nhưng bày một cái nút bấm vào là ăn lỗi thì tệ. */
+let TL_NHOM_LUU_DUOC = [];
+
 const taiDanhMucNen = ngheDuLieu('du_lieu_nen', async function taiDanhMucNen() {
   const [pb, cd, dv] = await Promise.all([
     API.dlnPhongBan().catch(() => ({ ds: [] })),
@@ -3738,10 +3770,16 @@ async function khoiDongCongViec() {
     $('#cv-tqct-panel').hidden = false;
     try {
       const kq = await API.cvTongQuanCongTy();
+      /* `|| 0` KHÔNG phải cho đẹp: `String(undefined)` in ra đúng chữ
+         "undefined" ngay trên ô số của Trạm Mục Tiêu — chữ máy lọt ra màn
+         hình, thứ người dùng đọc không hiểu gì. Ba ô y hệt ở
+         `taiLaiTongQuan()` đã chặn sẵn bằng `|| 0` từ lâu; ba ô này là bản
+         chép tay thứ hai và quên mất. Bắt được bằng bàn đo
+         `do-man-mo-ra-xem-duoc` khi đi quét cả lớp của GY-0006/GY-0007. */
       veThe('#cv-tqct-the', [
-        { k: 'Việc đang mở', v: String(kq.dang_mo), d: 'Toàn công ty' },
-        { k: 'Việc quá hạn', v: String(kq.qua_han), d: kq.qua_han ? 'Cần xử lý' : 'Không có', dir: kq.qua_han ? 'down' : '' },
-        { k: 'Chờ duyệt', v: String(kq.cho_duyet), d: 'Toàn công ty' }
+        { k: 'Việc đang mở', v: String(kq.dang_mo || 0), d: 'Toàn công ty' },
+        { k: 'Việc quá hạn', v: String(kq.qua_han || 0), d: kq.qua_han ? 'Cần xử lý' : 'Không có', dir: kq.qua_han ? 'down' : '' },
+        { k: 'Chờ duyệt', v: String(kq.cho_duyet || 0), d: 'Toàn công ty' }
       ]);
 
       const oPhong = $('#cv-tqct-phongban');
@@ -10327,11 +10365,9 @@ function veChuCoSo(chu, viTri, nhan) {
    được xem — một quyết định về quyền, không phải sửa chính tả).
    ========================================================================== */
 
-/** Nhóm giấy tờ người này LƯU được — máy chủ trả (`nhom_luu_duoc`), giao diện
- *  không tự đoán. Cả hai cửa cùng ghi vào đây sau mỗi lượt nạp.
- *  Ẩn nút khi không sửa được là để KHÔNG HỨA SUÔNG (bài học REV-0040 #8): máy
- *  chủ vẫn chặn 403 thật, nhưng bày một cái nút bấm vào là ăn lỗi thì tệ. */
-let TL_NHOM_LUU_DUOC = [];
+/* `TL_NHOM_LUU_DUOC` đã DỜI LÊN khối "BIẾN DÙNG LÚC KHỞI ĐỘNG" ở đầu tệp
+   (vá GY-0007). Khai ở đây thì Kho tài liệu chết ngay lúc mở ERP — lý do đầy
+   đủ nằm ở đúng chỗ khai mới. ĐỪNG khai lại ở đây. */
 
 function nutSuaTaiLieu(t) {
   if (!TL_NHOM_LUU_DUOC.includes(t.nhom)) return '';

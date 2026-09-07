@@ -24,6 +24,18 @@
    Lint `no-use-before-define` KHÔNG thay được cổng này: nó không bắt ca
    `TBDay`, vì chỗ dùng nằm trong một hàm (Hồ Ly đã thử).
 
+   ⚠️ CÁCH HỎNG THỨ SÁU — ghi thêm 07/09/2026 (GY-0007). CỔNG NÀY KHÔNG ĐÓNG NỔI:
+     ⑥ Lỗi được BẮT TỬ TẾ rồi IN RA MÀN HÌNH. Tab Kho tài liệu chết hoàn toàn
+        vì TDZ (`TL_NHOM_LUU_DUOC`) — đúng con bệnh `TBDay` ở trên — nhưng lần
+        này `try/catch` bọc kín và in ra một câu tiếng Việt đúng chuẩn nhà:
+        "Không tải được kho tài liệu: Cannot access…". Không `console.error`,
+        không ngoại lệ chưa bắt, nút cửa ngõ vẫn bấm ăn → CỔNG NÀY XANH suốt,
+        trong khi Sếp mở tab ra thấy trống trơn.
+        → Thứ đóng được ⑥ là `scripts/do-man-mo-ra-xem-duoc.mjs`: nó ĐỌC CHỮ
+          hiện trên từng tab, cho từng vai trò, ở từng bề ngang. Chạy
+          `npm run do-mo-ra-xem-duoc` CÙNG với cổng khói — đừng chỉ chạy một
+          cái rồi tưởng đã xong.
+
    CHẠY:
      npm run cong-khoi                → đo cây làm việc hiện tại
      node scripts/cong-khoi.mjs --commit main   → đo một commit khác

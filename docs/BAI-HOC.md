@@ -919,3 +919,41 @@ tiền tố của tên dài và luôn đứng trước — đúng nếp "file g�
 xong mới thấy nó **không phải lỗi của riêng cặp file mới**: 6 cặp trong repo đang xếp
 ngược (`them-chat`, `them-congviec`, `them-donhang`, `them-gopy`, `them-kho`,
 `them-vinhdanh`). Một dòng `.sort()` mặc định, sai âm thầm suốt 6 lần.
+
+**BH-62 · Một `catch` viết tử tế là chỗ nấp tốt nhất cho một tính năng đã chết.**
+07/09/2026, GY-0007 ("không xem được kho tài liệu trên app điện thoại, không kéo xuống
+được"). Tab Kho tài liệu **chết hoàn toàn ở mọi bề ngang, mọi vai trò**, mỗi lần mở ERP:
+`let TL_NHOM_LUU_DUOC` khai ở dòng ~10334 trong khi `await khoiDongKhoTaiLieu()` chạy ở
+dòng ~7462 — chạm biến trong vùng chết TDZ, đúng con bệnh `TBDay` đã giết chat nhiều tuần
+và đã đẻ ra `cong-khoi.mjs`. Nhưng lần này cổng khói **XANH**: lỗi rơi vào một `catch` có
+`try` đàng hoàng, in ra một câu tiếng Việt đúng chuẩn nhà ("Không tải được kho tài
+liệu: …") rồi thôi. Không `console.error`, không ngoại lệ chưa bắt, nút cửa ngõ vẫn bấm ăn.
+Sếp thì thấy một tab trống trơn, không có gì để kéo — nên góp ý về được viết thành "không
+kéo xuống được", và đọc nguyên văn góp ý mà đi sửa CSS cuộn thì sửa cả tuần không trúng.
+→ Đây là **cách hỏng thứ SÁU**, nối tiếp năm cách đã ghi ở đầu `cong-khoi.mjs`:
+**lỗi được bắt tử tế rồi in ra màn hình — mà không bàn đo nào ĐỌC màn hình.**
+→ Lưới chống tái phát không phải "nhớ khai biến cho đúng chỗ" (không ai nhớ nổi qua 11.000
+dòng), mà là hai thứ cùng lúc: ① một **khối khai biến dùng lúc khởi động** đặt TRƯỚC dãy
+`await khoiDong…()` trong `app.js`, ② bàn đo `scripts/do-man-mo-ra-xem-duoc.mjs` **đọc chữ
+trên từng tab của từng vai trò** và đỏ khi thấy câu lỗi. Bàn đo tự chứng minh có mắt bằng
+cách gài lại đúng lỗi cũ (`--tu-kiem`) → 12/12 tổ hợp vai trò × bề ngang đỏ.
+→ Hệ quả rộng cho cả repo: **`catch` nào nuốt lỗi vào một dòng chữ trên màn thì dòng chữ
+đó phải có một bàn đo đọc nó**; không thì nó chỉ là chỗ để một tính năng chết yên ổn.
+
+**BH-63 · Phép đo không tái hiện được cái bẫy thì đừng giả vờ đã đo — chuyển sang canh bằng LUẬT.**
+Cùng đợt GY-0007, đi quét cả lớp "mở ra mà không xem được" thì gặp bốn chỗ đặt trần chiều
+cao bằng `vh` cho thứ NỔI ĐÈ màn hình (`.modal` · `.tlq-tam` · `.tb-panel` · `.cnb-popup`).
+Trên điện thoại thật `100vh` cao hơn vùng nhìn thấy ~60-90px, nên tấm nổi thòi ra ngoài
+khung `position:fixed` và phần thòi ra thì `overflow:auto` của chính nó **không kéo tới
+được** — mất nút ✕, mất hàng nút Lưu/Huỷ. ERP đã trả giá đúng chuyện này ở `.cnb-popup`
+(29/08) và ghi hẳn chú thích, nhưng bốn chỗ khác vẫn nguyên. Vấn đề: **Chrome không đầu
+KHÔNG có thanh địa chỉ co giãn**, ở đó `100vh === innerHeight`, nên mọi phép đo hình học
+trên máy này đều XANH và cái bẫy tàng hình.
+→ Cách xử đúng là **nói thẳng ra là không đo được**, rồi canh bằng một luật đọc trên chính
+tệp CSS (mục Ⓓ của bàn đo mới): thứ nào nổi đè màn hình mà đặt trần chiều cao bằng `vh`
+thì ĐỎ. Không phải phép đo, là lưới — và phải gọi nó đúng tên.
+→ Cái bẫy trong chính cái lưới: bản đầu viết `\bvh\b`, và **bỏ lọt sạch cả bốn chỗ** — vì
+trong `100vh` thì trước `vh` là chữ số, mà chữ số cũng là ký tự từ nên **không có ranh
+giới `\b` ở đó**. Phải `(?<![a-z])vh\b`. Đã chứng minh bằng cách chạy đúng lưới đó lên
+CSS của `origin/main`: ra đủ 4 chỗ. **Lưới mới nào cũng phải chạy thử trên bản CHƯA VÁ —
+xanh trên bản đã vá không chứng minh được gì cả.**

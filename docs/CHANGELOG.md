@@ -8,6 +8,18 @@ Format: `Date | Feature | Domain | Decision | Migration | Breaking impact | Stat
 
 ---
 
+## 2026-09-07
+
+| Feature | Domain | Decision | Migration | Breaking impact | Status |
+|---|---|---|---|---|---|
+| GY-0007 — Kho tài liệu CHẾT HOÀN TOÀN mỗi lần mở ERP (mọi vai trò, mọi bề ngang) | Core (Kho tài liệu) | Root cause: `let TL_NHOM_LUU_DUOC` khai ở dòng ~10334 `app.js`, trong khi `await khoiDongKhoTaiLieu()` chạy ở dòng ~7462 → chạm biến trong vùng chết TDZ. Đúng con bệnh `TBDay` đã giết chat nhiều tuần, nhưng lần này lỗi rơi vào `try/catch` và in ra một câu tiếng Việt tử tế nên **cổng khói vẫn XANH** (cách hỏng thứ SÁU, đã ghi vào đầu `cong-khoi.mjs` và BH-62). Sếp thấy tab trống trơn nên góp ý viết thành "không kéo xuống được" — đọc nguyên văn mà đi sửa CSS cuộn thì không bao giờ trúng. Sửa: dời khai báo lên khối **"BIẾN DÙNG LÚC KHỞI ĐỘNG"** đặt TRƯỚC dãy `await khoiDong…()` | Không | Không | OFFICIAL — đo thật trên Chrome: 375px 0 thẻ → 3 thẻ, cuộn 226px → 1123px; **414px cuộn 0px → 740px** (đúng nguyên văn "không kéo xuống được"); 1440px 0 → 3 thẻ |
+| GY-0006 — "Không dùng được chat trên máy tính" | Core (Chat / Danh bạ) | **Đo lại thấy đã hết lỗi**, không vá gì. Đi trọn đường Danh bạ → "Chat ngay" → mở cửa sổ → gõ → gửi → cuộn ngược, với 4 vai trò × 3 bề ngang = 12 tổ hợp: 12/12 mở được, có tin, gửi ăn (50 → 51 tin), vùng đọc cuộn được, đóng xong gỡ đúng khoá cuộn. Giả thuyết: các bản vá tuần trước (bong bóng che nút · làm lại cho điện thoại · cổng khói) đã xử. Không vá bừa cho có | Không | Không | OFFICIAL |
+| Bàn đo mới `do-man-mo-ra-xem-duoc` — canh CẢ LỚP "màn mở ra mà không xem được" | Đo lường | Lớp gồm 4 dạng: Ⓐ màn hiện câu lỗi kỹ thuật thay cho dữ liệu · Ⓑ `console.error`/ngoại lệ chưa bắt · Ⓒ nội dung dài hơn màn mà không cuộn được, kể cả khi quên gỡ khoá cuộn (`cnb-mo` / `tlq-khoa-cuon`) · Ⓓ trần chiều cao đo bằng `vh` trên thứ nổi đè màn hình. Quét 4 vai trò (`admin`·`nguoi_dung`·`quan_ly_kho`·`ke_toan_truong`) × 3 bề ngang (375·414·1440) = **453 phép chấm**. Tự chứng minh có mắt: `--tu-kiem` gài lại đúng lỗi GY-0007 → đỏ 12/12 tổ hợp | Không | Không | OFFICIAL |
+| Cùng lớp, vá thêm 4 chỗ: trần chiều cao `vh` → `dvh` trên thứ nổi đè màn hình | Giao diện (CSS) | `.modal` (mọi hộp thoại) · `.tlq-tam` (tấm quét giấy tờ) · `.tb-panel` (bảng thông báo) · `.cnb-popup` (cửa sổ chat, dải 641-820px). Trên điện thoại `100vh` cao hơn vùng nhìn thấy ~60-90px nên tấm nổi thòi khỏi khung `position:fixed`, mất nút ✕ và hàng nút Lưu/Huỷ mà `overflow:auto` của chính nó không kéo tới được. Cùng luật đã ghi ở `.cnb-popup` @media 640px từ 29/08 — nay không còn ngoại lệ nào | Không | Không | **CHƯA ĐO ĐƯỢC BẰNG TRÌNH DUYỆT** — Chrome không đầu không có thanh địa chỉ co giãn nên `100vh === innerHeight`, cái bẫy tàng hình với mọi phép đo trên máy này. Canh bằng luật đọc CSS (mục Ⓓ), đã chứng minh lưới có mắt bằng cách chạy nó lên `origin/main`: ra đủ 4 chỗ. Xem BH-63 |
+| Ô số "Việc đang mở / quá hạn / chờ duyệt" của Trạm Mục Tiêu in ra chữ `undefined` | Core (Home) | Bắt được khi quét cả lớp, KHÔNG phải triệu chứng Sếp báo. `String(kq.dang_mo)` không có `|| 0`, trong khi ba ô y hệt ở `taiLaiTongQuan()` đã chặn từ lâu — bản chép tay thứ hai quên mất. Máy chủ hiện luôn trả đủ ba số nên chỉ lộ khi lệch bản/đường lỗi; sửa vì `String(undefined)` trên một ô SỐ là chữ máy lọt ra màn | Không | Không | OFFICIAL |
+
+---
+
 ## 2026-09-06
 
 | Feature | Domain | Decision | Migration | Breaking impact | Status |
