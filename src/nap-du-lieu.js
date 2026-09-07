@@ -824,6 +824,23 @@ export async function xemTruoc(env, phien, { bang, ghep, maDich, vanTay }) {
   const soSua = doiChieu.sua.length;
   const soBoQua = doiChieu.boQua.length;
 
+  /* ---- FILE KHÔNG CÓ CỘT SỐ LÔ, MÀ MÃ LẠI THEO LÔ (REV-0060 vòng 4 · CHẶN-③)
+     `ghiThat` nay tự tạo một lô mặc định cho những dòng này (không có lô thì
+     tồn thành TỒN CHẾT: đủ số trên màn, `xuatKho` trả “chỉ còn 0”). Nhưng
+     TỰ LÀM THÌ PHẢI NÓI RA — Sếp bấm “Xác nhận nạp” là đang chấp nhận một
+     quyết định của máy, không được biết sau khi đã ghi vào sổ cái. */
+  const thieuLo = maDich === 'ton_kho'
+    ? doiChieu.them.filter(b => b.__theoDoiHsd && !b.so_lo && !b.han_su_dung)
+    : [];
+  const cauThieuLo = thieuLo.length ? (
+    `${thieuLo.length.toLocaleString('vi-VN')} dòng trong file thuộc mã hàng có THEO DÕI HẠN SỬ DỤNG ` +
+    `mà file lại không có cột “Số lô” / “Hạn sử dụng”. Kho xuất hàng theo LÔ, nên tồn không gắn lô là ` +
+    `tồn KHÔNG XUẤT ĐƯỢC. ERP sẽ tự tạo cho mỗi dòng một LÔ MẶC ĐỊNH (chưa có số lô, chưa có hạn) để ` +
+    `hàng dùng được ngay — lô không hạn xếp cuối hàng FEFO nên không cướp chỗ của hàng cận hạn. ` +
+    `Muốn quản đúng theo lô thì xin bổ sung hai cột ấy vào file rồi nạp lại, ` +
+    `hoặc bỏ “theo dõi hạn dùng” cho các mã không quản theo lô.`
+  ) : null;
+
   // --- Dự tính lượt ghi + chặn nếu vượt hạn mức ---
   const ghiDuTinh = duTinhGhi(maDich, doiChieu.them, doiChieu.sua);
   const conLai = await conLaiTrongNgay(env);
@@ -850,7 +867,10 @@ export async function xemTruoc(env, phien, { bang, ghep, maDich, vanTay }) {
        bấm, không phải ghi chú bên lề. */
     canh_bao: (cauTrung ? [cauTrung] : [])
       .concat(cauLuoiHo(trung) ? [cauLuoiHo(trung)] : [])
+      .concat(cauThieuLo ? [cauThieuLo] : [])
       .concat(bang.canhBao || []),
+    /* Trả riêng con số để giao diện đếm được, không phải bóc chữ ra khỏi câu. */
+    so_dong_thieu_lo: thieuLo.length,
     /* Bắt xác nhận RIÊNG, không cho bấm trôi. Giao diện phải hiện một ô tick
        riêng cho câu này; máy chủ chặn lần nữa ở `ghiThat` (409). */
     nap_trung: cauTrung ? {
@@ -1097,9 +1117,24 @@ export async function ghiThat(env, phien, { bang, ghep, maDich, tenTep,
       INSERT INTO giao_dich_kho (phieu_id, san_pham_id, lo_hang_id, loai, so_luong, don_gia, doi_tac, ghi_chu, nguoi_id)
       VALUES (?, ?, ?, 'nhap', ?, ?, ?, ?, ?)
     `);
+    /* ---- MÃ THEO LÔ THÌ LUÔN TẠO LÔ (REV-0060 vòng 4 · CHẶN-③) ----------
+       Bản trước chỉ tạo lô khi file CÓ `so_lo` hoặc `han_su_dung`. Nhưng
+       `theo_doi_hsd` MẶC ĐỊNH là 1 (dòng ~1064: file không có cột "Theo dõi
+       hạn dùng" ⇒ ghi 1), còn `xuatKho` với `theo_doi_hsd = 1` xuất THEO LÔ
+       và không nhìn thấy dòng sổ cái nào có `lo_hang_id = NULL`.
+       Hệ quả đo được, đúng đường Sếp đi với file `Mã SKU,Số lượng tồn`:
+         màn Kho vận hiện 500/mã · báo cáo XNT tồn cuối 500 · ô chọn lô rỗng
+         · anh Duy xuất 1 túi → HTTP 400 “chỉ còn 0 túi” · xem trước cảnh báo []
+       Tức là TỒN CHẾT: đủ số trên mọi màn, không lấy ra được một món nào, và
+       không một câu nào báo. Đây đúng là việc REV-0060 sinh ra để làm.
+       Chọn cách (a) của Hồ Ly: tạo MỘT lô mặc định `so_lo = NULL`,
+       `han_su_dung = NULL` — khớp đúng hành vi `nhapKho` bên cạnh (mục 3 của
+       `kho.js` LUÔN tạo lô khi `theo_doi_hsd`), rẻ nhất, và không bắt Sếp
+       phải sửa file. Lô không hạn xếp CUỐI hàng FEFO nên nó không cướp chỗ
+       của hàng cận hạn. Màn xem trước nói ra chuyện này (xem `xemTruoc`). */
     for (const b of doiChieu.them) {
       let loId = null;
-      if (b.__theoDoiHsd && (b.so_lo || b.han_su_dung)) {
+      if (b.__theoDoiHsd) {
         loId = 'lo_' + crypto.randomUUID().slice(0, 12);
         loIds.push(loId);
         lenh.push(themLo.bind(loId, b.__spId, b.so_lo || null, b.han_su_dung || null));
@@ -1313,8 +1348,48 @@ export async function huyLuotNap(env, phien, phieuId) {
   if (!vet) {
     return { loi: 'Không tìm thấy lượt nạp này trong sổ. Có thể ai đó đã gỡ rồi.', ma: 404 };
   }
+  /* ---- DẤU "ĐÃ GỠ" MÀ SỔ CÁI VẪN CÒN DÒNG = LƯỢT KẸT, PHẢI GỠ LẠI ĐƯỢC
+          (REV-0060 vòng 4 · CAO-②) -------------------------------------------
+     Bản trước tin dấu vết là sự thật và trả 409 ngay. Nhưng dấu được đặt
+     TRƯỚC phép kiểm số dư (đó là cách khoá của vòng 3 · CAO-④), nên có một
+     đường ra mà chính lệnh TRẢ DẤU ngã: dấu ở lại "đã gỡ" trong khi không
+     một dòng nào bị xoá. Đo được: chặn đúng lệnh `UPDATE lich_su_thay_doi_nen`
+     thứ hai ⇒ dấu kẹt · dòng còn nguyên · bấm lại trả 409 "đã được gỡ rồi".
+     Ba hậu quả: (a) lượt nạp không còn đường ra nào từ giao diện; (b) sổ vết
+     khẳng định SAI cho những dòng vẫn nằm đó; (c) `CAU_SO_DU`/`CAU_SO_DU_LO`
+     coi mọi lượt mang dấu này là đã biến mất, nên các lượt nạp KHÁC trên cùng
+     mã bị từ chối oan vĩnh viễn vì số dư tính thiếu.
+     Chữa bằng cách hỏi SỔ CÁI, không hỏi dấu: còn dòng thì dấu đang nói dối,
+     tự chữa lại dấu rồi đi tiếp như một lượt bình thường. Đếm rẻ (một câu
+     COUNT có chỉ mục), và chỉ chạy đúng đường này. */
   if (vet.gia_tri_moi === DA_GO) {
-    return { loi: 'Lượt nạp này đã được gỡ khỏi sổ cái rồi.', ma: 409 };
+    let conDong = 0;
+    try {
+      conDong = Number((await env.DB.prepare(
+        'SELECT COUNT(*) AS n FROM giao_dich_kho WHERE phieu_id = ?').bind(ma).first())?.n || 0);
+    } catch (e) {
+      /* Đếm không được thì hỏng về phía AN TOÀN: giữ nguyên câu 409 cũ, đừng
+         đi xoá dựa trên một phép đếm đã thất bại. */
+      console.error('Đếm dòng còn lại của lượt nạp:', e && e.message);
+      return { loi: 'Lượt nạp này đã được gỡ khỏi sổ cái rồi.', ma: 409, phieu_id: ma };
+    }
+    if (!conDong) {
+      return { loi: 'Lượt nạp này đã được gỡ khỏi sổ cái rồi.', ma: 409, phieu_id: ma };
+    }
+    /* Còn dòng ⇒ dấu kẹt. Trả dấu về đúng số dòng thật rồi chạy tiếp; lỗi ở
+       đây thì thôi, luồng chính bên dưới vẫn đặt lại dấu bằng câu so-và-đặt. */
+    try {
+      await env.DB.prepare(
+        `UPDATE lich_su_thay_doi_nen SET gia_tri_moi = ?, ly_do = ?
+          WHERE bang = 'giao_dich_kho' AND truong = 'nap_file' AND ban_ghi_id = ? AND gia_tri_moi = ?`
+      ).bind(`${conDong} dòng`,
+             String(vet.ly_do || '').replace(/\s*—\s*đã gỡ khỏi sổ cái bởi.*$/, ''),
+             ma, DA_GO).run();
+      vet.gia_tri_moi = `${conDong} dòng`;
+      vet.ly_do = String(vet.ly_do || '').replace(/\s*—\s*đã gỡ khỏi sổ cái bởi.*$/, '');
+    } catch (e) {
+      console.error('Chữa lại dấu kẹt của lượt nạp:', e && e.message);
+    }
   }
 
   /* ---- AI ĐƯỢC GỠ (REV-0060 vòng 2 · CHẶN-②) ----------------------------
@@ -1409,14 +1484,28 @@ export async function huyLuotNap(env, phien, phieuId) {
   /* Trả dấu về đúng như trước khi bấm — dùng cho mọi đường quay lui bên dưới.
      Có dấu mà không xoá là một "lượt ma": nút gỡ biến mất, dòng vẫn nằm trong
      sổ. Thà tốn thêm một lượt ghi. */
+  /* ⚠️ TRẢ DẤU NGÃ THÌ PHẢI NÓI RA (REV-0060 vòng 4 · CAO-②). Bản trước trả
+     về `ok` rồi mọi chỗ gọi đều VỨT, nên khi lệnh này ngã, Sếp đọc một câu
+     409 nói y hệt lúc mọi thứ bình thường trong khi lượt nạp vừa mắc kẹt.
+     Nay ghi lại kết quả để mỗi câu từ chối nối thêm đúng một câu sự thật. */
+  let traDauHong = false;
   const traDauVe = async () => {
     const ok = await chay(
       `UPDATE lich_su_thay_doi_nen SET gia_tri_moi = ?, ly_do = ?
         WHERE bang = 'giao_dich_kho' AND truong = 'nap_file' AND ban_ghi_id = ?`,
       [vet.gia_tri_moi, String(vet.ly_do || ''), ma]);
+    traDauHong = !ok;
     if (luot) { try { await chinhLaiCho(env, luot); } catch { /* sổ ngày hỏng không được nuốt câu báo */ } }
     return ok;
   };
+  /* Câu nối thêm khi trả dấu hỏng. Nói đúng ba điều: sổ cái KHÔNG mất gì,
+     trạng thái hiển thị đang sai, và bấm lại vẫn đi tiếp được — vì từ vòng
+     này `huyLuotNap` nhận lại một lượt mang dấu “đã gỡ” mà sổ cái còn dòng. */
+  const CAU_TRA_DAU_HONG =
+    ' ⚠ Và ERP chưa trả được trạng thái lượt nạp về như cũ (máy chủ dữ liệu vừa ngã) — ' +
+    'danh sách có thể hiện lượt này là “đã gỡ” trong khi sổ cái VẪN CÒN ĐỦ DÒNG, không mất gì cả. ' +
+    'Bấm “Làm mới” rồi bấm gỡ lại là ERP tự chữa lại trạng thái. Còn sai thì xin báo người quản trị ' +
+    `kèm mã phiếu ${ma}.`;
 
   /* ---- HÀNG ĐÃ XUẤT ĐI RỒI THÌ KHÔNG GỠ ĐƯỢC (CHẶN-①) -------------------
      `xuatKho()` (src/kho.js) chặn cứng tồn âm — bất biến của cả module kho là
@@ -1518,7 +1607,8 @@ export async function huyLuotNap(env, phien, phieuId) {
     return {
       loi: `Không gỡ được lượt nạp này: ${soAm.toLocaleString('vi-VN')} mã đã xuất hàng dựa trên số ` +
            `vừa nạp, gỡ đi là tồn kho ÂM — ${ke}${conNua}. ` +
-           `Kho đã bán/xuất phần hàng đó rồi nên không xoá ngược được. ` + DUONG_RA_DIEU_CHINH,
+           `Kho đã bán/xuất phần hàng đó rồi nên không xoá ngược được. ` + DUONG_RA_DIEU_CHINH +
+           (traDauHong ? CAU_TRA_DAU_HONG : ''),
       ma: 409,
       phieu_id: ma,
       so_ma_se_am: soAm,
@@ -1556,7 +1646,8 @@ export async function huyLuotNap(env, phien, phieuId) {
       loi: `Không gỡ được lượt nạp này: ${soAmLo.toLocaleString('vi-VN')} LÔ HÀNG đã xuất hàng dựa trên ` +
            `số vừa nạp, gỡ đi là tồn của lô ÂM — ${keLo}${conNuaLo}. ` +
            `Tồn của cả mã có thể vẫn dương vì lô khác còn hàng, nhưng kho xuất theo LÔ (FEFO) nên ` +
-           `một lô âm là một lỗ thủng: ERP sẽ cho xuất tiếp phần không có thật. ` + DUONG_RA_DIEU_CHINH,
+           `một lô âm là một lỗ thủng: ERP sẽ cho xuất tiếp phần không có thật. ` + DUONG_RA_DIEU_CHINH +
+           (traDauHong ? CAU_TRA_DAU_HONG : ''),
       ma: 409,
       phieu_id: ma,
       so_lo_se_am: soAmLo,
@@ -1624,14 +1715,22 @@ export async function dsLuotNap(env, phien, gioiHan = 10) {
   const toi = phien?.nhan_su_id ? String(phien.nhan_su_id) : null;
   return {
     ok: true,
-    ds: (results || []).map(r => ({
-      ...r,
-      da_go: r.trang_thai === DA_GO,
-      dang_ghi: r.trang_thai === DANG_GHI,
-      go_duoc: r.trang_thai !== DA_GO &&
-               (quanLy || (!!toi && String(r.nguoi_id || '') === toi)),
-      ten_tep: String(r.ly_do || '').replace(/^Nạp từ file\s*/, '').replace(/\s*·\s*lượt nl_[0-9a-f]+.*$/, '')
-    }))
+    ds: (results || []).map(r => {
+      /* Dấu "đã gỡ" mà sổ cái VẪN CÒN dòng = lượt KẸT (REV-0060 vòng 4 ·
+         CAO-②): lệnh trả dấu ngã giữa chừng. Bản trước để `da_go = true` nên
+         nút gỡ biến mất và Sếp không còn đường ra nào từ giao diện. Sự thật
+         là `so_dong` — câu đếm ngay trong lưới này — chứ không phải cái dấu. */
+      const ket = r.trang_thai === DA_GO && Number(r.so_dong || 0) > 0;
+      return {
+        ...r,
+        da_go: r.trang_thai === DA_GO && !ket,
+        ket,
+        dang_ghi: r.trang_thai === DANG_GHI,
+        go_duoc: (r.trang_thai !== DA_GO || ket) &&
+                 (quanLy || (!!toi && String(r.nguoi_id || '') === toi)),
+        ten_tep: String(r.ly_do || '').replace(/^Nạp từ file\s*/, '').replace(/\s*·\s*lượt nl_[0-9a-f]+.*$/, '')
+      };
+    })
   };
 }
 

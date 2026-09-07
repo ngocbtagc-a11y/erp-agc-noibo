@@ -1719,11 +1719,17 @@
         <div class="panel">
           <div class="panel-head"><h4>Phiếu điều chỉnh tồn</h4></div>
           <div class="panel-body">
-            <p class="kv-ton-nhac" id="kvDcGioiThieu">
-              Kéo sổ về đúng số <b>đếm được ngoài kho</b>: hàng vỡ, hàng huỷ vì hết hạn, kiểm kê lệch,
-              hoặc tồn đầu kỳ nạp nhầm mà đã bán mất một phần nên không gỡ lượt nạp được nữa.
-              Phiếu vào sổ cái có dấu vết (ai lập, lúc nào, lý do gì) — không xoá ngược lịch sử.
-            </p>
+            <!-- Gọn còn MỘT dòng (REV-0060 vòng 4 · THẤP-①). Sếp dặn hai lần
+                 "vừa một màn ở 375px", mà đoạn giới thiệu ba dòng là chỗ tốn
+                 chiều cao nhất của màn này. Phần dài xuống <details> — ai cần
+                 thì mở, không chiếm chỗ của ô nhập. Dùng thẻ sẵn có của trình
+                 duyệt, không thêm JS, không thêm CSS. -->
+            <details class="kv-ton-nhac" id="kvDcGioiThieu">
+              <summary>Kéo sổ về đúng số <b>đếm được ngoài kho</b>. Khi nào dùng?</summary>
+              Hàng vỡ, hàng huỷ vì hết hạn, kiểm kê lệch, hoặc tồn đầu kỳ nạp nhầm mà đã bán mất một
+              phần nên không gỡ lượt nạp được nữa. Phiếu vào sổ cái có dấu vết (ai lập, lúc nào, lý do
+              gì) — không xoá ngược lịch sử.
+            </details>
             <form id="kvFormDieuChinh" class="form-luoi" autocomplete="off">
               <div class="field field-rong">
                 <label>Sản phẩm *</label>
@@ -1739,22 +1745,27 @@
                 </div>
                 <input type="hidden" id="kvDcSP">
               </div>
-              <div class="field field-rong" id="kvDcLoO" hidden>
+              <!-- Ô lô xếp CẠNH ô "số tồn thật" (`field` thay cho `field-rong`)
+                   để hai ô ăn chung một hàng ở màn rộng — THẤP-① của vòng 4.
+                   `required` do app.js bật/tắt theo mã: một ô bắt buộc nằm
+                   trong khối `hidden` làm trình duyệt chặn cả biểu mẫu mà
+                   không hiện nổi lời nhắc. Cửa chặn thật ở máy chủ. -->
+              <div class="field" id="kvDcLoO" hidden>
                 <label for="kvDcLo">Lô hàng *</label>
                 <select id="kvDcLo"><option value="">— Đang tải lô... —</option></select>
-                <span class="hint">Mã theo dõi hạn sử dụng thì tồn nằm ở từng lô — sửa ở mức mã sẽ để lại lô âm mà màn Xuất kho không nhìn thấy.</span>
+                <span class="hint">Hàng theo dõi HSD thì tồn nằm ở từng lô — bắt buộc chọn lô.</span>
+              </div>
+              <div class="field">
+                <label for="kvDcTonThuc">Số tồn THẬT đếm được *</label>
+                <input maxlength="15" type="text" id="kvDcTonThuc" inputmode="numeric" required
+                       placeholder="Số nguyên, VD: 0">
               </div>
               <div class="field field-rong" id="kvDcTonBox" hidden>
                 <div class="kv-ton-nhac" id="kvDcTonNhac"></div>
               </div>
-              <div class="field">
-                <label for="kvDcTonThuc">Số tồn THẬT đếm được *</label>
-                <input maxlength="15" type="text" id="kvDcTonThuc" inputmode="numeric" required placeholder="VD: 0">
-                <span class="hint">Đếm được bao nhiêu thì ghi bấy nhiêu — ERP tự tính phần chênh.</span>
-              </div>
               <div class="field field-rong">
                 <label for="kvDcLyDo">Lý do điều chỉnh *</label>
-                <textarea id="kvDcLyDo" rows="2" maxlength="400" required placeholder="VD: kiểm kê 07/09, hàng vỡ 12 túi · gỡ lượt nạp tồn nhầm phiếu pn_xxx"></textarea>
+                <textarea id="kvDcLyDo" class="o-thap" rows="2" maxlength="400" placeholder="VD: kiểm kê 07/09, hàng vỡ 12 túi · gỡ lượt nạp tồn nhầm phiếu pn_xxx" required></textarea>
               </div>
               <div class="field field-nut">
                 <button type="submit" class="btn-primary" id="kvNutDieuChinh">Lập phiếu điều chỉnh</button>

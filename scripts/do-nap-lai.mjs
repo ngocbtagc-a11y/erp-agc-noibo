@@ -1318,11 +1318,18 @@ console.log('\n⑧ b. ĐƯỜNG RA CHO CA "NẠP NHẦM RỒI BÁN MẤT" PHẢI
   const partTime = { nhan_su_id: 'NS-PT', ho_ten: 'Bạn part-time kho', vai_tro: 'nhan_vien_kho' };
   const rPt = await kho.dieuChinhKho(env, partTime, { san_pham_id: sp, ton_thuc: 5, ly_do: 'thử xem có qua không' });
   ok('17 bạn part-time có thao_tac_kho KHÔNG lập được phiếu điều chỉnh', rPt.status === 403, String(rPt.status));
-  const rTrong = await kho.dieuChinhKho(env, PHIEN, { san_pham_id: sp, ton_thuc: 5, ly_do: 'ừ' });
+  const rTrong = await kho.dieuChinhKho(env, PHIEN, { san_pham_id: sp, lo_hang_id: loA, ton_thuc: 5, ly_do: 'ừ' });
   ok('Bắt buộc ghi LÝ DO đủ dài — sổ cái không nhận một con số không lý do',
      rTrong.status === 400, String(rTrong.status));
-  const rAm = await kho.dieuChinhKho(env, PHIEN, { san_pham_id: sp, ton_thuc: -5, ly_do: 'thử đẩy về âm xem sao' });
+  /* ⚠️ PHẢI GỬI KÈM `lo_hang_id` (REV-0060 vòng 4). Mã này theo dõi HSD, mà từ
+     vòng 4 máy chủ BẮT chọn lô (CHẶN-①) và kiểm ĐIỀU ĐÓ TRƯỚC khi tính toán
+     gì. Không gửi lô thì mọi lượt gọi ở đây đều ăn 400 vì thiếu lô — phép
+     chấm vẫn xanh nhưng nó KHÔNG CÒN đo cái nó nói là đang đo, và ca gài
+     "nuốt dấu trừ" ở phần tự kiểm thành mù. */
+  const rAm = await kho.dieuChinhKho(env, PHIEN, {
+    san_pham_id: sp, lo_hang_id: loA, ton_thuc: -5, ly_do: 'thử đẩy về âm xem sao' });
   ok('Và KHÔNG lập được phiếu kéo tồn xuống ÂM (không phải cửa lách)', rAm.status === 400, String(rAm.status));
+  ok('…và sổ cái không nhúc nhích sau lượt bấm bị từ chối', tonCuaSp() === 0, String(tonCuaSp()));
 }
 
 console.log('\n⑧ c. CỬA "GÕ LẠI TÊN FILE" PHẢI LÀ CỬA CỦA MÁY CHỦ (CAO-③)');
@@ -1684,8 +1691,12 @@ if (TU_KIEM && !process.env.NAP_SRC) {
 
     { ten: '⑧ b2 CHẶN-ⓑ Phiếu điều chỉnh nuốt mất dấu trừ ("-5" lặng lẽ thành "5")',
       tep: 'kho.js',
-      tim: `  const thoTon = String(body.ton_thuc ?? '').trim().replace(/[.\\s,]/g, '');`,
-      thay: `  const thoTon = String(body.ton_thuc ?? '').replace(/[^\\d]/g, '');   // GÀI LỖI` },
+      /* Vòng 4 dời phép đọc số vào hàm riêng `docTonThat` (CAO-①), nên mỏ neo
+         cũ trỏ vào một dòng KHÔNG CÒN TỒN TẠI — ca gài thành MÙ mà bàn đo vẫn
+         xanh. Neo lại vào dòng thật; gài đúng cùng một hành vi: nuốt mọi ký tự
+         không phải chữ số, tức `-5` lặng lẽ thành `5`. */
+      tim: `  const s = String(tho).trim();`,
+      thay: `  const s = String(tho).replace(/[^\\d]/g, '');   // GÀI LỖI: nuốt dấu trừ` },
 
     { ten: '⑧ c CAO-③ So tên file khách gửi với chính tên file khách gửi',
       tep: 'nap-du-lieu.js',

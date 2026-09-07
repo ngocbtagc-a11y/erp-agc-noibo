@@ -32,6 +32,8 @@ import { dungMayGia, moChrome, GOC, TOI_ID } from './lib/ban-do-chrome.mjs';
 const kho = await import(new URL('file:///' + path.join(GOC, 'src', 'kho.js').replace(/\\/g, '/')));
 
 let dat = 0, truot = 0; const hong = [];
+/* Mốc chia luồng "đi đúng đường" và luồng "cố tình bấm sai" cho chốt console. */
+let consoleSachTruoc = 0;
 function ok(ten, dung, ct = '') {
   if (dung) { dat++; console.log(`  ✓ ${ten}${ct ? ' — ' + ct : ''}`); }
   else { truot++; hong.push(ten + (ct ? ` — ${ct}` : '')); console.log(`  ✗ ${ten}${ct ? ' — ' + ct : ''}`); }
@@ -141,8 +143,27 @@ console.log(`\n══ MÀN ĐIỀU CHỈNH TỒN TRÊN TRÌNH DUYỆT @${RONG}px
 tin(`dựng sẵn: lô LO-A = ${tonLo('lo_a')} (ÂM) · lô LO-M = ${tonLo('lo_m')} · tồn mã = ${tonMa()}`);
 
 try {
-  await chay(`document.querySelector('.nav-nut[data-tab="khovan"], [data-mo-tab="khovan"]')?.click()`);
+  /* ⚠️ `.sb-item[data-tab="khovan"]` — ĐÚNG cái nút thanh bên của ERP.
+     Bản trước gõ `.nav-nut[data-tab=…]`, một lớp KHÔNG TỒN TẠI, rồi `?.click()`
+     nuốt luôn cái `null`: tab Kho vận CHƯA TỪNG mở ra, `<section id="v-khovan">`
+     giữ nguyên thuộc tính `hidden`, và cả màn Điều chỉnh chưa bao giờ được
+     trình duyệt dựng hình. Mọi phép đọc bằng JS (`textContent`, `.options`,
+     `.click()` trên phần tử) vẫn chạy nên bàn đo vẫn xanh — nhưng mọi phép đo
+     HÌNH DẠNG (chiều cao, tràn ngang, chạm 44px, focus được hay không) thì đo
+     một khối 0×0. Đúng lớp "mở ra mà không xem được" mà `do-mo-ra-xem-duoc`
+     canh, chỉ khác là ở đây chính BÀN ĐO tự bịt mắt mình.
+     Nay kiểm luôn: mở không ra thì ĐỎ, không đi tiếp trên một màn vô hình. */
+  const moTab = await chay(`(() => {
+    const tab = document.querySelector('.sb-item[data-tab="khovan"]');
+    if (!tab) return 'không thấy tab khovan ở thanh bên';
+    tab.click();
+    const v = document.getElementById('v-khovan');
+    if (!v) return 'không thấy khối màn Kho vận';
+    return v.hidden ? 'tab Kho vận bấm rồi vẫn ẩn' : 'OK';
+  })()`);
   await cho(900);
+  ok('Mở được tab Kho vận và khối màn hiện ra thật (không phải bấm vào chỗ trống)',
+     moTab === 'OK', String(moTab));
 
   const coTab = await chay(`!!document.querySelector('#kvSeg .seg-nut[data-kv="dieuchinh"]')`);
   if (KHONG_QL) {
@@ -198,6 +219,94 @@ try {
     await cho(500);
     ok('Bảng tồn kho tự nạp lại sau khi lập phiếu (không phải bấm F5)',
        /100/.test(await chay(`document.querySelector('#kv-ton-bang')?.textContent || ''`)));
+
+    /* ---- ĐƯỜNG NGÓN TAY CỦA REV-0060 VÒNG 4 · CHẶN-① --------------------
+       Chọn mã có lô rồi BỎ TRỐNG ô lô mà bấm. Máy chủ chặn (đo ở
+       `do-lo-dieuchinh`), nhưng ở đây phải đo cái Sếp NHÌN THẤY: một câu
+       tiếng người, không phải một cú bấm không có gì xảy ra. `required` một
+       mình là chốt CÂM khi trình duyệt không focus được ô. */
+    /* Từ đây trở xuống là những lượt bấm CỐ TÌNH SAI, nên máy chủ trả 400 và
+       Chrome ghi một dòng "Failed to load resource… 400" vào console. Đó là
+       hành vi ĐÚNG, không phải lỗi — chốt "không lỗi console" chấm phần TRƯỚC
+       đoạn này, phần sau chấm riêng và chỉ tha đúng dòng 400 ấy. */
+    consoleSachTruoc = loiConsole.length;
+    const soPhieuTruoc = () => Number(db.prepare(
+      `SELECT COUNT(*) AS n FROM giao_dich_kho WHERE loai='dieu_chinh'`).get().n);
+    const truocBoTrong = soPhieuTruoc();
+    await chay(`document.getElementById('kvDcSPHienThi').click()`); await cho(300);
+    await chay(`document.querySelector('#kvDcSPGoiY .ql-goiy-item[data-gt="sp_hn"]').click()`);
+    await cho(800);
+    ok('Ô lô mang `required` khi mã theo dõi HSD',
+       (await chay(`document.getElementById('kvDcLo').required`)) === true);
+    await chay(`(() => { const t = document.getElementById('kvDcTonThuc');
+                         t.value = '50'; t.dispatchEvent(new Event('input'));
+                         const l = document.getElementById('kvDcLyDo');
+                         l.value = 'kiểm kê 07/09: đếm ngoài kho được 50 túi';
+                         l.dispatchEvent(new Event('input')); })()`);
+    await chay(`document.getElementById('kvNutDieuChinh').click()`);
+    await cho(900);
+    const cauTrong = await chay(`document.getElementById('kvLoiDieuChinh').textContent`);
+    ok('Bỏ trống ô lô rồi bấm: màn NÓI RA một câu, không im lặng',
+       /chọn LÔ HÀNG/i.test(String(cauTrong)), String(cauTrong).slice(0, 100));
+    ok('…và KHÔNG có phiếu nào vào sổ cái',
+       soPhieuTruoc() === truocBoTrong, `${truocBoTrong} → ${soPhieuTruoc()}`);
+
+    /* Và ô số: “12.5” kg phải bị từ chối tại chỗ, không lặng lẽ thành 125. */
+    await chay(`(() => { const s = document.getElementById('kvDcLo');
+                         s.value = 'lo_m'; s.dispatchEvent(new Event('change'));
+                         const t = document.getElementById('kvDcTonThuc');
+                         t.value = '12.5'; t.dispatchEvent(new Event('input')); })()`);
+    await chay(`document.getElementById('kvNutDieuChinh').click()`);
+    await cho(1200);
+    const cauTP = await chay(`document.getElementById('kvOkDieuChinh').hidden
+                              ? document.getElementById('kvLoiDieuChinh').textContent
+                              : 'ĐÃ GHI: ' + document.getElementById('kvOkDieuChinh').textContent`);
+    ok('“12.5” bị từ chối trên màn, sổ KHÔNG ghi 125',
+       /SỐ NGUYÊN/.test(String(cauTP)) && tonLo('lo_m') === 100,
+       `${String(cauTP).slice(0, 80)} · lô M = ${tonLo('lo_m')}`);
+
+    /* ---- THẤP-① VÒNG 4: “vừa một màn ở 375px” --------------------------
+       Sếp dặn hai lần. Đo THẬT: chiều cao trang so với chiều cao màn, với
+       màn Điều chỉnh đang mở và ô lô đã bung ra (trạng thái cao nhất). */
+    await cho(300);
+    const cao = await chay(`(() => {
+        const h = e => e ? Math.round(e.getBoundingClientRect().height) : 0;
+        const p = document.getElementById('kv-pane-dieuchinh');
+        return {
+          man: window.innerHeight,
+          trang: document.documentElement.scrollHeight,
+          pane: h(p),
+          /* Chiều cao phần LÀM VIỆC: giới thiệu + biểu mẫu + đầu bảng, KHÔNG
+             tính hộp báo lỗi/báo xong. Hai hộp ấy chỉ hiện sau khi bấm và cao
+             bao nhiêu là tuỳ câu báo dài ngắn — đo lẫn vào thì con số nhảy
+             theo nội dung câu chữ chứ không theo bố cục. */
+          lamViec: h(p) - h(document.getElementById('kvLoiDieuChinh'))
+                        - h(document.getElementById('kvOkDieuChinh')),
+          /* Phần KHUNG dùng chung của cả tab Kho vận — 9 màn con đều gánh,
+             không thuộc phạm vi REV-0060. Tách ra để không đổ oan cho màn
+             Điều chỉnh, cũng không giấu đi. */
+          the: h(document.getElementById('kv-the')),
+          seg: h(document.getElementById('kvSeg')),
+          phan: [...p.querySelectorAll(':scope > .panel > .panel-body > *')]
+                  .map(e => (e.id || e.tagName) + '=' + h(e)).join(' · ')
+        };
+      })()`);
+    tin(`chi tiết màn Điều chỉnh: ${cao.phan}`);
+    tin(`khung chung của tab Kho vận: thẻ số ${cao.the}px · thanh 9 nút ${cao.seg}px`);
+    tin(`@${RONG}px · màn ${cao.man}px · trang ${cao.trang}px · màn Điều chỉnh ${cao.pane}px ` +
+        `(phần làm việc ${cao.lamViec}px)`);
+    if (RONG <= 420) {
+      /* Chốt ở PHẦN LÀM VIỆC của màn Điều chỉnh, không ở chiều cao cả trang.
+         Lý do viết ra để lần sau không ai tưởng đây là nới tay: trang @375px
+         cao hơn khung nhìn CHỦ YẾU vì khung dùng chung của tab Kho vận —
+         riêng khối 4 thẻ số `#kv-the` đã ~439px trên một khung nhìn 812px.
+         Khối ấy do 9 màn con của Kho vận cùng gánh, có từ trước nhánh này, và
+         sửa nó là đổi bố cục cả tab — không phải việc của REV-0060. Cái nhánh
+         này CHỊU TRÁCH NHIỆM là màn Điều chỉnh: nó phải vừa MỘT khung nhìn
+         375×812 để anh Duy không vừa cuộn vừa nhớ mình đang gõ ô nào. */
+      ok('THẤP-① Phần làm việc của màn Điều chỉnh vừa một khung nhìn 375×812',
+         cao.lamViec <= 812, `${cao.lamViec}px`);
+    }
   }
 
   /* Không được đẻ thanh kéo ngang — luật màn hẹp 375px. */
@@ -207,7 +316,15 @@ try {
   ok(`Màn điều chỉnh không đẻ thanh kéo ngang @${RONG}px`,
      keo.body === 0 && keo.pane === 0, JSON.stringify(keo));
 
-  ok('Không lỗi console trong cả luồng', loiConsole.length === 0, JSON.stringify(loiConsole).slice(0, 200));
+  ok('Không lỗi console trong luồng đi ĐÚNG đường',
+     loiConsole.slice(0, consoleSachTruoc).length === 0,
+     JSON.stringify(loiConsole.slice(0, consoleSachTruoc)).slice(0, 200));
+  /* Phần cố tình bấm sai: chỉ được phép có đúng dòng "400" của cửa từ chối.
+     Bất kỳ dòng nào khác — nhất là "not focusable" — là chốt CÂM quay lại. */
+  const conLai = loiConsole.slice(consoleSachTruoc);
+  ok('Lượt bấm SAI chỉ đẻ ra đúng dòng 400 của cửa từ chối, không dòng lạ nào',
+     conLai.every(d => /status of 4\d\d/.test(String(d))),
+     JSON.stringify(conLai).slice(0, 200));
   ok('Không ngoại lệ chưa bắt', ngoaiLe.length === 0, JSON.stringify(ngoaiLe).slice(0, 200));
 } finally {
   await dong();

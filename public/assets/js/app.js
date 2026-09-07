@@ -9638,23 +9638,43 @@ async function khoiDongKho() {
       const oLoO = $('#kvDcLoO'), oLo = $('#kvDcLo');
       const oTonBox = $('#kvDcTonBox'), oTon = $('#kvDcTonNhac');
       dcLoDs = [];
-      if (!sp) { oLoO.hidden = true; oTonBox.hidden = true; return; }
+      if (!sp) { oLoO.hidden = true; oTonBox.hidden = true; oLo.required = false; return; }
       oTonBox.hidden = false;
       oTon.innerHTML = `Sổ đang ghi tồn: <b>${tienVN(sp.ton)} ${esc(sp.don_vi)}</b> cho “${esc(sp.ten)}”`;
-      if (!sp.theo_doi_hsd) { oLoO.hidden = true; oLo.innerHTML = ''; return; }
+      /* `required` bật/tắt THEO MÃ, không viết cứng trong HTML: một `<select
+         required>` nằm trong khối `hidden` làm trình duyệt từ chối gửi cả biểu
+         mẫu mà không hiện nổi lời nhắc (phần tử ẩn thì không focus được).
+         Và đây chỉ là phép lịch sự — cửa chặn THẬT nằm ở `dieuChinhKho` phía
+         máy chủ (REV-0060 vòng 4 · CHẶN-①): gọi thẳng API vẫn ăn 400. */
+      if (!sp.theo_doi_hsd) { oLoO.hidden = true; oLo.required = false; oLo.innerHTML = ''; return; }
       oLoO.hidden = false;
+      oLo.required = true;
       oLo.innerHTML = '<option value="">— Đang tải lô... —</option>';
       try {
-        /* `true` = lấy CẢ lô đang âm. Lô âm chính là cái thường phải sửa, mà
-           lưới mặc định (`ton > 0`) lọc mất đúng nó. */
+        /* `true` = lấy CẢ lô đang âm VÀ lô đang 0. Lô âm chính là cái thường
+           phải sửa, mà lưới mặc định (`ton > 0`) lọc mất đúng nó; lô 0 là ca
+           “sổ ghi 0 mà ngoài kho vẫn còn hàng”. Từ vòng 4 ô này là lối đi DUY
+           NHẤT cho hàng theo lô, nên lô nào không hiện ở đây là lô không sửa
+           được — vì thế lưới phải mở hết. */
         const kq = await API.khoLo(sp.id, true);
         dcLoDs = kq.lo || [];
+        /* Hai lượt nạp cùng “Số lô LO-A” đẻ ra HAI dòng `lo_hang` khác nhau,
+           cùng tên, cùng HSD — ô chọn hiện hai dòng giống hệt nhau thì người
+           đi sửa không biết mình đang sửa cái nào (REV-0060 vòng 4 · THẤP-③).
+           Chỉ gắn thêm dấu phân biệt cho nhãn THẬT SỰ trùng, để ca thường
+           (mỗi lô một tên) không bị làm rối thêm. */
+        const nhanGoc = l => `${l.so_lo || l.id}` +
+          `${l.han_su_dung ? ' · HSD ' + l.han_su_dung.split('-').reverse().join('/') : ''}`;
+        const demNhan = {};
+        for (const l of dcLoDs) { const n = nhanGoc(l); demNhan[n] = (demNhan[n] || 0) + 1; }
         oLo.innerHTML = dcLoDs.length
           ? '<option value="">— Chọn lô —</option>' + dcLoDs.map(l =>
-              `<option value="${esc(l.id)}">${esc(l.so_lo || l.id)}` +
-              `${l.han_su_dung ? ' · HSD ' + esc(l.han_su_dung.split('-').reverse().join('/')) : ''}` +
+              `<option value="${esc(l.id)}">${esc(nhanGoc(l))}` +
+              (demNhan[nhanGoc(l)] > 1
+                ? ` · nhập ${esc(String(l.tao_luc || '').slice(0, 16) || String(l.id).slice(-4))}`
+                : '') +
               ` · sổ ghi ${tienVN(l.ton)}${l.ton < 0 ? ' ⚠ ÂM' : ''}</option>`).join('')
-          : '<option value="">— Mã này chưa có lô nào có số dư —</option>';
+          : '<option value="">— Mã này chưa có lô nào trong sổ —</option>';
       } catch (err) {
         oLo.innerHTML = `<option value="">— Không tải được lô: ${esc(err.message || '')} —</option>`;
       }
@@ -9671,6 +9691,28 @@ async function khoiDongKho() {
       }
     });
 
+    /* ---- Ô BẮT BUỘC TRỐNG THÌ PHẢI NÓI RA, KHÔNG ĐƯỢC IM ------------------
+       `required` một mình là chốt CÂM: trình duyệt chặn `submit` rồi cố mở
+       bong bóng nhắc, và khi không focus được ô đó (màn đang cuộn, ô nằm
+       trong khối vừa hiện ra, hoặc trình duyệt từ chối) thì nó chỉ ghi một
+       dòng vào console — Sếp bấm nút, KHÔNG có gì xảy ra, KHÔNG có câu nào.
+       Im lặng đúng là lớp lỗi cả REV-0060 đang đuổi. Bắt lấy `invalid` và
+       viết câu ra đúng cái hộp lỗi mà máy chủ vẫn dùng. */
+    for (const o of [$('#kvDcLo'), $('#kvDcTonThuc'), $('#kvDcLyDo')]) {
+      if (!o) continue;
+      o.addEventListener('invalid', () => {
+        const cau = o.id === 'kvDcLo'
+          ? 'Xin chọn LÔ HÀNG: mã này theo dõi hạn sử dụng nên tồn nằm ở từng lô — ' +
+            'sửa ở mức mã sẽ để lại lô âm mà màn Xuất kho không nhìn thấy.'
+          : o.id === 'kvDcTonThuc'
+            ? 'Xin nhập số tồn THẬT đếm được (số nguyên từ 0 trở lên).'
+            : 'Xin ghi rõ LÝ DO điều chỉnh — sổ cái không nhận một con số không có lý do.';
+        const oLoi = $('#kvLoiDieuChinh');
+        oLoi.textContent = cau; oLoi.classList.add('show');
+        $('#kvOkDieuChinh').hidden = true;
+      });
+    }
+
     $('#kvFormDieuChinh').addEventListener('submit', async ev => {
       ev.preventDefault();
       const oLoi = $('#kvLoiDieuChinh'), oOk = $('#kvOkDieuChinh');
@@ -9684,6 +9726,9 @@ async function khoiDongKho() {
           ly_do: $('#kvDcLyDo').value
         });
         $('#kvFormDieuChinh').reset();
+        /* Gỡ `required` TRƯỚC khi giấu ô lô đi — bỏ sót là lần bấm sau trình
+           duyệt chặn cả biểu mẫu vì một ô bắt buộc đang ẩn. */
+        $('#kvDcLo').required = false;
         $('#kvDcLoO').hidden = true; $('#kvDcTonBox').hidden = true;
         oOk.textContent = '✓ ' + (kq.tin || 'Đã lập phiếu điều chỉnh.'); oOk.hidden = false;
         await taiLai();

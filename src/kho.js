@@ -13,6 +13,9 @@
 
 import { duocThaoTacKho, duocQuanLyKho, duocXemGiaVon, duocSuaSanPham, duocKhoaSanPham, laAdmin } from './quyen.js';
 import { ghiLichSuThayDoi } from './dulieunen.js';
+/* Kê danh sách lô trong câu từ chối của `dieuChinhKho` cũng là một lần CẮT —
+   dùng đúng khuôn chung, không tự viết `LIMIT 20` rồi im (`do-cat-im-lang`). */
+import { catBot } from './cat-danh-sach.js';
 
 /* ---- Trả lời dạng JSON (bản riêng của module, để file tự đứng được) ----- */
 
@@ -337,7 +340,11 @@ export async function xuatKho(env, phien, body) {
   const cauLenh = [];
 
   if (sp.theo_doi_hsd) {
-    // Lấy các lô còn hàng, sắp xếp cận hạn nhất trước (lô không có hạn xếp cuối)
+    /* Lấy các lô còn hàng, sắp xếp cận hạn nhất trước (lô không có hạn xếp cuối).
+       `l.id ASC` là chốt cuối (REV-0060 vòng 4 · THẤP-④): hai lô cùng HSD nhập
+       trong cùng một giây thì `tao_luc` bằng nhau, và D1 KHÔNG hứa thứ tự nào
+       cho phần hoà — đo được lô nhập SAU bị ăn trước. Tồn không sai, nhưng
+       “cận hạn xuất trước” thành lời hứa suông và hai lần chạy ra hai kết quả. */
     const { results: los } = await env.DB.prepare(`
       SELECT l.id, l.so_lo, l.han_su_dung, COALESCE(SUM(g.so_luong), 0) AS ton
         FROM lo_hang l
@@ -345,7 +352,7 @@ export async function xuatKho(env, phien, body) {
        WHERE l.san_pham_id = ?
        GROUP BY l.id
       HAVING ton > 0
-       ORDER BY (l.han_su_dung IS NULL), l.han_su_dung ASC, l.tao_luc ASC
+       ORDER BY (l.han_su_dung IS NULL), l.han_su_dung ASC, l.tao_luc ASC, l.id ASC
     `).bind(spId).all();
 
     const tongCo = los.reduce((s, l) => s + l.ton, 0);
@@ -411,6 +418,65 @@ export async function xuatKho(env, phien, body) {
    là quyết định của Sếp, không phải của người viết mã.
    ========================================================================== */
 
+/* Trần trên của một con số tồn (REV-0060 vòng 4 · CAO-①). Cột `so_luong` khai
+   INTEGER, nhưng SQLite không ép kiểu: `"99999999999999999999"` lưu được thành
+   `1e20` kiểu 'real', và mọi phép cộng tồn từ đó về sau đều là số thực. Trên
+   `MAX_SAFE_INTEGER` thì `9007199254740993` lưu ra `…992` — lệch 1 mà không ai
+   báo. Một tỷ đơn vị đã là gấp hàng vạn lần kho lớn nhất Alpha Green từng có;
+   chạm trần nghĩa là gõ nhầm, và phải NÓI RA chứ không lặng lẽ nhận. */
+const TRAN_TON = 1_000_000_000;
+
+/* Đọc "số tồn thật đếm được" — trả `{ so }` hoặc `{ loi }`.
+   ⚠️ KHÔNG `replace(/[.\s,]/g,'')` như bản trước: nuốt hết dấu chấm thì
+   `"12.5"` kg thành `125` kg và ERP in ra một câu chúc mừng cho con số gấp 10
+   (đo được ở REV-0060 vòng 4 · CAO-①). Cũng KHÔNG `replace(/[^\d]/g,'')`:
+   dấu trừ ở cửa này là một Ý ĐỊNH, nuốt đi thì `-5` lặng lẽ thành `5`.
+   Luật: hoặc số nguyên trần trụi (`^\d+$`), hoặc nhóm nghìn CHUẨN — cùng MỘT
+   dấu ngăn, mỗi nhóm đúng 3 chữ số (`1.000` · `1,000` · `2 000` · `1.000.000`).
+   Mọi thứ khác thì TỪ CHỐI VÀ NÓI RA. */
+function docTonThat(tho) {
+  /* Ép kiểu trước: `String(['7'])` là `'7'` nên một MẢNG lọt qua như số thường
+     (đo được: `ton_thuc: ["7"]` → HTTP 200). Chỉ nhận chuỗi và số. */
+  if (tho === null || tho === undefined || (typeof tho !== 'string' && typeof tho !== 'number')) {
+    return { loi: 'Xin nhập số tồn THẬT đếm được (số nguyên từ 0 trở lên, có thể là 0).' };
+  }
+  const s = String(tho).trim();
+  if (s === '') return { loi: 'Xin nhập số tồn THẬT đếm được (số nguyên từ 0 trở lên, có thể là 0).' };
+
+  const catNgan = s.length > 20 ? s.slice(0, 20) + '…' : s;
+  let sach = null;
+  if (/^\d+$/.test(s)) sach = s;
+  else {
+    const nhom = s.match(/^(\d{1,3})((?:([.,\s])\d{3})+)$/);
+    /* Cùng một dấu ngăn cho mọi nhóm — `1.000,000` là gõ nhầm, không phải
+       một triệu. */
+    if (nhom && new Set(nhom[2].replace(/\d/g, '')).size === 1) sach = s.replace(/[.,\s]/g, '');
+  }
+  if (sach === null) {
+    return {
+      loi: `“${catNgan}” không phải số tồn hợp lệ. ERP ghi tồn theo SỐ NGUYÊN — ` +
+           `xin ghi số ĐẾM ĐƯỢC ngoài kho, từ 0 trở lên, không dấu trừ. ` +
+           (/[.,]\s*\d{1,2}$/.test(s)
+             ? `Hàng cân theo kg mà lẻ (12,5 kg) thì xin quy về đơn vị nhỏ hơn (12500 g) ` +
+               `hoặc làm tròn rồi ghi rõ trong lý do — ERP KHÔNG tự bỏ dấu phẩy, ` +
+               `vì bỏ đi là “12,5” thành “125” mà không ai nhìn ra.`
+             : `Muốn giảm tồn thì ghi số CÒN LẠI, ERP tự tính phần chênh.`)
+    };
+  }
+
+  const so = Number(sach);
+  if (!Number.isSafeInteger(so) || so < 0) {
+    return { loi: `“${catNgan}” vượt sức chứa của một con số nguyên trong sổ cái. ` +
+                  `Tồn tối đa ERP nhận là ${TRAN_TON.toLocaleString('vi-VN')}.` };
+  }
+  if (so > TRAN_TON) {
+    return { loi: `“${catNgan}” lớn hơn trần ${TRAN_TON.toLocaleString('vi-VN')} đơn vị mà ERP nhận cho một mã. ` +
+                  `Con số này gần như chắc chắn là gõ nhầm — xin đếm lại. ` +
+                  `Nếu kho thật sự có ngần này, xin báo người quản trị để nới trần.` };
+  }
+  return { so };
+}
+
 export async function dieuChinhKho(env, phien, body) {
   if (!duocQuanLyKho(phien)) {
     return loi('Chỉ quản lý kho hoặc Admin mới lập được phiếu điều chỉnh tồn', 403);
@@ -420,24 +486,14 @@ export async function dieuChinhKho(env, phien, body) {
   if (!spId) return loi('Chưa chọn sản phẩm');
 
   const sp = await env.DB.prepare(
-    'SELECT id, ten, don_vi, theo_doi_hsd FROM san_pham WHERE id = ?').bind(spId).first();
+    'SELECT id, ten, don_vi, theo_doi_hsd, dang_ban FROM san_pham WHERE id = ?').bind(spId).first();
   if (!sp) return loi('Không tìm thấy sản phẩm này', 404);
 
   /* Số thật đếm được: cho phép 0 (đếm ra không còn cái nào) nên KHÔNG dùng
-     `soNguyenDuong` — hàm đó coi 0 là không hợp lệ.
-     ⚠️ KHÔNG được `replace(/[^\d]/g,'')` như các ô số khác: ở ĐÂY dấu trừ là
-     một ý định, không phải rác gõ nhầm. Nuốt nó đi thì `-5` lặng lẽ thành `5`
-     và ERP báo thành công cho một con số người dùng KHÔNG gõ (bàn đo bắt được:
-     `ton_thuc: -5` trả HTTP 200). Thà từ chối và nói ra. */
-  const thoTon = String(body.ton_thuc ?? '').trim().replace(/[.\s,]/g, '');
-  if (thoTon === '') return loi('Xin nhập số tồn THẬT đếm được (số nguyên, có thể là 0)');
-  if (!/^\d+$/.test(thoTon)) {
-    return loi(`“${String(body.ton_thuc).slice(0, 20)}” không phải số tồn hợp lệ. ` +
-               `Xin ghi số ĐẾM ĐƯỢC ngoài kho — số nguyên từ 0 trở lên, không có dấu trừ. ` +
-               `Muốn giảm tồn thì ghi số còn lại, ERP tự tính phần chênh.`);
-  }
-  const tonThuc = parseInt(thoTon, 10);
-  if (!Number.isFinite(tonThuc) || tonThuc < 0) return loi('Số tồn thật phải là số nguyên từ 0 trở lên');
+     `soNguyenDuong` — hàm đó coi 0 là không hợp lệ. */
+  const doc = docTonThat(body.ton_thuc);
+  if (doc.loi) return loi(doc.loi);
+  const tonThuc = doc.so;
 
   const lyDo = String(body.ly_do || '').trim();
   if (lyDo.length < 5) {
@@ -445,12 +501,59 @@ export async function dieuChinhKho(env, phien, body) {
                '“gỡ lượt nạp tồn nhầm phiếu pn_xxx”. Sổ cái không nhận một con số không có lý do.');
   }
 
-  /* Điều chỉnh theo LÔ hay theo MÃ. Hàng theo dõi hạn dùng thì tồn thật nằm
-     ở từng lô — sửa ở mức mã sẽ để lại lô âm mà `xuatKho` không nhìn thấy
-     (đúng cái bẫy của CHẶN-ⓐ), nên với hàng có lô thì BẮT chọn lô. */
   const loId = String(body.lo_hang_id || '').trim() || null;
+
+  /* ---- HÀNG THEO LÔ THÌ BẮT CHỌN LÔ (REV-0060 vòng 4 · CHẶN-①) ----------
+     Bản trước CHỈ VIẾT ra luật này trong lời bình rồi `SELECT theo_doi_hsd`
+     mà không dùng lần nào. Hậu quả đo được qua đúng đường ngón tay: lô A âm
+     −100 · lô B 200, chọn mã rồi để trống ô lô, gõ 200 → HTTP 200 kèm câu
+     “✓ từ 100 về 200 túi”, mà LÔ A VẪN −100 — đúng cái trạng thái CHẶN-ⓐ
+     dựng ra để cấm, chỉ khác là nay nó đến sau một cái nút tên “Điều chỉnh”.
+     Chiều lên còn dựng ra TỒN MA: mã 10 → 500 thì màn Kho vận và báo cáo XNT
+     đều hiện 500, nhưng `xuatKho(100)` trả 400 “chỉ còn 10” — vì `xuatKho`
+     với hàng theo lô cộng theo LÔ, không theo mã (`kho.js` mục 4).
+     Chặn ở MÁY CHỦ trước, `required` ở giao diện chỉ là phép lịch sự. */
+  if (sp.theo_doi_hsd && !loId) {
+    /* Hỏi THỪA MỘT DÒNG rồi mới biết có cắt hay không — cùng khuôn `catBot`
+       của cả repo. Kê thẳng 200 lô thì không ai đọc; kê 12 lô rồi IM là đúng
+       lớp "cắt im lặng" mà `do-cat-im-lang` sinh ra để cấm. */
+    const KE_LO = 12;
+    const { results: thoLo } = await env.DB.prepare(`
+      SELECT l.id, l.so_lo, l.han_su_dung, COALESCE(SUM(g.so_luong), 0) AS ton
+        FROM lo_hang l
+        LEFT JOIN giao_dich_kho g ON g.lo_hang_id = l.id
+       WHERE l.san_pham_id = ?
+       GROUP BY l.id
+       ORDER BY (l.han_su_dung IS NULL), l.han_su_dung ASC, l.tao_luc ASC, l.id ASC
+       LIMIT ${KE_LO + 1}
+    `).bind(spId).all();
+    const { ds: dsLo, biCat: cat } = catBot({ results: thoLo || [] }, KE_LO);
+    const ke = dsLo.map(l =>
+      `“${l.so_lo || l.id}”${l.han_su_dung ? ' (HSD ' + String(l.han_su_dung).split('-').reverse().join('/') + ')' : ''}` +
+      ` sổ ghi ${Number(l.ton || 0).toLocaleString('vi-VN')}${Number(l.ton || 0) < 0 ? ' ⚠ ÂM' : ''}`).join(' · ');
+    /* Cắt thì NÓI RA và chỉ đường: ô chọn lô ở màn Điều chỉnh liệt kê đủ. */
+    const cauCat = cat
+      ? ` (mới kê ${KE_LO} lô cận hạn nhất, mã này còn lô nữa — xem đủ ở ô chọn lô trên màn Điều chỉnh)`
+      : '';
+    return loi(
+      `“${sp.ten}” là hàng THEO DÕI HẠN SỬ DỤNG — tồn của nó nằm ở từng LÔ, ` +
+      `nên phải chọn đúng lô để điều chỉnh. Sửa ở mức mã sẽ để lại lô âm mà màn Xuất kho ` +
+      `không nhìn thấy, hoặc dựng ra tồn ma không lấy ra được. ` +
+      (ke
+        ? `Các lô của mã này: ${ke}${cauCat}. Xin chọn một lô rồi lập lại phiếu.`
+        : `Mã này chưa có lô nào trong sổ — xin nhập kho một phiếu (có Số lô) trước, ` +
+          `hoặc bỏ “theo dõi hạn dùng” cho mã này nếu kho không quản theo lô.`));
+  }
+
   let lo = null;
   if (loId) {
+    /* Ngược lại: hàng KHÔNG theo lô mà gửi kèm `lo_hang_id` thì dòng lô ấy là
+       RÁC CÂM — `xuatKho` đi đường mã nên không bao giờ đọc tới nó, và tồn mã
+       với tồn lô lệch nhau vĩnh viễn (đo: mã 17 / lô 7). Từ chối. */
+    if (!sp.theo_doi_hsd) {
+      return loi(`“${sp.ten}” KHÔNG theo dõi hạn sử dụng — tồn của nó nằm ở mức mã, không ở lô. ` +
+                 `Xin bỏ trống ô lô rồi lập lại phiếu.`);
+    }
     lo = await env.DB.prepare(
       'SELECT id, so_lo, han_su_dung, san_pham_id FROM lo_hang WHERE id = ?').bind(loId).first();
     if (!lo) return loi('Không tìm thấy lô hàng này', 404);
@@ -459,11 +562,13 @@ export async function dieuChinhKho(env, phien, body) {
 
   /* Tồn đang ghi trong sổ — cộng dồn THÔ, có tính cả dòng âm. Đây đúng là chỗ
      KHÔNG được lọc `ton > 0`: cái cần sửa thường chính là một lô đang âm. */
+  /* Một chuỗi con dùng cho CẢ phép đọc lẫn phép kiểm lúc ghi — hai câu khác
+     nhau là hai câu sẽ lệch nhau, mà lệch ở đây nghĩa là chốt chặn đồng thời
+     canh một con số không phải con số vừa đọc. */
+  const DU_LO = 'SELECT COALESCE(SUM(so_luong),0) FROM giao_dich_kho WHERE lo_hang_id = ?';
+  const DU_MA = 'SELECT COALESCE(SUM(so_luong),0) FROM giao_dich_kho WHERE san_pham_id = ?';
   const dangGhi = Number((await env.DB.prepare(
-    loId
-      ? 'SELECT COALESCE(SUM(so_luong),0) AS ton FROM giao_dich_kho WHERE lo_hang_id = ?'
-      : 'SELECT COALESCE(SUM(so_luong),0) AS ton FROM giao_dich_kho WHERE san_pham_id = ?'
-  ).bind(loId || spId).first())?.ton || 0);
+    `SELECT (${loId ? DU_LO : DU_MA}) AS ton`).bind(loId || spId).first())?.ton || 0);
 
   const lech = tonThuc - dangGhi;
   if (lech === 0) {
@@ -473,10 +578,9 @@ export async function dieuChinhKho(env, phien, body) {
 
   /* Sau điều chỉnh, tồn của MÃ cũng phải ≥ 0 (điều chỉnh một lô vẫn kéo tổng
      của mã xuống). Bất biến TỒN ≥ 0 là của cả module kho, không riêng lô. */
+  let tonMa = dangGhi;
   if (loId) {
-    const tonMa = Number((await env.DB.prepare(
-      'SELECT COALESCE(SUM(so_luong),0) AS ton FROM giao_dich_kho WHERE san_pham_id = ?'
-    ).bind(spId).first())?.ton || 0);
+    tonMa = Number((await env.DB.prepare(`SELECT (${DU_MA}) AS ton`).bind(spId).first())?.ton || 0);
     if (tonMa + lech < 0) {
       return loi(`Không lập được: sổ đang ghi tồn ${tonMa.toLocaleString('vi-VN')} ${sp.don_vi || 'đơn vị'} ` +
                  `cho “${sp.ten}”, điều chỉnh lô này ${lech.toLocaleString('vi-VN')} sẽ làm tồn của cả mã ÂM. ` +
@@ -484,13 +588,73 @@ export async function dieuChinhKho(env, phien, body) {
     }
   }
 
+  /* ---- GHI BẰNG MỘT CÂU CÓ ĐIỀU KIỆN (REV-0060 vòng 4 · CHẶN-②) --------
+     Bản trước đọc số dư ở một lượt `await` rồi `INSERT` ở lượt sau: không
+     giao dịch, không khoá, không kiểm lại. Hai người cùng bấm trên MỘT lô
+     thì cả hai cùng đọc 100, cùng tính chênh −100, cả hai được ghi ⇒ LÔ =
+     −100 (đo được: 200/200, lô âm, tồn mã âm). Kiểm kê cuối tháng chính là
+     lúc hai người cùng ngồi sửa cùng một mã, và `TỒN ≥ 0` không phải thứ
+     được phép hỏng theo xác suất.
+     Cách đóng — đúng cách đã dùng cho `huyLuotNap` ở CAO-④ đợt này: không
+     khoá, mà nhét phép kiểm VÀO CHÍNH câu ghi. `INSERT … SELECT … WHERE
+     (số dư đọc lúc nãy vẫn đúng)` là một phép so-và-đặt nguyên tử của D1;
+     người thứ hai ghi 0 dòng và biết ngay mình là người thứ hai.
+     Kiểm CẢ HAI vế khi có lô: số dư LÔ và số dư MÃ đều phải chưa đổi — bằng
+     không thì bất biến “tồn mã ≥ 0” vừa kiểm ở trên lại hỏng theo đường mã. */
   const phieuId = 'pd_' + crypto.randomUUID().slice(0, 12);
-  await env.DB.prepare(`
+  const ghiChu = `Điều chỉnh tồn: sổ ghi ${dangGhi} → đếm thật ${tonThuc}. Lý do: ${lyDo.slice(0, 400)}`;
+  const dieuKien = loId
+    ? `WHERE (${DU_LO}) = ? AND (${DU_MA}) = ?`
+    : `WHERE (${DU_MA}) = ?`;
+  const thamSo = loId ? [loId, dangGhi, spId, tonMa] : [spId, dangGhi];
+  const kq = await env.DB.prepare(`
     INSERT INTO giao_dich_kho (phieu_id, san_pham_id, lo_hang_id, loai, so_luong, doi_tac, ghi_chu, nguoi_id)
-    VALUES (?, ?, ?, 'dieu_chinh', ?, NULL, ?, ?)
-  `).bind(phieuId, spId, loId, lech,
-          `Điều chỉnh tồn: sổ ghi ${dangGhi} → đếm thật ${tonThuc}. Lý do: ${lyDo.slice(0, 400)}`,
-          phien.nhan_su_id).run();
+    SELECT ?, ?, ?, 'dieu_chinh', ?, NULL, ?, ?
+    ${dieuKien}
+  `).bind(phieuId, spId, loId, lech, ghiChu, phien.nhan_su_id, ...thamSo).run();
+
+  /* D1 thật trả cả `changes` lẫn `rows_written`; ổ giả của bàn đo chỉ trả một
+     trong hai. Đọc cái nào có — nhưng KHÔNG mặc định là 1 khi thiếu cả hai,
+     vì mặc định-thành-thành-công đúng là cách chốt chặn này chết âm thầm. */
+  const daGhi = Number(kq?.meta?.changes ?? kq?.meta?.rows_written ?? 0);
+  if (!daGhi) {
+    return loi(
+      `Số dư ${lo ? `của lô “${lo.so_lo || lo.id}”` : 'của mã này'} vừa thay đổi ngay lúc bạn bấm ` +
+      `(có người khác vừa nhập/xuất/điều chỉnh). ERP KHÔNG ghi phiếu nào cả — ` +
+      `xin bấm “Làm mới”, xem lại số sổ đang ghi rồi lập phiếu lần nữa.`, 409);
+  }
+
+  /* ---- SỔ VẾT TRA ĐƯỢC BẰNG MÁY (REV-0060 vòng 4 · CAO-④) --------------
+     `ghi_chu` là một câu tiếng Việt: đọc được bằng mắt, nhưng không lọc được,
+     không thống kê được “tháng này điều chỉnh mất bao nhiêu vì hàng vỡ”, và
+     đổi câu chữ một lần là mọi phiếu cũ đọc máy không ra. Ghi thêm MỘT dòng
+     `lich_su_thay_doi_nen` — đúng bảng mọi cửa sửa dữ liệu nền đang dùng, 0
+     migration, và cửa đọc `?bang=giao_dich_kho` đã mở sẵn từ vòng trước.
+     `truong = 'dieu_chinh'` nên KHÔNG lẫn với `'nap_file'` của `dsLuotNap`
+     hay của hai câu số dư trong `huyLuotNap`.
+     Bọc `try`: sổ cái là sự thật, sổ vết là phần thêm — mất sổ vết thì báo
+     vào console, KHÔNG được nuốt mất một phiếu đã ghi thành công. */
+  try {
+    await env.DB.prepare(`
+      INSERT INTO lich_su_thay_doi_nen (bang, ban_ghi_id, truong, gia_tri_cu, gia_tri_moi,
+                                        nguoi_id, nguoi_ten, ly_do, luc)
+      VALUES ('giao_dich_kho', ?, 'dieu_chinh', ?, ?, ?, ?, ?, datetime('now','+7 hours'))
+    `).bind(phieuId, String(dangGhi), String(tonThuc), phien.nhan_su_id,
+            phien?.ho_ten || phien?.ten_dang_nhap || null, lyDo.slice(0, 400)).run();
+  } catch (e) {
+    console.error('Ghi vết phiếu điều chỉnh:', e && e.message);
+  }
+
+  /* Mã đã NGỪNG BÁN vẫn điều chỉnh được — CÓ CHỦ Ý, và đây là chỗ viết ra
+     (REV-0060 vòng 4 · CAO-③). `nhapKho` từ chối `dang_ban = 0` vì nhập thêm
+     hàng cho một mã đã ngừng kinh doanh là sai; nhưng ĐẾM LẠI và ghi giảm về
+     0 cho hàng tồn của mã đã ngừng bán là việc kho thật phải làm (thanh lý,
+     huỷ hàng hết hạn). Cấm ở đây thì tồn của mã ngừng bán treo vĩnh viễn.
+     Đổi lại phải NÓI RA, vì `danhSachSanPham` chỉ lấy `dang_ban = 1` nên sửa
+     xong không nhìn thấy ở màn nào. */
+  const nhacNgungBan = sp.dang_ban ? '' :
+    ` ⚠ “${sp.ten}” đã NGỪNG KINH DOANH — phiếu vẫn vào sổ cái và báo cáo XNT, ` +
+    `nhưng mã này không hiện ở danh sách tồn kho nên số vừa sửa chỉ tra lại được qua báo cáo.`;
 
   return json({
     ok: true, phieu_id: phieuId,
@@ -499,7 +663,7 @@ export async function dieuChinhKho(env, phien, body) {
     tin: `Đã lập phiếu điều chỉnh ${phieuId}: ` +
          `${lo ? `lô “${lo.so_lo || lo.id}” của ` : ''}“${sp.ten}” từ ${dangGhi.toLocaleString('vi-VN')} ` +
          `về ${tonThuc.toLocaleString('vi-VN')} ${sp.don_vi || 'đơn vị'} ` +
-         `(${lech > 0 ? '+' : ''}${lech.toLocaleString('vi-VN')}). Lý do đã ghi vào sổ cái.`
+         `(${lech > 0 ? '+' : ''}${lech.toLocaleString('vi-VN')}). Lý do đã ghi vào sổ cái.` + nhacNgungBan
   });
 }
 
@@ -514,19 +678,31 @@ export async function loTheoSanPham(env, phien, spId, tatCa = false) {
   /* `HAVING ton > 0` là ĐÚNG cho màn xuất kho (chọn lô để lấy hàng ra) nhưng
      SAI cho màn điều chỉnh: lô cần sửa thường chính là lô đang ÂM, mà lô âm
      thì lưới này lọc mất — người đi sửa không nhìn thấy đúng cái mình phải
-     sửa (REV-0060 vòng 3 · CHẶN-ⓐ/ⓑ). `tatCa` mở lưới ra cho đường đó. */
+     sửa (REV-0060 vòng 3 · CHẶN-ⓐ/ⓑ). `tatCa` mở lưới ra cho đường đó.
+
+     ⚠️ `tatCa` bỏ HẲN mệnh đề lọc, không đổi thành `ton <> 0` (REV-0060 vòng 4).
+     Từ vòng này máy chủ BẮT chọn lô với hàng theo dõi HSD (CHẶN-①), nên ô chọn
+     lô là lối đi DUY NHẤT: lô nào không hiện ở đây là lô không sửa được. Mà lô
+     `ton = 0` đúng là ca phải sửa được — kiểm kê thấy còn hàng thật trong khi
+     sổ ghi 0, hoặc một lô âm vừa được kéo về 0 rồi phát hiện đếm nhầm.
+     `l.id ASC` chốt cuối cho thứ tự xác định (THẤP-④). */
   const { results } = await env.DB.prepare(`
-    SELECT l.id, l.so_lo, l.han_su_dung, COALESCE(SUM(g.so_luong), 0) AS ton
+    SELECT l.id, l.so_lo, l.han_su_dung, l.tao_luc, COALESCE(SUM(g.so_luong), 0) AS ton
       FROM lo_hang l
       LEFT JOIN giao_dich_kho g ON g.lo_hang_id = l.id
      WHERE l.san_pham_id = ?
      GROUP BY l.id
-    HAVING ${tatCa ? 'ton <> 0' : 'ton > 0'}
-     ORDER BY (l.han_su_dung IS NULL), l.han_su_dung ASC, l.tao_luc ASC
+    ${tatCa ? '' : 'HAVING ton > 0'}
+     ORDER BY (l.han_su_dung IS NULL), l.han_su_dung ASC, l.tao_luc ASC, l.id ASC
   `).bind(spId).all();
 
+  /* `tao_luc` trả kèm để giao diện phân biệt được HAI LÔ TRÙNG TÊN (REV-0060
+     vòng 4 · THẤP-③): hai lượt nạp cùng “Số lô LO-A” đẻ ra hai dòng `lo_hang`
+     khác nhau, cùng tên, cùng HSD — ô chọn lô hiện hai dòng giống hệt nhau và
+     người đi sửa không biết mình đang sửa cái nào. */
   const los = results.map(l => ({
     id: l.id, so_lo: l.so_lo, han_su_dung: l.han_su_dung, ton: l.ton,
+    tao_luc: l.tao_luc || null,
     so_ngay_toi_han: soNgayToi(l.han_su_dung)
   }));
 

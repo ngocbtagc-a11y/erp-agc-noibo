@@ -3427,6 +3427,26 @@ tr.kd-chiadoi td {
 }
 .kv-ton-nhac b { color: var(--ink); }
 
+/* Đoạn giới thiệu gấp/mở của màn Điều chỉnh (REV-0060 vòng 4 · THẤP-①).
+   Sếp dặn hai lần "vừa một màn ở 375px": ba dòng chữ giới thiệu là chỗ tốn
+   chiều cao nhất mà không giúp gì cho người đã biết việc. Đóng lại còn một
+   dòng, ai cần thì mở. Dùng <details> sẵn có, không thêm JS. */
+details.kv-ton-nhac > summary {
+  cursor: pointer;
+  list-style-position: outside;
+  /* Vùng chạm ≥ 44px kể cả khi câu chữ chỉ cao 20px — luật màn hẹp. */
+  min-height: 22px;
+  padding: 11px 0;
+  margin: -11px 0;
+}
+details.kv-ton-nhac[open] > summary { margin-bottom: 2px; }
+
+/* Ô lý do của màn Điều chỉnh: 2 dòng là đủ để gõ "kiểm kê 07/09, hàng vỡ 12
+   túi". `min-height: 90px` dùng chung cho mọi textarea là đúng cho ô "Đầu ra
+   cụ thể", thừa 30px ở đây — mà 30px trên màn 375px là một phần tám khung
+   nhìn. Vẫn kéo giãn được (`resize: vertical` giữ nguyên). */
+.field textarea.o-thap { min-height: 60px; }
+
 /* Hàng lọc ngày của báo cáo */
 .kv-loc {
   display: flex;
