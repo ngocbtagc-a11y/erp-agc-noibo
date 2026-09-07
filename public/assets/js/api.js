@@ -169,6 +169,12 @@ export const API = {
   cvSua: (id, truong) => goi('/api/cong-viec/sua', {
     method: 'POST', body: JSON.stringify({ id, ...truong })
   }),
+  /* Nhận xét một việc đã giao (GY-0005). Ghi vào ĐÚNG sổ sửa chung dưới
+     `truong='nhan_xet'`, nên đọc lại bằng `suaLichSu('cong_viec', id)` —
+     không có cửa đọc thứ hai để hai màn nói hai chuyện khác nhau. */
+  cvNhanXet: (id, noiDung) => goi('/api/cong-viec/nhan-xet', {
+    method: 'POST', body: JSON.stringify({ id, noi_dung: noiDung })
+  }),
   /* Sổ sửa dùng chung cho cả lớp — bang = 'cong_viec' | 'muc_tieu'. Mỗi dòng
      đã kèm `cau` tiếng Việt dựng sẵn ở máy chủ, giao diện chỉ việc in ra. */
   suaLichSu: (bang, id) => goi(`/api/sua/lich-su?bang=${bang}&id=${id}`),

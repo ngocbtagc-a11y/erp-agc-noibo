@@ -19,6 +19,8 @@ import { nenAnhChung, coByteCuaDataUrl } from './anh-chung.js';
 import { moQuetTaiLieu } from './quet-tai-lieu.js';
 import { soDoHienThi, chuHuyHieu, datSoDo, nenNhacCai, CHU_NHAC_CAI, KHOA_BO_QUA }
   from './so-do-bieu-tuong.js';
+/* Ô nhập ngày dùng chung (GY-0004) — MỘT chỗ cho cả 15 ô ngày của ERP. */
+import { theoDoiONgay, cauSaiONgay } from './o-ngay.js';
 /* ---- MÀN HÌNH TỰ LÀM MỚI (Sếp Ngọc 03/09/2026: "đã duyệt hoàn thành mà nó
    vẫn hiện ở đây") ---------------------------------------------------------
    `ngheDuLieu(nhóm, hàm)` đăng ký "màn này đang hiện nhóm dữ liệu đó" VÀ trả
@@ -2285,6 +2287,11 @@ const TBDay = (() => {
    mà các `khoiDong*` bên dưới dựng ra sau. Đặt TRƯỚC chúng, không phải sau. */
 noiDayONhieuDong();
 
+/* Ô nhập NGÀY — cùng lý do, cùng chỗ đặt (GY-0004). `theoDoiONgay` nâng cấp
+   mọi ô đang có RỒI theo dõi ô sinh ra sau (Kho tài liệu dựng ô bằng chuỗi
+   HTML), nên không còn cửa hậu nào để lỗi cũ quay lại qua ô mới. */
+theoDoiONgay();
+
 await khoiDongVinhDanh();
 await khoiDongMucTieu();
 
@@ -3447,6 +3454,16 @@ async function khoiDongCongViec() {
      (`CV_MO_THEO_TRANG_THAI`, `cvSua`) — gọi thẳng API vẫn bị chặn 403/409. */
   function htmlNutDongViec(r, loai) {
     const chuaXong = ['moi', 'dang_lam', 'cho_duyet'].includes(r.trang_thai);
+    /* NÚT NHẬN XÉT (GY-0005) — có mặt ở CẢ HAI phía và ở MỌI trạng thái, kể
+       cả việc đã nghiệm thu. Hai lý do, cả hai đều là lý do quản trị:
+         · người NHẬN việc phải có đường mở ra ĐỌC nhận xét về mình — hộp
+           "Sửa" không mở cho họ, nên nếu chỉ gắn nút ở phía người giao thì
+           nhận xét thành hồ sơ ngầm;
+         · việc vừa nghiệm thu xong mới đúng là lúc nhận xét có ích nhất, mà
+           đó lại đúng lúc mọi nút khác biến mất.
+       Cố ý ĐỂ NÂU (`.btn-nho` trần): một khung nhìn chỉ MỘT thứ được cam đậm
+       (luật ba màu ③), chỗ đó dành cho "Duyệt xong" / "Nộp kết quả". */
+    const nutNx = ` <button type="button" class="btn-nho" data-cv-nhanxet="${r.id}">Nhận xét</button>`;
     if (loai === 'toi') {
       // Người nhận là tôi; nếu người giao cũng là tôi => TODO CÁ NHÂN: bấm 1
       // phát là XONG, khỏi nộp + chờ duyệt. Tự giao cho mình thì tự sửa thoải
@@ -3456,11 +3473,11 @@ async function khoiDongCongViec() {
           ? `<button type="button" class="btn-nho btn-primary" data-cv-xongngay="${r.id}">✓ Xong</button>` +
             ` <button type="button" class="btn-nho cv-nut-sua" data-cv-sua="${r.id}">Sửa</button>` +
             ` <button type="button" class="btn-nho" data-cv-huy="${r.id}">Bỏ</button>`
-          : '';
+          : '';   // TODO cá nhân đã xong: không tự nhận xét mình, đỡ một nút thừa
       }
-      if (r.trang_thai === 'moi') return `<button type="button" class="btn-nho btn-primary" data-cv-batdau="${r.id}">Bắt đầu làm</button>`;
-      if (r.trang_thai === 'dang_lam') return `<button type="button" class="btn-nho btn-primary" data-cv-nop="${r.id}">Nộp kết quả</button>`;
-      return '';
+      if (r.trang_thai === 'moi') return `<button type="button" class="btn-nho btn-primary" data-cv-batdau="${r.id}">Bắt đầu làm</button>` + nutNx;
+      if (r.trang_thai === 'dang_lam') return `<button type="button" class="btn-nho btn-primary" data-cv-nop="${r.id}">Nộp kết quả</button>` + nutNx;
+      return nutNx.trim();
     }
     if (loai === 'giao') {
       let nut = '';
@@ -3476,7 +3493,7 @@ async function khoiDongCongViec() {
         nut += ` <button type="button" class="btn-nho cv-nut-sua" data-cv-sua="${r.id}">Sửa</button>`;
         nut += ` <button type="button" class="btn-nho" data-cv-huy="${r.id}">Huỷ</button>`;
       }
-      return nut;
+      return (nut + nutNx).trim();
     }
     return '';
   }
@@ -3640,6 +3657,113 @@ async function khoiDongCongViec() {
   $('#cv-sua-han-chot').addEventListener('change', capNhatHopLyDo);
   $('#cv-sua-han-chot').addEventListener('input', capNhatHopLyDo);
 
+  /* ==================== NHẬN XÉT MỘT VIỆC (GY-0005) ====================
+     Đọc lại nhận xét bằng ĐÚNG cửa `suaLichSu('cong_viec', id)` mà hộp Sửa
+     đang dùng, lọc `truong === 'nhan_xet'`. Không dựng cửa đọc thứ hai —
+     hai cửa cho một sổ là hai màn nói hai chuyện khác nhau, sớm hay muộn. */
+  const cvNxModal = $('#cvNxModalNen');
+  let cvNxId = null;
+
+  function dongHopNhanXet() { cvNxModal.hidden = true; cvNxId = null; }
+  cvNxModal.addEventListener('click', e => { if (e.target === cvNxModal) dongHopNhanXet(); });
+  $('#cv-nx-nut-dong').addEventListener('click', dongHopNhanXet);
+
+  const noiNhanXet = (chu) => {
+    const o = $('#cv-nx-loi');
+    o.textContent = chu || '';
+    o.classList.toggle('show', !!chu);
+  };
+
+  async function veSoNhanXet(id) {
+    const khoi = $('#cv-nx-so-khoi'), trong = $('#cv-nx-trong');
+    khoi.hidden = true; trong.hidden = true;
+    try {
+      const ls = await API.suaLichSu('cong_viec', id);
+      const ds = (ls.ds || []).filter(d => d.truong === 'nhan_xet');
+      if (!ds.length) { trong.hidden = false; return; }
+      $('#cv-nx-so').innerHTML = ds.map(d =>
+        `<li>${esc(d.cau)} <span class="luc">· ${esc(String(d.luc || '').slice(0, 16))}</span></li>`).join('');
+      khoi.hidden = false;
+    } catch {
+      /* KHÔNG im lặng: đọc hỏng mà hộp trống trơn thì người ta tưởng chưa ai
+         nhận xét bao giờ — đúng kiểu nói dối nguy hiểm nhất của một cái sổ. */
+      trong.textContent = 'Chưa đọc được sổ nhận xét (mạng hoặc quyền). Nhận xét cũ có thể đang có mà chưa hiện.';
+      trong.hidden = false;
+    }
+  }
+
+  async function moHopNhanXet(id) {
+    const r = CV_THEO_ID[id] || {};
+    cvNxId = id;
+    $('#cv-nx-viec').textContent = r.tieu_de
+      ? `Việc: "${r.tieu_de}" · người nhận: ${r.nguoi_nhan_ten || '—'}` + (r.dau_ra ? ` · đầu ra đã giao: ${r.dau_ra}` : '')
+      : 'Việc #' + id;
+    $('#cv-nx-noi-dung').value = '';
+    $('#cv-nx-xong').hidden = true;
+    noiNhanXet('');
+    /* Nút Vinh danh CHỈ hiện khi có người khác để khen — tự khen mình trên
+       bảng công khai thì không. */
+    $('#cv-nx-nut-khen').hidden = !(r.nguoi_nhan_id && r.nguoi_nhan_id !== TOI.id);
+    cvNxModal.hidden = false;
+    await veSoNhanXet(id);
+  }
+
+  // Hai chip gợi ý — CHÈN chữ mở đầu rồi nhường lại cho người viết.
+  $('#cv-nx-form').addEventListener('click', (e) => {
+    const chip = e.target.closest('[data-nx-them]');
+    if (!chip) return;
+    const o = $('#cv-nx-noi-dung');
+    const dau = o.value.trim();
+    o.value = (dau ? dau + '\n' : '') + chip.getAttribute('data-nx-them');
+    o.focus();
+    o.setSelectionRange(o.value.length, o.value.length);
+  });
+
+  $('#cv-nx-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!cvNxId) return;
+    const noi = $('#cv-nx-noi-dung').value.trim();
+    const nut = $('#cv-nx-nut-gui');
+    noiNhanXet('');
+    if (noi.length < 5) { noiNhanXet('Viết rõ chỗ làm tốt hoặc chỗ cần sửa giúp tôi — ít nhất 5 ký tự.'); return; }
+    nut.disabled = true;
+    try {
+      await API.cvNhanXet(cvNxId, noi);
+      $('#cv-nx-noi-dung').value = '';
+      $('#cv-nx-xong').textContent = 'Đã gửi. Người nhận việc vừa nhận được thông báo và đọc được câu này.';
+      $('#cv-nx-xong').hidden = false;
+      await veSoNhanXet(cvNxId);
+    } catch (err) {
+      noiNhanXet(err.message || 'Chưa gửi được nhận xét, thử lại nhé.');
+    } finally { nut.disabled = false; }
+  });
+
+  /* BẮC CẦU SANG VINH DANH — dùng LẠI `vdGui` sẵn có, không đẻ đường khen
+     thứ hai. Lời khen đi thẳng lên bảng Vinh danh ở Tổng quan, và người được
+     khen ăn đúng một thông báo của cửa đó. */
+  $('#cv-nx-nut-khen').addEventListener('click', async () => {
+    if (!cvNxId) return;
+    const r = CV_THEO_ID[cvNxId] || {};
+    const noi = $('#cv-nx-noi-dung').value.trim();
+    noiNhanXet('');
+    if (noi.length < 5) { noiNhanXet('Viết lời khen vào ô trên trước đã — Vinh danh cần một câu cụ thể.'); return; }
+    if (!r.nguoi_nhan_id) { noiNhanXet('Không rõ người nhận việc này để vinh danh.'); return; }
+    const nut = $('#cv-nx-nut-khen');
+    nut.disabled = true;
+    try {
+      // Nhận xét vẫn được ghi vào sổ việc: khen công khai KHÔNG thay cho
+      // việc chấm đầu ra, nó đứng thêm bên cạnh.
+      await API.cvNhanXet(cvNxId, noi);
+      await API.vdGui(r.nguoi_nhan_id, `${noi} (việc: ${r.tieu_de || '#' + cvNxId})`.slice(0, 500), 5);
+      $('#cv-nx-noi-dung').value = '';
+      $('#cv-nx-xong').textContent = `Đã ghi nhận xét VÀ vinh danh ${r.nguoi_nhan_ten || 'người nhận'} (+5 ⭐) trên bảng Vinh danh ở Tổng quan.`;
+      $('#cv-nx-xong').hidden = false;
+      await veSoNhanXet(cvNxId);
+    } catch (err) {
+      noiNhanXet(err.message || 'Chưa vinh danh được, thử lại nhé.');
+    } finally { nut.disabled = false; }
+  });
+
   $('#cv-sua-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     $('#cv-sua-loi').textContent = '';
@@ -3675,6 +3799,8 @@ async function khoiDongCongViec() {
   async function xuLyNut(e) {
     const nutSua = e.target.closest('[data-cv-sua]');
     if (nutSua) { await moHopSuaViec(nutSua.getAttribute('data-cv-sua')); return; }
+    const nutNx = e.target.closest('[data-cv-nhanxet]');
+    if (nutNx) { await moHopNhanXet(nutNx.getAttribute('data-cv-nhanxet')); return; }
     const nutBatDau = e.target.closest('[data-cv-batdau]');
     const nutNop = e.target.closest('[data-cv-nop]');
     const nutXongNgay = e.target.closest('[data-cv-xongngay]');
@@ -4016,7 +4142,8 @@ async function khoiDongLichSuViec() {
      Sếp Ngọc bấm mãi vào một cái nút đã chết mà console thì im). */
   $('#ls-cv-bang').addEventListener('click', (e) => {
     if (!e.target.closest('button[data-cv-batdau],button[data-cv-nop],button[data-cv-xongngay],' +
-                          'button[data-cv-duyet],button[data-cv-tralai],button[data-cv-sua],button[data-cv-huy]')) return;
+                          'button[data-cv-duyet],button[data-cv-tralai],button[data-cv-sua],button[data-cv-huy],' +
+                          'button[data-cv-nhanxet]')) return;
     goiMocNoi('CV_XU_LY_NUT', 'congviec', e);
   });
 
@@ -5187,18 +5314,49 @@ if (TOI.quyen.includes('nhansu')) {
     }
 
     /* Lưu ngay khi đổi, không chờ nút Lưu hồ sơ: ô này KHÔNG thuộc form hồ
-       sơ, gộp vào là phải sửa đường lưu nhân sự mà người khác đang dùng. */
-    $('#nsSua-ngaysinh')?.addEventListener('change', async () => {
+       sơ, gộp vào là phải sửa đường lưu nhân sự mà người khác đang dùng.
+
+       ⚠️ ĐÂY ĐÚNG LÀ CHỖ HỎNG CỦA GY-0004 ("nhập năm sinh ko đc"). Bản cũ
+       `o.disabled = true` NGAY trong `change`. Mà `<input type="date">` bắn
+       `change` từ chữ số ĐẦU TIÊN của năm (value = `0001-01-01`), nên vừa
+       gõ số "1" của "1990" là ô bị KHOÁ ⇒ MẤT TIÊU ĐIỂM ⇒ ba số "990" rơi
+       ra ngoài, còn máy chủ trả về "Năm sinh không hợp lý". Đo lại trong
+       Chrome thật: tiêu điểm mất ở đúng cú gõ thứ 5, value đứng ở
+       `0001-01-01`. Ba chốt mới, không chốt nào thừa:
+         ① KHÔNG khoá ô đang gõ. Đang gửi thì nói bằng chữ, không bằng khoá.
+         ② Chỉ gửi khi giá trị NẰM TRONG khoảng (`checkValidity` — `min`/`max`
+            do `o-ngay.js` đặt, khớp đúng chốt 1930…nay−14 của máy chủ).
+         ③ HOÃN 700ms: gõ tiếp thì huỷ lượt cũ, một lần gõ = một lần ghi D1,
+            không phải bốn. */
+    let hoanLuuNgaySinh = null, lanLuuNgaySinh = 0;
+    /* `#nsSua-loi` là `.form-loi`, mà `.form-loi` mặc định `display:none` —
+       bản cũ chỉ gán `textContent` nên câu "Chưa lưu được ngày sinh" CHƯA
+       BAO GIỜ hiện lên màn. Đó là im lặng đúng lúc cần nói nhất. */
+    const noiNgaySinh = (chu) => {
+      const oLoi = $('#nsSua-loi');
+      oLoi.textContent = chu || '';
+      oLoi.classList.toggle('show', !!chu);
+    };
+    $('#nsSua-ngaysinh')?.addEventListener('change', () => {
       const o = $('#nsSua-ngaysinh'), id = NS_SN_DANG_MO;
       if (!id) return;
-      o.disabled = true;
-      try {
-        await API.nsNgaySinhLuu(id, o.value || null);
-        $('#nsSua-loi').textContent = '';
-        taiViecCanLam();     // dải "sinh nhật tháng sau" phải đổi theo ngay
-      } catch (err) {
-        $('#nsSua-loi').textContent = err.message || 'Chưa lưu được ngày sinh.';
-      } finally { o.disabled = false; }
+      clearTimeout(hoanLuuNgaySinh);
+      // Đang gõ dở (năm mới có 1–3 chữ số) — `o-ngay.js` đã hiện câu ngay
+      // dưới ô rồi, ở đây chỉ việc KHÔNG gửi và KHÔNG khoá ô.
+      if (cauSaiONgay(o)) { noiNgaySinh(''); return; }
+      noiNgaySinh('');
+      const luot = ++lanLuuNgaySinh;
+      hoanLuuNgaySinh = setTimeout(async () => {
+        try {
+          await API.nsNgaySinhLuu(id, o.value || null);
+          if (luot !== lanLuuNgaySinh || NS_SN_DANG_MO !== id) return;  // đã có lượt mới
+          noiNgaySinh('');
+          taiViecCanLam();   // dải "sinh nhật tháng sau" phải đổi theo ngay
+        } catch (err) {
+          if (luot !== lanLuuNgaySinh || NS_SN_DANG_MO !== id) return;
+          noiNgaySinh(err.message || 'Chưa lưu được ngày sinh.');
+        }
+      }, 700);
     });
 
     $('#nsSua-sinhnhat')?.addEventListener('change', async () => {

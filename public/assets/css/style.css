@@ -569,6 +569,23 @@ button { cursor: pointer; border: none; background: none; }
   color: var(--text-mute);
 }
 
+/* ---- Ô NHẬP NGÀY DÙNG CHUNG (GY-0004) ----------------------------------
+   Dòng nhắc nằm ngay dưới ô, MẶC ĐỊNH ẨN — chỉ hiện lúc đang bấm vào ô hoặc
+   lúc giá trị sai. Hiện sẵn cho cả 15 ô ngày là đẩy mọi form dài thêm 15
+   dòng, phá đúng luật "vừa một màn" Sếp Ngọc đã nhắc hai lần.
+   Đỏ CHỈ dùng cho `.sai` — đúng ngoại lệ duy nhất của luật ba màu. */
+.o-ngay-nhac {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-mute);
+}
+.o-ngay-nhac.sai {
+  color: var(--danger-dark);
+  font-weight: 500;
+}
+input[type="date"].o-ngay-sai { border-color: var(--danger-dark); }
+
 .mk-nhac {
   font-size: 12.5px;
   line-height: 1.5;
@@ -4322,6 +4339,45 @@ textarea.tlq-o { padding: 10px 12px; }
    Hai nút xuống hàng và chiếm hết bề ngang, khỏi phải nhắm. */
 @media (max-width: 640px) {
   .cv-sua-nut { width: 100%; flex: 1 1 100%; }
+}
+
+/* ---- SỔ NHẬN XÉT MỘT VIỆC (GY-0005) -------------------------------------
+   Dùng LẠI khuôn của sổ sửa ở trên — cùng một thứ: dòng sự việc có người,
+   có giờ. Đẻ khuôn thứ hai là mời hai màn trông khác nhau cho cùng nội dung.
+   Cuộn dọc trong hộp: một việc chạy dài có thể có chục nhận xét, mà hộp thì
+   phải vừa MỘT màn điện thoại (Sếp Ngọc nhắc hai lần). */
+.cv-nx-so { margin-top: 4px; }
+.cv-nx-so h5 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--text-mute);
+  font-weight: 600;
+}
+.cv-nx-so ul {
+  margin: 0; padding: 0; list-style: none;
+  max-height: 34vh; overflow-y: auto;
+}
+.cv-nx-so li {
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--ink);
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+  overflow-wrap: anywhere;
+}
+.cv-nx-so li:last-child { border-bottom: 0; }
+.cv-nx-so .luc { color: var(--text-mute); font-size: 11.5px; }
+
+.cv-nx-chip { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.cv-nx-chip .btn-nho { width: auto; }
+
+.cv-nx-xong {
+  margin-top: 12px;
+  padding: 10px 13px;
+  border-radius: var(--r-sm);
+  background: var(--sage-wash);
+  color: var(--ink);
+  font-size: 13px;
 }
 
 /* ==========================================================================

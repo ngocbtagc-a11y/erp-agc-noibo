@@ -3358,6 +3358,10 @@ function cauSuaDoc(d, bang) {
       : `${d.nguoi_ten} gỡ việc "${d.gia_tri_cu}" khỏi mục tiêu này`;
   }
   if (d.truong === 'go') return `${d.nguoi_ten} đã gỡ lời khen: "${d.gia_tri_cu}"`;
+  /* NHẬN XÉT (GY-0005) — cũng KHÔNG phải "đổi A thành B". Ép vào khuôn chung
+     ra câu *"đổi nhan_xet (trống) → làm tốt phần đóng gói"*, đọc không hiểu,
+     mà một dòng sổ đọc không hiểu thì đúng bằng không ghi. */
+  if (d.truong === 'nhan_xet') return `${d.nguoi_ten} nhận xét: "${d.gia_tri_moi}"`;
 
   /* CÙNG MỘT TÊN CỘT, HAI NGHĨA KHÁC NHAU. `tieu_de` ở `cong_viec` là "tên
      việc", ở `muc_tieu` là "tên mục tiêu" — in nhầm thì Sếp mở sổ mục tiêu
@@ -3691,6 +3695,80 @@ async function cvSua(req, env) {
   }
 
   return json({ ok: true, da_doi: doi.map(d => d.truong), so_dong_ghi: lenh.length });
+}
+
+/* ==========================================================================
+   NHẬN XÉT MỘT VIỆC ĐÃ GIAO — GY-0005
+   ---------------------------------------------------------------------------
+   Sếp Ngọc: *"Cần thêm nút hoặc mục nhận xét để nhận xét công việc của người
+   được giao."*
+
+   HAI CHỐT THIẾT KẾ, cả hai đều là chốt QUẢN TRỊ chứ không phải chốt kỹ thuật:
+
+   ① NHẬN XÉT GẮN VÀO MỘT VIỆC, KHÔNG GẮN VÀO MỘT NGƯỜI. Công ty quản theo
+      MBOs — chấm ĐẦU RA, không chấm con người. Một ô chữ tự do treo trên hồ
+      sơ nhân sự là lời phán về tính cách; cùng câu chữ ấy gắn vào một việc
+      có `dau_ra` viết sẵn thì thành lời chấm một kết quả, cãi lại được bằng
+      bằng chứng. Nên `ban_ghi_id` ở đây LUÔN là id một việc.
+
+   ② NGƯỜI BỊ NHẬN XÉT PHẢI ĐỌC ĐƯỢC. Nhận xét mà người ta không thấy thì là
+      ghi chép nội bộ, không phải quản lý — và tệ hơn: nó thành hồ sơ ngầm.
+      Nên mỗi lần nhận xét là một thông báo tới đúng người đó, và câu nhận
+      xét nằm ngay trong sổ việc mà họ mở được.
+
+   KHÔNG ĐẺ BẢNG MỚI. `lich_su_thay_doi_nen` đã được `them-ly-do-sua.sql`
+   tuyên bố là SỔ SỬA CHUNG của cả ERP, và đã có sẵn tiền lệ cho những vết
+   KHÔNG phải "đổi A thành B" (`viec_gan`, `go` — xem `cauSuaDoc`). Một nhận
+   xét là đúng khuôn đó: (bang, ban_ghi_id, truong, gia_tri_moi, ai, lúc).
+   Nhờ vậy nhận xét hiện luôn trong "Đã sửa những gì" của thẻ việc mà không
+   phải viết thêm một cửa đọc thứ hai.
+
+   AI ĐƯỢC VIẾT: người giao · quản lý cấp trên của người nhận · Admin ·
+   và CHÍNH người nhận (để nói lại). Nhận xét một chiều không cãi được thì
+   người ta không đọc nữa — và mất luôn cái kênh này.
+   ========================================================================== */
+async function cvNhanXet(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  if (!duocXemTab(phien, 'congviec')) return loi('Bạn không có quyền', 403);
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+
+  const id = parseInt(b.id, 10);
+  if (!id) return loi('Thiếu id công việc');
+  const noiDung = String(b.noi_dung || '').trim().slice(0, 1000);
+  if (noiDung.length < 5) return loi('Nhận xét quá ngắn — viết rõ chỗ làm tốt hoặc chỗ cần sửa giúp tôi');
+
+  const cv = await env.DB.prepare(
+    'SELECT id, tieu_de, nguoi_giao_id, nguoi_giao_ten, nguoi_nhan_id, nguoi_nhan_ten FROM cong_viec WHERE id = ?'
+  ).bind(id).first();
+  if (!cv) return loi('Không tìm thấy công việc', 404);
+
+  /* KHÁC `cvSua` MỘT CHỖ QUAN TRỌNG: việc đã `hoan_thanh` hay `huy` vẫn nhận
+     xét được. Sửa nội dung việc đã nghiệm thu là sửa bằng chứng; còn nhận
+     xét một việc đã xong mới đúng là lúc nhận xét có ích nhất. */
+  const laNguoiGiao = cv.nguoi_giao_id === phien.nhan_su_id || laAdmin(phien);
+  const laNguoiNhan = cv.nguoi_nhan_id === phien.nhan_su_id;
+  const laQuanLy = !laNguoiGiao && await laCapTrenCua(env, phien.nhan_su_id, cv.nguoi_nhan_id);
+  if (!laNguoiGiao && !laQuanLy && !laNguoiNhan) {
+    return loi('Chỉ người giao việc, quản lý cấp trên hoặc chính người nhận mới nhận xét được việc này', 403);
+  }
+
+  const ten = phien.ho_ten || phien.ten_dang_nhap;
+  const r = await env.DB.prepare(
+    `INSERT INTO lich_su_thay_doi_nen (bang, ban_ghi_id, truong, gia_tri_cu, gia_tri_moi,
+                                       nguoi_id, nguoi_ten, luc)
+     VALUES ('cong_viec', ?, 'nhan_xet', NULL, ?, ?, ?, datetime('now','+7 hours'))`
+  ).bind(String(id), noiDung, phien.nhan_su_id, ten).run();
+
+  /* BÁO CHO NGƯỜI CÒN LẠI — không báo cho chính mình (tự nhận xét việc mình
+     tự giao là TODO cá nhân, ăn thông báo của chính mình là làm phiền). */
+  const nhan = laNguoiNhan ? cv.nguoi_giao_id : cv.nguoi_nhan_id;
+  if (nhan && nhan !== phien.nhan_su_id) {
+    await guiThongBao(env, null,
+      `${ten} nhận xét việc "${cv.tieu_de}": ${noiDung.slice(0, 160)}${noiDung.length > 160 ? '…' : ''}`,
+      'cong_viec_nhan_xet', String(id), nhan);
+  }
+  return json({ ok: true, id: r.meta.last_row_id, nguoi_ten: ten });
 }
 
 /* Lịch sử làm việc — kho lưu trữ TOÀN CỤC mọi việc trong Trạm Mục Tiêu,
@@ -7039,6 +7117,7 @@ const DUONG_DAN = {
   /* CTL-0017 — sửa NỘI DUNG việc đã giao. Tách hẳn khỏi `cap-nhat` (đổi
      trạng thái + kết quả): hai luật khác hẳn nhau, gộp một cửa là mời lỗi. */
   'POST /api/cong-viec/sua':       cvSua,
+  'POST /api/cong-viec/nhan-xet':  cvNhanXet,
   /* Sổ sửa dùng chung cho cả lớp — ?bang=cong_viec|muc_tieu&id=… */
   'GET  /api/sua/lich-su':         suaLichSu,
   'GET  /api/cong-viec/lich-su':   cvLichSu,
