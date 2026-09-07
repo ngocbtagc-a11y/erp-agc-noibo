@@ -296,8 +296,11 @@ lần sau **không ai biết nợ có tăng hay không** — nên ghi cả ba ra
   `capNutDongPhu()` trong `app.js`: đo `scrollHeight` vs `clientHeight` rồi
   gắn/gỡ nút. Đo lại sau vá: @1440 bảng bán chạy **có nút**, bảng bán kém
   không kẹp nên **không có nút thừa**; @1024 và @375 không kẹp, không nút.
-- **CAO-2 · luật CSS chết.** `main` 3/187 → nhánh này **0/190**. Có cổng mới
-  canh: `npm run do-luat-css-chet` (tự đối chứng 5 mẫu trước khi chấm).
+- **CAO-2 · luật CSS chết.** Có cổng mới canh: `npm run do-luat-css-chet`
+  (tự đối chứng bằng các mẫu dựng sẵn trước khi chấm tệp thật).
+  ⚠️ Con số nền ở đây từng viết là "`main` 3/187". SAI: 187 là số của
+  **merge-base `407d2df`**, còn `origin/main af951b8` là **3/189**
+  (REV-0063 vòng 2, THẤP-3). Đo lại rồi mới ghi, đừng lấy số của cây khác.
 - **VỪA-1** arm D đổi `>=` → `===` (báo cả hai chiều). **VỪA-2** sửa lời khai
   nbsp cho khớp số đo (dựng lại bằng `BO_NBSP=1`: giống hệt từng pixel).
   **VỪA-3** xem ở trên. **VỪA-4** `MOC_CAO_DONG` nay có arm E4 dùng thật, và
@@ -307,6 +310,43 @@ lần sau **không ai biết nợ có tăng hay không** — nên ghi cả ba ra
 - Cổng mới đều **tự chứng minh bắt được**: gài lại đúng 3 lỗi rồi chạy —
   arm R7 đỏ ở 1440/1280 ("hiện 34px / thật 50px"), arm D đỏ cả 4 mức, arm A
   đỏ với "KHÔNG ĐO ĐƯỢC (khung 0px)"; `do-luat-css-chet` đỏ đúng 2 dòng.
+
+## VÒNG VÁ REV-0063 VÒNG 2 — 07/09/2026, đã xử 1 CHẶN · 2 CAO · 3 VỪA · 5 THẤP
+
+- **CHẶN-1 · gộp `main af951b8` không sạch.** Xung đột đúng khối `.kd-sku-cot`:
+  `main` chữa bằng `minmax(560px)`, nhánh này bằng `minmax(360px)` +
+  `min(560px,100%)` ở chính `<table>`. Chốt tay **lấy phía NHÁNH**, lý do ghi
+  ngay tại chỗ trong `style.css`: sàn 560px của `main` làm **hai bảng SKU xếp
+  chồng ở 1440px** (lưới chỉ rộng 1094 < 560×2+20).
+- **CAO-1 · luật CSS chết thứ tư và thứ năm** — `@media(≤1100px) thead th,
+  tbody td { padding-left/right: 10px }` và `@media(≤640px) .chat-nhap
+  { padding-bottom: calc(… env(safe-area-inset-bottom)) }`, cả hai chết vì bị
+  **viết GỘP `padding` đè viết RỜI**. Đo Chrome trước vá: đệm 16px ở
+  1100·1099·1024·981 (chưa bao giờ 10px). Sau vá: **10px ở cả bốn**, và lề an
+  toàn tai thỏ thắng được luật nền. Cổng `do-luat-css-chet` nay soi thêm lớp
+  gộp-đè-rời, chuẩn hoá selector (đảo lớp · khoảng trắng quanh `> + ~` ·
+  hoa/thường tên thẻ), và lớp "@media bị @media phủ đứng sau đè" — lớp cuối
+  lòi ra thêm một luật chết thật (`.login-panel` @980px). Mục PHẠM VI của cổng
+  nay khai **đủ 7 chỗ mù**, không phải một chỗ tiện nói.
+- **CAO-2 · vạch `min-width: 1101px` mở ra dải tràn mới 1101–1245px**
+  (`kd-tq-bang` +145 → +46, nút "Chi tiết" bị chính khối đó ẩn ⇒ chỉ còn kéo
+  ngang). Dời vạch lên **1246px** và thêm **1200** vào `RONGS` của
+  `do-bang-that`. Quét lại **cả dải 1090–1440px, 40 mức: 0 tràn, 0 chỗ mất
+  đường xem**.
+- **VỪA-1** sửa lời khai sai trong `do-cat-im-lang.mjs`: tập bắt của arm K là
+  **tập con thực sự** của R7, không phải "hai phạm vi không chồng lấn".
+- **VỪA-2** `capNutDongPhu()` nay **gỡ cả nút THẬT** khi ô hết kẹp (trước để
+  lại 11 nút "mở ra thứ đang bày sẵn"). Chốt chặn dao động bằng `GO_TOI_DA`
+  chứ không bằng cách từ chối dọn. Đo: 40 mẫu × 50ms **không dao động**, sau
+  khi nới khung còn **0 nút nói dối / 0 ô kẹp thiếu nút**.
+- **VỪA-3** `.dai-gon-btn` trong ô bảng: vùng chạm **15px → 44px** bằng
+  `::after`, dòng chỉ cao thêm 5px. Đưa vào `do-nut-dai-cat-44px` kèm ca đối
+  chứng (gỡ luật → đo ra 16px).
+- **THẤP-1** bỏ con số viết cứng "bốn mẫu" trong `do-luat-css-chet`, in thẳng
+  `MAU.length`. **THẤP-2** "từ ~1230px mới hai cột" → đo được **1086px**.
+  **THẤP-3** xem ghi chú ở mục CAO-2 vòng 1 phía trên. **THẤP-4** thêm ca
+  `--tu-kiem` đứng sẵn bắt **arm R7 phải đỏ**. **THẤP-5** ghi rõ chỗ lệch
+  phạm vi giữa `capNutDongPhu()` và arm K/R7 với ô chỉ chứa ảnh.
 
 ---
 

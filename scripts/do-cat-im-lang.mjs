@@ -43,9 +43,25 @@
    Lớp đó do `npm run do-bang-that` canh, bằng HAI arm: **K** (dòng mẫu do bàn
    đo chèn — ô chữ phẳng) và **R7** (ĐƯỜNG VẼ THẬT của ứng dụng — ô nhiều lớp
    con). Cả hai mở Chrome thật và so `scrollHeight` với `clientHeight` trên MỌI
-   ô của 30 bảng ở 4 bề ngang. Đúng lỗi ô SKU nói trên thì **chỉ R7 bắt được**
-   — đã thử gài lại: K xanh cả 4 mức.
-   Hai cổng, hai phạm vi, không chồng lấn — phải chạy cả hai.
+   ô của 30 bảng ở các bề ngang trong `RONGS`.
+
+   ⚠️ ĐÍNH CHÍNH — CHỖ NÀY TỪNG VIẾT SAI (REV-0063 vòng 2, VỪA-1).
+   Câu cũ: *"Hai cổng, hai phạm vi, không chồng lấn — phải chạy cả hai."*
+   SAI. Hồ Ly đo bằng hai thí nghiệm gài lỗi khác nhau:
+     · gài lại đúng lỗi ô SKU (bỏ `capNutDongPhu()`): R7 đỏ ở 1440 và 1280,
+       **K xanh cả bốn mức** — K trượt đúng cái lỗi nó sinh ra để bắt.
+     · gài một cái kẹp CSS phổ quát (`tbody td > * { max-height:12px }`):
+       K bắt 1 bảng (`db-bang`), R7 bắt 15 bảng — **"CHỈ K thấy" = KHÔNG CÓ**.
+   Tức tập bắt của K là **TẬP CON THỰC SỰ** của R7, không phải một phạm vi thứ
+   hai. Lý do có thật: vòng K chấm dòng do bàn đo CHÈN, mà dòng chèn là chữ
+   phẳng — chữ phẳng trong cột chữ luôn được `luoiBang()` bọc `.dai-gon` kèm
+   nút, nên chỗ kẹp-thiếu-nút không bao giờ sinh ra ở đó.
+
+   K vẫn được GIỮ, nhưng phải hiểu đúng nó là gì: K chấm một dòng do chính bàn
+   đo dựng, nên K đỏ nghĩa là *PHÉP ĐO KẸP* hỏng, còn R7 đỏ nghĩa là *ỨNG DỤNG*
+   hỏng. Rẻ (~0.1ms) và đáng giữ ở vai trò chốt tự-kiểm ấy.
+   Nhưng **K KHÔNG đỡ được gì nếu R7 bị bỏ** — đừng bao giờ lấy "vẫn còn K"
+   làm lý do bỏ R7.
 
    MÃ THOÁT: 0 = sạch · 1 = có chỗ cắt im lặng · 2 = bàn đo hỏng.
    ========================================================================== */

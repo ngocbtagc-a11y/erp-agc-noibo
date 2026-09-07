@@ -12073,16 +12073,35 @@ function luoiBang() {
    thêm" dưới một cái tên KHÔNG hề bị cắt. Một cái nút mở ra đúng thứ đang bày
    sẵn là một lời nói dối nhỏ, cùng họ với chính lỗi đang vá.
 
-   BA TRẠNG THÁI, VÀ KHÔNG CÓ CỬA DAO ĐỘNG:
-     · đo được + bị kẹp    → gắn nút THẬT (không cờ `doan`), và không gỡ nữa.
-     · đo được + không kẹp → chỉ gỡ nút MANG CỜ `doan`, tức nút do phép đoán
-       đặt ra. Nút thật để yên: gỡ nó là mở cửa cho vòng lặp "gỡ nút → cột hẹp
-       lại → kẹp → gắn nút → cột rộng ra → gỡ nút…" mà MutationObserver sẽ
-       chạy mãi không dừng.
+   BA TRẠNG THÁI:
+     · đo được + bị kẹp    → gắn nút THẬT (không cờ `doan`).
+     · đo được + không kẹp → GỠ nút, kể cả nút THẬT. Xem "VÌ SAO GỠ CẢ NÚT
+       THẬT" ngay dưới.
      · KHÔNG đo được (ô chưa được dàn, `clientHeight` = 0) → đoán theo độ dài
        và ĐÁNH DẤU `doan`. Lùi về phía AN TOÀN: thà một cái nút thừa sống tạm
        vài trăm mili-giây còn hơn một chỗ cắt chữ âm thầm sống mãi. Lượt dập
        kế tiếp (mọi lần DOM đổi đều gọi lại hàm này) đo được thật và tự dọn.
+
+   ⚠️ VÌ SAO GỠ CẢ NÚT THẬT — VÀ VÌ SAO CÂU KHAI CŨ Ở ĐÂY LÀ SAI.
+   Chỗ này từng chỉ gỡ nút MANG CỜ `doan`, với lý do viết ra như một sự thật:
+   *"gỡ nút thật là mở cửa cho vòng lặp gỡ nút → cột hẹp lại → kẹp → gắn nút →
+   cột rộng ra → gỡ nút… mà MutationObserver sẽ chạy mãi không dừng."*
+   Đó là một GIẢ THUYẾT được trình bày như một SỐ ĐO. Hồ Ly dựng hẳn bản CÓ GỠ
+   rồi đo 40 mẫu × 50ms ở 1440px: số nút là 6 ở cả 40 mẫu — KHÔNG dao động,
+   không tái lập được (REV-0063 vòng 2, VỪA-2).
+   Còn cái GIÁ của việc không gỡ thì đo được ngay: mở ở 1440 (khung 537 → kẹp
+   → nút thật), rồi nới khung ra (mô phỏng xoay máy / kéo co cửa sổ) và ép vẽ
+   lại — 11 cái nút "Xem thêm" Ở LẠI trên những ô ĐÃ HẾT KẸP. Mười một cái nút
+   mở ra đúng thứ đang bày sẵn: chính là "một lời nói dối nhỏ, cùng họ với lỗi
+   đang vá" mà đoạn ngay phía trên lên án, và là lý do cờ `data-doan` ra đời.
+   Giữ lại một cái nút nói dối để phòng một vòng lặp chưa ai thấy là đổi sai
+   chiều — đo được thắng đoán được.
+
+   CHỐT CHẶN DAO ĐỘNG, ĐỂ KHÔNG PHẢI TIN AI: `GO_TOI_DA`. Mỗi ô đếm số lần
+   nút THẬT của nó bị gỡ (`data-so-go`); quá hạn thì thôi, giữ nút lại. Vòng
+   lặp giả định — nếu nó có thật ở một bố cục nào đó — bị chặn sau đúng
+   GO_TOI_DA nhịp, thay vì được chặn bằng cách không bao giờ dọn rác. Bộ đếm
+   nằm trên chính phần tử nên mỗi lần bảng vẽ lại là một khởi đầu sạch.
 
    ĐANG BUNG THÌ ĐỪNG ĐỤNG: `.dai-gon-mo` bỏ `max-height` nên `scrollHeight`
    bằng `clientHeight`, tức trông như "không kẹp" — không loại trừ thì mỗi lần
@@ -12093,12 +12112,30 @@ function luoiBang() {
    chỗ kẹp trong CSS thì thêm vào đây, nếu không lại đúng lỗi này dưới một cái
    tên khác.
    CHỐT CANH: arm K và arm R7 của `npm run do-bang-that` so `scrollHeight` với
-   `clientHeight` trên MỌI ô của 30 bảng ở 4 bề ngang. R7 chạy trên ĐƯỜNG VẼ
-   THẬT và là arm DUY NHẤT bắt được đúng lỗi này — đã thử gài lại: K xanh cả 4
-   mức, R7 đỏ ở 1440 và 1280 với đúng số đo "hiện 34px / thật 50px".
+   `clientHeight` trên MỌI ô của 30 bảng ở mọi bề ngang trong `RONGS`. R7 chạy
+   trên ĐƯỜNG VẼ THẬT và là arm DUY NHẤT bắt được đúng lỗi này — nay có một ca
+   `--tu-kiem` ĐỨNG SẴN tự gỡ `capNutDongPhu()` rồi đòi R7 phải đỏ, chứ không
+   còn chỉ chứng minh bằng lời (REV-0063 vòng 2, THẤP-4). Số đo khi gài lại:
+   K xanh ở mọi mức, R7 đỏ ở 1440 và 1280, "hiện 34px / thật 50px".
+   Tập bắt của K là TẬP CON THỰC SỰ của R7 — xem đính chính trong
+   `scripts/do-cat-im-lang.mjs`; đừng lấy "vẫn còn K" làm lý do bỏ R7.
    (`do-cat-im-lang` KHÔNG canh được lớp này: nó đọc MÃ NGUỒN tìm `LIMIT` và
    `.slice`, nó không nhìn thấy một cái kẹp CSS bao giờ.)
+
+   ⚠️ MỘT CHỖ LỆCH PHẠM VI, GHI RA ĐỂ ĐỪNG NGẠC NHIÊN (REV-0063 vòng 2,
+   THẤP-5). Hàm này chấm theo `scrollHeight > clientHeight`, KHÔNG hỏi bên
+   trong ô là chữ hay ảnh — nên một ô `.sm` chỉ chở ẢNH mà bị kẹp vẫn được cấp
+   nút "Xem thêm" (Hồ Ly đo: hiện 34px / thật 45px, `chu: 0`). Arm K/R7 thì bỏ
+   qua đúng ô ấy (`if (!chu) continue` — ảnh không phải chữ, đã khai đích danh
+   trong `DO_KEP_IM_LANG`). Hai bên lệch nhau đúng một ca.
+   Hôm nay VÔ HẠI: không ô `.sm` nào trong ERP chở ảnh. Và lệch theo chiều AN
+   TOÀN: bên vá rộng hơn bên đo, tức có thừa một cái nút chứ không thiếu. Nếu
+   mai có ô ảnh thật thì cân nhắc lại — nút "Xem thêm" dưới một tấm ảnh bị cắt
+   là đúng việc, chỉ là không arm nào canh nó.
    ========================================================================== */
+/* Trần số lần gỡ nút THẬT trên MỘT ô, trong MỘT đời DOM. 2 là đủ để dọn sạch
+   mọi ca kéo co / xoay máy đo được, và vẫn chặn cứng cái vòng lặp giả định. */
+const GO_TOI_DA = 2;
 function capNutDongPhu() {
   for (const sm of document.querySelectorAll('td.cot-chu .sm, td .sm.dong-phu')) {
     if (sm.classList.contains('dai-gon-mo')) continue;
@@ -12111,8 +12148,14 @@ function capNutDongPhu() {
     if (sm.scrollHeight > sm.clientHeight + 1) {
       if (!nutCu) themNutXemThem(sm, false);
       else delete nutCu.dataset.doan;                 // đoán đúng → thành nút thật
-    } else if (nutCu && nutCu.dataset.doan) {
-      nutCu.remove();                                 // đoán sai → dọn đi
+    } else if (nutCu) {
+      if (nutCu.dataset.doan) { nutCu.remove(); continue; }   // đoán sai → dọn đi
+      /* Nút THẬT trên ô đã HẾT KẸP cũng là rác — gỡ. Chốt chặn dao động ở đây,
+         không phải ở việc từ chối dọn (REV-0063 vòng 2, VỪA-2). */
+      const soGo = Number(sm.dataset.soGo || 0);
+      if (soGo >= GO_TOI_DA) continue;
+      sm.dataset.soGo = String(soGo + 1);
+      nutCu.remove();
     }
   }
 }

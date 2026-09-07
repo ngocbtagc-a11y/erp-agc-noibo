@@ -83,6 +83,11 @@ CSS_CHUA_VA = go(CSS_CHUA_VA, /(\.cv-pham-vi \{[^}]*?)min-height: 44px;/,
   '$1min-height: 0;', '.cv-pham-vi min-height');
 CSS_CHUA_VA = go(CSS_CHUA_VA, /\.seg-loc \.seg-nut \{ min-height: 44px; \}/,
   '.seg-loc .seg-nut { min-height: 0; }', '.seg-loc .seg-nut min-height');
+/* Nút "Xem thêm" TRONG Ô BẢNG — đường thoát DUY NHẤT khỏi chỗ chữ bị kẹp
+   (REV-0063 vòng 2, VỪA-3). Ca đối chứng gỡ đúng khối 44px, trả nút về cái đã
+   đo được trước khi vá: hộp 60×15px. */
+CSS_CHUA_VA = go(CSS_CHUA_VA, /td \.dai-gon-btn \{[\s\S]*?\n\}/,
+  'td .dai-gon-btn { padding: 0; font-size: 12px; }', 'td .dai-gon-btn');
 
 /* ==========================================================================
    BẢN TRƯỚC (`ab92afc`) — chép nguyên văn để có số ĐỐI CHIẾU, không phải khai
@@ -127,6 +132,23 @@ const BANG = `
   `<td class="sm">Sếp Ngọc</td><td class="sm">0${(i % 9) + 1}/09/2026</td><td><span class="tag">Mới</span></td><td></td></tr>`).join('')}
 </tbody></table></div></div>`;
 
+/* Ô BẢNG CÓ CHỮ BỊ KẸP + NÚT "XEM THÊM" — chép đúng hình dạng mà
+   `capNutDongPhu()` dựng ra ở màn Kinh doanh: `td.cot-chu` chứa `.nm` (mã SKU)
+   và `.sm` (tên hàng, bị `max-height` kẹp), nút `.dai-gon-btn` đặt NGAY SAU
+   `.sm`. Tên hàng là dữ liệu ngành thật, 96 ký tự. */
+const BANG_KEP = `
+<div class="panel"><div class="table-wrap"><table>
+<thead><tr><th>Mã SKU · Tên hàng</th><th class="num">SL bán</th><th class="num">Doanh thu</th></tr></thead>
+<tbody id="tbKep"><tr class="hang">
+  <td class="cot-chu">
+    <div class="nm">AGC-HDRM-500G-LOAI-A-1</div>
+    <div class="sm">Hạt điều rang muối Bình Phước loại A đóng túi zip 500g — lô nhập tháng 8/2026 kèm giấy kiểm định</div>
+    <button type="button" class="dai-gon-btn" id="nutXemThemO">Xem thêm</button>
+  </td>
+  <td class="num">1.234</td>
+  <td class="num">9.876.543.210</td>
+</tr></tbody></table></div></div>`;
+
 const KHUNG = (css, than, extra = '') => `<!doctype html><html lang="vi"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>${css}</style></head><body style="margin:0;padding:8px">
@@ -136,7 +158,7 @@ ${than}
   <button type="button" class="dai-cat-nut" id="nutXemThem">Tải thêm 200 việc cũ hơn</button>
 </div>
 <div class="dai-cat" id="daiCatAn" hidden></div>
-${BANG}${extra}</body></html>`;
+${BANG}${BANG_KEP}${extra}</body></html>`;
 
 const TRANG = `<!doctype html><html lang="vi"><head><meta charset="utf-8">
 <title>Đo dải phạm vi — 44px · chiều cao · số dòng</title></head><body style="font:13px monospace;margin:12px">
@@ -168,10 +190,28 @@ function doKhung(id, be, cao) {
   for (const tr of d.querySelectorAll('#tb tr')) if (tr.getBoundingClientRect().bottom <= cao) dong++;
   const an = d.querySelector('#daiCatAn');
   const csAn = an ? d.defaultView.getComputedStyle(an) : null;
+  /* Nút "Xem thêm" TRONG Ô BẢNG. Đo HAI số khác nhau, và đó là cả điểm của
+     phép đo này (REV-0063 vòng 2, VỪA-3):
+       · HỘP nút     — vùng ngón tay bấm trúng, phải >= 44px
+       · CHIỀU CAO DÒNG — phải KHÔNG phình ra, vì nút cao lên mà dòng cao theo
+         là đổi từ lỗi ngón tay sang lỗi "ăn mất số dòng thấy được"
+     Lề âm trên/dưới là thứ làm hai số này cùng đạt một lúc.
+     (Lưu ý cho người sửa: đoạn này nằm TRONG một chuỗi mẫu — đừng viết dấu
+     huyền ngược ở đây, nó đóng chuỗi và cả tệp thành lỗi cú pháp.) */
+  const nutO = d.querySelector('#nutXemThemO');
+  const oNutO = nutO && nutO.getBoundingClientRect();
+  const chamO = oNutO ? oNutO.height : null;
+  const dongKep = d.querySelector('#tbKep tr');
+  const smKep = d.querySelector('#tbKep .sm');
   return {
     nut_pham_vi: oPv ? Math.round(oPv.height * 10) / 10 : null,
     nut_xem_them: lay('#nutXemThem'),
     nut_loc_pham_vi: lay('#nutLoc'),
+    nut_o_bang_hop: oNutO ? Math.round(oNutO.height * 10) / 10 : null,
+    nut_o_bang_rong: oNutO ? Math.round(oNutO.width * 10) / 10 : null,
+    nut_o_bang_cham: chamO === null ? null : Math.round(chamO * 10) / 10,
+    dong_o_kep_cao: dongKep ? Math.round(dongKep.getBoundingClientRect().height * 10) / 10 : null,
+    o_kep_that_su_bi_kep: !!(smKep && smKep.scrollHeight > smKep.clientHeight + 1),
     dai_chiem_doc: chiemDoc,
     dong_bang_thay_duoc: dong,
     an_dung_khi_hidden: !!csAn && csAn.display === 'none' && an.getBoundingClientRect().height === 0,
@@ -185,8 +225,18 @@ function ve() {
 
   const nut44 = n375.nut_pham_vi >= 44 && n320.nut_pham_vi >= 44 &&
                 n375.nut_xem_them >= 44 && n320.nut_xem_them >= 44 &&
-                n375.nut_loc_pham_vi >= 44 && n320.nut_loc_pham_vi >= 44;
-  const dcNhay = !(dc.nut_pham_vi >= 44 && dc.nut_xem_them >= 44 && dc.nut_loc_pham_vi >= 44);
+                n375.nut_loc_pham_vi >= 44 && n320.nut_loc_pham_vi >= 44 &&
+                n375.nut_o_bang_cham >= 44 && n320.nut_o_bang_cham >= 44;
+  const dcNhay = !(dc.nut_pham_vi >= 44 && dc.nut_xem_them >= 44 && dc.nut_loc_pham_vi >= 44) &&
+                 !(dc.nut_o_bang_cham >= 44);
+  /* Vùng chạm nới ra mà DÒNG KHÔNG ĐƯỢC PHÌNH. Ngưỡng 4px là đúng phần đệm
+     4px trên/dưới thêm vào cho chữ nút dễ đọc, không phải một con số nới tay:
+     44px vùng chạm mà cộng 29px vào mọi dòng thì đã đổi sang lỗi khác. */
+  const dongKhongPhinh = n375.dong_o_kep_cao <= dc.dong_o_kep_cao + 10 &&
+                         n320.dong_o_kep_cao <= dc.dong_o_kep_cao + 10;
+  /* Ô mẫu phải THẬT SỰ bị kẹp, nếu không thì phép đo trên là đo một cái nút
+     không ai cần — bàn đo tự nói dối. */
+  const oKepThat = n375.o_kep_that_su_bi_kep && n320.o_kep_that_su_bi_kep;
   const gonHon = n375.dai_chiem_doc < t375.dai_chiem_doc && n320.dai_chiem_doc < t320.dai_chiem_doc;
   const dongKhongGiam = n375.dong_bang_thay_duoc >= t375.dong_bang_thay_duoc &&
                         n320.dong_bang_thay_duoc >= t320.dong_bang_thay_duoc;
@@ -195,9 +245,12 @@ function ve() {
 
   const kq = { nut_44px: nut44, doi_chung_con_hieu_luc: dcNhay, dai_gon_hon: gonHon,
                dong_bang_khong_giam: dongKhongGiam, an_dung_khi_hidden: anDung,
-               khong_tran_ngang: khongTran, nay: { '375': n375, '320': n320 },
+               khong_tran_ngang: khongTran,
+               nut_o_bang_khong_phinh_dong: dongKhongPhinh, o_mau_that_su_bi_kep: oKepThat,
+               nay: { '375': n375, '320': n320 },
                truoc: { '375': t375, '320': t320 }, doi_chung: dc };
-  kq.dat_het = nut44 && dcNhay && gonHon && dongKhongGiam && anDung && khongTran;
+  kq.dat_het = nut44 && dcNhay && gonHon && dongKhongGiam && anDung && khongTran &&
+               dongKhongPhinh && oKepThat;
   window.KET_QUA = kq;
   const d = (x) => String(x).padStart(6);
   document.getElementById('kq').textContent =
@@ -208,6 +261,13 @@ function ve() {
       'px   doi chung (go luat): ' + d(dc.nut_xem_them) + 'px\\n' +
     '  Nut BO LOC pham vi 375px: ' + d(n375.nut_loc_pham_vi) + 'px   320px: ' + d(n320.nut_loc_pham_vi) +
       'px   doi chung (go luat): ' + d(dc.nut_loc_pham_vi) + 'px\\n' +
+    '  Nut "Xem them" TRONG O BANG (REV-0063 v2, VUA-3)\\n' +
+    '    vung CHAM  375px: ' + d(n375.nut_o_bang_cham) + 'px   320px: ' + d(n320.nut_o_bang_cham) +
+      'px   doi chung (go luat): ' + d(dc.nut_o_bang_cham) + 'px\\n' +
+    '    hop        375px: ' + d(n375.nut_o_bang_hop) + 'x' + n375.nut_o_bang_rong +
+      '   doi chung: ' + d(dc.nut_o_bang_hop) + 'x' + dc.nut_o_bang_rong + '\\n' +
+    '    dong o kep 375px: ' + d(n375.dong_o_kep_cao) + 'px   doi chung: ' + d(dc.dong_o_kep_cao) +
+      'px   (khong duoc phinh)   o co that su bi kep: ' + n375.o_kep_that_su_bi_kep + '\\n' +
     '\\nCHIEU CAO DAI PHAM VI (ke ca margin) — TRUOC vs SAU\\n' +
     '  375px: TRUOC ' + d(t375.dai_chiem_doc) + 'px  ->  SAU ' + d(n375.dai_chiem_doc) +
       'px   (bot ' + Math.round(t375.dai_chiem_doc - n375.dai_chiem_doc) + 'px)\\n' +
@@ -221,6 +281,8 @@ function ve() {
     '\\nSo dong KHONG giam  : ' + (dongKhongGiam ? 'DAT' : 'HONG') +
     '\\nDai [hidden] van an : ' + (anDung ? 'DAT' : 'HONG') +
     '\\nKhong tran ngang    : ' + (khongTran ? 'DAT' : 'HONG') +
+    '\\nNut o bang: dong KHONG phinh : ' + (dongKhongPhinh ? 'DAT' : 'HONG') +
+    '\\nO mau THAT SU bi kep         : ' + (oKepThat ? 'DAT' : 'HONG - phep do vo nghia') +
     '\\nDoi chung con nhay  : ' + (dcNhay ? 'CO (ban khong va do ra <44px)' : 'KHONG - PHEP DO VO DUNG') +
     '\\n\\nKET_QUA_JSON=' + JSON.stringify(kq);
 }

@@ -1542,7 +1542,26 @@ table { width: 100%; border-collapse: collapse; min-width: min(560px, 100%); }
    đệm dọc là chiều cao dòng đổi, là số dòng thấy được đổi. Cỡ chữ cũng giữ
    nguyên tuyệt đối (11px tiêu đề / 13.5px ô). */
 @media (max-width: 1100px) {
-  thead th, tbody td { padding-left: 10px; padding-right: 10px; }
+  /* ⚠️ `table thead th` CHỨ KHÔNG PHẢI `thead th`, VÀ PHẢI CÓ CẢ DÒNG
+     `.table-wrap-cuon` — LUẬT NÀY ĐÃ CHẾT SUỐT CẢ MỘT VÒNG VÁ.
+     Bản đầu viết `thead th, tbody td { padding-left/right: 10px }`. Kẻ giết nó
+     KHÔNG phải một `padding-left` nào cả, mà là bốn luật nền VIẾT GỘP đứng sau:
+       dòng 1965 `thead th { padding: 11px 16px }`            ưu tiên 0,0,2
+       dòng 1978 `tbody td { padding: 13px 16px }`            ưu tiên 0,0,2
+       dòng 2825 `.table-wrap-cuon thead th { padding: 9px 16px }`  0,1,2
+       dòng 2827 `.table-wrap-cuon tbody td { padding: 8px 16px }`  0,1,2
+     `padding` đặt lại CẢ BỐN cạnh kể cả cạnh nó không nhắc tên, nên `16px`
+     thắng `10px` — mắt thường không thấy vì hai bên không cùng tên thuộc tính.
+     Đo Chrome trước khi sửa: đệm ngang là 16px ở 1100 · 1099 · 1024 · 981px,
+     CHƯA BAO GIỜ 10px ⇒ 144px (12 cột × 12px) mà khối này hứa lấy về thì chưa
+     từng lấy được đồng nào. (REV-0063 vòng 2, CAO-1)
+     Cách thắng: thêm tên thẻ `table` → 0,0,3 > 0,0,2; và với bảng cuộn thì
+     `.table-wrap-cuon table thead th` → 0,1,3 > 0,1,2. Viết RỜI ở đây là cố ý:
+     đệm DỌC mỗi luật một khác (11/13/9/8px), viết gộp là xoá luôn cả nó.
+     `npm run do-luat-css-chet` từ nay bắt được lớp "gộp đè rời" này. */
+  table thead th, table tbody td { padding-left: 10px; padding-right: 10px; }
+  .table-wrap-cuon table thead th,
+  .table-wrap-cuon table tbody td { padding-left: 10px; padding-right: 10px; }
   /* Tiêu đề cột được xuống dòng ở màn hẹp. Đây KHÔNG phải bóp chữ: cỡ chữ
      giữ nguyên 11px, và tiêu đề cao thêm một lần cho cả bảng — khác hẳn việc
      cho Ô xuống dòng, thứ sẽ làm MỌI dòng cao lên và ăn mất số dòng thấy
@@ -1732,9 +1751,30 @@ th.cot-phu, td.cot-phu { display: none; }
    Hai cột "Hủy" / "Hoàn" của `#kd-tq-bang` KHÁC với người-giao / ngày-tạo ở
    trên: tách theo TỪNG SÀN, chúng trả lời đúng câu Sếp hỏi ("Shopee rò rỉ hay
    TikTok rò rỉ") và thẻ số phía trên KHÔNG thay được vì nó đọc tổng toàn công
-   ty. Chúng chỉ chật ở máy tính bảng nằm ngang: @1024px bảng tràn +26px,
-   nhưng @1280 và @1440 bảng vừa khít (khung 1094 · bảng 1094).
-   Nên chỉ THẮT ĐÚNG CHỖ HẸP: từ 1101px trở lên hai cột trở lại bảng.
+   ty. Chúng chỉ chật ở màn hẹp: @1024px bảng tràn +26px, nhưng @1280 và
+   @1440 bảng vừa khít (khung 1094 · bảng 1094).
+   Nên chỉ THẮT ĐÚNG CHỖ HẸP: từ 1246px trở lên hai cột trở lại bảng.
+
+   ⚠️ VẠCH NÀY TỪNG LÀ 1101px VÀ ĐÓ LÀ MỘT DẢI TRÀN MỚI TỰ TẠO RA.
+   Con số 1101 được chốt từ ĐÚNG HAI số đo — 1280 và 1440 — rồi suy ra "chỗ
+   nào rộng hơn 1100 cũng vừa". Sai. Hồ Ly quét cả dải và đo được, đường vẽ
+   thật (REV-0063 vòng 2, CAO-2):
+       @1246  khung 900 · bảng 900   vừa
+       @1200  khung 854 · bảng 900   TRÀN +46   [rơi: So kỳ trước]
+       @1152  khung 806 · bảng 900   TRÀN +94   [rơi: So kỳ trước]
+       @1101  khung 755 · bảng 900   TRÀN +145  [rơi: Doanh thu tạm tính, So kỳ trước]
+       @1100  khung 754 · bảng 754   vừa  (cột phụ rời bảng, nút Chi tiết HIỆN)
+   Ở dải 1101–1245px hai cột "Hủy"/"Hoàn" đã trở lại bảng NHƯNG bảng tràn, mà
+   nút "Chi tiết" thì bị chính khối CSS này ẩn ⇒ đường duy nhất tới hai cột
+   rơi khỏi mép là KÉO NGANG — đúng thứ Sếp gửi ảnh bảo bỏ, nhắc hai lần.
+   Câu từng viết ở dưới đây, "đường tới dữ liệu có sẵn ở MỌI bề ngang", SAI ở
+   dải đó, và nay đúng trở lại vì vạch đã dời.
+   1246px là bề ngang ĐẦU TIÊN mà 7 cột đủ chỗ thật (đo được: khung 900 =
+   bảng 900), không phải một con số tròn chọn cho đẹp.
+   Cách chữa KHÔNG PHẢI là cho nút "Chi tiết" hiện lại ở ≥1101 — xem đoạn
+   "VÌ SAO KHÔNG CHỌN CÁCH…" ở cuối bình luận này.
+   Canh giữ: `do-bang-that` nay đo cả mức 1200px, tức PHÍA DƯỚI vạch. Ai dời
+   vạch xuống lại sẽ thấy đỏ ngay, không phải chờ Sếp gửi ảnh.
 
    `.cot-phu` vẫn được GIỮ trên `<th>`, không tháo ra. Đó là thứ bảo
    `luoiBang()` cấp nút "Chi tiết", nên đường tới dữ liệu có sẵn ở mọi bề
@@ -1742,7 +1782,7 @@ th.cot-phu, td.cot-phu { display: none; }
    kéo co cửa sổ qua mốc 1100px (`luoiBang()` chỉ chạy khi DOM đổi, KHÔNG chạy
    khi cửa sổ đổi cỡ — một luật `.cot-phu` gắn theo bề ngang bằng JS sẽ chết
    đúng ở đó).
-   Ở ≥1101px hai cột đã nằm trên bảng nên nút "Chi tiết" của bảng này không
+   Ở ≥1246px hai cột đã nằm trên bảng nên nút "Chi tiết" của bảng này không
    còn gì để mở — ẩn nó đi, đừng để một cái nút hứa mở ra thứ đang bày sẵn.
    Chốt canh: arm G của `do-bang-that` nay chỉ đòi nút cho ô cột phụ ĐANG THẬT
    SỰ BỊ GIẤU (`display: none`), nên nó đỏ nếu ai đó ẩn nút mà cột vẫn mất.
@@ -1756,11 +1796,16 @@ th.cot-phu, td.cot-phu { display: none; }
    G/G2/G3 ở cả 4 bề ngang. Bản chép ấy là tài liệu soi của người soi, không
    phải cổng của kho mã — nhưng phải khai ra, đừng để ai mở lên thấy đỏ rồi
    tưởng có hồi quy.
-   VÌ SAO KHÔNG CHỌN CÁCH "cứ để nút hiện luôn ở ≥1101px cho bàn nào cũng
+   VÌ SAO KHÔNG CHỌN CÁCH "cứ để nút hiện luôn ở ≥1246px cho bàn nào cũng
    xanh": ở đó hai cột đã nằm trên bảng, nên cái nút sẽ mở ra ĐÚNG THỨ ĐANG
    BÀY SẴN — trên một bảng chỉ có 2 dòng, ngay màn 1440px Sếp đang ngồi. Giữ
-   một cái nút vô nghĩa vĩnh viễn để một bản chép cũ khỏi đỏ là đổi sai chiều. */
-@media (min-width: 1101px) {
+   một cái nút vô nghĩa vĩnh viễn để một bản chép cũ khỏi đỏ là đổi sai chiều.
+   Hồ Ly đã soi lại và TÁN THÀNH quyết định này (REV-0063 vòng 2, ⑤) — kèm
+   đúng một điều kiện: nó chỉ đúng ở nơi hai cột THẬT SỰ vừa. Đó là lý do vạch
+   phải là 1246 chứ không phải 1101; ở 1101–1245 việc ẩn nút không còn là
+   "đừng hứa thứ đang bày sẵn" mà thành "lấy mất đường xem ở đúng chỗ cột rơi
+   khỏi màn". */
+@media (min-width: 1246px) {
   #kd-tq-wrap th.cot-phu, #kd-tq-wrap td.cot-phu { display: table-cell; }
   #kd-tq-wrap .o-chitiet { display: none; }
   /* Trả lại 50px lề phải mà `td.co-chitiet` chừa cho cái nút vừa ẩn. Không trả
@@ -2055,6 +2100,52 @@ td .sm { font-size: 12px; color: var(--text-mute); white-space: nowrap; }
   cursor: pointer;
 }
 .dai-gon-btn:hover { opacity: .75; }
+
+/* ⚠️ TRONG Ô BẢNG, NÚT NÀY LÀ ĐƯỜNG THOÁT DUY NHẤT — PHẢI ĐỦ TẦM NGÓN TAY.
+   Đo được ở cả 1440 và 1280: nút "Xem thêm" của ô SKU là **60 × 15px**, vì
+   khối `.dai-gon-btn` ở trên có `padding: 0` · `font-size: 12px` · không
+   `min-height`. Luật nhà là ≥44px (đã chuẩn hoá cho `.combo1-hienthi`,
+   `.ql-goiy-item`, `#kd-tq-ky .seg-nut`, ô tick chọn dòng).
+   Lớp `.dai-gon-btn` có từ trước nên đây KHÔNG phải hồi quy — nhưng vòng vá
+   REV-0063 biến nó thành đường thoát DUY NHẤT của một lỗi CAO (chữ bị kẹp
+   trong ô bảng SKU màn Kinh doanh), trên một PWA mà chính mã này viện làm lý
+   do bác `title`: "Sếp mở trên cả điện thoại lẫn máy tính bảng". Một đường
+   thoát cao 15px trên máy tính bảng thì gần bằng không có.
+   (REV-0063 vòng 2, VỪA-3)
+
+   VÌ SAO CÓ LỀ ÂM: nút nằm DƯỚI phần chữ bị kẹp trong ô, nên `min-height:44px`
+   trần trụi cộng thẳng ~29px vào MỌI dòng có nút — tức ăn mất số dòng thấy
+   được, đúng thứ mà khối "ĐỆM DỌC GIỮ NGUYÊN" ở trên cấm động vào.
+   Dùng lại ĐÚNG thủ pháp đã dùng cho ô tick chọn dòng (xem khối "Ô TICK CHỌN
+   DÒNG — 44px cho ngón tay"): hộp nút cao 44px thật, nhưng lề âm 10px trên và
+   dưới trả lại 20px cho dòng, nên dòng chỉ cao thêm vài pixel.
+   `inline-flex` + `align-items: center` để chữ "Xem thêm" nằm giữa hộp 44px —
+   `inline-block` sẽ dán chữ lên mép trên và nút trông như bị lệch.
+   Vì sao KHÔNG dùng `::after` phủ 44px: vùng chạm thì đúng, nhưng
+   `getBoundingClientRect()` của nút vẫn trả 24px, nên MỌI bàn đo đọc hộp —
+   kể cả bàn đo của người soi — sẽ báo "nút 15/24px, dưới luật nhà" và người
+   sau lại phải đi tìm hiểu xem con số nào mới thật. Hộp đo ra ĐÚNG 44px là
+   thứ vừa đúng cho ngón tay vừa đúng cho phép đo.
+   Chốt canh: `npm run do-nut-dai-cat` đo cả CHIỀU CAO HỘP lẫn CHIỀU CAO DÒNG
+   của `.dai-gon-btn` trong ô bảng, và có ca đối chứng gỡ luật này ra. */
+td .dai-gon-btn {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 6px;
+  /* -10px trên/dưới: hộp 44px chỉ ăn 24px chiều dọc của dòng.
+     -6px trái: đệm ngang mới không được đẩy chữ nút lệch khỏi mép cột.
+     HÌNH HỌC ĐO ĐƯỢC trên đường vẽ thật (1440 · 1280 · 1200px, 6 nút):
+       hộp 74×44 · lọt hẳn trong ô (mép trái nút cách mép ô 10px)
+       thò xuống dưới đáy ô 1–2px · đè lên 10px cuối của phần chữ bị kẹp
+       `elementFromPoint` giữa hộp trả về CHÍNH NÓ → không bị gì che.
+     ĐỪNG dồn lề âm về một phía. Dồn xuống dưới thì nút thò sang vùng DÒNG KẾ
+     TIẾP và ăn cú bấm của dòng người ta đang nhắm — tệ hơn hẳn. Đè 10px lên
+     chữ của CHÍNH Ô MÌNH thì vô hại: bấm vào dòng chữ đang bị cắt mà nó bung
+     ra là đúng thứ người dùng muốn. */
+  margin: -10px 0 -10px -6px;
+  font-size: 12.5px;
+}
 
 .person { display: flex; align-items: center; gap: 10px; }
 
@@ -2592,8 +2683,20 @@ tr.canh-bao:hover > td { background: #fbdbd6; }
 
   /* Chừa lề an toàn dưới (tai thỏ / thanh vuốt iPhone) cho ô nhập tin — thiếu
      nó thì nút Gửi nằm đúng chỗ thanh vuốt, bấm ra… về màn hình chính.
-     `env()` trả 0 trên máy không có tai thỏ nên không hại gì. */
-  .chat-nhap { padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px)); }
+     `env()` trả 0 trên máy không có tai thỏ nên không hại gì.
+
+     ⚠️ `form.chat-nhap` CHỨ KHÔNG PHẢI `.chat-nhap` — VÀ LỀ AN TOÀN NÀY CHƯA
+     BAO GIỜ CHẠY. Luật nền `.chat-nhap { padding: 10px 12px }` (dòng ~2724)
+     đứng SAU, cùng ưu tiên (0,1,0), và `padding` viết gộp đặt lại luôn
+     `padding-bottom` = 10px dù không nhắc tên nó. Hai bên khác tên thuộc tính
+     nên không ai nhìn ra, kể cả bản đầu của `do-luat-css-chet`.
+     Hậu quả: trên iPhone có thanh vuốt, nút Gửi nằm đúng chỗ vuốt-về-màn-chính
+     — đúng cái mà bình luận này viết ra để chặn, trên một PWA mà kho vận đọc
+     chat một tay giữa ca. (REV-0063 vòng 2, CAO-1)
+     `<form id="chat-form" class="chat-nhap">` — thẻ `form` có thật trong
+     app.html, nên `form.chat-nhap` (0,1,1) thắng (0,1,0). Đổi thẻ ở HTML thì
+     phải đổi cả đây; `do-luat-css-chet` sẽ kêu lại ngay nếu luật này chết. */
+  form.chat-nhap { padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px)); }
   .cnb-ds-muc { min-height: 60px; }            /* ngón cái, không phải con trỏ chuột */
   /* `div.chat-tin` CHỨ KHÔNG PHẢI `.chat-tin` — luật này cũng CHƯA TỪNG CHẠY
      (REV-0063 CAO-2, ca thứ ba cùng kiểu). Luật nền `.chat-tin { max-width:
@@ -3194,9 +3297,14 @@ tr.kd-chiadoi td {
   .login-hero { min-height: 160px; padding: 22px 24px; }
   .hero-word { font-size: clamp(58px, 17vw, 92px); margin-bottom: 0; }
   .hero-foot { display: none; }
-  .login-panel { padding: 26px 26px 32px; gap: 16px; }
+  /* Gộp hai luật `.login-panel` từng nằm cách nhau một dòng: cái trên đặt
+     `padding: 26px 26px 32px` rồi bị chính cái dưới (`32px 26px 34px`) đè —
+     cùng selector, cùng khối, đứng sau nên thắng. Con số 26/32 CHƯA BAO GIỜ
+     vẽ ra màn hình. Giữ nguyên giá trị đang thật sự chạy, chỉ bỏ cái xác.
+     `do-luat-css-chet` từ nay soi cả lớp "@media bị @media phủ đứng sau đè"
+     nên kiểu trùng lặp này không nằm im được nữa. (REV-0063 vòng 2) */
+  .login-panel { padding: 32px 26px 34px; gap: 16px; }
   .login-logo { width: 148px; }
-  .login-panel { padding: 32px 26px 34px; }
   .grid-2 { grid-template-columns: 1fr; }
 }
 
