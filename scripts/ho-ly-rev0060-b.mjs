@@ -115,14 +115,28 @@ console.log('\n④ KINH DOANH (van_hanh_san) có mở được màn "Nạp từ 
   const q = await import(url(path.join(GOC, 'src', 'quyen.js')));
   const js = readFileSync(path.join(GOC, 'public', 'assets', 'js', 'app.js'), 'utf8');
   const html = readFileSync(path.join(GOC, 'public', 'app.html'), 'utf8');
+  /* ⚠️ ĐÃ SỬA (Hồ Ly, vòng 4). Bản trước kết luận "Kinh doanh KHÔNG có đường
+     vào" bằng hai phép đọc chữ nay ĐÃ LỖI THỜI: nó soi xem `khoiDongNapFile`
+     có nằm trong `khoiDongKho` không, và xem khối màn có nằm trong
+     `<section id="v-khovan">` không. Vòng 2 đã dời lời gọi ra khối khởi động
+     chung, và `khoiDongNapFile` tự DỜI khối màn sang `#kd-pane-napfile` lúc
+     chạy — nên vế thứ hai vẫn "true" trong HTML tĩnh mà kết luận thì sai.
+     Một mẩu dò in ra câu sai còn tệ hơn không in gì: nó thoát 0 nên không làm
+     đỏ cổng nào, người đọc lại tin. Nay soi đúng bốn mắt xích thật. */
   const p = { vai_tro: 'van_hanh_san' };
   const coTab = q.duocXemTab(p, 'khovan');
-  const mMoi = js.match(/if \(TOI\.quyen\.includes\('khovan'\)\) \{\s*try \{ await khoiDongKho\(\)/);
-  const paneTrongKhovan = html.indexOf('id="kv-pane-napfile"') > html.indexOf('id="v-khovan"') &&
-                          html.indexOf('id="kv-pane-napfile"') < html.indexOf('<section', html.indexOf('id="v-khovan"') + 10);
-  console.log(`   van_hanh_san có tab 'khovan'?           ${coTab}`);
-  console.log(`   máy chủ cho van_hanh_san nạp danh mục?  ${q.duocSuaSanPham(p)}`);
-  console.log(`   khoiDongNapFile chỉ chạy trong khoiDongKho, mà khoiDongKho chỉ chạy khi có tab 'khovan'? ${!!mMoi}`);
-  console.log(`   màn "Nạp từ file" nằm TRONG khối <section id="v-khovan">? ${paneTrongKhovan}`);
-  console.log(`   ⇒ ${!coTab && q.duocSuaSanPham(p) ? '❌ Kinh doanh VẪN KHÔNG có đường vào màn nạp, dù máy chủ cho phép' : '✅'}`);
+  const suaSp = q.duocSuaSanPham(p);
+  const goiNgoaiKho = /const qKhoNap[\s\S]{0,600}?khoiDongNapFile\(qKhoNap, qSpNap\)/.test(js);
+  const catTheoCo   = /if \(qSpNap\.sua \|\| qKhoNap\.thao_tac\)/.test(js);
+  const tuDoiCho    = /if \(!TOI\.quyen\.includes\('khovan'\)\)[\s\S]{0,600}?getElementById\('kd-pane-napfile'\)[\s\S]{0,400}?appendChild\(khoi\)/.test(js);
+  const coChoDat    = html.includes('id="kd-pane-napfile"');
+  console.log(`   van_hanh_san có tab 'khovan'?              ${coTab}`);
+  console.log(`   máy chủ cho van_hanh_san nạp danh mục?     ${suaSp}`);
+  console.log(`   khoiDongNapFile gọi NGOÀI khoiDongKho?     ${goiNgoaiKho}`);
+  console.log(`   cắt theo CỜ máy chủ (sua || thao_tac)?     ${catTheoCo}`);
+  console.log(`   tự DỜI khối màn sang tab Kinh doanh?       ${tuDoiCho}`);
+  console.log(`   app.html có chỗ đặt #kd-pane-napfile?      ${coChoDat}`);
+  console.log(`   ⇒ ${(!coTab && suaSp && goiNgoaiKho && catTheoCo && tuDoiCho && coChoDat)
+    ? '✅ Kinh doanh CÓ đường vào màn nạp (vá vòng 2 — đo lại ở vòng 4)'
+    : '❌ Kinh doanh KHÔNG có đường vào màn nạp, dù máy chủ cho phép'}`);
 }
