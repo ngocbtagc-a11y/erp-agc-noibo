@@ -185,6 +185,29 @@ lần sau **không ai biết nợ có tăng hay không** — nên ghi cả ba ra
   trong PWA đã cài. Riêng PWA chạy standalone **không có thanh địa chỉ** nên ở đó
   `dvh` = `vh` và bản vá vô tác dụng — lợi ích chỉ nằm ở tab trình duyệt trên
   điện thoại. Rủi ro thì đã đo và đã chặn (cặp `vh`+`dvh`, BH-64).
+## NỢ MỚI GHI 07/09/2026 — REV-0061 vòng 2
+
+- **Dải cắt sổ nhận xét không có đường đi tiếp** *(REV-0061 vòng 2 · THẤP-2)*.
+  `xem_them: null` — dải nói *"còn 23 nhận xét chưa tải về máy"* mà không có
+  nút nào lấy tiếp. **Cố ý để lại vòng này**, hai lẽ: ① giống hệt
+  `#cv-sua-lichsu-cat` ngay cạnh nên **nhất quán** — vá một cái thành hai kiểu
+  còn tệ hơn; ② 100 nhận xét cho **một việc** là con số không đời nào chạm tới
+  (ca thật đang là 3). Vá thì vá **cả lớp dải cắt** trong một vòng riêng, đừng
+  vá lẻ đúng cái ô này.
+- **`holy-quet-neo-vong3.mjs` báo 1 neo chết** ở `scripts/do-kho-tai-lieu.mjs:486`
+  (neo `.tlq-nut-nhi { display: block; …`). **Nợ có sẵn của `a7c8f7f`** — đã
+  kiểm bằng cách cất hết bản vá đi rồi chạy lại, vẫn đúng 1. Hồ Ly khai 0;
+  khác nhau ở luật đếm/xuống dòng chứ không phải ở mã.
+- **Ca đối chứng E của `holy-soi-gy45-vong3.mjs` nay không thoả được nữa.** Nó
+  bẻ bằng cách *"gán `.value` mà không bắn `input`"* rồi đòi dòng đỏ phải dính
+  lại — mà đó chính là **thứ bản vá CAO-1 đã xoá bỏ ở tầng lớp**. Muốn làm mù
+  bản vá nay thì phải **giết cái bẫy trên `value`** trong `o-ngay.js` (xem
+  `DC-H` của `do-o-ngay`). Không sửa bàn đo của Hồ Ly — ghi lại để chị đổi ca
+  đối chứng ở vòng sau.
+- **Điểm mù còn lại của máy quét ②b**: nay hỏi tại **chỗ gọi**, nhưng khuôn gọi
+  nào không truy được đường đi (`API.x().then(…)`, lời gọi lồng làm đối số) thì
+  rơi về lưới cũ. Hiện **0 chỗ** như thế; máy quét tự kê ra dòng "ĐIỂM MÙ" mỗi
+  lần chạy, ai thêm khuôn mới thì thêm nhánh vào `tenBienNhanKetQua()`.
 
 ## CHỜ SẾP — ghi 04/09/2026
 
