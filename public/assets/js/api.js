@@ -318,6 +318,15 @@ export const API = {
     method: 'POST', headers: KIEU_BYTE, body: khungNapFile(moTa, byte)
   }),
 
+  /* ---- Đường lùi: xem và GỠ một lượt nạp tồn kho ----
+     Nạp tồn kho ghi thẳng vào sổ cái và KHÔNG khớp theo khoá tự nhiên được,
+     nên nạp nhầm là phải gỡ được — không có đường lùi thì chống nạp lại vẫn
+     chưa đủ (REV-0060 CHẶN-①). */
+  napLuot: (so = 10) => goi('/api/kho/nap-luot?so=' + encodeURIComponent(so)),
+  napHuy:  (phieuId) => goi('/api/kho/nap-huy', {
+    method: 'POST', body: JSON.stringify({ phieu_id: phieuId })
+  }),
+
   /* ---- Kho: Xuất / Nhập / Tồn ---- */
   khoSanPham: () => goi('/api/kho/san-pham'),
 

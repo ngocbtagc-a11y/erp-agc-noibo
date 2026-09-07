@@ -40,6 +40,21 @@
    ⑥ Bộ nhớ. Worker chỉ có 128 MB cho cả isolate. File .xlsx 0,9 MB của Shopee
       bung ra 8,9 MB XML (gấp 10,8 lần — số đo thật, không phải ước lượng).
       → Có TRẦN BYTE và TRẦN DÒNG, chạm là dừng và nói ra, không âm thầm cắt.
+      Trần CỘT cũng vậy: cột thứ 201 CÓ nội dung là dừng và nói ra (REV-0060).
+
+   ⑦ .XLSX NHIỀU BẢNG. `Desktop\Nhap_khau_hang_hoa.xlsx` của Sếp có 7 bảng,
+      bảng đầu tiên là trang chữ "Hướng dẫn nhập khẩu", số liệu nằm ở bảng 2.
+      Lấy bảng đầu rồi im lặng là đưa trang hướng dẫn cho Sếp như thể đó là
+      bảng số liệu. → Liệt kê TÊN + SỐ DÒNG của mọi bảng, để NGƯỜI chọn.
+
+   ⑧ HỆ NGÀY 1904. Excel có hai mốc ngày. File xuất từ Excel bản Mac cũ khai
+      `<workbookPr date1904="1"/>`; không đọc cờ này thì mọi ô ngày lệch đúng
+      4 năm 1 ngày, mà lệch IM LẶNG. Hạn sử dụng lệch 4 năm với công ty bán
+      thực phẩm là kiểu sai đắt nhất. → Đọc cờ, bù ngày, và NÓI RA đã bù.
+
+   ⑨ .XLSX ĐẶT MẬT KHẨU nằm trong kho OLE2, byte đầu `D0 CF 11 E0` giống hệt
+      .xls 2003. Chẩn đoán nhầm là Sếp đi chữa sai bệnh. → Dò dấu vết
+      `EncryptedPackage` rồi nói thẳng là file đang có mật khẩu.
    ========================================================================== */
 
 /* ---- Trần an toàn -------------------------------------------------------
@@ -66,6 +81,31 @@ export class LoiDocBang extends Error {
    bước đầu. Byte không nói dối.
    ========================================================================== */
 
+/* Dò dấu vết "gói đã mã hoá" của ECMA-376 nằm trong kho OLE2.
+   VÌ SAO CẦN: file .xlsx ĐẶT MẬT KHẨU được Excel gói lại trong kho OLE2, nên
+   byte đầu là `D0 CF 11 E0` — GIỐNG HỆT .xls đời 2003. Không dò thêm thì ERP
+   chẩn đoán nhầm ("file .xls đời 2003") và Sếp đi lưu lại thành CSV mãi không
+   xong, vì bệnh thật là cái mật khẩu.
+   Tên mục trong kho OLE2 lưu kiểu UTF-16LE ('E',0,'n',0,…) nên dò theo lối
+   "cho phép ĐÚNG MỘT byte đệm giữa hai chữ cái" — bắt được cả dạng liền lẫn
+   dạng xen byte, mà không phải dựng chuỗi khổng lồ trong bộ nhớ. */
+function coDauMatKhau(bytes) {
+  for (const chu of ['EncryptedPackage', 'StrongEncryptionDataSpace']) {
+    const dau = chu.charCodeAt(0);
+    for (let i = 0; i < bytes.length; i++) {
+      if (bytes[i] !== dau) continue;
+      for (const buoc of [1, 2]) {                 // liền nhau, hoặc xen 1 byte
+        let khop = true;
+        for (let k = 1; k < chu.length; k++) {
+          if (bytes[i + k * buoc] !== chu.charCodeAt(k)) { khop = false; break; }
+        }
+        if (khop) return true;
+      }
+    }
+  }
+  return false;
+}
+
 export function nhanDangKieu(bytes) {
   if (bytes.length >= 4 &&
       bytes[0] === 0x50 && bytes[1] === 0x4B &&
@@ -75,7 +115,7 @@ export function nhanDangKieu(bytes) {
   // .xls đời cũ (BIFF/OLE2): D0 CF 11 E0 A1 B1 1A E1 — KHÔNG đọc được.
   if (bytes.length >= 8 &&
       bytes[0] === 0xD0 && bytes[1] === 0xCF && bytes[2] === 0x11 && bytes[3] === 0xE0) {
-    return 'xls_cu';
+    return coDauMatKhau(bytes) ? 'co_mat_khau' : 'xls_cu';
   }
   if (bytes.length >= 5 &&
       bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46) {
@@ -317,30 +357,71 @@ function cotTuRef(ref) {
   return n - 1;
 }
 
-async function docXlsx(bytes, tranDong) {
-  const muc = mucLucNen(bytes);
+/* Trần số bảng liệt kê ra cho người chọn. File thật của Sếp nhiều nhất là 7
+   bảng; đặt 30 để không ai chạm, mà cũng không phải bung 500 phần XML. */
+const TRAN_BANG = 30;
 
-  /* --- Tìm ĐÚNG bảng đầu tiên, không đoán "sheet1.xml" ---
-     File Shopee thật chỉ có `sheet2.xml`, KHÔNG có sheet1. Đoán tên là đọc
-     ra rỗng mà không hiểu vì sao. Đi đúng đường: workbook.xml cho biết bảng
-     đầu tiên có r:id nào, file rels đổi r:id đó ra đường dẫn thật. */
-  let duongBang = null;
+/**
+ * Đọc .xlsx.
+ * @param {number} chon        chỉ số bảng cần đọc (0 = bảng đầu tiên)
+ * @param {boolean} demDong    có đếm số dòng của TỪNG bảng không (tốn thêm
+ *                             một lượt bung mỗi bảng — chỉ bật ở bước 1, để
+ *                             Sếp nhìn số dòng mà chọn đúng bảng)
+ * @returns {{luoi, dsBang, chon, tenBang, he1904, canhBao}}
+ */
+async function docXlsx(bytes, tranDong, chon = 0, demDong = false) {
+  const muc = mucLucNen(bytes);
+  const canhBao = [];
+
+  /* --- Liệt kê TẤT CẢ các bảng, không chỉ bảng đầu ---
+     ⚠️ ĐÂY LÀ CHỖ ĐÃ CẮN FILE THẬT CỦA SẾP.
+     `Desktop\Nhap_khau_hang_hoa.xlsx` có 7 bảng, bảng đầu tiên tên
+     "Hướng dẫn nhập khẩu" — một trang chữ hướng dẫn, KHÔNG phải số liệu.
+     Lấy bảng đầu rồi im lặng là đưa trang hướng dẫn cho Sếp như thể đó là
+     bảng số liệu. Máy KHÔNG được đoán bảng nào là bảng cần (đúng luật ① của
+     nap-du-lieu.js: máy gợi ý, người chọn).
+
+     Đi đúng đường: workbook.xml cho biết thứ tự + TÊN từng bảng và r:id của
+     nó, file rels đổi r:id ra đường dẫn thật. File Shopee thật chỉ có
+     `sheet2.xml` chứ không có sheet1 — đoán tên file là đọc ra rỗng. */
   const wb = await bungPhan(bytes, muc.get('xl/workbook.xml'));
   const rels = await bungPhan(bytes, muc.get('xl/_rels/workbook.xml.rels'));
+  const dsBang = [];
   if (wb && rels) {
-    const sheet = wb.match(/<sheet\b[^>]*\/?>/);
-    const rid = sheet && (sheet[0].match(/r:id="([^"]+)"/) || [])[1];
-    if (rid) {
-      const re = new RegExp(`<Relationship\\b[^>]*Id="${rid}"[^>]*>`);
-      const rel = rels.match(re);
-      let t = rel && (rel[0].match(/Target="([^"]+)"/) || [])[1];
-      if (t) duongBang = t.replace(/^\/?(xl\/)?/, 'xl/');
+    for (const m of wb.matchAll(/<sheet\b[^>]*\/?>/g)) {
+      if (dsBang.length >= TRAN_BANG) break;
+      const the = m[0];
+      const ten = goThucThe((the.match(/\bname="([^"]*)"/) || [])[1] || '');
+      const rid = (the.match(/r:id="([^"]+)"/) || [])[1];
+      let duong = null;
+      if (rid) {
+        const rel = rels.match(new RegExp(`<Relationship\\b[^>]*Id="${rid}"[^>]*>`));
+        const t = rel && (rel[0].match(/Target="([^"]+)"/) || [])[1];
+        if (t) duong = t.replace(/^\/?(xl\/)?/, 'xl/');
+      }
+      if (duong && muc.has(duong)) dsBang.push({ ten: ten || `Bảng ${dsBang.length + 1}`, duong });
     }
   }
-  if (!duongBang || !muc.has(duongBang)) {
-    duongBang = [...muc.keys()].find(k => /^xl\/worksheets\/sheet\d+\.xml$/.test(k));
+  if (!dsBang.length) {
+    for (const k of [...muc.keys()].filter(k => /^xl\/worksheets\/sheet\d+\.xml$/.test(k)).sort()) {
+      if (dsBang.length >= TRAN_BANG) break;
+      dsBang.push({ ten: `Bảng ${dsBang.length + 1}`, duong: k });
+    }
   }
-  if (!duongBang) throw new LoiDocBang('File Excel này không có bảng dữ liệu nào đọc được. Xin kiểm tra lại file.');
+  if (!dsBang.length) throw new LoiDocBang('File Excel này không có bảng dữ liệu nào đọc được. Xin kiểm tra lại file.');
+
+  const chonThat = (Number.isInteger(chon) && chon >= 0 && chon < dsBang.length) ? chon : 0;
+  const duongBang = dsBang[chonThat].duong;
+
+  /* --- Hệ ngày 1904 (Excel bản Mac cũ, hoặc file đối tác gửi) ---
+     Excel có HAI mốc ngày. Không đọc cờ này thì mọi ô ngày lệch đúng 4 năm 1
+     ngày — mà lệch im lặng. Với công ty bán THỰC PHẨM, hạn sử dụng lệch 4 năm
+     là kiểu sai đắt nhất. Đọc thêm một cờ, hết bệnh. */
+  const he1904 = !!(wb && /<workbookPr\b[^>]*date1904="(1|true)"/i.test(wb));
+  if (he1904) {
+    canhBao.push('File này dùng hệ ngày 1904 (Excel bản Mac cũ). ' +
+                 'ERP đã bù 4 năm 1 ngày khi đọc các ô ngày — xin kiểm lại vài ô ngày ở bước sau cho chắc.');
+  }
 
   // --- Kho chuỗi dùng chung: ô chữ trong xlsx chỉ lưu SỐ THỨ TỰ trỏ vào đây ---
   const kho = [];
@@ -356,7 +437,22 @@ async function docXlsx(bytes, tranDong) {
   }
 
   const xml = await bungPhan(bytes, muc.get(duongBang));
+
+  /* --- Ô GỘP: nói ra, đừng để Sếp tự đoán vì sao dòng dưới trống ---
+     Excel chỉ giữ giá trị ở ô TRÊN CÙNG của vùng gộp; các dòng dưới đọc ra
+     rỗng. Luật `batBuoc` bắt được và báo đúng dòng đúng cột, nên không có số
+     nào chạy êm vào sổ — chỉ thiếu một câu nói cho người dùng biết NGUYÊN
+     NHÂN, để họ đi bỏ gộp ô thay vì ngồi gõ lại tay. */
+  const soOGop = Number((xml.match(/<mergeCells\b[^>]*count="(\d+)"/) || [])[1] || 0) ||
+                 (xml.match(/<mergeCell\b/g) || []).length;
+  if (soOGop > 0) {
+    canhBao.push(`Bảng này có ${soOGop} vùng ô gộp (Merge & Center). ` +
+                 `Excel chỉ giữ giá trị ở ô trên cùng, nên các dòng dưới sẽ đọc ra TRỐNG. ` +
+                 `Xin bỏ gộp ô rồi điền đủ từng dòng, sau đó lưu lại và nạp lần nữa.`);
+  }
+
   const luoi = [];
+  let cotVuotTran = 0;                 // cột thứ 201 trở đi mà CÓ nội dung thật
   for (const md of xml.matchAll(/<row\b[^>]*>([\s\S]*?)<\/row>/g)) {
     const o = [];
     for (const mc of md[1].matchAll(/<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
@@ -374,6 +470,12 @@ async function docXlsx(bytes, tranDong) {
       }
       const ci = ref ? cotTuRef(ref) : o.length;
       if (ci >= 0 && ci < TRAN_COT) { while (o.length < ci) o.push(''); o[ci] = v; }
+      /* ⚠️ KHÔNG CẮT ÂM THẦM. Đầu file này có hứa: "chạm là dừng và NÓI RA,
+         không âm thầm cắt" — CSV giữ lời hứa đó, .xlsx thì trước đây lặng lẽ
+         vứt cột 201 trở đi. Chỉ tính là mất mát khi ô đó CÓ nội dung: file
+         Excel hay đèo theo hàng trăm cột trống chỉ vì lỡ tô màu, vứt mấy cột
+         rỗng ấy đi thì không mất gì và cũng không cần kêu. */
+      else if (ci >= TRAN_COT && String(v).trim() !== '') cotVuotTran = Math.max(cotVuotTran, ci + 1);
     }
     luoi.push(o);
     if (luoi.length > tranDong + 1) {
@@ -382,7 +484,37 @@ async function docXlsx(bytes, tranDong) {
         `Xin chia nhỏ file rồi nạp làm nhiều lần.`);
     }
   }
-  return luoi;
+  if (cotVuotTran) {
+    throw new LoiDocBang(
+      `Bảng “${dsBang[chonThat].ten}” có tới ${cotVuotTran} cột có dữ liệu, vượt mức ${TRAN_COT} cột cho một lần nạp. ` +
+      `Xin mở file, xoá bớt những cột không cần nạp rồi lưu lại và nạp lần nữa.`);
+  }
+
+  /* --- Đếm số dòng của từng bảng để Sếp chọn cho đúng ---
+     Chỉ chạy ở bước 1 (`demDong`), vì mỗi bảng là một lượt bung XML. Bảng nào
+     quá nặng thì để trống số dòng chứ không bung — thà thiếu một con số còn
+     hơn ăn hết bộ nhớ của isolate. */
+  for (let i = 0; i < dsBang.length; i++) {
+    const b = dsBang[i];
+    b.so_dong = null;
+    if (i === chonThat) { b.so_dong = Math.max(0, luoi.length - 1); continue; }
+    if (!demDong || dsBang.length < 2) continue;
+    const m = muc.get(b.duong);
+    if (!m || m.coThat > 8 * 1024 * 1024) continue;
+    try {
+      const x = await bungPhan(bytes, m);
+      b.so_dong = Math.max(0, (x.match(/<row\b/g) || []).length - 1);
+    } catch { /* bảng lỗi thì bỏ số dòng, không làm hỏng cả lần đọc */ }
+  }
+
+  if (dsBang.length > 1) {
+    canhBao.push(
+      `File có ${dsBang.length} bảng. ERP đang đọc bảng “${dsBang[chonThat].ten}”. ` +
+      `Nếu số liệu nằm ở bảng khác, xin chọn lại bảng rồi xem trước lần nữa.`);
+  }
+
+  return { luoi, dsBang: dsBang.map(b => ({ ten: b.ten, so_dong: b.so_dong })), chon: chonThat,
+           tenBang: dsBang[chonThat].ten, he1904, canhBao };
 }
 
 /* ==========================================================================
@@ -393,10 +525,16 @@ async function docXlsx(bytes, tranDong) {
  * Đọc file bảng thành lưới ô + tên cột.
  * @param {Uint8Array} bytes  nội dung file thô
  * @param {string} tenTep     tên file (chỉ để viết câu lỗi cho dễ hiểu)
+ * @param {{bangChon?:number, demDong?:boolean}} tuyChon
+ *        `bangChon` — .xlsx nhiều bảng thì đọc bảng thứ mấy (0 = bảng đầu).
+ *        `demDong`  — có đếm số dòng của từng bảng không (bật ở bước 1 để Sếp
+ *                     nhìn số dòng mà chọn đúng bảng; tốn thêm một lượt bung).
  * @returns {Promise<{cot:string[], dong:string[][], bangMa:string, dinhDang:string,
- *                    dauPhanCach:string|null, canhBao:string[]}>}
+ *                    dauPhanCach:string|null, canhBao:string[],
+ *                    dsBang:{ten:string,so_dong:number|null}[]|null,
+ *                    bangChon:number, tenBang:string|null, he1904:boolean}>}
  */
-export async function docBang(bytes, tenTep = 'file') {
+export async function docBang(bytes, tenTep = 'file', tuyChon = {}) {
   if (!bytes || !bytes.length) {
     throw new LoiDocBang('File rỗng — không có nội dung nào để đọc.');
   }
@@ -407,6 +545,12 @@ export async function docBang(bytes, tenTep = 'file') {
   }
 
   const kieu = nhanDangKieu(bytes);
+  if (kieu === 'co_mat_khau') {
+    throw new LoiDocBang(
+      'File Excel này đang ĐẶT MẬT KHẨU nên không mở ra để đọc được. ' +
+      'Xin mở bằng Excel, vào “File → Thông tin → Bảo vệ sổ tính → Mã hoá bằng mật khẩu”, ' +
+      'xoá trắng ô mật khẩu rồi lưu lại và gửi lần nữa.');
+  }
   if (kieu === 'xls_cu') {
     throw new LoiDocBang(
       'Đây là file Excel định dạng cũ (.xls đời 2003). ERP chưa đọc được định dạng này. ' +
@@ -418,11 +562,15 @@ export async function docBang(bytes, tenTep = 'file') {
 
   const canhBao = [];
   let luoi, bangMa, dinhDang, dauPhanCach = null;
+  let dsBang = null, bangChon = 0, tenBang = null, he1904 = false;
 
   if (kieu === 'xlsx') {
     dinhDang = 'Excel (.xlsx)';
     bangMa = 'UTF-8 (trong file Excel)';
-    luoi = await docXlsx(bytes, TRAN_DONG);
+    const x = await docXlsx(bytes, TRAN_DONG, tuyChon.bangChon, !!tuyChon.demDong);
+    luoi = x.luoi;
+    dsBang = x.dsBang; bangChon = x.chon; tenBang = x.tenBang; he1904 = x.he1904;
+    canhBao.push(...x.canhBao);
   } else {
     const gm = giaiMa(bytes);
     bangMa = gm.bangMa;
@@ -467,5 +615,6 @@ export async function docBang(bytes, tenTep = 'file') {
     throw new LoiDocBang(`File có ${cot.length} cột — nhiều bất thường. Kiểm tra lại dấu phân cách trong file.`);
   }
 
-  return { cot, dong, bangMa, dinhDang, dauPhanCach, canhBao, tenTep };
+  return { cot, dong, bangMa, dinhDang, dauPhanCach, canhBao, tenTep,
+           dsBang, bangChon, tenBang, he1904 };
 }

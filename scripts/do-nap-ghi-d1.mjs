@@ -439,10 +439,14 @@ if (TU_KIEM && !process.env.NAP_SRC) {
       tep: 'nap-du-lieu.js',
       tim: `      if (!cu) { them.push(b); continue; }`,
       thay: `      { them.push(b); continue; }` },
+    /* Chốt chặn hạn mức nay đi lối ĐẶT CHỖ (REV-0060 CAO-③): cộng dự tính vào
+       sổ ngày bằng câu nguyên tử rồi ĐỌC SỐ TRẢ VỀ, thay cho lối đọc-rồi-quyết
+       cũ. Chuỗi gài phải bám theo mã mới — không thì ca này MÙ, mà bàn đo báo
+       "KHÔNG gài được" chứ không lặng lẽ tính là đạt. */
     { ten: 'Bỏ chốt chặn hạn mức ghi trong ngày',
       tep: 'nap-du-lieu.js',
-      tim: `  if (ghiDuTinh > Math.max(0, conLai - CHUA_LAI)) {`,
-      thay: `  if (false) {` },
+      tim: `      if (dat.so_dong > HAN_MUC_NGAY - CHUA_LAI) {`,
+      thay: `      if (false) {` },
     { ten: 'Mã đã khoá vẫn cho file ghi đè',
       tep: 'nap-du-lieu.js',
       tim: `      if (b.__khoaCu) continue;`,

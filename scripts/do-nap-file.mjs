@@ -15,11 +15,17 @@
      của chính người viết.
    · BÀN ĐO PHẢI TỰ CHỨNG MINH CÓ MẮT:
         node scripts/do-nap-file.mjs --tu-kiem
-     cố ý làm hỏng bộ đọc rồi chạy lại — bàn đo PHẢI đỏ. Không đỏ thì bàn đo
-     này là đồ trang trí, đừng tin nó.
+     Mỗi ca gài một lỗi THẬT vào một bản sao của `src/` rồi chạy LẠI chính
+     bàn đo này trong một tiến trình con. Lần chạy con đó phải ĐỎ — đỏ nghĩa
+     là bàn đo bắt được lỗi vừa gài. Ca nào lần chạy con vẫn XANH là một lỗ
+     thủng có thật.
+     ⚠️ ĐỌC KỸ CHỖ NÀY (sửa theo REV-0060 THẤP-④): kết luận của CHÍNH lệnh
+     `--tu-kiem` là XANH khi bắt đủ mọi lỗi gài, ĐỎ khi có lỗ thủng. Ghi chú
+     cũ viết "--tu-kiem phải ĐỎ" là nói về lần chạy CON, nhưng người đọc lại
+     hiểu thành lệnh này phải đỏ, rồi thấy nó xanh thì tưởng bàn đo hỏng.
 
-   CHẠY:  npm run do-nap-file          → đo bình thường
-          npm run do-nap-file-tu-kiem  → tự kiểm (phải ĐỎ)
+   CHẠY:  npm run do-nap-file          → đo bình thường (xanh = đạt)
+          npm run do-nap-file-tu-kiem  → tự kiểm (xanh = bắt đủ lỗi gài)
    MÃ THOÁT: 0 = xanh, 1 = đỏ.
    ========================================================================== */
 
@@ -346,30 +352,48 @@ console.log('\n⑧ Đọc file Excel (.xlsx)');
 /* ==========================================================================
    9. FILE THẬT TRÊN MÁY SẾP  (CHỈ ĐỌC — không sửa, không xoá)
    ========================================================================== */
-console.log('\n⑨ File thật trên máy (chỉ đọc)');
-const thuMucThat = ['C:/Users/Admin/Desktop/AI/MauDuLieu_AGC', 'C:/Users/Admin/Desktop/AI', 'C:/Users/Admin/Desktop'];
-let daDoThat = 0;
-for (const tm of thuMucThat) {
-  if (!existsSync(tm)) continue;
-  let ds = [];
-  try { ds = readdirSync(tm).filter(f => /\.(csv|xlsx)$/i.test(f)); } catch { continue; }
-  for (const f of ds.slice(0, 4)) {
-    const duong = join(tm, f);
-    let byte;
-    try { byte = new Uint8Array(readFileSync(duong)); } catch { continue; }
-    if (byte.length > 8 * 1024 * 1024) continue;
-    try {
-      const b = await docBang(byte, f);
-      dung(`Đọc được file thật "${f}"`, b.cot.length >= 2 && b.dong.length >= 1,
-           `${b.cot.length} cột, ${b.dong.length} dòng, ${b.bangMa}`);
-      daDoThat++;
-    } catch (e) {
-      dung(`Đọc được file thật "${f}"`, false, e.message.slice(0, 80));
-    }
+/* ⚠️ DANH SÁCH KHOÁ CỨNG, KHÔNG QUÉT THƯ MỤC (sửa theo REV-0060 THẤP-④).
+   Bản cũ quét 3 thư mục, lấy tối đa 4 file, đạt khi đọc được >= 2. Với luật
+   đó thì lần chạy sau chỉ cần gặp 2 file bất kỳ là XANH — tức là câu khai
+   "9/9 file Excel thật đọc được" KHÔNG có bàn đo nào trong repo bảo vệ. Con
+   số nào không có bàn đo giữ thì con số đó không được nói ra.
+   Nay kê đích danh từng file, đo hết; file nào không còn trên máy thì NÓI RA
+   là ca đó mù, chứ không lặng lẽ bỏ qua rồi vẫn xanh. */
+console.log('\n⑨ File thật trên máy (chỉ đọc — danh sách khoá cứng)');
+const FILE_THAT = [
+  'C:/Users/Admin/Desktop/AI/TongHop_SanPham_Theo_SKU.xlsx',
+  'C:/Users/Admin/Desktop/Nhap_khau_hang_hoa.xlsx',
+  'C:/Users/Admin/Desktop/1. Nghiên cứu Marketing Form.xlsx'
+];
+let daDoThat = 0, thieuFile = 0;
+for (const duong of FILE_THAT) {
+  const f = duong.split('/').pop();
+  if (!existsSync(duong)) {
+    thieuFile++;
+    console.log(`  · BỎ QUA "${f}" — không còn trên máy, ca này MÙ`);
+    continue;
   }
-  if (daDoThat >= 4) break;
+  let byte;
+  try { byte = new Uint8Array(readFileSync(duong)); } catch { thieuFile++; continue; }
+  if (byte.length > 8 * 1024 * 1024) {
+    thieuFile++;
+    console.log(`  · BỎ QUA "${f}" — ${(byte.length / 1048576).toFixed(1)} MB, vượt trần 8 MB (đúng thiết kế)`);
+    continue;
+  }
+  try {
+    const b = await docBang(byte, f);
+    dung(`Đọc được file thật "${f}"`, b.cot.length >= 2 && b.dong.length >= 1,
+         `${b.cot.length} cột, ${b.dong.length} dòng, ${b.bangMa}` +
+         (b.dsBang && b.dsBang.length > 1 ? `, ${b.dsBang.length} bảng` : ''));
+    daDoThat++;
+  } catch (e) {
+    dung(`Đọc được file thật "${f}"`, false, e.message.slice(0, 80));
+  }
 }
-dung('Có đo trên ÍT NHẤT 2 file thật của Sếp', daDoThat >= 2, `mới đo ${daDoThat} file`);
+dung('Đọc trót lọt ĐỦ danh sách file thật đã kê đích danh',
+     daDoThat > 0 && daDoThat === FILE_THAT.length - thieuFile,
+     `${daDoThat}/${FILE_THAT.length - thieuFile} file có mặt` +
+     (thieuFile ? ` · ${thieuFile} file không đo được` : ''));
 
 /* Danh mục sản phẩm THẬT — đo cả đường ghép cột lẫn đường kiểm số */
 {

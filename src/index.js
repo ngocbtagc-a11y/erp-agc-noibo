@@ -2039,15 +2039,28 @@ async function nhanFileNap(req, env) {
    đúng lối index.js vẫn làm. */
 function loiNap(e) {
   if (e && e.name === 'LoiDocBang') return loi(e.message);
+  /* `LoiGhiNua` = ngã GIỮA LÚC GHI. Câu này BẮT BUỘC tới tay Sếp nguyên văn:
+     nó nói đã ghi được bao nhiêu dòng, đã gỡ sạch hay còn sót, và có được nạp
+     lại hay không. Nuốt nó thành "Không nạp được, thử lại nhé" là đúng cái đã
+     đẩy tồn lên 45.000 cho một file 30.000 (REV-0060 CHẶN-②). */
+  if (e && e.name === 'LoiGhiNua') return loi(e.message, e.da_don_sach ? 503 : 409);
   console.error('Nạp file:', e && e.message);
   return loi('Không đọc được file này. Xin kiểm tra lại file rồi thử lần nữa.');
 }
+
+/* .xlsx nhiều bảng: Sếp chọn bảng ở bước 1, hai bước sau phải đọc ĐÚNG bảng
+   đó — không thì xem trước một bảng, ghi vào sổ một bảng khác. */
+const bangChonCua = moTa => {
+  const n = Number(moTa && moTa.bang_chon);
+  return Number.isInteger(n) && n >= 0 ? n : 0;
+};
 
 async function khoNapMo(req, env) {
   const r = await nhanFileNap(req, env);
   if (r.loi) return r.loi;
   try {
-    return json(await napdulieu.moFile(env, r.phien, r.byte, String(r.moTa.ten_tep || 'file'), r.maDich));
+    return json(await napdulieu.moFile(env, r.phien, r.byte, String(r.moTa.ten_tep || 'file'),
+                                       r.maDich, bangChonCua(r.moTa)));
   } catch (e) { return loiNap(e); }
 }
 
@@ -2055,7 +2068,8 @@ async function khoNapXem(req, env) {
   const r = await nhanFileNap(req, env);
   if (r.loi) return r.loi;
   try {
-    const bang = await napdulieu.docBangTuByte(r.byte, String(r.moTa.ten_tep || 'file'));
+    const bang = await napdulieu.docBangTuByte(r.byte, String(r.moTa.ten_tep || 'file'),
+                                               { bangChon: bangChonCua(r.moTa) });
     return json(await napdulieu.xemTruoc(env, r.phien, {
       bang, ghep: r.moTa.ghep || {}, maDich: r.maDich,
       vanTay: await napdulieu.vanTayCot(bang.cot)
@@ -2068,7 +2082,7 @@ async function khoNapGhi(req, env) {
   if (r.loi) return r.loi;
   try {
     const tenTep = String(r.moTa.ten_tep || 'file');
-    const bang = await napdulieu.docBangTuByte(r.byte, tenTep);
+    const bang = await napdulieu.docBangTuByte(r.byte, tenTep, { bangChon: bangChonCua(r.moTa) });
     const ghep = r.moTa.ghep || {};
 
     /* Vân tay cột phải khớp với lúc xem trước. Nếu Sếp mở màn xem trước rồi
@@ -2079,7 +2093,12 @@ async function khoNapGhi(req, env) {
       return loi('File đã đổi so với lúc xem trước. Xin xem lại một lần nữa rồi mới nạp.');
     }
 
-    const kq = await napdulieu.ghiThat(env, r.phien, { bang, ghep, maDich: r.maDich, tenTep });
+    /* Xác nhận nạp trùng: Sếp phải tick RIÊNG ô "tôi biết file này đã nạp
+       rồi" thì cờ này mới bật. Không có nó thì `ghiThat` trả 409. */
+    const kq = await napdulieu.ghiThat(env, r.phien, {
+      bang, ghep, maDich: r.maDich, tenTep,
+      xacNhanTrung: r.moTa.xac_nhan_trung === true || r.moTa.xac_nhan_trung === 1
+    });
     if (kq.loi) return loi(kq.loi, kq.ma || 400);
 
     /* Nhớ bảng ghép cột cho lần sau — CHỈ nhớ sau khi đã ghi thật, tức là
@@ -2087,6 +2106,34 @@ async function khoNapGhi(req, env) {
     await napdulieu.nhoGhep(env, r.maDich, vanTay, ghep, r.phien);
     return json(kq);
   } catch (e) { return loiNap(e); }
+}
+
+/* ---- ĐƯỜNG LÙI: gỡ một lượt nạp tồn kho ra khỏi sổ cái -------------------
+   Chống nạp lại mà không có đường lùi thì chưa xong việc: chặn nhầm cũng có,
+   mà nạp nhầm file cũng có. Hai cửa này chỉ mở cho người có quyền THAO TÁC
+   KHO — `nap-du-lieu.js` kiểm lần nữa bên trong, không tin mỗi cửa này. */
+async function khoNapLuot(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  if (!duocXemTab(phien, 'khovan') && !duocXemTab(phien, 'kinhdoanh')) {
+    return loi('Bạn không có quyền xem lượt nạp tồn kho', 403);
+  }
+  const n = Number(new URL(req.url).searchParams.get('so') || 10);
+  const kq = await napdulieu.dsLuotNap(env, phien, n);
+  if (kq.loi) return loi(kq.loi, kq.ma || 400);
+  return json(kq);
+}
+
+async function khoNapHuy(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  if (!duocXemTab(phien, 'khovan') && !duocXemTab(phien, 'kinhdoanh')) {
+    return loi('Bạn không có quyền gỡ lượt nạp tồn kho', 403);
+  }
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  const kq = await napdulieu.huyLuotNap(env, phien, b && b.phieu_id);
+  if (kq.loi) return loi(kq.loi, kq.ma || 400);
+  return json(kq);
 }
 
 /* ==========================================================================
@@ -3530,6 +3577,18 @@ function cauSuaDoc(d, bang) {
      RA từ một file. Ép vào khuôn chung ra câu "đổi nap_file (trống) → SP-001",
      đọc không ra nghĩa gì. */
   if (d.truong === 'nap_file') {
+    /* Vết của lượt nạp TỒN KHO còn mang trạng thái ở `gia_tri_moi`, vì nó là
+       cái mốc để gỡ lại cả lượt (xem `huyLuotNap`). Ba trạng thái, ba câu —
+       ép cả ba vào một khuôn ra câu 'nạp "đã gỡ" vào ERP', đọc không ra
+       nghĩa. */
+    if (d.gia_tri_moi === 'đã gỡ') {
+      return `${d.nguoi_ten} nạp một lượt tồn kho từ file, sau đó lượt này ĐÃ ĐƯỢC GỠ khỏi sổ cái` +
+             (d.ly_do ? ` — ${d.ly_do}` : '');
+    }
+    if (d.gia_tri_moi === 'đang ghi') {
+      return `${d.nguoi_ten} bắt đầu nạp một lượt tồn kho từ file — lượt này CHƯA GHI XONG` +
+             (d.ly_do ? ` — ${d.ly_do}` : '');
+    }
     return `${d.nguoi_ten} nạp "${d.gia_tri_moi}" vào ERP từ file` +
            (d.ly_do ? ` — ${d.ly_do}` : '');
   }
@@ -7146,6 +7205,8 @@ const DUONG_DAN = {
   'POST /api/kho/nap-mo':           khoNapMo,
   'POST /api/kho/nap-xem':          khoNapXem,
   'POST /api/kho/nap-ghi':          khoNapGhi,
+  'GET /api/kho/nap-luot':          khoNapLuot,
+  'POST /api/kho/nap-huy':          khoNapHuy,
   'POST /api/kho/nhap':          khoNhap,
   'POST /api/kho/xuat':          khoXuat,
   'GET  /api/kho/lo':            khoLo,

@@ -4439,6 +4439,58 @@ textarea.tlq-o { padding: 10px 12px; }
 /* Tên file đang xử lý */
 .nap-ten-tep { font-weight: 600; overflow-wrap: anywhere; }
 
+/* ---- Cửa chặn nạp trùng ----
+   Đây là cảnh báo NẶNG nhất của màn này (nạp tiếp là tồn gấp đôi), nhưng vẫn
+   KHÔNG dùng đỏ: đỏ chỉ dành cho lỗi thật (docs/BANG-MAU.md). Vẫn họ vàng nâu
+   như cảnh báo mềm, chỉ viền dày hơn để nặng ký hơn mấy dòng bên trên. */
+.nap-trung {
+  margin: 12px 0;
+  padding: 12px;
+  border: 2px solid var(--warn);
+  border-radius: var(--r-sm);
+  background: var(--warn-wash);
+}
+.nap-trung-cau {
+  margin: 0 0 10px;
+  font-size: 14px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+/* Ô tick — cả dòng chữ là vùng bấm, và vùng đó cao ít nhất 44px */
+.nap-tick {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-height: 44px;
+  padding: 10px 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+.nap-tick input { width: 20px; height: 20px; margin-top: 2px; flex: 0 0 auto; }
+.nap-tick span { overflow-wrap: anywhere; }
+
+/* ---- Danh sách lượt nạp (đường lùi) ----
+   Cố ý KHÔNG dùng <table>: danh sách này có tên file dài bất định, nhét vào
+   bảng là đẻ thêm một thanh kéo ngang ở màn 375px. Xếp dọc, bọc chữ. */
+.nap-luot-dong {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px;
+  margin-bottom: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+}
+.nap-luot-chu {
+  flex: 1 1 220px;
+  min-width: 0;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.nap-luot-dong button { min-height: 44px; }
+
 /* ==========================================================================
    TỔNG QUAN 2 SÀN — bảng xếp hạng SKU bán chạy / bán kém
    Hai bảng cạnh nhau trên màn rộng, xếp chồng trên điện thoại (ERP là PWA,

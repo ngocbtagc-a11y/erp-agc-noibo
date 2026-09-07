@@ -29,8 +29,20 @@
    ========================================================================== */
 
 import { docBang, LoiDocBang } from './doc-bang.js';
-import { demGhi, chotNgayLuon, HAN_MUC_NGAY } from './canh-bao-ghi.js';
+import { datChoGhi, traLaiCho, chinhLaiCho, HAN_MUC_NGAY } from './canh-bao-ghi.js';
 import { duocSuaSanPham, duocThaoTacKho } from './quyen.js';
+
+/* Lỗi có câu chữ tiếng người phát sinh TRONG LÚC GHI (khác `LoiDocBang` là
+   lỗi lúc đọc file). Tách lớp riêng để index.js biết đường trả nguyên văn ra
+   cho Sếp: câu "đã ghi được 150/300 dòng rồi ngã, đã gỡ sạch" là câu người ta
+   PHẢI đọc được, không được nuốt thành "Không nạp được, thử lại nhé". */
+export class LoiGhiNua extends Error {
+  constructor(thongDiep, chiTiet = {}) {
+    super(thongDiep);
+    this.name = 'LoiGhiNua';
+    Object.assign(this, chiTiet);
+  }
+}
 
 /* Chừa lại cho phần còn lại của ngày. Nạp file là việc to, không được ăn hết
    hạn mức rồi để đồng bộ sàn chết đói — đơn hoàn ngừng cập nhật là mất tiền
@@ -122,7 +134,7 @@ export function docSo(chu) {
  * ⚠️ `12/09/2026` là 12 tháng 9, KHÔNG phải 9 tháng 12. Đọc theo lối Mỹ là
  * sai hạn sử dụng ba tháng — hàng thực phẩm thì đó là sai chết người.
  */
-export function docNgay(chu) {
+export function docNgay(chu, buNgay = 0) {
   const s = String(chu ?? '').trim();
   if (!s) return null;
 
@@ -142,7 +154,11 @@ export function docNgay(chu) {
        · Excel có lỗi coi năm 1900 là năm nhuận, nên mọi mốc trước 01/03/1900
          lệch một ngày. Khoảng 1990–2100 nằm xa hẳn vùng lỗi đó. */
   if (/^\d+(\.\d+)?$/.test(s)) {
-    const n = Math.floor(Number(s));
+    /* `buNgay` = 1462 khi file khai hệ ngày 1904 (Excel bản Mac cũ). Cộng
+       TRƯỚC khi lọc khoảng, vì số của hệ 1904 nhỏ hơn số của hệ 1900 đúng
+       1462 — không bù trước thì ngày hợp lệ lại rơi ra ngoài khoảng và bị
+       loại oan. Xem `he1904` trong src/doc-bang.js. */
+    const n = Math.floor(Number(s)) + (Number(buNgay) || 0);
     if (n >= 32874 && n <= 73415) {
       const d = new Date(Date.UTC(1899, 11, 30) + n * 86400000);
       return d.toISOString().slice(0, 10);
@@ -150,6 +166,9 @@ export function docNgay(chu) {
   }
   return null;
 }
+
+/** Số ngày phải bù cho một bảng: hệ 1904 lệch đúng 4 năm 1 ngày = 1462 ngày. */
+export function buNgayCuaBang(bang) { return bang && bang.he1904 ? 1462 : 0; }
 
 function ghepNgay(nam, thang, ngay) {
   if (thang < 1 || thang > 12 || ngay < 1 || ngay > 31) return null;
@@ -269,7 +288,7 @@ export function goiYGhep(cotFile, maDich) {
    ========================================================================== */
 
 /** Đọc một ô theo kiểu đã khai. Trả `{v}` nếu được, `{loi}` nếu không. */
-function docO(tho, truong) {
+export function docO(tho, truong, buNgay = 0) {
   const s = String(tho ?? '').trim();
 
   if (!s) {
@@ -307,7 +326,7 @@ function docO(tho, truong) {
     }
 
     case 'ngay': {
-      const d = docNgay(s);
+      const d = docNgay(s, buNgay);
       if (!d) return { loi: `ghi “${catNgan(s)}” — chưa đúng kiểu ngày. Xin ghi dạng 31/12/2026 hoặc 2026-12-31` };
       return { v: d };
     }
@@ -344,6 +363,7 @@ export function kiemBang(bang, ghep, maDich) {
     }
   }
 
+  const buNgay = buNgayCuaBang(bang);
   const truongDung = dich.truong.filter(t => t.ma in ghep && ghep[t.ma] !== null && ghep[t.ma] !== undefined);
   const banGhi = [];
   const loi = [];
@@ -361,7 +381,7 @@ export function kiemBang(bang, ghep, maDich) {
          Excel lược mất. Coi như ô rỗng — rồi để luật `batBuoc` phán, chứ
          không tự ý báo hỏng cả dòng. */
       const tho = ci < dong.length ? dong[ci] : '';
-      const kq = docO(tho, t);
+      const kq = docO(tho, t, buNgay);
       if (kq.loi) {
         loi.push({ dong: soDongFile, cot: t.nhan, thongDiep: `Dòng ${soDongFile}, cột ${t.nhan}: ${kq.loi}.` });
         hongDong = true;
@@ -408,11 +428,21 @@ export function kiemBang(bang, ghep, maDich) {
    hụt 2,3 lần. Đổi bảng/chỉ mục thì chạy lại bàn đo và sửa số ở đây.
 
    ⚠️ CÓ HAI CON SỐ, VÀ PHẢI LẤY CON SỐ LỚN HƠN.
-   Bàn đo ở máy (`node:sqlite`, dựng từ migrations) đo được 7 lượt/dòng cho
-   `san_pham`. Nhưng đo TRÊN WORKER THẬT với D1 thật thì ra 8 lượt/dòng —
-   CSDL thật có thêm chỉ mục mà bàn đo ở máy chưa dựng hết. Lấy số của bàn đo
-   ở máy là dự tính HỤT 1 lượt mỗi dòng, tức hụt 800 lượt cho một file 800
-   dòng. Nên lấy số đo THẬT rồi cộng thêm một chút đệm. */
+
+   ┌ SỐ ĐO ĐƯỢC, LẶP LẠI ĐƯỢC ─────────────────────────────────────────────┐
+   │ 7 lượt/dòng cho `san_pham` · `node:sqlite` dựng từ đúng `migrations/`  │
+   │ Chạy lại: `npm run do-nap-ghi`. Hồ Ly đo độc lập ra đúng 7 (REV-0060). │
+   │ Quy ra: 100 dòng → 700 · 1.000 dòng → 7.000 · 5.000 dòng → 35.000.     │
+   └───────────────────────────────────────────────────────────────────────┘
+   ┌ SỐ DỰ PHÒNG, CHƯA AI XÁC MINH LẠI ĐƯỢC ───────────────────────────────┐
+   │ 8 lượt/dòng — ghi nhận từ một lần chạy trên Worker + D1 thật, KHÔNG có │
+   │ bàn đo nào trong repo giữ lại được (repo không có đường tới D1 thật).  │
+   │ Ai đo lại được trên Worker thật thì ghi NGÀY + CÁCH ĐO vào ngay đây.   │
+   └───────────────────────────────────────────────────────────────────────┘
+   Con số ERP DÙNG để chặn là 9/dòng — cao hơn cả hai, tức là an toàn theo
+   đúng hướng (báo trước cao hơn thật thì chỉ chặn sớm; báo THẤP hơn thật là
+   chốt chặn vô dụng). Bàn đo `do-nap-ghi` canh ngược: số ở đây mà thấp hơn
+   số đo được là bàn đo ĐỎ. */
 const GIA_GHI = {
   san_pham:      { them: 9, sua_co_ban: 4, moi_truong_doi: 5 },
   ton_kho:       { them: 10, sua_co_ban: 0, moi_truong_doi: 0 }
@@ -431,7 +461,10 @@ export function duTinhGhi(maDich, them, sua) {
     const soDoi = Object.keys(b.__doi || {}).length;
     tong += g.sua_co_ban + soDoi * g.moi_truong_doi;
   }
-  if (maDich === 'ton_kho' && them.length) tong += 4;   // một dòng ghi vết cho cả phiếu
+  /* Ghi vết phiếu nhập: một dòng CHÈN lúc bắt đầu (mốc để gỡ nếu ngã) + một
+     lần SỬA lúc xong. Bảng `lich_su_thay_doi_nen` có 2 chỉ mục nên mỗi lượt
+     ăn 3 dòng D1; để 10 cho có chỗ thở. */
+  if (maDich === 'ton_kho' && them.length) tong += 10;
   return tong;
 }
 
@@ -506,6 +539,137 @@ async function doiChieuTonKho(env, banGhi) {
   return { them, sua: [], boQua, thieuSp };
 }
 
+/* ==========================================================================
+   4b. CHỐNG NẠP LẠI FILE TỒN KHO  (luật ③, phần trước đây bị bỏ sót)
+   --------------------------------------------------------------------------
+   ⚠️ VÌ SAO `ton_kho` KHÁC `san_pham`.
+   `san_pham` khớp theo khoá tự nhiên `ma_sku`: nạp lại cùng file thì mã đã có
+   -> SỬA, mà không có gì đổi -> BỎ QUA. Ba lần nạp vẫn 500 dòng, 0 lượt ghi.
+   `ton_kho` thì mỗi dòng là một PHIẾU NHẬP vào sổ cái — không có khoá tự
+   nhiên nào để khớp, nên nạp lại là CỘNG THÊM. Đo được: 5.000 -> 10.000 ->
+   15.000 sau ba lần nạp đúng một file, mà màn xem trước hiện y hệt lần đầu.
+
+   Tồn ảo gấp đôi thì Kinh doanh thấy còn hàng, bán ra, kho không có hàng
+   giao. Đây là mất tiền thật và mất điểm với khách.
+
+   LUẬT Ở ĐÂY: NHẬN RA VÀ CHẶN, KHÔNG PHẢI NHẮC.
+   "Dặn Sếp chỉ nạp một lần" không phải cơ chế. Người ta SẼ nạp lại — mạng
+   lỗi, tưởng chưa xong, hoặc file thêm vài dòng mới.
+
+   THÀ CHẶN NHẦM MỘT LẦN NẠP THẬT CÒN HƠN ĐỂ TỒN GẤP ĐÔI ÂM THẦM: chặn nhầm
+   thì Sếp bấm xác nhận là xong; tồn sai thì không ai biết cho tới lúc thiếu
+   hàng giao. Nên lưới quét rộng, bắt cả hai kiểu:
+
+     (a) TRÙNG NỘI DUNG — vân tay của đúng những gì sắp ghi (mã + số lượng +
+         lô + hạn). Cùng một file nạp lại thì vân tay y hệt.
+     (b) TRÙNG MÃ HÀNG — mã trong file này ĐÃ có phiếu nhập "nạp từ file"
+         trong sổ cái. Bắt được cả ca hiểm hơn (a): file cũ thêm vài dòng mới
+         rồi nạp lại cả file — vân tay khác, nhưng phần trùng vẫn cộng đôi.
+
+   Chặn xong thì phải có ĐƯỜNG LÙI (xem `huyLuotNap` bên dưới): nạp nhầm rồi
+   thì gỡ được cả lượt nạp đó ra khỏi sổ cái, không phải mở CSDL sửa tay.
+   ========================================================================== */
+
+/* Vân tay của NỘI DUNG sắp ghi vào sổ cái — không phải vân tay tên cột.
+   Cố ý băm cả số lượng/lô/hạn: đổi một con số trong file là ra vân tay khác,
+   và đó đúng là một lần nạp khác thật. */
+export async function vanTayNoiDung(maDich, banGhi) {
+  const chu = maDich + '\n' + banGhi
+    .map(b => [b.__khoa, b.so_luong ?? '', b.so_lo ?? '', b.han_su_dung ?? ''].join(''))
+    .sort().join('\n');
+  const bam = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(chu));
+  return [...new Uint8Array(bam)].slice(0, 12).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+/* Ghi vết của một lượt nạp tồn nằm ở `lich_su_thay_doi_nen` — KHÔNG đẻ bảng
+   mới, đúng lối repo đang dùng:
+     bang        = 'giao_dich_kho'
+     ban_ghi_id  = phieu_id (khoá để gỡ cả lượt nạp)
+     truong      = 'nap_file'
+     gia_tri_cu  = vân tay nội dung          <- chỗ nhận ra file đã nạp
+     gia_tri_moi = 'đang ghi' | '<n> dòng' | 'đã gỡ'   <- trạng thái lượt nạp
+   `gia_tri_cu` trước đây luôn null nên dùng lại được, không cần migration. */
+const DANG_GHI = 'đang ghi';
+const DA_GO    = 'đã gỡ';
+
+/** Tìm dấu vết của những lần nạp tồn trước có dính tới lần nạp này. */
+async function doTrungNapTon(env, banGhi, vanTayND) {
+  const ra = { trung_noi_dung: null, so_ma_trung: 0, lan_truoc: [] };
+  try {
+    /* (a) đúng nội dung này đã nạp chưa */
+    const { results: r1 } = await env.DB.prepare(
+      `SELECT ban_ghi_id, gia_tri_moi, nguoi_ten, luc, ly_do
+         FROM lich_su_thay_doi_nen
+        WHERE bang = 'giao_dich_kho' AND truong = 'nap_file'
+          AND gia_tri_cu = ? AND gia_tri_moi <> ?
+        ORDER BY luc DESC LIMIT 3`
+    ).bind(vanTayND, DA_GO).all();
+    if (r1 && r1.length) ra.trung_noi_dung = r1[0];
+
+    /* (b) mã hàng trong file đã có phiếu nhập "nạp từ file" chưa.
+       ⚠️ HỎI MỘT CÂU, KHÔNG HỎI THEO LÔ.
+       Lối `WHERE san_pham_id IN (?,…)` bị D1 chặn ở 100 tham số nên file
+       20.000 dòng phải chia 223 câu — mà Worker có TRẦN SỐ LỜI GỌI CON cho
+       mỗi yêu cầu, và bản thân vòng ghi đã ăn ~800 lượt rồi. Cộng thêm 223
+       lượt hỏi là đẩy lần nạp file lớn tới sát trần, hỏng vì lý do chẳng
+       liên quan gì tới dữ liệu.
+       Hỏi ngược lại: lấy MỘT LẦN danh sách mã đã từng nạp tồn bằng file rồi
+       giao nhau trong bộ nhớ. Đọc D1 rẻ (5 triệu lượt/ngày), kho của công ty
+       có vài nghìn mã nên danh sách này nhỏ; đặt trần 50.000 cho chắc tay. */
+    const spTrongFile = new Set(banGhi.map(b => b.__spId).filter(Boolean));
+    const daTrung = new Set();
+    const phieu = new Map();
+    if (spTrongFile.size) {
+      const { results } = await env.DB.prepare(
+        `SELECT DISTINCT san_pham_id, phieu_id FROM giao_dich_kho
+          WHERE loai = 'nhap' AND ghi_chu LIKE 'Nạp từ file%' LIMIT 50000`).all();
+      for (const r of (results || [])) {
+        if (!spTrongFile.has(r.san_pham_id)) continue;
+        daTrung.add(r.san_pham_id);
+        phieu.set(r.phieu_id, true);
+      }
+    }
+    ra.so_ma_trung = daTrung.size;
+
+    if (phieu.size) {
+      const ds = [...phieu.keys()].slice(0, CO_LO_HOI);
+      const dau = ds.map(() => '?').join(',');
+      const { results } = await env.DB.prepare(
+        `SELECT ban_ghi_id, gia_tri_moi, nguoi_ten, luc, ly_do
+           FROM lich_su_thay_doi_nen
+          WHERE bang = 'giao_dich_kho' AND truong = 'nap_file' AND ban_ghi_id IN (${dau})
+          ORDER BY luc DESC LIMIT 5`
+      ).bind(...ds).all();
+      ra.lan_truoc = results || [];
+    }
+  } catch (e) {
+    /* Chưa nạp migration hoặc D1 trục trặc: KHÔNG được chặn oan lần nạp đầu
+       tiên của cả công ty. Nhưng cũng không được im: trả cờ để nói ra. */
+    console.error('Dò trùng nạp tồn:', e.message);
+    ra.khong_do_duoc = true;
+  }
+  return ra;
+}
+
+/* Đổi kết quả dò trùng thành câu tiếng người + cờ bắt xác nhận riêng. */
+function cauTrungNap(trung) {
+  if (!trung) return null;
+  const co = trung.trung_noi_dung || trung.so_ma_trung > 0;
+  if (!co) return null;
+  const v = trung.trung_noi_dung || (trung.lan_truoc && trung.lan_truoc[0]);
+  const ai = (v && v.nguoi_ten) ? v.nguoi_ten : 'ai đó';
+  const luc = (v && v.luc) ? v.luc : 'lần trước';
+  const tep = (v && v.ly_do) ? String(v.ly_do).replace(/^Nạp từ file\s*/, '') : '';
+  if (trung.trung_noi_dung) {
+    return `File này đã nạp rồi: ${ai} nạp lúc ${luc}${tep ? ' (' + tep + ')' : ''}, ` +
+           `đúng từng dòng từng con số như file đang chọn. ` +
+           `Nạp tiếp là CỘNG THÊM vào tồn hiện có, không phải ghi đè — tồn sẽ gấp đôi.`;
+  }
+  return `Có ${trung.so_ma_trung.toLocaleString('vi-VN')} mã hàng trong file này đã nạp tồn từ file trước đó ` +
+         `(gần nhất: ${ai}, lúc ${luc}${tep ? ', ' + tep : ''}). ` +
+         `Nạp tiếp là CỘNG THÊM vào tồn hiện có của những mã đó, không phải ghi đè.`;
+}
+
 /**
  * Xem trước một lần nạp. KHÔNG GHI GÌ.
  * @returns bảng tóm tắt để giao diện hiện cho Sếp bấm xác nhận.
@@ -515,9 +679,13 @@ export async function xemTruoc(env, phien, { bang, ghep, maDich, vanTay }) {
   const { banGhi, loi, soTrung, soDongDoc } = kiemBang(bang, ghep, maDich);
 
   let doiChieu, thieuSp = [];
+  let trung = null, cauTrung = null, vanTayND = null;
   if (maDich === 'ton_kho') {
     const r = await doiChieuTonKho(env, banGhi);
     doiChieu = r; thieuSp = r.thieuSp;
+    vanTayND = await vanTayNoiDung(maDich, r.them);
+    trung = await doTrungNapTon(env, r.them, vanTayND);
+    cauTrung = cauTrungNap(trung);
     for (const b of thieuSp.slice(0, TRAN_LOI_TRA_VE)) {
       loi.push({
         dong: b.__dong, cot: 'Mã hàng',
@@ -555,7 +723,24 @@ export async function xemTruoc(env, phien, { bang, ghep, maDich, vanTay }) {
     loi: loi.slice(0, TRAN_LOI_TRA_VE),
     loi_con_lai: Math.max(0, loi.length - TRAN_LOI_TRA_VE),
     da_khoa: daKhoa.length,
-    canh_bao: bang.canhBao || [],
+    /* Cảnh báo trùng đứng ĐẦU danh sách: đây là câu quyết định bấm hay không
+       bấm, không phải ghi chú bên lề. */
+    canh_bao: (cauTrung ? [cauTrung] : []).concat(bang.canhBao || []),
+    /* Bắt xác nhận RIÊNG, không cho bấm trôi. Giao diện phải hiện một ô tick
+       riêng cho câu này; máy chủ chặn lần nữa ở `ghiThat` (409). */
+    nap_trung: cauTrung ? {
+      co: true,
+      cau: cauTrung,
+      so_ma_trung: trung.so_ma_trung || 0,
+      trung_nguyen_file: !!trung.trung_noi_dung,
+      lan_truoc: (trung.trung_noi_dung ? [trung.trung_noi_dung] : (trung.lan_truoc || []))
+        .slice(0, 3).map(v => ({ phieu_id: v.ban_ghi_id, luc: v.luc, nguoi_ten: v.nguoi_ten, ly_do: v.ly_do }))
+    } : null,
+    can_xac_nhan_trung: !!cauTrung,
+    van_tay_noi_dung: vanTayND,
+    ds_bang: bang.dsBang || null,
+    bang_chon: bang.bangChon || 0,
+    ten_bang: bang.tenBang || null,
     ghi_du_tinh: ghiDuTinh,
     ghi_con_lai_hom_nay: conLai,
     vuot_han_muc: vuotHanMuc,
@@ -581,11 +766,63 @@ function sachDeHien(b) {
    5. GHI THẬT
    ========================================================================== */
 
+/* ---- DỌN LẠI KHI NGÃ GIỮA CHỪNG ----------------------------------------
+   ⚠️ `env.DB.batch()` CHỈ BAO MỘT LÔ 50 LỆNH, KHÔNG BAO CẢ LẦN NẠP.
+   File 300 dòng = 6 lô. Lô 4 ngã thì 3 lô đầu ĐÃ GHI XONG và nằm lại trong
+   sổ cái, còn giao diện chỉ nói "Không nạp được, thử lại nhé." Sếp đọc câu
+   đó, hiểu là chưa ghi gì, bấm nạp lại → tồn 45.000 cho file 30.000, và
+   không ai biết sai bao nhiêu vì cả hai lần đều là phiếu nhập hợp lệ.
+
+   D1 không cho gói 20.000 lệnh vào một giao dịch, nên luật ở đây là: NGÃ THÌ
+   GỠ SẠCH PHẦN ĐÃ GHI RỒI MỚI BÁO LỖI — một lần nạp hoặc vào hết, hoặc không
+   vào gì. Và câu báo phải nói rõ ĐÃ DỌN SẠCH hay CÒN SÓT, đừng để Sếp đoán.
+
+   Mọi lệnh dọn đều viết theo lối "chạy lại mấy lần cũng ra một kết quả"
+   (DELETE theo id, UPDATE về đúng giá trị cũ) nên dọn hụt rồi dọn lại được. */
+async function donLaiKhiNga(env, { maDich, phieuId, loIds, themIds, sua, lyDo }) {
+  let luot = 0; const sot = [];
+  const chay = async (sql, tso) => {
+    try {
+      const r = await env.DB.prepare(sql).bind(...tso).run();
+      luot += (r?.meta?.rows_written) || 0;
+    } catch (e) { sot.push(e.message); }
+  };
+  const theoLo = (ds, lam) => { const v = []; for (let i = 0; i < ds.length; i += CO_LO_HOI) v.push(lam(ds.slice(i, i + CO_LO_HOI))); return v; };
+
+  if (maDich === 'ton_kho') {
+    await chay('DELETE FROM giao_dich_kho WHERE phieu_id = ?', [phieuId]);
+    for (const lo of theoLo(loIds, x => x)) {
+      await chay(`DELETE FROM lo_hang WHERE id IN (${lo.map(() => '?').join(',')})`, lo);
+    }
+    await chay(`DELETE FROM lich_su_thay_doi_nen
+                 WHERE bang = 'giao_dich_kho' AND truong = 'nap_file' AND ban_ghi_id = ?`, [phieuId]);
+  } else {
+    for (const lo of theoLo(themIds, x => x)) {
+      await chay(`DELETE FROM san_pham WHERE id IN (${lo.map(() => '?').join(',')})`, lo);
+    }
+    for (const b of sua) {
+      if (b.__khoaCu || !b.__doi || !Object.keys(b.__doi).length) continue;
+      const dat = [], gt = [];
+      for (const [truong, [cu]] of Object.entries(b.__doi)) {
+        dat.push(`${truong} = ?`);
+        gt.push(truong === 'theo_doi_hsd' ? (cu ? 1 : 0) : cu);
+      }
+      await chay(`UPDATE san_pham SET ${dat.join(', ')} WHERE id = ?`, [...gt, b.__id]);
+    }
+    await chay('DELETE FROM lich_su_thay_doi_nen WHERE ly_do = ?', [lyDo]);
+  }
+  return { luot, sot };
+}
+
 /**
  * Ghi vào CSDL. Chỉ gọi SAU khi Sếp đã xem `xemTruoc` và bấm xác nhận.
- * Đếm lượt ghi THẬT bằng `demGhi` (đọc `meta.rows_written` do chính D1 trả).
+ * Đếm lượt ghi THẬT bằng `meta.rows_written` do chính D1 trả.
+ *
+ * @param {boolean} xacNhanTrung  Sếp đã đọc câu cảnh báo "file này đã nạp
+ *        rồi" và tick xác nhận riêng. Không có cờ này thì lần nạp tồn trùng
+ *        bị chặn 409 — xem khối 4b.
  */
-export async function ghiThat(env, phien, { bang, ghep, maDich, tenTep }) {
+export async function ghiThat(env, phien, { bang, ghep, maDich, tenTep, xacNhanTrung = false }) {
   const dich = DICH[maDich];
   if (maDich === 'san_pham' && !duocSuaSanPham(phien)) {
     return { loi: 'Bạn không có quyền nạp danh mục sản phẩm', ma: 403 };
@@ -600,27 +837,77 @@ export async function ghiThat(env, phien, { bang, ghep, maDich, tenTep }) {
     ? await doiChieuTonKho(env, banGhi)
     : await doiChieuSanPham(env, banGhi);
 
-  // Chặn lần nữa ở đây, không tin mỗi bước xem trước (người dùng có thể để
-  // màn hình xem trước qua đêm rồi mới bấm, lúc đó hạn mức đã khác).
+  /* --- CHỐNG NẠP LẠI FILE TỒN (CHẶN-①) — chặn ở MÁY CHỦ, không chỉ ở màn ---
+     Giao diện có thể bị bỏ qua (gọi thẳng API), và màn xem trước có thể để
+     qua đêm rồi mới bấm. Nên cửa chặn thật nằm ở đây. */
+  let vanTayND = null;
+  if (maDich === 'ton_kho' && doiChieu.them.length) {
+    vanTayND = await vanTayNoiDung(maDich, doiChieu.them);
+    /* Sếp đã tick xác nhận rồi thì KHÔNG dò lại — dò nữa cũng chỉ để bỏ qua
+       kết quả, mà mỗi lượt dò là một lời gọi con Worker phải trả. */
+    const trung = xacNhanTrung ? null : await doTrungNapTon(env, doiChieu.them, vanTayND);
+    const cau = cauTrungNap(trung);
+    if (cau && !xacNhanTrung) {
+      return {
+        loi: cau + ' Nếu đúng là muốn cộng thêm, xin tick ô xác nhận ở màn xem trước rồi bấm lại. ' +
+             'Nếu nạp nhầm lần trước, xin dùng nút “Gỡ lượt nạp” để bỏ lượt cũ ra khỏi sổ cái.',
+        ma: 409,
+        nap_trung: {
+          co: true, cau,
+          so_ma_trung: trung.so_ma_trung || 0,
+          trung_nguyen_file: !!trung.trung_noi_dung,
+          lan_truoc: (trung.trung_noi_dung ? [trung.trung_noi_dung] : (trung.lan_truoc || []))
+            .slice(0, 3).map(v => ({ phieu_id: v.ban_ghi_id, luc: v.luc, nguoi_ten: v.nguoi_ten, ly_do: v.ly_do }))
+        }
+      };
+    }
+  }
+
+  /* --- ĐẶT CHỖ HẠN MỨC TRƯỚC KHI GHI (CAO-③) ---
+     Không đọc-rồi-quyết nữa: cộng dự tính vào sổ ngày bằng câu nguyên tử rồi
+     ĐỌC SỐ TRẢ VỀ. Ba người nạp cùng lúc thì người thứ hai, thứ ba nhìn thấy
+     ngay phần người thứ nhất đã đặt. Vượt thì trả chỗ lại và 429 — 429 xảy
+     ra TRƯỚC dòng ghi đầu tiên, sổ ngày về đúng số cũ. */
   const ghiDuTinh = duTinhGhi(maDich, doiChieu.them, doiChieu.sua);
-  const conLai = await conLaiTrongNgay(env);
-  if (ghiDuTinh > Math.max(0, conLai - CHUA_LAI)) {
-    return {
-      loi: `Hôm nay không còn đủ lượt ghi để nạp file này (cần khoảng ${ghiDuTinh.toLocaleString('vi-VN')}). ` +
-           `Xin chia nhỏ file hoặc nạp lại vào ngày mai.`,
-      ma: 429
-    };
+  let daDatCho = 0;
+  try {
+    const dat = await datChoGhi(env, ghiDuTinh);
+    if (dat) {
+      daDatCho = ghiDuTinh;
+      if (dat.so_dong > HAN_MUC_NGAY - CHUA_LAI) {
+        await traLaiCho(env, daDatCho);
+        return {
+          loi: `Hôm nay không còn đủ lượt ghi để nạp file này (cần khoảng ${ghiDuTinh.toLocaleString('vi-VN')}). ` +
+               `Xin chia nhỏ file hoặc nạp lại vào ngày mai.`,
+          ma: 429
+        };
+      }
+    }
+  } catch (e) {
+    /* Chưa nạp migration `d1_ghi_ngay` hoặc D1 trục trặc: KHÔNG chặn oan lần
+       nạp — mất chốt chặn một lần còn hơn khoá cứng cả tính năng. */
+    console.error('Đặt chỗ lượt ghi:', e.message);
+    daDatCho = 0;
   }
 
   const lenh = [];
   const nguoiTen = phien?.ho_ten || phien?.ten_dang_nhap || 'Không rõ';
-  const lyDo = `Nạp từ file “${String(tenTep || 'không rõ tên').slice(0, 80)}”`;
+  /* Mã lượt nạp đi kèm lý do: vừa để Sếp tra "dòng này vào sổ từ lượt nạp
+     nào", vừa để gỡ lại đúng một lượt khi ngã giữa chừng (`donLaiKhiNga`
+     xoá ghi vết theo đúng chuỗi `ly_do` này). */
+  const luotId = 'nl_' + crypto.randomUUID().slice(0, 8);
+  const lyDo = `Nạp từ file “${String(tenTep || 'không rõ tên').slice(0, 80)}” · lượt ${luotId}`;
 
   const ghiVet = env.DB.prepare(
     `INSERT INTO lich_su_thay_doi_nen (bang, ban_ghi_id, truong, gia_tri_cu, gia_tri_moi,
                                        nguoi_id, nguoi_ten, ly_do, luc)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now','+7 hours'))`
   );
+
+  /* Giữ lại mọi id vừa sinh ra — đây là bản đồ để GỠ LẠI nếu ngã giữa chừng. */
+  const themIds = [];
+  const loIds = [];
+  let phieuId = null;
 
   if (maDich === 'san_pham') {
     const themSP = env.DB.prepare(`
@@ -629,6 +916,7 @@ export async function ghiThat(env, phien, { bang, ghep, maDich, tenTep }) {
     `);
     for (const b of doiChieu.them) {
       const id = 'sp_' + crypto.randomUUID().slice(0, 12);
+      themIds.push(id);
       lenh.push(themSP.bind(
         id, b.__khoa, b.ten,
         b.danh_muc ?? null,
@@ -662,7 +950,7 @@ export async function ghiThat(env, phien, { bang, ghep, maDich, tenTep }) {
     /* TỒN KHO: ghi vào SỔ CÁI thành một phiếu nhập, không đặt thẳng con số
        tồn. Đúng nguyên tắc của module kho — tồn luôn là tổng của sổ cái,
        không bao giờ là con số rời cộng trừ tay. */
-    const phieuId = 'pn_' + crypto.randomUUID().slice(0, 12);
+    phieuId = 'pn_' + crypto.randomUUID().slice(0, 12);
     const themLo = env.DB.prepare(
       'INSERT INTO lo_hang (id, san_pham_id, so_lo, han_su_dung) VALUES (?, ?, ?, ?)');
     const themGd = env.DB.prepare(`
@@ -673,39 +961,90 @@ export async function ghiThat(env, phien, { bang, ghep, maDich, tenTep }) {
       let loId = null;
       if (b.__theoDoiHsd && (b.so_lo || b.han_su_dung)) {
         loId = 'lo_' + crypto.randomUUID().slice(0, 12);
+        loIds.push(loId);
         lenh.push(themLo.bind(loId, b.__spId, b.so_lo || null, b.han_su_dung || null));
       }
       lenh.push(themGd.bind(phieuId, b.__spId, loId, b.so_luong, b.don_gia ?? null,
                             b.doi_tac || null, lyDo, phien.nhan_su_id));
     }
-    if (doiChieu.them.length) {
-      lenh.push(ghiVet.bind('giao_dich_kho', String(phieuId), 'nap_file', null,
-                            `${doiChieu.them.length} dòng`, phien.nhan_su_id, nguoiTen, lyDo));
-    }
   }
 
-  // --- Ghi theo lô, đếm lượt ghi THẬT ---
   let ghiThuc = 0;
-  for (let i = 0; i < lenh.length; i += CO_LO) {
-    const kq = await env.DB.batch(lenh.slice(i, i + CO_LO));
-    demGhi(kq);
+  const dem = kq => {
     for (const r of (Array.isArray(kq) ? kq : [kq])) {
       const n = r?.meta?.rows_written;
       if (typeof n === 'number' && n > 0) ghiThuc += n;
     }
+  };
+
+  /* --- Ghi vết phiếu nhập đi TRƯỚC dữ liệu, không đi sau ---
+     Đây là cái mốc để gỡ lại. Ghi sau thì lần nạp ngã giữa chừng để lại một
+     đống dòng trong sổ cái mà KHÔNG có dấu nào chỉ ra chúng thuộc lượt nạp
+     nào — mở CSDL sửa tay là đường duy nhất. Ghi trước thì dù cả isolate
+     chết, vẫn tra ra được phiếu đang dở (`gia_tri_moi = 'đang ghi'`) rồi gỡ.
+     Vẫn đúng MỘT dòng ghi vết cho cả lượt nạp: xong việc thì SỬA dòng này,
+     không chèn thêm dòng thứ hai. */
+  if (maDich === 'ton_kho' && doiChieu.them.length) {
+    dem(await ghiVet.bind('giao_dich_kho', String(phieuId), 'nap_file', vanTayND,
+                          DANG_GHI, phien.nhan_su_id, nguoiTen, lyDo).run());
   }
 
-  /* ⚠️ CHỐT SỔ NGAY, KHÔNG ĐỢI CRON.
-     `demGhi` ở trên chỉ cộng vào bộ nhớ của isolate đang chạy, mà cron chốt
-     sổ lại chạy ở isolate khác — số này gần như không bao giờ tới được sổ
-     ngày. Không chốt ngay thì màn xem trước của lần nạp SAU vẫn báo "hôm nay
-     còn 100.000 lượt" dù vừa đốt 40.000, và chốt chặn hạn mức thành đồ trang
-     trí. Xem chú thích dài ở `chotNgayLuon` trong src/canh-bao-ghi.js. */
-  let conLaiSau = null;
-  if (ghiThuc > 0) {
-    const chot = await chotNgayLuon(env, ghiThuc);
-    if (chot) conLaiSau = Math.max(0, HAN_MUC_NGAY - chot.so_dong);
+  // --- Ghi theo lô. NGÃ THÌ GỠ SẠCH RỒI MỚI BÁO (CHẶN-②) ---
+  let daChay = 0;
+  try {
+    for (let i = 0; i < lenh.length; i += CO_LO) {
+      dem(await env.DB.batch(lenh.slice(i, i + CO_LO)));
+      daChay = Math.min(i + CO_LO, lenh.length);
+    }
+    if (maDich === 'ton_kho' && doiChieu.them.length) {
+      dem(await env.DB.prepare(
+        `UPDATE lich_su_thay_doi_nen SET gia_tri_moi = ?
+          WHERE bang = 'giao_dich_kho' AND truong = 'nap_file' AND ban_ghi_id = ?`
+      ).bind(`${doiChieu.them.length} dòng`, String(phieuId)).run());
+    }
+  } catch (e) {
+    console.error('Nạp file ngã giữa chừng:', e && e.message);
+    let daVaoSo = null;
+    if (maDich === 'ton_kho') {
+      try {
+        const d = await env.DB.prepare(
+          'SELECT COUNT(*) AS n FROM giao_dich_kho WHERE phieu_id = ?').bind(phieuId).first();
+        daVaoSo = Number(d?.n || 0);
+      } catch { /* đếm không được thì thôi, câu báo vẫn nói đủ ý */ }
+    }
+    const don = await donLaiKhiNga(env, { maDich, phieuId, loIds, themIds, sua: doiChieu.sua, lyDo });
+    ghiThuc += don.luot;
+    /* Lượt ghi ĐÃ TIÊU vẫn phải vào sổ ngày, kể cả khi ngã — không thì hạn
+       mức đếm hụt và chốt chặn của ngày hôm đó thành vô nghĩa. */
+    if (daDatCho || ghiThuc) await chinhLaiCho(env, ghiThuc - daDatCho);
+
+    const tongDong = maDich === 'ton_kho' ? doiChieu.them.length
+                                          : doiChieu.them.length + doiChieu.sua.filter(b => !b.__khoaCu).length;
+    const daPhan = daVaoSo !== null
+      ? `đã ghi được ${daVaoSo.toLocaleString('vi-VN')}/${tongDong.toLocaleString('vi-VN')} dòng`
+      : `đã chạy được ${daChay.toLocaleString('vi-VN')}/${lenh.length.toLocaleString('vi-VN')} lệnh ghi`;
+    throw new LoiGhiNua(
+      don.sot.length
+        ? `Máy chủ dữ liệu ngã giữa chừng khi đang nạp — ${daPhan}. ` +
+          `ERP gỡ lại KHÔNG xong nên sổ sách CÒN SÓT phần ghi dở. ` +
+          `XIN ĐỪNG NẠP LẠI. Mở màn Kho vận xem sổ cái, hoặc gỡ lượt nạp ${phieuId || luotId} rồi mới nạp lần nữa.`
+        : `Máy chủ dữ liệu ngã giữa chừng khi đang nạp — ${daPhan}. ` +
+          `ERP đã gỡ sạch phần ghi dở, sổ sách trở lại đúng như trước khi nạp. ` +
+          `Xin nạp lại file này một lần nữa.`,
+      { phieu_id: phieuId, luot_id: luotId, da_don_sach: don.sot.length === 0, luot_ghi_that: ghiThuc });
   }
+
+  /* --- Chỉnh sổ ngày về SỐ THẬT ---
+     Đã đặt chỗ `daDatCho` lúc đầu; giờ biết số thật thì cộng/trừ phần chênh.
+     Sau bước này sổ ngày cộng dồn đúng bằng tổng lượt ghi thật.
+     ⚠️ KHÔNG gọi `demGhi` ở đây nữa (CAO-④): `demGhi` cộng vào bộ đếm treo
+     trong bộ nhớ, mà cron `scheduled()` có lúc chạy CÙNG isolate với
+     `fetch()` — lúc đó cron flush bộ đếm ấy lần nữa và sổ ngày cộng đôi
+     (đo được 700 → 1.400). Đã chốt thẳng vào sổ ở đây rồi thì không được
+     đếm lần thứ hai. */
+  let conLaiSau = null;
+  const chot = await chinhLaiCho(env, ghiThuc - daDatCho);
+  if (chot) conLaiSau = Math.max(0, HAN_MUC_NGAY - chot.so_dong);
 
   return {
     ok: true,
@@ -716,7 +1055,102 @@ export async function ghiThat(env, phien, { bang, ghep, maDich, tenTep }) {
     dong_loi: loi.length,
     so_lenh: lenh.length,
     luot_ghi_that: ghiThuc,
-    ghi_con_lai_hom_nay: conLaiSau
+    ghi_con_lai_hom_nay: conLaiSau,
+    /* Đường lùi: trả về mã phiếu để giao diện hiện nút “Gỡ lượt nạp này”. */
+    phieu_id: phieuId,
+    luot_id: luotId
+  };
+}
+
+/* ==========================================================================
+   5b. ĐƯỜNG LÙI — GỠ MỘT LƯỢT NẠP TỒN RA KHỎI SỔ CÁI
+   --------------------------------------------------------------------------
+   Trước REV-0060, `grep -c "DELETE FROM" src/kho.js` = 0: nạp nhầm tồn kho là
+   phải mở CSDL sửa tay. Chống nạp lại mà không có đường lùi thì lỗi vẫn chưa
+   đóng được — vì chống nhầm cũng có, và người ta vẫn sẽ nạp nhầm file.
+
+   Gỡ ở đây là XOÁ HẲN các dòng của phiếu đó khỏi sổ cái, không phải ghi một
+   phiếu xuất bù. Vì sao: tồn đầu kỳ nạp nhầm là dữ liệu CHƯA TỪNG ĐÚNG, ghi
+   phiếu xuất bù sẽ để lại một cặp nhập/xuất giả trong sổ mà anh Duy đọc
+   không hiểu. Việc gỡ vẫn được ghi vết đầy đủ (ai gỡ, lúc nào, phiếu nào,
+   bao nhiêu dòng) nên vẫn truy được nguồn gốc.
+
+   CHỈ gỡ được phiếu do NẠP FILE sinh ra (`truong='nap_file'`) — phiếu nhập
+   tay ở màn Kho vận không đi qua cửa này.
+   ========================================================================== */
+export async function huyLuotNap(env, phien, phieuId) {
+  if (!duocThaoTacKho(phien)) return { loi: 'Bạn không có quyền gỡ lượt nạp tồn kho', ma: 403 };
+  const ma = String(phieuId || '').trim();
+  if (!ma) return { loi: 'Chưa rõ gỡ lượt nạp nào.', ma: 400 };
+
+  const vet = await env.DB.prepare(
+    `SELECT ban_ghi_id, gia_tri_moi, nguoi_ten, luc, ly_do FROM lich_su_thay_doi_nen
+      WHERE bang = 'giao_dich_kho' AND truong = 'nap_file' AND ban_ghi_id = ?`
+  ).bind(ma).first();
+  if (!vet) {
+    return { loi: 'Không tìm thấy lượt nạp này trong sổ. Có thể ai đó đã gỡ rồi.', ma: 404 };
+  }
+  if (vet.gia_tri_moi === DA_GO) {
+    return { loi: 'Lượt nạp này đã được gỡ khỏi sổ cái rồi.', ma: 409 };
+  }
+
+  const d = await env.DB.prepare(
+    `SELECT COUNT(*) AS n, COALESCE(SUM(so_luong),0) AS sl FROM giao_dich_kho WHERE phieu_id = ?`
+  ).bind(ma).first();
+  const soDong = Number(d?.n || 0), soLuong = Number(d?.sl || 0);
+
+  /* Lô hàng do chính lượt nạp này sinh ra: chỉ xoá lô KHÔNG còn dòng sổ cái
+     nào khác trỏ vào. Lô dùng chung với phiếu nhập tay thì giữ nguyên. */
+  const { results: loDs } = await env.DB.prepare(
+    `SELECT DISTINCT lo_hang_id AS id FROM giao_dich_kho
+      WHERE phieu_id = ? AND lo_hang_id IS NOT NULL`).bind(ma).all();
+
+  let luot = 0;
+  const chay = async (sql, tso) => {
+    const r = await env.DB.prepare(sql).bind(...tso).run();
+    luot += (r?.meta?.rows_written) || 0;
+  };
+  await chay('DELETE FROM giao_dich_kho WHERE phieu_id = ?', [ma]);
+  for (const l of (loDs || [])) {
+    await chay(`DELETE FROM lo_hang WHERE id = ?
+                 AND NOT EXISTS (SELECT 1 FROM giao_dich_kho WHERE lo_hang_id = lo_hang.id)`, [l.id]);
+  }
+  await chay(
+    `UPDATE lich_su_thay_doi_nen SET gia_tri_moi = ?, ly_do = ?
+      WHERE bang = 'giao_dich_kho' AND truong = 'nap_file' AND ban_ghi_id = ?`,
+    [DA_GO,
+     `${String(vet.ly_do || '').slice(0, 140)} — đã gỡ khỏi sổ cái bởi ` +
+     `${phien?.ho_ten || phien?.ten_dang_nhap || 'không rõ'}`,
+     ma]);
+
+  await chinhLaiCho(env, luot);
+  return {
+    ok: true, phieu_id: ma, da_go_dong: soDong, da_go_so_luong: soLuong,
+    luot_ghi_that: luot,
+    tin: `Đã gỡ ${soDong.toLocaleString('vi-VN')} dòng (${soLuong.toLocaleString('vi-VN')} đơn vị) ` +
+         `của lượt nạp này ra khỏi sổ cái kho. Tồn kho đã tính lại theo sổ.`
+  };
+}
+
+/** Danh sách các lượt nạp tồn kho gần đây — để Sếp biết cái nào cần gỡ. */
+export async function dsLuotNap(env, phien, gioiHan = 10) {
+  if (!duocThaoTacKho(phien)) return { loi: 'Bạn không có quyền xem lượt nạp tồn kho', ma: 403 };
+  const n = Math.max(1, Math.min(50, Number(gioiHan) || 10));
+  const { results } = await env.DB.prepare(
+    `SELECT v.ban_ghi_id AS phieu_id, v.gia_tri_moi AS trang_thai, v.nguoi_ten, v.luc, v.ly_do,
+            (SELECT COUNT(*) FROM giao_dich_kho g WHERE g.phieu_id = v.ban_ghi_id) AS so_dong,
+            (SELECT COALESCE(SUM(g.so_luong),0) FROM giao_dich_kho g WHERE g.phieu_id = v.ban_ghi_id) AS so_luong
+       FROM lich_su_thay_doi_nen v
+      WHERE v.bang = 'giao_dich_kho' AND v.truong = 'nap_file'
+      ORDER BY v.luc DESC LIMIT ?`).bind(n).all();
+  return {
+    ok: true,
+    ds: (results || []).map(r => ({
+      ...r,
+      da_go: r.trang_thai === DA_GO,
+      dang_ghi: r.trang_thai === DANG_GHI,
+      ten_tep: String(r.ly_do || '').replace(/^Nạp từ file\s*/, '').replace(/\s*·\s*lượt nl_[0-9a-f]+.*$/, '')
+    }))
   };
 }
 
@@ -768,13 +1202,15 @@ export async function ghepDaNho(env, maDich, vanTay) {
 
 /* Đọc file thành lưới ô. Bọc lại `docBang` để index.js chỉ phải nhập MỘT
    mô-đun (`nap-du-lieu.js`) thay vì hai. */
-export async function docBangTuByte(bytes, tenTep) {
-  return docBang(bytes, tenTep);
+export async function docBangTuByte(bytes, tenTep, tuyChon = {}) {
+  return docBang(bytes, tenTep, tuyChon);
 }
 
 /** Bước 1 — đọc file, trả tên cột + gợi ý ghép + (nếu đã nhớ) xem trước luôn. */
-export async function moFile(env, phien, bytes, tenTep, maDich) {
-  const bang = await docBang(bytes, tenTep);
+export async function moFile(env, phien, bytes, tenTep, maDich, bangChon = 0) {
+  /* `demDong: true` — bước 1 là chỗ DUY NHẤT cần số dòng của TỪNG bảng, để
+     Sếp nhìn mà chọn đúng bảng. Hai bước sau không bật, khỏi bung XML thừa. */
+  const bang = await docBang(bytes, tenTep, { bangChon, demDong: true });
   const vanTay = await vanTayCot(bang.cot);
   const daNho = await ghepDaNho(env, maDich, vanTay);
   const ghep = daNho || goiYGhep(bang.cot, maDich);
@@ -782,16 +1218,40 @@ export async function moFile(env, phien, bytes, tenTep, maDich) {
   const dich = DICH[maDich];
   const duGhep = dich.truong.filter(t => t.batBuoc).every(t => t.ma in ghep);
 
+  /* --- MẪU PHẢI HIỆN GIÁ TRỊ ĐÃ ĐỌC, KHÔNG PHẢI SỐ THÔ (VỪA-③) ---
+     Excel lưu 31/12/2026 thành số 46387. Cả màn ghép cột được thiết kế quanh
+     cái mẫu này — để Sếp phát hiện ghép nhầm NGAY TẠI CHỖ. In ra "46387" thì
+     cửa chặn bằng mắt người mất tác dụng đúng ở cột dễ sai nhất.
+     Đọc SẴN cả hai cách hiểu (ngày · số) cho từng ô mẫu, rồi giao diện hiện
+     cách hiểu ĐÚNG VỚI KIỂU Ô đang ghép. Đọc ở đây chứ không viết lại hàm
+     đọc trong app.js: hai bản đọc là hai bản sẽ lệch nhau. */
+  const buNgay = buNgayCuaBang(bang);
+  const mauDong = bang.dong.slice(0, 3);
+  const mauDoc = mauDong.map(d => d.map(v => {
+    const s = String(v ?? '').trim();
+    if (!s) return null;
+    const ng = docNgay(s, buNgay);
+    const so = docSo(s);
+    if (!ng && so === null) return null;
+    return { ngay: ng || undefined, so: so === null ? undefined : so };
+  }));
+
   return {
     ok: true,
     tep: { ten: tenTep, bang_ma: bang.bangMa, dinh_dang: bang.dinhDang, so_dong: bang.dong.length },
     cot: bang.cot,
-    mau_dong: bang.dong.slice(0, 3),
+    mau_dong: mauDong,
+    mau_doc: mauDoc,
     ghep,
     da_nho: !!daNho,
     du_de_xem_truoc: duGhep,
     van_tay: vanTay,
     canh_bao: bang.canhBao,
+    /* Danh sách bảng để NGƯỜI chọn (CAO-⑤). Máy chỉ mở sẵn bảng đầu tiên. */
+    ds_bang: bang.dsBang,
+    bang_chon: bang.bangChon || 0,
+    ten_bang: bang.tenBang,
+    he_ngay_1904: !!bang.he1904,
     truong: dich.truong.map(t => ({ ma: t.ma, nhan: t.nhan, bat_buoc: !!t.batBuoc, kieu: t.kieu }))
   };
 }

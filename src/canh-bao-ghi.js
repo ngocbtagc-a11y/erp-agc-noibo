@@ -76,6 +76,63 @@ async function congVaoNgay(env, ngay, them) {
    Nên nạp file tự chốt sổ NGAY, không đợi cron. Giá phải trả: đúng MỘT lượt
    ghi thêm cho mỗi lần nạp — trong khi bản thân lần nạp đó đã tốn hàng nghìn.
    ========================================================================== */
+/* ==========================================================================
+   ĐẶT CHỖ TRƯỚC KHI GHI — chống hai người cùng lọt qua chốt chặn
+   --------------------------------------------------------------------------
+   ⚠️ VÌ SAO "ĐỌC RỒI MỚI QUYẾT" LÀ HỎNG.
+   `SELECT so_dong … ` rồi so sánh rồi mới ghi là ba việc rời nhau. Ba người
+   nạp cùng lúc thì cả ba đều ĐỌC thấy "còn 65.000", cả ba đều thấy file mình
+   cần 45.000, cả ba đều đi qua — 140.000/100.000, D1 chặn ghi CẢ HỆ THỐNG.
+   Đo được: `node scripts/ho-ly-rev0060-b.mjs` mục ①.
+
+   Cách đúng: ĐẶT CHỖ trước. Cộng phần DỰ TÍNH vào sổ ngày bằng đúng câu
+   `ON CONFLICT DO UPDATE … + excluded` (nguyên tử, đã đo là không bị đè), rồi
+   ĐỌC SỐ TRẢ VỀ. Người thứ hai thấy ngay số của người thứ nhất vì phép cộng
+   và phép đọc là MỘT câu lệnh. Vượt thì trả chỗ lại rồi 429; không vượt thì
+   ghi, xong chỉnh lại chênh lệch giữa dự tính và số thật.
+
+   Bản thân hai lượt ghi của đặt chỗ/hoàn chỗ KHÔNG tự đếm vào sổ — cố ý:
+   ca bị chặn phải để sổ ngày y nguyên như trước khi thử (bàn đo canh việc
+   này), và 2 dòng cho mỗi lần nạp là sai số nằm dưới mức đáng quan tâm.
+   ========================================================================== */
+
+/** Đặt chỗ `soDuTinh` lượt ghi. Trả `{ngay, so_dong}` — số SAU khi đã đặt. */
+export async function datChoGhi(env, soDuTinh) {
+  if (!(soDuTinh > 0)) return null;
+  const ngay = ngayVN();
+  const d = await congVaoNgay(env, ngay, soDuTinh);
+  return { ngay, so_dong: d?.so_dong || 0 };
+}
+
+/** Trả lại chỗ đã đặt (khi bị chặn, hoặc khi ghi ít hơn dự tính). */
+export async function traLaiCho(env, so) {
+  if (!(so > 0)) return null;
+  const ngay = ngayVN();
+  try {
+    const d = await congVaoNgay(env, ngay, -so);
+    return { ngay, so_dong: d?.so_dong || 0 };
+  } catch (e) {
+    console.error('Trả lại chỗ ghi:', e.message);
+    return null;
+  }
+}
+
+/**
+ * Chỉnh sổ ngày theo chênh lệch giữa DỰ TÍNH đã đặt chỗ và SỐ THẬT đã ghi.
+ * `chenh` dương = ghi nhiều hơn dự tính (đặt thêm), âm = ghi ít hơn (trả về).
+ */
+export async function chinhLaiCho(env, chenh) {
+  if (!chenh) return null;
+  const ngay = ngayVN();
+  try {
+    const d = await congVaoNgay(env, ngay, chenh);
+    return { ngay, so_dong: d?.so_dong || 0 };
+  } catch (e) {
+    console.error('Chỉnh sổ lượt ghi:', e.message);
+    return null;
+  }
+}
+
 export async function chotNgayLuon(env, soDong) {
   if (!(soDong > 0)) return null;
   const ngay = ngayVN();

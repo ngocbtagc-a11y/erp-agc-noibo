@@ -1360,6 +1360,18 @@
           <div class="empty" id="cskh-trong" hidden>Chưa có đơn hoàn nào trong 6 tháng gần đây.</div>
         </div>
       </div>
+
+      <!-- ===== Chỗ đặt màn "Nạp từ file" cho người KHÔNG có tab Kho vận =====
+           Kinh doanh (van_hanh_san) là CHỦ SỞ HỮU danh mục SKU và máy chủ vẫn
+           cho họ nạp danh mục — nhưng màn nạp lại nằm trong tab Kho vận, mà
+           họ không có tab đó. Nút hiện đúng người, nằm trong căn phòng người
+           đó không mở được cửa (REV-0060 CAO-⑥).
+           Ô này để TRỐNG trong HTML; `khoiDongNapFile` dời NGUYÊN khối màn
+           nạp sang đây khi người dùng không có tab Kho vận — dời chứ không
+           chép, để không đẻ ra hai khối trùng id.
+           ⚠️ ĐÂY LÀ CHỖ ĐẶT TẠM VỀ MẶT KỸ THUẬT. Màn này thuộc tab nào là
+           QUYẾT ĐỊNH CỦA SẾP — xem câu chờ Sếp trong CHANGELOG. -->
+      <div class="kv-pane" id="kd-pane-napfile" hidden></div>
     </section>
 
     <!-- ---------- Kho — Xuất / Nhập / Tồn ---------- -->
@@ -1426,6 +1438,18 @@
           </div>
           <div class="panel-body">
             <p class="hint" id="napB2Nho" hidden></p>
+            <!-- File .xlsx nhiều bảng: MÁY KHÔNG ĐOÁN HỘ bảng nào là bảng số
+                 liệu (luật ① của nap-du-lieu.js). File thật của Sếp
+                 `Nhap_khau_hang_hoa.xlsx` có 7 bảng, bảng đầu tiên là trang
+                 chữ "Hướng dẫn nhập khẩu" — lấy bảng đầu rồi im lặng là đưa
+                 trang hướng dẫn cho Sếp như thể đó là số liệu. -->
+            <div class="form-luoi" id="napChonBangO" hidden>
+              <div class="field field-rong">
+                <label for="napChonBang">File có nhiều bảng — chọn bảng chứa số liệu cần nạp</label>
+                <select id="napChonBang"></select>
+                <span class="nap-mau" id="napChonBangHint"></span>
+              </div>
+            </div>
             <div class="form-luoi" id="napGhepO"></div>
             <div class="form-loi" id="nap-loi2"></div>
             <div class="nap-nut">
@@ -1444,6 +1468,20 @@
           <div class="panel-body">
             <div class="stats" id="napTomTat"></div>
             <div id="napCanhBao"></div>
+
+            <!-- CỬA CHẶN NẠP TRÙNG. Nạp tồn kho hai lần là CỘNG THÊM, không
+                 phải ghi đè — tồn gấp đôi, mà tồn ảo thì bán ra không có hàng
+                 giao. Nên chỗ này BẮT XÁC NHẬN RIÊNG: nút nạp tắt hẳn cho tới
+                 khi Sếp tick. Máy chủ chặn lần nữa (409), không tin mỗi tick. -->
+            <div class="nap-trung" id="napTrungO" hidden>
+              <p class="nap-trung-cau" id="napTrungCau"></p>
+              <div id="napTrungDs"></div>
+              <label class="nap-tick" for="napTrungTick">
+                <input type="checkbox" id="napTrungTick">
+                <span>Tôi đã kiểm rồi. Vẫn nạp, và hiểu rằng số trong file sẽ CỘNG THÊM vào tồn đang có.</span>
+              </label>
+            </div>
+
             <div id="napBangLoi"></div>
             <div class="form-loi" id="nap-loi3"></div>
             <div class="nap-nut">
@@ -1458,9 +1496,25 @@
           <div class="panel-head"><h4>Đã nạp xong</h4></div>
           <div class="panel-body">
             <div class="stats" id="napKetQua"></div>
+            <p class="hint" id="napB4Go"></p>
             <div class="nap-nut">
+              <button type="button" class="btn-phu" id="napB4GoNut" hidden>Gỡ lượt nạp vừa rồi</button>
               <button type="button" class="btn-primary" id="napB4Moi">Nạp thêm file khác</button>
             </div>
+          </div>
+        </div>
+
+        <!-- ĐƯỜNG LÙI — các lượt nạp tồn kho gần đây, gỡ được từng lượt.
+             Trước REV-0060 không có đường nào: nạp nhầm là mở CSDL sửa tay.
+             Cố ý KHÔNG dùng thẻ bảng ở đây (giữ luật vừa màn 375px). -->
+        <div class="panel" id="nap-luot" hidden>
+          <div class="panel-head">
+            <h4>Lượt nạp tồn kho gần đây</h4>
+            <span class="hint">Nạp nhầm thì gỡ ở đây — sổ cái bỏ hết dòng của lượt đó, tồn tính lại ngay.</span>
+          </div>
+          <div class="panel-body">
+            <div id="napLuotDs"></div>
+            <div class="form-loi" id="nap-loi5"></div>
           </div>
         </div>
       </div>
