@@ -239,10 +239,225 @@ lần sau **không ai biết nợ có tăng hay không** — nên ghi cả ba ra
   và một bàn nữa. 37 bàn còn lại vẫn treo được — mà bàn đo treo thì người ta
   **tắt nó chứ không sửa nó**. Không nâng lên `lib/` dùng chung được ngay vì
   **43 script import nó**; chờ lúc hàng đợi trống worktree.
-- **`do-bang-that` chưa đo 1024px.** Bật lên thì lòi ra **5 chỗ tràn**, trong
+- ~~**`do-bang-that` chưa đo 1024px.** Bật lên thì lòi ra **5 chỗ tràn**, trong
   đó **2 chỗ là của `f1ac70b`** (`kd-sku-chay` / `kd-sku-kem`, cột "Doanh thu"
   rơi khỏi màn ở 1440 và 1280). **Vá 2 bảng đó TRƯỚC, rồi mới bật mức đo** —
-  đừng bật để cổng đỏ sẵn.
+  đừng bật để cổng đỏ sẵn.~~
+  ✅ **XONG 07/09/2026** — nhánh `fix/bang-sku-tran-1024`. Hai bảng SKU vá
+  xong, mức 1024px đã bật kèm lời cấm bỏ nó, cả 5 chỗ tràn đã xử.
+  `do-bang-that` **73 ĐẠT · 2 TRƯỢT → 97 ĐẠT · 0 TRƯỢT** ở bốn mức
+  1440 · 1280 · 1024 · 375.
+
+---
+
+## NỢ MỚI GHI 07/09/2026 — từ việc vá bảng SKU và bật mức đo 1024px
+
+- **`do-gop-viec` ĐANG ĐỎ SẴN TRÊN `origin/main`** (`407d2df`), không phải do
+  nhánh nào gây ra: `❌ 1440px: số dòng bị giảm` — `truoc` 9 dòng, `sau`
+  `gop.toi` 8 · `gop.congty` 8. Đã kiểm bằng cách stash sạch cây làm việc rồi
+  chạy lại: **ra đúng cùng con số**. Đây là chốt chính Sếp dặn — *"không được
+  làm giảm số dòng thấy được"* — đang bị vi phạm trên hệ thống thật mà chưa ai
+  khai. Phải xử trước khi nó thành cái mái như `MOC_TRAN` cũ.
+- **`do-tu-lam-moi` 52 ĐẠT · 2 TRƯỢT** — nợ của `f1ac70b`, đã biết từ trước,
+  vẫn còn nguyên. ⚠️ **Con số này đã CŨ. Từ lượt gộp `aa6245f` (07/09/2026) nó
+  là 51 / 3** — xem mục "NỢ MỞ ②" ở cuối tệp.
+- ~~**CẦN SẾP / HỒ LY XÁC NHẬN MỘT QUYẾT ĐỊNH HIỂN THỊ.** Bảng "Tổng quan 2 sàn"
+  (`kd-tq-bang`) — đã cho hai cột "Hủy"/"Hoàn" xuống `.cot-phu`, vì thẻ số trên
+  bảng đã báo "Hủy + Hoàn" kèm % trên GMV.~~
+  ✅ **ĐÃ SỬA 07/09/2026 (vòng vá REV-0063 · VỪA-3).** Hồ Ly bác, và bác đúng
+  bằng số — cả hai điểm đều tái lập được:
+  1. `.cot-phu` là `display:none` ở **MỌI** bề ngang, nên hai cột biến mất cả
+     trên màn 1440px của Sếp — nơi bảng này **không hề tràn** (đo lại: khung
+     1094 · bảng 1094 · vừa). Trả giá ở màn rộng để chữa +26px ở màn hẹp.
+  2. **Lý do cũ SAI VỀ DỮ LIỆU:** thẻ "Hủy + Hoàn" đọc `dt.tong` — **tổng toàn
+     công ty, KHÔNG tách sàn** — nên nó không trả lời được đúng câu mà hai cột
+     ấy trả lời: *Shopee đang rò rỉ hay TikTok đang rò rỉ*. Với AGC đó là số
+     quyết định có đẩy ngân sách sang TikTok hay không: thông tin cấp một.
+  **Nay:** hai cột **ở lại trên bảng từ 1101px trở lên**, chỉ rời bảng từ
+  **≤1100px** — một khối `@media (min-width: 1101px)` trên `#kd-tq-wrap`
+  (style.css). `.cot-phu` vẫn giữ trên `<th>` để `luoiBang()` luôn cấp nút
+  "Chi tiết": đường tới dữ liệu có ở mọi bề ngang, không JS nào phải đo màn
+  hình, nên không hỏng khi người ta kéo co cửa sổ qua mốc 1100px.
+  Đo lại: `kd-tq-bang` **vừa khít ở 1440 · 1280 · 1024**, `do-bang-that` arm
+  A/B/B2/G/G2/G3 xanh cả 4 mức.
+  ⚠️ **Còn một chỗ cần NGƯỜI SOI sửa, không phải kho mã:**
+  `scripts/holy-rev63-quet-min560.mjs` là bản CHÉP của `do-bang-that`, đóng
+  băng TRƯỚC khi arm G được sửa nghĩa (nay chỉ đòi nút "Chi tiết" cho ô cột
+  phụ **đang thật sự `display:none`**, chứ không theo cái tên lớp). Bản chép
+  ấy vẫn chấm theo LỚP nên báo `G2 · kd-tq-bang 0x0` ở 1440 và 1280 — cái nút
+  ở đó bị ẩn **có chủ ý**, vì hai cột đã nằm trên bảng rồi. Bàn đo hiện hành
+  xanh cả G/G2/G3 ở cả 4 bề ngang.
+
+---
+
+## VÒNG VÁ REV-0063 — 07/09/2026, đã xử hết 2 CAO · 4 VỪA · 2 THẤP
+
+- **CAO-1 · cắt chữ âm thầm ở ô "Mã SKU · Tên hàng"** (đo: hiện 34px / thật
+  50px, cả 3 dòng `#kd-sku-chay` @1440px, KHÔNG có nút "Xem thêm"). Vá bằng
+  `capNutDongPhu()` trong `app.js`: đo `scrollHeight` vs `clientHeight` rồi
+  gắn/gỡ nút. Đo lại sau vá: @1440 bảng bán chạy **có nút**, bảng bán kém
+  không kẹp nên **không có nút thừa**; @1024 và @375 không kẹp, không nút.
+- **CAO-2 · luật CSS chết.** Có cổng mới canh: `npm run do-luat-css-chet`
+  (tự đối chứng bằng các mẫu dựng sẵn trước khi chấm tệp thật).
+  ⚠️ Con số nền ở đây từng viết là "`main` 3/187". SAI: 187 là số của
+  **merge-base `407d2df`**, còn `origin/main af951b8` là **3/189**
+  (REV-0063 vòng 2, THẤP-3). Đo lại rồi mới ghi, đừng lấy số của cây khác.
+- **VỪA-1** arm D đổi `>=` → `===` (báo cả hai chiều). **VỪA-2** sửa lời khai
+  nbsp cho khớp số đo (dựng lại bằng `BO_NBSP=1`: giống hệt từng pixel).
+  **VỪA-3** xem ở trên. **VỪA-4** `MOC_CAO_DONG` nay có arm E4 dùng thật, và
+  arm A đỏ khi bảng đo ra `khung 0px` thay vì chấm là "vừa".
+- **THẤP-1** ghi mép của `min(560px, 100%)` vào ngay chỗ luật. **THẤP-2**
+  `do-bang-vua-man` thêm mức 1024px (39 → **46 ĐẠT · 0 TRƯỢT**).
+- Cổng mới đều **tự chứng minh bắt được**: gài lại đúng 3 lỗi rồi chạy —
+  arm R7 đỏ ở 1440/1280 ("hiện 34px / thật 50px"), arm D đỏ cả 4 mức, arm A
+  đỏ với "KHÔNG ĐO ĐƯỢC (khung 0px)"; `do-luat-css-chet` đỏ đúng 2 dòng.
+
+## VÒNG VÁ REV-0063 VÒNG 2 — 07/09/2026, đã xử 1 CHẶN · 2 CAO · 3 VỪA · 5 THẤP
+
+- **CHẶN-1 · gộp `main af951b8` không sạch.** Xung đột đúng khối `.kd-sku-cot`:
+  `main` chữa bằng `minmax(560px)`, nhánh này bằng `minmax(360px)` +
+  `min(560px,100%)` ở chính `<table>`. Chốt tay **lấy phía NHÁNH**, lý do ghi
+  ngay tại chỗ trong `style.css`: sàn 560px của `main` làm **hai bảng SKU xếp
+  chồng ở 1440px** (lưới chỉ rộng 1094 < 560×2+20).
+- **CAO-1 · luật CSS chết thứ tư và thứ năm** — `@media(≤1100px) thead th,
+  tbody td { padding-left/right: 10px }` và `@media(≤640px) .chat-nhap
+  { padding-bottom: calc(… env(safe-area-inset-bottom)) }`, cả hai chết vì bị
+  **viết GỘP `padding` đè viết RỜI**. Đo Chrome trước vá: đệm 16px ở
+  1100·1099·1024·981 (chưa bao giờ 10px). Sau vá: **10px ở cả bốn**, và lề an
+  toàn tai thỏ thắng được luật nền. Cổng `do-luat-css-chet` nay soi thêm lớp
+  gộp-đè-rời, chuẩn hoá selector (đảo lớp · khoảng trắng quanh `> + ~` ·
+  hoa/thường tên thẻ), và lớp "@media bị @media phủ đứng sau đè" — lớp cuối
+  lòi ra thêm một luật chết thật (`.login-panel` @980px). Mục PHẠM VI của cổng
+  nay khai **đủ 8 chỗ mù** (vòng 3 THẤP-1 thêm chỗ thứ ⑧: `chuanHoaSel()`
+  không gộp `:hover`/`:HOVER`, `::before`/`:before`, nháy đơn/kép trong `[]` —
+  cả ba lệch về phía bỏ sót, ERP hôm nay 0 ca), không phải một chỗ tiện nói.
+- **CAO-2 · vạch `min-width: 1101px` mở ra dải tràn mới 1101–1245px**
+  (`kd-tq-bang` +145 → +46, nút "Chi tiết" bị chính khối đó ẩn ⇒ chỉ còn kéo
+  ngang). Dời vạch lên **1246px** và thêm **1200** vào `RONGS` của
+  `do-bang-that`. Quét lại **cả dải 1090–1440px, 40 mức: 0 tràn, 0 chỗ mất
+  đường xem**.
+- **VỪA-1** sửa lời khai sai trong `do-cat-im-lang.mjs`: tập bắt của arm K là
+  **tập con thực sự** của R7, không phải "hai phạm vi không chồng lấn".
+- **VỪA-2** `capNutDongPhu()` nay **gỡ cả nút THẬT** khi ô hết kẹp (trước để
+  lại 11 nút "mở ra thứ đang bày sẵn"). Chốt chặn dao động bằng `GO_TOI_DA`
+  chứ không bằng cách từ chối dọn. Đo: 40 mẫu × 50ms **không dao động**, sau
+  khi nới khung còn **0 nút nói dối / 0 ô kẹp thiếu nút**.
+- **VỪA-3** `.dai-gon-btn` trong ô bảng: hộp **15px → 44px** bằng HỘP THẬT +
+  lề âm -10/-10 (KHÔNG dùng `::after` — bản đầu định thế, nhưng `::after`
+  không hiện trong `getBoundingClientRect()` nên mọi bàn đo đọc hộp sẽ báo
+  24px). Dòng chỉ cao thêm ~3px. Đưa vào `do-nut-dai-cat-44px` kèm ca đối
+  chứng (gỡ luật → đo ra 16px).
+- **THẤP-1** bỏ con số viết cứng "bốn mẫu" trong `do-luat-css-chet`, in thẳng
+  `MAU.length`. **THẤP-2** "từ ~1230px mới hai cột" → đo được **1086px**.
+  **THẤP-3** xem ghi chú ở mục CAO-2 vòng 1 phía trên. **THẤP-4** thêm ca
+  `--tu-kiem` đứng sẵn bắt **arm R7 phải đỏ**. **THẤP-5** ghi rõ chỗ lệch
+  phạm vi giữa `capNutDongPhu()` và arm K/R7 với ô chỉ chứa ảnh.
+
+### REV-0063 vòng 3 → vá vòng 4 (07–08/09/2026)
+
+Hồ Ly vòng 3: **FAIL — 0 CHẶN · 1 CAO · 4 VỪA · 6 THẤP**. Cả 11 chỗ của vòng 2
+đã kiểm lại và ĐẠT hết; cái làm FAIL là **một chỗ MỚI**, và nó là **lần thứ BA
+liên tiếp cùng một hình dạng lỗi**: đo ở một phía của cái vạch rồi kết luận cho
+cả hai phía (vòng 1 đo 1440 sót 1024 · vòng 2 đo 1280/1440 sót 1101–1245 ·
+vòng 3 đo 1200/1280/1440 sót **chế độ THẺ ≤980px**).
+
+- **CAO-1 · nút "Xem thêm" đo ra 44px mà ngón tay chỉ bấm được 37–38px trên
+  điện thoại.** Ở chế độ THẺ các ô xếp chồng, `margin-bottom:-10px` kéo
+  `td.num` trùm 8–9px đáy nút. Vá bằng **`position: relative; z-index: 1`** —
+  chạm 45px ở cả 9 bề ngang, chiều cao dòng KHÔNG đổi (95.5 bảng / 137 thẻ).
+  Bỏ lề âm cũng chữa được nhưng ăn thêm 10–20px mỗi dòng, nên không.
+- **CAO-1 phần cổng · `nut_o_bang_cham` là CHỐT GIẢ.** Nó là *cùng một biểu
+  thức* với `nut_o_bang_hop` (`oNutO.height`), cả tệp không có một
+  `elementFromPoint` nào, và JSON tự tố cáo `_hop:44 _cham:44` ở cả 5 bộ số.
+  Nay cổng quét từng pixel bằng `elementFromPoint`, có khung ở **cả** chế độ
+  thẻ lẫn chế độ bảng, thêm **arm ② đo trên ỨNG DỤNG THẬT ở 9 bề ngang**, và
+  một ca đối chứng gỡ đúng `position/z-index` (hộp phải vẫn ≥44 mà chạm phải
+  <44) chạy **mặc định**, không nấp sau cờ.
+- **VỪA-1 · `GO_TOI_DA = 2` không đủ** — trần chạm ở lượt nới thứ BA, trả lại
+  4 nút nói dối. Nay đếm **theo CHÙM** (`GO_TOI_DA = 6`, `CHUM_MS = 250`), có
+  cổng mới `npm run do-nut-noi-doi` chạy CẢ ca kéo co lẫn **ca vòng lặp tự
+  nuôi dựng thật bằng `:has()`**, mỗi ca một đối chứng đỏ.
+- **VỪA-2** lời khai "đừng dồn lề âm… nút sẽ ăn cú bấm dòng sau" nay ghi thêm
+  số thật: bản đối xứng **vẫn ăn 1px** của dòng sau ở 1440·1280·1024.
+- **VỪA-4 · `do-nut-dai-cat` không phải cổng tự chấm** — nó `listen(8919)` rồi
+  đứng chờ người mở trình duyệt, không in kết luận, không mã thoát, cổng mạng
+  viết cứng. Nay tự lái Chrome, in `KET_QUA_JSON` ra stdout, trả mã thoát 0/1,
+  cổng mạng lấy 0 (đổi được bằng `CONG_DO_NUT`).
+- **THẤP-1** `do-luat-css-chet` khai thêm chỗ mù ⑧ (ba dạng viết
+  `chuanHoaSel()` không gộp). **THẤP-2** ghi rõ arm R7 mới chứng minh ở **3/5
+  mức**. **THẤP-3** arm ② đo nút trên ứng dụng thật. **THẤP-4** sửa "R7 đỏ ở
+  1440 và 1280" → **ba mức** (thêm 1200). **THẤP-5** khung "TRƯỚC" nay gỡ hẳn
+  khối `td .dai-gon-btn` nên cột TRƯỚC/SAU có tín hiệu thật (16 vs 44).
+
+---
+
+## NỢ MỞ — chưa làm, đợi hàng đợi trống
+
+### ① `.gitattributes` · lớp "bàn đo so chuỗi `\n` trên kho mã CRLF"
+
+Kho để `core.autocrlf = true` và **chưa có `.gitattributes`**, nên cây làm việc
+mang CRLF: **125/126 tệp chữ**. Mọi bàn đo dựng biểu thức `X\n` (với `X` là ký
+tự cụ thể) trên mã đọc từ đĩa sẽ **trượt IM LẶNG**.
+
+Hồ Ly đo vi sai (chạy mọi regex của từng bàn đo trên hai bản CRLF/LF của đúng
+những tệp nó đọc), REV-0063 vòng 3:
+
+| tầng | số bàn đo |
+|---|---|
+| tổng `.mjs` trong `scripts/` + `scripts/lib` | **129** |
+| trong đó **ĐỌC mã kho từ đĩa** — mẫu số thật | **49** |
+| **ĐÃ PHÒNG** (`replace(/\r\n/g)` hoặc `\r?\n`) | **10** |
+| **CHẾT HÔM NAY** | **0** ✅ |
+| **SỐNG NHỜ MAY** — biểu thức vắt qua ranh dòng, sống chỉ vì `\s*`/`[\s\S]` nuốt hộ `\r` | **9** |
+| đọc thô, không vắt ranh dòng | 30 |
+
+Chín cái sống nhờ may: ~~`do-nut-dai-cat-44px`~~ *(vòng 4 đã đóng: nó chuẩn
+hoá CRLF→LF ngay khi đọc `style.css`)* · `do-ba-mau` · `do-cat-im-lang` ·
+`do-quyen-duyet-gopy` · `do-sua-viec-da-giao` · `ho-ly-rev0060-b` ·
+`ho-ly-rev0060` · `holy-do-8-nguoi-that` · `holy-quet-cat-vong3` — **còn TÁM**.
+Đổi đúng một ký tự trong biểu thức là chết, im lặng, trên máy Windows nào cũng
+chết. Trớ trêu: cái vừa đóng chính là cổng của CAO-1 vòng này, dòng 89 —
+`/td \.dai-gon-btn \{[\s\S]*?\n\}/` gỡ được luật 44px chỉ vì `[\s\S]` nuốt hộ
+`\r`.
+
+**Lớp này đã bị bắt và vá 4 LẦN ở 4 TỆP KHÁC NHAU** (`do-so-do-bieu-tuong`
+29/08 · `do-kho-tai-lieu` · `do-quyen-man-viec-gop` · `do-nap-lai` vòng này).
+Bốn lần cùng một lỗi ở bốn tệp nghĩa là **chỗ chữa không phải từng tệp**.
+
+**Việc phải làm:** thêm `* text=auto eol=lf` vào `.gitattributes`, hoặc đưa
+`docNguon()` lên `scripts/lib/` và bắt mọi bàn đo dùng nó. Chi phí 0.
+**KHÔNG làm trong vòng vá REV-0063** — đổi cách kho lưu ký tự xuống dòng đụng
+cả 126 tệp, phải có hàng đợi trống và một lượt chạy hết cổng riêng cho nó.
+*(Vòng 4 đã tự chuẩn hoá CRLF→LF trong `do-nut-dai-cat-44px` và dùng `\r?\n`
+trong `do-nut-noi-doi` — hai con, không phải cả lớp.)*
+
+### ② `do-tu-lam-moi` nay **51 / 3**, không phải 52 / 2 — nợ của `main`
+
+Con số trong sổ đã cũ. Hôm nay:
+
+```
+❌ 117 hàm ghi đều đã khai — CHƯA KHAI: khoDieuChinh, kdTachDongHang
+❌ không khai thừa tên hàm không tồn tại — THỪA: napLuot
+❌ ⑤b tổng đúng 6 lượt (1 ghi + 5 nạp lại) — 7 lượt
+```
+
+⚠️ **Dòng đỏ thứ BA (`⑤b … 7 lượt`) chưa được khai ở đâu cả** — báo cáo vòng 3
+chỉ trích hai dòng đầu. Nó là **51 ĐẠT / 3 TRƯỢT**, không phải 51/2.
+
+`khoDieuChinh` và `napLuot` là hàm của **đường nạp file + phiếu điều chỉnh tồn
+kho**, tức phần việc của `main af951b8` (`napLuot` vào từ `239f983`). Và
+`git diff --stat af951b8 HEAD -- public/assets/js/lam-moi.js
+public/assets/js/api.js` → **RỖNG**: nhánh `fix/bang-sku-tran-1024` chưa từng
+chạm hai tệp quyết định cổng ấy. Con số đổi ở lượt gộp `aa6245f`, không ở lượt
+vá. **Không phải nợ của nhánh này, nhưng là nợ THẬT của `main`** — khai
+`khoDieuChinh` và bỏ `napLuot` thừa trong `lam-moi.js`, và truy dòng ⑤b.
+
+Kiểm bằng cách stash sạch `style.css` + `app.js` của nhánh rồi chạy lại:
+**ra đúng 51 / 3, đúng cả ba dòng đỏ** — nên không dòng nào là của vòng vá này.
+
+### ③ `do-gop-viec` đỏ — nợ `f699272`, chờ Sếp chốt
+
+Giữ nguyên, xem mục cùng tên phía trên.
 
 ---
 

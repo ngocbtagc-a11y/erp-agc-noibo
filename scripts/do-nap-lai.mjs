@@ -62,6 +62,16 @@ const TU_KIEM = process.argv.includes('--tu-kiem');
 const NGUON = process.env.NAP_SRC ? path.resolve(process.env.NAP_SRC) : path.join(GOC, 'src');
 const modun = m => import(pathToFileURL(path.join(NGUON, m)).href);
 
+/* ĐỌC MÃ NGUỒN ĐỂ SOI — LUÔN QUA HÀM NÀY, ĐỪNG GỌI THẲNG `readFileSync`.
+   Git trên máy Windows của Sếp bật `core.autocrlf=true`, nên tệp trong cây làm
+   việc xuống dòng bằng CRLF trong khi mọi biểu thức soi ở dưới viết `\n`. Hậu
+   quả đo được (REV-0063 vòng 2): ba chốt ⑧e đỏ trên MỌI bản lấy về ở Windows —
+   kể cả `origin/main af951b8`, nơi `src/doc-bang.js` giống hệt từng ký tự sau
+   khi chuẩn hoá xuống dòng. Bàn đo đỏ vì cách lấy tệp, không vì mã hỏng: đúng
+   loại "đỏ nhầm lý do" mà kho mã này chống, chỉ khác là nó nhầm sang phía kêu
+   oan. Chuẩn hoá về LF ở ĐÚNG MỘT CHỖ, không rải `\r?` vào từng regex. */
+const docNguon = (ten) => readFileSync(path.join(NGUON, ten), 'utf8').replace(/\r\n/g, '\n');
+
 const nap    = await modun('nap-du-lieu.js');
 const docb   = await modun('doc-bang.js');
 const canhbao = await modun('canh-bao-ghi.js');
@@ -835,7 +845,7 @@ async function canhBanBot(soMa, slNap, slBan, am = true, phien = PHIEN) {
      `${r.g.ma_se_am.length} mã kê ra`);
   /* Không được có cửa sau: gỡ bất chấp tồn âm. Bỏ ghi chú trước khi soi —
      máy đo tin vào lời bình trong mã là máy đo vô dụng. */
-  const maSach = readFileSync(path.join(NGUON, 'nap-du-lieu.js'), 'utf8')
+  const maSach = docNguon('nap-du-lieu.js')
     .replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/.*$/gm, '$1');
   ok('KHÔNG có cờ nào cho gỡ bất chấp tồn âm (không `force`, không `bo_qua_am`)',
      !/\bforce\b|batChap|bat_chap|boQuaAm|bo_qua_am/.test(maSach) &&
@@ -1049,7 +1059,7 @@ console.log('\n⑦ e. MỘT CÁI TICK KHÔNG ĐƯỢC TẮT CẢ HAI LỚP (CAO-
 
 console.log('\n⑦ f. TRẦN DÒ TRÙNG ĐẾM THEO MÃ, VÀ NÓI RA KHI CHẠM (CAO-⑥)');
 {
-  const src = readFileSync(path.join(NGUON, 'nap-du-lieu.js'), 'utf8');
+  const src = docNguon('nap-du-lieu.js');
   ok('Câu dò lớp (b) hỏi theo MÃ, không hỏi theo cặp (mã × phiếu)',
      /SELECT DISTINCT san_pham_id FROM giao_dich_kho/.test(src) &&
      !/SELECT DISTINCT san_pham_id, phieu_id FROM giao_dich_kho/.test(src));
@@ -1272,12 +1282,12 @@ console.log('\n══ ⑧ a. GỠ LƯỢT NẠP KHÔNG ĐƯỢC LÀM TỒN **LÔ
 
 console.log('\n⑧ b. ĐƯỜNG RA CHO CA "NẠP NHẦM RỒI BÁN MẤT" PHẢI CÓ THẬT (CHẶN-ⓑ)');
 {
-  const maKho = readFileSync(path.join(NGUON, 'kho.js'), 'utf8');
+  const maKho = docNguon('kho.js');
   ok('ERP có hàm ghi phiếu điều chỉnh THẬT (không chỉ có cột trong báo cáo)',
      typeof kho.dieuChinhKho === 'function' &&
      /INSERT INTO giao_dich_kho[\s\S]{0,400}'dieu_chinh'/.test(maKho));
   ok('Và có cửa API cho nó',
-     /'POST \/api\/kho\/dieu-chinh'/.test(readFileSync(path.join(NGUON, 'index.js'), 'utf8')));
+     /'POST \/api\/kho\/dieu-chinh'/.test(docNguon('index.js')));
   ok('Và có màn cho Sếp bấm',
      /kv-pane-dieuchinh/.test(readFileSync(path.join(GOC, 'public', 'app.html'), 'utf8')) &&
      /kvFormDieuChinh/.test(readFileSync(path.join(GOC, 'public', 'assets', 'js', 'app.js'), 'utf8')));
@@ -1449,7 +1459,7 @@ console.log('\n⑧ d. KIỂM SỐ DƯ VÀ XOÁ PHẢI NGUYÊN TỬ (CAO-④)');
 
 console.log('\n⑧ e/f/h. BỘ ĐỌC BẢNG: CHỐT VÒNG · CÂU LỖI KHÔNG NÓI DỐI · MỘT LOẠI SỐ');
 {
-  const maDb = readFileSync(path.join(NGUON, 'doc-bang.js'), 'utf8');
+  const maDb = docNguon('doc-bang.js');
   /* ⑧e — vòng "đi tiếp" phải có ĐỦ BA chốt, và bảng ẩn phải bỏ TRƯỚC khi bung
      (bung xong mới `continue` là trả tiền rồi vứt đi). */
   const doan = (maDb.match(/if \(!nguoiChon && coDong\(luoi\) < 2[\s\S]*?\n  \}\n/) || [''])[0];
@@ -1746,7 +1756,13 @@ if (TU_KIEM && !process.env.NAP_SRC) {
     cpSync(path.join(GOC, 'src'), TAM, { recursive: true });
 
     const duong = path.join(TAM, ca.tep);
-    let noi = readFileSync(duong, 'utf8');
+    /* Chuẩn hoá xuống dòng TRƯỚC KHI GÀI — cùng lý do với `docNguon()` ở đầu
+       tệp. Chuỗi `tim` nhiều dòng viết trong file này dùng `\n`, còn bản lấy
+       về ở Windows (`core.autocrlf=true`) là CRLF, nên `noi.includes(tim)`
+       trượt và ca gài in "mã đã đổi nên ca này MÙ" — một câu SAI: mã không
+       đổi gì cả. Đo được trước khi sửa: 27/32, đúng 5 ca trượt và cả 5 đều là
+       ca có chuỗi `tim` nhiều dòng. (REV-0063 vòng 2) */
+    let noi = readFileSync(duong, 'utf8').replace(/\r\n/g, '\n');
     const sua = ca.sua || [[ca.tim, ca.thay]];
     let gaiDuoc = true;
     for (const [tim, thay] of sua) {

@@ -1,4 +1,4 @@
-/* ==========================================================================
+﻿/* ==========================================================================
    BÀN ĐO: BẢNG VỪA MÀN VỚI DỮ LIỆU THẬT
    ---------------------------------------------------------------------------
    VÌ SAO CÓ FILE NÀY, TRONG KHI ĐÃ CÓ `do-bang-vua-man.mjs`.
@@ -103,7 +103,7 @@ const TU_KIEM = dso.includes('--tu-kiem');
    LUẬT CHUNG rút ra, viết vào đây cho vòng sau: VẼ MỘT VẠCH `min-width` /
    `max-width` MỚI THÌ PHẢI THÊM MỘT MỨC ĐO NẰM Ở PHÍA CHƯA AI ĐO CỦA VẠCH.
    (REV-0063 vòng 2, CAO-2) */
-const RONGS = [1440, 1280, 1200, 1024, 375];
+const RONGS = [1440, 1430, 1420, 1410, 1400, 1390, 1380, 1370, 1360, 1350, 1340, 1330, 1320, 1310, 1300, 1290, 1280, 1270, 1260, 1250, 1246, 1245, 1240, 1230, 1220, 1210, 1200, 1190, 1180, 1170, 1160, 1150, 1140, 1130, 1120, 1110, 1101, 1100, 1090];
 
 /* MẪU SỐ. ERP hiện có 30 bảng: 29 viết sẵn trong `app.html` + 1 dựng bằng JS
    (`#cv-tqct-phongban`, xem `API_CHO_BANG_27` bên dưới). Nếu một hôm nó soi
@@ -1206,3 +1206,4 @@ if (BANG_KE) {
 }
 
 process.exit(tongKet() ? 0 : 1);
+

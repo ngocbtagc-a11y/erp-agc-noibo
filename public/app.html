@@ -1099,15 +1099,43 @@
                SKU chưa khớp mã kho. Rỗng thì ẩn hẳn, không hiện khối trống. -->
           <div class="list" id="kd-tq-canhbao" hidden></div>
 
-          <div class="table-wrap-cuon">
+          <div class="table-wrap-cuon" id="kd-tq-wrap">
             <table>
               <thead>
                 <tr>
+                  <!-- BẢY CỘT TIỀN CHỈ CHẬT Ở MÁY TÍNH BẢNG NẰM NGANG, NÊN
+                       CHỈ Ở ĐÓ MỚI ĐƯỢC BỚT CỘT.
+                       Trong khung 678px (@1024px) bảy số VND — mỗi số ăn
+                       ~100–120px — tràn +26px, và cột rơi khỏi mép phải đúng
+                       là "So kỳ trước". Nhưng @1440px và @1280px bảng này
+                       KHÔNG hề tràn (đo được: khung 1094 · bảng 1094 · vừa),
+                       nên bỏ cột ở đó là trả giá ở màn rộng để chữa một chỗ
+                       chật ở màn hẹp.
+
+                       "Hủy" và "Hoàn" TÁCH THEO TỪNG SÀN là thông tin cấp
+                       một, không phải chú thích: câu Sếp hỏi ở bảng này là
+                       "sàn nào mang về bao nhiêu VÀ mất bao nhiêu vào rò rỉ" —
+                       Shopee rò rỉ hay TikTok rò rỉ quyết định có đẩy ngân
+                       sách sang TikTok hay không. Thẻ số phía trên KHÔNG thay
+                       được hai cột này: nó đọc `dt.tong`, tức TỔNG TOÀN CÔNG
+                       TY, không tách sàn. (Vòng REV-0063 VỪA-3: lý do bỏ cột
+                       viết ở đây trước kia SAI về mặt dữ liệu — sửa lại cho
+                       đúng.) Bảng lại chỉ có 2–3 dòng (Shopee · TikTok), giấu
+                       2/7 cột là đổi một cái liếc mắt lấy hai cú bấm.
+
+                       Nên: `.cot-phu` GIỮ NGUYÊN ở đây — đó là thứ bảo
+                       `luoiBang()` luôn cấp nút "Chi tiết", tức đường tới dữ
+                       liệu có ở MỌI bề ngang, không phụ thuộc JS đo màn hình
+                       (và không hỏng khi người ta kéo co cửa sổ). Việc hai cột
+                       CÓ NẰM TRÊN BẢNG HAY KHÔNG thì để CSS quyết theo bề
+                       ngang: `#kd-tq-wrap` trong style.css cho chúng trở lại
+                       bảng từ 1101px lên, và ẩn luôn nút "Chi tiết" thừa ở
+                       đó. -->
                   <th>Sàn</th>
                   <th class="num">Đơn đặt</th>
                   <th class="num">GMV đơn đặt</th>
-                  <th class="num">Hủy</th>
-                  <th class="num">Hoàn</th>
+                  <th class="num cot-phu">Hủy</th>
+                  <th class="num cot-phu">Hoàn</th>
                   <th class="num">Doanh thu tạm tính</th>
                   <th class="num">So kỳ trước</th>
                 </tr>
@@ -1128,12 +1156,28 @@
         </div>
         <div class="panel-body">
           <div class="list" id="kd-sku-canhbao" hidden></div>
+          <!-- BA CỘT, KHÔNG PHẢI BỐN — câu hỏi khi nhìn một dòng ở đây là
+               "MÃ NÀO bán được / nằm im, và DOANH THU bao nhiêu". Bốn cột cũ
+               trả lời câu đó bằng hai cột danh tính (Mã SKU + Tên hàng) cho
+               CÙNG một thứ hàng, và cái cột thừa ấy đẩy "Doanh thu" — chính
+               là câu trả lời — rơi khỏi mép phải trong khung nửa bảng 537px.
+               Nay danh tính gộp vào MỘT cột `.cot-chu`: mã SKU đứng dòng trên
+               (`.nm`, đúng chỗ nhấn cũ), tên hàng làm dòng phụ ngay dưới
+               (`.sm`, kẹp 2 dòng). KHÔNG trường nào bị giấu sau nút "Chi
+               tiết" — cả ba cột đều nằm trên bảng. Đúng lối `ns-bang` đã dùng
+               từ trước, không đẻ cách thứ hai.
+
+               TÊN HÀNG DÀI HƠN 2 DÒNG thì có nút "Xem thêm" ngay tại chỗ, do
+               `luoiBang()` gắn sau khi ĐO ô (REV-0063 CAO-1). Vòng trước
+               không có nút đó, và ở đúng màn 1440px của Sếp tên hàng 92 ký tự
+               bị cắt cụt ở dòng 2 mà không một dấu hiệu nào — `title` chỉ
+               hiện khi rê chuột, tức không tồn tại trên điện thoại. -->
           <div class="kd-sku-cot">
             <div>
               <h5 style="margin:0 0 8px">🔥 10 SKU bán chạy nhất</h5>
               <div class="table-wrap-cuon">
                 <table>
-                  <thead><tr><th>Mã SKU</th><th>Tên hàng</th><th class="num">SL bán</th><th class="num">Doanh thu</th></tr></thead>
+                  <thead><tr><th class="cot-chu">Mã SKU · Tên hàng</th><th class="num">SL bán</th><th class="num">Doanh thu</th></tr></thead>
                   <tbody id="kd-sku-chay"></tbody>
                 </table>
               </div>
@@ -1142,7 +1186,7 @@
               <h5 style="margin:0 0 8px">🧊 10 SKU bán kém nhất</h5>
               <div class="table-wrap-cuon">
                 <table>
-                  <thead><tr><th>Mã SKU</th><th>Tên hàng</th><th class="num">SL bán</th><th class="num">Doanh thu</th></tr></thead>
+                  <thead><tr><th class="cot-chu">Mã SKU · Tên hàng</th><th class="num">SL bán</th><th class="num">Doanh thu</th></tr></thead>
                   <tbody id="kd-sku-kem"></tbody>
                 </table>
               </div>
@@ -1861,7 +1905,12 @@
                   <th>Trạng thái trên sàn</th>
                   <th class="num cot-phu">Số tiền</th>
                   <th class="cot-phu">Người mua</th>
-                  <th>Kho nhận</th>
+                  <!-- "Kho nhận" KHÔNG phải cột trạng thái ngắn: dòng phụ của
+                       nó chở TÊN NGƯỜI nhận (tới 80 ký tự) kèm giờ phút, nên
+                       ở `nowrap` nó rộng 365px và kéo bảng tràn +102px @1024px
+                       — cột rơi mất chính là nó. Đánh dấu `.cot-chu` để nó có
+                       TRẦN và được xuống dòng, đúng lớp đã có sẵn. -->
+                  <th class="cot-chu">Kho nhận</th>
                 </tr>
               </thead>
               <tbody id="dh-bang"></tbody>

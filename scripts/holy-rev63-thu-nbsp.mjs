@@ -1,4 +1,4 @@
-/* ==========================================================================
+﻿/* ==========================================================================
    CHỤP ẢNH GIAO DIỆN — Chrome headless có sẵn trên máy, chi phí 0
    ---------------------------------------------------------------------------
    Chạy:  node scripts/chup-anh-giao-dien.mjs <thư-mục-ra> [commit]
@@ -167,12 +167,11 @@ const MAN = [
    1024 thêm 06/09/2026 — máy tính bảng nằm ngang. Xem lời cấm ở `RONGS` trong
    `do-bang-that.mjs`: cả dải 981–1100px sinh ra luật CSS riêng mà chưa cổng
    nào đo, và vừa bật lên là lòi ra 5 chỗ tràn. Ảnh cũng phải có mức này. */
-const KHUNG = [{ nhan: '1440', rong: 1440, cao: 900 },
-               { nhan: '1280', rong: 1280, cao: 860 },
-               { nhan: '1024', rong: 1024, cao: 800 },
-               { nhan: '375',  rong: 375,  cao: 812 }];
+const KHUNG = [{ nhan: '375', rong: 375, cao: 812 }, { nhan: '1024', rong: 1024, cao: 800 }, { nhan: '1440', rong: 1440, cao: 900 }];
 
-const may = await dungMayGia({ commit, apiRieng, tatHoatAnh: true });
+const BO_NBSP = process.env.BO_NBSP === '1';
+const suaTep = BO_NBSP ? ((s, ten) => ten.endsWith('app.js') ? s.split('\u00A0').join(' ') : s) : null;
+const may = await dungMayGia({ commit, apiRieng, tatHoatAnh: true, suaTep });
 if (commit) console.log(`  ↩ hoàn nguyên public/ về ${commit} (đủ tệp, không danh sách tay)`);
 mkdirSync(raDir, { recursive: true });
 
@@ -202,6 +201,38 @@ try {
           await cr.chay(`(function(){const e=document.querySelector('${m.cuonToi}');` +
             `if(e) e.scrollIntoView({block:'start'}); return !!e;})()`);
           await cr.doi(500);
+        }
+        if (m.ten === 'kinhdoanh') {
+          const do1 = await cr.chay(`(function(){
+            const r=[];
+            for (const sel of ['#kd-sku-chay','#kd-sku-kem']) {
+              const tb=document.querySelector(sel); if(!tb) continue;
+              for (const td of tb.querySelectorAll('td.num, td[data-nhan="DOANH THU"]')) {
+                const cs=getComputedStyle(td);
+                const lh=parseFloat(cs.lineHeight)||18;
+                r.push({ bang:sel, chu:td.textContent.trim(), cao:Math.round(td.getBoundingClientRect().height),
+                         soDong: Math.round(td.getBoundingClientRect().height/lh), lh:Math.round(lh),
+                         nbsp: /\u00A0/.test(td.textContent) });
+              }
+            }
+            return r;
+          })()`);
+          const do2 = await cr.chay(`(function(){
+            const r=[];
+            for (const sel of ['#kd-sku-chay','#kd-sku-kem']) {
+              const tb=document.querySelector(sel); if(!tb) continue;
+              for (const sm of tb.querySelectorAll('td.cot-chu .sm')) {
+                const cat = sm.scrollHeight > sm.clientHeight + 1;
+                r.push({ bang:sel, cat, hien:sm.clientHeight, that:sm.scrollHeight,
+                         coNutXemThem: !!(sm.parentElement && sm.parentElement.querySelector('.dai-gon-btn')),
+                         coTitle: sm.hasAttribute('title'),
+                         chu: sm.textContent.trim().slice(0,40) });
+              }
+            }
+            return r;
+          })()`);
+          console.log('  ĐO tên hàng @' + k.rong + 'px: ' + JSON.stringify(do2));
+          console.log('  ĐO ô tiền @' + k.rong + 'px (BO_NBSP=' + (process.env.BO_NBSP||'0') + '): ' + JSON.stringify(do1));
         }
         // Bề ngang khung nhìn PHẢI đúng con số đã đặt — nếu không, ảnh cắt mép.
         const rongThat = await cr.chay('window.innerWidth');
@@ -253,3 +284,6 @@ if (sai) truot.push(`${sai} ảnh sai bề ngang`);
 console.log(`\n${daChup.length} ảnh (${hau}) → ${raDir}`);
 if (truot.length) { console.log('❌ BÀN CHỤP HỎNG: ' + truot.join(' · ')); process.exit(1); }
 console.log('✅ BÀN CHỤP ĐẠT');
+
+
+

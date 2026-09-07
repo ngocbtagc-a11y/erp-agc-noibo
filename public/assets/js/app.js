@@ -514,7 +514,10 @@ function veBangNsQuanTri() {
       `<td><span class="tag ${tt.mau}">${esc(tt.chu)}</span></td>` +
       `<td>${veOHopDong(n)}</td>` +
       `<td class="sm">${esc(n.ngay_vao || '')}</td>` +
-      `<td>${thaoTac}</td>`;
+      /* `.o-nut` — xem ghi chú ở `veDongTaiKhoan`. Ba nút Sửa/Hoàn tất/Xoá
+         dính `tbody td { white-space: nowrap }` nên nằm một hàng cứng và kéo
+         `ns-bang` tràn +54px @1024px. */
+      `<td class="o-nut">${thaoTac}</td>`;
   });
   veTrongNS(DS_NHAN_SU_QT, ds);
   veDaiThieuHopDong();
@@ -609,7 +612,12 @@ function veBangQtTaiKhoan() {
       `<td>${esc(n.bo_phan || '—')}</td>` +
       `<td>${cotTK}</td>` +
       `<td class="sm">${esc(tenVaiTro || '—')}</td>` +
-      `<td class="qt-thaotac">${thaoTac}</td>`;
+      /* `.o-nut` — nhóm nút TỰ XUỐNG HÀNG khi hết chỗ. Thiếu nó thì
+         `.qt-thaotac { white-space: nowrap }` giữ cả ba nút trên MỘT dòng và
+         bề ngang tối thiểu của cột thành tổng ba nút: đo được 337px, kéo
+         `qtBang` tràn +51px @1024px. Đúng lớp lỗi mà `.o-nut` sinh ra để
+         chặn, không đẻ cách thứ hai. */
+      `<td class="qt-thaotac o-nut">${thaoTac}</td>`;
   });
 
   const o = $('#qt-trong');
@@ -7208,16 +7216,45 @@ async function khoiDongTongQuanSan() {
     const tbody = $(dich);
     tbody.innerHTML = '';
     if (!ds.length) {
-      tbody.innerHTML = `<tr><td colspan="4" class="empty">Chưa có dữ liệu.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="3" class="empty">Chưa có dữ liệu.</td></tr>`;
       return;
     }
     ds.forEach(s => {
       const tr = el('tr', s.so_luong === 0 ? 'kd-sku-chet' : '');
+      /* MỘT Ô DANH TÍNH, HAI DÒNG — xem ghi chú ở `app.html`. Mã SKU là thứ
+         người ta HÀNH ĐỘNG lên (sửa mã trên sàn, tra trong kho) nên nó giữ
+         dòng trên và giữ nét đậm cũ; tên hàng là thứ người ta ĐỌC để biết đó
+         là hàng gì nên nằm ngay dưới, không giấu đi đâu cả.
+
+         CSS kẹp dòng phụ 2 dòng, nên tên hàng dài PHẢI có đường đọc tiếp —
+         `luoiBang()` đo `scrollHeight` vs `clientHeight` rồi gắn nút "Xem
+         thêm" (xem ghi chú dài ở đó, REV-0063 CAO-1). `title` là thứ TIỆN
+         THÊM cho người dùng chuột, KHÔNG phải đường thoát: nó không tồn tại
+         trên điện thoại/máy tính bảng, mà ERP là PWA Sếp mở trên cả hai. Lời
+         khai cũ ở đây ("`title` giữ trọn tên… không cắt chữ âm thầm") là SAI
+         và đã cắt cụt tên hàng thật ở màn 1440px — đo được hiện 34px / thật
+         50px trên cả 3 dòng của bảng bán chạy. */
       tr.innerHTML =
-        `<td><b>${esc(s.sku)}</b></td>` +
-        `<td>${esc(s.ten || '')}</td>` +
+        `<td class="cot-chu"><div class="nm">${esc(s.sku)}</div>` +
+          (s.ten ? `<div class="sm" title="${esc(s.ten)}">${esc(s.ten)}</div>` : '') + '</td>' +
         `<td class="num">${tienVN(s.so_luong)}</td>` +
-        `<td class="num">${s.doanh_thu ? tienVN(s.doanh_thu) + ' đ' : '—'}</td>`;
+        /* DẤU CÁCH KHÔNG NGẮT (U+00A0) giữa số và "đ" — đơn vị tiền phải dính
+           với con số, không được rơi xuống dòng khác.
+
+           ⚠️ ĐÍNH CHÍNH LỜI KHAI (REV-0063 VỪA-2). Bản đầu ghi ở đây rằng
+           "chữ 'đ' rơi xuống một dòng RIÊNG ở 375px, ảnh `375-kinhdoanh-sau.png`
+           bắt được". KHÔNG TÁI LẬP ĐƯỢC, và cả hai bên đều đo:
+             · Hồ Ly mở chính tấm ảnh đó và cả tấm `-truoc`: cả hai hiện
+               `9.876.543.210 đ` TRÊN MỘT DÒNG.
+             · Dựng lại trạng thái trước khi vá bằng công tắc `BO_NBSP=1`
+               (thay mọi U+00A0 về dấu cách thường) rồi đo chiều cao ô tiền:
+               375px → 60px / 2 dòng · 1024px → 72px / 3 dòng · 1440px →
+               72px / 3 dòng. CÓ nbsp ra ĐÚNG BẰNG NGẦN ẤY, từng pixel một.
+           Nghĩa là ở bố cục hôm nay dấu cách không ngắt KHÔNG đổi gì cả.
+           Giữ lại vì nó ĐÚNG VỀ CHỮ NGHĨA và là chốt chặn cho ca xấu mai này
+           (số dài hơn, cột hẹp hơn) — nhưng đây là một phòng xa, KHÔNG phải
+           một lỗi đã bắt được. Khai không phải là đo. */
+        `<td class="num">${s.doanh_thu ? tienVN(s.doanh_thu) + ' đ' : '—'}</td>`;
       tbody.appendChild(tr);
     });
   }
@@ -12003,10 +12040,200 @@ function luoiBang() {
       }
     }
   });
+  capNutDongPhu();
   /* Cột vừa bị ẩn xong thì bảng hẹp lại — bảo dải "còn cột bên phải" đo lại,
      không thì nó giữ số đo của lúc bảng còn đủ cột và dán lời nhắc kéo ngang
      lên một cái bảng đã vừa màn. */
   if (typeof window.quetLaiBaoCuon === 'function') window.quetLaiBaoCuon();
+}
+
+/* ==========================================================================
+   DÒNG PHỤ BỊ KẸP THÌ PHẢI CÓ ĐƯỜNG ĐỌC TIẾP — REV-0063 CAO-1
+   ---------------------------------------------------------------------------
+   LỖI ĐÃ LỌT, kể lại để đừng lặp. Bản vá REV-0063 gộp "Mã SKU + Tên hàng" vào
+   MỘT ô hai dòng (`.nm` + `.sm`). Hai đường cấp nút "Xem thêm" của `luoiBang()`
+   đều TRƯỢT ô ấy:
+     · đường ① chỉ nhận ô CHỈ-CÓ-CHỮ (`!td.children.length`) — ô này có 2 lớp con;
+     · đường ② chỉ nhìn `.nm` — mã SKU 24 ký tự, không đủ dài.
+   Trong khi CSS `td.cot-chu .sm { max-height: 2.8em; overflow: hidden }` vẫn
+   kẹp và GIẤU phần thừa. Đo bằng Chrome ở 1440px (khung nửa bảng chỉ 537px):
+   cả 3 dòng của `#kd-sku-chay` có `clientHeight 34` mà `scrollHeight 50` —
+   mất hẳn dòng thứ ba của tên hàng, không một dấu hiệu nào.
+   `title` KHÔNG phải đường thoát hợp lệ: nó chỉ hiện khi rê chuột, mà ERP là
+   PWA Sếp mở cả trên điện thoại lẫn máy tính bảng.
+
+   VÌ SAO NẰM NGOÀI VÒNG `data-luoi`, KHÔNG NẰM TRONG. Vòng kia dập LỚP — làm
+   một lần là xong, và nó tự chặn bằng `data-luoi` để không gọi lại vô hạn qua
+   MutationObserver. Việc ở đây là ĐO, mà số đo đổi theo bề ngang cột: cùng một
+   cái tên 92 ký tự thì ở khung 537px là 3 dòng (bị kẹp), ở khung 678px là 2
+   dòng (không kẹp). Nhốt nó trong vòng dập-một-lần là đóng băng một số đo
+   nhất thời — đúng lỗi đã đo được ở bản đầu của chính chỗ vá này: lượt dập
+   đầu chạy lúc panel Kinh doanh còn `hidden` (`clientHeight` = 0), phép đo
+   lùi về đoán-theo-độ-dài, và ở 375px lẫn 1024px hiện ra một cái nút "Xem
+   thêm" dưới một cái tên KHÔNG hề bị cắt. Một cái nút mở ra đúng thứ đang bày
+   sẵn là một lời nói dối nhỏ, cùng họ với chính lỗi đang vá.
+
+   BA TRẠNG THÁI:
+     · đo được + bị kẹp    → gắn nút THẬT (không cờ `doan`).
+     · đo được + không kẹp → GỠ nút, kể cả nút THẬT. Xem "VÌ SAO GỠ CẢ NÚT
+       THẬT" ngay dưới.
+     · KHÔNG đo được (ô chưa được dàn, `clientHeight` = 0) → đoán theo độ dài
+       và ĐÁNH DẤU `doan`. Lùi về phía AN TOÀN: thà một cái nút thừa sống tạm
+       vài trăm mili-giây còn hơn một chỗ cắt chữ âm thầm sống mãi. Lượt dập
+       kế tiếp (mọi lần DOM đổi đều gọi lại hàm này) đo được thật và tự dọn.
+
+   ⚠️ VÌ SAO GỠ CẢ NÚT THẬT — VÀ VÌ SAO CÂU KHAI CŨ Ở ĐÂY LÀ SAI.
+   Chỗ này từng chỉ gỡ nút MANG CỜ `doan`, với lý do viết ra như một sự thật:
+   *"gỡ nút thật là mở cửa cho vòng lặp gỡ nút → cột hẹp lại → kẹp → gắn nút →
+   cột rộng ra → gỡ nút… mà MutationObserver sẽ chạy mãi không dừng."*
+   Đó là một GIẢ THUYẾT được trình bày như một SỐ ĐO. Hồ Ly dựng hẳn bản CÓ GỠ
+   rồi đo 40 mẫu × 50ms ở 1440px: số nút là 6 ở cả 40 mẫu — KHÔNG dao động,
+   không tái lập được (REV-0063 vòng 2, VỪA-2).
+   Còn cái GIÁ của việc không gỡ thì đo được ngay: mở ở 1440 (khung 537 → kẹp
+   → nút thật), rồi nới khung ra (mô phỏng xoay máy / kéo co cửa sổ) và ép vẽ
+   lại — 11 cái nút "Xem thêm" Ở LẠI trên những ô ĐÃ HẾT KẸP. Mười một cái nút
+   mở ra đúng thứ đang bày sẵn: chính là "một lời nói dối nhỏ, cùng họ với lỗi
+   đang vá" mà đoạn ngay phía trên lên án, và là lý do cờ `data-doan` ra đời.
+   Giữ lại một cái nút nói dối để phòng một vòng lặp chưa ai thấy là đổi sai
+   chiều — đo được thắng đoán được.
+
+   CHỐT CHẶN DAO ĐỘNG, ĐỂ KHÔNG PHẢI TIN AI: `GO_TOI_DA` — nhưng ĐẾM THEO
+   CHÙM, không đếm theo cả đời DOM. Xem khối ngay trên hai hằng số dưới đây;
+   bản trước đếm theo đời DOM với trần 2 và chạm trần thật ở lượt nới thứ BA.
+
+   ĐANG BUNG THÌ ĐỪNG ĐỤNG: `.dai-gon-mo` bỏ `max-height` nên `scrollHeight`
+   bằng `clientHeight`, tức trông như "không kẹp" — không loại trừ thì mỗi lần
+   DOM đổi là cái nút "Thu gọn" của người đang đọc bị giật mất khỏi tay.
+
+   DANH SÁCH SELECTOR PHẢI SOI GƯƠNG VỚI CÁI KẸP TRONG CSS
+   (`td .sm.dong-phu, td.cot-chu .sm` — style.css, khối "LƯỚI BẢNG"). Thêm một
+   chỗ kẹp trong CSS thì thêm vào đây, nếu không lại đúng lỗi này dưới một cái
+   tên khác.
+   CHỐT CANH: arm K và arm R7 của `npm run do-bang-that` so `scrollHeight` với
+   `clientHeight` trên MỌI ô của 30 bảng ở mọi bề ngang trong `RONGS`. R7 chạy
+   trên ĐƯỜNG VẼ THẬT và là arm DUY NHẤT bắt được đúng lỗi này — nay có một ca
+   `--tu-kiem` ĐỨNG SẴN tự gỡ `capNutDongPhu()` rồi đòi R7 phải đỏ, chứ không
+   còn chỉ chứng minh bằng lời (REV-0063 vòng 2, THẤP-4). Số đo khi gài lại:
+   K xanh ở mọi mức, R7 đỏ ở **BA** mức — 1440 · 1280 · 1200 — "hiện 34px /
+   thật 50px". (Câu cũ ghi "1440 và 1280", thiếu 1200; mức ấy đã vào `RONGS`
+   từ vòng 2. REV-0063 vòng 3, THẤP-4.)
+   ⚠️ VÀ R7 MỚI ĐƯỢC CHỨNG MINH Ở 3/5 MỨC, KHÔNG PHẢI MỌI BỀ NGANG. Ở 1024px
+   và 375px ca `--tu-kiem` KHÔNG gài được ô nào (arm R7 hỏi theo Ô, mà ở hai
+   mức ấy hai bảng SKU đã xếp chồng nên cột rộng ra và không ô nào còn kẹp) —
+   bàn đo nói thẳng "không gài được ca nào ở bề ngang này, KHÔNG KẾT LUẬN GÌ"
+   thay vì in một dấu tick. Đừng đọc "132 ĐẠT / 7 TRƯỢT" thành "R7 được chứng
+   minh ở mọi bề ngang". (REV-0063 vòng 3, THẤP-2.)
+   Tập bắt của K là TẬP CON THỰC SỰ của R7 — xem đính chính trong
+   `scripts/do-cat-im-lang.mjs`; đừng lấy "vẫn còn K" làm lý do bỏ R7.
+   (`do-cat-im-lang` KHÔNG canh được lớp này: nó đọc MÃ NGUỒN tìm `LIMIT` và
+   `.slice`, nó không nhìn thấy một cái kẹp CSS bao giờ.)
+
+   ⚠️ MỘT CHỖ LỆCH PHẠM VI, GHI RA ĐỂ ĐỪNG NGẠC NHIÊN (REV-0063 vòng 2,
+   THẤP-5). Hàm này chấm theo `scrollHeight > clientHeight`, KHÔNG hỏi bên
+   trong ô là chữ hay ảnh — nên một ô `.sm` chỉ chở ẢNH mà bị kẹp vẫn được cấp
+   nút "Xem thêm" (Hồ Ly đo: hiện 34px / thật 45px, `chu: 0`). Arm K/R7 thì bỏ
+   qua đúng ô ấy (`if (!chu) continue` — ảnh không phải chữ, đã khai đích danh
+   trong `DO_KEP_IM_LANG`). Hai bên lệch nhau đúng một ca.
+   Hôm nay VÔ HẠI: không ô `.sm` nào trong ERP chở ảnh. Và lệch theo chiều AN
+   TOÀN: bên vá rộng hơn bên đo, tức có thừa một cái nút chứ không thiếu. Nếu
+   mai có ô ảnh thật thì cân nhắc lại — nút "Xem thêm" dưới một tấm ảnh bị cắt
+   là đúng việc, chỉ là không arm nào canh nó.
+   ========================================================================== */
+/* ⚠️ TRẦN ĐẾM THEO CHÙM, KHÔNG THEO ĐỜI DOM — REV-0063 vòng 3, VỪA-1.
+   Bản trước: `GO_TOI_DA = 2` đếm trên CẢ ĐỜI DOM, kèm lời khai *"2 là đủ để
+   dọn sạch mọi ca kéo co / xoay máy ĐO ĐƯỢC"*. Câu ấy SAI, và Hồ Ly đo được
+   nó sai: nới rồi thu 5 vòng liên tiếp trên bảng SKU (không có lượt tải dữ
+   liệu nào xen vào), từ lượt nới thứ BA trần chạm và **4 nút "Xem thêm" ở lại
+   trên ô đã hết kẹp** — đúng cái "nút nói dối" mà chính vòng ấy đi chữa.
+   `soGo={"0":7,"2":4}`. Đường thật để tới đó CÓ TỒN TẠI: `luoiBang()` chỉ
+   chạy lại khi `childList` đổi, `resize` chỉ gọi `quetHet` chứ KHÔNG vẽ lại
+   bảng — nên ba lần xoay máy tính bảng / kéo co cửa sổ là đủ, bộ đếm không
+   được xoá vì bảng chưa vẽ lại. Một lời khai trình bày giả thuyết như số đo,
+   đúng thứ đoạn bình luận ngay trên nó đang lên án.
+
+   VÌ SAO KHÔNG DÙNG ĐỀ NGHỊ "ĐẶT LẠI BỘ ĐẾM KHI SỐ LẦN GẮN CŨNG TĂNG".
+   Đề nghị ấy dựa trên giả định *"dao động thật thì gắn/gỡ xen kẽ, còn kéo co
+   thì không"*. Chính số đo của ca kéo co bác nó: mỗi lượt THU gắn lại đúng 4
+   nút thật, tức kéo co CŨNG xen kẽ gắn/gỡ. Hai cảnh giống hệt nhau nếu chỉ
+   nhìn ĐẾM. Không có tín hiệu cục bộ nào tách được chúng bằng số lần.
+
+   THỨ TÁCH ĐƯỢC LÀ NHỊP, VÀ NÓ ĐO ĐƯỢC. Vòng lặp giả định (gỡ nút → cột hẹp
+   lại → kẹp → gắn nút → cột rộng ra → gỡ nút) TỰ NUÔI NÓ: không cần gì bên
+   ngoài, nên nó chạy hết tốc độ `MutationObserver` + `requestAnimationFrame`.
+   Kéo co thì phải đợi NGƯỜI hoặc đợi một lượt tải dữ liệu. SỐ ĐO THẬT, cả hai
+   ca đều dựng lên và chạy trong `npm run do-nut-noi-doi`:
+     · kéo co nới/thu 5 vòng  : hai lần gỡ liên tiếp trên CÙNG một ô cách nhau
+                                nhỏ nhất 649ms · giữa 655ms — và đó là BÀN ĐO
+                                TỰ ĐỘNG chạy hết sức, người thật còn chậm hơn.
+     · vòng lặp tự nuôi (gài) : cách nhau nhỏ nhất 0ms · giữa 0ms — cả chuỗi
+                                nằm gọn trong vài khung hình đầu.
+   Hai dải KHÔNG chạm nhau và cũng không gần nhau: nhịp CHẬM NHẤT của vòng lặp
+   vẫn dưới một mili-giây, nhịp NHANH NHẤT của kéo co là 649ms. CHUM_MS = 250
+   nằm giữa — lớn hơn mọi nhịp của vòng lặp, và bằng 38% nhịp nhanh nhất của
+   kéo co. Đây là chỗ DUY NHẤT trong khối này là một lựa chọn chứ không phải
+   một số đo, nên nó có bàn đo canh CẢ HAI đầu, và mỗi đầu có một ca đối chứng
+   ĐỎ chạy trong cùng lượt:
+     · nới CHUM_MS quá nhịp kéo co → mọi lượt gỡ gộp làm một chùm, bộ đếm
+       không bao giờ đặt lại, chạm trần ở vòng thứ 7 → ca A đỏ
+       (đối chứng A2: giữ GO_TOI_DA thật, đặt CHUM_MS = 1e12).
+     · thu CHUM_MS xuống dưới nhịp khung hình → vòng lặp tự nuôi cũng được
+       đặt lại mỗi khung → không bao giờ dừng → ca B đỏ
+       (đối chứng B: bỏ hẳn trần).
+   Vì thế ca A phải chạy 8 vòng chứ không 5: 5 vòng chỉ bắt được đầu thứ nhất.
+
+   CÁCH CHẶN VẪN LÀ CHẶN CỨNG, KHÔNG PHẢI BÓP NHỊP. Gỡ tới lần thứ
+   `GO_TOI_DA` trong cùng một chùm thì ô ấy THÔI, không gỡ nữa → DOM ngừng
+   đổi → `MutationObserver` ngừng bắn → vòng lặp CHẾT, không phải chạy chậm
+   lại. Đo được ở ca gài: **24 lần gỡ rồi im lặng 2351ms** (đúng 4 ô × 6), so
+   với **304 lần và vẫn đang chạy** ở bản bỏ trần. Sau đó, nếu có một lượt vẽ
+   lại THẬT (cách hơn 250ms) thì bộ đếm về 0 và cái nút nói dối — nếu có —
+   được dọn ngay lượt ấy, thay vì nằm lại vĩnh viễn như bản trần-theo-đời-DOM.
+   GO_TOI_DA = 6 chứ không phải 2: kéo co không bao giờ chạm tới nó (đo được:
+   mỗi chùm của kéo co chỉ có ĐÚNG MỘT lần gỡ, `soGo` đứng nguyên ở 1 suốt 5
+   vòng), còn vòng lặp thì 6 nhịp là đã dừng trong vòng vài chục mili-giây.
+   Chọn 6 để một chuỗi vẽ lại dồn dập HỢP LỆ (nạp dữ liệu + dập lớp + gắn nút
+   chi tiết trong cùng một khung hình) vẫn có chỗ thở.
+   CHỐT CANH: `npm run do-nut-noi-doi` — chạy cả ca kéo co lẫn ca vòng lặp
+   gài sẵn, đòi 0 nút nói dối ở ca đầu và vòng lặp phải DỪNG ở ca sau. */
+const GO_TOI_DA = 6;
+const CHUM_MS = 250;
+function capNutDongPhu() {
+  for (const sm of document.querySelectorAll('td.cot-chu .sm, td .sm.dong-phu')) {
+    if (sm.classList.contains('dai-gon-mo')) continue;
+    const ke = sm.nextElementSibling;
+    const nutCu = ke && ke.classList.contains('dai-gon-btn') ? ke : null;
+    if (sm.clientHeight <= 0) {                       // chưa dàn → đoán, có đánh dấu
+      if (!nutCu && sm.textContent.trim().length > 55) themNutXemThem(sm, true);
+      continue;
+    }
+    if (sm.scrollHeight > sm.clientHeight + 1) {
+      if (!nutCu) themNutXemThem(sm, false);
+      else delete nutCu.dataset.doan;                 // đoán đúng → thành nút thật
+    } else if (nutCu) {
+      if (nutCu.dataset.doan) { nutCu.remove(); continue; }   // đoán sai → dọn đi
+      /* Nút THẬT trên ô đã HẾT KẸP cũng là rác — gỡ. Chốt chặn dao động ở đây,
+         không phải ở việc từ chối dọn (REV-0063 vòng 2, VỪA-2).
+         Đếm THEO CHÙM: cách lần gỡ trước quá `CHUM_MS` thì đây là một nhịp
+         mới, đếm lại từ 0. Xem khối dài ở `GO_TOI_DA` để biết vì sao nhịp
+         mới là thứ tách được kéo co với vòng lặp, còn số lần thì không. */
+      const gio = performance.now();
+      const cungChum = gio - Number(sm.dataset.goLuc || 0) <= CHUM_MS;
+      const soGo = cungChum ? Number(sm.dataset.soGo || 0) : 0;
+      if (soGo >= GO_TOI_DA) continue;
+      sm.dataset.soGo = String(soGo + 1);
+      sm.dataset.goLuc = String(gio);
+      nutCu.remove();
+    }
+  }
+}
+function themNutXemThem(sau, laDoan) {
+  const nut = document.createElement('button');
+  nut.type = 'button';
+  nut.className = 'dai-gon-btn';
+  nut.textContent = 'Xem thêm';
+  if (laDoan) nut.dataset.doan = '1';
+  nut.addEventListener('click', () => window.toggleDaiGon(nut));
+  sau.after(nut);
 }
 
 /* Mở/đóng dòng chi tiết. Uỷ quyền trên `document` nên bảng vẽ lại bao nhiêu
