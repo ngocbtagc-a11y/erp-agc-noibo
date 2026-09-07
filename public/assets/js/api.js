@@ -350,8 +350,12 @@ export const API = {
 
   khoXuat: (d) => goi('/api/kho/xuat', { method: 'POST', body: JSON.stringify(d) }),
 
-  khoLo: (sanPhamId) =>
-    goi('/api/kho/lo?san_pham_id=' + encodeURIComponent(sanPhamId)),
+  khoDieuChinh: (d) => goi('/api/kho/dieu-chinh', { method: 'POST', body: JSON.stringify(d) }),
+
+  /* `tatCa` — lấy cả lô đang ÂM, cho màn Điều chỉnh nhìn thấy đúng cái phải
+     sửa. Màn Xuất kho vẫn dùng lưới cũ (chỉ lô còn hàng). */
+  khoLo: (sanPhamId, tatCa = false) =>
+    goi('/api/kho/lo?san_pham_id=' + encodeURIComponent(sanPhamId) + (tatCa ? '&tat_ca=1' : '')),
 
   khoBaoCao: (tu, den) =>
     goi('/api/kho/bao-cao?tu=' + encodeURIComponent(tu) + '&den=' + encodeURIComponent(den)),

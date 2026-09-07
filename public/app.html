@@ -1383,11 +1383,12 @@
 
       <div class="stats" id="kv-the"></div>
 
-      <!-- Chuyển màn: Tồn / Nhập / Xuất / Báo cáo -->
+      <!-- Chuyển màn: Tồn / Nhập / Xuất / Điều chỉnh / Báo cáo -->
       <div class="seg" id="kvSeg">
         <button class="seg-nut active" data-kv="ton">Tồn kho</button>
         <button class="seg-nut" data-kv="nhap">Nhập kho</button>
         <button class="seg-nut" data-kv="xuat">Xuất kho</button>
+        <button class="seg-nut" data-kv="dieuchinh">Điều chỉnh</button>
         <button class="seg-nut" data-kv="baocao">Báo cáo</button>
         <button class="seg-nut" data-kv="donhoan">Đơn hoàn</button>
         <button class="seg-nut" data-kv="lichsu">Lịch sử đơn hoàn</button>
@@ -1488,7 +1489,11 @@
                    thành phản xạ, mà phản xạ thì gạt luôn cả lớp (a). Muốn qua
                    cửa này phải GÕ LẠI TÊN FILE — việc không làm được bằng phản xạ. -->
               <div class="field field-rong nap-trung-go" id="napTrungGoO" hidden>
-                <label for="napTrungGo">Gõ lại đúng tên file để xác nhận vẫn muốn cộng thêm lần nữa</label>
+                <!-- Tên phải gõ là tên file của LƯỢT NẠP TRƯỚC, máy chủ lấy từ
+                     sổ vết chứ không lấy từ gói vừa gửi lên (REV-0060 vòng 3 ·
+                     CAO-③) — nếu không thì cả hai vế đều do khách khai, và gọi
+                     thẳng API với cả hai là 'x' là qua. -->
+                <label for="napTrungGo">Gõ lại đúng tên file của lượt nạp TRƯỚC để xác nhận vẫn muốn cộng thêm lần nữa</label>
                 <!-- `maxlength` 90: tên file Windows dài nhất ~80 ký tự đã là
                      nhiều; ô một dòng không khai trần là ô nhận chữ vô hạn,
                      gõ vào là tràn ngang màn 375px (luật `do-chu-dai`). -->
@@ -1702,6 +1707,61 @@
             </form>
             <div class="form-loi" id="kvLoiXuat"></div>
             <div class="form-ok" id="kvOkXuat" hidden></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== Màn Điều chỉnh tồn (REV-0060 vòng 3 · CHẶN-ⓑ) =====
+           Đường ra thật cho ca "nạp nhầm rồi bán mất": trước đây câu từ chối
+           của nút Gỡ lượt nạp chỉ sang "màn Kho vận lập phiếu điều chỉnh" —
+           một cái màn KHÔNG TỒN TẠI. Nay nó có, và chỉ quản lý kho mở được. -->
+      <div class="kv-pane" id="kv-pane-dieuchinh" hidden>
+        <div class="panel">
+          <div class="panel-head"><h4>Phiếu điều chỉnh tồn</h4></div>
+          <div class="panel-body">
+            <p class="kv-ton-nhac" id="kvDcGioiThieu">
+              Kéo sổ về đúng số <b>đếm được ngoài kho</b>: hàng vỡ, hàng huỷ vì hết hạn, kiểm kê lệch,
+              hoặc tồn đầu kỳ nạp nhầm mà đã bán mất một phần nên không gỡ lượt nạp được nữa.
+              Phiếu vào sổ cái có dấu vết (ai lập, lúc nào, lý do gì) — không xoá ngược lịch sử.
+            </p>
+            <form id="kvFormDieuChinh" class="form-luoi" autocomplete="off">
+              <div class="field field-rong">
+                <label>Sản phẩm *</label>
+                <div class="combo1" id="kvDcSPCombo">
+                  <button type="button" class="combo1-hienthi rong" id="kvDcSPHienThi">
+                    <span>Chọn sản phẩm...</span>
+                    <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+                  </button>
+                  <div class="combo1-panel" id="kvDcSPPanel" hidden>
+                    <input maxlength="80" type="search" id="kvDcSPTim" placeholder="Tìm theo tên hoặc mã SKU...">
+                    <div class="ql-goiy" id="kvDcSPGoiY"></div>
+                  </div>
+                </div>
+                <input type="hidden" id="kvDcSP">
+              </div>
+              <div class="field field-rong" id="kvDcLoO" hidden>
+                <label for="kvDcLo">Lô hàng *</label>
+                <select id="kvDcLo"><option value="">— Đang tải lô... —</option></select>
+                <span class="hint">Mã theo dõi hạn sử dụng thì tồn nằm ở từng lô — sửa ở mức mã sẽ để lại lô âm mà màn Xuất kho không nhìn thấy.</span>
+              </div>
+              <div class="field field-rong" id="kvDcTonBox" hidden>
+                <div class="kv-ton-nhac" id="kvDcTonNhac"></div>
+              </div>
+              <div class="field">
+                <label for="kvDcTonThuc">Số tồn THẬT đếm được *</label>
+                <input maxlength="15" type="text" id="kvDcTonThuc" inputmode="numeric" required placeholder="VD: 0">
+                <span class="hint">Đếm được bao nhiêu thì ghi bấy nhiêu — ERP tự tính phần chênh.</span>
+              </div>
+              <div class="field field-rong">
+                <label for="kvDcLyDo">Lý do điều chỉnh *</label>
+                <textarea id="kvDcLyDo" rows="2" maxlength="400" required placeholder="VD: kiểm kê 07/09, hàng vỡ 12 túi · gỡ lượt nạp tồn nhầm phiếu pn_xxx"></textarea>
+              </div>
+              <div class="field field-nut">
+                <button type="submit" class="btn-primary" id="kvNutDieuChinh">Lập phiếu điều chỉnh</button>
+              </div>
+            </form>
+            <div class="form-loi" id="kvLoiDieuChinh"></div>
+            <div class="form-ok" id="kvOkDieuChinh" hidden></div>
           </div>
         </div>
       </div>

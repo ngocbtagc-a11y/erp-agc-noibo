@@ -8993,6 +8993,12 @@ async function khoiDongKho() {
   } else {
     document.querySelectorAll('#kvSeg .seg-nut[data-kv="danhmuc"]').forEach(b => b.remove());
   }
+  /* Phiếu ĐIỀU CHỈNH chỉ dành cho quản lý kho (anh Duy + Admin) — máy chủ
+     kiểm `duocQuanLyKho` độc lập trong `kho.js`, giấu nút chỉ để không hứa
+     suông với người bấm vào cũng ăn 403. */
+  if (!qKho.quan_ly) {
+    document.querySelectorAll('#kvSeg .seg-nut[data-kv="dieuchinh"]').forEach(b => b.remove());
+  }
   // Không xem được giá vốn → bỏ cột giá trị tồn và ô đơn giá
   if (!qKho.gia_von) {
     const th = $('#kv-thGiaTri'); if (th) th.remove();
@@ -9005,7 +9011,7 @@ async function khoiDongKho() {
     const nut = e.target.closest('.seg-nut');
     if (!nut) return;
     document.querySelectorAll('#kvSeg .seg-nut').forEach(b => b.classList.toggle('active', b === nut));
-    ['ton', 'nhap', 'xuat', 'baocao', 'donhoan', 'lichsu', 'danhmuc', 'napfile'].forEach(k => {
+    ['ton', 'nhap', 'xuat', 'dieuchinh', 'baocao', 'donhoan', 'lichsu', 'danhmuc', 'napfile'].forEach(k => {
       const pane = document.getElementById('kv-pane-' + k);
       if (pane) pane.hidden = (k !== nut.dataset.kv);
     });
@@ -9110,9 +9116,14 @@ async function khoiDongKho() {
     hienThi: $('#kvXuatSPHienThi'), panel: $('#kvXuatSPPanel'),
     tim: $('#kvXuatSPTim'), goiY: $('#kvXuatSPGoiY'), giaTri: $('#kvXuatSP')
   }, () => DS_SP.map(s => ({ gia_tri: s.id, nhan: `${s.ten} — tồn ${s.ton} ${s.don_vi}` })), null, 'Chọn sản phẩm...').capNhatHienThi : null;
+  const veDcSP = $('#kvDcSP') ? ganCombo({
+    hienThi: $('#kvDcSPHienThi'), panel: $('#kvDcSPPanel'),
+    tim: $('#kvDcSPTim'), goiY: $('#kvDcSPGoiY'), giaTri: $('#kvDcSP')
+  }, () => DS_SP.map(s => ({ gia_tri: s.id, nhan: `${s.ten} — tồn ${s.ton} ${s.don_vi}` })), null, 'Chọn sản phẩm...').capNhatHienThi : null;
   function doDropdown() {
     veNhapSP?.();
     veXuatSP?.();
+    veDcSP?.();
   }
 
   /* ---- Nạp lại toàn bộ dữ liệu kho từ máy chủ ---- */
@@ -9332,6 +9343,78 @@ async function khoiDongKho() {
         oLoi.textContent = err.message; oLoi.classList.add('show');
       } finally {
         nut.disabled = false; nut.textContent = 'Xuất kho';
+      }
+    });
+  }
+
+  /* ---- Phiếu điều chỉnh tồn (chỉ quản lý kho) — REV-0060 vòng 3 · CHẶN-ⓑ ----
+     Đây là ĐƯỜNG RA cho ca "nạp nhầm tồn rồi kho đã bán mất một phần": nút Gỡ
+     lượt nạp từ chối (đúng — gỡ đi là tồn ÂM), và trước bản vá này câu từ chối
+     chỉ sang một cái màn KHÔNG TỒN TẠI, tức là Sếp kẹt vĩnh viễn, lối duy nhất
+     là mở CSDL sửa tay. */
+  if (qKho.quan_ly && $('#kvFormDieuChinh')) {
+    let dcLoDs = [];
+    const dcSpDangChon = () => DS_SP.find(x => x.id === $('#kvDcSP').value) || null;
+
+    async function veDcLo() {
+      const sp = dcSpDangChon();
+      const oLoO = $('#kvDcLoO'), oLo = $('#kvDcLo');
+      const oTonBox = $('#kvDcTonBox'), oTon = $('#kvDcTonNhac');
+      dcLoDs = [];
+      if (!sp) { oLoO.hidden = true; oTonBox.hidden = true; return; }
+      oTonBox.hidden = false;
+      oTon.innerHTML = `Sổ đang ghi tồn: <b>${tienVN(sp.ton)} ${esc(sp.don_vi)}</b> cho “${esc(sp.ten)}”`;
+      if (!sp.theo_doi_hsd) { oLoO.hidden = true; oLo.innerHTML = ''; return; }
+      oLoO.hidden = false;
+      oLo.innerHTML = '<option value="">— Đang tải lô... —</option>';
+      try {
+        /* `true` = lấy CẢ lô đang âm. Lô âm chính là cái thường phải sửa, mà
+           lưới mặc định (`ton > 0`) lọc mất đúng nó. */
+        const kq = await API.khoLo(sp.id, true);
+        dcLoDs = kq.lo || [];
+        oLo.innerHTML = dcLoDs.length
+          ? '<option value="">— Chọn lô —</option>' + dcLoDs.map(l =>
+              `<option value="${esc(l.id)}">${esc(l.so_lo || l.id)}` +
+              `${l.han_su_dung ? ' · HSD ' + esc(l.han_su_dung.split('-').reverse().join('/')) : ''}` +
+              ` · sổ ghi ${tienVN(l.ton)}${l.ton < 0 ? ' ⚠ ÂM' : ''}</option>`).join('')
+          : '<option value="">— Mã này chưa có lô nào có số dư —</option>';
+      } catch (err) {
+        oLo.innerHTML = `<option value="">— Không tải được lô: ${esc(err.message || '')} —</option>`;
+      }
+    }
+    $('#kvDcSP').addEventListener('change', veDcLo);
+    $('#kvDcSPHienThi').addEventListener('click', () => setTimeout(veDcLo, 0));
+    $('#kvDcLo').addEventListener('change', () => {
+      const l = dcLoDs.find(x => x.id === $('#kvDcLo').value);
+      const sp = dcSpDangChon();
+      if (l && sp) {
+        $('#kvDcTonNhac').innerHTML =
+          `Sổ đang ghi cho lô “${esc(l.so_lo || l.id)}”: <b>${tienVN(l.ton)} ${esc(sp.don_vi)}</b>` +
+          (l.ton < 0 ? ' — lô này đang ÂM, màn Xuất kho KHÔNG nhìn thấy nó.' : '');
+      }
+    });
+
+    $('#kvFormDieuChinh').addEventListener('submit', async ev => {
+      ev.preventDefault();
+      const oLoi = $('#kvLoiDieuChinh'), oOk = $('#kvOkDieuChinh');
+      oLoi.classList.remove('show'); oOk.hidden = true;
+      const nut = $('#kvNutDieuChinh'); nut.disabled = true; nut.textContent = 'Đang lưu…';
+      try {
+        const kq = await API.khoDieuChinh({
+          san_pham_id: $('#kvDcSP').value,
+          lo_hang_id: $('#kvDcLo').value || null,
+          ton_thuc: $('#kvDcTonThuc').value,
+          ly_do: $('#kvDcLyDo').value
+        });
+        $('#kvFormDieuChinh').reset();
+        $('#kvDcLoO').hidden = true; $('#kvDcTonBox').hidden = true;
+        oOk.textContent = '✓ ' + (kq.tin || 'Đã lập phiếu điều chỉnh.'); oOk.hidden = false;
+        await taiLai();
+        doDropdown();
+      } catch (err) {
+        oLoi.textContent = err.message; oLoi.classList.add('show');
+      } finally {
+        nut.disabled = false; nut.textContent = 'Lập phiếu điều chỉnh';
       }
     });
   }

@@ -361,6 +361,23 @@ function cotTuRef(ref) {
    bảng; đặt 30 để không ai chạm, mà cũng không phải bung 500 phần XML. */
 const TRAN_BANG = 30;
 
+/** Đếm số dòng CÓ NỘI DUNG THẬT trong XML một bảng — cùng nghĩa với `coDong`
+ *  của lưới đã bung, để ô chọn bảng chỉ hiện MỘT loại số (vòng 3 · THẤP-③).
+ *
+ *  Quét MỘT LƯỢT, không `split` và không `matchAll` có bắt nhóm: cả hai đều
+ *  dựng ra 20.000 chuỗi con của một bảng lớn, đúng cái sức ép bộ nhớ mà CAO-⑤
+ *  đang gỡ. Ở đây chỉ nhích con trỏ: gặp `<row` là mở một dòng, gặp ô đầu tiên
+ *  có ký tự thật thì tính dòng đó rồi thôi không tính lại. */
+function demDongCoNoiDung(xml) {
+  const re = /<row\b|<(?:v|t)(?:\s[^>]*)?>\s*[^<\s]/g;
+  let n = 0, dangMo = false, m;
+  while ((m = re.exec(xml)) !== null) {
+    if (m[0].charCodeAt(1) === 114 /* r của <row */) dangMo = true;
+    else if (dangMo) { n++; dangMo = false; }
+  }
+  return n;
+}
+
 /**
  * Đọc .xlsx.
  * @param {number|null} chon   chỉ số bảng NGƯỜI chọn (0 = bảng đầu tiên).
@@ -536,15 +553,36 @@ async function docXlsx(bytes, tranDong, chon = null, demDong = false) {
      phải NÓI RA là đã đi. Người đã chọn đích danh thì không tự ý đổi. */
   if (!nguoiChon && coDong(luoi) < 2 && dsBang.length > 1) {
     dsBang[chonThat].so_dong = Math.max(0, coDong(luoi) - 1);
+    /* ⚠️ VÒNG NÀY PHẢI CÓ CHỐT, KHÔNG ĐƯỢC BUNG TỚI 30 BẢNG (vòng 3 · CAO-⑤).
+       Đường đếm dòng ngay bên dưới đã có chốt kích thước từ đầu; đường này thì
+       không, nên nó bung CẢ XML LẪN LƯỚI Ô ĐẦY ĐỦ của tối đa `TRAN_BANG`
+       bảng — mỗi lưới tới 20.000 × 200 ô — trong một isolate 128 MB. Bảng ẩn
+       còn tệ hơn: bung xong mới `continue`, tức là TRẢ TIỀN RỒI VỨT ĐI.
+       Nguy thật: một workbook 8 MB nén, bảng đầu rỗng, các bảng sau nặng ⇒
+       isolate chết ngay ở bước MỞ FILE và câu lỗi ra là câu chung chung, Sếp
+       không có đường nào lần ra.
+       Ba cái chốt, theo đúng thứ tự rẻ-trước:
+         · bảng ẩn thì bỏ TRƯỚC khi bung (rẻ nhất, và nó cũng đúng: bảng ẩn là
+           bản nháp cũ, không tự ý mở sang);
+         · bảng nén hơn 8 MB thì bỏ — cùng con số với đường đếm dòng;
+         · và dừng sau `TRAN_THU_BANG` bảng đã bung, đủ để bắt ca thật (bảng
+           bìa/hướng dẫn đứng trước bảng số liệu) mà không thành vòng vô hạn. */
+    const TRAN_THU_BANG = 5;
+    let daThu = 0;
     for (let i = 0; i < dsBang.length; i++) {
       if (i === chonThat) continue;
+      if (dsBang[i].an) continue;                       // bản nháp cũ — không bung, không đi sang
+      if (daThu >= TRAN_THU_BANG) break;
+      const mucB = muc.get(dsBang[i].duong);
+      if (!mucB || mucB.coThat > 8 * 1024 * 1024) continue;
       let thu = null;
+      daThu++;
       try { thu = await bungLuoi(dsBang[i].duong, dsBang[i].ten); }
       catch { continue; }               // bảng hỏng/quá to thì bỏ, không làm hỏng cả lần đọc
       dsBang[i].so_dong = Math.max(0, coDong(thu.luoi) - 1);
       /* Đã đếm được số dòng của MỌI bảng rồi thì dù có đi tiếp được hay không,
          câu lỗi ở `docBang` cũng kê ra được đúng bảng nào có số liệu. */
-      if (coDong(thu.luoi) < 2 || dsBang[i].an) continue;
+      if (coDong(thu.luoi) < 2) continue;
       canhBao.push(`Bảng “${dsBang[chonThat].ten}” không có dòng dữ liệu nào, ` +
                    `nên ERP mở sang bảng “${dsBang[i].ten}”. ` +
                    `Nếu số liệu nằm ở bảng khác, xin chọn lại bảng rồi xem trước lần nữa.`);
@@ -559,9 +597,17 @@ async function docXlsx(bytes, tranDong, chon = null, demDong = false) {
      Chỉ chạy ở bước 1 (`demDong`), vì mỗi bảng là một lượt bung XML. Bảng nào
      quá nặng thì để trống số dòng chứ không bung — thà thiếu một con số còn
      hơn ăn hết bộ nhớ của isolate. */
+  /* ⚠️ MỘT Ô, MỘT LOẠI SỐ (REV-0060 vòng 3 · THẤP-③). Trước đây ô chọn bảng
+     hiện HAI loại số trong cùng một danh sách: bảng đang đọc đếm DÒNG THÔ
+     (`luoi.length`, tính cả dòng chỉ có định dạng), bảng đi tiếp đếm DÒNG CÓ
+     NỘI DUNG (`coDong`). Ô đó chính là cửa chặn bằng mắt của Sếp lúc chọn
+     bảng, nên hai loại số trong một danh sách là một cái bẫy nhỏ mà im lặng.
+     Nay CẢ BA đường đều đếm DÒNG CÓ NỘI DUNG — đó mới là con số dùng để chọn
+     bảng (một bảng 800 dòng trống trơn mà hiện "800 dòng" thì hỏng đúng việc
+     ô này sinh ra để làm). */
   for (let i = 0; i < dsBang.length; i++) {
     const b = dsBang[i];
-    if (i === chonThat) { b.so_dong = Math.max(0, luoi.length - 1); continue; }
+    if (i === chonThat) { b.so_dong = Math.max(0, coDong(luoi) - 1); continue; }
     /* Đã đếm rồi (đường "bảng rỗng" ở trên) thì giữ, đừng xoá đi đếm lại. */
     if (b.so_dong === undefined) b.so_dong = null;
     if (b.so_dong !== null) continue;
@@ -570,7 +616,7 @@ async function docXlsx(bytes, tranDong, chon = null, demDong = false) {
     if (!m || m.coThat > 8 * 1024 * 1024) continue;
     try {
       const x = await bungPhan(bytes, m);
-      b.so_dong = Math.max(0, (x.match(/<row\b/g) || []).length - 1);
+      b.so_dong = Math.max(0, demDongCoNoiDung(x) - 1);
     } catch { /* bảng lỗi thì bỏ số dòng, không làm hỏng cả lần đọc */ }
   }
 
@@ -594,9 +640,25 @@ async function docXlsx(bytes, tranDong, chon = null, demDong = false) {
  *  lỗi cũ đã đúng). */
 function keBangRong(dsBang, tenBang) {
   if (!dsBang || dsBang.length < 2) return null;
-  const ke = dsBang.map(b => `“${b.ten}” (${b.so_dong === null || b.so_dong === undefined
+  const chuaDem = b => b.so_dong === null || b.so_dong === undefined;
+  const ke = dsBang.map(b => `“${b.ten}” (${chuaDem(b)
     ? 'chưa đếm được' : b.so_dong.toLocaleString('vi-VN') + ' dòng'}${b.an ? ', đang ẩn' : ''})`).join(' · ');
   const con = dsBang.filter(b => b.ten !== tenBang && Number(b.so_dong) > 0);
+  /* ⚠️ "CHƯA ĐẾM" KHÁC "ĐẾM RỒI, RỖNG THẬT" (REV-0060 vòng 3 · CAO-⑥).
+     `Number(null)` = 0, nên bản trước gộp hai chuyện đó làm một. Ở bước 2 và
+     bước 3 (`nap-xem`, `nap-ghi`) `demDong` TẮT, nên `so_dong` của mọi bảng
+     khác đều `null` ⇒ `con` rỗng ⇒ ERP khẳng định "Không bảng nào có dòng dữ
+     liệu" trong khi nó CHƯA ĐẾM một bảng nào. Ca thật: Sếp nhìn ô chọn bảng ở
+     bước 1 thấy `Sheet1 · 0 dòng` / `Data · 812 dòng`, lỡ chọn `Sheet1`, bấm
+     Xem trước → ERP nói ngược lại chính cái nó vừa in ra một phút trước.
+     Máy chủ KHÔNG được khẳng định một điều nó không biết. */
+  const soChuaDem = dsBang.filter(b => b.ten !== tenBang && chuaDem(b)).length;
+  if (!con.length && soChuaDem) {
+    return `Bảng “${tenBang}” không có dòng dữ liệu nào. File này có ${dsBang.length} bảng: ${ke}. ` +
+           `ERP chưa đếm số dòng của ${soChuaDem.toLocaleString('vi-VN')} bảng còn lại ở bước này, ` +
+           `nên chưa nói được bảng nào có số liệu. Xin quay lại bước ghép cột để chọn bảng — ` +
+           `ở đó ERP đếm và hiện số dòng của từng bảng.`;
+  }
   return `Bảng “${tenBang}” không có dòng dữ liệu nào. File này có ${dsBang.length} bảng: ${ke}. ` +
          (con.length
            ? `Xin chọn lại bảng ${con.map(b => '“' + b.ten + '”').join(' hoặc ')} ở bước ghép cột rồi xem trước lần nữa.`

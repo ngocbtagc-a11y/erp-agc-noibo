@@ -1897,11 +1897,24 @@ async function khoXuat(req, env) {
   return kho.xuatKho(env, phien, b);
 }
 
+/* Phiếu điều chỉnh tồn — ĐƯỜNG RA cho ca "nạp nhầm rồi bán mất" (REV-0060
+   vòng 3 · CHẶN-ⓑ). Cửa ngoài chỉ kiểm "có tab Kho vận"; ai được LẬP thì
+   `kho.js` tự kiểm `duocQuanLyKho` bên trong — chặn kép như mọi cửa kho. */
+async function khoDieuChinh(req, env) {
+  const { phien, loi: l } = await batBuocXemKho(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return kho.dieuChinhKho(env, phien, b);
+}
+
 async function khoLo(req, env) {
   const { phien, loi: l } = await batBuocXemKho(req, env);
   if (l) return l;
   const u = new URL(req.url);
-  return kho.loTheoSanPham(env, phien, u.searchParams.get('san_pham_id'));
+  /* `tat_ca=1` — lấy CẢ lô đang âm, cho màn điều chỉnh nhìn thấy đúng cái
+     phải sửa. Màn xuất kho vẫn dùng lưới cũ (chỉ lô còn hàng). */
+  return kho.loTheoSanPham(env, phien, u.searchParams.get('san_pham_id'),
+                           u.searchParams.get('tat_ca') === '1');
 }
 
 async function khoBaoCao(req, env) {
@@ -7220,6 +7233,7 @@ const DUONG_DAN = {
   'POST /api/kho/nap-huy':          khoNapHuy,
   'POST /api/kho/nhap':          khoNhap,
   'POST /api/kho/xuat':          khoXuat,
+  'POST /api/kho/dieu-chinh':    khoDieuChinh,
   'GET  /api/kho/lo':            khoLo,
   'GET  /api/kho/bao-cao':       khoBaoCao,
   'GET  /api/kho/lich-su':       khoLichSu,

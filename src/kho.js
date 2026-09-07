@@ -382,20 +382,146 @@ export async function xuatKho(env, phien, body) {
 }
 
 /* ==========================================================================
+   4b. PHIẾU ĐIỀU CHỈNH TỒN  — kéo sổ về đúng số ĐẾM ĐƯỢC ngoài kho
+   --------------------------------------------------------------------------
+   VÌ SAO CÓ (REV-0060 vòng 3 · CHẶN-ⓑ). Bảng `giao_dich_kho` có `loai =
+   'dieu_chinh'` từ ngày đầu và báo cáo XNT đã có sẵn cột cho nó, nhưng KHÔNG
+   một câu `INSERT` nào trong cả ERP từng ghi được một dòng như thế. Nghĩa là
+   cột ấy chỉ tồn tại trên giấy. Hệ quả đo được: nạp nhầm tồn → kho bán mất
+   vài món → bấm “Gỡ lượt nạp” → 409 vì gỡ sẽ làm tồn ÂM → và câu từ chối chỉ
+   sang “lập phiếu điều chỉnh ở màn Kho vận”, một cái màn không có. Lối duy
+   nhất còn lại là mở D1 sửa tay — đúng cái việc REV-0060 sinh ra để xoá bỏ.
+
+   ĐÂY LÀ ĐƯỜNG RA THẬT, và nó cũng là nghiệp vụ kho đúng: hàng vỡ, hàng hết
+   hạn phải huỷ, kiểm kê lệch, tồn đầu kỳ nạp sai — mọi kho thật đều cần một
+   chứng từ nói “sổ đang ghi X, đếm thật là Y, chênh vì lý do này”. Ghi một
+   dòng có dấu vết vẫn tốt hơn vô hạn lần so với xoá ngược lịch sử.
+
+   HAI LUẬT CỨNG:
+   1. Người lập nhập TỒN THẬT ĐẾM ĐƯỢC (≥ 0), máy chủ tự tính phần chênh.
+      KHÔNG cho nhập thẳng phần chênh: gõ nhầm dấu trừ là ra một con số hoàn
+      toàn khác mà không ai nhìn ra, còn “đếm được bao nhiêu” thì anh Duy
+      đọc lại được và cãi lại được.
+   2. Sau điều chỉnh, tồn của MÃ và tồn của LÔ đều phải ≥ 0. Phiếu điều chỉnh
+      là cửa sửa sai, không phải cửa lách bất biến TỒN ≥ 0 của module kho.
+
+   AI ĐƯỢC LẬP: `duocQuanLyKho` (anh Duy + Admin), KHÔNG phải cả 17 bạn
+   part-time có `thao_tac_kho`. Chọn chặt vì đây là cửa duy nhất trong ERP ghi
+   thẳng một con số vào sổ cái mà không có chứng từ mua/bán đứng sau. Nới ra
+   là quyết định của Sếp, không phải của người viết mã.
+   ========================================================================== */
+
+export async function dieuChinhKho(env, phien, body) {
+  if (!duocQuanLyKho(phien)) {
+    return loi('Chỉ quản lý kho hoặc Admin mới lập được phiếu điều chỉnh tồn', 403);
+  }
+
+  const spId = String(body.san_pham_id || '').trim();
+  if (!spId) return loi('Chưa chọn sản phẩm');
+
+  const sp = await env.DB.prepare(
+    'SELECT id, ten, don_vi, theo_doi_hsd FROM san_pham WHERE id = ?').bind(spId).first();
+  if (!sp) return loi('Không tìm thấy sản phẩm này', 404);
+
+  /* Số thật đếm được: cho phép 0 (đếm ra không còn cái nào) nên KHÔNG dùng
+     `soNguyenDuong` — hàm đó coi 0 là không hợp lệ.
+     ⚠️ KHÔNG được `replace(/[^\d]/g,'')` như các ô số khác: ở ĐÂY dấu trừ là
+     một ý định, không phải rác gõ nhầm. Nuốt nó đi thì `-5` lặng lẽ thành `5`
+     và ERP báo thành công cho một con số người dùng KHÔNG gõ (bàn đo bắt được:
+     `ton_thuc: -5` trả HTTP 200). Thà từ chối và nói ra. */
+  const thoTon = String(body.ton_thuc ?? '').trim().replace(/[.\s,]/g, '');
+  if (thoTon === '') return loi('Xin nhập số tồn THẬT đếm được (số nguyên, có thể là 0)');
+  if (!/^\d+$/.test(thoTon)) {
+    return loi(`“${String(body.ton_thuc).slice(0, 20)}” không phải số tồn hợp lệ. ` +
+               `Xin ghi số ĐẾM ĐƯỢC ngoài kho — số nguyên từ 0 trở lên, không có dấu trừ. ` +
+               `Muốn giảm tồn thì ghi số còn lại, ERP tự tính phần chênh.`);
+  }
+  const tonThuc = parseInt(thoTon, 10);
+  if (!Number.isFinite(tonThuc) || tonThuc < 0) return loi('Số tồn thật phải là số nguyên từ 0 trở lên');
+
+  const lyDo = String(body.ly_do || '').trim();
+  if (lyDo.length < 5) {
+    return loi('Xin ghi rõ LÝ DO điều chỉnh (ít nhất 5 ký tự) — VD: “kiểm kê 07/09, hàng vỡ 12 túi”, ' +
+               '“gỡ lượt nạp tồn nhầm phiếu pn_xxx”. Sổ cái không nhận một con số không có lý do.');
+  }
+
+  /* Điều chỉnh theo LÔ hay theo MÃ. Hàng theo dõi hạn dùng thì tồn thật nằm
+     ở từng lô — sửa ở mức mã sẽ để lại lô âm mà `xuatKho` không nhìn thấy
+     (đúng cái bẫy của CHẶN-ⓐ), nên với hàng có lô thì BẮT chọn lô. */
+  const loId = String(body.lo_hang_id || '').trim() || null;
+  let lo = null;
+  if (loId) {
+    lo = await env.DB.prepare(
+      'SELECT id, so_lo, han_su_dung, san_pham_id FROM lo_hang WHERE id = ?').bind(loId).first();
+    if (!lo) return loi('Không tìm thấy lô hàng này', 404);
+    if (String(lo.san_pham_id) !== spId) return loi('Lô hàng này không thuộc mã hàng đang chọn');
+  }
+
+  /* Tồn đang ghi trong sổ — cộng dồn THÔ, có tính cả dòng âm. Đây đúng là chỗ
+     KHÔNG được lọc `ton > 0`: cái cần sửa thường chính là một lô đang âm. */
+  const dangGhi = Number((await env.DB.prepare(
+    loId
+      ? 'SELECT COALESCE(SUM(so_luong),0) AS ton FROM giao_dich_kho WHERE lo_hang_id = ?'
+      : 'SELECT COALESCE(SUM(so_luong),0) AS ton FROM giao_dich_kho WHERE san_pham_id = ?'
+  ).bind(loId || spId).first())?.ton || 0);
+
+  const lech = tonThuc - dangGhi;
+  if (lech === 0) {
+    return loi(`Sổ đang ghi đúng ${dangGhi.toLocaleString('vi-VN')} ${sp.don_vi || 'đơn vị'}` +
+               `${lo ? ` cho lô “${lo.so_lo || lo.id}”` : ''} — không có gì để điều chỉnh.`);
+  }
+
+  /* Sau điều chỉnh, tồn của MÃ cũng phải ≥ 0 (điều chỉnh một lô vẫn kéo tổng
+     của mã xuống). Bất biến TỒN ≥ 0 là của cả module kho, không riêng lô. */
+  if (loId) {
+    const tonMa = Number((await env.DB.prepare(
+      'SELECT COALESCE(SUM(so_luong),0) AS ton FROM giao_dich_kho WHERE san_pham_id = ?'
+    ).bind(spId).first())?.ton || 0);
+    if (tonMa + lech < 0) {
+      return loi(`Không lập được: sổ đang ghi tồn ${tonMa.toLocaleString('vi-VN')} ${sp.don_vi || 'đơn vị'} ` +
+                 `cho “${sp.ten}”, điều chỉnh lô này ${lech.toLocaleString('vi-VN')} sẽ làm tồn của cả mã ÂM. ` +
+                 `Xin kiểm lại số đếm được, hoặc điều chỉnh các lô khác trước.`);
+    }
+  }
+
+  const phieuId = 'pd_' + crypto.randomUUID().slice(0, 12);
+  await env.DB.prepare(`
+    INSERT INTO giao_dich_kho (phieu_id, san_pham_id, lo_hang_id, loai, so_luong, doi_tac, ghi_chu, nguoi_id)
+    VALUES (?, ?, ?, 'dieu_chinh', ?, NULL, ?, ?)
+  `).bind(phieuId, spId, loId, lech,
+          `Điều chỉnh tồn: sổ ghi ${dangGhi} → đếm thật ${tonThuc}. Lý do: ${lyDo.slice(0, 400)}`,
+          phien.nhan_su_id).run();
+
+  return json({
+    ok: true, phieu_id: phieuId,
+    san_pham_id: spId, lo_hang_id: loId,
+    ton_truoc: dangGhi, ton_sau: tonThuc, chenh_lech: lech,
+    tin: `Đã lập phiếu điều chỉnh ${phieuId}: ` +
+         `${lo ? `lô “${lo.so_lo || lo.id}” của ` : ''}“${sp.ten}” từ ${dangGhi.toLocaleString('vi-VN')} ` +
+         `về ${tonThuc.toLocaleString('vi-VN')} ${sp.don_vi || 'đơn vị'} ` +
+         `(${lech > 0 ? '+' : ''}${lech.toLocaleString('vi-VN')}). Lý do đã ghi vào sổ cái.`
+  });
+}
+
+/* ==========================================================================
    5. CHI TIẾT TỒN THEO LÔ (cho một sản phẩm)
    ========================================================================== */
 
-export async function loTheoSanPham(env, phien, spId) {
+export async function loTheoSanPham(env, phien, spId, tatCa = false) {
   spId = String(spId || '').trim();
   if (!spId) return loi('Thiếu mã sản phẩm');
 
+  /* `HAVING ton > 0` là ĐÚNG cho màn xuất kho (chọn lô để lấy hàng ra) nhưng
+     SAI cho màn điều chỉnh: lô cần sửa thường chính là lô đang ÂM, mà lô âm
+     thì lưới này lọc mất — người đi sửa không nhìn thấy đúng cái mình phải
+     sửa (REV-0060 vòng 3 · CHẶN-ⓐ/ⓑ). `tatCa` mở lưới ra cho đường đó. */
   const { results } = await env.DB.prepare(`
     SELECT l.id, l.so_lo, l.han_su_dung, COALESCE(SUM(g.so_luong), 0) AS ton
       FROM lo_hang l
       LEFT JOIN giao_dich_kho g ON g.lo_hang_id = l.id
      WHERE l.san_pham_id = ?
      GROUP BY l.id
-    HAVING ton > 0
+    HAVING ${tatCa ? 'ton <> 0' : 'ton > 0'}
      ORDER BY (l.han_su_dung IS NULL), l.han_su_dung ASC, l.tao_luc ASC
   `).bind(spId).all();
 

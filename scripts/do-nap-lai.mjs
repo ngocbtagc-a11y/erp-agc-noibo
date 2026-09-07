@@ -1193,6 +1193,330 @@ console.log('\n⑦ i. BẪY HỘP THOẠI Ở LỚP DÙNG CHUNG (THẤP-⑨)');
 }
 
 /* ==========================================================================
+   ⑧ — TÁM LỖI CỦA VÒNG 3 (REV-0060 vòng 3)
+   --------------------------------------------------------------------------
+   Vòng 2 vá đúng hai chỗ CHẶN, nhưng CÙNG MỘT HẬU QUẢ (tồn kho ÂM) vẫn đến
+   được bằng đường LÔ HÀNG, và cái giá của "không có cờ force" chưa trả được vì
+   hai lối thoát mà câu từ chối hứa KHÔNG TỒN TẠI trong ERP này.
+     ⑧a CHẶN-ⓐ  gỡ lượt nạp không được làm tồn LÔ âm (kho xuất theo FEFO)
+     ⑧b CHẶN-ⓑ  câu từ chối phải chỉ vào cửa CÓ THẬT, và cửa đó phải mở được
+     ⑧c CAO-③   cửa "gõ lại tên file" phải là cửa của MÁY CHỦ, không của màn
+     ⑧d CAO-④   kiểm số dư và xoá phải nguyên tử (hai người gỡ cùng lúc)
+     ⑧e CAO-⑤   vòng "đi tiếp sang bảng có số liệu" phải có chốt
+     ⑧f CAO-⑥   `keBangRong` không được khẳng định điều nó không biết
+     ⑧g THẤP-①  tên file NFD (máy Mac) vs NFC (Windows)
+     ⑧h THẤP-③  ô chọn bảng chỉ được hiện MỘT loại số dòng
+   ========================================================================== */
+const kho = await modun('kho.js');
+
+console.log('\n══ ⑧ a. GỠ LƯỢT NẠP KHÔNG ĐƯỢC LÀM TỒN **LÔ** ÂM (CHẶN-ⓐ) ══');
+{
+  /* ĐÚNG cảnh Hồ Ly dựng, đo qua ĐÚNG cửa ERP (ghiThat → nhapKho → xuatKho →
+     huyLuotNap → xuatKho), không đọc bảng rồi tự kết luận.
+     HSD đặt lệch nhau để FEFO XÁC ĐỊNH: lô A cận hạn hơn nên bị ăn trước —
+     không có HSD thì `tao_luc` bằng nhau tới giây, thứ tự là do may. */
+  const db = dungCsdl(), env = dungD1(db);
+  await ghi(env, B('Mã SKU,Tên sản phẩm,Đơn vị tính\nSP-00001,"Hạnh nhân Mỹ 500g",túi\n'),
+            { ma_sku: 0, ten: 1, don_vi: 2 }, 'san_pham', 'dm.csv');
+  const spId = db.prepare(`SELECT id FROM san_pham WHERE ma_sku='SP-00001'`).get().id;
+
+  const k = await ghi(env, B('Mã SKU,Số lượng,Số lô,Hạn sử dụng\nSP-00001,100,LO-A,2026-10-01\n'),
+                      { ma_sku: 0, so_luong: 1, so_lo: 2, han_su_dung: 3 }, 'ton_kho', 'TonDauKy.csv');
+  await kho.nhapKho(env, PHIEN, { san_pham_id: spId, so_luong: 100, so_lo: 'LO-M', han_su_dung: '2027-10-01' });
+  await kho.xuatKho(env, PHIEN, { san_pham_id: spId, so_luong: 100 });
+
+  const tonMa = () => Number(db.prepare(
+    `SELECT COALESCE(SUM(so_luong),0) AS t FROM giao_dich_kho WHERE san_pham_id=?`).get(spId).t);
+  const loNao = () => db.prepare(
+    `SELECT l.so_lo, COALESCE(SUM(g.so_luong),0) AS t FROM lo_hang l
+       LEFT JOIN giao_dich_kho g ON g.lo_hang_id=l.id GROUP BY l.id ORDER BY l.so_lo`).all();
+  const dauCua = () => db.prepare(`SELECT gia_tri_moi AS v FROM lich_su_thay_doi_nen
+      WHERE bang='giao_dich_kho' AND truong='nap_file' AND ban_ghi_id=?`).get(k.phieu_id).v;
+  tin(`nạp lô A 100 · nhập tay lô M 100 · xuất 100 (FEFO ăn lô A) → tồn mã ${tonMa()} · ` +
+      loNao().map(l => `${l.so_lo}=${l.t}`).join(' · '));
+
+  const g = await nap.huyLuotNap(env, PHIEN, k.phieu_id);
+  tin(`bấm gỡ → ${g.ok ? 'CHO QUA' : g.ma} · ${String(g.loi || g.tin).slice(0, 110)}…`);
+  ok('Gỡ lượt nạp khi LÔ đã xuất hết: bị từ chối (tồn MÃ vẫn dương nên tầng mã không thấy)',
+     g.ma === 409, String(g.ma));
+  ok('Câu từ chối kê ĐÍCH DANH lô sẽ âm, không nói chung chung',
+     /LÔ HÀNG/.test(g.loi || '') && /LO-A/.test(g.loi || '') && g.so_lo_se_am === 1,
+     String(g.loi).slice(0, 100));
+  ok('Không một dòng nào bị xoá, và dấu “đã gỡ” đã trả về như cũ',
+     Number(db.prepare('SELECT COUNT(*) AS n FROM giao_dich_kho WHERE phieu_id=?').get(k.phieu_id).n) === 1 &&
+     dauCua() !== 'đã gỡ', String(dauCua()));
+
+  /* Ca gây hại thật: xuất TIẾP qua đúng cửa ERP. Trước bản vá HTTP 200 và tồn
+     mã về −100; nay lô A đã hết nên chỉ còn lô M, xuất đúng 100 rồi hết. */
+  const r2 = await kho.xuatKho(env, PHIEN, { san_pham_id: spId, so_luong: 100 });
+  ok('Xuất tiếp qua ĐÚNG cửa xuatKho: tồn mã KHÔNG âm', tonMa() >= 0,
+     `HTTP ${r2.status} · tồn mã ${tonMa()}`);
+  const r3 = await kho.xuatKho(env, PHIEN, { san_pham_id: spId, so_luong: 1 });
+  ok('Và hết hàng thật thì xuất tiếp bị chặn, không đẻ tồn âm',
+     r3.status === 400 && tonMa() === 0, `HTTP ${r3.status} · tồn ${tonMa()}`);
+}
+{
+  /* KHÔNG ĐƯỢC CHẶN OAN: hàng có lô nhưng chưa xuất gì thì vẫn gỡ được. */
+  const db = dungCsdl(), env = dungD1(db);
+  await ghi(env, B('Mã SKU,Tên sản phẩm,Đơn vị tính\nSP-00001,"Hạnh nhân Mỹ 500g",túi\n'),
+            { ma_sku: 0, ten: 1, don_vi: 2 }, 'san_pham', 'dm.csv');
+  const k = await ghi(env, B('Mã SKU,Số lượng,Số lô,Hạn sử dụng\nSP-00001,100,LO-A,2026-10-01\n'),
+                      { ma_sku: 0, so_luong: 1, so_lo: 2, han_su_dung: 3 }, 'ton_kho', 'TonDauKy.csv');
+  const g = await nap.huyLuotNap(env, PHIEN, k.phieu_id);
+  ok('Hàng theo lô mà chưa xuất gì: đường lùi vẫn thông (không chặn oan)',
+     !!g.ok && Number(db.prepare('SELECT COUNT(*) AS n FROM giao_dich_kho').get().n) === 0,
+     g.ok ? 'gỡ được' : String(g.ma));
+  ok('Và lô mồ côi cũng được dọn theo',
+     Number(db.prepare('SELECT COUNT(*) AS n FROM lo_hang').get().n) === 0);
+}
+
+console.log('\n⑧ b. ĐƯỜNG RA CHO CA "NẠP NHẦM RỒI BÁN MẤT" PHẢI CÓ THẬT (CHẶN-ⓑ)');
+{
+  const maKho = readFileSync(path.join(NGUON, 'kho.js'), 'utf8');
+  ok('ERP có hàm ghi phiếu điều chỉnh THẬT (không chỉ có cột trong báo cáo)',
+     typeof kho.dieuChinhKho === 'function' &&
+     /INSERT INTO giao_dich_kho[\s\S]{0,400}'dieu_chinh'/.test(maKho));
+  ok('Và có cửa API cho nó',
+     /'POST \/api\/kho\/dieu-chinh'/.test(readFileSync(path.join(NGUON, 'index.js'), 'utf8')));
+  ok('Và có màn cho Sếp bấm',
+     /kv-pane-dieuchinh/.test(readFileSync(path.join(GOC, 'public', 'app.html'), 'utf8')) &&
+     /kvFormDieuChinh/.test(readFileSync(path.join(GOC, 'public', 'assets', 'js', 'app.js'), 'utf8')));
+
+  /* Đi HẾT đường: nạp nhầm → bán mất → gỡ bị 409 → làm ĐÚNG cái câu 409 bảo. */
+  const db = dungCsdl(), env = dungD1(db);
+  await ghi(env, B('Mã SKU,Tên sản phẩm,Đơn vị tính\nSP-00001,"Hạnh nhân Mỹ 500g",túi\n'),
+            { ma_sku: 0, ten: 1, don_vi: 2 }, 'san_pham', 'dm.csv');
+  const sp = db.prepare(`SELECT id FROM san_pham WHERE ma_sku='SP-00001'`).get().id;
+  const k = await ghi(env, B('Mã SKU,Số lượng,Số lô,Hạn sử dụng\nSP-00001,100,LO-A,2026-10-01\n'),
+                      { ma_sku: 0, so_luong: 1, so_lo: 2, han_su_dung: 3 }, 'ton_kho', 'NhamTo.csv');
+  await kho.xuatKho(env, PHIEN, { san_pham_id: sp, so_luong: 30 });
+  const g = await nap.huyLuotNap(env, PHIEN, k.phieu_id);
+  ok('Nạp nhầm rồi bán mất: gỡ vẫn bị từ chối (đúng)', g.ma === 409, String(g.ma));
+  ok('Câu từ chối chỉ vào phiếu điều chỉnh, và KHÔNG hứa gỡ được phiếu XUẤT',
+     /điều chỉnh/i.test(g.loi || '') && /KHÔNG gỡ được một phiếu XUẤT/.test(g.loi || ''),
+     String(g.loi).slice(-130));
+
+  const tonCuaSp = () => Number(db.prepare(
+    `SELECT COALESCE(SUM(so_luong),0) AS t FROM giao_dich_kho WHERE san_pham_id=?`).get(sp).t);
+  const loA = db.prepare(`SELECT id FROM lo_hang WHERE so_lo='LO-A'`).get().id;
+  const rd = await kho.dieuChinhKho(env, PHIEN, {
+    san_pham_id: sp, lo_hang_id: loA, ton_thuc: 0,
+    ly_do: `nạp nhầm file NhamTo.csv, phiếu ${k.phieu_id}` });
+  tin(`lập phiếu điều chỉnh → HTTP ${rd.status} · tồn ${tonCuaSp()}`);
+  ok('Làm đúng cái câu 409 bảo thì THOÁT ĐƯỢC: sổ về đúng số thật',
+     rd.status === 200 && tonCuaSp() === 0, `HTTP ${rd.status} · tồn ${tonCuaSp()}`);
+  const dc = db.prepare(`SELECT phieu_id AS p, ghi_chu AS g, nguoi_id AS n
+                           FROM giao_dich_kho WHERE loai='dieu_chinh'`).get();
+  ok('Và phiếu điều chỉnh có dấu vết đủ: mã phiếu · lý do · ai lập',
+     /^pd_/.test(dc.p) && /NhamTo\.csv/.test(dc.g) && dc.n === 'NS-NGOC', `${dc.p} · ${dc.n}`);
+  const r4 = await kho.xuatKho(env, PHIEN, { san_pham_id: sp, so_luong: 1 });
+  ok('Sau điều chỉnh, xuất tiếp bị chặn đúng (không còn tồn ảo)', r4.status === 400, String(r4.status));
+
+  /* Phiếu điều chỉnh KHÔNG được thành cửa lách bất biến TỒN ≥ 0, và không
+     phải ai cũng lập được. */
+  db.prepare(`INSERT OR IGNORE INTO nhan_su (id, ho_ten) VALUES ('NS-PT','Bạn part-time kho')`).run();
+  const partTime = { nhan_su_id: 'NS-PT', ho_ten: 'Bạn part-time kho', vai_tro: 'nhan_vien_kho' };
+  const rPt = await kho.dieuChinhKho(env, partTime, { san_pham_id: sp, ton_thuc: 5, ly_do: 'thử xem có qua không' });
+  ok('17 bạn part-time có thao_tac_kho KHÔNG lập được phiếu điều chỉnh', rPt.status === 403, String(rPt.status));
+  const rTrong = await kho.dieuChinhKho(env, PHIEN, { san_pham_id: sp, ton_thuc: 5, ly_do: 'ừ' });
+  ok('Bắt buộc ghi LÝ DO đủ dài — sổ cái không nhận một con số không lý do',
+     rTrong.status === 400, String(rTrong.status));
+  const rAm = await kho.dieuChinhKho(env, PHIEN, { san_pham_id: sp, ton_thuc: -5, ly_do: 'thử đẩy về âm xem sao' });
+  ok('Và KHÔNG lập được phiếu kéo tồn xuống ÂM (không phải cửa lách)', rAm.status === 400, String(rAm.status));
+}
+
+console.log('\n⑧ c. CỬA "GÕ LẠI TÊN FILE" PHẢI LÀ CỬA CỦA MÁY CHỦ (CAO-③)');
+{
+  const db = dungCsdl(), env = dungD1(db);
+  await ghi(env, csvSP(20), GHEP_SP);
+  await ghi(env, csvTon(20), GHEP_TON, 'ton_kho', 'Ton_T9.csv');
+  const t1 = tonCua(db);
+
+  /* GỌI THẲNG API, bỏ qua giao diện: cả hai trường đều là 'x'. Trước bản vá
+     cửa này mở toang, vì `ten_tep` và `xac_nhan_ten_tep` CÙNG do khách gửi
+     lên trong một gói — so hai cái đó là tự so mình với mình. */
+  const gian = await ghi(env, csvTon(20), GHEP_TON, 'ton_kho', 'x', { xacNhanTenTep: 'x' });
+  ok("Gọi thẳng API với ten_tep='x' và xac_nhan_ten_tep='x': BỊ CHẶN",
+     gian.ma === 409 && tonCua(db) === t1, `${gian.ma} · tồn ${t1} → ${tonCua(db)}`);
+  ok('Và câu chặn nói rõ phải gõ tên file của LƯỢT NẠP TRƯỚC',
+     /LƯỢT NẠP TRƯỚC/.test(gian.loi || '') && /Ton_T9\.csv/.test(gian.loi || ''),
+     String(gian.loi).slice(0, 140));
+
+  /* Đổi tên file rồi nạp lại: vẫn phải gõ tên CŨ (thứ máy chủ biết); gõ tên
+     MỚI (thứ mình vừa tự khai) thì không mở được. */
+  const tenMoi = await ghi(env, csvTon(20), GHEP_TON, 'ton_kho', 'Ton_T9 (1).csv',
+                           { xacNhanTenTep: 'Ton_T9 (1).csv' });
+  ok('Đổi tên file rồi gõ lại chính tên MỚI: KHÔNG mở được cửa',
+     tenMoi.ma === 409 && tonCua(db) === t1, `${tenMoi.ma} · tồn ${tonCua(db)}`);
+  const tenCu = await ghi(env, csvTon(20), GHEP_TON, 'ton_kho', 'Ton_T9 (1).csv',
+                          { xacNhanTenTep: 'Ton_T9.csv' });
+  ok('Gõ đúng tên file của lượt nạp TRƯỚC thì qua được (không khoá việc thật)',
+     !tenCu.loi && tonCua(db) === t1 * 2, tenCu.loi ? String(tenCu.ma) : String(tonCua(db)));
+
+  /* Màn xem trước phải in ra ĐÚNG chuỗi máy chủ sẽ đem đi so. */
+  const db2 = dungCsdl(), env2 = dungD1(db2);
+  await ghi(env2, csvSP(20), GHEP_SP);
+  await ghi(env2, csvTon(20), GHEP_TON, 'ton_kho', 'TonDauKy_T9.csv');
+  const x = await xemT(env2, csvTon(20), GHEP_TON, 'ton_kho', 'DoiTenLungTung.csv');
+  ok('Xem trước trả về TÊN FILE CỦA LƯỢT TRƯỚC, không phải tên khách vừa gửi',
+     !!x.nap_trung && x.nap_trung.ten_tep === 'TonDauKy_T9.csv', String(x.nap_trung?.ten_tep));
+  ok('Và moi được tên file ra khỏi sổ vết',
+     nap.tenTepTuLyDo('Nạp từ file “Ton dau ky.csv” · lượt nl_ab12cd34') === 'Ton dau ky.csv',
+     nap.tenTepTuLyDo('Nạp từ file “Ton dau ky.csv” · lượt nl_ab12cd34'));
+}
+
+console.log('\n⑧ d. KIỂM SỐ DƯ VÀ XOÁ PHẢI NGUYÊN TỬ (CAO-④)');
+{
+  /* `node:sqlite` chạy đồng bộ nên hai lời gọi không tự chen nhau — D1 thì có.
+     Dựng lớp giả lập NHƯỜNG LƯỢT ở mọi phép ĐỌC để hai `huyLuotNap` thật sự
+     xen kẽ, đúng thứ tự mà một Worker thật gặp. */
+  function dungD1Nhuong(db) {
+    const goc = dungD1(db);
+    const cho = () => new Promise(r => setTimeout(r, 0));
+    const boc = p => ({
+      bind: (...a) => boc(p.bind(...a)),
+      run: () => p.run(),
+      first: async () => { await cho(); return p.first(); },
+      all: async () => { await cho(); return p.all(); }
+    });
+    return { DB: { prepare: s => boc(goc.DB.prepare(s)), batch: ds => goc.DB.batch(ds) } };
+  }
+
+  db_toctou: {
+    /* Ca Hồ Ly dựng: HAI LƯỢT NẠP KHÁC NHAU trên cùng một mã. */
+    const db = dungCsdl(), env = dungD1Nhuong(db);
+    db.prepare(`INSERT OR IGNORE INTO nhan_su (id, ho_ten) VALUES ('NS-HANG','Phan Thị Hằng')`).run();
+    const HANG = { nhan_su_id: 'NS-HANG', ho_ten: 'Phan Thị Hằng', vai_tro: 'admin' };
+    await ghi(env, csvSP(1), GHEP_SP);
+    const kA = await ghi(env, csvTon(1, 100), GHEP_TON, 'ton_kho', 'ton_A.csv');
+    const kB = await ghi(env, csvTon(1, 100), GHEP_TON, 'ton_kho', 'ton_B.csv',
+                         { xacNhanTrung: true, xacNhanTenTep: 'ton_A.csv' });
+    const sp = db.prepare(`SELECT id FROM san_pham WHERE ma_sku='SP-00001'`).get().id;
+    /* Xuất ghi thẳng vào sổ cái (đúng quy ước `kho.js`: dòng xuất mang số ÂM).
+       Không đi qua `xuatKho` vì mã do `csvSP` sinh ra mặc định theo dõi HSD mà
+       lượt nạp này không kèm lô — cảnh cần dựng ở đây là TOCTOU, không phải
+       đường FEFO. */
+    db.prepare(`INSERT INTO giao_dich_kho (phieu_id, san_pham_id, loai, so_luong, ghi_chu, nguoi_id)
+                VALUES ('px_ban_toctou', ?, 'xuat', -50, 'Xuất bán cho khách', 'NS-NGOC')`).run(sp);
+    const ton = () => Number(db.prepare(
+      `SELECT COALESCE(SUM(so_luong),0) AS t FROM giao_dich_kho WHERE san_pham_id=?`).get(sp).t);
+    tin(`nạp A 100 · nạp B 100 · xuất 50 → tồn ${ton()}`);
+
+    const [gA, gB] = await Promise.all([
+      nap.huyLuotNap(env, PHIEN, kA.phieu_id),
+      nap.huyLuotNap(env, HANG, kB.phieu_id)
+    ]);
+    tin(`anh Duy gỡ A → ${gA.ok ? 'QUA' : gA.ma} · chị Hằng gỡ B → ${gB.ok ? 'QUA' : gB.ma} · tồn ${ton()}`);
+    ok('Hai người gỡ hai lượt CÙNG LÚC: không được cả hai cùng qua',
+       !(gA.ok && gB.ok), `${gA.ok ? 'qua' : gA.ma} / ${gB.ok ? 'qua' : gB.ma}`);
+    ok('Và tồn kho KHÔNG âm sau khi hai người cùng bấm', ton() >= 0, String(ton()));
+    ok('Lượt nào bị từ chối thì dấu “đã gỡ” phải trả về (không đẻ “lượt ma”)',
+       Number(db.prepare(
+         `SELECT COUNT(*) AS n FROM lich_su_thay_doi_nen v
+           WHERE v.bang='giao_dich_kho' AND v.truong='nap_file' AND v.gia_tri_moi='đã gỡ'
+             AND EXISTS (SELECT 1 FROM giao_dich_kho g WHERE g.phieu_id=v.ban_ghi_id)`).get().n) === 0);
+    /* Hỏng về phía AN TOÀN được, nhưng KHÔNG được thành khoá chết: hai người
+       cùng bị từ chối thì một người bấm lại một mình phải gỡ được ngay. */
+    const lai = await nap.huyLuotNap(env, PHIEN, kA.phieu_id);
+    ok('Từ chối rồi thì bấm lại MỘT MÌNH vẫn gỡ được (không thành khoá chết)',
+       !!lai.ok && ton() === 50, lai.ok ? `tồn ${ton()}` : String(lai.ma));
+  }
+  {
+    /* Và hai người gỡ CÙNG MỘT lượt: người thứ hai không được xoá lần nữa. */
+    const db = dungCsdl(), env = dungD1Nhuong(db);
+    db.prepare(`INSERT OR IGNORE INTO nhan_su (id, ho_ten) VALUES ('NS-HANG','Phan Thị Hằng')`).run();
+    const HANG = { nhan_su_id: 'NS-HANG', ho_ten: 'Phan Thị Hằng', vai_tro: 'admin' };
+    await ghi(env, csvSP(3), GHEP_SP);
+    const k = await ghi(env, csvTon(3, 100), GHEP_TON, 'ton_kho', 'ton.csv');
+    const [x1, x2] = await Promise.all([
+      nap.huyLuotNap(env, PHIEN, k.phieu_id),
+      nap.huyLuotNap(env, HANG, k.phieu_id)
+    ]);
+    ok('Hai người gỡ CÙNG một lượt: đúng một người qua',
+       (x1.ok ? 1 : 0) + (x2.ok ? 1 : 0) === 1, `${x1.ok ? 'qua' : x1.ma} / ${x2.ok ? 'qua' : x2.ma}`);
+    const thua = x1.ok ? x2 : x1;
+    ok('Và người thứ hai không báo "đã gỡ 0 dòng" mà nói thẳng là người khác vừa gỡ',
+       /người khác/.test(String(thua.loi || '')), String(thua.loi || '').slice(0, 80));
+  }
+}
+
+console.log('\n⑧ e/f/h. BỘ ĐỌC BẢNG: CHỐT VÒNG · CÂU LỖI KHÔNG NÓI DỐI · MỘT LOẠI SỐ');
+{
+  const maDb = readFileSync(path.join(NGUON, 'doc-bang.js'), 'utf8');
+  /* ⑧e — vòng "đi tiếp" phải có ĐỦ BA chốt, và bảng ẩn phải bỏ TRƯỚC khi bung
+     (bung xong mới `continue` là trả tiền rồi vứt đi). */
+  const doan = (maDb.match(/if \(!nguoiChon && coDong\(luoi\) < 2[\s\S]*?\n  \}\n/) || [''])[0];
+  ok('⑧e Vòng đi-tiếp có chốt 8 MB như đường đếm dòng ngay dưới',
+     /coThat > 8 \* 1024 \* 1024/.test(doan), doan ? 'có đoạn mã' : '(không tìm thấy vòng)');
+  ok('⑧e Bảng ẩn bị bỏ TRƯỚC khi bung XML, không bung xong mới bỏ',
+     doan.indexOf('.an) continue') > 0 && doan.indexOf('.an) continue') < doan.indexOf('bungLuoi('),
+     `vị trí: ẩn ${doan.indexOf('.an) continue')} · bung ${doan.indexOf('bungLuoi(')}`);
+  ok('⑧e Và vòng có trần số bảng được thử, không chạy hết 30 bảng',
+     /TRAN_THU_BANG/.test(doan) && /break;/.test(doan));
+
+  /* ⑧f — `keBangRong` không được nói "không bảng nào có dòng dữ liệu" khi nó
+     mới chỉ CHƯA ĐẾM. Đúng cảnh bước 2/bước 3 (`demDong` tắt). */
+  const wbXml = bs => '<?xml version="1.0"?><workbook xmlns:r="r">' +
+    bs.map((b, i) => `<sheet name="${b.ten}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('') + '</workbook>';
+  const relsXml = bs => '<?xml version="1.0"?><Relationships>' +
+    bs.map((b, i) => `<Relationship Id="rId${i + 1}" Target="worksheets/sheet${i + 1}.xml"/>`).join('') + '</Relationships>';
+  const lamXlsx = bs => dungZip([
+    { ten: 'xl/workbook.xml', noiDung: wbXml(bs) },
+    { ten: 'xl/_rels/workbook.xml.rels', noiDung: relsXml(bs) },
+    ...bs.map((b, i) => ({ ten: `xl/worksheets/sheet${i + 1}.xml`,
+      noiDung: SHEET(b.dong.map((d, j) => `<row r="${j + 1}">` +
+        d.map((v, c) => oStr(String.fromCharCode(65 + c) + (j + 1), v)).join('') + '</row>').join('')) }))
+  ]);
+  const xHai = lamXlsx([
+    { ten: 'Sheet1', dong: [] },
+    { ten: 'Data', dong: [['Mã SKU', 'Tên sản phẩm'], ['SP-1', 'Hạt điều'], ['SP-2', 'Hạnh nhân']] }
+  ]);
+  /* `bangChon: 0` = Sếp CHỌN đích danh Sheet1 (đúng ca thật), `demDong` tắt
+     như ở bước xem trước và bước ghi. */
+  let eF = null;
+  try { await docb.docBang(xHai, 'hai.xlsx', { bangChon: 0 }); } catch (er) { eF = er; }
+  tin(`chọn Sheet1 ở bước xem trước → "${eF ? eF.message.slice(0, 140) : '(không ném)'}"`);
+  ok('⑧f KHÔNG khẳng định "Không bảng nào có dòng dữ liệu" khi mới chỉ CHƯA ĐẾM',
+     !!eF && !/Không bảng nào có dòng dữ liệu/.test(eF.message),
+     eF ? eF.message.slice(0, 110) : '(không ném)');
+  ok('⑧f Mà nói rõ là CHƯA ĐẾM, và chỉ đường quay lại bước chọn bảng',
+     !!eF && /chưa đếm/i.test(eF.message) && /ghép cột/.test(eF.message),
+     eF ? eF.message.slice(-100) : '');
+  let eF2 = null;
+  try { await docb.docBang(xHai, 'hai.xlsx', { bangChon: 0, demDong: true }); } catch (er) { eF2 = er; }
+  ok('⑧f Đếm rồi thì vẫn chỉ thẳng sang bảng có số liệu như cũ',
+     !!eF2 && /“Data”/.test(eF2.message) && /chọn lại bảng/.test(eF2.message),
+     eF2 ? eF2.message.slice(-90) : '');
+
+  /* ⑧h — ô chọn bảng chỉ được hiện MỘT loại số: dòng CÓ NỘI DUNG.
+     Bảng "Rác" có 6 dòng thô nhưng ô nào cũng rỗng ⇒ phải hiện 0, không phải 5. */
+  const xRac = lamXlsx([
+    { ten: 'Data', dong: [['Mã SKU', 'Tên'], ['SP-1', 'Hạt điều']] },
+    { ten: 'Rác', dong: [['', ''], ['', ''], ['', ''], ['', ''], ['', ''], ['', '']] }
+  ]);
+  const bRac = await docb.docBang(xRac, 'rac.xlsx', { demDong: true });
+  tin(`ô chọn bảng: ${bRac.dsBang.map(b => `${b.ten} (${b.so_dong})`).join(' | ')}`);
+  ok('⑧h Bảng toàn dòng trống hiện 0 dòng, không hiện số dòng thô',
+     bRac.dsBang.find(b => b.ten === 'Rác').so_dong === 0,
+     String(bRac.dsBang.find(b => b.ten === 'Rác').so_dong));
+  ok('⑧h Và bảng có số liệu vẫn đếm đúng',
+     bRac.dsBang.find(b => b.ten === 'Data').so_dong === 1,
+     String(bRac.dsBang.find(b => b.ten === 'Data').so_dong));
+}
+
+console.log('\n⑧ g. TÊN FILE NFD (MÁY MAC) vs NFC (WINDOWS) — THẤP-①');
+{
+  const nfc = 'Tồn đầu kỳ.csv'.normalize('NFC');
+  const nfd = 'Tồn đầu kỳ.csv'.normalize('NFD');
+  tin(`cùng một tên, nhìn trên màn hình y hệt: NFC ${nfc.length} ký tự · NFD ${nfd.length} ký tự`);
+  ok('Tên file lưu dạng NFD (máy Mac), Sếp gõ NFC (Windows): vẫn khớp',
+     nap.khopTenTep(nfc, nfd) === true && nap.khopTenTep(nfd, nfc) === true,
+     `${nap.khopTenTep(nfc, nfd)} / ${nap.khopTenTep(nfd, nfc)}`);
+  ok('Nhưng vẫn KHÔNG nới cửa: tên khác thì vẫn không khớp',
+     nap.khopTenTep('Ton dau ky.csv', nfd) === false);
+}
+
+/* ==========================================================================
    TỰ KIỂM — GÀI LẠI TỪNG LỖI VÀO MÃ THẬT
    ========================================================================== */
 if (TU_KIEM && !process.env.NAP_SRC) {
@@ -1335,7 +1659,72 @@ if (TU_KIEM && !process.env.NAP_SRC) {
     { ten: '⑦ h THẤP-⑧ Gợi ý bừa cho ô không bắt buộc (ghép nhầm mà tự tin)',
       tep: 'nap-du-lieu.js',
       tim: `    const nguong = t.batBuoc ? 55 : 90;`,
-      thay: `    const nguong = 55;   // GÀI LỖI` }
+      thay: `    const nguong = 55;   // GÀI LỖI` },
+
+    /* ---- Tám ca của VÒNG 3 ---- */
+
+    { ten: '⑧ a CHẶN-ⓐ Chỉ soi số dư theo MÃ, bỏ tầng LÔ (tồn âm đi đường vòng)',
+      tep: 'nap-du-lieu.js',
+      tim: `  if (seAmLo.length) {`,
+      thay: `  if (false) {   // GÀI LỖI: không soi lô, để lại lô âm mồ côi` },
+
+    { ten: '⑧ a2 CHẶN-ⓐ Soi lô nhưng lọc mất chính lô âm (đúng bẫy HAVING ton > 0)',
+      tep: 'nap-du-lieu.js',
+      tim: `     HAVING con < 0\`;
+
+  /* \`ORDER BY\` để câu từ chối kê ra cùng một danh sách ở mọi lần bấm`,
+      thay: `     HAVING con < 0 AND con > 0\`;   // GÀI LỖI: không lô nào lọt lưới
+
+  /* \`ORDER BY\` để câu từ chối kê ra cùng một danh sách ở mọi lần bấm` },
+
+    { ten: '⑧ b CHẶN-ⓑ Bỏ hàm lập phiếu điều chỉnh (câu từ chối lại chỉ vào cửa không có)',
+      tep: 'kho.js',
+      tim: `export async function dieuChinhKho(env, phien, body) {`,
+      thay: `async function dieuChinhKhoAn(env, phien, body) {   // GÀI LỖI: không xuất ra nữa` },
+
+    { ten: '⑧ b2 CHẶN-ⓑ Phiếu điều chỉnh nuốt mất dấu trừ ("-5" lặng lẽ thành "5")',
+      tep: 'kho.js',
+      tim: `  const thoTon = String(body.ton_thuc ?? '').trim().replace(/[.\\s,]/g, '');`,
+      thay: `  const thoTon = String(body.ton_thuc ?? '').replace(/[^\\d]/g, '');   // GÀI LỖI` },
+
+    { ten: '⑧ c CAO-③ So tên file khách gửi với chính tên file khách gửi',
+      tep: 'nap-du-lieu.js',
+      tim: `    const daGoTen = nguyenFile && !!canGo && khopTenTep(xacNhanTenTep, canGo);`,
+      thay: `    const daGoTen = nguyenFile && khopTenTep(xacNhanTenTep, tenTep);   // GÀI LỖI` },
+
+    { ten: '⑧ d CAO-④ Kiểm số dư mà không nhìn lượt người khác đang gỡ',
+      tep: 'nap-du-lieu.js',
+      tim: `             AND d.ban_ghi_id = g.phieu_id AND d.gia_tri_moi = '\${DA_GO}'
+      WHERE g.san_pham_id IN`,
+      thay: `             AND d.ban_ghi_id = g.phieu_id AND d.gia_tri_moi = 'không bao giờ khớp'
+      WHERE g.san_pham_id IN` },
+
+    { ten: '⑧ d2 CAO-④ Bỏ khoá “đã gỡ” trên chính lượt đang gỡ (hai người xoá hai lần)',
+      tep: 'nap-du-lieu.js',
+      tim: `        AND gia_tri_moi <> ?\`,
+    [DA_GO, lyDoMoi, ma, DA_GO]);`,
+      thay: `        AND ? <> ?\`,
+    [DA_GO, lyDoMoi, ma, 'a', 'b']);   // GÀI LỖI: điều kiện luôn đúng` },
+
+    { ten: '⑧ e CAO-⑤ Bỏ chốt 8 MB của vòng đi-tiếp (bung 30 bảng trong isolate 128 MB)',
+      tep: 'doc-bang.js',
+      tim: `      if (!mucB || mucB.coThat > 8 * 1024 * 1024) continue;`,
+      thay: `      if (!mucB) continue;   // GÀI LỖI: bỏ chốt kích thước` },
+
+    { ten: '⑧ f CAO-⑥ `keBangRong` lại khẳng định điều nó chưa đếm',
+      tep: 'doc-bang.js',
+      tim: `  if (!con.length && soChuaDem) {`,
+      thay: `  if (false) {   // GÀI LỖI: chưa đếm mà vẫn nói "không bảng nào có dữ liệu"` },
+
+    { ten: '⑧ g THẤP-① Bỏ chuẩn hoá NFC (tên file máy Mac gõ mãi không vào)',
+      tep: 'nap-du-lieu.js',
+      tim: `  const sach = s => String(s ?? '').normalize('NFC').trim().toLowerCase().replace(/\\s+/g, ' ');`,
+      thay: `  const sach = s => String(s ?? '').trim().toLowerCase().replace(/\\s+/g, ' ');   // GÀI LỖI` },
+
+    { ten: '⑧ h THẤP-③ Ô chọn bảng hiện lại hai loại số (thô vs có nội dung)',
+      tep: 'doc-bang.js',
+      tim: `      b.so_dong = Math.max(0, demDongCoNoiDung(x) - 1);`,
+      thay: `      b.so_dong = Math.max(0, (x.match(/<row\\b/g) || []).length - 1);   // GÀI LỖI` }
   ];
 
   const TAM = path.join(GOC, '.tu-kiem-nap-lai');
