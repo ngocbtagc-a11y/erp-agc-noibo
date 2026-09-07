@@ -103,6 +103,12 @@
     "do-bang-vua-man-truoc": "node scripts/do-bang-vua-man.mjs --commit 755d556",
     "do-bang-vua-man-tu-kiem": "node scripts/do-bang-vua-man.mjs --tu-kiem",
     "ban-tai-tep": "node scripts/ban-tai-tep.mjs",
+    "nap-ghepcot-may": "node scripts/chay-migration.mjs them-nap-ghep-cot.sql",
+    "nap-ghepcot": "node scripts/chay-migration.mjs them-nap-ghep-cot.sql --remote",
+    "do-nap-file": "node scripts/do-nap-file.mjs",
+    "do-nap-file-tu-kiem": "node scripts/do-nap-file.mjs --tu-kiem",
+    "do-nap-ghi": "node scripts/do-nap-ghi-d1.mjs",
+    "do-nap-ghi-tu-kiem": "node scripts/do-nap-ghi-d1.mjs --tu-kiem",
     "do-tach-vai-tro": "node scripts/do-tach-vai-tro.mjs",
     "do-hai-o-tren-man": "node scripts/do-hai-o-tren-man.mjs",
     "do-tai-tep": "node scripts/ban-tai-tep.mjs --tu-dong"

@@ -48,6 +48,26 @@ async function goi(duongDan, tuyChon = {}, tuDongVeDangNhap = true) {
   return duLieu;
 }
 
+/* Gói mô tả + byte file thành MỘT khung byte thẳng.
+   Khung: [4 byte độ dài phần mô tả, big-endian][JSON mô tả][byte file].
+   KHÔNG dùng base64 trong JSON: file 8 MB thành ~11 MB chữ rồi nhân thêm mấy
+   bản trong 128 MB bộ nhớ dùng chung của cả isolate (bài học REV-0054 #2).
+
+   ⚠️ Hàm này CHỈ dựng khung, KHÔNG tự gọi mạng. Lời gọi `goi(..., { method:
+   'POST' ... })` phải nằm nguyên trong từng mục của API — bàn đo
+   `do-tu-lam-moi` nhận diện "hàm ghi" bằng cách tìm đúng chữ `method: 'POST'`
+   trong thân mục đó. Giấu lời gọi vào hàm dùng chung là làm cái lưới ấy mù,
+   rồi một hàm ghi thật lọt lưới mà không ai biết. */
+function khungNapFile(moTa, byte) {
+  const md = new TextEncoder().encode(JSON.stringify(moTa));
+  const khung = new Uint8Array(4 + md.length + byte.length);
+  new DataView(khung.buffer).setUint32(0, md.length, false);   // big-endian
+  khung.set(md, 4);
+  khung.set(byte, 4 + md.length);
+  return khung;
+}
+const KIEU_BYTE = { 'Content-Type': 'application/octet-stream' };
+
 export const API = {
   dangNhap: (ten, mk) => goi('/api/dang-nhap', {
     method: 'POST',
@@ -282,6 +302,20 @@ export const API = {
 
   qtXoaNhanSu: (id) => goi('/api/quan-tri/xoa-nhan-su', {
     method: 'POST', body: JSON.stringify({ id })
+  }),
+
+  /* ---- Nạp file số liệu (CSV / Excel) vào sổ sách ----
+     BA BƯỚC, BA ĐƯỜNG RIÊNG. `napMo` và `napXem` KHÔNG ghi gì vào CSDL; chỉ
+     `napGhi` mới ghi, và chỉ được gọi SAU KHI Sếp bấm xác nhận trên màn xem
+     trước. Tách hẳn ra để không bao giờ có chuyện lỡ tay ghi. */
+  napMo:  (moTa, byte) => goi('/api/kho/nap-mo', {
+    method: 'POST', headers: KIEU_BYTE, body: khungNapFile(moTa, byte)
+  }),
+  napXem: (moTa, byte) => goi('/api/kho/nap-xem', {
+    method: 'POST', headers: KIEU_BYTE, body: khungNapFile(moTa, byte)
+  }),
+  napGhi: (moTa, byte) => goi('/api/kho/nap-ghi', {
+    method: 'POST', headers: KIEU_BYTE, body: khungNapFile(moTa, byte)
   }),
 
   /* ---- Kho: Xuất / Nhập / Tồn ---- */

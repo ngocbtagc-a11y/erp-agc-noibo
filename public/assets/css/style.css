@@ -4358,3 +4358,83 @@ textarea.tlq-o { padding: 10px 12px; }
   box-sizing: border-box;
   min-height: 44px;
 }
+
+/* ==========================================================================
+   NẠP FILE SỐ LIỆU (Kho vận → Nạp từ file)
+   ---------------------------------------------------------------------------
+   Không thêm màu mới: chỉ dùng lại các biến sẵn có trong họ NÂU – XANH LÁ –
+   CAM, cộng đỏ CHỈ cho dòng lỗi (đúng ngoại lệ duy nhất trong docs/BANG-MAU.md).
+   Một điểm nhấn cam mỗi màn: nút chính của bước đang đứng (.btn-primary).
+   ========================================================================== */
+
+/* Vùng kéo thả — viền nét đứt mảnh thay vì mảng nền (luật ④ bảng màu) */
+.nap-tha {
+  margin-top: 12px;
+  padding: 20px 16px;
+  text-align: center;
+  border: 1px dashed var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+}
+.nap-tha.dang-keo { border-color: var(--cam); background: var(--cam-wash); }
+.nap-tha p { margin: 8px 0 0; }
+
+/* Hàng nút cuối mỗi bước. Bọc xuống dòng ở màn hẹp để không tràn ngang. */
+.nap-nut {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+.nap-nut button { min-height: 44px; }
+/* Ở màn điện thoại, nút chiếm cả bề ngang cho dễ bấm */
+@media (max-width: 560px) {
+  .nap-nut { flex-direction: column-reverse; }
+  .nap-nut button { width: 100%; }
+}
+
+/* Một dòng ghép cột: tên ô trong ERP + ô chọn cột của file */
+.nap-ghep-dong select { min-height: 44px; }
+.nap-ghep-dong .nap-bb { color: var(--cam-text); font-weight: 600; }
+
+/* Mẫu dữ liệu đọc được từ cột đang chọn — cho Sếp đối chiếu bằng mắt */
+.nap-mau {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-mute);
+  overflow-wrap: anywhere;
+}
+
+/* Danh sách lỗi. ĐỎ ở đây là đúng chỗ: có việc hỏng thật, người đọc phải
+   thấy ngay dòng nào cột nào. */
+.nap-loi-ds { margin-top: 12px; }
+.nap-loi-ds h5 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  color: var(--danger-dark);
+}
+.nap-loi-dong {
+  padding: 8px 10px;
+  margin-bottom: 6px;
+  border-left: 3px solid var(--danger);
+  background: var(--danger-wash);
+  border-radius: var(--r-sm);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.nap-loi-them { font-size: 13px; color: var(--text-mute); margin-top: 8px; }
+
+/* Cảnh báo mềm (không phải lỗi) — dùng họ vàng nâu, KHÔNG dùng đỏ */
+.nap-canh-dong {
+  padding: 8px 10px;
+  margin-bottom: 6px;
+  border-left: 3px solid var(--warn);
+  background: var(--warn-wash);
+  border-radius: var(--r-sm);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+/* Tên file đang xử lý */
+.nap-ten-tep { font-weight: 600; overflow-wrap: anywhere; }

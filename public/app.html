@@ -1304,6 +1304,89 @@
         <button class="seg-nut" data-kv="donhoan">Đơn hoàn</button>
         <button class="seg-nut" data-kv="lichsu">Lịch sử đơn hoàn</button>
         <button class="seg-nut" data-kv="danhmuc">Danh mục</button>
+        <button class="seg-nut" data-kv="napfile">Nạp từ file</button>
+      </div>
+
+      <!-- ===== Màn Nạp từ file =====
+           Bốn bước, hiện lần lượt, mỗi lúc chỉ MỘT bước trên màn — để vừa một
+           màn điện thoại 375px và để người dùng không phải cuộn đi cuộn lại.
+           ⚠️ CỐ Ý KHÔNG dùng <table> ở màn này: danh sách lỗi và bảng xem
+           trước dài bất định, nhét vào bảng là đẻ ra thanh kéo ngang thứ 23
+           (bàn đo do-bang-that sẽ bắt). Dùng thẻ .stats + danh sách dọc. -->
+      <div class="kv-pane" id="kv-pane-napfile" hidden>
+
+        <!-- Bước 1: chọn nạp vào đâu + chọn file -->
+        <div class="panel" id="nap-b1">
+          <div class="panel-head">
+            <h4>Nạp số liệu từ file</h4>
+            <span class="hint">Nhận file CSV và Excel (.xlsx)</span>
+          </div>
+          <div class="panel-body">
+            <div class="form-luoi">
+              <div class="field field-rong">
+                <label for="napDich">Nạp vào đâu</label>
+                <select id="napDich">
+                  <option value="san_pham">Danh mục sản phẩm — mã hàng, tên, đơn vị tính</option>
+                  <option value="ton_kho">Tồn kho đầu kỳ — số lượng đang có trong kho</option>
+                </select>
+              </div>
+            </div>
+            <p class="hint" id="napDichMoTa"></p>
+            <div class="nap-tha" id="napVungTha">
+              <input type="file" id="napChonTep" hidden
+                     accept=".csv,.xlsx,.txt,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+              <button type="button" class="btn-primary" id="napNutChon">📄 Chọn file để nạp</button>
+              <p class="hint">hoặc kéo thả file vào đây</p>
+            </div>
+            <div class="form-loi" id="nap-loi"></div>
+          </div>
+        </div>
+
+        <!-- Bước 2: ghép cột — MÁY KHÔNG TỰ QUYẾT, người chọn -->
+        <div class="panel" id="nap-b2" hidden>
+          <div class="panel-head">
+            <h4>Cột nào là cột nào?</h4>
+            <span class="hint" id="napB2Hint"></span>
+          </div>
+          <div class="panel-body">
+            <p class="hint" id="napB2Nho" hidden></p>
+            <div class="form-luoi" id="napGhepO"></div>
+            <div class="form-loi" id="nap-loi2"></div>
+            <div class="nap-nut">
+              <button type="button" class="btn-phu" id="napB2Huy">← Chọn file khác</button>
+              <button type="button" class="btn-primary" id="napB2Tiep">Xem trước →</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Bước 3: xem trước rồi mới ghi -->
+        <div class="panel" id="nap-b3" hidden>
+          <div class="panel-head">
+            <h4>Xem trước — chưa ghi gì cả</h4>
+            <span class="hint" id="napB3Hint"></span>
+          </div>
+          <div class="panel-body">
+            <div class="stats" id="napTomTat"></div>
+            <div id="napCanhBao"></div>
+            <div id="napBangLoi"></div>
+            <div class="form-loi" id="nap-loi3"></div>
+            <div class="nap-nut">
+              <button type="button" class="btn-phu" id="napB3Lui">← Sửa lại cột</button>
+              <button type="button" class="btn-primary" id="napB3Ghi">Xác nhận nạp vào ERP</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Bước 4: xong -->
+        <div class="panel" id="nap-b4" hidden>
+          <div class="panel-head"><h4>Đã nạp xong</h4></div>
+          <div class="panel-body">
+            <div class="stats" id="napKetQua"></div>
+            <div class="nap-nut">
+              <button type="button" class="btn-primary" id="napB4Moi">Nạp thêm file khác</button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- ===== Màn Tồn kho ===== -->

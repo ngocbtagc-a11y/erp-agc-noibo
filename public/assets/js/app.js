@@ -8711,11 +8711,18 @@ async function khoiDongKho() {
     const nut = e.target.closest('.seg-nut');
     if (!nut) return;
     document.querySelectorAll('#kvSeg .seg-nut').forEach(b => b.classList.toggle('active', b === nut));
-    ['ton', 'nhap', 'xuat', 'baocao', 'donhoan', 'lichsu', 'danhmuc'].forEach(k => {
+    ['ton', 'nhap', 'xuat', 'baocao', 'donhoan', 'lichsu', 'danhmuc', 'napfile'].forEach(k => {
       const pane = document.getElementById('kv-pane-' + k);
       if (pane) pane.hidden = (k !== nut.dataset.kv);
     });
   });
+
+  /* ---- Nạp từ file ----
+     Giấu hẳn nút khi không có quyền GHI. Máy chủ vẫn chặn độc lập (403 ở
+     `batBuocNapDuLieu` trong index.js) — giấu nút chỉ để không hứa suông
+     với người bấm vào cũng không nạp được, KHÔNG phải lớp bảo vệ. */
+  if (qKho.quan_ly || qKho.thao_tac) khoiDongNapFile(qKho);
+  else document.querySelectorAll('#kvSeg .seg-nut[data-kv="napfile"]').forEach(b => b.remove());
 
   /* ---- Vẽ bảng tồn kho + thẻ tổng quan + đổ dropdown ---- */
   function veTonKho(tuKhoa) {
@@ -9085,6 +9092,259 @@ const NEN_ANH_KHIEU_NAI = { canhToiDa: 1280, chatLuong: 0.72 };
 /* ==========================================================================
    ĐƠN HOÀN — Shopee
    ========================================================================== */
+
+/* ==========================================================================
+   NẠP TỪ FILE — bốn bước: chọn file → ghép cột → xem trước → ghi
+   ---------------------------------------------------------------------------
+   HAI LUẬT KHÔNG ĐƯỢC PHÁ Ở MÀN NÀY:
+
+   ① MÁY KHÔNG TỰ QUYẾT CỘT NÀO LÀ CỘT NÀO. Máy chỉ điền sẵn gợi ý; Sếp nhìn
+      MẪU DỮ LIỆU THẬT đọc từ cột đó rồi mới xác nhận. File Shopee, file kế
+      toán, file Excel tự làm đặt tên cột khác nhau hết — đoán sai một cột là
+      cả bảng sai, mà sai êm (số vẫn vào, chỉ vào nhầm ô).
+
+   ② KHÔNG BAO GIỜ GHI THẲNG. Bước 3 hiện rõ: thêm mấy dòng, sửa mấy dòng,
+      giữ nguyên mấy dòng, dòng nào lỗi và lỗi gì, tốn bao nhiêu lượt ghi.
+      Bấm xác nhận rồi mới gọi `API.napGhi`.
+
+   Byte của file được giữ trong biến `tepByte` giữa các bước để không bắt Sếp
+   chọn lại file ba lần. Chọn file khác thì xoá sạch trạng thái cũ.
+   ========================================================================== */
+function khoiDongNapFile(qKho) {
+  let tepByte = null;       // Uint8Array nội dung file đang xử lý
+  let tepTen  = '';
+  let mo      = null;       // kết quả /nap-mo  (cột, gợi ý ghép, vân tay)
+  let xem     = null;       // kết quả /nap-xem (bảng tóm tắt)
+
+  const oDich = $('#napDich');
+  if (!oDich) return;
+
+  /* Tồn kho cần quyền thao tác kho; danh mục cần quyền quản lý kho.
+     Không có quyền nào thì bỏ hẳn lựa chọn đó khỏi danh sách — thà không
+     hiện, còn hơn hiện rồi báo 403 sau khi Sếp đã chọn xong file. */
+  if (!qKho.quan_ly) { const o = oDich.querySelector('option[value="san_pham"]'); if (o) o.remove(); }
+  if (!qKho.thao_tac) { const o = oDich.querySelector('option[value="ton_kho"]'); if (o) o.remove(); }
+
+  const MO_TA_DICH = {
+    san_pham: 'Nạp mã hàng, tên, nhóm hàng, đơn vị tính. Nạp cái này TRƯỚC — tồn kho và báo cáo đều cần có sản phẩm.',
+    ton_kho:  'Nạp số lượng đang có trong kho. Mỗi dòng thành một lần nhập trong sổ cái, nên tồn vẫn truy được nguồn gốc.'
+  };
+  function veMoTaDich() { $('#napDichMoTa').textContent = MO_TA_DICH[oDich.value] || ''; }
+  oDich.addEventListener('change', () => { veMoTaDich(); veBuoc(1); });
+  veMoTaDich();
+
+  /* ---- Chuyển bước. Mỗi lúc CHỈ MỘT bước trên màn (vừa màn 375px) ---- */
+  function veBuoc(n) {
+    [1, 2, 3, 4].forEach(i => { const p = $('#nap-b' + i); if (p) p.hidden = (i !== n); });
+    ['#nap-loi', '#nap-loi2', '#nap-loi3'].forEach(s => {
+      const o = $(s); if (o) { o.textContent = ''; o.classList.remove('show'); }
+    });
+  }
+  function baoLoi(oId, tin) {
+    const e = $(oId);
+    if (!e) return;
+    e.textContent = tin;
+    e.classList.add('show');
+  }
+
+  /* ---- Bước 1: chọn file ---- */
+  ganVungThaTep({
+    vungTha: $('#napVungTha'),
+    oChonFile: $('#napChonTep'),
+    nutChon: $('#napNutChon'),
+    vungBamCamUng: $('#napVungTha'),
+    khiCoTep: nhanTep
+  });
+
+  async function nhanTep(f) {
+    veBuoc(1);
+    const nut = $('#napNutChon');
+    const chuCu = nut.textContent;
+    nut.disabled = true;
+    nut.textContent = 'Đang đọc file…';
+    try {
+      tepByte = new Uint8Array(await f.arrayBuffer());
+      tepTen = f.name || 'file';
+      mo = await API.napMo({ dich: oDich.value, ten_tep: tepTen }, tepByte);
+      veGhepCot();
+      veBuoc(2);
+    } catch (err) {
+      tepByte = null; mo = null;
+      baoLoi('#nap-loi', err.message || 'Không đọc được file này, thử lại nhé.');
+    } finally {
+      nut.disabled = false;
+      nut.textContent = chuCu;
+    }
+  }
+
+  /* ---- Bước 2: ghép cột ----
+     Mỗi ô trong ERP là một dòng: nhãn + ô chọn cột của file + MẪU DỮ LIỆU
+     đọc được từ cột đang chọn. Cái mẫu đó là thứ giúp Sếp phát hiện ghép
+     nhầm NGAY TẠI CHỖ, thay vì phát hiện sau khi số đã vào sổ. */
+  function veGhepCot() {
+    $('#napB2Hint').textContent =
+      tepTen + ' · ' + mo.tep.dinh_dang + ' · ' + mo.tep.bang_ma + ' · ' + mo.tep.so_dong + ' dòng';
+
+    const oNho = $('#napB2Nho');
+    oNho.hidden = !mo.da_nho;
+    if (mo.da_nho) {
+      oNho.textContent = 'Lần trước đã ghép file dạng này rồi, ERP điền sẵn theo trí nhớ. ' +
+                         'Xin xem lại một lượt rồi bấm Xem trước.';
+    }
+
+    const hop = $('#napGhepO');
+    hop.innerHTML = mo.truong.map(t => {
+      const chon = mo.ghep[t.ma];
+      const opt = ['<option value="">— Không nạp cột này —</option>'].concat(
+        mo.cot.map((c, i) =>
+          '<option value="' + i + '"' + (String(chon) === String(i) ? ' selected' : '') + '>' + esc(c) + '</option>')
+      ).join('');
+      return '<div class="field field-rong nap-ghep-dong">' +
+        '<label for="napG-' + esc(t.ma) + '">' + esc(t.nhan) +
+          (t.bat_buoc ? ' <span class="nap-bb">(bắt buộc)</span>' : '') + '</label>' +
+        '<select id="napG-' + esc(t.ma) + '" data-truong="' + esc(t.ma) + '">' + opt + '</select>' +
+        '<span class="nap-mau" id="napM-' + esc(t.ma) + '"></span>' +
+      '</div>';
+    }).join('');
+
+    hop.querySelectorAll('select').forEach(s => {
+      s.addEventListener('change', () => veMau(s));
+      veMau(s);
+    });
+  }
+
+  /* Hiện vài giá trị đầu đọc được từ cột đang chọn — "đọc thử cho Sếp xem". */
+  function veMau(sel) {
+    const o = $('#napM-' + sel.dataset.truong);
+    if (!o) return;
+    const i = sel.value === '' ? -1 : Number(sel.value);
+    if (i < 0) { o.textContent = ''; return; }
+    const mau = (mo.mau_dong || []).map(d => d[i]).filter(v => v !== undefined && v !== '');
+    if (!mau.length) { o.textContent = 'Cột này trống ở mấy dòng đầu'; return; }
+    /* Chỉ hiện vài giá trị đầu cho gọn — nhưng phải NÓI RA là đang cắt, chứ
+       không lẳng lặng hiện 2 cái rồi để Sếp tưởng cả cột chỉ có bấy nhiêu. */
+    const HIEN = 2;
+    const dau = mau.slice(0, HIEN).map(v => '“' + v + '”').join(' · ');
+    o.textContent = mau.length > HIEN
+      ? 'Đọc thử ' + HIEN + ' giá trị đầu: ' + dau + ' … (còn ' + (mau.length - HIEN) + ' giá trị nữa trong mẫu)'
+      : 'Đọc thử: ' + dau;
+  }
+
+  function ghepHienTai() {
+    const g = {};
+    $('#napGhepO').querySelectorAll('select').forEach(s => {
+      if (s.value !== '') g[s.dataset.truong] = Number(s.value);
+    });
+    return g;
+  }
+
+  $('#napB2Huy').addEventListener('click', () => { tepByte = null; mo = null; veBuoc(1); });
+
+  $('#napB2Tiep').addEventListener('click', async () => {
+    const nut = $('#napB2Tiep');
+    nut.disabled = true;
+    try {
+      xem = await API.napXem({ dich: oDich.value, ten_tep: tepTen, ghep: ghepHienTai() }, tepByte);
+      veXemTruoc();
+      veBuoc(3);
+    } catch (err) {
+      baoLoi('#nap-loi2', err.message || 'Không xem trước được, thử lại nhé.');
+    } finally { nut.disabled = false; }
+  });
+
+  /* ---- Bước 3: xem trước, CHƯA GHI GÌ ---- */
+  function veXemTruoc() {
+    $('#napB3Hint').textContent = tepTen + ' · đọc được ' + xem.so_dong_doc + ' dòng';
+
+    /* Bốn con số Sếp cần biết TRƯỚC KHI ghi. Chỉ ô "Dòng lỗi" mới được đỏ,
+       và chỉ khi thật sự có lỗi — đỏ nhan nhản là không ai nhìn nữa. */
+    veThe('#napTomTat', [
+      { k: 'Thêm mới',   v: String(xem.so_them),    d: 'Mã chưa có trong ERP' },
+      { k: 'Cập nhật',   v: String(xem.so_sua),     d: 'Mã đã có, thông tin đổi' },
+      { k: 'Giữ nguyên', v: String(xem.so_bo_qua),  d: 'Giống hệt, không ghi' },
+      { k: 'Dòng lỗi',   v: String(xem.so_dong_loi),
+        d: xem.so_dong_loi ? 'Sẽ bỏ qua' : 'Không có',
+        dir: xem.so_dong_loi ? 'down' : '' }
+    ]);
+
+    // Cảnh báo mềm (vàng nâu, KHÔNG đỏ): không chặn, nhưng Sếp nên biết.
+    const canh = [];
+    if (xem.ghi_du_tinh) {
+      canh.push('File này tốn khoảng <b>' + Number(xem.ghi_du_tinh).toLocaleString('vi-VN') +
+                '</b> lượt ghi. Hôm nay còn khoảng ' +
+                Number(xem.ghi_con_lai_hom_nay).toLocaleString('vi-VN') + ' lượt.');
+    }
+    if (xem.da_khoa) {
+      canh.push('<b>' + xem.da_khoa + '</b> mã hàng đã “Hoàn tất” nên file KHÔNG ghi đè được. ' +
+                'Muốn sửa thì mở khoá ở màn Tồn kho trước.');
+    }
+    if (xem.so_trung_trong_file) {
+      canh.push('Có <b>' + xem.so_trung_trong_file + '</b> mã bị lặp ngay trong file. ' +
+                'Chỉ dòng đầu tiên được dùng.');
+    }
+    (xem.canh_bao || []).forEach(c => canh.push(esc(c)));
+    $('#napCanhBao').innerHTML = canh.map(c => '<div class="nap-canh-dong">' + c + '</div>').join('');
+
+    // Danh sách lỗi — đúng dòng, đúng cột, bằng tiếng người
+    const ds = xem.loi || [];
+    $('#napBangLoi').innerHTML = !ds.length ? '' :
+      '<div class="nap-loi-ds">' +
+        '<h5>Những dòng ERP không nhận (sẽ bỏ qua, không nạp)</h5>' +
+        ds.map(l => '<div class="nap-loi-dong">' + esc(l.thongDiep) + '</div>').join('') +
+        (xem.loi_con_lai
+          ? '<p class="nap-loi-them">…và ' + xem.loi_con_lai + ' dòng lỗi nữa không liệt kê hết ở đây.</p>'
+          : '') +
+      '</div>';
+
+    /* Chặn cứng khi vượt hạn mức ghi trong ngày — nút xác nhận TẮT HẲN.
+       Vượt hạn mức là D1 chặn ghi cả hệ thống: đơn hoàn ngừng cập nhật,
+       kho vận không thấy đơn quá hạn. Máy chủ chặn lần nữa ở `ghiThat`. */
+    const nut = $('#napB3Ghi');
+    const khongCoGi = (xem.so_them + xem.so_sua) === 0;
+    if (xem.vuot_han_muc) {
+      nut.disabled = true;
+      baoLoi('#nap-loi3', xem.loi_han_muc);
+    } else if (khongCoGi) {
+      nut.disabled = true;
+      baoLoi('#nap-loi3', 'Không có gì để nạp — mọi dòng trong file đều đã có sẵn và giống hệt trong ERP.');
+    } else {
+      nut.disabled = false;
+      nut.textContent = 'Xác nhận nạp ' + (xem.so_them + xem.so_sua) + ' dòng vào ERP';
+    }
+  }
+
+  $('#napB3Lui').addEventListener('click', () => veBuoc(2));
+
+  $('#napB3Ghi').addEventListener('click', async () => {
+    const nut = $('#napB3Ghi');
+    const chuCu = nut.textContent;
+    nut.disabled = true;
+    nut.textContent = 'Đang nạp…';
+    try {
+      const kq = await API.napGhi({
+        dich: oDich.value, ten_tep: tepTen, ghep: ghepHienTai(), van_tay: xem.van_tay
+      }, tepByte);
+      veThe('#napKetQua', [
+        { k: 'Đã thêm',     v: String(kq.da_them), d: 'Mã hàng mới' },
+        { k: 'Đã cập nhật', v: String(kq.da_sua),  d: 'Mã hàng có sẵn' },
+        { k: 'Giữ nguyên',  v: String(kq.bo_qua),  d: 'Không có gì đổi' },
+        { k: 'Lượt ghi đã dùng', v: Number(kq.luot_ghi_that).toLocaleString('vi-VN'),
+          d: 'Trên hạn mức 100.000/ngày' }
+      ]);
+      veBuoc(4);
+    } catch (err) {
+      nut.disabled = false;
+      nut.textContent = chuCu;
+      baoLoi('#nap-loi3', err.message || 'Không nạp được, thử lại nhé.');
+    }
+  });
+
+  $('#napB4Moi').addEventListener('click', () => {
+    tepByte = null; mo = null; xem = null;
+    veBuoc(1);
+  });
+}
+
 async function khoiDongDonHoan() {
 
   /* Danh sách đơn hoàn dùng chung — Nguồn + mã vận đơn + tìm kiếm + quẹt QR */
