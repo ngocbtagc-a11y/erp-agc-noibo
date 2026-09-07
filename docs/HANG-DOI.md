@@ -199,6 +199,28 @@ lần sau **không ai biết nợ có tăng hay không** — nên ghi cả ba ra
 - **Eshop (MShopKeeper) — tài liệu ghi ngừng hỗ trợ OpenAPI từ 30/06/2026**,
   đã qua hơn 2 tháng. Cần Sếp thử bấm "TẠO MÃ KẾT NỐI" xem còn không.
 
+## NỢ GHI 07/09/2026 — từ REV-0062 vòng 2
+
+- **Lưới Ⓕ đo "bộ vẽ chạy xong chưa", KHÔNG đo "nội dung có thật và đúng vai
+  không".** Hồ Ly gài lọt hai đường: đúng số thẻ nhưng **thẻ rỗng** (88 phép,
+  0 hỏng); và **vai hạn chế vẽ ra ô số của vai khác** (62 phép, 0 hỏng).
+  Ngưỡng theo vai là **sàn dưới**, nên thêm vai mới thì nó **lỏng dần trong im
+  lặng**, không bao giờ kêu. Vá: đòi một mẩu chữ đã gieo nằm TRONG mỏ neo, và
+  dùng `===` thay cho `≥` ở chỗ số cố định theo vai.
+- **Lưới Ⓔ so TÊN KHOÁ với một hằng số chép tay, không so với gói dữ liệu
+  thật.** Gài lại đúng lỗi CAO-3 (`co_chu_chua_tra_duoc` → `co_chu_chua_neo`)
+  thì nó **xanh nguyên** (17 phép, 0 hỏng), vì `app.js` đỡ khoá đó bằng `|| 0`.
+  Phép có răng thật là phép thứ tư (tổng hữu hạn); phép so tên **đang so hằng
+  số với hằng số**. Giá trị kiểu boolean cũng lọt.
+- **Đồng hồ chết mới có ở 3/40 bàn đo.** Đã có ở `cong-khoi`, `do-mo-ra-xem-duoc`
+  và một bàn nữa. 37 bàn còn lại vẫn treo được — mà bàn đo treo thì người ta
+  **tắt nó chứ không sửa nó**. Không nâng lên `lib/` dùng chung được ngay vì
+  **43 script import nó**; chờ lúc hàng đợi trống worktree.
+- **`do-bang-that` chưa đo 1024px.** Bật lên thì lòi ra **5 chỗ tràn**, trong
+  đó **2 chỗ là của `f1ac70b`** (`kd-sku-chay` / `kd-sku-kem`, cột "Doanh thu"
+  rơi khỏi màn ở 1440 và 1280). **Vá 2 bảng đó TRƯỚC, rồi mới bật mức đo** —
+  đừng bật để cổng đỏ sẵn.
+
 ---
 
 ## TÀI LIỆU LUẬT
