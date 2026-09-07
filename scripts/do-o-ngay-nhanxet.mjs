@@ -26,16 +26,37 @@
      A5  người bị nhận xét NHẬN ĐƯỢC THÔNG BÁO — và tự nhận xét mình thì
          KHÔNG tự gửi cho mình
      A6  nhận xét rỗng/quá ngắn bị chặn
+     A7  NHẬN XÉT CŨ KHÔNG BỊ VẾT SỬA ĐẨY RA KHỎI TRẦN (REV-0061 · CHẶN-1)
+     A8  nhận xét quá 1000 ký tự bị TỪ CHỐI, không bị cắt im lặng (VỪA-3)
 
    ĐO GÌ — PHẦN B
-     B1  GÕ THẬT 8 chữ số vào ô ngày sinh: giữ được tiêu điểm suốt và ra
-         đúng 1990-01-01 (đây chính là ca Sếp báo)
+     B1  GÕ THẬT 8 chữ số của MỘT NGÀY KHÔNG ĐỐI XỨNG vào ô ngày sinh
      B2  DÁN thật "25/01/1990" → 1990-01-25
      B3  CẢ LỚP: mọi `input[type=date]` đều có min/max — đếm và nêu số
      B4  ngưỡng ngón tay 44px cho ô ngày và nút Nhận xét
      B5  nút "Nhận xét" có mặt ở CẢ HAI phía (người giao VÀ người nhận), và
          hộp mở ra thật
      B6  không tràn ngang ở 375px khi hộp nhận xét mở
+     B7  DÒNG ĐỌC LẠI NGÀY: ô có giá trị thì hiện "= 25/01/1990 · N tuổi", và
+         con số đó phải KHỚP `o.value` — bản vá THẬT của GY-0004
+     B8  `#kvBcDen` / `#kvBcTu` / `#dmNgayVao` nhận được ngày TƯƠNG LAI (CAO-1)
+     B9  câu lỗi nói ĐÚNG ĐẦU BỊ VI PHẠM, không một câu chung cho cả hai (CAO-2)
+     B10 câu lỗi đỏ KHÔNG dính lại giữa hai lần mở hộp hồ sơ (VỪA-2)
+     B11 bấm dòng thông báo `cong_viec_nhan_xet` MỞ ĐÚNG hộp nhận xét (VỪA-1)
+
+   ⚠️ VÌ SAO B1 PHẢI GÕ `25011990` CHỨ KHÔNG PHẢI `01011990` — ĐỪNG ĐỔI LẠI.
+   Bản đầu của bàn đo này gõ `01011990`. `01/01` đọc theo ngày/tháng/năm hay
+   tháng/ngày/năm đều ra `1990-01-01`: một NGÀY ĐỐI XỨNG. Phép kiểm đó KHÔNG
+   THỂ phát hiện lỗi đảo thứ tự — không phải vì thiếu ca, mà vì nguyên lý.
+   Hồ Ly gõ `25011990` trên Chrome tiếng Anh ra `1990-02-05` ở 9/9 ô: hợp lệ,
+   nằm trong min/max, không một câu lỗi nào (REV-0061). Ai đổi ngày này về một
+   ngày đối xứng là tự bịt mắt bàn đo.
+
+   Và bàn đo KHÔNG đòi `value` phải bằng `1990-01-25`: thứ tự ô con do NGÔN
+   NGỮ GIAO DIỆN của trình duyệt quyết, `<input type="date">` không cho ERP
+   đổi. Thứ đo được — và là thứ thật sự cứu người dùng — là ERP có NÓI RA nó
+   hiểu thành ngày nào không (B7), và `value` có khớp đúng thứ tự mà trình
+   duyệt TỰ KHAI không (B1). Sai lệch giữa hai cái đó mới là lỗi.
 
    CA ĐỐI CHỨNG (BH-16) — bẻ ĐÚNG MỘT chỗ, nói TRƯỚC phép kiểm nào phải đỏ:
      DC-A  trả `o.disabled = true` về ô ngày sinh   → B1 mất tiêu điểm
@@ -43,6 +64,9 @@
      DC-C  gỡ nhánh `nhan_xet` khỏi `cauSuaDoc`     → A4 câu sổ đọc không hiểu
      DC-D  bỏ chặn quyền trong `cvNhanXet`          → A1 người ngoài nhận xét được
      DC-E  gỡ nút Nhận xét ở phía NGƯỜI NHẬN        → B5 người bị nhận xét mù
+     DC-F  bỏ lọc `truong` ở `suaLichSu`            → A7 nhận xét cũ rơi mất
+     DC-G  gỡ dòng đọc lại ngày (`docLaiNgay`)      → B7 mù trở lại
+     DC-H  gán `.value` mà không bắn `input`        → B10 câu đỏ dính lại
    ========================================================================== */
 
 import { cpSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
@@ -107,7 +131,8 @@ async function dungVong(thuMucSrc) {
 
   const nx = (ai, than) => goiAPI(worker, env, '/api/cong-viec/nhan-xet', phien[ai],
     { method: 'POST', body: JSON.stringify(than) });
-  const lichSu = (ai, id) => goiAPI(worker, env, `/api/sua/lich-su?bang=cong_viec&id=${id}`, phien[ai]);
+  const lichSu = (ai, id, truong) => goiAPI(worker, env,
+    `/api/sua/lich-su?bang=cong_viec&id=${id}` + (truong ? `&truong=${truong}` : ''), phien[ai]);
   const vet = (id) => db.prepare(
     "SELECT * FROM lich_su_thay_doi_nen WHERE bang='cong_viec' AND ban_ghi_id = ? AND truong='nhan_xet'").all(String(id));
   const tinCua = (who) => db.prepare(
@@ -208,6 +233,80 @@ const T = await dungVong(path.join(GOC, 'src'));
   ok('A6 · nhận xét cụt lủn ("ok") → CHẶN', r2.status === 400, `HTTP ${r2.status}`);
 }
 
+/* A8 — VỪA-3: quá dài thì TỪ CHỐI, không cắt im lặng */
+{
+  const dai = 'Chỗ cần sửa: '.repeat(120);            // ~1560 ký tự
+  const r = await T.nx('SEP', { id: 1, noi_dung: dai });
+  ok('A8 · nhận xét 1500+ ký tự → TỪ CHỐI (không âm thầm cắt còn 1000)',
+     r.status === 400, `HTTP ${r.status} ${JSON.stringify(r.than && r.than.loi)}`);
+  const luu = T.db.prepare(
+    "SELECT gia_tri_moi FROM lich_su_thay_doi_nen WHERE truong='nhan_xet' AND length(gia_tri_moi) >= 1000").all();
+  ok('A8 · và KHÔNG có dòng nào bị cắt cụt 1000 ký tự nằm lại trong sổ',
+     luu.length === 0, `${luu.length} dòng`);
+}
+
+/* ======================================================================== */
+/* A7 — CHẶN-1: nhận xét cũ bị vết sửa đẩy ra khỏi trần 100                  */
+/* ---------------------------------------------------------------------- */
+/* CA TÁI HIỆN NGUYÊN VĂN CỦA HỒ LY (REV-0061 · CHẶN-1):                     */
+/*   · việc #1 có 3 NHẬN XÉT ghi tháng 6/2026 (dòng CŨ NHẤT)                 */
+/*   · cũng việc đó, tháng 8 có 110 dòng sửa `tieu_de` bình thường           */
+/*   · cửa đọc trần 100 ⇒ đọc chung một rổ thì 3 nhận xét rơi HẾT            */
+/* Nhận xét bao giờ cũng là dòng cũ nhất của một việc chạy dài — tức là dòng */
+/* RƠI TRƯỚC TIÊN. Đây không phải ca hiếm, đây là ca THƯỜNG.                 */
+/* ======================================================================== */
+console.log('\n=== A7 · CHẶN-1 — 110 lần sửa có đẩy 3 nhận xét cũ ra khỏi sổ không? ===\n');
+{
+  const V = await dungVong(path.join(GOC, 'src'));
+  const them = V.db.prepare(
+    `INSERT INTO lich_su_thay_doi_nen (bang, ban_ghi_id, truong, gia_tri_cu, gia_tri_moi,
+                                       nguoi_id, nguoi_ten, luc)
+     VALUES ('cong_viec', '1', ?, ?, ?, 'SEP', 'Bùi Thị Ngọc', ?)`);
+  for (let i = 1; i <= 3; i++) {
+    them.run('nhan_xet', null,
+      `Chỗ cần sửa: lô 12 thiếu số lô — đây là lần thứ ${i}`, `2026-06-0${i} 09:00:00`);
+  }
+  for (let i = 1; i <= 110; i++) {
+    them.run('tieu_de', 'Rà soát tồn lô chè chưng yến', `Rà soát tồn lô chè chưng yến (v${i})`,
+      `2026-08-${String((i % 28) + 1).padStart(2, '0')} 1${i % 10}:00:00`);
+  }
+
+  /* ① Ca gốc CÓ THẬT — cửa chung vẫn cắt, và vẫn NÓI là đã cắt. */
+  const chung = await V.lichSu('AN', 1);
+  const nxTrongRoChung = (chung.than.ds || []).filter(d => d.truong === 'nhan_xet').length;
+  ok('A7 · ca có thật: đọc CHUNG một rổ thì cửa trả 100 dòng và nói rõ đã cắt',
+     (chung.than.ds || []).length === 100 && !!chung.than.cat,
+     `${(chung.than.ds || []).length} dòng · cat=${JSON.stringify(chung.than.cat)}`);
+  ok('A7 · và lọc `truong` ở TRÌNH DUYỆT trên rổ đó thì còn 0/3 nhận xét — ' +
+     'đúng chỗ màn hình khẳng định sai "Chưa có nhận xét nào"',
+     nxTrongRoChung === 0, `${nxTrongRoChung}/3 câu`);
+
+  /* ② Bản vá: hỏi RIÊNG loại vết. */
+  const rieng = await V.lichSu('AN', 1, 'nhan_xet');
+  const cau = (rieng.than.ds || []);
+  ok('A7 · hỏi RIÊNG `?truong=nhan_xet` → ĐỦ 3 nhận xét cũ, không mất câu nào',
+     cau.length === 3 && cau.every(d => d.truong === 'nhan_xet'), `${cau.length} câu`);
+  ok('A7 · và không cắt gì cả nên `cat` = null (dải cắt biến mất, không mọc dòng thừa)',
+     rieng.than.cat === null, JSON.stringify(rieng.than.cat));
+  ok('A7 · câu CŨ NHẤT (tháng 6, "lần thứ 1") vẫn còn — đây là câu rơi trước tiên ở bản cũ',
+     cau.some(d => /lần thứ 1$/.test(d.gia_tri_moi || '')),
+     JSON.stringify(cau.map(d => d.gia_tri_moi)));
+
+  /* ③ Cửa lọc là DANH SÁCH TRẮNG, không nhận chuỗi tự do. */
+  const bay = await V.lichSu('AN', 1, 'tieu_de');
+  ok('A7 · `?truong=` ngoài danh sách trắng → CHẶN (gõ sai mà trả rỗng lại đúng lỗi đang chữa)',
+     bay.status === 400, `HTTP ${bay.status}`);
+
+  /* ④ Trần vẫn còn hiệu lực trên chính loại vết đó — không phải bỏ trần đi. */
+  for (let i = 1; i <= 120; i++) {
+    them.run('nhan_xet', null, `Nhận xét dồn số ${i}`, `2026-09-0${(i % 7) + 1} 08:00:00`);
+  }
+  const day = await V.lichSu('AN', 1, 'nhan_xet');
+  ok('A7 · 123 nhận xét → vẫn cắt ở 100 VÀ vẫn nói ra, đơn vị là NHẬN XÉT chứ không phải dòng sổ',
+     (day.than.ds || []).length === 100 && day.than.cat && day.than.cat.tong === 123,
+     `${(day.than.ds || []).length} dòng · cat=${JSON.stringify(day.than.cat)}`);
+}
+
 /* ======================================================================== */
 /* PHẦN B — TRÌNH DUYỆT                                                      */
 /* ======================================================================== */
@@ -226,6 +325,8 @@ const VIEC_GIAO = {
 };
 
 const NHAN_XET_DA_GUI = [];
+/* Bật ở ca B12: máy chủ NÓI là đã cắt sổ nhận xét → hộp phải nói lại. */
+let SO_NHAN_XET_BI_CAT = false;
 function apiRieng(duong, u, traJson) {
   if (duong === '/api/toi-la-ai') {
     traJson({ ...TOI, la_admin: 1, them_nhan_su: 1, thao_tac_van_hanh: 1, phong_ban_quan_ly: [],
@@ -257,12 +358,34 @@ function apiRieng(duong, u, traJson) {
     return true;
   }
   if (duong === '/api/cong-viec/nhan-xet') { NHAN_XET_DA_GUI.push(1); traJson({ ok: true, id: 1 }); return true; }
+  /* Máy giả phải bắt chước ĐÚNG máy chủ thật: chỉ trả nhận xét khi được hỏi
+     `?truong=nhan_xet`. Nếu nó cứ trả nhận xét cho mọi lời gọi thì bàn đo
+     xanh kể cả khi giao diện quên mất bộ lọc — tức bàn đo đo cái vỏ. */
   if (duong === '/api/sua/lich-su') {
-    traJson({ ds: [{ truong: 'nhan_xet', gia_tri_cu: null, gia_tri_moi: 'Chỗ làm tốt: gửi đúng hạn',
-                     nguoi_ten: 'Phạm Khương Duy', luc: '2026-09-05 10:00:00',
-                     cau: 'Phạm Khương Duy nhận xét: "Chỗ làm tốt: gửi đúng hạn"' }], cat: null });
+    const loc = u.searchParams.get('truong');
+    const nhanXet = { truong: 'nhan_xet', gia_tri_cu: null, gia_tri_moi: 'Chỗ làm tốt: gửi đúng hạn',
+                      nguoi_ten: 'Phạm Khương Duy', luc: '2026-09-05 10:00:00',
+                      cau: 'Phạm Khương Duy nhận xét: "Chỗ làm tốt: gửi đúng hạn"' };
+    const vetSua = { truong: 'tieu_de', gia_tri_cu: 'a', gia_tri_moi: 'b',
+                     nguoi_ten: 'Bùi Thị Ngọc', luc: '2026-09-06 10:00:00',
+                     cau: 'Bùi Thị Ngọc đổi tên việc a → b' };
+    /* `SO_NHAN_XET_BI_CAT` bật lên thì máy giả trả về ĐÚNG khuôn `nhanCat`
+       thật (`gioi_han`/`tong`) — sai khuôn thì `veDaiCat` im lặng và bàn đo
+       xanh oan, tức lại đúng lỗi đang canh. */
+    traJson(loc === 'nhan_xet'
+      ? { ds: [nhanXet], cat: SO_NHAN_XET_BI_CAT ? { gioi_han: 100, tong: 123, xem_them: null } : null }
+      : { ds: [vetSua], cat: null });
     return true;
   }
+  /* VỪA-1 — một dòng thông báo nhận xét THẬT trong chuông, `lien_ket` là id việc. */
+  if (duong === '/api/thong-bao') {
+    traJson({ thong_bao: [{ id: 1, nhom: 'ca_nhan', loai: 'cong_viec_nhan_xet',
+                            noi_dung: 'Phạm Khương Duy nhận xét việc "Rà soát tồn lô chè chưng yến": Chỗ làm tốt…',
+                            lien_ket: String(VIEC_TOI.id), tao_luc: '2026-09-06 10:00:00' }],
+              chua_doc: 1, cat: null });
+    return true;
+  }
+  if (duong === '/api/thong-bao/da-xem') { traJson({ ok: true }); return true; }
   return false;
 }
 
@@ -287,13 +410,16 @@ async function doTrinhDuyet({ be = null, tep = null } = {}) {
   const kq = {};
   try {
     /* --- B1 · GÕ THẬT vào ô ngày sinh --------------------------------- */
+    /* NGÀY KHÔNG ĐỐI XỨNG `25011990` — xem lời dặn ở đầu tệp, ĐỪNG đổi về
+       `01011990`: ngày đối xứng thì đọc kiểu nào cũng ra một kết quả, phép
+       kiểm mất khả năng phát hiện lỗi đảo thứ tự (REV-0061 · GY-0004). */
     await c.chay(`document.querySelector('[data-tab="nhansu"]')?.click(); true`);
     await c.doi(800);
     await c.chay(`document.querySelector('[data-sua-ns]').click(); true`);
     await c.doi(800);
     await c.chay(`(()=>{const o=document.getElementById('nsSua-ngaysinh');o.value='';o.scrollIntoView();o.focus();return true})()`);
     const buoc = [];
-    for (const ch of '01011990') {
+    for (const ch of '25011990') {
       await goSo(c, ch);
       buoc.push(await c.chay(`(()=>{const o=document.getElementById('nsSua-ngaysinh');
         return {v:o.value, dis:o.disabled, tieuDiem:document.activeElement===o};})()`));
@@ -301,6 +427,90 @@ async function doTrinhDuyet({ be = null, tep = null } = {}) {
     kq.b1_giu_tieu_diem = buoc.every(b => b.tieuDiem && !b.dis);
     kq.b1_gia_tri = buoc[buoc.length - 1].v;
     kq.b1_buoc = buoc;
+    /* THỨ TỰ Ô CON MÀ CHÍNH TRÌNH DUYỆT NÀY ĐANG KHAI. `value` phải khớp
+       đúng thứ tự đó — lệch là ERP đang nói dối về thứ tự. */
+    kq.b1_thu_tu = await c.chay(`(()=>{
+      try {
+        return new Intl.DateTimeFormat(undefined,{year:'numeric',month:'2-digit',day:'2-digit'})
+          .formatToParts(new Date(2026,0,25))
+          .filter(p=>['day','month','year'].includes(p.type)).map(p=>p.type).join('/');
+      } catch { return 'khong-doc-duoc'; }
+    })()`);
+
+    /* --- B7 · DÒNG ĐỌC LẠI NGÀY (bản vá thật của GY-0004) -------------- */
+    kq.b7 = await c.chay(`(()=>{
+      const o=document.getElementById('nsSua-ngaysinh');
+      const n=o.nextElementSibling;
+      return { coThe: !!(n && n.classList.contains('o-ngay-nhac')),
+               hien: !!(n && !n.hidden),
+               chu: n ? n.textContent : '',
+               doc: n ? (n.dataset.ngayDoc || '') : '',
+               value: o.value };
+    })()`);
+    /* Dòng đọc lại phải SỐNG LẠI ở ô KHÁC nữa — nếu chỉ ô ngày sinh có thì
+       15 ô còn lại vẫn mù đúng như trước. Ô hạn chót việc: kiểu mặc định,
+       không có tuổi, nên câu phải là "= DD/MM/YYYY" trơn. */
+    kq.b7_o_khac = await c.chay(`(()=>{
+      const o=document.getElementById('cv-han-chot'); if(!o) return {khong_co:true};
+      o.value='2026-03-04';
+      o.dispatchEvent(new Event('input',{bubbles:true}));
+      const n=o.nextElementSibling;
+      return { chu: n ? n.textContent : '', hien: !!(n && !n.hidden), doc: n ? (n.dataset.ngayDoc||'') : '' };
+    })()`);
+
+    /* --- B8 · CAO-1: ô báo cáo / ngày vào làm nhận ngày TƯƠNG LAI ------ */
+    kq.b8 = await c.chay(`(()=>{
+      const thu = (id, v) => { const o=document.getElementById(id); if(!o) return {khong_co:true};
+        o.value=v; return { hopLe:o.checkValidity(), min:o.min, max:o.max }; };
+      return { kvBcDen_maisau: thu('kvBcDen','2026-09-08'),
+               kvBcDen_cuoinam: thu('kvBcDen','2026-12-31'),
+               kvBcTu_cuoinam: thu('kvBcTu','2026-12-31'),
+               dmNgayVao_thuhaitoi: thu('dmNgayVao','2026-09-14') };
+    })()`);
+
+    /* --- B9 · CAO-2: câu lỗi nói ĐÚNG đầu bị vi phạm ------------------- */
+    kq.b9 = await c.chay(`(()=>{
+      const doc = (id, v) => { const o=document.getElementById(id); if(!o) return {khong_co:true};
+        o.value=v; o.dispatchEvent(new Event('input',{bubbles:true}));
+        const n=o.nextElementSibling;
+        return { hopLe:o.checkValidity(), chu: n ? n.textContent : '', do: !!(n && n.classList.contains('sai')) }; };
+      return {
+        // Máy in mua năm 1988 — ca thật của Hồ Ly. Sàn của kiểu qua-khu nay là 1900.
+        muaNam1988: doc('tsThemNgayMua','1988-05-20'),
+        // Vượt trần: phải nói "không được quá hôm nay", KHÔNG nói về sàn dưới.
+        muaTuongLai: doc('tsThemNgayMua','2030-01-01'),
+        // Ngày sinh dưới sàn 1930 → phải nói về SÀN, không nói "dưới 14 tuổi".
+        sinhNam1900: doc('nsSua-ngaysinh','1900-01-01'),
+        // Ngày sinh quá trần (dưới 14 tuổi) → phải nói về TUỔI, không nói 1930.
+        sinh2020: doc('nsSua-ngaysinh','2020-01-01')
+      };
+    })()`);
+
+    /* --- B10 · VỪA-2: câu đỏ dính lại giữa hai lần mở hộp -------------- */
+    /* Đọc phòng thủ: ca đối chứng DC-B gỡ hẳn bộ nâng cấp nên thẻ `.o-ngay-nhac`
+       không tồn tại. Nổ ở đây là bàn đo chết, không phải sản phẩm sai. */
+    kq.b10 = await c.chay(`(async()=>{
+      const doc = () => { const o=document.getElementById('nsSua-ngaysinh');
+        const n=o.nextElementSibling;
+        const laNhac = !!(n && n.classList.contains('o-ngay-nhac'));
+        return { chu: laNhac ? n.textContent : '(không có thẻ nhắc)',
+                 do: laNhac && n.classList.contains('sai'),
+                 vien: o.classList.contains('o-ngay-sai'), value: o.value }; };
+      const o=document.getElementById('nsSua-ngaysinh');
+      o.focus();
+      o.value='2020-01-01'; o.dispatchEvent(new Event('input',{bubbles:true}));
+      const truoc = doc();
+      /* RỜI TIÊU ĐIỂM RỒI MỚI ĐÓNG — đây mới là ca thật: người ta gõ nhầm rồi
+         BẤM ĐÓNG hộp, tức ô đã mất tiêu điểm. Đo được 07/09: nếu ô VẪN đang
+         có tiêu điểm thì Chrome tự bắn sự kiện input khi mã gán value, nên
+         bản GÃY cũng tự sạch và ca đối chứng xanh oan — phép đo khi ấy không
+         đo cái gì cả. */
+      o.blur();
+      document.getElementById('nsSuaModalNen').hidden = true;
+      document.querySelector('[data-sua-ns]').click();
+      await new Promise(r=>setTimeout(r,700));
+      return { truoc, sau: doc() };
+    })()`);
 
     /* --- B2 · DÁN thật ------------------------------------------------- */
     kq.b2_dan = await c.chay(`(()=>{
@@ -372,6 +582,36 @@ async function doTrinhDuyet({ be = null, tep = null } = {}) {
                tranHop: m ? Math.round(m.scrollWidth - m.clientWidth) : 0 };
     })()`);
 
+    /* --- B12 · CHẶN-1 tầng lưới: sổ nhận xét bị cắt thì hộp phải NÓI RA -- */
+    SO_NHAN_XET_BI_CAT = true;
+    kq.b12 = await c.chay(`(async()=>{
+      document.getElementById('cvNxModalNen').hidden = true;
+      const n=document.querySelector('#ls-cv-bang [data-cv-nhanxet]');
+      if(!n) return { khongCoNut:true };
+      n.click();
+      await new Promise(r=>setTimeout(r,800));
+      const dai=document.getElementById('cv-nx-cat');
+      return { coO: !!dai, hien: !!(dai && !dai.hidden), chu: dai ? dai.innerText : '',
+               soDong: document.querySelectorAll('#cv-nx-so li').length };
+    })()`);
+    SO_NHAN_XET_BI_CAT = false;
+
+    /* --- B11 · VỪA-1: bấm dòng thông báo nhận xét phải MỞ ĐÚNG hộp ----- */
+    kq.b11 = await c.chay(`(async()=>{
+      document.getElementById('cvNxModalNen').hidden = true;
+      document.getElementById('tbNut').click();
+      await new Promise(r=>setTimeout(r,600));
+      const it = document.querySelector('#tbDanhSach .tb-item[data-loai="cong_viec_nhan_xet"]');
+      if (!it) return { coDong:false };
+      const bieuTuong = it.textContent.trim().slice(0,2);
+      it.click();
+      await new Promise(r=>setTimeout(r,900));
+      return { coDong:true, bieuTuong,
+               lienKet: it.dataset.lienKet || '',
+               hopMo: !document.getElementById('cvNxModalNen').hidden,
+               tieuDe: (document.getElementById('cv-nx-viec')||{}).textContent || '' };
+    })()`);
+
     kq.loi_console = c.loiConsole.slice();
     kq.ngoai_le = c.ngoaiLe.slice();
   } finally {
@@ -383,10 +623,25 @@ async function doTrinhDuyet({ be = null, tep = null } = {}) {
 console.log(`\n=== B · TRÌNH DUYỆT THẬT @${RONG}px — ô ngày + nút nhận xét ===\n`);
 const B = await doTrinhDuyet();
 
+/* Ngày `25011990` đọc theo ĐÚNG thứ tự trình duyệt tự khai. Máy Việt/Anh cho
+   hai kết quả khác nhau, và cả hai đều "đúng" theo trình duyệt — cái sai là
+   khi ERP không nói cho người dùng biết nó hiểu ra cái nào (xem B7). */
+const MONG_THEO_THU_TU = {
+  'day/month/year': '1990-01-25',
+  'month/day/year': '1990-02-05',
+  'year/month/day': '1990-01-25'
+};
+const MONG = MONG_THEO_THU_TU[B.b1_thu_tu] || null;
+
 ok('B1 · GÕ 8 chữ số vào ô NGÀY SINH: giữ tiêu điểm suốt, KHÔNG bị khoá giữa chừng',
    B.b1_giu_tieu_diem, JSON.stringify(B.b1_buoc));
-ok('B1 · gõ xong ra ĐÚNG 1990-01-01 (trước bản vá: kẹt ở 0001-01-01)',
-   B.b1_gia_tri === '1990-01-01', `value = ${B.b1_gia_tri}`);
+ok('B1 · gõ xong ra một NGÀY ĐỦ, không kẹt ở 0001-01-01 (đây là ca Sếp báo)',
+   /^\d{4}-\d{2}-\d{2}$/.test(B.b1_gia_tri || '') && !String(B.b1_gia_tri).startsWith('0'),
+   `value = ${B.b1_gia_tri}`);
+ok(`B1 · gõ NGÀY KHÔNG ĐỐI XỨNG 25011990 trên trình duyệt thứ tự "${B.b1_thu_tu}" ` +
+   `→ value KHỚP đúng thứ tự đó (${MONG})`,
+   MONG !== null && B.b1_gia_tri === MONG,
+   `value = ${B.b1_gia_tri} · mong = ${MONG} · thứ tự khai = ${B.b1_thu_tu}`);
 ok('B2 · DÁN "25/01/1990" → 1990-01-25', B.b2_dan === '1990-01-25', `value = ${B.b2_dan}`);
 ok('B2 · DÁN "1990-01-25" (kiểu ISO) cũng ăn', B.b2_dan_iso === '1990-01-25', `value = ${B.b2_dan_iso}`);
 ok(`B3 · CẢ LỚP: ${B.b3.tong} ô ngày trong ERP, tất cả đều có min/max`,
@@ -409,6 +664,72 @@ ok('B5 · GỬI THẬT trên màn: báo xong và ô nhập được dọn',
    B.b5_gui.xong && B.b5_gui.oDaRong, JSON.stringify(B.b5_gui));
 ok(`B6 · @${RONG}px không tràn ngang (trang lẫn hộp)`,
    !B.b6.tranTrang && B.b6.tranHop <= 1, JSON.stringify(B.b6));
+
+/* ---- B7 · DÒNG ĐỌC LẠI NGÀY — bản vá THẬT của GY-0004 ------------------ */
+{
+  const v = B.b7.value || '';
+  const [y, th, ng] = v.split('-');
+  const mongDoc = v ? `= ${ng}/${th}/${y}` : '';
+  ok('B7 · ô ngày CÓ giá trị thì dòng đọc lại HIỆN THƯỜNG TRỰC (không phải chỉ khi bấm vào)',
+     B.b7.coThe && B.b7.hien, JSON.stringify(B.b7));
+  ok(`B7 · dòng đó đọc lại ĐÚNG value của ô ("${mongDoc}") — người gõ NHÌN THẤY ` +
+     'ERP hiểu thành ngày nào, ngay lúc gõ xong',
+     B.b7.doc.startsWith(mongDoc), `doc="${B.b7.doc}" · value=${v}`);
+  ok('B7 · ngày sinh còn kèm SỐ TUỔI — sai một con là thấy ngay',
+     / · \d+ tuổi$/.test(B.b7.doc), `doc="${B.b7.doc}"`);
+  ok('B7 · CẢ LỚP: ô ngày khác (hạn chót việc) cũng có dòng đọc lại — "= 04/03/2026"',
+     B.b7_o_khac.hien && B.b7_o_khac.doc === '= 04/03/2026', JSON.stringify(B.b7_o_khac));
+}
+
+/* ---- B8 · CAO-1: hồi quy "Đến ngày" không đặt được quá hôm nay --------- */
+ok('B8 · #kvBcDen nhận NGÀY MAI (2026-09-08) — trước bản vá `checkValidity()` = false, chặn cả form',
+   B.b8.kvBcDen_maisau.hopLe === true, JSON.stringify(B.b8.kvBcDen_maisau));
+ok('B8 · #kvBcDen nhận CUỐI NĂM (2026-12-31) — kiểu người ta hay gõ cho chắc',
+   B.b8.kvBcDen_cuoinam.hopLe === true, JSON.stringify(B.b8.kvBcDen_cuoinam));
+ok('B8 · #kvBcTu cũng vậy (không áp một luật chung rồi để nó tự đúng)',
+   B.b8.kvBcTu_cuoinam.hopLe === true, JSON.stringify(B.b8.kvBcTu_cuoinam));
+ok('B8 · #dmNgayVao nhận ngày vào làm TƯƠNG LAI (offer đã ký, thứ Hai tới bắt đầu)',
+   B.b8.dmNgayVao_thuhaitoi.hopLe === true, JSON.stringify(B.b8.dmNgayVao_thuhaitoi));
+ok('B8 · nhưng KHÔNG bỏ min/max: `0001-01-01` vẫn phải sai thấy được',
+   B.b8.kvBcDen_maisau.min === '1900-01-01' && B.b8.kvBcDen_maisau.max === '2100-12-31',
+   JSON.stringify(B.b8.kvBcDen_maisau));
+
+/* ---- B9 · CAO-2: câu lỗi nói ĐÚNG đầu bị vi phạm ----------------------- */
+ok('B9 · ngày mua 20/05/1988 (máy in mua năm 1988) → HỢP LỆ, không còn chặn oan ở sàn 1990',
+   B.b9.muaNam1988.hopLe === true && !B.b9.muaNam1988.do, JSON.stringify(B.b9.muaNam1988));
+ok('B9 · ngày mua 01/01/2030 → câu lỗi nói về TRẦN ("không được quá hôm nay"), ' +
+   'và nói luôn ngày đang nhập',
+   /quá hôm nay/.test(B.b9.muaTuongLai.chu) && /04\/01\/2030|01\/01\/2030/.test(B.b9.muaTuongLai.chu),
+   JSON.stringify(B.b9.muaTuongLai));
+ok('B9 · ngày sinh 01/01/1900 → câu lỗi nói về SÀN ("sớm nhất là 1930"), KHÔNG nói về tuổi',
+   /1930/.test(B.b9.sinhNam1900.chu) && !/14 tuổi/.test(B.b9.sinhNam1900.chu),
+   JSON.stringify(B.b9.sinhNam1900));
+ok('B9 · ngày sinh 01/01/2020 → câu lỗi nói về TUỔI ("dưới 14 tuổi"), KHÔNG nói về 1930 — ' +
+   'một câu chung cho cả hai đầu là câu SAI SỰ THẬT ở một nửa số ca',
+   /14 tuổi/.test(B.b9.sinh2020.chu) && !/1930/.test(B.b9.sinh2020.chu),
+   JSON.stringify(B.b9.sinh2020));
+
+/* ---- B10 · VỪA-2: câu đỏ dính lại giữa hai lần mở hộp ------------------ */
+ok('B10 · gõ sai ngày sinh thì CÓ hiện câu đỏ (nếu không thì phép kiểm dưới vô nghĩa)',
+   B.b10.truoc.do && B.b10.truoc.vien, JSON.stringify(B.b10.truoc));
+ok('B10 · đóng hộp rồi mở lại, KHÔNG chạm vào ô → câu đỏ và viền đỏ ĐỀU BIẾN MẤT ' +
+   '(trước bản vá: form người B hiện câu đỏ của người A dưới một ô rỗng)',
+   !B.b10.sau.do && !B.b10.sau.vien, JSON.stringify(B.b10.sau));
+
+/* ---- B12 · CHẶN-1 tầng lưới: hộp Nhận xét có dải cắt ------------------- */
+ok('B12 · máy chủ nói sổ nhận xét bị cắt (100/123) → hộp Nhận xét NÓI LẠI bằng dải cắt ' +
+   '(trước bản vá hộp này không có ô nào, chỉ hộp Sửa việc ngay cạnh mới có)',
+   B.b12.hien && /100/.test(B.b12.chu) && /123/.test(B.b12.chu), JSON.stringify(B.b12));
+ok('B12 · dải nói theo đơn vị NHẬN XÉT, không phải "lần sửa" — cửa đọc nay chỉ đếm nhận xét',
+   /nhận xét/i.test(B.b12.chu), JSON.stringify(B.b12.chu));
+
+/* ---- B11 · VỪA-1: bấm thông báo nhận xét ------------------------------- */
+ok('B11 · chuông có dòng thông báo nhận xét, và mang biểu tượng RIÊNG (💬) chứ không rơi về 🔔',
+   B.b11.coDong && B.b11.bieuTuong === '💬', JSON.stringify(B.b11));
+ok('B11 · bấm vào dòng đó thì HỘP NHẬN XÉT MỞ RA, đúng việc `lien_ket` trỏ tới — ' +
+   'trước bản vá: panel đóng, không đổi tab, không mở gì cả',
+   B.b11.hopMo && B.b11.lienKet === String(VIEC_TOI.id), JSON.stringify(B.b11));
+
 ok('B · 0 lỗi console, 0 ngoại lệ', B.loi_console.length === 0 && B.ngoai_le.length === 0,
    JSON.stringify([B.loi_console, B.ngoai_le]));
 
@@ -477,6 +798,61 @@ console.log('\n=== CA ĐỐI CHỨNG — gài lỗi lại, phép đo PHẢI đ�
   const r = await V.nx('HANG', { id: 1, noi_dung: 'Người ngoài chen vào chấm việc phòng khác.' });
   ok('DC-D · bỏ chặn quyền → người NGOÀI chấm được việc của phòng khác',
      r.status === 200, `bản gãy HTTP ${r.status}`);
+}
+
+/* DC-F — bỏ lọc `truong` ở `suaLichSu`, tức quay về ĐÚNG bản CHẶN-1.
+   Bẻ ở chỗ ĐỌC tham số chứ không ở mệnh đề SQL: bỏ mỗi mệnh đề `AND truong=?`
+   mà vẫn `bind` ba tham số thì D1 ném "column index out of range" — ca đối
+   chứng khi ấy đỏ vì CÂU SQL HỎNG, không phải vì nhận xét bị đẩy ra khỏi
+   trần, tức là đo nhầm thứ. (Đã đo được đúng bẫy này lúc dựng ca.) */
+{
+  const src = banBeGay('dc-f', s => s.replace(
+    "  const truong = String(u.searchParams.get('truong') || '').trim();",
+    "  const truong = '';"));
+  const V = await dungVong(src);
+  const them = V.db.prepare(
+    `INSERT INTO lich_su_thay_doi_nen (bang, ban_ghi_id, truong, gia_tri_cu, gia_tri_moi,
+                                       nguoi_id, nguoi_ten, luc)
+     VALUES ('cong_viec', '1', ?, NULL, ?, 'SEP', 'Bùi Thị Ngọc', ?)`);
+  for (let i = 1; i <= 3; i++) them.run('nhan_xet', `Nhận xét cũ ${i}`, `2026-06-0${i} 09:00:00`);
+  for (let i = 1; i <= 110; i++) {
+    them.run('tieu_de', `Đổi tên lần ${i}`, `2026-08-${String((i % 28) + 1).padStart(2, '0')} 1${i % 10}:00:00`);
+  }
+  const r = await V.lichSu('AN', 1, 'nhan_xet');
+  const cau = (r.than.ds || []).filter(d => d.truong === 'nhan_xet');
+  ok('DC-F · bỏ lọc `truong` → 110 vết sửa đẩy SẠCH 3 nhận xét cũ ra khỏi trần 100, ' +
+     'hộp sẽ in "Chưa có nhận xét nào"',
+     cau.length === 0, `bản gãy: còn ${cau.length}/3 nhận xét · ${(r.than.ds || []).length} dòng trả về`);
+}
+
+/* DC-G — gỡ dòng ĐỌC LẠI NGÀY. Bẻ đúng `docLaiNgay` (trả rỗng) chứ không gỡ
+   cả `veNhac`: gỡ cả thì mất luôn câu báo sai, và ca này hoá ra đo hai thứ. */
+{
+  const G = await doTrinhDuyet({
+    tep: 'assets/js/o-ngay.js',
+    be: s => s.replace('export function docLaiNgay(o) {', 'export function docLaiNgay(o) {\n  return \'\';')
+  });
+  /* Đo trên CÂU CHỮ hiện ra màn: gỡ `docLaiNgay` thì dòng nhắc vẫn còn (nó
+     còn hai việc khác), nhưng KHÔNG chỗ nào đọc lại "= DD/MM/YYYY" nữa —
+     tức người gõ lại mù đúng như trước bản vá. */
+  ok('DC-G · gỡ dòng đọc lại ngày → gõ 25011990 ra 1990-02-05 mà KHÔNG chỗ nào nói ra, ' +
+     'đúng trạng thái mù của GY-0004 trước bản vá',
+     !G.b7.doc && !/=\s*\d{2}\/\d{2}\/\d{4}/.test(G.b7.chu || '') &&
+     !/=\s*\d{2}\/\d{2}\/\d{4}/.test(G.b7_o_khac.chu || ''),
+     `bản gãy: doc="${G.b7.doc}" chu="${G.b7.chu}" value=${G.b7.value}`);
+}
+
+/* DC-H — gán `.value` mà KHÔNG bắn `input` (bản trước VỪA-2). */
+{
+  const G = await doTrinhDuyet({
+    tep: 'assets/js/app.js',
+    be: s => s.replace(
+      "        oNg.dispatchEvent(new Event('input', { bubbles: true }));",
+      '        /* DC-H: không bắn */')
+  });
+  ok('DC-H · gán `.value` không bắn `input` → câu đỏ + viền đỏ của người TRƯỚC ' +
+     'dính lại trên form người SAU',
+     G.b10.sau.do || G.b10.sau.vien, `bản gãy: ${JSON.stringify(G.b10)}`);
 }
 
 rmSync(TAM, { recursive: true, force: true });

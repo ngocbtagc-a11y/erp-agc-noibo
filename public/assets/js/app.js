@@ -2773,6 +2773,29 @@ async function veTongQuanTheoVaiTro() {
   const canhBao = [];
   const laManager = !TOI.la_admin && (TOI.phong_ban_quan_ly || []).length > 0;
 
+  /* CON SỐ TRÊN THẺ ĐẾM TRÊN MỘT DANH SÁCH ĐÃ BỊ CẮT (REV-0061 — cùng lớp với
+     CHẶN-1). `cvDanhSach` trần 100 mỗi phạm vi và NÓI RA bằng `cat_nhan` /
+     `cat_giao` / `cat_phoi_hop`; bản trước nhận rồi vứt, nên "Việc đang mở: 100"
+     đọc như con số thật trong khi nó là con số CẮT. Thẻ Home là chỗ Sếp nhìn
+     đầu tiên mỗi sáng — nói dối ở đây là nói dối ở chỗ đắt nhất. */
+  const catCv = [cv.cat_nhan, cv.cat_giao, cv.cat_phoi_hop].filter(Boolean);
+  if (catCv.length) {
+    const tong = catCv.reduce((s, c) => s + (c.tong || 0), 0);
+    const hien = catCv.reduce((s, c) => s + (c.gioi_han || 0), 0);
+    canhBao.push({ m: 'warn', b: 'Số liệu việc trên đây đang đếm thiếu',
+      s: tong > hien
+        ? `Mỗi mục chỉ lấy ${catCv[0].gioi_han} việc gần nhất — còn ${tong - hien} việc cũ hơn chưa tính. Xem đủ ở Lịch sử làm việc.`
+        : 'Danh sách việc đã chạm trần — xem đủ ở Lịch sử làm việc.',
+      t: 'Công việc',
+      onClick: () => window.MO_DEN_LICHSU_TIM && window.MO_DEN_LICHSU_TIM('') });
+  }
+  if (mt.cat) {
+    canhBao.push({ m: 'warn', b: 'Danh sách mục tiêu đang bị cắt bớt',
+      s: `Đang hiện ${mt.cat.gioi_han} mục tiêu` +
+         (mt.cat.tong ? ` trên tổng ${mt.cat.tong}` : '') + ' — mở Trạm Mục Tiêu để xem đủ.',
+      t: 'Mục tiêu', onClick: () => moTab('muctieu') });
+  }
+
   if (TOI.la_admin) {
     ((mt.cong_ty || [])).filter(m => m.trang_thai === 'dang_thuc_hien' && !m.da_chot)
       .forEach(m => canhBao.push({ m: 'warn', b: `Mục tiêu công ty "${m.tieu_de}" chưa chốt`, s: 'Vào khối Trạm Mục Tiêu bên dưới để chốt', t: 'Mục tiêu' }));
@@ -3658,9 +3681,17 @@ async function khoiDongCongViec() {
   $('#cv-sua-han-chot').addEventListener('input', capNhatHopLyDo);
 
   /* ==================== NHẬN XÉT MỘT VIỆC (GY-0005) ====================
-     Đọc lại nhận xét bằng ĐÚNG cửa `suaLichSu('cong_viec', id)` mà hộp Sửa
-     đang dùng, lọc `truong === 'nhan_xet'`. Không dựng cửa đọc thứ hai —
-     hai cửa cho một sổ là hai màn nói hai chuyện khác nhau, sớm hay muộn. */
+     Đọc lại nhận xét bằng ĐÚNG cửa `suaLichSu` mà hộp Sửa đang dùng — không
+     dựng cửa đọc thứ hai, hai cửa cho một sổ là hai màn nói hai chuyện khác
+     nhau, sớm hay muộn.
+
+     NHƯNG PHẢI HỎI RIÊNG `truong='nhan_xet'`, KHÔNG lọc ở trình duyệt
+     (REV-0061 · CHẶN-1). Bản đầu gọi cửa chung rồi `.filter()` trên 100 dòng
+     đã tải về: một việc chạy dài có 110 lần sửa thì 3 câu nhận xét viết từ
+     tháng 6 — luôn là dòng CŨ NHẤT — rơi hết ra ngoài trần, `ls.cat` nói rõ
+     là đã cắt, mà màn hình vứt câu đó đi rồi in "Chưa có nhận xét nào cho
+     việc này". Không phải để trống: KHẲNG ĐỊNH SAI, đúng cái lỗi mà chính
+     `suaLichSu` viết "KHÔNG XIN MIỄN TRỪ". */
   const cvNxModal = $('#cvNxModalNen');
   let cvNxId = null;
 
@@ -3677,9 +3708,14 @@ async function khoiDongCongViec() {
   async function veSoNhanXet(id) {
     const khoi = $('#cv-nx-so-khoi'), trong = $('#cv-nx-trong');
     khoi.hidden = true; trong.hidden = true;
+    veDaiCat('#cv-nx-cat', null);
     try {
-      const ls = await API.suaLichSu('cong_viec', id);
-      const ds = (ls.ds || []).filter(d => d.truong === 'nhan_xet');
+      const ls = await API.suaLichSu('cong_viec', id, 'nhan_xet');
+      const ds = ls.ds || [];
+      /* Dải cắt vẽ TRƯỚC cả nhánh "trống" — sổ mà rỗng vì bị cắt thì càng
+         phải nói ra, đó đúng là ca CHẶN-1. Đơn vị là "nhận xét", không phải
+         "lần sửa": cửa đọc nay chỉ đếm nhận xét. */
+      veDaiCat('#cv-nx-cat', ls.cat, { don_vi: 'nhận xét' });
       if (!ds.length) { trong.hidden = false; return; }
       $('#cv-nx-so').innerHTML = ds.map(d =>
         `<li>${esc(d.cau)} <span class="luc">· ${esc(String(d.luc || '').slice(0, 16))}</span></li>`).join('');
@@ -3893,6 +3929,12 @@ async function khoiDongCongViec() {
   }
 
   window.LAM_MOI_CONGVIEC = lamMoiCacManLienQuanCv;
+  /* Chuông thông báo nằm ở một khối khác (IIFE `chuongThongBao`) nên phải bắc
+     cầu ra ngoài — bấm dòng "… nhận xét việc …" mà không mở được đúng hộp thì
+     tin nhắn ấy chỉ là một dòng chữ (REV-0061 · VỪA-1). Việc chưa nằm trong
+     danh sách đã tải thì hộp vẫn mở và vẫn đọc được sổ nhận xét, chỉ thiếu
+     dòng tiêu đề việc — vẫn hơn hẳn một cú bấm chết. */
+  window.MO_HOP_NHANXET = moHopNhanXet;
   await taiLai();
   await taiLaiTongQuanCongTy();
 }
@@ -5305,11 +5347,23 @@ if (TOI.quyen.includes('nhansu')) {
          nên phải hỏi riêng khi mở hồ sơ. */
       const oNg = $('#nsSua-ngaysinh');
       if (!oNg) return;
-      oNg.value = '';
+      /* PHẢI BẮN `input` SAU MỖI LẦN GÁN `.value` (REV-0061 · VỪA-2).
+         `o-ngay.js` chỉ vẽ lại dòng dưới ô ở `focus`/`blur`/`input`/`change`;
+         gán thẳng `.value` bằng mã thì trình duyệt KHÔNG bắn sự kiện nào cả.
+         Hậu quả đo được: mở hồ sơ người A, gõ nhầm 2020 (dưới 14 tuổi) → dòng
+         đỏ + viền đỏ; đóng hộp, mở hồ sơ người B mà không chạm vào ô → form
+         của B hiện nguyên câu đỏ của A dưới một ô rỗng. Và nay còn một lý do
+         thứ hai: dòng "= 25/01/1990 · 36 tuổi" cũng phải theo kịp giá trị mới,
+         nếu không nó đọc lại ngày sinh của NGƯỜI TRƯỚC. */
+      const datNgay = (v) => {
+        oNg.value = v;
+        oNg.dispatchEvent(new Event('input', { bubbles: true }));
+      };
+      datNgay('');
       try {
         const kq = await API.nsSinhNhat(n.id);
         if (NS_SN_DANG_MO !== n.id) return;          // đã mở hồ sơ người khác
-        oNg.value = (kq.ngay_sinh || '').slice(0, 10);
+        datNgay((kq.ngay_sinh || '').slice(0, 10));
       } catch { /* để trống — vẫn nhập mới được */ }
     }
 
@@ -7638,7 +7692,10 @@ if (TOI.shopee && TOI.shopee.xem) {
   chuong.hidden = false;
 
   const ICO = { day_kho: '📦', day_ke_toan: '💰', khieu_nai: '⚠️', canh_bao: '🔔',
-                cong_viec_moi: '🎯', cong_viec_phoi_hop: '🤝' };
+                cong_viec_moi: '🎯', cong_viec_phoi_hop: '🤝',
+                /* GY-0005 · REV-0061 · VỪA-1 — thiếu dòng này thì tin nhận xét
+                   rơi về 🔔 chung, lẫn với cảnh báo hệ thống. */
+                cong_viec_nhan_xet: '💬' };
 
   /* RỔ B của góp ý 03/09/2026 — chỗ dễ bỏ sót nhất. Trước bản này chuông chỉ
      tự hỏi lại 5 PHÚT/LẦN: giao việc xong, danh sách đã đúng nhưng con số đỏ
@@ -7652,7 +7709,7 @@ if (TOI.shopee && TOI.shopee.xem) {
     if (kq.chua_doc > 0) { badge.textContent = kq.chua_doc > 99 ? '99+' : kq.chua_doc; badge.hidden = false; }
     else badge.hidden = true;
     ds.innerHTML = list.map(t =>
-      `<div class="tb-item" data-loai="${esc(t.loai || '')}">` +
+      `<div class="tb-item" data-loai="${esc(t.loai || '')}" data-lien-ket="${esc(t.lien_ket || '')}">` +
       `${ICO[t.loai] || '🔔'} ${esc(t.noi_dung)}<div class="tb-gio">${esc(t.tao_luc || '')}</div></div>`
     ).join('');
     trong.hidden = list.length > 0;
@@ -7690,6 +7747,26 @@ if (TOI.shopee && TOI.shopee.xem) {
     } else if (it.dataset.loai === 'cong_viec_moi' || it.dataset.loai === 'cong_viec_phoi_hop') {
       moTab('tongquan');
       if (window.LAM_MOI_CONGVIEC) window.LAM_MOI_CONGVIEC();
+    } else if (it.dataset.loai === 'cong_viec_nhan_xet') {
+      /* REV-0061 · VỪA-1 — trước bản này bấm vào là panel đóng, KHÔNG đổi tab,
+         KHÔNG mở hộp. Trái hẳn lập luận trụ cột của cả thiết kế nhận xét:
+         "người bị nhận xét PHẢI đọc được → nên bắn thông báo". Thông báo mà
+         bấm không đi đâu thì lời hứa đó không có đường thực hiện.
+         `lien_ket` chính là id việc (xem `cvNhanXet` → `guiThongBao`). */
+      const idViec = it.dataset.lienKet;
+      if (idViec && window.MO_HOP_NHANXET) {
+        moTab('tongquan');
+        if (window.LAM_MOI_CONGVIEC) window.LAM_MOI_CONGVIEC();
+        window.MO_HOP_NHANXET(idViec);
+      } else if (window.MO_DEN_LICHSU_TIM) {
+        /* Tin cũ (hoặc tin lỗi) không kèm `lien_ket` thì VẪN phải đi tới một
+           chỗ CÓ THẬT — Lịch sử làm việc là nơi có nút "Nhận xét" của mọi
+           việc. Bỏ mặc ở đây là quay lại đúng cú bấm chết đang vá. */
+        window.MO_DEN_LICHSU_TIM('');
+      } else {
+        moTab('tongquan');
+        if (window.LAM_MOI_CONGVIEC) window.LAM_MOI_CONGVIEC();
+      }
     }
     panel.hidden = true;
   });
@@ -10544,10 +10621,21 @@ function noiNutSuaTaiLieu(goc, khiXong) {
         const d = r.ds || [];
         if (!d.length) { ols.textContent = 'Chưa ai sửa tài liệu này.'; return; }
         const ten = { tieu_de: 'tên tài liệu', so_hieu: 'số hiệu' };
+        /* SỔ BẰNG CHỨNG CẮT THÌ PHẢI NÓI (REV-0061 — cùng lớp với CHẶN-1).
+           `tlLichSu` có gọi `nhanCat` nên gói trả về kèm `r.cat`; bản trước
+           nhận rồi vứt đi, in ra 100 dòng đầu như thể đó là tất cả. Đây không
+           có thẻ `.dai-cat` sẵn nên nói bằng một dòng chữ ngay dưới danh sách,
+           đúng chỗ mắt người ta dừng lại. */
+        const c = r.cat;
+        const dongCat = c
+          ? `<div class="tl-nk-cat">Đang hiện ${c.gioi_han} lần sửa gần nhất` +
+            (c.tong ? ` trên tổng ${c.tong} — còn ${c.tong - c.gioi_han} lần sửa cũ hơn chưa hiện.` : ' — sổ này còn dài hơn.') +
+            '</div>'
+          : '';
         ols.innerHTML = '<ul class="tl-nk-ds">' + d.map(k =>
           `<li><b>${esc(k.nguoi_ten || '—')}</b> đổi ${esc(ten[k.truong] || k.truong)}: ` +
           `"${esc(k.gia_tri_cu || '(trống)')}" → "${esc(k.gia_tri_moi || '(trống)')}" ` +
-          `lúc ${esc(String(k.luc || '').slice(0, 16))}</li>`).join('') + '</ul>';
+          `lúc ${esc(String(k.luc || '').slice(0, 16))}</li>`).join('') + '</ul>' + dongCat;
       } catch (e) { ols.textContent = e.message; }
     });
 

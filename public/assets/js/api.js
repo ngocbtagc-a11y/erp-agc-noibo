@@ -176,8 +176,13 @@ export const API = {
     method: 'POST', body: JSON.stringify({ id, noi_dung: noiDung })
   }),
   /* Sổ sửa dùng chung cho cả lớp — bang = 'cong_viec' | 'muc_tieu'. Mỗi dòng
-     đã kèm `cau` tiếng Việt dựng sẵn ở máy chủ, giao diện chỉ việc in ra. */
-  suaLichSu: (bang, id) => goi(`/api/sua/lich-su?bang=${bang}&id=${id}`),
+     đã kèm `cau` tiếng Việt dựng sẵn ở máy chủ, giao diện chỉ việc in ra.
+     `truong` (tuỳ chọn, hiện chỉ nhận 'nhan_xet') = hỏi RIÊNG một loại vết.
+     BẮT BUỘC dùng cho hộp Nhận xét: đọc chung một rổ 100 dòng rồi lọc ở
+     trình duyệt thì 110 lần sửa việc đẩy hết nhận xét cũ ra ngoài trần, và
+     màn hình khẳng định sai "Chưa có nhận xét nào" (REV-0061 · CHẶN-1). */
+  suaLichSu: (bang, id, truong) => goi(
+    `/api/sua/lich-su?bang=${bang}&id=${id}` + (truong ? `&truong=${encodeURIComponent(truong)}` : '')),
   /* `truoc` = con trỏ `cap_nhat_luc|id` của dòng cuối đã tải → máy chủ trả tiếp
      500 việc CŨ HƠN. Đây là ĐƯỜNG ĐI TIẾP CÓ THẬT của dải cắt (REV-0034 · L2):
      ô tìm kiếm ở màn đó lọc phía trình duyệt nên không với tới phần bị cắt. */

@@ -109,22 +109,82 @@ export function khoangCuaKieu(kieu) {
   if (kieu === 'ngay-sinh') {
     // Khớp ĐÚNG chốt của máy chủ (`nsNgaySinhLuu`): 1930 … năm nay − 14.
     return { min: '1930-01-01', max: `${nam - 14}-12-31`,
-             chu: 'từ năm 1930 đến năm ' + (nam - 14) };
+             chu: 'từ năm 1930 đến năm ' + (nam - 14),
+             chuDuoi: 'Năm sinh sớm nhất nhận được là 1930',
+             chuTren: `Người dưới 14 tuổi thì chưa lập hồ sơ được — năm sinh muộn nhất là ${nam - 14}` };
   }
-  if (kieu === 'qua-khu') return { min: '1990-01-01', max: homNay, chu: 'không quá hôm nay' };
-  return { min: '1900-01-01', max: '2100-12-31', chu: 'từ năm 1900 đến năm 2100' };
+  /* `qua-khu` = việc ĐÃ XẢY RA (ngày mua tài sản, ngày ban hành giấy tờ).
+     Sàn dưới để 1900 chứ KHÔNG 1990 (REV-0061 · CAO-2): ca thật đo được là
+     máy in mua năm 1988 bị chặn, mà câu lỗi lại ghi "không quá hôm nay" —
+     người dùng đọc xong vẫn không biết mình vướng đầu nào, sửa kiểu gì cũng
+     không qua. Sàn 1990 là con số tự nghĩ ra, không luật nghiệp vụ nào chốt.
+     1900 giữ đúng vai trò DUY NHẤT của sàn ở đây: chặn `0001-01-01` mà
+     Chrome sinh ra giữa lúc người ta đang gõ năm. */
+  if (kieu === 'qua-khu') {
+    return { min: '1900-01-01', max: homNay, chu: 'không quá hôm nay',
+             chuDuoi: 'Ngày sớm nhất nhận được là 01/01/1900',
+             chuTren: `Ngày này đã xảy ra rồi nên không được quá hôm nay (${ngayDocVN(homNay)})` };
+  }
+  return { min: '1900-01-01', max: '2100-12-31', chu: 'từ năm 1900 đến năm 2100',
+           chuDuoi: 'Ngày sớm nhất nhận được là 01/01/1900',
+           chuTren: 'Ngày muộn nhất nhận được là 31/12/2100' };
 }
 
-/** Câu sai bằng tiếng người cho một ô ngày. `null` = không sai. */
+/** `YYYY-MM-DD` → `DD/MM/YYYY`. Chuỗi rỗng nếu không phải một ngày đủ. */
+export function ngayDocVN(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || '').trim());
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : '';
+}
+
+/** Số tuổi tính đến hôm nay (giờ VN). `null` nếu không tính được. */
+export function tuoiTheoNgaySinh(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || '').trim());
+  if (!m) return null;
+  const h = homNayVN();
+  /* `substring` chứ không `slice`: đây là CẮT CHUỖI ngày, không phải cắt bớt
+     một danh sách — `do-cat-im-lang` canh `.slice(0, N)` và đã báo oan đúng
+     dòng này một lần. Cùng lẽ với `docNgay()` ở trên. */
+  let t = +h.substring(0, 4) - +m[1];
+  if (h.substring(5) < `${m[2]}-${m[3]}`) t--;
+  return t >= 0 && t < 200 ? t : null;
+}
+
+/* ---- ERP HIỂU THÀNH NGÀY NÀO — bản vá THẬT của GY-0004 ------------------
+   `min`/`max` chặn được `0001-01-01`: thứ tệ nhất VỀ HÌNH THỨC. Nó KHÔNG
+   chặn được thứ tệ nhất VỀ HẬU QUẢ — máy để tiếng Anh thì ô đầu là THÁNG,
+   gõ `25011990` ra `1990-02-05`: một ngày HỢP LỆ, nằm trong khoảng, không
+   một câu lỗi nào. Sai mà trông như đã điền xong (REV-0061).
+
+   Dòng "Thứ tự trên máy này…" nói đúng sự thật nhưng CHỈ HIỆN LÚC BẤM VÀO Ô
+   — mà bấm vào là gõ ngay, chưa kịp đọc.
+
+   Cách chữa KHÔNG phụ thuộc thứ tự trình duyệt: sau khi ô CÓ GIÁ TRỊ thì đọc
+   lại chính ngày đó bằng chữ Việt ngay cạnh ô. Người gõ nhìn thấy ERP hiểu
+   thành ngày nào NGAY LÚC GÕ XONG, chứ không phải lúc đã lưu xong. Ngày sinh
+   kèm luôn số tuổi — sai một con là thấy ngay.
+
+   Vì sao KHÔNG viết lại ô theo thứ tự Việt: `<input type="date">` không cho
+   đổi thứ tự ô con, và đè `.value` giữa lúc người ta đang gõ chính là cái
+   bẫy mất tiêu điểm của GY-0004 bản đầu. */
+export function docLaiNgay(o) {
+  const doc = ngayDocVN(o.value);
+  if (!doc) return '';
+  if (o.dataset.ngayKieu === 'ngay-sinh') {
+    const t = tuoiTheoNgaySinh(o.value);
+    return t == null ? `= ${doc}` : `= ${doc} · ${t} tuổi`;
+  }
+  return `= ${doc}`;
+}
+
+/** Câu sai bằng tiếng người cho một ô ngày. `null` = không sai.
+ *  PHẢI NÓI ĐÚNG ĐẦU NÀO BỊ VI PHẠM (REV-0061 · CAO-2): một câu chung cho cả
+ *  hai đầu là câu sai sự thật ở một nửa số ca. */
 export function cauSaiONgay(o) {
   if (!o.value) return o.validity && o.validity.badInput ? 'Ngày này chưa điền đủ ba ô ngày / tháng / năm.' : null;
   const v = o.validity || {};
   const kh = khoangCuaKieu(o.dataset.ngayKieu || '');
-  if (v.rangeUnderflow || v.rangeOverflow) {
-    return o.dataset.ngayKieu === 'ngay-sinh'
-      ? `Năm sinh phải ${kh.chu} — kiểm lại giúp tôi.`
-      : `Ngày phải ${kh.chu} — kiểm lại giúp tôi.`;
-  }
+  if (v.rangeUnderflow) return `${kh.chuDuoi} — bạn đang nhập ${ngayDocVN(o.value) || o.value}.`;
+  if (v.rangeOverflow) return `${kh.chuTren} — bạn đang nhập ${ngayDocVN(o.value) || o.value}.`;
   if (v.badInput) return 'Ngày này chưa điền đủ ba ô ngày / tháng / năm.';
   return null;
 }
@@ -140,13 +200,22 @@ function nangCapMot(o) {
   if (!o.max) o.max = kh.max;
 
   const thuTu = thuTuONgay();
-  const cauGoiY = (thuTu ? `Thứ tự trên máy này: ${thuTu}. ` : '') +
-                  `Dán được: 25/01/1990 · 1990-01-25 · 25011990. Nhận ${kh.chu}.`;
-  o.title = cauGoiY;
+  /* Câu gợi ý lúc bấm vào ô GIỮ NGẮN — một dòng, chỉ nói THỨ TỰ và KHOẢNG
+     nhận. Phần "dán được kiểu nào" đẩy hết vào `title` (REV-0061 · THẤP-1:
+     câu ba dòng đẩy hộp dài thêm 75px ở 375px, mà điện thoại còn bị bàn phím
+     ảo che ~350px nữa). */
+  const cauGoiY = (thuTu ? `Thứ tự trên máy này: ${thuTu}. ` : '') + `Nhận ${kh.chu}.`;
+  o.title = (thuTu ? `Thứ tự trên máy này: ${thuTu}. ` : '') +
+            `Dán được: 25/01/1990 · 1990-01-25 · 25011990. Nhận ${kh.chu}.`;
 
-  /* Dòng gợi ý + dòng báo sai nằm CHUNG một ô, và MẶC ĐỊNH ẨN — hiện lúc
-     bấm vào ô, hoặc lúc đang sai. Hiện sẵn cho cả 15 ô là đẩy mọi form dài
-     thêm 15 dòng, phá đúng luật "vừa một màn" Sếp đã nhắc hai lần. */
+  /* MỘT thẻ em duy nhất cho cả ba việc: đọc lại ngày · gợi ý · báo sai.
+     Không dựng thẻ thứ hai — mỗi thẻ em chèn thêm là một chỗ có thể gãy cho
+     bộ chọn CSS anh-em kề hoặc `nextElementSibling` (REV-0061 · lời khai #2).
+
+     ẨN khi ô còn RỖNG và không bấm vào: hiện sẵn cho cả 17 ô là đẩy mọi form
+     dài thêm 17 dòng, phá đúng luật "vừa một màn" Sếp đã nhắc hai lần.
+     HIỆN THƯỜNG TRỰC khi ô ĐÃ CÓ GIÁ TRỊ: đó là lúc — và là chỗ duy nhất —
+     người ta thấy được ERP hiểu con số vừa gõ thành ngày nào (GY-0004). */
   const nhac = document.createElement('div');
   nhac.className = 'o-ngay-nhac';
   nhac.hidden = true;
@@ -155,6 +224,7 @@ function nangCapMot(o) {
   const veNhac = (dangBam) => {
     const sai = cauSaiONgay(o);
     if (sai) {
+      nhac.dataset.ngayDoc = '';
       nhac.textContent = sai;
       nhac.classList.add('sai');
       nhac.hidden = false;
@@ -163,13 +233,23 @@ function nangCapMot(o) {
     }
     o.classList.remove('o-ngay-sai');
     nhac.classList.remove('sai');
-    nhac.textContent = cauGoiY;
-    nhac.hidden = !dangBam;
+    const doc = docLaiNgay(o);
+    nhac.dataset.ngayDoc = doc;
+    nhac.textContent = doc ? (dangBam ? `${doc} — ${cauGoiY}` : doc) : cauGoiY;
+    nhac.hidden = !(dangBam || doc);
   };
 
   o.addEventListener('focus', () => veNhac(true));
   o.addEventListener('blur', () => veNhac(false));
   o.addEventListener('input', () => veNhac(document.activeElement === o));
+  /* `change` cũng phải nghe: chọn ngày bằng BẢNG LỊCH (bấm chuột) không bắn
+     `input` ở mọi bản Chrome — thiếu nó thì đúng đường người dùng hay dùng
+     nhất lại là đường không thấy dòng đọc lại. */
+  o.addEventListener('change', () => veNhac(document.activeElement === o));
+
+  /* Ô dựng sẵn CÓ giá trị (`tlqBanHanh` vẽ bằng chuỗi, hộp Sửa việc gán
+     `.value` rồi mới mở) phải hiện dòng đọc lại NGAY, không đợi ai chạm vào. */
+  veNhac(false);
 
   /* DÁN. `paste` CÓ bắn trên `<input type="date">` và huỷ được — đã đo. */
   o.addEventListener('paste', (e) => {

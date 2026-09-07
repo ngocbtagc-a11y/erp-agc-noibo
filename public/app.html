@@ -1560,13 +1560,22 @@
           <div class="panel-head"><h4>Báo cáo Xuất – Nhập – Tồn theo kỳ</h4></div>
           <div class="panel-body" style="padding-bottom:0">
             <form id="kvFormBaoCao" class="kv-loc" autocomplete="off">
+              <!-- KHÔNG gắn `data-ngay-kieu="qua-khu"` cho hai ô này (REV-0061 · CAO-1).
+                   Đây là KHOẢNG ĐỌC của một báo cáo, không phải một ngày đã xảy ra.
+                   Gắn `qua-khu` là đặt `max = hôm nay`: chị kho gõ "đến ngày
+                   31/12/2026" cho chắc là ô đỏ, mà ô lại `required` trong form có
+                   submit ⇒ TRÌNH DUYỆT CHẶN CẢ FORM bằng bong bóng tiếng Anh của
+                   Chrome, không phải câu tiếng Việt của ERP. Đo được: 2026-09-08 và
+                   2026-12-31 đều `checkValidity() = false`. Luật "không xem báo cáo
+                   tới ngày trong tương lai" chưa ai chốt — không tự áp. Khoảng mặc
+                   định 1900–2100 vẫn chặn `0001-01-01`, đúng việc nó phải làm. -->
               <div class="field">
                 <label>Từ ngày</label>
-                <input type="date" id="kvBcTu" data-ngay-kieu="qua-khu" required>
+                <input type="date" id="kvBcTu" required>
               </div>
               <div class="field">
                 <label>Đến ngày</label>
-                <input type="date" id="kvBcDen" data-ngay-kieu="qua-khu" required>
+                <input type="date" id="kvBcDen" required>
               </div>
               <button type="submit" class="btn-primary" id="kvNutBaoCao">Xem báo cáo</button>
             </form>
@@ -2537,7 +2546,10 @@
             </div>
             <div class="field">
               <label>Ngày vào làm</label>
-              <input type="date" id="dmNgayVao" data-ngay-kieu="qua-khu">
+              <!-- KHÔNG `qua-khu` (REV-0061 · THẤP-2): ngày vào làm thường là
+                   TƯƠNG LAI — offer đã ký, thứ Hai tới bắt đầu. `max = hôm nay`
+                   sẽ chặn đúng ca hay gặp nhất. -->
+              <input type="date" id="dmNgayVao">
             </div>
             <div class="field">
               <label>Trạng thái</label>
@@ -3196,10 +3208,12 @@
          kết, một cái chấm kết quả. Gộp vào một nút là mời bấm nhầm.
 
      VÌ SAO KHÔNG GỘP VÀO "Vinh danh": Vinh danh là lời khen CÔNG KHAI về
-     một CON NGƯỜI, cả công ty đọc, và tự trôi đi cho bảng luôn tươi. Nhận
-     xét ở đây gắn vào MỘT VIỆC có `dau_ra` viết sẵn, chỉ hai người trong
-     cuộc, và ở lại vĩnh viễn trong sổ việc — hai vòng đời khác nhau, gộp
-     là hỏng cả hai. NHƯNG có bắc cầu: viết xong một nhận xét khen thì bấm
+     một CON NGƯỜI, và tự trôi đi cho bảng luôn tươi. Nhận xét ở đây gắn vào
+     MỘT VIỆC có `dau_ra` viết sẵn và ở lại vĩnh viễn trong sổ việc — hai
+     vòng đời khác nhau, gộp là hỏng cả hai.
+     (Bản mô tả cũ ở đây viết nhận xét là "chỉ hai người trong cuộc" — SAI.
+     Cửa đọc `suaLichSu` chỉ hỏi `duocXemTab(phien,'congviec')`, nên ai xem
+     được tab Công việc đều đọc được nguyên văn. REV-0061 · VỪA-4.) NHƯNG có bắc cầu: viết xong một nhận xét khen thì bấm
      thẳng "Vinh danh luôn" ngay tại đây, không phải sang tab khác gõ lại.
      (Sếp Ngọc tự nhận điểm cần cải thiện là ghi nhận và khen ngợi — nên
      đường đi tới lời khen phải NGẮN HƠN đường đi tới lời chê, không phải
@@ -3217,10 +3231,20 @@
       <ul id="cv-nx-so"></ul>
     </div>
     <div class="empty" id="cv-nx-trong" hidden>Chưa có nhận xét nào cho việc này.</div>
+    <!-- Sổ nhận xét CẮT THÌ PHẢI NÓI (REV-0061 · CHẶN-1). Đúng khuôn
+         `#cv-sua-lichsu-cat` của hộp Sửa việc ngay cạnh — hộp này trước
+         không có ô nào, nên nhận xét cũ rơi mất mà màn hình vẫn nói
+         "Chưa có nhận xét nào". -->
+    <div class="dai-cat" id="cv-nx-cat" hidden></div>
 
     <form id="cv-nx-form" class="form-luoi" autocomplete="off" style="margin-top:14px">
       <div class="field field-rong">
-        <label for="cv-nx-noi-dung">Nhận xét <span class="goi-y">· người được nhận xét sẽ đọc được câu này</span></label>
+        <!-- NÓI ĐÚNG SỰ THẬT VỀ NGƯỜI ĐỌC (REV-0061 · VỪA-4). Câu cũ chỉ nói
+             "người được nhận xét sẽ đọc được" — đúng nhưng thiếu một nửa:
+             cửa đọc là `suaLichSu`, ai xem được tab Công việc đều đọc được
+             nguyên văn. Người viết phải biết mình đang viết cho ai TRƯỚC khi
+             gõ, không phải biết sau. -->
+        <label for="cv-nx-noi-dung">Nhận xét <span class="goi-y">· người được nhận xét đọc được, và ai xem được tab Công việc cũng đọc được — viết như nói trước mặt</span></label>
         <!-- GỢI Ý HAI CHIỀU, KHÔNG PHẢI MẪU CỨNG. Ô nhận xét mà chỉ mời chê
              thì thành ô để chê; hai nút dưới đây chỉ CHÈN một chữ mở đầu rồi
              nhường lại cho người viết, không ép điền theo khuôn. -->

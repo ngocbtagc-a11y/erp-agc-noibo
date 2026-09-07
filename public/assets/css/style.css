@@ -570,9 +570,13 @@ button { cursor: pointer; border: none; background: none; }
 }
 
 /* ---- Ô NHẬP NGÀY DÙNG CHUNG (GY-0004) ----------------------------------
-   Dòng nhắc nằm ngay dưới ô, MẶC ĐỊNH ẨN — chỉ hiện lúc đang bấm vào ô hoặc
-   lúc giá trị sai. Hiện sẵn cho cả 15 ô ngày là đẩy mọi form dài thêm 15
-   dòng, phá đúng luật "vừa một màn" Sếp Ngọc đã nhắc hai lần.
+   Dòng dưới ô làm BA việc bằng MỘT thẻ: đọc lại ngày · gợi ý · báo sai.
+   · ô RỖNG và không bấm vào → ẩn hẳn. Hiện sẵn cho cả 17 ô ngày là đẩy mọi
+     form dài thêm 17 dòng, phá luật "vừa một màn" Sếp Ngọc đã nhắc hai lần.
+   · ô ĐÃ CÓ GIÁ TRỊ → hiện thường trực "= 25/01/1990" (ngày sinh kèm số
+     tuổi). Đây là bản vá THẬT của GY-0004: máy để tiếng Anh gõ `25011990` ra
+     `1990-02-05` — hợp lệ, trong khoảng, không một câu lỗi nào; chỉ dòng này
+     nói ra được ERP đang hiểu thành ngày nào (REV-0061).
    Đỏ CHỈ dùng cho `.sai` — đúng ngoại lệ duy nhất của luật ba màu. */
 .o-ngay-nhac {
   margin-top: 6px;
@@ -3965,6 +3969,9 @@ tr.kd-chiadoi td {
 
 .tl-nk-ds { margin: 0; padding-left: 20px; }
 .tl-nk-ds li { margin-bottom: 4px; }
+/* Sổ sửa tài liệu bị cắt thì nói ra ngay dưới danh sách (REV-0061). Chữ mờ,
+   KHÔNG đỏ — đây là lời báo, không phải lỗi của người đang xem. */
+.tl-nk-cat { margin-top: 6px; font-size: 12px; color: var(--text-mute); }
 .tl-dai {
   display: inline-block; padding: 2px 10px; border-radius: var(--r-pill);
   font-size: 12px; font-weight: 600;

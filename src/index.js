@@ -3403,14 +3403,35 @@ async function laCapTrenCua(env, nguoiId, nhanVienId) {
    (bang = 'cong_viec' | 'muc_tieu' | ...). MỘT cửa cho cả lớp, không đẻ mỗi
    module một cửa. Trả kèm `cau` đã dựng sẵn để giao diện chỉ việc in ra. */
 const SUA_BANG_HOP_LE = new Set(['cong_viec', 'muc_tieu']);
+/* Lọc theo LOẠI VẾT — `?truong=nhan_xet`.
+   ---------------------------------------------------------------------------
+   VÌ SAO PHẢI CÓ (REV-0061 · CHẶN-1). Sổ sửa và sổ nhận xét dùng CHUNG một
+   bảng, mà trần 100 dòng cũng dùng chung. Một việc chạy dài có 110 lần sửa
+   bình thường thì 3 câu nhận xét viết từ tháng 6 — LUÔN là dòng CŨ NHẤT —
+   rơi ra ngoài trần trước tiên, và hộp Nhận xét in ra "Chưa có nhận xét nào
+   cho việc này". Không phải để trống: KHẲNG ĐỊNH SAI.
+
+   Vá bằng dải cắt thôi thì chưa đủ — dải cắt chỉ nói "còn N dòng nữa", trong
+   khi thứ rơi mất là TOÀN BỘ nhận xét. Nên chữa ở tầng bệnh: hỏi RIÊNG loại
+   vết mình cần, để lời nhận xét về một con người không bao giờ bị đẩy ra khỏi
+   màn hình vì ai đó sửa việc nhiều lần. Trần 100 khi ấy là 100 NHẬN XÉT của
+   một việc — con số không đời nào chạm tới; mà chạm thì `cat` nói đúng số
+   nhận xét, không phải số dòng sổ.
+
+   Danh sách trắng chứ không nhận chuỗi tự do: `truong` đi thẳng vào WHERE
+   (đã tham số hoá, nhưng cửa nào cũng nên đóng cả hai lớp), và một tên trường
+   gõ sai mà trả về rỗng thì lại đúng cái "màn hình khẳng định sai" đang chữa. */
+const SUA_TRUONG_LOC = new Set(['nhan_xet']);
 async function suaLichSu(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
   const u = new URL(req.url);
   const bang = String(u.searchParams.get('bang') || '').trim();
   const id = parseInt(u.searchParams.get('id'), 10);
+  const truong = String(u.searchParams.get('truong') || '').trim();
   if (!SUA_BANG_HOP_LE.has(bang)) return loi('Bảng không hợp lệ');
   if (!id) return loi('Thiếu id bản ghi');
+  if (truong && !SUA_TRUONG_LOC.has(truong)) return loi('Loại vết không hợp lệ');
   /* Quyền XEM đi theo quyền xem của chính thực thể đó. Trạm Mục Tiêu vốn đã
      minh bạch toàn công ty (tinh thần MBOs) — ai xem được việc thì xem được
      lịch sử sửa của việc đó. Cái phải siết là quyền SỬA, không phải quyền
@@ -3429,22 +3450,26 @@ async function suaLichSu(req, env) {
   /* `ly_do` là cột migration `them-ly-do-sua.sql` mới thêm. Deploy có thể
      chạy TRƯỚC migration (REV-0037 · L2) — đọc phòng thủ để cửa này hỏng
      theo chiều an toàn: mất cột lý do chứ không mất cả sổ. */
+  /* Lọc nằm TRONG câu SQL, không lọc sau khi đã cắt — lọc sau trần là đúng
+     cái lỗi CHẶN-1 chép lại một tầng thấp hơn. */
+  const locTruong = truong ? ' AND truong = ?' : '';
+  const thamSo = truong ? [bang, String(id), truong] : [bang, String(id)];
   const cauDoc = (coLyDo) => `
     SELECT truong, gia_tri_cu, gia_tri_moi, nguoi_id, nguoi_ten,
            ${coLyDo ? 'ly_do' : 'NULL AS ly_do'}, luc
-      FROM lich_su_thay_doi_nen WHERE bang = ? AND ban_ghi_id = ?
+      FROM lich_su_thay_doi_nen WHERE bang = ? AND ban_ghi_id = ?${locTruong}
      ORDER BY luc DESC, id DESC LIMIT ${GH + 1}`;
   let kq;
   try {
-    kq = await env.DB.prepare(cauDoc(true)).bind(bang, String(id)).all();
+    kq = await env.DB.prepare(cauDoc(true)).bind(...thamSo).all();
   } catch (e) {
     if (!/no such column/i.test(String(e && e.message || e))) throw e;
-    kq = await env.DB.prepare(cauDoc(false)).bind(bang, String(id)).all();
+    kq = await env.DB.prepare(cauDoc(false)).bind(...thamSo).all();
   }
   const { ds, biCat } = catBot(kq, GH);
   const cat = await nhanCat(env, biCat, GH,
-    'SELECT COUNT(*) AS n FROM lich_su_thay_doi_nen WHERE bang = ? AND ban_ghi_id = ?',
-    [bang, String(id)], null);
+    `SELECT COUNT(*) AS n FROM lich_su_thay_doi_nen WHERE bang = ? AND ban_ghi_id = ?${locTruong}`,
+    thamSo, null);
   return json({ ds: ds.map(d => ({ ...d, cau: cauSuaDoc(d, bang) })), cat });
 }
 
@@ -3726,6 +3751,18 @@ async function cvSua(req, env) {
    AI ĐƯỢC VIẾT: người giao · quản lý cấp trên của người nhận · Admin ·
    và CHÍNH người nhận (để nói lại). Nhận xét một chiều không cãi được thì
    người ta không đọc nữa — và mất luôn cái kênh này.
+
+   ⚠️ AI ĐƯỢC ĐỌC THÌ RỘNG HƠN HẲN — VÀ PHẢI NÓI RA (REV-0061 · VỪA-4).
+   Cửa ĐỌC là `suaLichSu`, mà nó chỉ hỏi `duocXemTab(phien, 'congviec')`:
+   người khác phòng, không dính dây gì tới việc này, vẫn `GET /api/sua/lich-su`
+   ra nguyên văn câu nhận xét. Đo được: chị Hằng (kế toán trưởng) đọc được
+   nhận xét trong một việc của kho.
+
+   Bản mô tả cũ ở đây và trên hộp Nhận xét viết *"chỉ hai người trong cuộc"* —
+   ĐÓ LÀ SAI SỰ THẬT, và sai theo chiều nguy hiểm nhất: người viết tưởng mình
+   đang viết riêng cho một người, trong khi cả công ty đọc được. Nay sửa LỜI
+   MÔ TẢ cho khớp sự thật, KHÔNG tự sửa quyền: "ai được đọc nhận xét" là
+   chính sách nhân sự, đã ghi thành câu chờ Sếp Ngọc chốt (CHANGELOG).
    ========================================================================== */
 async function cvNhanXet(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
@@ -3735,8 +3772,16 @@ async function cvNhanXet(req, env) {
 
   const id = parseInt(b.id, 10);
   if (!id) return loi('Thiếu id công việc');
-  const noiDung = String(b.noi_dung || '').trim().slice(0, 1000);
+  /* TỪ CHỐI CHỨ KHÔNG CẮT (REV-0061 · VỪA-3). Bản trước `.slice(0, 1000)` rồi
+     trả HTTP 200 — gọi thẳng API 1500 ký tự thì mất 500 ký tự cuối mà không
+     một chữ nào nói là đã cắt. `maxlength="1000"` chỉ che được đường trình
+     duyệt; một tích hợp sau này (hay chính bản ERP trên điện thoại) thì không.
+     Cùng một lẽ với `suaLichSu`: sổ này cắt im lặng là nói dối. */
+  const noiDung = String(b.noi_dung || '').trim();
   if (noiDung.length < 5) return loi('Nhận xét quá ngắn — viết rõ chỗ làm tốt hoặc chỗ cần sửa giúp tôi');
+  if (noiDung.length > 1000) {
+    return loi(`Nhận xét dài ${noiDung.length} ký tự — tối đa 1000. Cắt bớt giúp tôi, đừng để tôi tự cắt mất phần cuối.`);
+  }
 
   const cv = await env.DB.prepare(
     'SELECT id, tieu_de, nguoi_giao_id, nguoi_giao_ten, nguoi_nhan_id, nguoi_nhan_ten FROM cong_viec WHERE id = ?'
