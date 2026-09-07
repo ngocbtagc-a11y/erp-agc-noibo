@@ -57,6 +57,7 @@
     "do-cat-im-lang": "node scripts/do-cat-im-lang.mjs",
     "do-luat-css-chet": "node scripts/do-luat-css-chet.mjs",
     "do-nut-dai-cat": "node scripts/do-nut-dai-cat-44px.mjs",
+    "do-nut-noi-doi": "node scripts/do-nut-noi-doi.mjs",
     "do-duong-di-tiep": "node scripts/do-duong-di-tiep.mjs",
     "nap-khotailieu-may": "node scripts/chay-migration.mjs them-kho-tai-lieu.sql",
     "nap-khotailieu": "node scripts/chay-migration.mjs them-kho-tai-lieu.sql --remote",

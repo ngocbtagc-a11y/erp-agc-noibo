@@ -2126,8 +2126,10 @@ td .sm { font-size: 12px; color: var(--text-mute); white-space: nowrap; }
    kể cả bàn đo của người soi — sẽ báo "nút 15/24px, dưới luật nhà" và người
    sau lại phải đi tìm hiểu xem con số nào mới thật. Hộp đo ra ĐÚNG 44px là
    thứ vừa đúng cho ngón tay vừa đúng cho phép đo.
-   Chốt canh: `npm run do-nut-dai-cat` đo cả CHIỀU CAO HỘP lẫn CHIỀU CAO DÒNG
-   của `.dai-gon-btn` trong ô bảng, và có ca đối chứng gỡ luật này ra. */
+   Chốt canh: `npm run do-nut-dai-cat` đo CHIỀU CAO HỘP, VÙNG CHẠM THẬT
+   (`elementFromPoint` quét từng pixel) và CHIỀU CAO DÒNG của `.dai-gon-btn`
+   trong ô bảng, ở CẢ chế độ bảng LẪN chế độ thẻ, và có ca đối chứng gỡ luật
+   này ra. */
 td .dai-gon-btn {
   display: inline-flex;
   align-items: center;
@@ -2135,16 +2137,68 @@ td .dai-gon-btn {
   padding: 0 6px;
   /* -10px trên/dưới: hộp 44px chỉ ăn 24px chiều dọc của dòng.
      -6px trái: đệm ngang mới không được đẩy chữ nút lệch khỏi mép cột.
-     HÌNH HỌC ĐO ĐƯỢC trên đường vẽ thật (1440 · 1280 · 1200px, 6 nút):
-       hộp 74×44 · lọt hẳn trong ô (mép trái nút cách mép ô 10px)
+
+     ⚠️ SỐ ĐO NGAY DƯỚI ĐÂY CHỈ ĐÚNG CHO **CHẾ ĐỘ BẢNG** (≥1024px). Bản trước
+     đo ở 1440 · 1280 · 1200 — cả ba đều là chế độ bảng — rồi viết câu kết
+     luận cho MỌI bề ngang. Ở chế độ THẺ (≤980px) số đo NGƯỢC lại; xem khối
+     `position/z-index` cuối luật này. Ba vòng liên tiếp của nhánh này cùng
+     mắc đúng chuyện ấy (đo một phía của cái vạch rồi kết luận cho cả hai
+     phía), nên: ghi phạm vi NGAY CẠNH số đo, đừng để người sau tự suy.
+
+     HÌNH HỌC ĐO ĐƯỢC trên đường vẽ thật, CHẾ ĐỘ BẢNG (1440 · 1280 · 1200 ·
+     1024px):
+       hộp 74.3×44 · lọt hẳn trong ô (mép trái nút cách mép ô 10px)
        thò xuống dưới đáy ô 1–2px · đè lên 10px cuối của phần chữ bị kẹp
-       `elementFromPoint` giữa hộp trả về CHÍNH NÓ → không bị gì che.
+       `elementFromPoint` quét dọc giữa hộp → 45px liền mạch, không bị gì che
+       chiều cao dòng 95.5px
+
      ĐỪNG dồn lề âm về một phía. Dồn xuống dưới thì nút thò sang vùng DÒNG KẾ
-     TIẾP và ăn cú bấm của dòng người ta đang nhắm — tệ hơn hẳn. Đè 10px lên
-     chữ của CHÍNH Ô MÌNH thì vô hại: bấm vào dòng chữ đang bị cắt mà nó bung
-     ra là đúng thứ người dùng muốn. */
+     TIẾP và ăn cú bấm của dòng người ta đang nhắm; đo được: dồn lề âm xuống
+     làm dòng cao thêm 10–20px, tức ăn mất số dòng thấy được — cấm.
+     Nhưng bản ĐỐI XỨNG -10/-10 đang dùng KHÔNG tránh HẲN chuyện thò.
+     Đo được (chấm `elementFromPoint` ngay dưới mép trên của `<tr>` kế tiếp):
+       chế độ BẢNG 1440 · 1280 · 1200 · 1024 : nút thò xuống đáy `<tr>` 1px,
+         dòng sau chồng lên -1px, và MỌI nút CÓ dòng kế tiếp **ăn đúng 1px**
+         của dòng ấy — `elementFromPoint` ở đó trả về NÚT.
+       chế độ THẺ 414 · 375 · 320                : ăn 0px (các thẻ cách nhau
+         40.8px, nút còn cách đáy thẻ 32.8px).
+     1px ấy rơi đúng vào viền/đệm trên của dòng sau, chỗ không có nút nào, nên
+     vô hại — nhưng là 1px chứ không phải 0px, và câu khai cũ viết như thể đã
+     tránh hẳn. (REV-0063 vòng 3, VỪA-2.)
+     Đè 10px lên chữ của CHÍNH Ô MÌNH thì vô hại: bấm vào dòng chữ đang bị cắt
+     mà nó bung ra là đúng thứ người dùng muốn. */
   margin: -10px 0 -10px -6px;
   font-size: 12.5px;
+  /* ⚠️ HAI DÒNG NÀY LÀ THỨ DUY NHẤT GIỮ ĐỦ 44px VÙNG CHẠM Ở CHẾ ĐỘ THẺ.
+     REV-0063 vòng 3, CAO-1. Hộp đo ra 44px ở MỌI bề ngang, nhưng ngón tay chỉ
+     bấm được 37–38px trên điện thoại — quét từng pixel bằng `elementFromPoint`
+     trên đường vẽ thật, TRƯỚC khi có hai dòng này:
+
+       bề ngang            | hộp       | vùng chạm | chế độ
+       1440 · 1280 · 1200 ·
+       1024                | 74.3 × 44 | 75 × 45 ✅| BẢNG — các ô nằm CẠNH nhau
+       414 · 390 · 320     | 74.3 × 44 | 75 × 37 ❌| THẺ  — hụt 9px đáy
+       375 · 360           | 74.3 × 44 | 75 × 38 ❌| THẺ  — hụt 8px đáy
+
+     AI CHE: ở ≤980px bảng đổi sang chế độ THẺ (`.luoi-bang tr/td` thành
+     `display: block|inline`) nên các ô XẾP CHỒNG dọc. `margin-bottom: -10px`
+     của nút kéo ô kế tiếp lên trùm 8–9px đáy nút, và `td.num` đứng SAU trong
+     cây nên nó thắng phép chấm điểm: `elementFromPoint` ở dải đáy trả về
+     `TD.num`. Ở chế độ bảng các ô nằm cạnh nhau nên không ai trùm — đó là lý
+     do 1024 trở lên vẫn đủ 44px. LỀ ÂM KHÔNG PHẢI THỦ PHẠM, thứ tự xếp lớp
+     mới là; đừng "chữa" bằng cách gỡ lề âm.
+
+     VÌ SAO KHÔNG GỠ LỀ ÂM — đo cả 5 phương án, ở 375px:
+       ① nguyên bản                  chạm 38 ❌ · dòng 137
+       ② bỏ lề âm DƯỚI               chạm 45 ✅ · dòng 147 (+10) ❌ ăn mất dòng
+       ③ bỏ HẲN lề âm                chạm 45 ✅ · dòng 157 (+20) ❌ ăn mất dòng
+       ④ position:relative;z-index:1 chạm 45 ✅ · dòng 137 (KHÔNG đổi) ✅
+       ⑤ nút thành block riêng dòng  chạm 27 ❌ tệ hơn
+     Chỉ ④ đạt cả hai điều kiện cùng lúc, và giá của nó là 0 pixel: không phạm
+     chốt "đừng ăn mất số dòng thấy được" mà chính khối này dựng ra để tự bảo
+     vệ. Lề âm giữ nguyên. */
+  position: relative;
+  z-index: 1;
 }
 
 .person { display: flex; align-items: center; gap: 10px; }

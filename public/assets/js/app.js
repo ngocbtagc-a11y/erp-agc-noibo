@@ -12097,11 +12097,9 @@ function luoiBang() {
    Giữ lại một cái nút nói dối để phòng một vòng lặp chưa ai thấy là đổi sai
    chiều — đo được thắng đoán được.
 
-   CHỐT CHẶN DAO ĐỘNG, ĐỂ KHÔNG PHẢI TIN AI: `GO_TOI_DA`. Mỗi ô đếm số lần
-   nút THẬT của nó bị gỡ (`data-so-go`); quá hạn thì thôi, giữ nút lại. Vòng
-   lặp giả định — nếu nó có thật ở một bố cục nào đó — bị chặn sau đúng
-   GO_TOI_DA nhịp, thay vì được chặn bằng cách không bao giờ dọn rác. Bộ đếm
-   nằm trên chính phần tử nên mỗi lần bảng vẽ lại là một khởi đầu sạch.
+   CHỐT CHẶN DAO ĐỘNG, ĐỂ KHÔNG PHẢI TIN AI: `GO_TOI_DA` — nhưng ĐẾM THEO
+   CHÙM, không đếm theo cả đời DOM. Xem khối ngay trên hai hằng số dưới đây;
+   bản trước đếm theo đời DOM với trần 2 và chạm trần thật ở lượt nới thứ BA.
 
    ĐANG BUNG THÌ ĐỪNG ĐỤNG: `.dai-gon-mo` bỏ `max-height` nên `scrollHeight`
    bằng `clientHeight`, tức trông như "không kẹp" — không loại trừ thì mỗi lần
@@ -12116,7 +12114,15 @@ function luoiBang() {
    trên ĐƯỜNG VẼ THẬT và là arm DUY NHẤT bắt được đúng lỗi này — nay có một ca
    `--tu-kiem` ĐỨNG SẴN tự gỡ `capNutDongPhu()` rồi đòi R7 phải đỏ, chứ không
    còn chỉ chứng minh bằng lời (REV-0063 vòng 2, THẤP-4). Số đo khi gài lại:
-   K xanh ở mọi mức, R7 đỏ ở 1440 và 1280, "hiện 34px / thật 50px".
+   K xanh ở mọi mức, R7 đỏ ở **BA** mức — 1440 · 1280 · 1200 — "hiện 34px /
+   thật 50px". (Câu cũ ghi "1440 và 1280", thiếu 1200; mức ấy đã vào `RONGS`
+   từ vòng 2. REV-0063 vòng 3, THẤP-4.)
+   ⚠️ VÀ R7 MỚI ĐƯỢC CHỨNG MINH Ở 3/5 MỨC, KHÔNG PHẢI MỌI BỀ NGANG. Ở 1024px
+   và 375px ca `--tu-kiem` KHÔNG gài được ô nào (arm R7 hỏi theo Ô, mà ở hai
+   mức ấy hai bảng SKU đã xếp chồng nên cột rộng ra và không ô nào còn kẹp) —
+   bàn đo nói thẳng "không gài được ca nào ở bề ngang này, KHÔNG KẾT LUẬN GÌ"
+   thay vì in một dấu tick. Đừng đọc "132 ĐẠT / 7 TRƯỢT" thành "R7 được chứng
+   minh ở mọi bề ngang". (REV-0063 vòng 3, THẤP-2.)
    Tập bắt của K là TẬP CON THỰC SỰ của R7 — xem đính chính trong
    `scripts/do-cat-im-lang.mjs`; đừng lấy "vẫn còn K" làm lý do bỏ R7.
    (`do-cat-im-lang` KHÔNG canh được lớp này: nó đọc MÃ NGUỒN tìm `LIMIT` và
@@ -12133,9 +12139,64 @@ function luoiBang() {
    mai có ô ảnh thật thì cân nhắc lại — nút "Xem thêm" dưới một tấm ảnh bị cắt
    là đúng việc, chỉ là không arm nào canh nó.
    ========================================================================== */
-/* Trần số lần gỡ nút THẬT trên MỘT ô, trong MỘT đời DOM. 2 là đủ để dọn sạch
-   mọi ca kéo co / xoay máy đo được, và vẫn chặn cứng cái vòng lặp giả định. */
-const GO_TOI_DA = 2;
+/* ⚠️ TRẦN ĐẾM THEO CHÙM, KHÔNG THEO ĐỜI DOM — REV-0063 vòng 3, VỪA-1.
+   Bản trước: `GO_TOI_DA = 2` đếm trên CẢ ĐỜI DOM, kèm lời khai *"2 là đủ để
+   dọn sạch mọi ca kéo co / xoay máy ĐO ĐƯỢC"*. Câu ấy SAI, và Hồ Ly đo được
+   nó sai: nới rồi thu 5 vòng liên tiếp trên bảng SKU (không có lượt tải dữ
+   liệu nào xen vào), từ lượt nới thứ BA trần chạm và **4 nút "Xem thêm" ở lại
+   trên ô đã hết kẹp** — đúng cái "nút nói dối" mà chính vòng ấy đi chữa.
+   `soGo={"0":7,"2":4}`. Đường thật để tới đó CÓ TỒN TẠI: `luoiBang()` chỉ
+   chạy lại khi `childList` đổi, `resize` chỉ gọi `quetHet` chứ KHÔNG vẽ lại
+   bảng — nên ba lần xoay máy tính bảng / kéo co cửa sổ là đủ, bộ đếm không
+   được xoá vì bảng chưa vẽ lại. Một lời khai trình bày giả thuyết như số đo,
+   đúng thứ đoạn bình luận ngay trên nó đang lên án.
+
+   VÌ SAO KHÔNG DÙNG ĐỀ NGHỊ "ĐẶT LẠI BỘ ĐẾM KHI SỐ LẦN GẮN CŨNG TĂNG".
+   Đề nghị ấy dựa trên giả định *"dao động thật thì gắn/gỡ xen kẽ, còn kéo co
+   thì không"*. Chính số đo của ca kéo co bác nó: mỗi lượt THU gắn lại đúng 4
+   nút thật, tức kéo co CŨNG xen kẽ gắn/gỡ. Hai cảnh giống hệt nhau nếu chỉ
+   nhìn ĐẾM. Không có tín hiệu cục bộ nào tách được chúng bằng số lần.
+
+   THỨ TÁCH ĐƯỢC LÀ NHỊP, VÀ NÓ ĐO ĐƯỢC. Vòng lặp giả định (gỡ nút → cột hẹp
+   lại → kẹp → gắn nút → cột rộng ra → gỡ nút) TỰ NUÔI NÓ: không cần gì bên
+   ngoài, nên nó chạy hết tốc độ `MutationObserver` + `requestAnimationFrame`.
+   Kéo co thì phải đợi NGƯỜI hoặc đợi một lượt tải dữ liệu. SỐ ĐO THẬT, cả hai
+   ca đều dựng lên và chạy trong `npm run do-nut-noi-doi`:
+     · kéo co nới/thu 5 vòng  : hai lần gỡ liên tiếp trên CÙNG một ô cách nhau
+                                nhỏ nhất 649ms · giữa 655ms — và đó là BÀN ĐO
+                                TỰ ĐỘNG chạy hết sức, người thật còn chậm hơn.
+     · vòng lặp tự nuôi (gài) : cách nhau nhỏ nhất 0ms · giữa 0ms — cả chuỗi
+                                nằm gọn trong vài khung hình đầu.
+   Hai dải KHÔNG chạm nhau và cũng không gần nhau: nhịp CHẬM NHẤT của vòng lặp
+   vẫn dưới một mili-giây, nhịp NHANH NHẤT của kéo co là 649ms. CHUM_MS = 250
+   nằm giữa — lớn hơn mọi nhịp của vòng lặp, và bằng 38% nhịp nhanh nhất của
+   kéo co. Đây là chỗ DUY NHẤT trong khối này là một lựa chọn chứ không phải
+   một số đo, nên nó có bàn đo canh CẢ HAI đầu, và mỗi đầu có một ca đối chứng
+   ĐỎ chạy trong cùng lượt:
+     · nới CHUM_MS quá nhịp kéo co → mọi lượt gỡ gộp làm một chùm, bộ đếm
+       không bao giờ đặt lại, chạm trần ở vòng thứ 7 → ca A đỏ
+       (đối chứng A2: giữ GO_TOI_DA thật, đặt CHUM_MS = 1e12).
+     · thu CHUM_MS xuống dưới nhịp khung hình → vòng lặp tự nuôi cũng được
+       đặt lại mỗi khung → không bao giờ dừng → ca B đỏ
+       (đối chứng B: bỏ hẳn trần).
+   Vì thế ca A phải chạy 8 vòng chứ không 5: 5 vòng chỉ bắt được đầu thứ nhất.
+
+   CÁCH CHẶN VẪN LÀ CHẶN CỨNG, KHÔNG PHẢI BÓP NHỊP. Gỡ tới lần thứ
+   `GO_TOI_DA` trong cùng một chùm thì ô ấy THÔI, không gỡ nữa → DOM ngừng
+   đổi → `MutationObserver` ngừng bắn → vòng lặp CHẾT, không phải chạy chậm
+   lại. Đo được ở ca gài: **24 lần gỡ rồi im lặng 2351ms** (đúng 4 ô × 6), so
+   với **304 lần và vẫn đang chạy** ở bản bỏ trần. Sau đó, nếu có một lượt vẽ
+   lại THẬT (cách hơn 250ms) thì bộ đếm về 0 và cái nút nói dối — nếu có —
+   được dọn ngay lượt ấy, thay vì nằm lại vĩnh viễn như bản trần-theo-đời-DOM.
+   GO_TOI_DA = 6 chứ không phải 2: kéo co không bao giờ chạm tới nó (đo được:
+   mỗi chùm của kéo co chỉ có ĐÚNG MỘT lần gỡ, `soGo` đứng nguyên ở 1 suốt 5
+   vòng), còn vòng lặp thì 6 nhịp là đã dừng trong vòng vài chục mili-giây.
+   Chọn 6 để một chuỗi vẽ lại dồn dập HỢP LỆ (nạp dữ liệu + dập lớp + gắn nút
+   chi tiết trong cùng một khung hình) vẫn có chỗ thở.
+   CHỐT CANH: `npm run do-nut-noi-doi` — chạy cả ca kéo co lẫn ca vòng lặp
+   gài sẵn, đòi 0 nút nói dối ở ca đầu và vòng lặp phải DỪNG ở ca sau. */
+const GO_TOI_DA = 6;
+const CHUM_MS = 250;
 function capNutDongPhu() {
   for (const sm of document.querySelectorAll('td.cot-chu .sm, td .sm.dong-phu')) {
     if (sm.classList.contains('dai-gon-mo')) continue;
@@ -12151,10 +12212,16 @@ function capNutDongPhu() {
     } else if (nutCu) {
       if (nutCu.dataset.doan) { nutCu.remove(); continue; }   // đoán sai → dọn đi
       /* Nút THẬT trên ô đã HẾT KẸP cũng là rác — gỡ. Chốt chặn dao động ở đây,
-         không phải ở việc từ chối dọn (REV-0063 vòng 2, VỪA-2). */
-      const soGo = Number(sm.dataset.soGo || 0);
+         không phải ở việc từ chối dọn (REV-0063 vòng 2, VỪA-2).
+         Đếm THEO CHÙM: cách lần gỡ trước quá `CHUM_MS` thì đây là một nhịp
+         mới, đếm lại từ 0. Xem khối dài ở `GO_TOI_DA` để biết vì sao nhịp
+         mới là thứ tách được kéo co với vòng lặp, còn số lần thì không. */
+      const gio = performance.now();
+      const cungChum = gio - Number(sm.dataset.goLuc || 0) <= CHUM_MS;
+      const soGo = cungChum ? Number(sm.dataset.soGo || 0) : 0;
       if (soGo >= GO_TOI_DA) continue;
       sm.dataset.soGo = String(soGo + 1);
+      sm.dataset.goLuc = String(gio);
       nutCu.remove();
     }
   }

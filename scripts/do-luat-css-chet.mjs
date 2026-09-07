@@ -569,6 +569,16 @@ console.log('       TRƯỚC khi tin con số.');
 console.log('    ⑥ luật nền bị luật nền đứng sau đè — máy này chỉ chấm khai báo NẰM TRONG');
 console.log('       @media, đúng như tên nó.');
 console.log('    ⑦ tệp CSS khác và CSS nội tuyến trong HTML — máy chỉ đọc MỘT tệp.');
+console.log('    ⑧ BA DẠNG VIẾT mà `chuanHoaSel()` KHÔNG gộp về một khoá, nên hai luật');
+console.log('       thật ra CÙNG selector lại bị coi là hai selector khác nhau:');
+console.log('         · giả lớp khác hoa/thường   `.a:hover`    vs `.a:HOVER`  (CSS coi là một)');
+console.log('         · giả phần tử một/hai chấm  `.a::before`  vs `.a:before`');
+console.log('         · nháy đơn/kép trong []     [data-x="1"]  vs [data-x=\'1\']');
+console.log('       CẢ BA lệch về phía BỎ SÓT, không phải đỏ oan: thấy hai selector khác');
+console.log('       nhau thì máy thôi không so, chứ không kêu bừa. Đếm trong style.css');
+console.log('       hôm nay: `:before`/`:after` một dấu hai chấm 0 chỗ; selector thuộc');
+console.log('       tính có nháy 26 chỗ, TẤT CẢ cùng một kiểu nháy — nên chưa cắn ai.');
+console.log('       (REV-0063 vòng 3, THẤP-1.)');
 console.log('  Nên con số dưới đây là SÀN DƯỚI, không phải trần.');
 
 if (batBuoc.length) {
