@@ -332,6 +332,37 @@ console.log('\n④ Chặn khi hạn mức ghi trong ngày sắp cạn');
      Number(db.prepare('SELECT COUNT(*) AS n FROM san_pham').get().n) === 0);
   ok('Câu từ chối nói cách xử lý', /chia nhỏ|ngày mai/i.test(kq.loi || ''), (kq.loi || '').slice(0, 90));
 }
+{
+  /* ⚠️ CA NÀY LỌT LƯỚI VÒNG TRƯỚC, VÀ NÓ LÀM CHỐT CHẶN THÀNH ĐỒ TRANG TRÍ.
+     Lượt ghi của một lần nạp file phải vào SỔ NGÀY (`d1_ghi_ngay`) NGAY, chứ
+     không đợi cron. `demGhi` chỉ cộng vào một biến trong BỘ NHỚ của isolate
+     đang chạy, mà cron chốt sổ chạy ở isolate KHÁC — số đó không bao giờ tới
+     nơi. Không chốt ngay thì nạp ba file 5.000 dòng liên tiếp (120.000 lượt)
+     mà lần nào màn xem trước cũng báo "hôm nay còn 100.000 lượt", rồi D1
+     chặn ghi cả hệ thống. */
+  const db = dungCsdl();
+  const env = dungD1(db);
+  const ngay = new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
+  const doSo = () => db.prepare('SELECT so_dong FROM d1_ghi_ngay WHERE ngay = ?').get(ngay)?.so_dong ?? null;
+
+  ok('Trước khi nạp: sổ ngày chưa có gì', doSo() === null, String(doSo()));
+
+  const kq1 = await nạp(env, csvSanPham(50), GHEP_SP);
+  const sau1 = doSo();
+  ok('Nạp xong: lượt ghi vào SỔ NGÀY ngay, KHÔNG đợi cron', sau1 !== null && sau1 > 0,
+     sau1 === null ? '(SỔ NGÀY VẪN TRỐNG — chốt chặn vô dụng)' : `sổ ngày = ${sau1}`);
+  ok('Sổ ngày ghi đủ lượt ghi thật của lần nạp', sau1 >= kq1.luot_ghi_that,
+     `sổ ${sau1} · thật ${kq1.luot_ghi_that}`);
+
+  /* File THỨ HAI trong cùng ngày — đây mới đúng chỗ người ta vượt hạn mức.
+     Sổ phải CỘNG DỒN, không ghi đè. */
+  const kq2 = await nạp(env, csvSanPham(100), GHEP_SP);
+  const sau2 = doSo();
+  ok('File thứ hai CỘNG DỒN vào sổ ngày, không ghi đè',
+     sau2 >= sau1 + kq2.luot_ghi_that, `sau file 1 = ${sau1} · sau file 2 = ${sau2}`);
+  ok('Trả lại cho giao diện số lượt còn lại sau khi nạp',
+     typeof kq2.ghi_con_lai_hom_nay === 'number', String(kq2.ghi_con_lai_hom_nay));
+}
 
 /* ==========================================================================
    7. GHI VẾT + KHOÁ DỮ LIỆU

@@ -29,7 +29,7 @@
    ========================================================================== */
 
 import { docBang, LoiDocBang } from './doc-bang.js';
-import { demGhi, HAN_MUC_NGAY } from './canh-bao-ghi.js';
+import { demGhi, chotNgayLuon, HAN_MUC_NGAY } from './canh-bao-ghi.js';
 import { duocSuaSanPham, duocThaoTacKho } from './quyen.js';
 
 /* Chừa lại cho phần còn lại của ngày. Nạp file là việc to, không được ăn hết
@@ -216,7 +216,14 @@ export const DICH = {
     truong: [
       { ma: 'ma_sku',      nhan: 'Mã hàng (SKU)',   kieu: 'chu',    batBuoc: true,
         goiY: ['masku', 'sku', 'mahang', 'masanpham', 'ma', 'masp'] },
-      { ma: 'so_luong',    nhan: 'Số lượng tồn',    kieu: 'nguyen', batBuoc: true,
+      /* ⚠️ KHÔNG ÂM, và đây không phải chuyện khó tính cho vui.
+         Mỗi dòng ở đây ghi vào sổ cái thành một dòng loại 'nhap'. Một dòng
+         "nhập −8" là một phiếu NHẬP làm GIẢM tồn — anh Duy mở sổ ra thấy
+         phiếu nhập âm thì không hiểu nổi, mà tồn thì đã sai rồi. File tồn
+         đầu kỳ xuất từ phần mềm cũ hay có ô âm do công thức lỗi; thà chặn
+         và chỉ rõ dòng nào, còn hơn cho nó chảy êm vào sổ.
+         Muốn giảm tồn thì dùng phiếu XUẤT ở màn Kho vận, không phải nạp file. */
+      { ma: 'so_luong',    nhan: 'Số lượng tồn',    kieu: 'nguyen_khong_am', batBuoc: true,
         goiY: ['soluong', 'soluongton', 'ton', 'tonkho', 'sl', 'quantity', 'tonhientai'] },
       { ma: 'don_gia',     nhan: 'Đơn giá vốn',     kieu: 'tien',
         goiY: ['dongia', 'giavon', 'gia', 'donggia', 'price', 'giamua', 'gianhap'] },
@@ -283,7 +290,10 @@ function docO(tho, truong) {
       const n = docSo(s);
       if (n === null) return { loi: `ghi “${catNgan(s)}” — chỗ này cần con số` };
       if (!Number.isInteger(n)) return { loi: `ghi “${catNgan(s)}” — chỗ này cần số nguyên, không có phần lẻ` };
-      if (truong.kieu === 'nguyen_khong_am' && n < 0) return { loi: `ghi “${catNgan(s)}” — số này không được âm` };
+      if (truong.kieu === 'nguyen_khong_am' && n < 0) {
+        return { loi: `ghi “${catNgan(s)}” — số này không được âm. ` +
+                      `Nếu cần giảm tồn thì lập phiếu Xuất kho, đừng ghi số âm vào file` };
+      }
       if (Math.abs(n) > 1e9) return { loi: `ghi “${catNgan(s)}” — con số lớn bất thường, kiểm tra lại` };
       return { v: n };
     }
@@ -685,6 +695,18 @@ export async function ghiThat(env, phien, { bang, ghep, maDich, tenTep }) {
     }
   }
 
+  /* ⚠️ CHỐT SỔ NGAY, KHÔNG ĐỢI CRON.
+     `demGhi` ở trên chỉ cộng vào bộ nhớ của isolate đang chạy, mà cron chốt
+     sổ lại chạy ở isolate khác — số này gần như không bao giờ tới được sổ
+     ngày. Không chốt ngay thì màn xem trước của lần nạp SAU vẫn báo "hôm nay
+     còn 100.000 lượt" dù vừa đốt 40.000, và chốt chặn hạn mức thành đồ trang
+     trí. Xem chú thích dài ở `chotNgayLuon` trong src/canh-bao-ghi.js. */
+  let conLaiSau = null;
+  if (ghiThuc > 0) {
+    const chot = await chotNgayLuon(env, ghiThuc);
+    if (chot) conLaiSau = Math.max(0, HAN_MUC_NGAY - chot.so_dong);
+  }
+
   return {
     ok: true,
     da_them: doiChieu.them.length,
@@ -693,7 +715,8 @@ export async function ghiThat(env, phien, { bang, ghep, maDich, tenTep }) {
     bo_vi_khoa: (doiChieu.sua || []).filter(b => b.__khoaCu).length,
     dong_loi: loi.length,
     so_lenh: lenh.length,
-    luot_ghi_that: ghiThuc
+    luot_ghi_that: ghiThuc,
+    ghi_con_lai_hom_nay: conLaiSau
   };
 }
 

@@ -277,6 +277,27 @@ console.log('\n⑥ Câu lỗi chỉ đúng dòng và cột');
   dung('Đếm đúng số dòng trùng', kq.soTrung === 1, `ra ${kq.soTrung}`);
 }
 {
+  /* TỒN KHO ÂM — ca này lọt lưới vòng trước.
+     Mỗi dòng tồn kho ghi vào sổ cái thành một dòng loại 'nhap'. Để số âm đi
+     qua là ghi một PHIẾU NHẬP làm GIẢM tồn: sổ vẫn cân về mặt phép cộng, mà
+     người đọc sổ thì không hiểu nổi, và tồn thì đã sai. Đây đúng là kiểu sai
+     ÊM mà cả đường nạp này sinh ra để chặn. */
+  const bang = {
+    cot: ['Mã SKU', 'Số lượng tồn'],
+    dong: [
+      ['TK-001', '150'],      // dòng 2: sạch
+      ['TK-002', '-8'],       // dòng 3: âm — PHẢI bị chặn
+      ['TK-003', '0']         // dòng 4: 0 — hợp lệ, nhưng không ghi gì (bỏ qua ở bước đối chiếu)
+    ]
+  };
+  const kq = kiemBang(bang, { ma_sku: 0, so_luong: 1 }, 'ton_kho');
+  const cauAm = kq.loi.find(l => /Dòng 3/.test(l.thongDiep));
+  dung('Tồn kho ÂM bị chặn, không lọt vào sổ cái', !!cauAm, cauAm?.thongDiep);
+  dung('Câu chặn nói rõ cột Số lượng tồn', /cột Số lượng tồn/.test(cauAm?.thongDiep || ''), cauAm?.thongDiep);
+  dung('Câu chặn bảo cách làm đúng (lập phiếu Xuất)', /phiếu Xuất/i.test(cauAm?.thongDiep || ''), cauAm?.thongDiep);
+  dung('Số 0 và số dương vẫn qua bình thường', kq.banGhi.length === 2, `ra ${kq.banGhi.length}`);
+}
+{
   // Thiếu ghép ô bắt buộc -> phải chặn, không được nạp bừa
   let câu = '';
   try { kiemBang({ cot: ['A', 'B'], dong: [['1', '2']] }, { ma_sku: 0 }, 'san_pham'); }

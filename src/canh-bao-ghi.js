@@ -47,6 +47,51 @@ function ngayVN(luc = Date.now()) {
   return new Date(luc + 7 * 3600 * 1000).toISOString().slice(0, 10);
 }
 
+/* Cộng thẳng một số dòng vào sổ ngày. Tách riêng để hai đường cùng dùng:
+   cron chốt số treo, và nạp file chốt NGAY (xem congNgayNgay bên dưới). */
+async function congVaoNgay(env, ngay, them) {
+  return env.DB.prepare(`
+    INSERT INTO d1_ghi_ngay (ngay, so_dong) VALUES (?, ?)
+    ON CONFLICT(ngay) DO UPDATE SET so_dong = so_dong + excluded.so_dong
+    RETURNING so_dong, da_bao
+  `).bind(ngay, them).first();
+}
+
+/* ==========================================================================
+   CHỐT NGAY — dành cho việc GHI HÀNG LOẠT do NGƯỜI bấm (nạp file số liệu)
+   --------------------------------------------------------------------------
+   ⚠️ VÌ SAO KHÔNG DÙNG CHUNG ĐƯỜNG CỦA CRON ĐƯỢC.
+   `demGhi` cộng vào biến `donCho` nằm trong BỘ NHỚ của isolate đang chạy.
+   Cron `scheduled()` chạy ở isolate KHÁC với isolate phục vụ lời gọi HTTP,
+   nên số mà một lần nạp file cộng vào `donCho` gần như KHÔNG BAO GIỜ tới
+   được chỗ cron chốt sổ. Tức là: nạp file ghi 40.000 dòng thật, mà sổ ngày
+   vẫn ghi 0.
+
+   Hậu quả đúng bằng cái mà chốt chặn hạn mức sinh ra để chặn: Sếp nạp file
+   thứ nhất (5.000 dòng = 40.000 lượt), màn xem trước vẫn báo "hôm nay còn
+   100.000 lượt"; nạp tiếp file thứ hai, thứ ba — vẫn "còn 100.000". Ba file
+   là 120.000 lượt, vượt hạn mức, D1 chặn ghi cả hệ thống: đơn hoàn ngừng
+   cập nhật, kho vận không thấy đơn quá hạn. Chốt chặn có mà như không.
+
+   Nên nạp file tự chốt sổ NGAY, không đợi cron. Giá phải trả: đúng MỘT lượt
+   ghi thêm cho mỗi lần nạp — trong khi bản thân lần nạp đó đã tốn hàng nghìn.
+   ========================================================================== */
+export async function chotNgayLuon(env, soDong) {
+  if (!(soDong > 0)) return null;
+  const ngay = ngayVN();
+  try {
+    const d = await congVaoNgay(env, ngay, soDong);
+    return { ngay, so_dong: d?.so_dong || 0 };
+  } catch (e) {
+    /* Chưa nạp migration hoặc D1 trục trặc: KHÔNG được làm hỏng lần nạp đã
+       ghi xong. Ghi lại vào bộ đếm treo để cron còn vớt được nếu may mắn
+       cùng isolate, rồi thôi. */
+    donCho += soDong;
+    console.error('Chốt lượt ghi nạp file:', e.message);
+    return null;
+  }
+}
+
 /**
  * Chốt số đang treo vào bảng ngày + kêu Telegram nếu chạm ngưỡng.
  * Gọi ở CUỐI `scheduled()` — dùng lại cron 5 phút sẵn có, không thêm lịch.
@@ -61,11 +106,7 @@ export async function chotVaCanhBao(env, guiTelegram) {
 
   let dong;
   try {
-    dong = await env.DB.prepare(`
-      INSERT INTO d1_ghi_ngay (ngay, so_dong) VALUES (?, ?)
-      ON CONFLICT(ngay) DO UPDATE SET so_dong = so_dong + excluded.so_dong
-      RETURNING so_dong, da_bao
-    `).bind(ngay, them).first();
+    dong = await congVaoNgay(env, ngay, them);
   } catch (e) {
     donCho += them;                 // chưa nạp migration / D1 lỗi -> giữ lại đếm tiếp
     console.error('Đếm lượt ghi D1:', e.message);

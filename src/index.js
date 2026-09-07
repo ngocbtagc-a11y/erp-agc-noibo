@@ -21,7 +21,7 @@ import {
   VAI_TRO_HE_THONG, VI_TRI_CONG_VIEC, laVaiTroHeThong, laViTriCongViec,
   duocDatViTriCongViec, viTriCoXemLuong, moTaVaiTro, boVaiTro,
   // Nạp file số liệu — cắt quyền GHI ở máy chủ (xem batBuocNapDuLieu)
-  duocSuaSanPham
+  duocSuaSanPham, quyenSanPham
 } from './quyen.js';
 import { kiemTraMatKhauDat, DAI_TOI_THIEU } from './mat-khau.js';
 import * as kho from './kho.js';
@@ -254,6 +254,14 @@ async function toiLaAi(req, env) {
     // 28/08/2026). Giao diện dùng để vẽ nút; luật thật ở gopYDuyet().
     duyet_gopy: duocDuyetGopY(phien),
     kho: quyenKho(phien),           // { thao_tac, quan_ly, gia_von } cho tab Kho
+    /* { sua, khoa } cho Sản phẩm/SKU. TÁCH KHỎI `kho` là cố ý: chủ sở hữu
+       SKU là Kinh doanh (van_hanh_san) — họ quyết định bán gì — mà vai trò
+       đó KHÔNG có mặt trong bảng quyền Kho, nên suy quyền sản phẩm ra từ
+       `kho.quan_ly` là suy sai. Màn "Nạp từ file" từng cắt theo `kho.quan_ly`
+       nên giấu mất chức năng nạp danh mục khỏi đúng người sở hữu danh mục,
+       trong khi máy chủ vẫn cho qua (duocSuaSanPham). Gửi thẳng cờ thật
+       xuống để giao diện cắt CÙNG MỘT LUẬT với máy chủ. */
+    san_pham: quyenSanPham(phien),
     shopee: quyenShopee(phien),     // { xem, quan_ly } cho tab Đơn hoàn
     thao_tac_van_hanh: duocThaoTacVanHanh(phien),   // được bấm nút ở bước Vận hành sàn (Cần đối soát) hay chỉ xem
     // Để giao diện khỏi ghi cứng con số, sau này đổi một chỗ là xong

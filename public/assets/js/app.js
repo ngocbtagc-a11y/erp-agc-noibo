@@ -8996,8 +8996,17 @@ async function khoiDongKho() {
   /* ---- Nạp từ file ----
      Giấu hẳn nút khi không có quyền GHI. Máy chủ vẫn chặn độc lập (403 ở
      `batBuocNapDuLieu` trong index.js) — giấu nút chỉ để không hứa suông
-     với người bấm vào cũng không nạp được, KHÔNG phải lớp bảo vệ. */
-  if (qKho.quan_ly || qKho.thao_tac) khoiDongNapFile(qKho);
+     với người bấm vào cũng không nạp được, KHÔNG phải lớp bảo vệ.
+
+     ⚠️ CẮT ĐÚNG LUẬT MÀ MÁY CHỦ ĐANG CẮT, không cắt theo luật gần giống.
+     Nạp danh mục sản phẩm đi theo quyền SẢN PHẨM (`TOI.san_pham.sua`), KHÔNG
+     đi theo `qKho.quan_ly`. Hai cái này khác nhau ở đúng một vai trò, mà lại
+     là vai trò quan trọng nhất với danh mục: Kinh doanh (van_hanh_san) là
+     CHỦ SỞ HỮU SKU nhưng không có mặt trong bảng quyền Kho. Cắt theo
+     `qKho.quan_ly` là giấu chức năng nạp danh mục khỏi đúng người sở hữu
+     danh mục, trong khi máy chủ vẫn cho họ nạp. */
+  const qSanPham = TOI.san_pham || { sua: false, khoa: false };
+  if (qSanPham.sua || qKho.thao_tac) khoiDongNapFile(qKho, qSanPham);
   else document.querySelectorAll('#kvSeg .seg-nut[data-kv="napfile"]').forEach(b => b.remove());
 
   /* ---- Vẽ bảng tồn kho + thẻ tổng quan + đổ dropdown ---- */
@@ -9386,7 +9395,7 @@ const NEN_ANH_KHIEU_NAI = { canhToiDa: 1280, chatLuong: 0.72 };
    Byte của file được giữ trong biến `tepByte` giữa các bước để không bắt Sếp
    chọn lại file ba lần. Chọn file khác thì xoá sạch trạng thái cũ.
    ========================================================================== */
-function khoiDongNapFile(qKho) {
+function khoiDongNapFile(qKho, qSanPham) {
   let tepByte = null;       // Uint8Array nội dung file đang xử lý
   let tepTen  = '';
   let mo      = null;       // kết quả /nap-mo  (cột, gợi ý ghép, vân tay)
@@ -9395,10 +9404,13 @@ function khoiDongNapFile(qKho) {
   const oDich = $('#napDich');
   if (!oDich) return;
 
-  /* Tồn kho cần quyền thao tác kho; danh mục cần quyền quản lý kho.
+  /* Tồn kho cần quyền THAO TÁC KHO; danh mục cần quyền SỬA SẢN PHẨM.
      Không có quyền nào thì bỏ hẳn lựa chọn đó khỏi danh sách — thà không
-     hiện, còn hơn hiện rồi báo 403 sau khi Sếp đã chọn xong file. */
-  if (!qKho.quan_ly) { const o = oDich.querySelector('option[value="san_pham"]'); if (o) o.remove(); }
+     hiện, còn hơn hiện rồi báo 403 sau khi Sếp đã chọn xong file.
+     Hai dòng dưới đây phải soi CÙNG hàm quyền mà máy chủ soi
+     (duocSuaSanPham · duocThaoTacKho) — lệch một chút là hoặc giấu nhầm
+     người, hoặc hứa suông rồi 403. */
+  if (!qSanPham.sua) { const o = oDich.querySelector('option[value="san_pham"]'); if (o) o.remove(); }
   if (!qKho.thao_tac) { const o = oDich.querySelector('option[value="ton_kho"]'); if (o) o.remove(); }
 
   const MO_TA_DICH = {
@@ -9533,11 +9545,20 @@ function khoiDongNapFile(qKho) {
     $('#napB3Hint').textContent = tepTen + ' · đọc được ' + xem.so_dong_doc + ' dòng';
 
     /* Bốn con số Sếp cần biết TRƯỚC KHI ghi. Chỉ ô "Dòng lỗi" mới được đỏ,
-       và chỉ khi thật sự có lỗi — đỏ nhan nhản là không ai nhìn nữa. */
+       và chỉ khi thật sự có lỗi — đỏ nhan nhản là không ai nhìn nữa.
+
+       Chữ dưới mỗi con số đổi theo ĐÍCH NẠP. Nạp tồn kho KHÔNG tạo mã hàng
+       mới — nó ghi từng dòng vào SỔ CÁI kho. Để nguyên chữ "Mã hàng mới" là
+       nói sai việc đang làm với chính người đọc nó (anh Duy ở kho), rồi
+       người ta tưởng file tồn kho đẻ ra 4 mã hàng lạ. */
+    const laTonKho = oDich.value === 'ton_kho';
     veThe('#napTomTat', [
-      { k: 'Thêm mới',   v: String(xem.so_them),    d: 'Mã chưa có trong ERP' },
-      { k: 'Cập nhật',   v: String(xem.so_sua),     d: 'Mã đã có, thông tin đổi' },
-      { k: 'Giữ nguyên', v: String(xem.so_bo_qua),  d: 'Giống hệt, không ghi' },
+      { k: laTonKho ? 'Ghi vào sổ' : 'Thêm mới', v: String(xem.so_them),
+        d: laTonKho ? 'Dòng nhập vào sổ cái kho' : 'Mã chưa có trong ERP' },
+      { k: 'Cập nhật',   v: String(xem.so_sua),
+        d: laTonKho ? 'Nạp tồn không sửa mã hàng' : 'Mã đã có, thông tin đổi' },
+      { k: laTonKho ? 'Bỏ qua' : 'Giữ nguyên', v: String(xem.so_bo_qua),
+        d: laTonKho ? 'Số lượng bằng 0, không ghi' : 'Giống hệt, không ghi' },
       { k: 'Dòng lỗi',   v: String(xem.so_dong_loi),
         d: xem.so_dong_loi ? 'Sẽ bỏ qua' : 'Không có',
         dir: xem.so_dong_loi ? 'down' : '' }
@@ -9600,10 +9621,14 @@ function khoiDongNapFile(qKho) {
       const kq = await API.napGhi({
         dich: oDich.value, ten_tep: tepTen, ghep: ghepHienTai(), van_tay: xem.van_tay
       }, tepByte);
+      const laTK = oDich.value === 'ton_kho';
       veThe('#napKetQua', [
-        { k: 'Đã thêm',     v: String(kq.da_them), d: 'Mã hàng mới' },
-        { k: 'Đã cập nhật', v: String(kq.da_sua),  d: 'Mã hàng có sẵn' },
-        { k: 'Giữ nguyên',  v: String(kq.bo_qua),  d: 'Không có gì đổi' },
+        { k: laTK ? 'Đã ghi vào sổ' : 'Đã thêm', v: String(kq.da_them),
+          d: laTK ? 'Dòng nhập trong sổ cái kho' : 'Mã hàng mới' },
+        { k: 'Đã cập nhật', v: String(kq.da_sua),
+          d: laTK ? 'Nạp tồn không sửa mã hàng' : 'Mã hàng có sẵn' },
+        { k: laTK ? 'Bỏ qua' : 'Giữ nguyên', v: String(kq.bo_qua),
+          d: laTK ? 'Số lượng bằng 0' : 'Không có gì đổi' },
         { k: 'Lượt ghi đã dùng', v: Number(kq.luot_ghi_that).toLocaleString('vi-VN'),
           d: 'Trên hạn mức 100.000/ngày' }
       ]);

@@ -4444,9 +4444,20 @@ textarea.tlq-o { padding: 10px 12px; }
    Hai bảng cạnh nhau trên màn rộng, xếp chồng trên điện thoại (ERP là PWA,
    Sếp xem trên máy lẫn trên điện thoại).
    ========================================================================== */
+/* ⚠️ SÀN 320px LÀM TRÀN HAI BẢNG NÀY — số đo thật của `npm run do-bang-that`:
+   kd-sku-chay và kd-sku-kem tràn +23px ở 1440px và +103px ở 1280px, cột rơi
+   ra ngoài là "Doanh thu".
+   Vì sao: mỗi bảng có 4 cột (Mã SKU · Tên hàng · SL bán · Doanh thu) mà sàn
+   320px cho phép hai bảng đứng cạnh nhau ngay cả khi khung mẹ chưa đủ rộng
+   cho cả hai. Ép hai bảng 4 cột vào nửa khung là tràn.
+   Cách xử: KHÔNG bỏ cột (bỏ cột nào là quyết định của người làm Kinh doanh,
+   không phải của người sửa CSS), KHÔNG thu nhỏ chữ (Sếp dặn thẳng). Chỉ nâng
+   sàn lên đúng bề ngang mà một bảng 4 cột cần: chưa đủ chỗ cho hai bảng thì
+   XẾP CHỒNG, mỗi bảng ăn trọn bề ngang và vừa khít. Rộng hơn thì vẫn hai
+   bảng cạnh nhau như tác giả muốn. */
 .kd-sku-cot {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(560px, 1fr));
   gap: 20px;
 }
 .kd-sku-cot h5 { font-size: 13px; font-weight: 600; color: var(--text); }
