@@ -267,7 +267,10 @@ kq.F2_o_rong_cao = await cr.chay(`(() => {
   }
   return ra;
 })()`);
-const SO_O_NHIEU_DONG = 31;   /* 12 ô đợt đầu + 19 ô nhóm chữ dài vá theo REV-0047/L1-L2 */
+const SO_O_NHIEU_DONG = 32;   /* 12 ô đợt đầu + 19 ô nhóm chữ dài (REV-0047/L1-L2)
+                                 + 1 ô nhận xét việc (GY-0005). Sàn này phải
+                                 nhích theo mỗi ô mới, nếu không thì thêm ô mà
+                                 quên gắn `.o-nhieu-dong` sẽ lọt im lặng. */
 for (const o of kq.F2_o_rong_cao)
   if (o.cao > 48) doVi.push(`ô "${o.id}" lúc RỖNG cao ${o.cao}px (min-height ${o.min}) — ăn bớt dòng trên màn hẹp`);
 if (kq.F2_o_rong_cao.length < SO_O_NHIEU_DONG)

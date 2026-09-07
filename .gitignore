@@ -48,3 +48,7 @@ erp-agc-noibo/
 
 # Thư mục tạm của bàn đo (scripts/do-kho-tai-lieu.mjs) — sinh ra rồi bỏ
 .do-tam/
+
+# Ảnh chụp màn hình do bàn đo sinh ra (`--chup`) — bằng chứng của MỘT lượt
+# chạy, không phải tài sản của repo. Xem lại thì chạy lại.
+.anh-*/

@@ -140,7 +140,11 @@ export async function dungMayGia({ commit = null, tatHoatAnh = false, apiRieng =
        ĐỐI CHỨNG của bàn đo đó phải GỠ ĐƯỢC đoạn bọc phát tín hiệu nằm trong
        `api.js` — không gỡ được thì không chứng minh được bàn đo có mắt. Danh
        sách cũ chỉ hai tệp nên mọi bàn đo cũ KHÔNG đổi hành vi. */
-    for (const f of ['app.html', 'assets/js/app.js', 'assets/js/api.js', 'assets/js/lam-moi.js']) {
+    /* Thêm `o-ngay.js` (07/09/2026, GY-0004): bộ nâng cấp ô nhập ngày dùng
+       chung nay là một tệp riêng, nên ca đối chứng muốn bẻ nó phải với tới
+       được. Chỉ THÊM tên vào danh sách — bàn đo cũ không đổi hành vi. */
+    for (const f of ['app.html', 'assets/js/app.js', 'assets/js/api.js',
+                     'assets/js/lam-moi.js', 'assets/js/o-ngay.js']) {
       const p = join(tam, f);
       if (!existsSync(p)) continue;
       const truoc = readFileSync(p, 'utf8');

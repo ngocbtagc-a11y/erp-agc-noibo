@@ -1772,6 +1772,15 @@
           <div class="panel-head"><h4>Báo cáo Xuất – Nhập – Tồn theo kỳ</h4></div>
           <div class="panel-body" style="padding-bottom:0">
             <form id="kvFormBaoCao" class="kv-loc" autocomplete="off">
+              <!-- KHÔNG gắn `data-ngay-kieu="qua-khu"` cho hai ô này (REV-0061 · CAO-1).
+                   Đây là KHOẢNG ĐỌC của một báo cáo, không phải một ngày đã xảy ra.
+                   Gắn `qua-khu` là đặt `max = hôm nay`: chị kho gõ "đến ngày
+                   31/12/2026" cho chắc là ô đỏ, mà ô lại `required` trong form có
+                   submit ⇒ TRÌNH DUYỆT CHẶN CẢ FORM bằng bong bóng tiếng Anh của
+                   Chrome, không phải câu tiếng Việt của ERP. Đo được: 2026-09-08 và
+                   2026-12-31 đều `checkValidity() = false`. Luật "không xem báo cáo
+                   tới ngày trong tương lai" chưa ai chốt — không tự áp. Khoảng mặc
+                   định 1900–2100 vẫn chặn `0001-01-01`, đúng việc nó phải làm. -->
               <div class="field">
                 <label>Từ ngày</label>
                 <input type="date" id="kvBcTu" required>
@@ -2124,7 +2133,7 @@
               <div class="field"><label>Hãng sản xuất</label><input maxlength="60" type="text" id="tsThemHangSx" placeholder="Dell, HP, Canon..."></div>
               <div class="field"><label>Model</label><input maxlength="60" type="text" id="tsThemModel"></div>
               <div class="field"><label>Số serial</label><input maxlength="60" type="text" id="tsThemSerial" placeholder="Mã serial của nhà sản xuất"></div>
-              <div class="field"><label>Ngày mua</label><input type="date" id="tsThemNgayMua"></div>
+              <div class="field"><label>Ngày mua</label><input type="date" id="tsThemNgayMua" data-ngay-kieu="qua-khu"></div>
               <div class="field"><label>Nhà cung cấp</label><textarea class="o-nhieu-dong" rows="1" maxlength="200" id="tsThemNCC"></textarea></div>
               <div class="field"><label>Giá mua (đ) <span class="hint">— chỉ để tham chiếu, không phải sổ kế toán</span></label><input type="number" id="tsThemGiaMua" min="0" step="1000"></div>
               <div class="field"><label>Hết bảo hành</label><input type="date" id="tsThemHetBaoHanh"></div>
@@ -2312,7 +2321,7 @@
           <div class="field"><label>Hãng sản xuất</label><input maxlength="60" type="text" id="tsSuaHangSx"></div>
           <div class="field"><label>Model</label><input maxlength="60" type="text" id="tsSuaModel"></div>
           <div class="field"><label>Số serial</label><input maxlength="60" type="text" id="tsSuaSerial"></div>
-          <div class="field"><label>Ngày mua</label><input type="date" id="tsSuaNgayMua"></div>
+          <div class="field"><label>Ngày mua</label><input type="date" id="tsSuaNgayMua" data-ngay-kieu="qua-khu"></div>
           <div class="field"><label>Nhà cung cấp</label><textarea class="o-nhieu-dong" rows="1" maxlength="200" id="tsSuaNCC"></textarea></div>
           <div class="field"><label>Giá mua (đ)</label><input type="number" id="tsSuaGiaMua" min="0" step="1000"></div>
           <div class="field"><label>Hết bảo hành</label><input type="date" id="tsSuaHetBaoHanh"></div>
@@ -2702,7 +2711,7 @@
             </div>
             <div class="field">
               <label>Ngày sinh</label>
-              <input type="date" id="dmNgaySinh">
+              <input type="date" id="dmNgaySinh" data-ngay-kieu="ngay-sinh">
             </div>
             <div class="field">
               <label>Giới tính</label>
@@ -2749,6 +2758,9 @@
             </div>
             <div class="field">
               <label>Ngày vào làm</label>
+              <!-- KHÔNG `qua-khu` (REV-0061 · THẤP-2): ngày vào làm thường là
+                   TƯƠNG LAI — offer đã ký, thứ Hai tới bắt đầu. `max = hôm nay`
+                   sẽ chặn đúng ca hay gặp nhất. -->
               <input type="date" id="dmNgayVao">
             </div>
             <div class="field">
@@ -3090,7 +3102,7 @@
          Lưu NGAY khi đổi, cùng lý do với ô tick bên dưới. -->
     <div class="field" style="max-width:220px">
       <label>Ngày sinh <span class="goi-y">· để trống = chưa có thông tin</span></label>
-      <input type="date" id="nsSua-ngaysinh">
+      <input type="date" id="nsSua-ngaysinh" data-ngay-kieu="ngay-sinh">
     </div>
     <label class="sn-congkhai">
       <input type="checkbox" id="nsSua-sinhnhat">
@@ -3392,6 +3404,80 @@
            đây là giấu đúng dòng người ta muốn giấu. -->
       <div class="dai-cat" id="cv-sua-lichsu-cat" hidden></div>
     </div>
+  </div>
+</div>
+
+<!-- ==================== NHẬN XÉT MỘT VIỆC (GY-0005) ====================
+     Sếp Ngọc: "Cần thêm nút hoặc mục nhận xét để nhận xét công việc của
+     người được giao."
+
+     VÌ SAO LÀ MỘT HỘP RIÊNG, KHÔNG NHÉT VÀO HỘP "Sửa việc đã giao":
+       · Hộp Sửa CHỈ mở cho người giao, và CHỈ khi việc chưa nghiệm thu.
+         Nhét nhận xét vào đó thì (a) người NHẬN việc — đúng người cần đọc
+         nhận xét về mình — không có đường nào mở ra xem, và (b) việc đã
+         xong, đúng lúc nhận xét có ích nhất, lại là lúc hộp đó đóng.
+       · Sửa và nhận xét là hai hành động khác hẳn nhau: một cái đổi cam
+         kết, một cái chấm kết quả. Gộp vào một nút là mời bấm nhầm.
+
+     VÌ SAO KHÔNG GỘP VÀO "Vinh danh": Vinh danh là lời khen CÔNG KHAI về
+     một CON NGƯỜI, và tự trôi đi cho bảng luôn tươi. Nhận xét ở đây gắn vào
+     MỘT VIỆC có `dau_ra` viết sẵn và ở lại vĩnh viễn trong sổ việc — hai
+     vòng đời khác nhau, gộp là hỏng cả hai.
+     (Bản mô tả cũ ở đây viết nhận xét là "chỉ hai người trong cuộc" — SAI.
+     Cửa đọc `suaLichSu` chỉ hỏi `duocXemTab(phien,'congviec')`, nên ai xem
+     được tab Công việc đều đọc được nguyên văn. REV-0061 · VỪA-4.) NHƯNG có bắc cầu: viết xong một nhận xét khen thì bấm
+     thẳng "Vinh danh luôn" ngay tại đây, không phải sang tab khác gõ lại.
+     (Sếp Ngọc tự nhận điểm cần cải thiện là ghi nhận và khen ngợi — nên
+     đường đi tới lời khen phải NGẮN HƠN đường đi tới lời chê, không phải
+     ngược lại.) -->
+<div class="modal-nen" id="cvNxModalNen" hidden>
+  <div class="modal">
+    <h4>Nhận xét công việc</h4>
+    <p class="hint" id="cv-nx-viec" style="margin:0 0 14px"></p>
+
+    <!-- Sổ nhận xét — người NHẬN việc mở ra là đọc được nhận xét về mình.
+         Nhận xét mà người bị nhận xét không thấy thì là hồ sơ ngầm, không
+         phải quản lý. -->
+    <div class="cv-nx-so" id="cv-nx-so-khoi" hidden>
+      <h5>Đã nhận xét</h5>
+      <ul id="cv-nx-so"></ul>
+    </div>
+    <div class="empty" id="cv-nx-trong" hidden>Chưa có nhận xét nào cho việc này.</div>
+    <!-- Sổ nhận xét CẮT THÌ PHẢI NÓI (REV-0061 · CHẶN-1). Đúng khuôn
+         `#cv-sua-lichsu-cat` của hộp Sửa việc ngay cạnh — hộp này trước
+         không có ô nào, nên nhận xét cũ rơi mất mà màn hình vẫn nói
+         "Chưa có nhận xét nào". -->
+    <div class="dai-cat" id="cv-nx-cat" hidden></div>
+
+    <form id="cv-nx-form" class="form-luoi" autocomplete="off" style="margin-top:14px">
+      <div class="field field-rong">
+        <!-- NÓI ĐÚNG SỰ THẬT VỀ NGƯỜI ĐỌC (REV-0061 · VỪA-4). Câu cũ chỉ nói
+             "người được nhận xét sẽ đọc được" — đúng nhưng thiếu một nửa:
+             cửa đọc là `suaLichSu`, ai xem được tab Công việc đều đọc được
+             nguyên văn. Người viết phải biết mình đang viết cho ai TRƯỚC khi
+             gõ, không phải biết sau. -->
+        <label for="cv-nx-noi-dung">Nhận xét <span class="goi-y">· người được nhận xét đọc được, và ai xem được tab Công việc cũng đọc được — viết như nói trước mặt</span></label>
+        <!-- GỢI Ý HAI CHIỀU, KHÔNG PHẢI MẪU CỨNG. Ô nhận xét mà chỉ mời chê
+             thì thành ô để chê; hai nút dưới đây chỉ CHÈN một chữ mở đầu rồi
+             nhường lại cho người viết, không ép điền theo khuôn. -->
+        <!-- `rows="1"` + `.o-nhieu-dong`: ô tự cao dần theo chữ (`noiDayONhieuDong`).
+             Để `rows="3"` là chiếm 91px lúc còn RỖNG — trên màn 375px đó là ăn
+             mất hai dòng của sổ nhận xét ngay phía trên. `do-chu-dai` bắt được. -->
+        <textarea id="cv-nx-noi-dung" class="o-nhieu-dong" rows="1" maxlength="1000"
+          placeholder="Chấm theo ĐẦU RA đã giao. Ví dụ: Đối chiếu tồn khớp 100% và gửi trước 17h — đúng cam kết. Lần sau ghi rõ số lô ở cột ghi chú giúp tôi."></textarea>
+        <div class="cv-nx-chip">
+          <button type="button" class="btn-nho" data-nx-them="Chỗ làm tốt: ">+ Chỗ làm tốt</button>
+          <button type="button" class="btn-nho" data-nx-them="Chỗ cần sửa: ">+ Chỗ cần sửa</button>
+        </div>
+      </div>
+      <div class="field field-nut" style="display:flex; gap:10px; flex-wrap:wrap">
+        <button type="submit" class="btn-primary" id="cv-nx-nut-gui" style="width:auto">Gửi nhận xét</button>
+        <button type="button" class="btn-phu" id="cv-nx-nut-khen" style="width:auto" hidden>⭐ Vinh danh luôn</button>
+        <button type="button" class="btn-phu" id="cv-nx-nut-dong" style="width:auto">Đóng</button>
+      </div>
+    </form>
+    <div class="form-loi" id="cv-nx-loi"></div>
+    <div class="cv-nx-xong" id="cv-nx-xong" hidden></div>
   </div>
 </div>
 

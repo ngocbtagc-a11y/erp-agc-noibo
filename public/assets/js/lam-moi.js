@@ -105,6 +105,10 @@ export const NHOM_DU_LIEU = {
   cvTao:              ['viec', 'muc_tieu', 'thong_bao'],
   cvCapNhat:          ['viec', 'muc_tieu', 'thong_bao'],
   cvSua:              ['viec', 'muc_tieu', 'thong_bao'],
+  /* Nhận xét KHÔNG đổi việc (tiêu đề, hạn, trạng thái đều nguyên) — chỉ đẻ
+     một dòng sổ + một thông báo. Bắn 'viec' là bắt mọi màn việc vẽ lại vô
+     ích; chỉ bắn 'thong_bao' để chuông của người được nhận xét kêu ngay. */
+  cvNhanXet:          ['thong_bao'],
 
   /* -- Mục tiêu -- */
   mtTao:              ['muc_tieu', 'viec'],

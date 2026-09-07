@@ -3596,6 +3596,10 @@ function cauSuaDoc(d, bang) {
       : `${d.nguoi_ten} gỡ việc "${d.gia_tri_cu}" khỏi mục tiêu này`;
   }
   if (d.truong === 'go') return `${d.nguoi_ten} đã gỡ lời khen: "${d.gia_tri_cu}"`;
+  /* NHẬN XÉT (GY-0005) — cũng KHÔNG phải "đổi A thành B". Ép vào khuôn chung
+     ra câu *"đổi nhan_xet (trống) → làm tốt phần đóng gói"*, đọc không hiểu,
+     mà một dòng sổ đọc không hiểu thì đúng bằng không ghi. */
+  if (d.truong === 'nhan_xet') return `${d.nguoi_ten} nhận xét: "${d.gia_tri_moi}"`;
 
   /* Vết NẠP TỪ FILE cũng không phải "đổi A thành B": đây là dòng được TẠO
      RA từ một file. Ép vào khuôn chung ra câu "đổi nap_file (trống) → SP-001",
@@ -3660,11 +3664,48 @@ async function laCapTrenCua(env, nguoiId, nhanVienId) {
    như mọi thay đổi khác, nên phải mở đường ĐỌC lại — nếu không thì ghi vết có
    mà không ai tra được, tức là không có ghi vết. */
 const SUA_BANG_HOP_LE = new Set(['cong_viec', 'muc_tieu', 'san_pham', 'giao_dich_kho']);
+/* Lọc theo LOẠI VẾT — `?truong=nhan_xet`.
+   ---------------------------------------------------------------------------
+   VÌ SAO PHẢI CÓ (REV-0061 · CHẶN-1). Sổ sửa và sổ nhận xét dùng CHUNG một
+   bảng, mà trần 100 dòng cũng dùng chung. Một việc chạy dài có 110 lần sửa
+   bình thường thì 3 câu nhận xét viết từ tháng 6 — LUÔN là dòng CŨ NHẤT —
+   rơi ra ngoài trần trước tiên, và hộp Nhận xét in ra "Chưa có nhận xét nào
+   cho việc này". Không phải để trống: KHẲNG ĐỊNH SAI.
+
+   Vá bằng dải cắt thôi thì chưa đủ — dải cắt chỉ nói "còn N dòng nữa", trong
+   khi thứ rơi mất là TOÀN BỘ nhận xét. Nên chữa ở tầng bệnh: hỏi RIÊNG loại
+   vết mình cần, để lời nhận xét về một con người không bao giờ bị đẩy ra khỏi
+   màn hình vì ai đó sửa việc nhiều lần. Trần 100 khi ấy là 100 NHẬN XÉT của
+   một việc — con số không đời nào chạm tới; mà chạm thì `cat` nói đúng số
+   nhận xét, không phải số dòng sổ.
+
+   Danh sách trắng chứ không nhận chuỗi tự do: `truong` đi thẳng vào WHERE
+   (đã tham số hoá, nhưng cửa nào cũng nên đóng cả hai lớp), và một tên trường
+   gõ sai mà trả về rỗng thì lại đúng cái "màn hình khẳng định sai" đang chữa. */
+/* CHỐT THEO CẶP `bang × truong`, KHÔNG hai danh sách trắng rời (REV-0061
+   vòng 2 · THẤP-1). Hai danh sách rời thì `?bang=muc_tieu&truong=nhan_xet`
+   qua được cả hai cửa rồi trả rỗng kèm HTTP 200 — hôm nay vô hại vì mục tiêu
+   chưa có nhận xét, nhưng ngày ai thêm nhận xét cho mục tiêu mà quên nối vào
+   đây thì màn hình in "chưa có nhận xét nào" ĐÚNG KIỂU CHẶN-1: rỗng vì hỏi
+   sai cửa, mà nói như thể đã hỏi đúng. Thêm loại vết cho một bảng thì thêm
+   vào ĐÚNG dòng của bảng ấy. */
+const SUA_TRUONG_LOC = new Map([
+  ['cong_viec', new Set(['nhan_xet'])],
+  ['muc_tieu', new Set()],
+  /* Hai bảng của nhánh nạp file. Chưa có loại vết nào lọc riêng, nhưng phải
+     CÓ DÒNG của mình ở đây — thiếu dòng thì `SUA_TRUONG_LOC.get(bang)` là
+     `undefined`, và cái `|| new Set()` bên dưới lại biến một bảng chưa khai
+     báo thành "hợp lệ nhưng rỗng", đúng kiểu khẳng định sai mà chốt này dựng
+     lên để cấm. Có dòng rỗng thì `?truong=` bất kỳ bị từ chối rõ ràng. */
+  ['san_pham', new Set()],
+  ['giao_dich_kho', new Set()]
+]);
 async function suaLichSu(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
   const u = new URL(req.url);
   const bang = String(u.searchParams.get('bang') || '').trim();
+  const truong = String(u.searchParams.get('truong') || '').trim();
   if (!SUA_BANG_HOP_LE.has(bang)) return loi('Bảng không hợp lệ');
 
   /* Mã bản ghi: `cong_viec`/`muc_tieu` dùng số, còn `san_pham`/`giao_dich_kho`
@@ -3676,6 +3717,9 @@ async function suaLichSu(req, env) {
   const idTho = String(u.searchParams.get('id') || '').trim();
   const id = BANG_MA_SO.has(bang) ? parseInt(idTho, 10) : idTho;
   if (!id) return loi('Thiếu id bản ghi');
+  if (truong && !(SUA_TRUONG_LOC.get(bang) || new Set()).has(truong)) {
+    return loi(`Bảng "${bang}" không có loại vết "${truong}"`);
+  }
   /* Quyền XEM đi theo quyền xem của chính thực thể đó. Trạm Mục Tiêu vốn đã
      minh bạch toàn công ty (tinh thần MBOs) — ai xem được việc thì xem được
      lịch sử sửa của việc đó. Cái phải siết là quyền SỬA, không phải quyền
@@ -3702,22 +3746,26 @@ async function suaLichSu(req, env) {
   /* `ly_do` là cột migration `them-ly-do-sua.sql` mới thêm. Deploy có thể
      chạy TRƯỚC migration (REV-0037 · L2) — đọc phòng thủ để cửa này hỏng
      theo chiều an toàn: mất cột lý do chứ không mất cả sổ. */
+  /* Lọc nằm TRONG câu SQL, không lọc sau khi đã cắt — lọc sau trần là đúng
+     cái lỗi CHẶN-1 chép lại một tầng thấp hơn. */
+  const locTruong = truong ? ' AND truong = ?' : '';
+  const thamSo = truong ? [bang, String(id), truong] : [bang, String(id)];
   const cauDoc = (coLyDo) => `
     SELECT truong, gia_tri_cu, gia_tri_moi, nguoi_id, nguoi_ten,
            ${coLyDo ? 'ly_do' : 'NULL AS ly_do'}, luc
-      FROM lich_su_thay_doi_nen WHERE bang = ? AND ban_ghi_id = ?
+      FROM lich_su_thay_doi_nen WHERE bang = ? AND ban_ghi_id = ?${locTruong}
      ORDER BY luc DESC, id DESC LIMIT ${GH + 1}`;
   let kq;
   try {
-    kq = await env.DB.prepare(cauDoc(true)).bind(bang, String(id)).all();
+    kq = await env.DB.prepare(cauDoc(true)).bind(...thamSo).all();
   } catch (e) {
     if (!/no such column/i.test(String(e && e.message || e))) throw e;
-    kq = await env.DB.prepare(cauDoc(false)).bind(bang, String(id)).all();
+    kq = await env.DB.prepare(cauDoc(false)).bind(...thamSo).all();
   }
   const { ds, biCat } = catBot(kq, GH);
   const cat = await nhanCat(env, biCat, GH,
-    'SELECT COUNT(*) AS n FROM lich_su_thay_doi_nen WHERE bang = ? AND ban_ghi_id = ?',
-    [bang, String(id)], null);
+    `SELECT COUNT(*) AS n FROM lich_su_thay_doi_nen WHERE bang = ? AND ban_ghi_id = ?${locTruong}`,
+    thamSo, null);
   return json({ ds: ds.map(d => ({ ...d, cau: cauSuaDoc(d, bang) })), cat });
 }
 
@@ -3968,6 +4016,100 @@ async function cvSua(req, env) {
   }
 
   return json({ ok: true, da_doi: doi.map(d => d.truong), so_dong_ghi: lenh.length });
+}
+
+/* ==========================================================================
+   NHẬN XÉT MỘT VIỆC ĐÃ GIAO — GY-0005
+   ---------------------------------------------------------------------------
+   Sếp Ngọc: *"Cần thêm nút hoặc mục nhận xét để nhận xét công việc của người
+   được giao."*
+
+   HAI CHỐT THIẾT KẾ, cả hai đều là chốt QUẢN TRỊ chứ không phải chốt kỹ thuật:
+
+   ① NHẬN XÉT GẮN VÀO MỘT VIỆC, KHÔNG GẮN VÀO MỘT NGƯỜI. Công ty quản theo
+      MBOs — chấm ĐẦU RA, không chấm con người. Một ô chữ tự do treo trên hồ
+      sơ nhân sự là lời phán về tính cách; cùng câu chữ ấy gắn vào một việc
+      có `dau_ra` viết sẵn thì thành lời chấm một kết quả, cãi lại được bằng
+      bằng chứng. Nên `ban_ghi_id` ở đây LUÔN là id một việc.
+
+   ② NGƯỜI BỊ NHẬN XÉT PHẢI ĐỌC ĐƯỢC. Nhận xét mà người ta không thấy thì là
+      ghi chép nội bộ, không phải quản lý — và tệ hơn: nó thành hồ sơ ngầm.
+      Nên mỗi lần nhận xét là một thông báo tới đúng người đó, và câu nhận
+      xét nằm ngay trong sổ việc mà họ mở được.
+
+   KHÔNG ĐẺ BẢNG MỚI. `lich_su_thay_doi_nen` đã được `them-ly-do-sua.sql`
+   tuyên bố là SỔ SỬA CHUNG của cả ERP, và đã có sẵn tiền lệ cho những vết
+   KHÔNG phải "đổi A thành B" (`viec_gan`, `go` — xem `cauSuaDoc`). Một nhận
+   xét là đúng khuôn đó: (bang, ban_ghi_id, truong, gia_tri_moi, ai, lúc).
+   Nhờ vậy nhận xét hiện luôn trong "Đã sửa những gì" của thẻ việc mà không
+   phải viết thêm một cửa đọc thứ hai.
+
+   AI ĐƯỢC VIẾT: người giao · quản lý cấp trên của người nhận · Admin ·
+   và CHÍNH người nhận (để nói lại). Nhận xét một chiều không cãi được thì
+   người ta không đọc nữa — và mất luôn cái kênh này.
+
+   ⚠️ AI ĐƯỢC ĐỌC THÌ RỘNG HƠN HẲN — VÀ PHẢI NÓI RA (REV-0061 · VỪA-4).
+   Cửa ĐỌC là `suaLichSu`, mà nó chỉ hỏi `duocXemTab(phien, 'congviec')`:
+   người khác phòng, không dính dây gì tới việc này, vẫn `GET /api/sua/lich-su`
+   ra nguyên văn câu nhận xét. Đo được: chị Hằng (kế toán trưởng) đọc được
+   nhận xét trong một việc của kho.
+
+   Bản mô tả cũ ở đây và trên hộp Nhận xét viết *"chỉ hai người trong cuộc"* —
+   ĐÓ LÀ SAI SỰ THẬT, và sai theo chiều nguy hiểm nhất: người viết tưởng mình
+   đang viết riêng cho một người, trong khi cả công ty đọc được. Nay sửa LỜI
+   MÔ TẢ cho khớp sự thật, KHÔNG tự sửa quyền: "ai được đọc nhận xét" là
+   chính sách nhân sự, đã ghi thành câu chờ Sếp Ngọc chốt (CHANGELOG).
+   ========================================================================== */
+async function cvNhanXet(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  if (!duocXemTab(phien, 'congviec')) return loi('Bạn không có quyền', 403);
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+
+  const id = parseInt(b.id, 10);
+  if (!id) return loi('Thiếu id công việc');
+  /* TỪ CHỐI CHỨ KHÔNG CẮT (REV-0061 · VỪA-3). Bản trước `.slice(0, 1000)` rồi
+     trả HTTP 200 — gọi thẳng API 1500 ký tự thì mất 500 ký tự cuối mà không
+     một chữ nào nói là đã cắt. `maxlength="1000"` chỉ che được đường trình
+     duyệt; một tích hợp sau này (hay chính bản ERP trên điện thoại) thì không.
+     Cùng một lẽ với `suaLichSu`: sổ này cắt im lặng là nói dối. */
+  const noiDung = String(b.noi_dung || '').trim();
+  if (noiDung.length < 5) return loi('Nhận xét quá ngắn — viết rõ chỗ làm tốt hoặc chỗ cần sửa giúp tôi');
+  if (noiDung.length > 1000) {
+    return loi(`Nhận xét dài ${noiDung.length} ký tự — tối đa 1000. Cắt bớt giúp tôi, đừng để tôi tự cắt mất phần cuối.`);
+  }
+
+  const cv = await env.DB.prepare(
+    'SELECT id, tieu_de, nguoi_giao_id, nguoi_giao_ten, nguoi_nhan_id, nguoi_nhan_ten FROM cong_viec WHERE id = ?'
+  ).bind(id).first();
+  if (!cv) return loi('Không tìm thấy công việc', 404);
+
+  /* KHÁC `cvSua` MỘT CHỖ QUAN TRỌNG: việc đã `hoan_thanh` hay `huy` vẫn nhận
+     xét được. Sửa nội dung việc đã nghiệm thu là sửa bằng chứng; còn nhận
+     xét một việc đã xong mới đúng là lúc nhận xét có ích nhất. */
+  const laNguoiGiao = cv.nguoi_giao_id === phien.nhan_su_id || laAdmin(phien);
+  const laNguoiNhan = cv.nguoi_nhan_id === phien.nhan_su_id;
+  const laQuanLy = !laNguoiGiao && await laCapTrenCua(env, phien.nhan_su_id, cv.nguoi_nhan_id);
+  if (!laNguoiGiao && !laQuanLy && !laNguoiNhan) {
+    return loi('Chỉ người giao việc, quản lý cấp trên hoặc chính người nhận mới nhận xét được việc này', 403);
+  }
+
+  const ten = phien.ho_ten || phien.ten_dang_nhap;
+  const r = await env.DB.prepare(
+    `INSERT INTO lich_su_thay_doi_nen (bang, ban_ghi_id, truong, gia_tri_cu, gia_tri_moi,
+                                       nguoi_id, nguoi_ten, luc)
+     VALUES ('cong_viec', ?, 'nhan_xet', NULL, ?, ?, ?, datetime('now','+7 hours'))`
+  ).bind(String(id), noiDung, phien.nhan_su_id, ten).run();
+
+  /* BÁO CHO NGƯỜI CÒN LẠI — không báo cho chính mình (tự nhận xét việc mình
+     tự giao là TODO cá nhân, ăn thông báo của chính mình là làm phiền). */
+  const nhan = laNguoiNhan ? cv.nguoi_giao_id : cv.nguoi_nhan_id;
+  if (nhan && nhan !== phien.nhan_su_id) {
+    await guiThongBao(env, null,
+      `${ten} nhận xét việc "${cv.tieu_de}": ${noiDung.slice(0, 160)}${noiDung.length > 160 ? '…' : ''}`,
+      'cong_viec_nhan_xet', String(id), nhan);
+  }
+  return json({ ok: true, id: r.meta.last_row_id, nguoi_ten: ten });
 }
 
 /* Lịch sử làm việc — kho lưu trữ TOÀN CỤC mọi việc trong Trạm Mục Tiêu,
@@ -7323,6 +7465,7 @@ const DUONG_DAN = {
   /* CTL-0017 — sửa NỘI DUNG việc đã giao. Tách hẳn khỏi `cap-nhat` (đổi
      trạng thái + kết quả): hai luật khác hẳn nhau, gộp một cửa là mời lỗi. */
   'POST /api/cong-viec/sua':       cvSua,
+  'POST /api/cong-viec/nhan-xet':  cvNhanXet,
   /* Sổ sửa dùng chung cho cả lớp — ?bang=cong_viec|muc_tieu&id=… */
   'GET  /api/sua/lich-su':         suaLichSu,
   'GET  /api/cong-viec/lich-su':   cvLichSu,

@@ -919,3 +919,120 @@ tiền tố của tên dài và luôn đứng trước — đúng nếp "file g�
 xong mới thấy nó **không phải lỗi của riêng cặp file mới**: 6 cặp trong repo đang xếp
 ngược (`them-chat`, `them-congviec`, `them-donhang`, `them-gopy`, `them-kho`,
 `them-vinhdanh`). Một dòng `.sort()` mặc định, sai âm thầm suốt 6 lần.
+
+**BH-62 · Một `catch` viết tử tế là chỗ nấp tốt nhất cho một tính năng đã chết.**
+07/09/2026, GY-0007 ("không xem được kho tài liệu trên app điện thoại, không kéo xuống
+được"). **Mỗi lần mở ERP**, ở **mọi bề ngang** và **mọi vai trò có quyền `khotailieu`**,
+tab Kho tài liệu ở **lần vẽ đầu tiên** hiện **0 tài liệu + một câu lỗi máy** trên màn:
+`let TL_NHOM_LUU_DUOC` khai ở dòng ~10334 trong khi `await khoiDongKhoTaiLieu()` chạy ở
+dòng ~7462 — chạm biến trong vùng chết TDZ, đúng con bệnh `TBDay` đã giết chat nhiều tuần
+và đã đẻ ra `cong-khoi.mjs`. Nhưng lần này cổng khói **XANH**: lỗi rơi vào một `catch` có
+`try` đàng hoàng, in ra một câu tiếng Việt đúng chuẩn nhà ("Không tải được kho tài
+liệu: …") rồi thôi. Không `console.error`, không ngoại lệ chưa bắt, nút cửa ngõ vẫn bấm ăn.
+Sếp thì thấy một tab trống trơn, không có gì để kéo — nên góp ý về được viết thành "không
+kéo xuống được", và đọc nguyên văn góp ý mà đi sửa CSS cuộn thì sửa cả tuần không trúng.
+
+→ **SỬA LỜI KHAI 07/09/2026 (REV-0062 ⓪ + CAO-1) — bản đầu của bài học này viết "chết
+hoàn toàn", và đó là NÓI QUÁ.** Hồ Ly dựng lại `origin/main` với đúng ba tài liệu như ảnh
+Sếp chụp và đo được **đường hồi phục**:
+
+| Thời điểm | Số thẻ | Dải đếm |
+|---|---|---|
+| ngay sau khi nạp trang | **0** + câu lỗi TDZ | ẩn |
+| sau khi **bấm một nút lọc bất kỳ** (kể cả "Tất cả") | **3** | hiện |
+| nạp lại → **gõ một phát** vào ô tìm | **3** | hiện |
+
+**Vì sao hồi phục**: `napKhoTaiLieu()` gọi `veLoc()` — vẽ và **nối dây** 8 nút lọc —
+**TRƯỚC** dòng `TL_NHOM_LUU_DUOC = nhomLuuDuoc;` là chỗ nổ. Nên lúc tab chết, nút lọc và
+ô tìm vẫn nằm đó và vẫn gọi `nap()` được; đến lúc người dùng chạm vào thì mô-đun đã chạy
+hết tệp, dòng khai đã thi hành, `nap()` chạy trọn vẹn. **Một cú bấm là tab sống lại cho
+tới hết phiên.** Ảnh "đang chạy" của Sếp được giải thích trọn vẹn bằng đúng chuyện đó.
+→ **Mức nghiêm trọng KHÔNG đổi**: người mở ERP ra nhìn thấy màn trống + một câu lỗi máy,
+và **không ai bảo họ "bấm một nút là hiện"**. Với người không biết bấm thử, tab coi như
+hỏng. Vẫn đáng vá, đã vá đúng.
+→ **Bài học của chính chỗ này**: nói quá theo hướng an toàn **vẫn là khai sai số đo**, và
+câu sai đã kịp nằm vĩnh viễn trong `CHANGELOG.md` + bài học này trước khi ai kiểm lại.
+Viết mức nghiêm trọng thì viết **đúng thứ đo được**, đừng viết thứ nghe cho đủ nặng.
+
+→ Đây là **cách hỏng thứ SÁU**, nối tiếp năm cách đã ghi ở đầu `cong-khoi.mjs`:
+**lỗi được bắt tử tế rồi in ra màn hình — mà không bàn đo nào ĐỌC màn hình.**
+→ Lưới chống tái phát không phải "nhớ khai biến cho đúng chỗ" (không ai nhớ nổi qua 11.000
+dòng), mà là hai thứ cùng lúc: ① một **khối khai biến dùng lúc khởi động** đặt TRƯỚC dãy
+`await khoiDong…()` trong `app.js`, ② bàn đo `scripts/do-man-mo-ra-xem-duoc.mjs` đi qua
+từng tab của từng vai trò ở từng bề ngang.
+
+→ **VÒNG 2 — ĐỌC CHỮ THÔI THÌ CHƯA ĐÓNG ĐƯỢC CÁCH HỎNG (REV-0062 CHẶN-1).** Bản đầu của
+bàn đo đó canh bằng một **danh sách sáu câu tiếng Việt chép tay** ("Không tải được",
+"Không mở được"…). Hồ Ly gài bốn kiểu hỏng khác và **bàn đo mù đúng hai kiểu khó nhất**:
+· **A** — chết y hệt, nhưng `catch` in câu KHÁC ("Kho tài liệu đang bảo trì…") → 0 thẻ, **XANH**
+· **B** — nạp xong, không lỗi, chỉ **không vẽ gì** → 0 thẻ, im lặng tuyệt đối, **XANH**
+Cả hai đi qua được vì danh sách chép tay thì **câu thứ bảy luôn lọt**, và vì màn rỗng thì
+phép chấm "cuộn xuống được" cũng xanh nốt ("vừa một màn" — rỗng thì lấy gì mà cuộn).
+Nguyên văn Hồ Ly: ***"cách hỏng thứ SÁU mới đóng được một CÂU, chưa đóng được một CÁCH HỎNG."***
+→ **Chữa bằng cách ĐẢO CÂU HỎI**, không phải bằng cách liệt kê thêm câu lỗi. Câu hỏi đúng
+không phải *"màn có câu xấu nào không"* mà là ***"tab này CÓ NỘI DUNG không"***: mỗi tab
+**tự khai một mỏ neo** — một thứ cụ thể chỉ tồn tại nếu bộ vẽ đã chạy xong (một thẻ, một
+dòng, một con số). Không có mỏ neo → **ĐỎ**, bất kể màn im lặng hay in ra câu gì. Tab nào
+ra rỗng mà **có lý do chính đáng** (ổ giả cố ý trả mảng rỗng) thì chỉ đòi **khung**, không
+đòi dữ liệu — bàn đo không bao giờ đòi thứ nó không tự gieo.
+→ **Mỏ neo phải do JS vẽ ra, không được nằm sẵn trong `app.html`** — mỏ neo tĩnh là mỏ neo
+mù, tab chết thì nó vẫn nằm đó. Cả bảng mỏ neo được chọn bằng cách ĐO: dựng `app.html`
+bằng `DOMParser` (không chạy script) rồi trừ khỏi DOM sống, giữ đúng thứ JS thêm vào.
+→ **Và phải tự gài BỐN kiểu hỏng KHÁC NHAU, không phải gài lại lỗi cũ của chính mình.**
+Gài lại đúng lỗi mình vừa vá là tự chấm bài mình: bàn đo bắt được thứ nó sinh ra để bắt.
+Bốn ca A·B·C·D nay nằm trong bàn đo, chạy lại được (`npm run do-mo-ra-xem-duoc-ca-A`…),
+và **mỗi ca khai sẵn phép chấm nào PHẢI đỏ** — đỏ vì lý do khác cũng bị tính là trượt.
+→ Hệ quả rộng cho cả repo: **`catch` nào nuốt lỗi vào một dòng chữ trên màn thì màn đó
+phải có một bàn đo khẳng định NÓ CÓ NỘI DUNG** — chứ không phải một bàn đo đi dò câu chữ.
+Dò chữ đóng được một câu; hỏi "có nội dung không" mới đóng được cách hỏng.
+
+**BH-63 · Phép đo không tái hiện được cái bẫy thì đừng giả vờ đã đo — chuyển sang canh bằng LUẬT.**
+Cùng đợt GY-0007, đi quét cả lớp "mở ra mà không xem được" thì gặp bốn chỗ đặt trần chiều
+cao bằng `vh` cho thứ NỔI ĐÈ màn hình (`.modal` · `.tlq-tam` · `.tb-panel` · `.cnb-popup`).
+Trên điện thoại thật `100vh` cao hơn vùng nhìn thấy ~60-90px, nên tấm nổi thòi ra ngoài
+khung `position:fixed` và phần thòi ra thì `overflow:auto` của chính nó **không kéo tới
+được** — mất nút ✕, mất hàng nút Lưu/Huỷ. ERP đã trả giá đúng chuyện này ở `.cnb-popup`
+(29/08) và ghi hẳn chú thích, nhưng bốn chỗ khác vẫn nguyên. Vấn đề: **Chrome không đầu
+KHÔNG có thanh địa chỉ co giãn**, ở đó `100vh === innerHeight`, nên mọi phép đo hình học
+trên máy này đều XANH và cái bẫy tàng hình.
+→ Cách xử đúng là **nói thẳng ra là không đo được**, rồi canh bằng một luật đọc trên chính
+tệp CSS (mục Ⓓ của bàn đo mới): thứ nào nổi đè màn hình mà đặt trần chiều cao bằng `vh`
+thì ĐỎ. Không phải phép đo, là lưới — và phải gọi nó đúng tên.
+→ Cái bẫy trong chính cái lưới: bản đầu viết `\bvh\b`, và **bỏ lọt sạch cả bốn chỗ** — vì
+trong `100vh` thì trước `vh` là chữ số, mà chữ số cũng là ký tự từ nên **không có ranh
+giới `\b` ở đó**. Phải `(?<![a-z])vh\b`. Đã chứng minh bằng cách chạy đúng lưới đó lên
+CSS của `origin/main`: ra đủ 4 chỗ. **Lưới mới nào cũng phải chạy thử trên bản CHƯA VÁ —
+xanh trên bản đã vá không chứng minh được gì cả.**
+
+**BH-64 · `dvh` không có đường lui: đơn vị trình duyệt không hiểu thì mất CẢ DÒNG luật, không "lùi về `vh`".**
+07/09/2026, REV-0062 CHẶN-2 — bắt được ngay trên bản vá của BH-63. Đổi bốn chỗ `vh` → `dvh`
+và viết **một dòng duy nhất** là đã dựng lại đúng cái hỏng mình vừa đi vá, cho máy cũ.
+Luật CSS: khai báo mang **đơn vị lạ là khai báo không hợp lệ và bị vứt cả dòng** — không
+phải lùi về giá trị cũ, mà là **không còn trần nào cả**. Đo thật bằng `getComputedStyle`
+trong Chrome, dùng một đơn vị bịa (`qvh`) đóng vai trình duyệt cũ:
+
+| viết thế nào | `getComputedStyle` trả về |
+|---|---|
+| `max-height: calc(100qvh - 40px)` **một mình** | **`none`** — mất sạch trần |
+| `max-height: 92qvh` **một mình** | **`none`** |
+| CẶP `calc(100vh - 40px)` rồi `calc(100qvh - 40px)` | `772px` — **giữ được** |
+| CẶP `92vh` rồi `92qvh` | `747.04px` — **giữ được** |
+| CẶP `100vh` rồi `50dvh` (Chrome MỚI) | `406px` = **nửa màn** → dòng SAU vẫn thắng |
+
+`dvh` chỉ có từ **Chrome 108 / Safari 15.4 / Firefox 101** (cuối 2022). Dưới mốc đó:
+`.modal` mất trần → hộp thoại dài tràn khỏi `.modal-nen` (`fixed` + căn giữa nên phần dư
+bị đẩy đều hai đầu) → **mất hàng nút "Lưu / Huỷ"**; `.tlq-tam` mất trần → màn quét giấy tờ
+**mất nút ✕**. Trước bản vá họ hỏng vì `vh` cao hơn vùng nhìn ~60-90px; sau bản vá họ hỏng
+vì **không còn trần nào** — **nặng hơn**. Nhân sự kho quét giấy tờ bằng điện thoại cũ là
+nhóm dính đầu tiên.
+→ **Luật nhà: `dvh` không bao giờ đứng một mình.** Viết CẶP — `vh` trước làm nền, `dvh`
+sau đè lên. Tốn 0đ, không thêm gói. Áp cho cả 5 chỗ (`.modal` · `.tlq-tam` · `.tb-panel` ·
+`.cnb-popup` × 2 khối).
+→ **Lưới Ⓓ phải chấm BA trạng thái, không phải hai**: `vh` một mình ĐỎ (bẫy cũ) · `dvh`
+một mình ĐỎ (bẫy mới) · CẶP đúng thứ tự ĐẠT. Lưới cũ chỉ cấm `vh` nên nó **chấm XANH cho
+chính cái bẫy mới** — một lưới chỉ biết cấm cái sai hôm qua thì hôm nay nó gật đầu cho cái
+sai mới.
+→ Bẫy phụ, bắt được lúc tự thử: lưới đọc CSS phải **gỡ chú thích trước khi soi**. Chú
+thích mới viết có nhắc lại `max-height: calc(100qvh - 40px)` làm ví dụ, và lưới **đọc luôn
+chữ trong chú thích như khai báo thật**. Lưới đọc chữ thì phải đọc đúng phần chữ **có hiệu
+lực**.
