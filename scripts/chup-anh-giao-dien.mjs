@@ -108,6 +108,37 @@ function apiRieng(duong, u, traJson, req) {
       dong_viec: [], ghi_nhan: [] });
     return true;
   }
+  /* DASHBOARD MARKETPLACE (`f1ac70b`) — Tổng quan 2 sàn + 10 SKU bán chạy/kém.
+     Thiếu hai đường này thì màn `kinhdoanh` chụp ra panel RỖNG, và đúng hai
+     bảng tràn +23px trên màn 1440px của Sếp lại không có tấm ảnh nào làm
+     chứng. Số tiền để đúng cỡ tỷ đồng: bề ngang một cột tiền do CON SỐ DÀI
+     NHẤT quyết định, y như bề ngang cột chữ do câu dài nhất. */
+  if (duong === '/api/kinh-doanh/tong-quan-kenh') {
+    const kenh = (nguon) => ({ nguon, so_don: 12345, gmv: 9876543210,
+      so_don_huy: 234, tien_huy: 1234567890, so_don_hoan: 123, tien_hoan: 987654321,
+      doanh_thu: 7654321098, truoc_doanh_thu: 8765432109, truoc_so_don: 13000,
+      truoc_du_du_lieu: true });
+    traJson({ co_bang: true,
+      ky: { ma: 'thang_nay', nhan: 'Tháng này', truoc_nhan: 'Tháng trước' },
+      kenh: [kenh('shopee'), kenh('tiktok')],
+      tong: { so_don: 24690, gmv: 19753086420, tien_huy: 2469135780,
+              tien_hoan: 1975308642, doanh_thu: 15308642196,
+              truoc_doanh_thu: 17530864218, truoc_so_don: 26000, truoc_du_du_lieu: true },
+      chan_doan: { hoan: [] } });
+    return true;
+  }
+  if (duong === '/api/kinh-doanh/xep-hang-sku') {
+    const SP = 'Hạt điều rang muối Bình Phước loại A nguyên hạt túi zip 500g — lô nhập khẩu quý 3';
+    const hang = (i, sl) => ({ sku: 'AGC-HDRM-500G-LOAI-A-' + i, ten: SP,
+      so_luong: sl, doanh_thu: sl ? 9876543210 : 0 });
+    traJson({ co_bang: true,
+      ky: { ma: 'thang_nay', nhan: 'Tháng này', tu: '2026-09-01', den: '2026-09-30' },
+      nguon_xep_hang: 'danh_muc', so_ma_hang: 120, so_ma_ban_duoc: 87,
+      ban_chay: [1, 2, 3].map(i => hang(i, 1234 - i)),
+      ban_kem: [4, 5, 6].map(i => hang(i, 0)),
+      chua_khop: [], chua_tach: 0 });
+    return true;
+  }
   if (duong === '/api/cong-viec/tong-quan-congty') {
     traJson({ dang_mo: 40, qua_han: 3, cho_duyet: 2,
       theo_phong_ban: [{ bo_phan: 'Kho vận', dang_mo: 18, qua_han: 2, cho_duyet: 1 },
@@ -123,13 +154,22 @@ const MAN = [
   { ten: 'dangnhap',    trang: 'index.html', tab: null },
   { ten: 'trammuctieu', trang: 'app.html',   tab: null },
   { ten: 'lichsuviec',  trang: 'app.html',   tab: 'lichsuviec' },
-  { ten: 'khovan',      trang: 'app.html',   tab: 'khovan' }
+  { ten: 'khovan',      trang: 'app.html',   tab: 'khovan' },
+  /* Thêm 06/09/2026. Màn Kinh doanh chở Dashboard Marketplace của `f1ac70b`,
+     nơi hai bảng SKU tràn +23px ngay trên màn 1440px. Bàn chụp không có nó
+     nên không tấm ảnh nào thấy được — mà REV-0059 đã ghi rõ: có lỗi CHỈ ẢNH
+     MỚI THẤY, bàn đo số thì không. Thêm màn mới vào ERP thì thêm vào đây. */
+  { ten: 'kinhdoanh',   trang: 'app.html',   tab: 'kinhdoanh', cuonToi: '#kd-sku-panel' }
 ];
-/* Ba bề ngang người ta THẬT SỰ dùng — 1280 thêm 04/09/2026: laptop phổ
+/* Bốn bề ngang người ta THẬT SỰ dùng — 1280 thêm 04/09/2026: laptop phổ
    thông là chỗ bảng chật nhất mà vẫn còn là BẢNG (dưới 980px đã đổi sang thẻ),
-   nên chụp thiếu nó là bỏ trống đúng khoảng dễ hỏng nhất. */
+   nên chụp thiếu nó là bỏ trống đúng khoảng dễ hỏng nhất.
+   1024 thêm 06/09/2026 — máy tính bảng nằm ngang. Xem lời cấm ở `RONGS` trong
+   `do-bang-that.mjs`: cả dải 981–1100px sinh ra luật CSS riêng mà chưa cổng
+   nào đo, và vừa bật lên là lòi ra 5 chỗ tràn. Ảnh cũng phải có mức này. */
 const KHUNG = [{ nhan: '1440', rong: 1440, cao: 900 },
                { nhan: '1280', rong: 1280, cao: 860 },
+               { nhan: '1024', rong: 1024, cao: 800 },
                { nhan: '375',  rong: 375,  cao: 812 }];
 
 const may = await dungMayGia({ commit, apiRieng, tatHoatAnh: true });
@@ -151,6 +191,17 @@ try {
              rảnh, còn ở đây bấm xong mới chụp. */
           await cr.chay(`document.querySelector('[data-tab="${m.tab}"]').click(); 1`);
           await cr.doi(1200);
+        }
+        /* CUỘN TỚI ĐÚNG THỨ ĐANG ĐEM RA CHẤM. `Page.captureScreenshot` chỉ
+           chụp KHUNG NHÌN, nên thứ nằm dưới nếp gấp không có mặt trong ảnh.
+           Bảng SKU của `f1ac70b` nằm dưới bốn thẻ số + bảng Tổng quan 2 sàn:
+           chụp màn Kinh doanh mà không cuộn thì ra một tấm ảnh đẹp KHÔNG CHỨA
+           cái đang hỏng — vẫn là "đã chụp rồi" trên giấy, và vẫn mù đúng chỗ.
+           `cuonToi` để rỗng thì chụp đầu trang như cũ. */
+        if (m.cuonToi) {
+          await cr.chay(`(function(){const e=document.querySelector('${m.cuonToi}');` +
+            `if(e) e.scrollIntoView({block:'start'}); return !!e;})()`);
+          await cr.doi(500);
         }
         // Bề ngang khung nhìn PHẢI đúng con số đã đặt — nếu không, ảnh cắt mép.
         const rongThat = await cr.chay('window.innerWidth');

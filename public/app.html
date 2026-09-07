@@ -1103,11 +1103,23 @@
             <table>
               <thead>
                 <tr>
+                  <!-- BẢY CỘT TIỀN TRONG MỘT KHUNG 678px (máy tính bảng nằm
+                       ngang) là không vừa: mỗi số VND ăn ~100–120px, và cột
+                       rơi khỏi mép phải chính là "So kỳ trước" — đo được
+                       +26px @1024px. Câu hỏi khi nhìn một dòng ở đây là
+                       "SÀN NÀO mang về BAO NHIÊU tiền, và có TỤT so với kỳ
+                       trước không". Bốn cột trả lời câu đó ở lại: Sàn · Đơn
+                       đặt · GMV đơn đặt · Doanh thu tạm tính · So kỳ trước.
+                       "Hủy" và "Hoàn" là phần RÒ RỈ, không phải câu trả lời —
+                       và thẻ số ngay trên bảng đã báo "Hủy + Hoàn" kèm % trên
+                       GMV rồi. Nên hai cột này thành `.cot-phu`: vẫn còn
+                       nguyên, mở bằng nút "Chi tiết" của từng dòng, không mất
+                       trường nào. -->
                   <th>Sàn</th>
                   <th class="num">Đơn đặt</th>
                   <th class="num">GMV đơn đặt</th>
-                  <th class="num">Hủy</th>
-                  <th class="num">Hoàn</th>
+                  <th class="num cot-phu">Hủy</th>
+                  <th class="num cot-phu">Hoàn</th>
                   <th class="num">Doanh thu tạm tính</th>
                   <th class="num">So kỳ trước</th>
                 </tr>
@@ -1128,12 +1140,23 @@
         </div>
         <div class="panel-body">
           <div class="list" id="kd-sku-canhbao" hidden></div>
+          <!-- BA CỘT, KHÔNG PHẢI BỐN — câu hỏi khi nhìn một dòng ở đây là
+               "MÃ NÀO bán được / nằm im, và DOANH THU bao nhiêu". Bốn cột cũ
+               trả lời câu đó bằng hai cột danh tính (Mã SKU + Tên hàng) cho
+               CÙNG một thứ hàng, và cái cột thừa ấy đẩy "Doanh thu" — chính
+               là câu trả lời — rơi khỏi mép phải trong khung nửa bảng 537px.
+               Nay danh tính gộp vào MỘT cột `.cot-chu`: mã SKU đứng dòng trên
+               (`.nm`, đúng chỗ nhấn cũ), tên hàng làm dòng phụ ngay dưới
+               (`.sm`, kẹp 2 dòng, `title` giữ chữ đủ). KHÔNG trường nào bị
+               giấu sau nút, không ai phải bấm thêm một lần để biết mình đang
+               nhìn hàng gì. Đúng lối `ns-bang` đã dùng từ trước, không đẻ
+               cách thứ hai. -->
           <div class="kd-sku-cot">
             <div>
               <h5 style="margin:0 0 8px">🔥 10 SKU bán chạy nhất</h5>
               <div class="table-wrap-cuon">
                 <table>
-                  <thead><tr><th>Mã SKU</th><th>Tên hàng</th><th class="num">SL bán</th><th class="num">Doanh thu</th></tr></thead>
+                  <thead><tr><th class="cot-chu">Mã SKU · Tên hàng</th><th class="num">SL bán</th><th class="num">Doanh thu</th></tr></thead>
                   <tbody id="kd-sku-chay"></tbody>
                 </table>
               </div>
@@ -1142,7 +1165,7 @@
               <h5 style="margin:0 0 8px">🧊 10 SKU bán kém nhất</h5>
               <div class="table-wrap-cuon">
                 <table>
-                  <thead><tr><th>Mã SKU</th><th>Tên hàng</th><th class="num">SL bán</th><th class="num">Doanh thu</th></tr></thead>
+                  <thead><tr><th class="cot-chu">Mã SKU · Tên hàng</th><th class="num">SL bán</th><th class="num">Doanh thu</th></tr></thead>
                   <tbody id="kd-sku-kem"></tbody>
                 </table>
               </div>
@@ -1638,7 +1661,12 @@
                   <th>Trạng thái trên sàn</th>
                   <th class="num cot-phu">Số tiền</th>
                   <th class="cot-phu">Người mua</th>
-                  <th>Kho nhận</th>
+                  <!-- "Kho nhận" KHÔNG phải cột trạng thái ngắn: dòng phụ của
+                       nó chở TÊN NGƯỜI nhận (tới 80 ký tự) kèm giờ phút, nên
+                       ở `nowrap` nó rộng 365px và kéo bảng tràn +102px @1024px
+                       — cột rơi mất chính là nó. Đánh dấu `.cot-chu` để nó có
+                       TRẦN và được xuống dòng, đúng lớp đã có sẵn. -->
+                  <th class="cot-chu">Kho nhận</th>
                 </tr>
               </thead>
               <tbody id="dh-bang"></tbody>

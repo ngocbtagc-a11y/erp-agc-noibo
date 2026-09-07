@@ -36,9 +36,12 @@
    CÁCH ĐO — Chrome thật, app.js thật, bề ngang đổi bằng
    `Emulation.setDeviceMetricsOverride` (co khung bằng CSS thì
    `window.innerWidth` vẫn là số cũ và phép đo nói dối).
-   Ba bề ngang, đúng bề ngang người ta thật sự dùng:
+   Bốn bề ngang, đúng bề ngang người ta thật sự dùng:
      1440 — màn máy tính Sếp đang ngồi (ảnh Sếp gửi chụp ở đây)
      1280 — laptop phổ thông
+     1024 — máy tính bảng NẰM NGANG. Xem lời cấm ở `RONGS` bên dưới: nửa số
+            luật bảng trong style.css sinh ra từ số đo 1024, mà tới
+            06/09/2026 vẫn chưa cổng nào đo ở 1024. Đừng bỏ mức này.
       375 — điện thoại
 
    CHẠY:
@@ -64,16 +67,37 @@ const COMMIT = lay('--commit', null);
 const BANG_KE = dso.includes('--bang-ke');
 const TU_KIEM = dso.includes('--tu-kiem');
 
-/* Ba bề ngang người ta THẬT SỰ dùng. Không đo 900/320 nữa: chúng nằm giữa hai
-   mốc đã đo và chỉ làm loãng con số phải báo cho Sếp. */
-const RONGS = [1440, 1280, 375];
+/* Bốn bề ngang người ta THẬT SỰ dùng. Không đo 900/320 nữa: chúng nằm giữa hai
+   mốc đã đo và chỉ làm loãng con số phải báo cho Sếp.
 
-/* MẪU SỐ. ERP hiện có 27 bảng: 26 viết sẵn trong `app.html` + 1 dựng bằng JS
+   ⚠️⚠️ 1024 KHÔNG BAO GIỜ ĐƯỢC BỎ KHỎI DANH SÁCH NÀY. ⚠️⚠️
+   Lý do, và nó buồn cười theo đúng nghĩa đen: luật CSS
+   `@media (max-width: 1100px)` trong `style.css` (đệm ngang 10px · tiêu đề cột
+   xuống dòng · hạ trần `.cot-chu`) SINH RA TỪ SỐ ĐO 1024px của Hồ Ly — mà
+   KHÔNG CỔNG NÀO đo ở 1024. Cả dải 981–1100px, tức máy tính bảng nằm ngang,
+   không có ai canh. Bench xanh trong khi thật ra tràn.
+   Bật mức này lên (06/09/2026) lòi ra ngay 5 chỗ, trong đó có hai chỗ mà bàn
+   đo ba mức không thể thấy:
+     · `thead th { white-space: normal }` của chính khối 1100px đã CHẾT nhiều
+       vòng — một luật nền đứng sau nó trong tệp, cùng độ ưu tiên, đè mất.
+       `kd-tq-bang` +139px · `cskh-bang` +12px.
+     · `ns-bang` +54px · `qtBang` +51px — ô nhóm nút giữ `nowrap`.
+     · `dh-bang` +102px — cột "Kho nhận" chở tên người mà không có trần.
+   Bỏ 1024 đi là mù lại đúng dải mà nửa số luật bảng đang phục vụ.
+   Thêm mức mới thì THÊM, đừng thay. */
+const RONGS = [1440, 1280, 1024, 375];
+
+/* MẪU SỐ. ERP hiện có 30 bảng: 29 viết sẵn trong `app.html` + 1 dựng bằng JS
    (`#cv-tqct-phongban`, xem `API_CHO_BANG_27` bên dưới). Nếu một hôm nó soi
    được ít hơn, hoặc là có bảng bị mất, hoặc là bàn đo hỏng — cả hai đều phải
    báo, không được im. Thêm bảng mới thì SỬA SỐ NÀY LÊN, và việc phải sửa
-   chính là lời nhắc "bảng mới của mày đã đo chưa?". */
-const SO_BANG_PHAI_SOI = 27;
+   chính là lời nhắc "bảng mới của mày đã đo chưa?".
+
+   27 → 30 (06/09/2026): `f1ac70b` thêm ba bảng (`kd-tq-bang` Tổng quan 2 sàn,
+   `kd-sku-chay`, `kd-sku-kem`) mà KHÔNG sửa con số này. Arm D dùng `>=` nên
+   nó vẫn xanh — mẫu số im lặng tụt lại, và hai trong ba bảng mới ấy tràn ngay
+   ở màn 1440px của Sếp. Lời nhắc chỉ có tác dụng khi con số được giữ đúng. */
+const SO_BANG_PHAI_SOI = 30;
 
 /* MỐC CHỮ và MỐC CHIỀU CAO DÒNG — hai chốt chống "sửa quá tay". Sếp dặn
    thẳng: bỏ bớt CỘT, không thu nhỏ CHỮ; và không được làm giảm số dòng thấy
@@ -506,6 +530,33 @@ const API_THAT = (duong, u, traJson) => {
     return R({ co_bang: true, co_van_don: false, don_huy: HOAN_THAT.map(r => ({
       ...r, gia_tri_don: 1234567, ai_huy: TEN_NGUOI, huy_ly_do_khach: CHU_DAI.slice(0, 90),
       ngay: '2026-08-21' })) });
+  /* Dashboard Marketplace (`f1ac70b`). Số tiền để ĐÚNG cỡ người ta thật sự
+     thấy: GMV một tháng của AGC là hàng tỷ, tức 10–13 chữ số — bề ngang cột
+     tiền do CHÍNH con số dài nhất quyết định, y như bề ngang cột chữ do câu
+     dài nhất quyết định. Mock bằng "1.234.567" là lại đo bằng dữ liệu dễ. */
+  if (duong === '/api/kinh-doanh/tong-quan-kenh') {
+    const kenh = (nguon) => ({ nguon, so_don: 12345, gmv: 9876543210,
+      so_don_huy: 234, tien_huy: 1234567890, so_don_hoan: 123, tien_hoan: 987654321,
+      doanh_thu: 7654321098, truoc_doanh_thu: 8765432109, truoc_so_don: 13000,
+      truoc_du_du_lieu: true });
+    return R({ co_bang: true,
+      ky: { ma: 'thang_nay', nhan: 'Tháng này', truoc_nhan: 'Tháng trước' },
+      kenh: [kenh('shopee'), kenh('tiktok')],
+      tong: { so_don: 24690, gmv: 19753086420, tien_huy: 2469135780,
+              tien_hoan: 1975308642, doanh_thu: 15308642196,
+              truoc_doanh_thu: 17530864218, truoc_so_don: 26000, truoc_du_du_lieu: true },
+      chan_doan: { hoan: [] } });
+  }
+  if (duong === '/api/kinh-doanh/xep-hang-sku') {
+    const hang = (i, sl) => ({ sku: 'AGC-HDRM-500G-LOAI-A-' + i, ten: SP_TEN,
+      so_luong: sl, doanh_thu: sl ? 9876543210 : 0 });
+    return R({ co_bang: true,
+      ky: { ma: 'thang_nay', nhan: 'Tháng này', tu: '2026-09-01', den: '2026-09-30' },
+      nguon_xep_hang: 'danh_muc', so_ma_hang: 120, so_ma_ban_duoc: 87,
+      ban_chay: [1, 2].map(i => hang(i, 1234)),
+      ban_kem: [3, 4].map(i => hang(i, 0)),
+      chua_khop: [], chua_tach: 0 });
+  }
   if (duong === '/api/kinh-doanh/khach-hoan-nhieu')
     return R({ khach_hang: [{ nguoi_mua: TEN_NGUOI, nguon: 'shopee,tiktok',
                               so_don: 12, so_huy: 4, gan_nhat: '2026-08-28' }] });
@@ -618,7 +669,14 @@ const ARM_R_PHAI_CO = [
   'kt-ts-bang',   // Kế toán tra soát — ô tick chị Hằng
   'kt-hh-bang',   // Kế toán hàng hoàn — ô tick chị Hằng
   'ts-bang',      // Tài sản — ô tick anh Duy
-  'qtBang'        // Quản trị tài khoản
+  'qtBang',       // Quản trị tài khoản
+  /* Ba bảng của `f1ac70b` (Dashboard Marketplace). Chúng vào đây MUỘN, và cái
+     giá của việc vào muộn đã trả rồi: `kd-sku-chay` và `kd-sku-kem` tràn +23px
+     ngay trên màn 1440px của Sếp, cột "Doanh thu" rơi khỏi mép phải, và không
+     arm nào kêu vì arm R không có dữ liệu để vẽ chúng ra. */
+  'kd-tq-bang',   // Tổng quan 2 sàn — 7 cột tiền
+  'kd-sku-chay',  // 10 SKU bán chạy — nằm trong lưới 2 cột, khung chỉ nửa panel
+  'kd-sku-kem'    // 10 SKU bán kém
 ];
 
 /* Bấm qua từng tab VÀ TỪNG TAB CON, đo SAU MỖI LẦN BẤM. Bấm hết một lượt rồi
@@ -706,10 +764,20 @@ for (const RONG of RONGS) {
     cr.dong();
   }
   /* Hai bảng này có DANH SÁCH THẺ VẼ TAY riêng (`.kv-card-list`, thẻ góp ý) và
-     ở ≤980px thì chính cái `<table>` bị CSS ẩn hẳn — không có gì để chấm, và
-     đó là đúng thiết kế có từ trước bản vá này. Ghi ra ĐÍCH DANH kèm bề ngang,
-     để đây là chỗ CỐ Ý bỏ chứ không phải chỗ lọt. */
-  const THE_VE_TAY = RONG <= 980 ? ['gy-bang', 'kv-ton-bang'] : [];
+     ở dưới mốc của mình thì chính cái `<table>` bị CSS ẩn hẳn — không có gì để
+     chấm, và đó là đúng thiết kế có từ trước bản vá này. Ghi ra ĐÍCH DANH kèm
+     bề ngang, để đây là chỗ CỐ Ý bỏ chứ không phải chỗ lọt.
+
+     MỖI BẢNG MỘT MỐC, KHÔNG DÙNG CHUNG MỘT SỐ. Bản cũ viết `RONG <= 980` cho
+     cả hai, và con số đó không đúng với cái nào: Góp ý đổi sang thẻ ở ≤1100px
+     (`.gy-chi-dienthoai`, style.css), Tồn kho ở ≤780px (`.kv-card-list`). Với
+     ba mức đo cũ (1440·1280·375) sai số này không lộ ra. Vừa bật mức 1024px
+     là lộ ngay: `gy-bang` bị báo "KHÔNG VẼ RA DÒNG NÀO" trong khi nó CỐ Ý
+     không có bảng ở bề ngang đó. Lấy đúng mốc CSS thật. */
+  const THE_VE_TAY = [
+    ...(RONG <= 1100 ? ['gy-bang'] : []),
+    ...(RONG <= 780 ? ['kv-ton-bang'] : [])
+  ];
   const thieuBang = ARM_R_PHAI_CO.filter(m => !daThay.has(m) && !THE_VE_TAY.includes(m));
 
   ok(`R @${RONG}px · phủ đủ ${ARM_R_PHAI_CO.length} bảng bắt buộc, mỗi bảng ≥1 dòng THẬT ` +

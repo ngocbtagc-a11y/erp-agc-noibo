@@ -239,10 +239,36 @@ lần sau **không ai biết nợ có tăng hay không** — nên ghi cả ba ra
   và một bàn nữa. 37 bàn còn lại vẫn treo được — mà bàn đo treo thì người ta
   **tắt nó chứ không sửa nó**. Không nâng lên `lib/` dùng chung được ngay vì
   **43 script import nó**; chờ lúc hàng đợi trống worktree.
-- **`do-bang-that` chưa đo 1024px.** Bật lên thì lòi ra **5 chỗ tràn**, trong
+- ~~**`do-bang-that` chưa đo 1024px.** Bật lên thì lòi ra **5 chỗ tràn**, trong
   đó **2 chỗ là của `f1ac70b`** (`kd-sku-chay` / `kd-sku-kem`, cột "Doanh thu"
   rơi khỏi màn ở 1440 và 1280). **Vá 2 bảng đó TRƯỚC, rồi mới bật mức đo** —
-  đừng bật để cổng đỏ sẵn.
+  đừng bật để cổng đỏ sẵn.~~
+  ✅ **XONG 07/09/2026** — nhánh `fix/bang-sku-tran-1024`. Hai bảng SKU vá
+  xong, mức 1024px đã bật kèm lời cấm bỏ nó, cả 5 chỗ tràn đã xử.
+  `do-bang-that` **73 ĐẠT · 2 TRƯỢT → 97 ĐẠT · 0 TRƯỢT** ở bốn mức
+  1440 · 1280 · 1024 · 375.
+
+---
+
+## NỢ MỚI GHI 07/09/2026 — từ việc vá bảng SKU và bật mức đo 1024px
+
+- **`do-gop-viec` ĐANG ĐỎ SẴN TRÊN `origin/main`** (`407d2df`), không phải do
+  nhánh nào gây ra: `❌ 1440px: số dòng bị giảm` — `truoc` 9 dòng, `sau`
+  `gop.toi` 8 · `gop.congty` 8. Đã kiểm bằng cách stash sạch cây làm việc rồi
+  chạy lại: **ra đúng cùng con số**. Đây là chốt chính Sếp dặn — *"không được
+  làm giảm số dòng thấy được"* — đang bị vi phạm trên hệ thống thật mà chưa ai
+  khai. Phải xử trước khi nó thành cái mái như `MOC_TRAN` cũ.
+- **`do-tu-lam-moi` 52 ĐẠT · 2 TRƯỢT** — nợ của `f1ac70b`, đã biết từ trước,
+  vẫn còn nguyên.
+- **CẦN SẾP / HỒ LY XÁC NHẬN MỘT QUYẾT ĐỊNH HIỂN THỊ.** Bảng "Tổng quan 2 sàn"
+  (`kd-tq-bang`) có 7 cột tiền, không thể vừa khung 678px ở 1024px. Đã cho hai
+  cột **"Hủy"** và **"Hoàn"** xuống `.cot-phu` — vẫn xem được bằng nút "Chi
+  tiết" của từng dòng, và thẻ số ngay trên bảng đã báo "Hủy + Hoàn" kèm % trên
+  GMV. Lý do chọn đúng hai cột đó: câu hỏi khi nhìn một dòng là *"sàn nào mang
+  về bao nhiêu, có tụt không"* — Hủy/Hoàn là phần RÒ RỈ, không phải câu trả
+  lời. **Đây là quyết định hiển thị, không phải business rule** — nhưng nó đổi
+  cái Sếp nhìn thấy trên màn 1440px, nên khai ra để lật lại được: muốn giữ đủ
+  7 cột thì phải cho `kd-tq-bang` vào `BANG_GIU_CUON` kèm lý do viết bằng chữ.
 
 ---
 

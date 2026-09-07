@@ -514,7 +514,10 @@ function veBangNsQuanTri() {
       `<td><span class="tag ${tt.mau}">${esc(tt.chu)}</span></td>` +
       `<td>${veOHopDong(n)}</td>` +
       `<td class="sm">${esc(n.ngay_vao || '')}</td>` +
-      `<td>${thaoTac}</td>`;
+      /* `.o-nut` — xem ghi chú ở `veDongTaiKhoan`. Ba nút Sửa/Hoàn tất/Xoá
+         dính `tbody td { white-space: nowrap }` nên nằm một hàng cứng và kéo
+         `ns-bang` tràn +54px @1024px. */
+      `<td class="o-nut">${thaoTac}</td>`;
   });
   veTrongNS(DS_NHAN_SU_QT, ds);
   veDaiThieuHopDong();
@@ -609,7 +612,12 @@ function veBangQtTaiKhoan() {
       `<td>${esc(n.bo_phan || '—')}</td>` +
       `<td>${cotTK}</td>` +
       `<td class="sm">${esc(tenVaiTro || '—')}</td>` +
-      `<td class="qt-thaotac">${thaoTac}</td>`;
+      /* `.o-nut` — nhóm nút TỰ XUỐNG HÀNG khi hết chỗ. Thiếu nó thì
+         `.qt-thaotac { white-space: nowrap }` giữ cả ba nút trên MỘT dòng và
+         bề ngang tối thiểu của cột thành tổng ba nút: đo được 337px, kéo
+         `qtBang` tràn +51px @1024px. Đúng lớp lỗi mà `.o-nut` sinh ra để
+         chặn, không đẻ cách thứ hai. */
+      `<td class="qt-thaotac o-nut">${thaoTac}</td>`;
   });
 
   const o = $('#qt-trong');
@@ -7205,16 +7213,26 @@ async function khoiDongTongQuanSan() {
     const tbody = $(dich);
     tbody.innerHTML = '';
     if (!ds.length) {
-      tbody.innerHTML = `<tr><td colspan="4" class="empty">Chưa có dữ liệu.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="3" class="empty">Chưa có dữ liệu.</td></tr>`;
       return;
     }
     ds.forEach(s => {
       const tr = el('tr', s.so_luong === 0 ? 'kd-sku-chet' : '');
+      /* MỘT Ô DANH TÍNH, HAI DÒNG — xem ghi chú ở `app.html`. Mã SKU là thứ
+         người ta HÀNH ĐỘNG lên (sửa mã trên sàn, tra trong kho) nên nó giữ
+         dòng trên và giữ nét đậm cũ; tên hàng là thứ người ta ĐỌC để biết đó
+         là hàng gì nên nằm ngay dưới, không giấu đi đâu cả. `title` giữ trọn
+         tên khi CSS kẹp dòng phụ 2 dòng — không cắt chữ âm thầm. */
       tr.innerHTML =
-        `<td><b>${esc(s.sku)}</b></td>` +
-        `<td>${esc(s.ten || '')}</td>` +
+        `<td class="cot-chu"><div class="nm">${esc(s.sku)}</div>` +
+          (s.ten ? `<div class="sm" title="${esc(s.ten)}">${esc(s.ten)}</div>` : '') + '</td>' +
         `<td class="num">${tienVN(s.so_luong)}</td>` +
-        `<td class="num">${s.doanh_thu ? tienVN(s.doanh_thu) + ' đ' : '—'}</td>`;
+        /* DẤU CÁCH KHÔNG NGẮT giữa số và "đ". Ở chế độ thẻ (≤980px) ô bảng
+           thành `display:inline` kèm `overflow-wrap:anywhere`, nên một số tiền
+           13 chữ số bị ngắt và chữ "đ" rơi xuống một dòng RIÊNG — ảnh
+           `375-kinhdoanh-sau.png` bắt được, bàn đo số thì không (chữ không mất,
+           bảng không tràn). Đơn vị tiền phải dính với con số. */
+        `<td class="num">${s.doanh_thu ? tienVN(s.doanh_thu) + ' đ' : '—'}</td>`;
       tbody.appendChild(tr);
     });
   }
