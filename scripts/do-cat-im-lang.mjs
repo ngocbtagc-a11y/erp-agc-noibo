@@ -70,8 +70,34 @@ const MIEN_TRU = [
   { tep: 'src/mota-cv.js', ham: 'danhSach',
     lyDo: 'HÀNG ĐỢI: mô tả công việc của MỘT chức danh, trần 200 — xa ngưỡng.' },
   { tep: 'src/kho.js', ham: 'lichSu',
-    lyDo: 'HÀNG ĐỢI: lịch sử giao dịch 1 sản phẩm, trần do người gọi truyền (≤200) — cần dải cắt khi kho chạy thật.' }
+    lyDo: 'HÀNG ĐỢI: lịch sử giao dịch 1 sản phẩm, trần do người gọi truyền (≤200) — cần dải cắt khi kho chạy thật.' },
+  { tep: 'src/nap-du-lieu.js', ham: 'huyLuotNap',
+    lyDo: 'CÓ CHỦ Ý + ĐÃ NÓI RA: câu từ chối gỡ kê đích danh 5 mã sẽ âm (`LIMIT ${KE_MA_TOI_DA}`) rồi tự nói “…và N mã nữa” bằng một câu COUNT thật — cắt để câu báo đọc được, không phải cắt để giấu. Kê hết 20.000 mã thì không ai đọc.' },
+  { tep: 'src/nap-du-lieu.js', ham: 'dsLuotNap',
+    lyDo: 'CÓ CHỦ Ý: 10 lượt nạp GẦN ĐÂY (trần người gọi truyền, ≤50) — nhãn giao diện là “Lượt nạp gần đây”, không phải sổ tra cứu.' }
 ];
+
+/* ==========================================================================
+   MẶT TRẬN ③ — CỬA MÔ-ĐUN (thêm 07/09/2026, REV-0060 vòng 2 · CAO-⑥)
+   --------------------------------------------------------------------------
+   Phép quét ① chỉ soi hàm CÓ GỌI `json(` trong thân. Mấy mô-đun nghiệp vụ
+   không tự trả HTTP: chúng trả một object cho `index.js`, `index.js` mới
+   `json()`. Nên cả `src/nap-du-lieu.js` VÔ HÌNH với máy quét — mà chỗ cắt
+   trong đó không phải một danh sách hiện ra cho vui: nó là CHỐT CHẶN chống
+   nạp trùng tồn kho (`LIMIT 50000` đếm CẶP mã × phiếu, kho 60 mã đã 55.000
+   cặp). Cắt im lặng đúng ở đó = chốt chặn tự mù trong khi giao diện vẫn hiện
+   "không có gì bất thường". Đắt hơn mọi chỗ ① đang canh.
+
+   Các tệp dưới đây soi bằng ĐÚNG luật của ①, chỉ bỏ điều kiện "có gọi json(".
+   Thêm một dòng là một quyết định có tên, không phải một sự im lặng.
+   ========================================================================== */
+const MO_DUN_TRA_DU_LIEU = [
+  { tep: 'src/nap-du-lieu.js',
+    lyDo: 'Trả object cho index.js; chứa lớp dò trùng nạp tồn — một CHỐT CHẶN, không phải danh sách.' },
+  { tep: 'src/doc-bang.js',
+    lyDo: 'Bộ đọc file: cắt dòng/cột/bảng ở đây là mất số liệu của Sếp, phải nói ra.' }
+];
+const LA_CUA_MO_DUN = tep => MO_DUN_TRA_DU_LIEU.some(m => m.tep === tep);
 
 /* ==========================================================================
    PHÉP QUÉT ① — máy chủ
@@ -198,22 +224,29 @@ function dauCatCoDanhSach(than, locRaManHinh = false) {
   return ra;
 }
 
-/** Hàm này có phải "chỗ cắt cần nói ra" không? (chưa xét miễn trừ) */
-function laChoCanNoi(h) {
+/** Hàm này có phải "chỗ cắt cần nói ra" không? (chưa xét miễn trừ)
+ *  `cuaMoDun` = tệp nằm trong `MO_DUN_TRA_DU_LIEU`: trả object cho index.js
+ *  chứ không tự `json()`, nên bỏ điều kiện "có gọi json(" — mọi luật khác
+ *  giữ nguyên. */
+function laChoCanNoi(h, cuaMoDun = false) {
   // Chỉ soi hàm TRẢ RA TRÌNH DUYỆT. Cron/tác vụ nền cắt lô là đúng việc
   // của nó — không ai đang nhìn một màn hình để mà bị nói dối.
-  if (!/\bjson\s*\(/.test(h.than)) return null;
+  if (!cuaMoDun && !/\bjson\s*\(/.test(h.than)) return null;
   const lim = dauCatCoDanhSach(h.than, true);
   if (!lim.length) return null;
-  if (/\b(?:catBot|nhanCat)\s*\(/.test(h.than)) return null;
+  /* `noiVetCat` là bản tại chỗ của catBot/nhanCat trong src/nap-du-lieu.js —
+     không import được vì bàn đo của Hồ Ly khoá cây phụ thuộc đường nạp ở 4
+     tệp. Cùng một việc: hỏi thừa một dòng rồi NÓI RA khi chạm trần. */
+  if (/\b(?:catBot|nhanCat|noiVetCat)\s*\(/.test(h.than)) return null;
   return [...new Set(lim)].join(' · ');
 }
 
-function quetMayChu(danhSachTep, docTep) {
+function quetMayChu(danhSachTep, docTep, epCuaMoDun = null) {
   const loi = [];
   for (const tep of danhSachTep) {
+    const cuaMoDun = epCuaMoDun === null ? LA_CUA_MO_DUN(tep) : epCuaMoDun;
     for (const h of tachHam(boGhiChu(docTep(tep)))) {
-      const lim = laChoCanNoi(h);
+      const lim = laChoCanNoi(h, cuaMoDun);
       if (!lim) continue;
       if (MIEN_TRU.some(x => x.tep === tep && x.ham === h.ten)) continue;
       loi.push({ tep, ham: h.ten, dong: h.tuDong, lim });
@@ -232,7 +265,9 @@ function kiemMienTru(docTep) {
     try { ham = tachHam(boGhiChu(docTep(m.tep))).find(h => h.ten === m.ham); }
     catch { /* tệp không còn */ }
     if (!ham) { chet.push(`${m.tep} ${m.ham}() — KHÔNG CÒN HÀM NÀY`); continue; }
-    if (!laChoCanNoi(ham)) chet.push(`${m.tep} ${m.ham}() — hàm đã hết vi phạm, XOÁ dòng miễn trừ này đi`);
+    if (!laChoCanNoi(ham, LA_CUA_MO_DUN(m.tep))) {
+      chet.push(`${m.tep} ${m.ham}() — hàm đã hết vi phạm, XOÁ dòng miễn trừ này đi`);
+    }
   }
   return chet;
 }
@@ -681,6 +716,33 @@ function veTop(ds) {
 `,
 
   /* ======================================================================
+     MẶT TRẬN ③ — CỬA MÔ-ĐUN (REV-0060 vòng 2 · CAO-⑥).
+     Mô-đun nghiệp vụ KHÔNG gọi `json(` — index.js mới gọi. Mẫu bẩn này phải
+     LỌT lưới ① (chứng minh lỗ thủng có thật) và BỊ BẮT ở lưới ③.
+     ====================================================================== */
+  'ban/mo-dun-ban.js': `
+async function doTrungBan(env, banGhi) {
+  const ra = { so_ma_trung: 0 };
+  const { results } = await env.DB.prepare(
+    "SELECT DISTINCT san_pham_id, phieu_id FROM giao_dich_kho WHERE loai = 'nhap' LIMIT 50000").all();
+  for (const r of results) if (banGhi.has(r.san_pham_id)) ra.so_ma_trung++;
+  return ra;
+}
+`,
+  'ban/mo-dun-sach.js': `
+async function doTrungSach(env, banGhi) {
+  const ra = { so_ma_trung: 0 };
+  const kq = await env.DB.prepare(
+    "SELECT DISTINCT san_pham_id FROM giao_dich_kho WHERE loai = 'nhap' ORDER BY san_pham_id LIMIT ?")
+    .bind(TRAN + 1).all();
+  const { ds, cat } = noiVetCat(kq, TRAN);
+  ra.cat = cat;
+  for (const r of ds) if (banGhi.has(r.san_pham_id)) ra.so_ma_trung++;
+  return ra;
+}
+`,
+
+  /* ======================================================================
      PHÉP QUÉT ②b — "nhận `cat` rồi vứt". Bộ mẫu này DỰNG LẠI ĐÚNG ca CHẶN-1
      của REV-0061: máy chủ cắt tử tế và nói ra, màn hình nghe xong vứt đi rồi
      khẳng định "chưa có gì". Ba tệp giả một bộ: máy chủ · lớp gọi · màn hình.
@@ -866,6 +928,18 @@ function tuKiem() {
   if (sachUuid.length !== 0) chet('sinh mã gửi `(… : String(Date.now() + Math.random())).slice(0, 40)` bị bắt oan — đúng ca REV-0040');
   if (banLong.length !== 1)  chet('nới `String(…)` cho ngoặc lồng đã mở CỬA SAU: dòng có String(…) mà cắt danh sách thật KHÔNG bị bắt');
 
+  /* MẶT TRẬN ③ — CỬA MÔ-ĐUN. Ba điều phải đúng cùng lúc, thiếu cái nào thì
+     lưới mới hoặc vô dụng, hoặc là một cửa sau. */
+  const mdBanO  = quetMayChu(['ban/mo-dun-ban.js'], docMau, false);   // lưới ① cũ
+  const mdBanM  = quetMayChu(['ban/mo-dun-ban.js'], docMau, true);    // lưới ③ mới
+  const mdSach  = quetMayChu(['ban/mo-dun-sach.js'], docMau, true);
+  if (mdBanO.length !== 0) chet('mẫu CỬA MÔ-ĐUN bẩn lại bị lưới ① bắt — ca đối chứng dựng sai, không chứng minh được lỗ thủng');
+  if (mdBanM.length !== 1) chet('mẫu CỬA MÔ-ĐUN bẩn (LIMIT 50000 trên chốt chặn, không nói) KHÔNG bị bắt — phép quét ③ vô dụng');
+  if (mdSach.length !== 0) chet('mẫu CỬA MÔ-ĐUN sạch (đã gọi noiVetCat) bị bắt OAN — phép quét ③ sẽ bị người ta tắt đi');
+
+  console.log('  ✅ Mặt trận ③ (cửa mô-đun, REV-0060 vòng 2): thêm 1 mẫu bẩn + 1 mẫu sạch — mẫu bẩn LỌT');
+  console.log('     lưới ① và BỊ lưới ③ bắt, mẫu sạch không bị bắt oan. Lỗ thủng cửa mô-đun đã bịt.');
+
   /* ---- PHÉP QUÉT ②b — "nhận `cat` rồi vứt" (REV-0061 · CHẶN-1) ---- */
   const hamCat2 = hamTraCat(['ban2/may-chu.js', 'ban2/tai-lieu.js'], docMau);
   if (!hamCat2.has('soLichSu')) chet('②b không nhận ra hàm gọi `nhanCat(` là hàm TRẢ VỀ `cat`');
@@ -903,7 +977,7 @@ function tuKiem() {
          'hai cửa đều nghe · đổi tên biến một nhịp): ' + JSON.stringify(sachCach3));
   }
 
-  console.log('  ✅ Ca đối chứng: 18/18 mẫu bẩn BỊ BẮT · 14/14 mẫu sạch KHÔNG bị bắt oan — máy quét có hiệu lực.');
+  console.log('  ✅ Ca đối chứng (bộ REV-0061): 18/18 mẫu bẩn BỊ BẮT · 14/14 mẫu sạch KHÔNG bị bắt oan.');
   console.log('     (trong đó 3 mẫu "cách thứ ba" của Hồ Ly — lưới hỏi-cả-thân-hàm từng lọt 3/3.)');
 }
 
@@ -953,6 +1027,8 @@ if (loiMayChu.length === 0) {
     console.log(`  ❌ ${l.tep}:${l.dong}  ${l.ham}()  [${l.lim}] — cắt mà KHÔNG gọi catBot/nhanCat và KHÔNG có trong bảng miễn trừ`);
   }
 }
+console.log(`  ℹ️  ${MO_DUN_TRA_DU_LIEU.length} tệp được soi như CỬA MÔ-ĐUN (trả object cho index.js, không tự gọi json):`);
+for (const m of MO_DUN_TRA_DU_LIEU) console.log(`      · ${m.tep} — ${m.lyDo}`);
 console.log(`  ℹ️  ${MIEN_TRU.length} chỗ miễn trừ CÓ LÝ DO VIẾT RA (hàng đợi + top-N có chủ ý):`);
 for (const m of MIEN_TRU) console.log(`      · ${m.tep} ${m.ham}() — ${m.lyDo}`);
 

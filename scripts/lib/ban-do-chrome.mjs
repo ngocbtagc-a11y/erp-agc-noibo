@@ -292,6 +292,32 @@ export async function moChrome({ url, rong = 1440, cao = 812, doiMs = 2500 } = {
       loiConsole.push('[log] ' + g.params.entry.text);
   });
 
+  /* ⚠️ HỘP THOẠI TRÌNH DUYỆT TREO BÀN ĐO — BẪY ĐẶT Ở LỚP DÙNG CHUNG
+     (REV-0060 vòng 2 · THẤP-⑨). `public/assets/js/app.js` gọi `confirm(` ở
+     37 chỗ. Bàn đo nào bấm trúng một nút như thế thì Chrome dựng hộp thoại
+     CHẶN LUỒNG: bàn đo đứng im tới hết giờ chờ rồi mới đỏ — đỏ vì hết giờ,
+     không phải vì lỗi thật, nên người đọc đi tìm sai hướng cả buổi. Trước
+     đây chỉ `ban-nap-file.mjs` tự nhớ đặt bẫy; bàn đo viết sau thì không.
+     Nay đặt ở đây, một lần, cho MỌI bàn đo trình duyệt:
+       · `addScriptToEvaluateOnNewDocument` — cắm trước cả mã trang, sống qua
+         mọi lần tải lại;
+       · `Page.javascriptDialogOpening` — lưới thứ hai, bắt cả hộp thoại
+         `beforeunload` hay hộp thoại do mã ngoài tầm với dựng lên. */
+  const BAY_HOP_THOAI = `(() => {
+    window.confirm = () => true;
+    window.alert   = () => undefined;
+    window.prompt  = (_c, mac) => (mac === undefined ? '' : mac);
+  })()`;
+  await goi('Page.addScriptToEvaluateOnNewDocument', { source: BAY_HOP_THOAI }, sessionId);
+  const hopThoaiDaBat = [];
+  ws.addEventListener('message', ev => {
+    const g = JSON.parse(ev.data);
+    if (g.method === 'Page.javascriptDialogOpening') {
+      hopThoaiDaBat.push(`${g.params.type}: ${String(g.params.message || '').slice(0, 120)}`);
+      goi('Page.handleJavaScriptDialog', { accept: true }, sessionId).catch(() => {});
+    }
+  });
+
   /* Bề ngang PHẢI đặt bằng Emulation, KHÔNG bằng `--window-size`: Chrome có bề
      ngang cửa sổ tối thiểu (~500px trên Windows) nên `--window-size=320` ra
      viewport 500 — phép đo im lặng nói dối đúng ở chỗ ta cần nó thật nhất. */
@@ -299,6 +325,7 @@ export async function moChrome({ url, rong = 1440, cao = 812, doiMs = 2500 } = {
     { width: rong, height: cao, deviceScaleFactor: 1, mobile: rong <= 640 }, sessionId);
   await goi('Page.reload', {}, sessionId);
   await new Promise(ok => setTimeout(ok, doiMs));
+  await goi('Runtime.evaluate', { expression: BAY_HOP_THOAI }, sessionId).catch(() => {});
 
   async function chay(bieuThuc) {
     const r = await goi('Runtime.evaluate',
@@ -327,7 +354,7 @@ export async function moChrome({ url, rong = 1440, cao = 812, doiMs = 2500 } = {
   }
 
   return {
-    chay, goi, chup, sessionId, loiConsole, canhBao, ngoaiLe,
+    chay, goi, chup, sessionId, loiConsole, canhBao, ngoaiLe, hopThoaiDaBat,
     doi: ms => new Promise(ok => setTimeout(ok, ms)),
     dong() {
       try { ws.close(); } catch {}
