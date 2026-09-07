@@ -3545,6 +3545,26 @@ tr.kd-chiadoi td {
 }
 .kv-ton-nhac b { color: var(--ink); }
 
+/* Đoạn giới thiệu gấp/mở của màn Điều chỉnh (REV-0060 vòng 4 · THẤP-①).
+   Sếp dặn hai lần "vừa một màn ở 375px": ba dòng chữ giới thiệu là chỗ tốn
+   chiều cao nhất mà không giúp gì cho người đã biết việc. Đóng lại còn một
+   dòng, ai cần thì mở. Dùng <details> sẵn có, không thêm JS. */
+details.kv-ton-nhac > summary {
+  cursor: pointer;
+  list-style-position: outside;
+  /* Vùng chạm ≥ 44px kể cả khi câu chữ chỉ cao 20px — luật màn hẹp. */
+  min-height: 22px;
+  padding: 11px 0;
+  margin: -11px 0;
+}
+details.kv-ton-nhac[open] > summary { margin-bottom: 2px; }
+
+/* Ô lý do của màn Điều chỉnh: 2 dòng là đủ để gõ "kiểm kê 07/09, hàng vỡ 12
+   túi". `min-height: 90px` dùng chung cho mọi textarea là đúng cho ô "Đầu ra
+   cụ thể", thừa 30px ở đây — mà 30px trên màn 375px là một phần tám khung
+   nhìn. Vẫn kéo giãn được (`resize: vertical` giữ nguyên). */
+.field textarea.o-thap { min-height: 60px; }
+
 /* Hàng lọc ngày của báo cáo */
 .kv-loc {
   display: flex;
@@ -4598,18 +4618,163 @@ textarea.tlq-o { padding: 10px 12px; }
 }
 
 /* ==========================================================================
+   NẠP FILE SỐ LIỆU (Kho vận → Nạp từ file)
+   ---------------------------------------------------------------------------
+   Không thêm màu mới: chỉ dùng lại các biến sẵn có trong họ NÂU – XANH LÁ –
+   CAM, cộng đỏ CHỈ cho dòng lỗi (đúng ngoại lệ duy nhất trong docs/BANG-MAU.md).
+   Một điểm nhấn cam mỗi màn: nút chính của bước đang đứng (.btn-primary).
+   ========================================================================== */
+
+/* Vùng kéo thả — viền nét đứt mảnh thay vì mảng nền (luật ④ bảng màu) */
+.nap-tha {
+  margin-top: 12px;
+  padding: 20px 16px;
+  text-align: center;
+  border: 1px dashed var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+}
+.nap-tha.dang-keo { border-color: var(--cam); background: var(--cam-wash); }
+.nap-tha p { margin: 8px 0 0; }
+
+/* Hàng nút cuối mỗi bước. Bọc xuống dòng ở màn hẹp để không tràn ngang. */
+.nap-nut {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+.nap-nut button { min-height: 44px; }
+/* Ở màn điện thoại, nút chiếm cả bề ngang cho dễ bấm */
+@media (max-width: 560px) {
+  .nap-nut { flex-direction: column-reverse; }
+  .nap-nut button { width: 100%; }
+}
+
+/* Một dòng ghép cột: tên ô trong ERP + ô chọn cột của file */
+.nap-ghep-dong select { min-height: 44px; }
+.nap-ghep-dong .nap-bb { color: var(--cam-text); font-weight: 600; }
+
+/* Mẫu dữ liệu đọc được từ cột đang chọn — cho Sếp đối chiếu bằng mắt */
+.nap-mau {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-mute);
+  overflow-wrap: anywhere;
+}
+
+/* Danh sách lỗi. ĐỎ ở đây là đúng chỗ: có việc hỏng thật, người đọc phải
+   thấy ngay dòng nào cột nào. */
+.nap-loi-ds { margin-top: 12px; }
+.nap-loi-ds h5 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  color: var(--danger-dark);
+}
+.nap-loi-dong {
+  padding: 8px 10px;
+  margin-bottom: 6px;
+  border-left: 3px solid var(--danger);
+  background: var(--danger-wash);
+  border-radius: var(--r-sm);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.nap-loi-them { font-size: 13px; color: var(--text-mute); margin-top: 8px; }
+
+/* Cảnh báo mềm (không phải lỗi) — dùng họ vàng nâu, KHÔNG dùng đỏ */
+.nap-canh-dong {
+  padding: 8px 10px;
+  margin-bottom: 6px;
+  border-left: 3px solid var(--warn);
+  background: var(--warn-wash);
+  border-radius: var(--r-sm);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+/* Tên file đang xử lý */
+.nap-ten-tep { font-weight: 600; overflow-wrap: anywhere; }
+
+/* ---- Cửa chặn nạp trùng ----
+   Đây là cảnh báo NẶNG nhất của màn này (nạp tiếp là tồn gấp đôi), nhưng vẫn
+   KHÔNG dùng đỏ: đỏ chỉ dành cho lỗi thật (docs/BANG-MAU.md). Vẫn họ vàng nâu
+   như cảnh báo mềm, chỉ viền dày hơn để nặng ký hơn mấy dòng bên trên. */
+.nap-trung {
+  margin: 12px 0;
+  padding: 12px;
+  border: 2px solid var(--warn);
+  border-radius: var(--r-sm);
+  background: var(--warn-wash);
+}
+.nap-trung-cau {
+  margin: 0 0 10px;
+  font-size: 14px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+/* Ô tick — cả dòng chữ là vùng bấm, và vùng đó cao ít nhất 44px */
+.nap-tick {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-height: 44px;
+  padding: 10px 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+.nap-tick input { width: 20px; height: 20px; margin-top: 2px; flex: 0 0 auto; }
+.nap-tick span { overflow-wrap: anywhere; }
+
+/* ---- Danh sách lượt nạp (đường lùi) ----
+   Cố ý KHÔNG dùng <table>: danh sách này có tên file dài bất định, nhét vào
+   bảng là đẻ thêm một thanh kéo ngang ở màn 375px. Xếp dọc, bọc chữ. */
+.nap-luot-dong {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px;
+  margin-bottom: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+}
+.nap-luot-chu {
+  flex: 1 1 220px;
+  min-width: 0;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.nap-luot-dong button { min-height: 44px; }
+
+/* ==========================================================================
    TỔNG QUAN 2 SÀN — bảng xếp hạng SKU bán chạy / bán kém
    Hai bảng cạnh nhau trên màn rộng, xếp chồng trên điện thoại (ERP là PWA,
    Sếp xem trên máy lẫn trên điện thoại).
    ========================================================================== */
-/* SÀN 360px, KHÔNG PHẢI 320px. Đây là chỗ QUYẾT ĐỊNH bề ngang khung bảng —
-   lưới hai cột chia đôi panel, nên "màn 1440px" của Sếp thật ra chỉ là khung
-   537px cho mỗi bảng. Với sàn 320 thì ở 1024px (máy tính bảng nằm ngang) lưới
-   vẫn cố nhét hai cột, mỗi cột còn 329px, và một bảng có cột tiền không đủ
-   chỗ. 360 khiến ở 1024px lưới tự xuống MỘT cột rộng 678px — hai bảng xếp
-   chồng, vẫn thấy đủ, không phải kéo ngang. Từ ~1230px trở lên mới quay lại
-   hai cột cạnh nhau, đúng lúc mỗi cột đã đủ rộng thật.
-   Đo bằng `npm run do-bang-that` (đã có mức 1024px kể từ vòng này). */
+/* ⚠️ ĐÂY LÀ KHỐI ĐÃ XUNG ĐỘT KHI GỘP `main af951b8` — ĐỌC TRƯỚC KHI SỬA.
+   Hai nhánh cùng chữa một triệu chứng (kd-sku-chay/kd-sku-kem tràn +23px @1440,
+   +103px @1280, cột rơi là "Doanh thu") theo hai cách ngược nhau:
+     · `main af951b8` : nâng SÀN CỦA LƯỚI lên minmax(560px, 1fr)  ← ĐÃ BỎ
+     · nhánh này      : sàn lưới 360px + chữa gốc ở BẢNG bằng
+                        `table { min-width: min(560px, 100%) }`   ← ĐANG DÙNG
+   Chốt tay lấy phía NHÁNH, lý do là số đo chứ không phải sở thích:
+   panel chia đôi nên "màn 1440px" của Sếp chỉ còn khung 1094px cho lưới này.
+   Với sàn 560px của main thì 560×2 + gap 20 = 1140 > 1094 ⇒ auto-fit rớt về
+   MỘT cột ⇒ HAI BẢNG SKU XẾP CHỒNG ngay trên màn Sếp đang ngồi. Sàn 360px giữ
+   hai bảng cạnh nhau (khung 537px mỗi bảng) và vẫn 0 tràn vì `min-width` ở
+   chính <table> mới là thứ chặn tràn, không phải sàn lưới.
+   NGƯỜI GỘP SAU: đừng "khôi phục" 560px — đó là bản đã bị thay có chủ đích.
+
+   Vì sao sàn là 360px chứ không phải 320px (lý do gốc, vẫn còn hiệu lực):
+   với sàn 320 thì ở 1024px (máy tính bảng nằm ngang) lưới vẫn cố nhét hai cột,
+   mỗi cột còn 329px, và một bảng có cột tiền không đủ chỗ. 360 khiến ở 1024px
+   lưới tự xuống MỘT cột rộng 678px — hai bảng xếp chồng, vẫn thấy đủ, không
+   phải kéo ngang. Đo được: từ 1086px trở lên mới quay lại hai cột cạnh nhau
+   (1080px → 1 cột), đúng lúc mỗi cột đã đủ rộng thật.
+   Đo bằng `npm run do-bang-that` (đã có mức 1024px và 1200px kể từ vòng này). */
 .kd-sku-cot {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));

@@ -62,6 +62,12 @@
    ========================================================================== */
 
 import { dungMayGia, moChrome, TOI, TOI_ID, NGUOI, DANH_BA, dungTin } from './lib/ban-do-chrome.mjs';
+/* Lấy THẲNG bảng quyền của máy chủ, không chép tay lại (mục Ⓔ của chính bàn
+   đo này: ổ giả lệch hợp đồng máy chủ thì bàn đo đo một màn nhỏ hơn màn thật
+   mà không ai biết). Thiếu `kho` trong `/api/toi-la-ai` là thanh #kvSeg mất
+   hai nút — “Điều chỉnh” và “Nạp từ file” — nên hai màn ấy đi qua cổng này
+   mà không lần nào bị mở ra. */
+import { quyenKho, quyenSanPham } from '../src/quyen.js';
 
 const dso = process.argv;
 const TU_KIEM = dso.includes('--tu-kiem');
@@ -307,12 +313,19 @@ function oChatCoTriNho(voiMacDinh) {
 function oTraLoi(vai, chat) {
   return function apiRieng(duong, u, traJson, req) {
     if (chat.tiep(duong, u, traJson, req)) return true;
-    if (duong === '/api/toi-la-ai') return traJson({
-      ...TOI, id: TOI_ID, nhan_su_id: TOI_ID, quyen: vai.tab,
-      vai_tro: vai.admin ? 'admin' : vai.ma,
-      la_admin: vai.admin, them_nhan_su: vai.admin, thao_tac_van_hanh: vai.admin,
-      phong_ban_quan_ly: [], shopee: { xem: vai.tab.includes('donhoan') ? 1 : 0 }
-    }) || true;
+    if (duong === '/api/toi-la-ai') {
+      const vt = vai.admin ? 'admin' : vai.ma;
+      return traJson({
+        ...TOI, id: TOI_ID, nhan_su_id: TOI_ID, quyen: vai.tab,
+        vai_tro: vt,
+        la_admin: vai.admin, them_nhan_su: vai.admin, thao_tac_van_hanh: vai.admin,
+        /* Đúng hai khối `src/index.js` gửi kèm cho tab Kho vận, tính bằng
+           CHÍNH hàm của máy chủ — xem lời bình ở chỗ `import` trên đầu tệp. */
+        kho: quyenKho({ vai_tro: vt }),
+        san_pham: quyenSanPham({ vai_tro: vt }),
+        phong_ban_quan_ly: [], shopee: { xem: vai.tab.includes('donhoan') ? 1 : 0 }
+      }) || true;
+    }
     if (duong === '/api/tai-lieu') {
       /* Máy chủ thật lọc theo quyền XEM của từng vai (src/quyen.js
          `QUYEN_NHOM_TAI_LIEU`) — bàn đo lọc y hệt, không trả cả kho cho vai
@@ -558,6 +571,104 @@ async function motLuot(vai, bn) {
 
       cham(kq.cuonDuoc, `Ⓒ ${tab} — cuộn xuống được`,
         kq.canCuon > 8 ? `cần cuộn ${kq.canCuon}px, cuộn tới ${kq.cuonToi}px` : 'vừa một màn');
+    }
+
+    /* ---- MÀN CON SAU THANH CHUYỂN (`#kvSeg` · `#kdSeg` · …) -------------
+       Vòng trên chỉ bấm vào TAB rồi chấm cái pane MẶC ĐỊNH. Nhưng Kho vận có
+       chín màn con nằm sau một thanh nút, Kinh doanh cũng vậy — bấm tab chỉ
+       mở đúng màn đầu tiên, tám màn còn lại chưa lần nào đi qua cổng này.
+       Màn "Điều chỉnh" của REV-0060 là một trong số đó: pane MỚI, ghi thẳng
+       vào sổ cái kho, và chưa từng bị hỏi câu "mở ra có xem được không".
+       Ở đây cố ý KHÔNG khai mỏ neo cho từng màn con: ổ giả trả rỗng nên đòi
+       số liệu là bắt oan. Chỉ hỏi những câu tối thiểu — và chúng đủ bắt cả
+       Ⓐ (câu lỗi kỹ thuật), Ⓕ (trống trơn / cha đang ẩn) và Ⓒ (không cuộn). */
+    for (const tab of dsTab) {
+      const oSeg = await b.chay(`(() => {
+        const v = document.getElementById('v-${tab}');
+        if (!v) return null;
+        const s = v.querySelector('[id$="Seg"]');
+        if (!s) return null;
+        /* CHỈ đi những thanh có khối màn con theo khuôn "…-pane". Tab Nhân sự
+           dùng khuôn khác (id knMan-<mã>) và nằm trong một details đóng sẵn,
+           nên đi vào đó bằng lưới này là báo oan "nút chết" cho một màn mà
+           người dùng chưa mở. Bỏ qua thì phải NÓI RA, đừng lặng lẽ. */
+        /* Phải soi TỪNG TÊN LỚP, không dùng [class*="-pane"]: chuỗi đó khớp cả
+           "thd-panel" — và khớp nhầm ở đây nghĩa là lưới đi vào một tab dùng
+           khuôn khác rồi báo oan "nút chết". */
+        const coPane = [...v.querySelectorAll('*')]
+          .some(e => [...e.classList].some(c => /-pane$/.test(c)));
+        return coPane ? s.id : 'BO-QUA:' + s.id;
+      })()`);
+      if (!oSeg) continue;
+      if (String(oSeg).startsWith('BO-QUA:')) {
+        console.log(`  (bỏ qua)  màn con ${tab} — thanh #${String(oSeg).slice(7)} không dùng khuôn ` +
+                    `"…-pane", lưới màn con chưa với tới. Khai ra ở đây để không ai tưởng đã đo.`);
+        continue;
+      }
+
+      await b.chay(`document.querySelector('[data-tab="${tab}"]').click(); 1`);
+      await b.doi(500);
+      /* Mỗi thanh dùng một tên `data-` riêng (`data-kv` · `data-kd` · `data-kn`
+         · `data-xc` · `data-qt`). Đọc tên ĐẦU TIÊN có giá trị thay vì kê tay
+         từng cái — kê tay là ngày mai thêm thanh thứ sáu thì nó lặng lẽ đi
+         qua với "0 nút". Nút đang `hidden` (VD "Cấu hình ca" của vai không đủ
+         quyền) thì bỏ qua: bấm vào một nút ẩn không phải đường của người dùng. */
+      const dsNut = await b.chay(`[...document.querySelectorAll('#${oSeg} .seg-nut')]
+        .filter(n => !n.hidden && n.offsetParent !== null)
+        .map(n => {
+          const k = Object.keys(n.dataset).find(k => n.dataset[k]);
+          return { khoa: k || '', ma: k ? n.dataset[k] : '', ten: (n.textContent || '').trim() };
+        })
+        .filter(x => x.ma)`);
+      cham(dsNut.length > 0, `màn con ${tab} — thanh #${oSeg} có nút để bấm`, `${dsNut.length} nút`);
+
+      for (const n of dsNut) {
+        await b.chay(`document.querySelector('#${oSeg} .seg-nut[data-${n.khoa}="${n.ma}"]').click(); 1`);
+        await b.doi(500);
+        const kq = await b.chay(`(async () => {
+          /* Khối màn con của mọi tab đều đặt tên lớp kết thúc bằng "-pane"
+             (kv-pane · kd-pane · kn-pane …). Bắt theo khuôn ấy thay vì kê tay
+             hai lớp — cùng lý do như chỗ đọc tên data-. */
+          const p = [...document.querySelectorAll('#v-${tab} *')]
+            .find(x => !x.hidden && [...x.classList].some(c => /-pane$/.test(c)));
+          if (!p) return { coPane: false };
+          const se = document.scrollingElement;
+          const canCuon = se.scrollHeight - se.clientHeight;
+          let cuonDuoc = true, cuonToi = 0;
+          if (canCuon > 8) {
+            se.scrollTop = 0; window.scrollTo(0, 99999);
+            await new Promise(r => setTimeout(r, 180));
+            cuonToi = se.scrollTop; cuonDuoc = cuonToi > 0; window.scrollTo(0, 0);
+          }
+          return {
+            coPane: true, id: p.id,
+            /* \`offsetParent === null\` = một tổ tiên đang display:none. Đúng ca
+               "bấm vào, trạng thái có đổi, mà không gì dựng hình" — cách hỏng
+               im lặng nhất, và cũng là cách BÀN ĐO tự bịt mắt mình. */
+            hienThat: p.offsetParent !== null,
+            cao: Math.round(p.getBoundingClientRect().height),
+            chu: p.innerText || '',
+            soO: p.querySelectorAll('button, input, select, textarea, table, .stat, .kv-card').length,
+            canCuon, cuonDuoc, cuonToi
+          };
+        })()`);
+        const ten = `${tab}/${n.ma}`;
+        if (!cham(kq.coPane, `Ⓕ màn con ${ten} — bấm xong CÓ một khối màn hiện ra`,
+                  kq.coPane ? '' : 'không khối nào bỏ `hidden` — nút chết')) continue;
+        cham(kq.hienThat && kq.cao > 0, `Ⓕ màn con ${ten} — khối màn được dựng hình thật`,
+             kq.hienThat ? `#${kq.id} cao ${kq.cao}px`
+                         : `#${kq.id} bỏ [hidden] rồi mà cha đang display:none — dựng ra 0×0`);
+        /* "Trống trơn" = KHÔNG có ô/bảng nào VÀ cũng không có chữ nào đáng kể.
+           Đòi cả hai là bắt oan: có màn con chỉ là một khối chữ giải thích
+           (VD Kinh doanh/R&D) — không ô nhập nào mà vẫn xem được. */
+        cham(kq.soO > 0 || kq.chu.trim().length > 20, `Ⓕ màn con ${ten} — KHÔNG trống trơn`,
+             `${kq.soO} ô/bảng · ${kq.chu.trim().length} ký tự`);
+        const loiCon = batLoiTrongChu(kq.chu);
+        cham(loiCon.length === 0, `Ⓐ màn con ${ten} — không có câu lỗi kỹ thuật trên màn`,
+             loiCon.length ? loiCon.join(' | ') : `${kq.chu.trim().length} ký tự`);
+        cham(kq.cuonDuoc, `Ⓒ màn con ${ten} — cuộn xuống được`,
+             kq.canCuon > 8 ? `cần ${kq.canCuon}px, cuộn tới ${kq.cuonToi}px` : 'vừa một màn');
+      }
     }
 
     /* ---- GY-0006: đi trọn đường CHAT ------------------------------------ */
