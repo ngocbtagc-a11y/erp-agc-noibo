@@ -4438,3 +4438,27 @@ textarea.tlq-o { padding: 10px 12px; }
 
 /* Tên file đang xử lý */
 .nap-ten-tep { font-weight: 600; overflow-wrap: anywhere; }
+
+/* ==========================================================================
+   TỔNG QUAN 2 SÀN — bảng xếp hạng SKU bán chạy / bán kém
+   Hai bảng cạnh nhau trên màn rộng, xếp chồng trên điện thoại (ERP là PWA,
+   Sếp xem trên máy lẫn trên điện thoại).
+   ========================================================================== */
+.kd-sku-cot {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 20px;
+}
+.kd-sku-cot h5 { font-size: 13px; font-weight: 600; color: var(--text); }
+
+/* Dòng SKU bán được 0 cái — mờ đi để mắt bắt ngay nhóm "chết hẳn" */
+tr.kd-sku-chet td { color: var(--text-mute); }
+tr.kd-sku-chet td:first-child { font-weight: 600; }
+
+#kd-tq-ky { margin-bottom: 16px; }
+/* Nút chọn kỳ đủ tầm ngón tay. Đo được .seg-nut dùng chung chỉ cao 36px ở
+   375px — dưới ngưỡng 44px mà dự án vừa chuẩn hoá cho .combo1-hienthi và
+   .ql-goiy-item. Chỉ nống trong phạm vi khối này, KHÔNG sửa .seg-nut dùng
+   chung (đụng cả Kho vận/Công việc/Kinh doanh — việc đó cần ERP Owner). */
+#kd-tq-ky .seg-nut { min-height: 44px; }
+#kd-tq-canhbao:not([hidden]), #kd-sku-canhbao:not([hidden]) { margin-bottom: 16px; }

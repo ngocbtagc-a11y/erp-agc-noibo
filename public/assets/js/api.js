@@ -478,6 +478,11 @@ export const API = {
   }),
   kdDonHangHuy: () => goi('/api/kinh-doanh/don-hang-huy'),
   kdDongBoDonHang: () => goi('/api/kinh-doanh/dong-bo-don-hang', { method: 'POST' }),
+  /* Tổng quan 2 sàn — trả tiền ở dạng VNĐ đã chia sẵn, KHÔNG chia lại 100000
+     (xem khối TỔNG QUAN 2 SÀN trong src/index.js). ky = hom_nay|7ngay|30ngay|thang_nay */
+  kdTongQuanKenh: (ky) => goi('/api/kinh-doanh/tong-quan-kenh?ky=' + encodeURIComponent(ky || 'hom_nay')),
+  kdXepHangSku: (ky) => goi('/api/kinh-doanh/xep-hang-sku?ky=' + encodeURIComponent(ky || 'thang_nay')),
+  kdTachDongHang: () => goi('/api/kinh-doanh/tach-dong-hang', { method: 'POST' }),
 
   /* ---- Kế toán: đơn hoàn cần tra soát tiền ---- */
   ktCanTraSoat: () => goi('/api/ke-toan/can-tra-soat'),
