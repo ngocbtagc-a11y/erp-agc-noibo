@@ -105,7 +105,15 @@
     "ban-tai-tep": "node scripts/ban-tai-tep.mjs",
     "do-tach-vai-tro": "node scripts/do-tach-vai-tro.mjs",
     "do-hai-o-tren-man": "node scripts/do-hai-o-tren-man.mjs",
-    "do-tai-tep": "node scripts/ban-tai-tep.mjs --tu-dong"
+    "do-tai-tep": "node scripts/ban-tai-tep.mjs --tu-dong",
+    "do-mo-ra-xem-duoc": "node scripts/do-man-mo-ra-xem-duoc.mjs",
+    "do-mo-ra-xem-duoc-anh": "node scripts/do-man-mo-ra-xem-duoc.mjs --chup",
+    "do-mo-ra-xem-duoc-tu-kiem": "node scripts/do-man-mo-ra-xem-duoc.mjs --tu-kiem",
+    "do-mo-ra-xem-duoc-luoi": "node scripts/do-man-mo-ra-xem-duoc.mjs --chi-luoi",
+    "do-mo-ra-xem-duoc-ca-A": "node scripts/do-man-mo-ra-xem-duoc.mjs --ca A",
+    "do-mo-ra-xem-duoc-ca-B": "node scripts/do-man-mo-ra-xem-duoc.mjs --ca B",
+    "do-mo-ra-xem-duoc-ca-C": "node scripts/do-man-mo-ra-xem-duoc.mjs --ca C",
+    "do-mo-ra-xem-duoc-ca-D": "node scripts/do-man-mo-ra-xem-duoc.mjs --ca D"
   },
   "devDependencies": {
     "wrangler": "^4.0.0"

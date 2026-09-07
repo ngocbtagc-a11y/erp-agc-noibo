@@ -2100,7 +2100,12 @@ tr.canh-bao:hover > td { background: #fbdbd6; }
    chuông thông báo (#tbBadge) lẫn chuông chat (#cnbBadge) — xem hết tin rồi
    vẫn tưởng còn việc chưa đọc (ADR-0008 Đề xuất B). */
 .tb-badge[hidden] { display: none; }
-.tb-panel { position: absolute; top: 46px; right: 0; width: 340px; max-width: 90vw; max-height: 62vh; overflow-y: auto; background: var(--white); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 34px rgba(44,33,23,.18); z-index: 200; }
+/* `62dvh` — cùng luật `vh` → `dvh` với `.cnb-popup` / `.modal` / `.tlq-tam`:
+   trên điện thoại `vh` cao hơn vùng nhìn thấy thật, nên mấy dòng thông báo
+   cuối cùng nằm dưới mép màn mà bảng thì đã hết chỗ cuộn.
+   CẶP HAI DÒNG `62vh` rồi `62dvh`, không phải một dòng — lý do đầy đủ ghi ở
+   `.modal`. Máy cũ ăn dòng đầu, máy mới ăn dòng sau. */
+.tb-panel { position: absolute; top: 46px; right: 0; width: 340px; max-width: 90vw; max-height: 62vh; max-height: 62dvh; overflow-y: auto; background: var(--white); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 34px rgba(44,33,23,.18); z-index: 200; }
 .tb-panel-dau { padding: 12px 16px; font-weight: 700; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--white); }
 .tb-item { padding: 12px 16px; border-bottom: 1px solid var(--line); cursor: pointer; font-size: 13px; line-height: 1.45; }
 .tb-item:last-child { border-bottom: none; }
@@ -2160,7 +2165,16 @@ tr.canh-bao:hover > td { background: #fbdbd6; }
 .cnb-popup {
   position: fixed; right: 24px; bottom: 92px; z-index: 300;
   width: 360px; max-width: calc(100vw - 32px);
-  height: 500px; max-height: calc(100vh - 140px);
+  /* `dvh` ở đây KHÔNG thừa dù dưới 640px đã có luật `100dvh` riêng: dải
+     641-820px (máy tính bảng, điện thoại nằm ngang) vẫn dùng đúng dòng này,
+     mà ở đó thanh địa chỉ vẫn ăn mất chỗ như trên điện thoại dựng. Trên máy
+     tính bàn `dvh` bằng đúng `vh`, nên đổi mà không đổi gì cả — được thêm
+     một luật KHÔNG có ngoại lệ, thứ mà bàn đo soi được.
+     CẶP HAI DÒNG — máy cũ không biết `dvh` sẽ mất SẠCH trần chứ không lùi
+     về `vh`; đo và giải thích đầy đủ ở `.modal`. */
+  height: 500px;
+  max-height: calc(100vh - 140px);   /* nền cho trình duyệt chưa biết `dvh` */
+  max-height: calc(100dvh - 140px);  /* trình duyệt biết `dvh` thì đè lên */
   background: var(--card);
   border-radius: var(--r-lg);
   box-shadow: var(--shadow-lg);
@@ -2432,7 +2446,13 @@ tr.canh-bao:hover > td { background: #fbdbd6; }
   .cnb-popup {
     inset: 0; top: 0; right: 0; bottom: 0; left: 0;
     width: 100%; max-width: none;
-    height: 100dvh; max-height: 100dvh;
+    /* CẶP hai dòng (thêm 07/09/2026, REV-0062 CHẶN-2). Dòng `dvh` này có từ
+       29/08/2026 và ĐỨNG MỘT MÌNH — trên Chrome <108 / Safari <15.4 nó bị vứt
+       cả dòng, cửa sổ chat toàn màn mất SẠCH chiều cao. Đó đúng là GY-0006
+       "không dùng được chat". Nợ cũ, không phải của nhánh này, nhưng cùng một
+       cách hỏng nên vá luôn — 0 đồng. Số đo ở `.modal`. */
+    height: 100vh; max-height: 100vh;      /* nền cho máy chưa biết `dvh` */
+    height: 100dvh; max-height: 100dvh;    /* máy biết `dvh` thì đè lên */
     border-radius: 0; border: none;
     z-index: 320;              /* trên cả nút nổi (301) — không còn gì đè lên */
   }
@@ -3172,7 +3192,36 @@ tr.kd-chiadoi td {
 .modal {
   width: 100%;
   max-width: 440px;
-  max-height: calc(100vh - 40px);
+  /* `dvh` chứ KHÔNG phải `vh` — cùng một luật đã ghi ở `.cnb-popup` (mục
+     "ĐIỆN THOẠI — CHAT CHIẾM TOÀN MÀN HÌNH"). `vh` tính theo màn hình lúc
+     CHƯA có thanh địa chỉ, nên trên điện thoại trần này CAO HƠN vùng nhìn
+     thấy thật ~60-90px. `.modal-nen` là `position:fixed` + `place-items:
+     center`, nên phần dư bị đẩy đều ra hai đầu: hộp thoại dài thì mất cả
+     tiêu đề ở trên lẫn HÀNG NÚT "Lưu / Huỷ" ở dưới, mà `overflow-y:auto`
+     của chính hộp cũng không kéo tới được vì phần dư nằm NGOÀI hộp.
+     `dvh` co đúng theo phần nhìn thấy được. Bàn đo
+     `do-man-mo-ra-xem-duoc.mjs` mục Ⓓ canh cả lớp này.
+
+     VÌ SAO PHẢI VIẾT HAI DÒNG (REV-0062 CHẶN-2, đo ngày 07/09/2026).
+     Bản đầu chỉ viết một dòng `dvh`. Nhưng `dvh` mới có từ Chrome 108 /
+     Safari 15.4 / Firefox 101 (cuối 2022), và luật CSS là: khai báo mang
+     đơn vị trình duyệt KHÔNG hiểu thì bị vứt CẢ DÒNG — không phải "lùi về
+     `vh`", mà là KHÔNG CÒN TRẦN NÀO. Đo thật bằng `getComputedStyle` trong
+     chính Chrome của bàn đo, dùng một đơn vị bịa (`qvh`) để đóng vai máy cũ:
+       · `max-height: calc(100qvh - 40px)` một mình  → `none`
+       · `max-height: 92qvh` một mình                → `none`
+       · CẶP `calc(100vh - 40px)` rồi `calc(100qvh - 40px)` → `772px` (giữ)
+       · CẶP `92vh` rồi `92qvh`                      → `747.04px` (giữ)
+       · CẶP `100vh` rồi `50dvh` trên Chrome mới     → `406px` = NỬA màn,
+         tức dòng SAU vẫn thắng — viết cặp không làm mất `dvh`.
+     Mất trần thì hộp thoại dài tràn khỏi `.modal-nen`, và vì nền là `fixed`
+     + căn giữa nên phần dư bị đẩy đều hai đầu: mất tiêu đề TRÊN, mất hàng
+     nút "Lưu / Huỷ" DƯỚI — nặng hơn hẳn cái hỏng `vh` đang đi vá. Nhân sự
+     kho quét giấy tờ bằng điện thoại cũ là nhóm dính đầu tiên.
+     → Luật nhà từ đây: `dvh` không bao giờ đứng một mình. Mục Ⓓ của bàn đo
+       bắt buộc cặp này; `dvh` trần trụi là ĐỎ. */
+  max-height: calc(100vh - 40px);   /* nền cho trình duyệt chưa biết `dvh` */
+  max-height: calc(100dvh - 40px);  /* trình duyệt biết `dvh` thì đè lên */
   overflow-y: auto;
   background: var(--card);
   border-radius: var(--r-lg);
@@ -3973,8 +4022,16 @@ tr.kd-chiadoi td {
   background: rgba(44, 33, 23, .55);
   display: flex; align-items: flex-end; justify-content: center;
 }
+/* `92dvh` chứ KHÔNG phải `92vh` — cùng luật với `.cnb-popup` và `.modal`.
+   Đây là màn quét giấy tờ, và nó CHỈ dùng trên điện thoại (chụp bằng máy
+   ảnh) nên đúng là chỗ `vh` hại nhất: ở dưới 640px tấm này neo đáy
+   (`align-items: flex-end`), phần dư vì `vh` bị đẩy hết LÊN TRÊN — thanh
+   tiêu đề mang nút "✕" trôi ra khỏi màn, người quét không còn đường đóng
+   ngoài việc tải lại trang. */
 .tlq-tam {
-  width: 100%; max-width: 560px; max-height: 92vh; overflow: auto;
+  width: 100%; max-width: 560px; overflow: auto;
+  max-height: 92vh;    /* nền cho trình duyệt chưa biết `dvh` — xem `.modal` */
+  max-height: 92dvh;   /* trình duyệt biết `dvh` thì đè lên */
   background: var(--bg); border-radius: var(--r-lg) var(--r-lg) 0 0;
   box-shadow: var(--shadow-lg);
 }
