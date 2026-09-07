@@ -54,8 +54,13 @@ export function docNgay(chuoi) {
   const s = String(chuoi == null ? '' : chuoi).trim();
   if (!s) return null;
 
-  // 1990-01-25 (ISO, có thể kèm giờ) — năm đứng đầu thì không mơ hồ.
-  let m = s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
+  /* 1990-01-25 (ISO, có thể kèm giờ) — năm đứng đầu thì không mơ hồ.
+     NEO CẢ HAI ĐẦU (REV-0061 · THẤP-3): bản trước chỉ neo đầu chuỗi nên
+     `1990-01-25rác` cũng đọc thành 25/01/1990 — dán nhầm nửa câu vào ô ngày
+     mà ERP nhận như dán đúng. Phần giờ vẫn cho qua (máy chủ trả
+     `2026-09-05 10:00:00` / `…T10:00:00Z`), nhưng phải ĐÚNG khuôn giờ, không
+     phải "bất cứ thứ gì đứng sau". */
+  let m = s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})(?:[T ]\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?\s*(?:Z|[+-]\d{2}:?\d{2})?)?$/);
   if (m) {
     const [, y, th, ng] = m.map(Number);
     return ngayCoThat(y, th, ng) ? `${y}-${String(th).padStart(2, '0')}-${String(ng).padStart(2, '0')}` : null;
@@ -246,6 +251,57 @@ function nangCapMot(o) {
      `input` ở mọi bản Chrome — thiếu nó thì đúng đường người dùng hay dùng
      nhất lại là đường không thấy dòng đọc lại. */
   o.addEventListener('change', () => veNhac(document.activeElement === o));
+
+  /* ---- GÁN `.value` BẰNG MÃ CŨNG PHẢI VẼ LẠI — VÁ CẢ LỚP Ở MỘT CHỖ ------
+     Trình duyệt KHÔNG bắn sự kiện nào khi mã gán `o.value = ...`. Bốn cái
+     `addEventListener` ngay trên vì thế mù đúng con đường mà ERP dùng NHIỀU
+     NHẤT: mở một hộp sửa rồi đổ dữ liệu MÁY CHỦ vào ô.
+
+     Đo được (REV-0061 vòng 2 · CAO-1): mở *Sửa việc* của việc A, gõ nhầm hạn
+     chót `01/01/2200` → câu đỏ. Đóng hộp, mở *Sửa việc* của việc B (hạn chót
+     `30/09/2026`, hoàn toàn hợp lệ) → ô hiện `30/09/2026` mà DƯỚI Ô VẪN LÀ
+     CÂU ĐỎ nói *"bạn đang nhập 01/01/2200"*. Màn hình khẳng định sai, và còn
+     dán nhãn "sai" lên một giá trị ĐÚNG.
+     Hậu quả thứ hai nặng hơn: dòng `= 30/09/2026` — bản vá THẬT của GY-0004,
+     cách DUY NHẤT người dùng thấy ERP hiểu ngày đó là ngày nào — VẮNG MẶT
+     trên mọi đường tải dữ liệu từ máy chủ. Tức thứ Sếp cần nhất thì chỉ hiện
+     khi gõ tay, không hiện khi mở hồ sơ ra xem.
+
+     VÌ SAO VÁ Ở ĐÂY CHỨ KHÔNG Ở 9 CHỖ GỌI TRONG `app.js`:
+     "gán `.value` thì nhớ bắn `input`" là luật mà NGƯỜI VIẾT MÃ phải nhớ.
+     ERP có 9 lệnh gán trên 6 ô ngày; bản vá vòng trước nhớ được đúng 1.
+     Vá ở 9 chỗ gọi thì lệnh gán thứ 10 — ở màn chưa ai viết — lại thủng, và
+     ta lại đi vá vòng thứ ba. `nangCapMot` đã SỞ HỮU cái ô này, nên nó đặt
+     được cái bẫy ngay trên `value`: mọi lệnh gán, ở mọi màn, kể cả màn chưa
+     viết, đều đi qua đây. ĐỪNG gỡ cái bẫy này rồi đi bắn `input` thủ công ở
+     từng chỗ gọi — đó đúng là cái bệnh mà nó chữa.
+
+     BẪY CHỈ VẼ LẠI DÒNG NHẮC, KHÔNG BẮN `input`/`change` HỘ. Bắn hộ là đổi
+     hành vi của phần còn lại của ERP: `#cv-sua-han-chot` có `capNhatHopLyDo`
+     nghe `input` rồi mở khối "lý do dời hạn" cao 234px — bung nó ra ngay lúc
+     hộp vừa nạp dữ liệu là báo động giả, và ở 375px là đẩy hộp phải cuộn.
+
+     Không lấy được bộ mô tả `value` thì bỏ qua lớp này: bốn `addEventListener`
+     ở trên vẫn chạy, mất lớp bảo vệ chứ không gãy màn. */
+  const moTaValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+  if (moTaValue && typeof moTaValue.get === 'function' && typeof moTaValue.set === 'function') {
+    Object.defineProperty(o, 'value', {
+      configurable: true,
+      enumerable: false,
+      get() { return moTaValue.get.call(this); },
+      set(v) {
+        moTaValue.set.call(this, v);
+        veNhac(document.activeElement === o);
+      }
+    });
+  }
+
+  /* `form.reset()` KHÔNG đi qua cái bẫy trên và cũng không bắn `input`/
+     `change` — nó bắn `reset` trên FORM, và xoá ô SAU khi handler chạy xong
+     (nên phải đợi một nhịp). ERP gọi `.reset()` ở hơn 20 chỗ, trong đó
+     `#cv-form` có ô ngày `#cv-han-chot`: thiếu nhánh này thì bấm "Huỷ" xong,
+     dòng nhắc vẫn đọc lại cái ngày vừa bị xoá khỏi ô. */
+  if (o.form) o.form.addEventListener('reset', () => setTimeout(() => veNhac(false), 0));
 
   /* Ô dựng sẵn CÓ giá trị (`tlqBanHanh` vẽ bằng chuỗi, hộp Sửa việc gán
      `.value` rồi mới mở) phải hiện dòng đọc lại NGAY, không đợi ai chạm vào. */

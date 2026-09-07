@@ -391,8 +391,84 @@ const MIEN_TRU_CAT = [
           'thì mở hẳn danh sách hội thoại — một lối ra có thật, không phải một câu khẳng định sai.' }
 ];
 
-/** ④ Chỗ gọi `API.xxx(` mà thân hàm bao quanh KHÔNG nhắc tới `cat`. */
-function quetVutCat(danhSachTep, docTep, apiCat, mienTru = []) {
+/* ==========================================================================
+   ②b HỎI TẠI CHỖ GỌI, KHÔNG HỎI CẢ THÂN HÀM (REV-0061 vòng 2 · VỪA-1)
+   --------------------------------------------------------------------------
+   Bản đầu của ④ hỏi ĐÚNG MỘT LẦN cho cả thân hàm: *"trong thân hàm bao quanh
+   có chỗ nào nhắc `cat` không"*. Nghĩa là **một** chữ `cat` ở bất kỳ đâu trong
+   hàm là **mọi** lời gọi khác trong cùng hàm được tha. Hồ Ly gài ba mẫu, lọt
+   cả ba (REV-0061 vòng 2 · VỪA-1):
+
+     a · MỘT hàm gọi HAI cửa: nghe `cat` cửa này, vứt `cat` cửa kia;
+     b · trong hàm tình cờ có một biến tên `cat` dùng việc khác;
+     c · lời gọi nằm trong hàm con (arrow truyền vào `addEventListener`), hàm
+         cha có `veDaiCat` cho một DANH SÁCH KHÁC.
+
+   Cả ba đều không phải chuyện lý thuyết: `veTongQuanTheoVaiTro` vừa vá xong
+   đã là hàm GỌI HAI CỬA, thêm cửa thứ ba vào đó là mẫu (a).
+
+   Cách hỏi nay: truy XEM KẾT QUẢ CỦA CHÍNH LỜI GỌI NÀY chảy vào đâu, rồi hỏi
+   `cat` **trên cái biến đó** (kể cả sau một vài lần đổi tên). Bốn khuôn nhận
+   được — rã ngay tại chỗ · gán vào một biến · `return` thẳng lên trên · một
+   phần tử của `Promise.all([…])`.
+
+   ⚠️ ĐIỂM MÙ CÒN LẠI, ĐỌC TRƯỚC KHI SỬA: khuôn nào KHÔNG khớp bốn cái trên
+   (ví dụ `API.x().then(v => …)`, hay lời gọi làm đối số lồng trong một lời
+   gọi khác) thì không truy được đường đi. Những chỗ ấy KHÔNG được thả im
+   lặng: chúng rơi về lưới cũ (`CO_NGHE_CAT` trên cả thân hàm) VÀ được kê ra
+   thành danh sách `khongTruyDuoc` để người chạy nhìn thấy. Lưới cũ ở đó vẫn
+   mù đúng ba dạng a/b/c trên — ai thêm khuôn gọi mới thì thêm nhánh vào
+   `tenBienNhanKetQua()`, đừng nới `CO_NGHE_CAT`.
+   ========================================================================== */
+
+/** Kết quả của lời gọi ở dòng `i` chảy vào đâu. */
+function tenBienNhanKetQua(dong, i, tenApi) {
+  const L = dong[i];
+  const goi = `API\\.${tenApi}\\s*\\(`;
+  // ① `const { ds, cat } = await API.x(…)` — rã ngay tại chỗ.
+  let m = new RegExp(`\\{([^}]*)\\}\\s*=\\s*(?:await\\s+)?${goi}`).exec(L);
+  if (m) return { kieu: 'ra', truong: m[1] };
+  // ② `const kq = await API.x(…)` · `kq = await API.x(…)`
+  m = new RegExp(`(?:const|let|var)?\\s*([A-Za-z_$][A-Za-z0-9_$]*)\\s*=\\s*(?:await\\s+)?${goi}`).exec(L);
+  if (m) return { kieu: 'bien', ten: m[1] };
+  // ③ `return API.x(…)` — trao NGUYÊN gói lên trên, hàm này không vẽ gì.
+  if (new RegExp(`return\\s+(?:await\\s+)?${goi}`).test(L)) return { kieu: 'traLen' };
+  // ④ `const [a, b] = await Promise.all([ … ])` — MỘT phần tử MỘT dòng, đúng
+  //    lối viết của `app.js`. Đếm lệch thì thà khai "không truy được".
+  for (let k = i - 1; k >= Math.max(0, i - 12); k--) {
+    const p = /(?:const|let|var)\s*\[([^\]]*)\]\s*=\s*(?:await\s+)?Promise\.all\(\[/.exec(dong[k]);
+    if (!p) continue;
+    const ten = p[1].split(',').map(s => s.trim()).filter(Boolean);
+    const vt = i - (k + 1);
+    if (vt >= 0 && vt < ten.length && /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(ten[vt])) {
+      return { kieu: 'bien', ten: ten[vt] };
+    }
+    break;
+  }
+  return { kieu: 'khong-truy-duoc' };
+}
+
+/** Thân hàm có đọc `cat` TỪ CHÍNH biến này không (theo được vài lần đổi tên)?
+ *  `veTongQuanTheoVaiTro` viết `const [a, b] = await Promise.all(…); cv = a;`
+ *  rồi mới `cv.cat_nhan` — không theo cái dây ấy là đi tố oan hàm làm đúng. */
+function ngheCatTuBien(than, ten) {
+  const S = new Set([ten]);
+  for (let vong = 0; vong < 3; vong++) {
+    const truoc = S.size;
+    for (const t of [...S]) {
+      for (const m of than.matchAll(new RegExp(`\\b([A-Za-z_$][A-Za-z0-9_$]*)\\s*=\\s*${t}\\s*[;,)]`, 'g'))) {
+        S.add(m[1]);
+      }
+    }
+    if (S.size === truoc) break;
+  }
+  const ds = [...S].join('|');
+  return new RegExp(`\\b(?:${ds})\\s*\\??\\.\\s*cat(_[a-z_]+)?\\b`).test(than) ||
+         new RegExp(`\\{[^}]*\\bcat(_[a-z_]+)?\\b[^}]*\\}\\s*=\\s*(?:${ds})\\b`).test(than);
+}
+
+/** ④ Chỗ gọi `API.xxx(` mà CHÍNH lời gọi đó nhận `cat` rồi vứt. */
+function quetVutCat(danhSachTep, docTep, apiCat, mienTru = [], soTay = null) {
   const loi = [];
   if (!apiCat.size) return loi;
   const ten = [...apiCat.keys()].join('|');
@@ -404,8 +480,17 @@ function quetVutCat(danhSachTep, docTep, apiCat, mienTru = []) {
       const m = re.exec(dong[i]);
       if (!m) continue;
       const h = thanHamQuanh(dong, i);
-      if (CO_NGHE_CAT.test(h.than)) continue;
-      const khoa = `${tep}:${h.tuDong}:${m[1]}`;
+      const noi = tenBienNhanKetQua(dong, i, m[1]);
+      let nghe;
+      if (noi.kieu === 'ra') nghe = /\bcat(_[a-z_]+)?\b/.test(noi.truong);
+      else if (noi.kieu === 'bien') nghe = ngheCatTuBien(h.than, noi.ten);
+      else if (noi.kieu === 'traLen') nghe = false;      // trao nguyên gói lên trên
+      else {
+        nghe = CO_NGHE_CAT.test(h.than);                 // lưới cũ — CÒN MÙ, xem ghi chú trên
+        if (soTay) soTay.push({ tep, dong: i + 1, ham: h.ten, api: m[1] });
+      }
+      if (nghe) continue;
+      const khoa = `${tep}:${h.tuDong}:${m[1]}:${i}`;
       if (daBao.has(khoa)) continue;
       daBao.add(khoa);
       if (mienTru.some(x => x.tep === tep && x.ham === h.ten && x.api === m[1])) continue;
@@ -671,6 +756,56 @@ async function veNhatKySach(id) {
   veDaiCat('#nk-cat', kq.cat, { don_vi: 'lượt xem' });
   o.innerHTML = (kq.ds || []).map(d => d.cau).join('');
 }
+`,
+  /* BẨN — CÁCH THỨ BA (REV-0061 vòng 2 · VỪA-1). Ba mẫu của Hồ Ly, giữ NGUYÊN
+     ý từng mẫu. Lưới hỏi-một-lần-cho-cả-thân-hàm để lọt CẢ BA: mỗi hàm dưới
+     đây đều có một chữ `cat` "hợp lệ" ở đâu đó, và chữ ấy tha cho lời gọi bẩn
+     nằm cùng hàm. Xoá mẫu nào là mở lại đúng lỗ đó. */
+  'ban2/man-cach3.js': `
+async function veMotMan(id) {
+  const a = await API.soLichSu(id);
+  veDaiCat('#a-cat', a.cat, { don_vi: 'nhận xét' });
+  const b = await API.tlNhatKy(id);
+  o.innerHTML = (b.ds || []).map(d => d.cau).join('');
+}
+async function veManKhac(id) {
+  const cat = 'mèo';
+  const kq = await API.soLichSu(id);
+  o.innerHTML = cat + (kq.ds || []).length;
+}
+function moMan(id) {
+  veDaiCat('#khac-cat', dsKhac.cat, { don_vi: 'việc' });
+  nut.addEventListener('click', async () => {
+    const kq = await API.tlNhatKy(id);
+    o.innerHTML = (kq.ds || []).map(d => d.cau).join('');
+  });
+}
+`,
+  /* SẠCH đi kèm — lưới siết lại thì phải chứng minh không tố oan hai lối viết
+     rất thường gặp: rã `cat` ở một câu lệnh RIÊNG, và đổi tên biến một nhịp
+     (đúng khuôn `const [a,b] = await Promise.all(…); cv = a;` của
+     `veTongQuanTheoVaiTro`). */
+  'ban2/man-sach3.js': `
+async function veRaRieng(id) {
+  const kq = await API.soLichSu(id);
+  const { ds, cat } = kq;
+  veDaiCat('#r-cat', cat, { don_vi: 'nhận xét' });
+  o.innerHTML = (ds || []).map(d => d.cau).join('');
+}
+async function veHaiCuaDeuNghe(id) {
+  const a = await API.soLichSu(id);
+  veDaiCat('#a-cat', a.cat, { don_vi: 'nhận xét' });
+  const b = await API.tlNhatKy(id);
+  veDaiCat('#b-cat', b.cat, { don_vi: 'lượt xem' });
+}
+async function veDoiTen(id) {
+  let so;
+  const [x] = await Promise.all([
+    API.soLichSu(id)
+  ]);
+  so = x;
+  veDaiCat('#d-cat', so.cat, { don_vi: 'nhận xét' });
+}
 `
 };
 const docMau = (t) => MAU[t];
@@ -754,7 +889,22 @@ function tuKiem() {
          ' — báo oan là cách nhanh nhất để người ta tắt máy quét đi');
   }
 
-  console.log('  ✅ Ca đối chứng: 15/15 mẫu bẩn BỊ BẮT · 11/11 mẫu sạch KHÔNG bị bắt oan — máy quét có hiệu lực.');
+  /* CÁCH THỨ BA (REV-0061 vòng 2 · VỪA-1) — ba mẫu Hồ Ly gài, lưới cũ lọt 3/3.
+     Đây là chỗ đo xem việc "hỏi tại chỗ gọi" có thật sự bịt được lỗ hay không. */
+  const vutCach3 = quetVutCat(['ban2/man-cach3.js'], docMau, api2);
+  const sachCach3 = quetVutCat(['ban2/man-sach3.js'], docMau, api2);
+  if (vutCach3.length !== 3) {
+    chet(`②b CÁCH THỨ BA bắt được ${vutCach3.length}/3 — lưới vẫn hỏi một lần cho cả thân hàm: ` +
+         'một chữ `cat` ở đâu đó tha cho mọi lời gọi khác trong cùng hàm. ' +
+         'Chi tiết: ' + JSON.stringify(vutCach3));
+  }
+  if (sachCach3.length !== 0) {
+    chet('②b siết lại thành BÁO OAN ba lối viết sạch rất thường gặp (rã `cat` ở câu lệnh riêng · ' +
+         'hai cửa đều nghe · đổi tên biến một nhịp): ' + JSON.stringify(sachCach3));
+  }
+
+  console.log('  ✅ Ca đối chứng: 18/18 mẫu bẩn BỊ BẮT · 14/14 mẫu sạch KHÔNG bị bắt oan — máy quét có hiệu lực.');
+  console.log('     (trong đó 3 mẫu "cách thứ ba" của Hồ Ly — lưới hỏi-cả-thân-hàm từng lọt 3/3.)');
 }
 
 /* ==========================================================================
@@ -817,7 +967,8 @@ if (loiGiaoDien.length === 0) {
 const TEP_GD_JS = TEP_GD.filter(t => t.endsWith('.js'));
 const HAM_CAT = hamTraCat(TEP_SRC, docThat);
 const { duong: DUONG_CAT, api: API_CAT } = phuongThucTraCat(docThat, HAM_CAT);
-const loiVutCat = quetVutCat(TEP_GD_JS, docThat, API_CAT, MIEN_TRU_CAT);
+const KHONG_TRUY_DUOC = [];
+const loiVutCat = quetVutCat(TEP_GD_JS, docThat, API_CAT, MIEN_TRU_CAT, KHONG_TRUY_DUOC);
 
 /* Miễn trừ CHẾT là miễn trừ nguy hiểm — y hệt bảng trên. */
 const vutKhongMienTru = quetVutCat(TEP_GD_JS, docThat, API_CAT);
@@ -843,6 +994,16 @@ if (loiVutCat.length === 0) {
   }
 }
 for (const m of MIEN_TRU_CAT) console.log(`     · MIỄN TRỪ ${m.ham}() API.${m.api} — ${m.lyDo}`);
+/* KHAI RA ĐIỂM MÙ, đừng để trong báo cáo rồi quên. Những chỗ dưới đây máy quét
+   KHÔNG truy được kết quả lời gọi chảy đi đâu, nên chúng đang được xử bằng lưới
+   cũ (hỏi cả thân hàm) — tức vẫn mù ba dạng a/b/c ghi ở đầu mục ②b. */
+if (KHONG_TRUY_DUOC.length === 0) {
+  console.log('     ℹ️  Điểm mù: 0 — mọi lời gọi đều truy được kết quả chảy đi đâu.');
+} else {
+  console.log(`     ⚠️  ĐIỂM MÙ: ${KHONG_TRUY_DUOC.length} lời gọi không truy được đường đi, ` +
+              'đang xử bằng lưới CŨ (hỏi cả thân hàm — còn mù "hai cửa một hàm"):');
+  for (const k of KHONG_TRUY_DUOC) console.log(`        · ${k.tep}:${k.dong}  ${k.ham}()  API.${k.api}`);
+}
 
 /* ==========================================================================
    ③ CHẠY THẬT `catBot`/`nhanCat` — quét tĩnh chỉ thấy LỜI GỌI, không thấy

@@ -3421,7 +3421,17 @@ const SUA_BANG_HOP_LE = new Set(['cong_viec', 'muc_tieu']);
    Danh sách trắng chứ không nhận chuỗi tự do: `truong` đi thẳng vào WHERE
    (đã tham số hoá, nhưng cửa nào cũng nên đóng cả hai lớp), và một tên trường
    gõ sai mà trả về rỗng thì lại đúng cái "màn hình khẳng định sai" đang chữa. */
-const SUA_TRUONG_LOC = new Set(['nhan_xet']);
+/* CHỐT THEO CẶP `bang × truong`, KHÔNG hai danh sách trắng rời (REV-0061
+   vòng 2 · THẤP-1). Hai danh sách rời thì `?bang=muc_tieu&truong=nhan_xet`
+   qua được cả hai cửa rồi trả rỗng kèm HTTP 200 — hôm nay vô hại vì mục tiêu
+   chưa có nhận xét, nhưng ngày ai thêm nhận xét cho mục tiêu mà quên nối vào
+   đây thì màn hình in "chưa có nhận xét nào" ĐÚNG KIỂU CHẶN-1: rỗng vì hỏi
+   sai cửa, mà nói như thể đã hỏi đúng. Thêm loại vết cho một bảng thì thêm
+   vào ĐÚNG dòng của bảng ấy. */
+const SUA_TRUONG_LOC = new Map([
+  ['cong_viec', new Set(['nhan_xet'])],
+  ['muc_tieu', new Set()]
+]);
 async function suaLichSu(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
@@ -3431,7 +3441,9 @@ async function suaLichSu(req, env) {
   const truong = String(u.searchParams.get('truong') || '').trim();
   if (!SUA_BANG_HOP_LE.has(bang)) return loi('Bảng không hợp lệ');
   if (!id) return loi('Thiếu id bản ghi');
-  if (truong && !SUA_TRUONG_LOC.has(truong)) return loi('Loại vết không hợp lệ');
+  if (truong && !(SUA_TRUONG_LOC.get(bang) || new Set()).has(truong)) {
+    return loi(`Bảng "${bang}" không có loại vết "${truong}"`);
+  }
   /* Quyền XEM đi theo quyền xem của chính thực thể đó. Trạm Mục Tiêu vốn đã
      minh bạch toàn công ty (tinh thần MBOs) — ai xem được việc thì xem được
      lịch sử sửa của việc đó. Cái phải siết là quyền SỬA, không phải quyền

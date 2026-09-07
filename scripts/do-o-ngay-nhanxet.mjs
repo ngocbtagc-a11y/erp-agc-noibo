@@ -42,6 +42,10 @@
      B8  `#kvBcDen` / `#kvBcTu` / `#dmNgayVao` nhận được ngày TƯƠNG LAI (CAO-1)
      B9  câu lỗi nói ĐÚNG ĐẦU BỊ VI PHẠM, không một câu chung cho cả hai (CAO-2)
      B10 câu lỗi đỏ KHÔNG dính lại giữa hai lần mở hộp hồ sơ (VỪA-2)
+     B10b CẢ 8 Ô mà `app.js` gán `.value` bằng mã: gán xong thì câu đỏ của bản
+         ghi TRƯỚC biến mất VÀ dòng đọc lại hiện đúng giá trị mới (CAO-1 vòng 2)
+     B10c cùng chuyện đó trên MÀN THẬT: bấm "Sửa" việc A → gõ nhầm → Huỷ →
+         bấm "Sửa" việc B, đúng cảnh Hồ Ly dựng
      B11 bấm dòng thông báo `cong_viec_nhan_xet` MỞ ĐÚNG hộp nhận xét (VỪA-1)
 
    ⚠️ VÌ SAO B1 PHẢI GÕ `25011990` CHỨ KHÔNG PHẢI `01011990` — ĐỪNG ĐỔI LẠI.
@@ -66,7 +70,7 @@
      DC-E  gỡ nút Nhận xét ở phía NGƯỜI NHẬN        → B5 người bị nhận xét mù
      DC-F  bỏ lọc `truong` ở `suaLichSu`            → A7 nhận xét cũ rơi mất
      DC-G  gỡ dòng đọc lại ngày (`docLaiNgay`)      → B7 mù trở lại
-     DC-H  gán `.value` mà không bắn `input`        → B10 câu đỏ dính lại
+     DC-H  gỡ BẪY trên `value` trong `o-ngay.js`    → B10b/B10c đỏ CẢ 8 ô
    ========================================================================== */
 
 import { cpSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
@@ -297,6 +301,18 @@ console.log('\n=== A7 · CHẶN-1 — 110 lần sửa có đẩy 3 nhận xét c
   ok('A7 · `?truong=` ngoài danh sách trắng → CHẶN (gõ sai mà trả rỗng lại đúng lỗi đang chữa)',
      bay.status === 400, `HTTP ${bay.status}`);
 
+  /* ③b THẤP-1 — cặp `bang × truong` phải khớp NHAU, chứ không phải hai danh
+     sách trắng rời nhau. `muc_tieu` chưa có loại vết `nhan_xet`; cho qua rồi
+     trả rỗng kèm HTTP 200 là dựng sẵn đúng cái "màn hình khẳng định sai" của
+     CHẶN-1 cho ngày ai đó thêm nhận xét cho mục tiêu mà quên nối cửa. */
+  const cheoBang = await goiAPI(V.worker, V.env,
+    '/api/sua/lich-su?bang=muc_tieu&id=1&truong=nhan_xet', V.phien.AN);
+  ok('A7 · THẤP-1: `bang=muc_tieu&truong=nhan_xet` → CHẶN 400, KHÔNG trả rỗng kèm HTTP 200',
+     cheoBang.status === 400, `HTTP ${cheoBang.status} · ${JSON.stringify(cheoBang.than || {})}`);
+  ok('A7 · THẤP-1: và cặp ĐÚNG (`cong_viec` × `nhan_xet`) vẫn qua — siết cặp mà siết ' +
+     'nhầm cả cửa đang dùng thì còn tệ hơn để hở',
+     rieng.status === 200, `HTTP ${rieng.status}`);
+
   /* ④ Trần vẫn còn hiệu lực trên chính loại vết đó — không phải bỏ trần đi. */
   for (let i = 1; i <= 120; i++) {
     them.run('nhan_xet', null, `Nhận xét dồn số ${i}`, `2026-09-0${(i % 7) + 1} 08:00:00`);
@@ -322,6 +338,26 @@ const VIEC_GIAO = {
   mo_ta: '', nguoi_giao_id: 'NS-NGOC', nguoi_giao_ten: 'Bùi Thị Ngọc',
   nguoi_nhan_id: 'NS-DUY', nguoi_nhan_ten: 'Phạm Khương Duy',
   han_chot: '2026-09-12', trang_thai: 'hoan_thanh', muc_tieu_id: null, tao_luc: '2026-09-01 09:00:00'
+};
+
+/* HAI VIỆC ĐỂ DỰNG LẠI ĐÚNG CẢNH CAO-1 (REV-0061 vòng 2): mở *Sửa việc A*,
+   gõ nhầm hạn chót → đỏ; đóng; mở *Sửa việc B* có hạn chót HỢP LỆ và KHÁC A.
+   Phải là việc TÔI GIAO + CHƯA XONG thì `nutCuaViec()` mới vẽ nút "Sửa"
+   (`app.js:3516`) — VIEC_TOI/VIEC_GIAO sẵn có đều không thoả: một cái tôi
+   NHẬN, một cái ĐÃ nghiệm thu. Hai hạn chót phải KHÁC NHAU, nếu không thì
+   `moHopSuaViec` gán lại đúng giá trị cũ và phép đo mất khả năng phân biệt
+   "vẽ lại thật" với "may mà trùng". */
+const VIEC_SUA_A = {
+  id: 21, tieu_de: 'Chốt đơn lô chè chưng yến số 9', dau_ra: 'Đơn đã chốt trên Shopee',
+  mo_ta: '', nguoi_giao_id: 'NS-NGOC', nguoi_giao_ten: 'Bùi Thị Ngọc',
+  nguoi_nhan_id: 'NS-HUYEN', nguoi_nhan_ten: 'Nguyễn Thị Huyền',
+  han_chot: '2026-09-20', trang_thai: 'dang_lam', muc_tieu_id: null, tao_luc: '2026-09-01 09:00:00'
+};
+const VIEC_SUA_B = {
+  id: 22, tieu_de: 'Dán tem phụ lô hạnh nhân nhập khẩu', dau_ra: 'Đủ tem phụ trước khi lên kệ',
+  mo_ta: '', nguoi_giao_id: 'NS-NGOC', nguoi_giao_ten: 'Bùi Thị Ngọc',
+  nguoi_nhan_id: 'NS-DUY', nguoi_nhan_ten: 'Phạm Khương Duy',
+  han_chot: '2026-09-30', trang_thai: 'dang_lam', muc_tieu_id: null, tao_luc: '2026-09-01 09:00:00'
 };
 
 const NHAN_XET_DA_GUI = [];
@@ -351,7 +387,10 @@ function apiRieng(duong, u, traJson) {
   if (duong.startsWith('/api/nhan-su/hop-dong')) { traJson({ hop_dong: [] }); return true; }
   if (duong.startsWith('/api/ky-nang')) { traJson({ ky_nang: [], danh_muc: [], duoc: false }); return true; }
   if (duong.startsWith('/api/mo-ta-cong-viec')) { traJson({ mo_ta: [], ds: [] }); return true; }
-  if (duong === '/api/cong-viec/danh-sach') { traJson({ nhan: [VIEC_TOI], giao: [VIEC_GIAO] }); return true; }
+  if (duong === '/api/cong-viec/danh-sach') {
+    traJson({ nhan: [VIEC_TOI], giao: [VIEC_GIAO, VIEC_SUA_A, VIEC_SUA_B] });
+    return true;
+  }
   if (duong === '/api/cong-viec/hom-nay') {
     traJson({ nhac_tat: 0, toi: { qua_han: [], den_han_hom_nay: [], chua_bat_dau: [], cho_toi_duyet: [] },
               dong_viec: [], ghi_nhan: [] });
@@ -512,6 +551,54 @@ async function doTrinhDuyet({ be = null, tep = null } = {}) {
       return { truoc, sau: doc() };
     })()`);
 
+    /* --- B10b · CAO-1: gán `.value` bằng mã phải vẽ lại — CẢ 8 Ô ------- */
+    /* REV-0061 vòng 2 đếm được 9 lệnh gán `.value` trên 7 ô ngày trong
+       `app.js`, cộng ô ngày sinh đã vá vòng trước = 8 ô. Vòng trước bàn đo
+       này chỉ canh MỘT ô (B10 ở trên) nên 7 ô kia thủng mà vẫn xanh.
+       ĐỪNG THU LẠI CÒN MỘT Ô: cái lỗi được vá ở đây là lỗi CẢ LỚP, canh một
+       ô là canh một mẫu của lớp rồi tưởng đã canh cả lớp.
+
+       Mỗi ô đo đúng hai nhịp của cảnh thật:
+         ① bản ghi TRƯỚC — người dùng GÕ nhầm (gán + bắn `input`, đúng đường
+            bàn phím đi) → phải ĐỎ, nếu không thì nhịp ② vô nghĩa;
+         ② bản ghi SAU — máy chủ đổ dữ liệu vào (gán THẲNG `.value`, KHÔNG
+            một sự kiện nào, đúng đường `app.js` đi) → phải hết đỏ, hết viền
+            đỏ, VÀ hiện dòng đọc lại đúng giá trị mới. */
+    kq.b10_lop = await c.chay(`(()=>{
+      const CA = [
+        ['nsSua-ngaysinh',  '2020-01-01', '1990-01-25', '= 25/01/1990', 'Sửa hồ sơ nhân sự'],
+        ['tsSuaNgayMua',    '2030-01-01', '2024-03-15', '= 15/03/2024', 'Sửa tài sản'],
+        ['tsSuaHetBaoHanh', '2200-01-01', '2027-03-15', '= 15/03/2027', 'Sửa tài sản'],
+        ['cv-sua-han-chot', '2200-01-01', '2026-09-30', '= 30/09/2026', 'Sửa việc'],
+        ['nsHd-batdau',     '1800-01-01', '2026-01-01', '= 01/01/2026', 'Hợp đồng nhân sự'],
+        ['nsHd-hethan',     '2200-01-01', '2027-01-01', '= 01/01/2027', 'Hợp đồng nhân sự'],
+        ['kvBcTu',          '2200-01-01', '2026-09-01', '= 01/09/2026', 'Báo cáo kho'],
+        ['kvBcDen',         '1800-01-01', '2026-09-07', '= 07/09/2026', 'Báo cáo kho']
+      ];
+      /* Đọc phòng thủ y như B10: ca đối chứng DC-B gỡ hẳn bộ nâng cấp nên thẻ
+         ".o-ngay-nhac" không tồn tại — nổ ở đây là bàn đo chết, không phải
+         sản phẩm sai. (Không dùng dấu huyền trong khối này: cả đoạn nằm
+         trong một template literal của Node.) */
+      const doc = (o) => { const n = o.nextElementSibling;
+        const la = !!(n && n.classList.contains('o-ngay-nhac'));
+        return { chu: la ? n.textContent : '(không có thẻ nhắc)',
+                 do: la && n.classList.contains('sai'),
+                 hien: la && !n.hidden,
+                 docLai: la ? (n.dataset.ngayDoc || '') : '',
+                 vien: o.classList.contains('o-ngay-sai') }; };
+      return CA.map(([id, ban, sach, mong, man]) => {
+        const o = document.getElementById(id);
+        if (!o) return { id, man, khong_co: true };
+        o.blur();
+        o.value = ban;                                        // ① gõ nhầm…
+        o.dispatchEvent(new Event('input', { bubbles: true }));
+        const truoc = doc(o);
+        o.value = sach;         // ② máy chủ đổ dữ liệu — KHÔNG sự kiện nào
+        const sau = doc(o);
+        return { id, man, mong, truoc, sau, value: o.value };
+      });
+    })()`);
+
     /* --- B2 · DÁN thật ------------------------------------------------- */
     kq.b2_dan = await c.chay(`(()=>{
       const o=document.getElementById('nsSua-ngaysinh'); o.value=''; o.focus();
@@ -524,6 +611,44 @@ async function doTrinhDuyet({ be = null, tep = null } = {}) {
       const dt=new DataTransfer(); dt.setData('text/plain','1990-01-25');
       o.dispatchEvent(new ClipboardEvent('paste',{clipboardData:dt,bubbles:true,cancelable:true}));
       return o.value;
+    })()`);
+
+    /* --- B10d · `form.reset()` cũng phải vẽ lại ------------------------ */
+    /* `.reset()` KHÔNG đi qua cái bẫy trên `value` và cũng không bắn
+       `input`/`change` — nó bắn `reset` trên FORM và xoá ô SAU khi handler
+       chạy. ERP gọi `.reset()` ở hơn 20 chỗ; `#cv-form` có ô ngày
+       `#cv-han-chot`. Thiếu nhánh này thì bấm "Huỷ" xong dòng nhắc vẫn đọc
+       lại cái ngày vừa bị xoá khỏi ô — lại đúng lớp "màn hình nói sai". */
+    kq.b10_reset = await c.chay(`(async()=>{
+      const o = document.getElementById('cv-han-chot');
+      const f = document.getElementById('cv-form');
+      if (!o || !f) return { khong_co: true };
+      /* Đọc phòng thủ: ca đối chứng DC-B gỡ hẳn bộ nâng cấp nên KHÔNG có thẻ
+         nhắc nào — nổ ở đây là bàn đo chết, không phải sản phẩm sai. */
+      const doc = () => { const n = o.nextElementSibling;
+        const la = !!(n && n.classList.contains('o-ngay-nhac'));
+        return { doc: la ? (n.dataset.ngayDoc || '') : '', hien: la && !n.hidden }; };
+      o.value = '2026-12-31';
+      const truoc = doc();
+      f.reset();
+      await new Promise(r=>setTimeout(r,50));
+      return { truoc, value: o.value, ...doc() };
+    })()`);
+
+    /* --- B2b · THẤP-3: nhánh ISO phải NEO CẢ HAI ĐẦU ------------------- */
+    /* Bản trước chỉ neo đầu chuỗi: dán "1990-01-25rác" (nửa câu copy nhầm)
+       cũng ăn thành 25/01/1990. Nhưng phần GIỜ thật thì vẫn phải qua — máy
+       chủ trả "2026-09-05 10:00:00", siết quá tay là chặn cả ca đúng. */
+    kq.b2_neo = await c.chay(`(()=>{
+      const dan = (chu) => { const o=document.getElementById('nsSua-ngaysinh');
+        o.value=''; o.focus();
+        const dt=new DataTransfer(); dt.setData('text/plain',chu);
+        o.dispatchEvent(new ClipboardEvent('paste',{clipboardData:dt,bubbles:true,cancelable:true}));
+        return o.value; };
+      return { rac: dan('1990-01-25rác'),
+               racSo: dan('1990-01-2599'),
+               kemGio: dan('1990-01-25 10:00:00'),
+               kemGioZ: dan('1990-01-25T10:00:00Z') };
     })()`);
 
     /* --- B3 · CẢ LỚP ô ngày -------------------------------------------- */
@@ -612,6 +737,48 @@ async function doTrinhDuyet({ be = null, tep = null } = {}) {
                tieuDe: (document.getElementById('cv-nx-viec')||{}).textContent || '' };
     })()`);
 
+    /* --- B10c · CAO-1 trên MÀN THẬT: Sửa việc A → Sửa việc B ----------- */
+    /* B10b ở trên đo đúng cơ chế nhưng gán `.value` bằng tay. Cảnh Hồ Ly
+       dựng là cảnh NGƯỜI DÙNG đi: bấm nút "Sửa" việc A, gõ nhầm hạn chót,
+       ĐÓNG hộp bằng nút Huỷ, rồi bấm nút "Sửa" việc B. Không dựng lại đúng
+       cảnh ấy thì không chứng minh được là đã hết — chỉ chứng minh được cái
+       hàm mình vừa viết chạy đúng. */
+    kq.b10_e2e = await c.chay(`(async()=>{
+      const doi = (ms) => new Promise(r=>setTimeout(r,ms));
+      document.getElementById('cvNxModalNen').hidden = true;
+      document.querySelector('[data-tab="congviec"]')?.click();
+      await doi(900);
+      const nut = [...document.querySelectorAll('[data-cv-sua]')];
+      if (nut.length < 2) return { du_nut: false, so_nut: nut.length };
+      const doc = () => { const o = document.getElementById('cv-sua-han-chot');
+        const n = o.nextElementSibling;
+        const la = !!(n && n.classList.contains('o-ngay-nhac'));
+        return { chu: la ? n.textContent : '(không có thẻ nhắc)',
+                 do: la && n.classList.contains('sai'),
+                 hien: la && !n.hidden,
+                 docLai: la ? (n.dataset.ngayDoc || '') : '',
+                 vien: o.classList.contains('o-ngay-sai'), value: o.value }; };
+
+      // ① VIỆC A — mở hộp, hạn chót 20/09/2026 đổ sẵn từ máy chủ.
+      nut[0].click(); await doi(700);
+      const a_vua_mo = doc();
+      // …gõ nhầm 01/01/2200 (quá trần 2100) rồi RỜI TIÊU ĐIỂM, y như người
+      // ta gõ xong rồi với tay bấm Huỷ.
+      const oA = document.getElementById('cv-sua-han-chot');
+      oA.focus();
+      oA.value = '2200-01-01'; oA.dispatchEvent(new Event('input',{bubbles:true}));
+      oA.blur();
+      const a_go_nham = doc();
+      document.getElementById('cv-sua-nut-huy').click();
+      await doi(400);
+
+      // ② VIỆC B — hạn chót 30/09/2026, hoàn toàn hợp lệ, KHÔNG chạm vào ô.
+      nut[1].click(); await doi(700);
+      const b = doc();
+      document.getElementById('cv-sua-nut-huy').click();
+      return { du_nut: true, so_nut: nut.length, a_vua_mo, a_go_nham, b };
+    })()`);
+
     kq.loi_console = c.loiConsole.slice();
     kq.ngoai_le = c.ngoaiLe.slice();
   } finally {
@@ -644,6 +811,11 @@ ok(`B1 · gõ NGÀY KHÔNG ĐỐI XỨNG 25011990 trên trình duyệt thứ t�
    `value = ${B.b1_gia_tri} · mong = ${MONG} · thứ tự khai = ${B.b1_thu_tu}`);
 ok('B2 · DÁN "25/01/1990" → 1990-01-25', B.b2_dan === '1990-01-25', `value = ${B.b2_dan}`);
 ok('B2 · DÁN "1990-01-25" (kiểu ISO) cũng ăn', B.b2_dan_iso === '1990-01-25', `value = ${B.b2_dan_iso}`);
+ok('B2b · THẤP-3: DÁN "1990-01-25rác" → KHÔNG đọc thành ngày (nhánh ISO nay neo cả hai đầu)',
+   B.b2_neo.rac === '' && B.b2_neo.racSo === '', JSON.stringify(B.b2_neo));
+ok('B2b · …nhưng ngày KÈM GIỜ thật (máy chủ trả "2026-09-05 10:00:00" / kiểu ISO có Z) ' +
+   'vẫn phải ăn — siết quá tay là chặn cả ca đúng',
+   B.b2_neo.kemGio === '1990-01-25' && B.b2_neo.kemGioZ === '1990-01-25', JSON.stringify(B.b2_neo));
 ok(`B3 · CẢ LỚP: ${B.b3.tong} ô ngày trong ERP, tất cả đều có min/max`,
    B.b3.tong >= 14 && B.b3.thieu.length === 0, `thiếu: ${JSON.stringify(B.b3.thieu)}`);
 ok(`B3 · cả ${B.b3.tong} ô đều đã qua bộ nâng cấp dùng chung`,
@@ -715,6 +887,60 @@ ok('B10 · gõ sai ngày sinh thì CÓ hiện câu đỏ (nếu không thì phé
 ok('B10 · đóng hộp rồi mở lại, KHÔNG chạm vào ô → câu đỏ và viền đỏ ĐỀU BIẾN MẤT ' +
    '(trước bản vá: form người B hiện câu đỏ của người A dưới một ô rỗng)',
    !B.b10.sau.do && !B.b10.sau.vien, JSON.stringify(B.b10.sau));
+
+/* ---- B10b · CAO-1: CẢ 8 Ô, không chỉ ô ngày sinh ---------------------- */
+{
+  const L = B.b10_lop || [];
+  ok(`B10b · đủ 8 ô ngày mà \`app.js\` gán \`.value\` bằng mã (7 ô của CAO-1 + ô đã vá vòng trước)`,
+     L.length === 8 && L.every(x => !x.khong_co),
+     L.map(x => x.id + (x.khong_co ? ' (KHÔNG CÓ)' : '')).join(' · '));
+  for (const x of L) {
+    if (x.khong_co) continue;
+    ok(`B10b · ${x.man} · #${x.id} — ① gõ nhầm thì CÓ đỏ (không có thì hai phép dưới vô nghĩa)`,
+       x.truoc.do && x.truoc.vien, JSON.stringify(x.truoc));
+    ok(`B10b · ${x.man} · #${x.id} — ② gán \`.value\` giá trị HỢP LỆ (không sự kiện nào) ` +
+       `→ câu đỏ + viền đỏ của bản ghi TRƯỚC BIẾN MẤT`,
+       !x.sau.do && !x.sau.vien, JSON.stringify(x.sau));
+    ok(`B10b · ${x.man} · #${x.id} — ② dòng ĐỌC LẠI hiện đúng giá trị mới ("${x.mong}") — ` +
+       'đây mới là bản vá THẬT của GY-0004, và nó phải có mặt trên ĐƯỜNG TẢI DỮ LIỆU ' +
+       'từ máy chủ, không chỉ khi gõ tay',
+       x.sau.hien && x.sau.docLai.startsWith(x.mong),
+       `docLai="${x.sau.docLai}" · hien=${x.sau.hien} · value=${x.value}`);
+  }
+}
+
+/* ---- B10d · `form.reset()` — đường thứ hai KHÔNG đi qua bẫy `value` --- */
+{
+  const R = B.b10_reset || {};
+  ok('B10d · dựng được cảnh: `#cv-han-chot` có giá trị thì dòng đọc lại HIỆN ' +
+     '(không có thì phép kiểm dưới vô nghĩa)',
+     R.truoc && R.truoc.hien && R.truoc.doc === '= 31/12/2026', JSON.stringify(R.truoc));
+  ok('B10d · bấm Huỷ (`form.reset()`) → ô rỗng VÀ dòng đọc lại biến mất theo — ' +
+     '`.reset()` không bắn `input`/`change` và không đi qua bẫy `value`, phải nghe `reset` riêng',
+     R.value === '' && !R.doc && !R.hien, JSON.stringify(R));
+}
+
+/* ---- B10c · CAO-1 trên MÀN THẬT: Sửa việc A → Sửa việc B -------------- */
+{
+  const E = B.b10_e2e || {};
+  ok('B10c · dựng được đúng cảnh: có ≥ 2 nút "Sửa" việc trên màn Công việc',
+     E.du_nut === true, JSON.stringify({ so_nut: E.so_nut }));
+  if (E.du_nut) {
+    ok('B10c · mở Sửa việc A: hạn chót 20/09/2026 từ máy chủ hiện NGAY dòng đọc lại ' +
+       '"= 20/09/2026" — trước bản vá ô có giá trị mà dưới ô trống trơn',
+       E.a_vua_mo.hien && E.a_vua_mo.docLai === '= 20/09/2026' && !E.a_vua_mo.do,
+       JSON.stringify(E.a_vua_mo));
+    ok('B10c · gõ nhầm 01/01/2200 trong việc A → CÓ câu đỏ (nếu không thì phép kiểm dưới vô nghĩa)',
+       E.a_go_nham.do && E.a_go_nham.vien, JSON.stringify(E.a_go_nham));
+    ok('B10c · bấm Huỷ, mở Sửa việc B (hạn 30/09/2026 HỢP LỆ), KHÔNG chạm vào ô → ' +
+       'câu đỏ "bạn đang nhập 01/01/2200" và viền đỏ ĐỀU BIẾN MẤT',
+       !E.b.do && !E.b.vien, JSON.stringify(E.b));
+    ok('B10c · …và dưới ô là dòng đọc lại của CHÍNH việc B ("= 30/09/2026"), ' +
+       'không phải của việc A, không phải trống',
+       E.b.hien && E.b.docLai === '= 30/09/2026' && E.b.value === '2026-09-30',
+       JSON.stringify(E.b));
+  }
+}
 
 /* ---- B12 · CHẶN-1 tầng lưới: hộp Nhận xét có dải cắt ------------------- */
 ok('B12 · máy chủ nói sổ nhận xét bị cắt (100/123) → hộp Nhận xét NÓI LẠI bằng dải cắt ' +
@@ -842,17 +1068,41 @@ console.log('\n=== CA ĐỐI CHỨNG — gài lỗi lại, phép đo PHẢI đ�
      `bản gãy: doc="${G.b7.doc}" chu="${G.b7.chu}" value=${G.b7.value}`);
 }
 
-/* DC-H — gán `.value` mà KHÔNG bắn `input` (bản trước VỪA-2). */
+/* DC-H — GỠ CÁI BẪY trên `value` trong `o-ngay.js` (REV-0061 vòng 2 · CAO-1).
+   ------------------------------------------------------------------------
+   Vòng trước ca này bẻ `app.js` (bỏ một lệnh `dispatchEvent`) và vì thế chỉ
+   canh được ĐÚNG MỘT Ô — 6 ô kia thủng mà bàn đo vẫn xanh, đúng lỗi Hồ Ly
+   bắt được. Nay bản vá nằm ở TẦNG LỚP nên ca đối chứng cũng phải bẻ ở tầng
+   lớp: giết cái bẫy `Object.defineProperty(o,'value')` bằng cách cho
+   `moTaValue = null` — `o-ngay.js` lập tức quay về đúng trạng thái vòng
+   trước (chỉ nghe focus/blur/input/change).
+   ĐỪNG đổi ca này về bẻ một lệnh gán trong `app.js`: bẻ ở đó chỉ chứng minh
+   được một ô, mà lỗi này là lỗi cả lớp. */
 {
   const G = await doTrinhDuyet({
-    tep: 'assets/js/app.js',
+    tep: 'assets/js/o-ngay.js',
     be: s => s.replace(
-      "        oNg.dispatchEvent(new Event('input', { bubbles: true }));",
-      '        /* DC-H: không bắn */')
+      "  const moTaValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');",
+      '  const moTaValue = null;   /* DC-H: giết cái bẫy */')
   });
-  ok('DC-H · gán `.value` không bắn `input` → câu đỏ + viền đỏ của người TRƯỚC ' +
-     'dính lại trên form người SAU',
-     G.b10.sau.do || G.b10.sau.vien, `bản gãy: ${JSON.stringify(G.b10)}`);
+  const L = G.b10_lop || [];
+  const dinhDo = L.filter(x => !x.khong_co && (x.sau.do || x.sau.vien)).map(x => x.id);
+  const mucDoc = L.filter(x => !x.khong_co && (!x.sau.hien || !x.sau.docLai)).map(x => x.id);
+  ok('DC-H · gỡ bẫy `value` → câu đỏ + viền đỏ của bản ghi TRƯỚC dính lại trên ' +
+     `CẢ ${L.length} ô, dưới một giá trị HỢP LỆ của bản ghi SAU`,
+     dinhDo.length === L.length, `bản gãy dính đỏ ở ${dinhDo.length}/${L.length} ô: ${dinhDo.join(' · ')}`);
+  ok('DC-H · …và ô nào KHÔNG dính đỏ thì mất hẳn dòng đọc lại — bản vá THẬT của ' +
+     'GY-0004 vắng mặt trên đường tải dữ liệu từ máy chủ (hậu quả tầng hai của CAO-1)',
+     dinhDo.length + mucDoc.length >= L.length,
+     `dính đỏ ${dinhDo.length} ô · mất dòng đọc lại ${mucDoc.length} ô`);
+  ok('DC-H · trên MÀN THẬT: mở Sửa việc B (hạn 30/09/2026 hợp lệ) vẫn thấy câu đỏ ' +
+     '"bạn đang nhập 01/01/2200" của việc A — đúng ca CAO-1 Hồ Ly dựng',
+     G.b10_e2e.du_nut && (G.b10_e2e.b.do || G.b10_e2e.b.vien),
+     `bản gãy: ${JSON.stringify(G.b10_e2e.b || G.b10_e2e)}`);
+  ok('DC-H · và ngay lúc VỪA MỞ Sửa việc A, dòng "= 20/09/2026" cũng không có — ' +
+     '`veNhac` chỉ chạy một lần lúc nâng cấp ô, khi ô còn rỗng',
+     G.b10_e2e.du_nut && !G.b10_e2e.a_vua_mo.docLai,
+     `bản gãy: ${JSON.stringify(G.b10_e2e.a_vua_mo || G.b10_e2e)}`);
 }
 
 rmSync(TAM, { recursive: true, force: true });

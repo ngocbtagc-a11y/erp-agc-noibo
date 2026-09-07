@@ -5347,23 +5347,21 @@ if (TOI.quyen.includes('nhansu')) {
          nên phải hỏi riêng khi mở hồ sơ. */
       const oNg = $('#nsSua-ngaysinh');
       if (!oNg) return;
-      /* PHẢI BẮN `input` SAU MỖI LẦN GÁN `.value` (REV-0061 · VỪA-2).
-         `o-ngay.js` chỉ vẽ lại dòng dưới ô ở `focus`/`blur`/`input`/`change`;
-         gán thẳng `.value` bằng mã thì trình duyệt KHÔNG bắn sự kiện nào cả.
-         Hậu quả đo được: mở hồ sơ người A, gõ nhầm 2020 (dưới 14 tuổi) → dòng
-         đỏ + viền đỏ; đóng hộp, mở hồ sơ người B mà không chạm vào ô → form
-         của B hiện nguyên câu đỏ của A dưới một ô rỗng. Và nay còn một lý do
-         thứ hai: dòng "= 25/01/1990 · 36 tuổi" cũng phải theo kịp giá trị mới,
-         nếu không nó đọc lại ngày sinh của NGƯỜI TRƯỚC. */
-      const datNgay = (v) => {
-        oNg.value = v;
-        oNg.dispatchEvent(new Event('input', { bubbles: true }));
-      };
-      datNgay('');
+      /* GÁN THẲNG `.value` LÀ ĐỦ — KHÔNG bắn `input` thủ công ở đây nữa.
+         Bản vá REV-0061 vòng 2 (CAO-1) chuyển việc "vẽ lại dòng dưới ô sau
+         mỗi lần gán `.value`" vào ĐÚNG MỘT CHỖ: cái bẫy trên `value` mà
+         `nangCapMot()` của `o-ngay.js` đặt lên chính ô này.
+         Vòng trước luật ấy là luật NGƯỜI VIẾT MÃ phải nhớ, và trong ERP có 9
+         lệnh gán trên 6 ô ngày — nhớ được đúng 1 (chính chỗ này), 6 ô kia giữ
+         nguyên câu đỏ của bản ghi TRƯỚC dưới một giá trị HỢP LỆ của bản ghi
+         SAU. Nay mọi lệnh gán ở mọi màn đều đi qua bẫy đó.
+         Ai định thêm `dispatchEvent('input')` lại vào đây: đừng — đọc khối
+         "GÁN `.value` BẰNG MÃ CŨNG PHẢI VẼ LẠI" trong `o-ngay.js` trước. */
+      oNg.value = '';
       try {
         const kq = await API.nsSinhNhat(n.id);
         if (NS_SN_DANG_MO !== n.id) return;          // đã mở hồ sơ người khác
-        datNgay((kq.ngay_sinh || '').slice(0, 10));
+        oNg.value = (kq.ngay_sinh || '').slice(0, 10);
       } catch { /* để trống — vẫn nhập mới được */ }
     }
 
