@@ -9426,7 +9426,15 @@ function khoiDongNapFile(qKho, qSanPham) {
   let tepTen  = '';
   let mo      = null;       // kết quả /nap-mo  (cột, gợi ý ghép, vân tay)
   let xem     = null;       // kết quả /nap-xem (bảng tóm tắt)
-  let bangChon = 0;         // .xlsx nhiều bảng: đang đọc bảng thứ mấy
+  /* `null` = CHƯA AI CHỌN BẢNG. Máy chủ chỉ được tự bỏ qua bảng ẩn / bảng
+     rỗng khi chưa ai chọn (REV-0060 vòng 2 · CAO-⑦); gửi 0 là biến mọi lần
+     mở file thành "người đã chọn bảng đầu tiên". Mở xong thì nhận lại đúng
+     số bảng máy chủ ĐANG đọc, để hai bước sau không đọc lệch bảng. */
+  let bangChon = null;      // .xlsx nhiều bảng: đang đọc bảng thứ mấy
+  /* Bằng ĐÚNG `maxlength` của #napTrungGo trong app.html và `TRAN_GO_TEN_TEP`
+     ở src/nap-du-lieu.js — ba chỗ phải cùng một con số, lệch là màn mở nút mà
+     máy chủ vẫn 409 (hoặc ngược lại). */
+  const TRAN_GO_TEN = 90;
   let phieuVuaNap = null;   // phiếu của lượt nạp tồn vừa xong (để gỡ lại)
 
   const oDich = $('#napDich');
@@ -9445,7 +9453,13 @@ function khoiDongNapFile(qKho, qSanPham) {
     if (khoi && oCho) {
       oCho.appendChild(khoi);
       khoi.hidden = false;          // trong Kinh doanh, khối này LÀ cả màn
-      const seg = document.getElementById('kdSeg');
+      /* ⚠️ CHỈ CẮM NÚT KHI CÓ NGƯỜI NGHE (REV-0060 vòng 2 · THẤP-⑩).
+         Listener của `#kdSeg` chỉ được gắn khi người dùng có tab 'kinhdoanh'
+         (app.js, khối "-- Kinh doanh --"). Hôm nay chưa vai nào rơi vào khe
+         này, nhưng thêm một vị trí công việc mới — có `san_pham.sua`, không
+         có 'khovan', cũng không có 'kinhdoanh' — là có ngay một cái nút bấm
+         không ra gì. Nút chết còn tệ hơn không có nút. */
+      const seg = TOI.quyen.includes('kinhdoanh') ? document.getElementById('kdSeg') : null;
       if (seg && !seg.querySelector('.seg-nut[data-kd="napfile"]')) {
         const nut = document.createElement('button');
         nut.type = 'button';
@@ -9506,8 +9520,9 @@ function khoiDongNapFile(qKho, qSanPham) {
     try {
       tepByte = new Uint8Array(await f.arrayBuffer());
       tepTen = f.name || 'file';
-      bangChon = 0;                       // file mới thì về lại bảng đầu tiên
+      bangChon = null;                    // file mới thì để máy chủ tự mở bảng
       mo = await API.napMo({ dich: oDich.value, ten_tep: tepTen, bang_chon: bangChon }, tepByte);
+      bangChon = Number(mo.bang_chon) || 0;   // đọc bảng nào thì hai bước sau bám đúng bảng đó
       veGhepCot();
       veBuoc(2);
     } catch (err) {
@@ -9565,8 +9580,10 @@ function khoiDongNapFile(qKho, qSanPham) {
         oBang.innerHTML = dsBang.map((b, i) => {
           const sd = (b.so_dong === null || b.so_dong === undefined)
             ? 'chưa đếm được' : b.so_dong.toLocaleString('vi-VN') + ' dòng';
+          /* Bảng đang ẩn trong Excel thì NÓI RA (REV-0060 vòng 2 · CAO-⑦):
+             bảng bị ẩn thường là bản nháp cũ, số sai. */
           return '<option value="' + i + '"' + (i === (mo.bang_chon || 0) ? ' selected' : '') + '>' +
-                 esc(b.ten) + ' · ' + sd + '</option>';
+                 esc(b.ten) + ' · ' + sd + (b.an ? ' · đang ẩn' : '') + '</option>';
         }).join('');
         $('#napChonBangHint').textContent =
           'File có ' + dsBang.length + ' bảng. Chọn nhầm bảng là nạp nhầm số — xin xem số dòng cho chắc.';
@@ -9722,6 +9739,21 @@ function khoiDongNapFile(qKho, qSanPham) {
        bằng 409 — tick chỉ là cách nói "tôi biết", không phải cửa bảo vệ. */
     const oTrung = $('#napTrungO'), oTick = $('#napTrungTick');
     const coTrung = !!(xem.can_xac_nhan_trung && xem.nap_trung);
+    /* HAI LỚP, HAI CỬA (REV-0060 vòng 2 · CAO-⑤). Lớp (a) — trùng NGUYÊN
+       FILE — bắt gõ lại tên file; lớp (b) — trùng mã hàng, kêu mọi lần kho
+       nhập lại cùng mã — vẫn là cái tick. Để chung một ô tick thì cái tick
+       thành phản xạ và gạt luôn tín hiệu mạnh nhất. */
+    const goTen = !!(coTrung && xem.nap_trung.can_go_ten_tep);
+    const oTickO = $('#napTrungTickO'), oGoO = $('#napTrungGoO'), oGo = $('#napTrungGo');
+    if (oTickO) oTickO.hidden = goTen;
+    if (oGoO) oGoO.hidden = !goTen;
+    if (oGo) oGo.value = '';
+    if (goTen && $('#napTrungGoHint')) {
+      /* Cắt đúng bằng `maxlength` của ô: bảo người ta gõ một chuỗi dài hơn
+         thứ ô nhận được là bảo họ làm một việc không thể. */
+      $('#napTrungGoHint').textContent =
+        'Gõ đúng: ' + String(xem.nap_trung.ten_tep || tepTen || '').slice(0, TRAN_GO_TEN);
+    }
     if (oTrung) {
       oTrung.hidden = !coTrung;
       if (oTick) oTick.checked = false;
@@ -9759,11 +9791,28 @@ function khoiDongNapFile(qKho, qSanPham) {
     }
   }
 
-  /* Tick "tôi đã kiểm" mới mở nút nạp. */
-  $('#napTrungTick')?.addEventListener('change', e => {
+  /* Tick "tôi đã kiểm" (lớp b) — hoặc GÕ ĐÚNG TÊN FILE (lớp a) — mới mở nút
+     nạp. So tên ngay ở đây cho Sếp thấy nút bật lên; máy chủ so lại lần nữa
+     trong `ghiThat`, cửa chặn thật nằm ở đó. */
+  const moNutNeuXacNhan = () => {
     const nut = $('#napB3Ghi');
-    if (nut && !xem?.vuot_han_muc && (xem?.so_them + xem?.so_sua) > 0) nut.disabled = !e.target.checked;
-  });
+    if (!nut || xem?.vuot_han_muc || !((xem?.so_them + xem?.so_sua) > 0)) return;
+    const goTen = !!(xem?.nap_trung && xem.nap_trung.can_go_ten_tep);
+    if (goTen) {
+      const can = String(xem.nap_trung.ten_tep || tepTen || '').trim().toLowerCase();
+      const da = String($('#napTrungGo')?.value || '').trim().toLowerCase();
+      const boDuoi = s => s.replace(/\.(csv|xlsx|xls|tsv|txt)$/, '');
+      /* Tên dài hơn trần `maxlength` của ô thì nhận đúng phần đầu — cùng luật
+         với `khopTenTep` ở máy chủ (src/nap-du-lieu.js). */
+      const dai = can.length > TRAN_GO_TEN;
+      nut.disabled = !(da && (da === can || boDuoi(da) === boDuoi(can) ||
+                              (dai && da === can.slice(0, TRAN_GO_TEN))));
+    } else {
+      nut.disabled = !$('#napTrungTick')?.checked;
+    }
+  };
+  $('#napTrungTick')?.addEventListener('change', moNutNeuXacNhan);
+  $('#napTrungGo')?.addEventListener('input', moNutNeuXacNhan);
 
   $('#napB3Lui').addEventListener('click', () => veBuoc(2));
 
@@ -9776,7 +9825,8 @@ function khoiDongNapFile(qKho, qSanPham) {
       const kq = await API.napGhi({
         dich: oDich.value, ten_tep: tepTen, bang_chon: bangChon,
         ghep: ghepHienTai(), van_tay: xem.van_tay,
-        xac_nhan_trung: !!$('#napTrungTick')?.checked
+        xac_nhan_trung: !!$('#napTrungTick')?.checked,
+        xac_nhan_ten_tep: String($('#napTrungGo')?.value || '')
       }, tepByte);
       const laTK = oDich.value === 'ton_kho';
       phieuVuaNap = kq.phieu_id || null;
@@ -9868,7 +9918,10 @@ function khoiDongNapFile(qKho, qSanPham) {
         const trangThai = v.da_go
           ? '<span class="tag mute">đã gỡ</span>'
           : (v.dang_ghi ? '<span class="tag warn">chưa ghi xong</span>' : '');
-        const nut = v.da_go ? '' :
+        /* Chỉ người ĐÃ NẠP lượt đó, hoặc quản lý kho, mới gỡ được — máy chủ
+           chặn thật ở `huyLuotNap` (REV-0060 vòng 2 · CHẶN-②). Ở đây chỉ là
+           phép lịch sự: đừng vẽ một cái nút bấm vào là ăn 403. */
+        const nut = !v.go_duoc ? '' :
           '<button type="button" class="btn-nho" data-nap-go="' + esc(v.phieu_id) + '">Gỡ lượt này</button>';
         return '<div class="nap-luot-dong">' +
                  '<div class="nap-luot-chu">' + esc(v.ten_tep || '(không rõ tên file)') + ' ' + trangThai +

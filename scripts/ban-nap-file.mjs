@@ -301,6 +301,9 @@ try {
     canh: document.getElementById('napCanhBao').textContent.replace(/\\s+/g,' ').trim(),
     nutTat: document.getElementById('napB3Ghi').disabled,
     coTick: !!document.getElementById('napTrungTick'),
+    tickHien: !document.getElementById('napTrungTickO').hidden,
+    goHien: !document.getElementById('napTrungGoO').hidden,
+    goHint: document.getElementById('napTrungGoHint').textContent,
     coNutGo: !!document.querySelector('#napTrungDs [data-nap-go]')
   })`));
   tin(`câu cảnh báo: ${String(t2.cau).slice(0, 120)}`);
@@ -308,16 +311,33 @@ try {
   ok('Câu cảnh báo nói rõ file đã nạp rồi và nạp tiếp là CỘNG THÊM',
      /đã nạp rồi/i.test(t2.cau) && /cộng thêm/i.test(t2.cau), String(t2.cau).slice(0, 80));
   ok('Nút xác nhận bị TẮT — không cho bấm trôi', t2.nutTat === true);
-  ok('Có ô tick xác nhận riêng', t2.coTick === true);
   ok('Có sẵn nút gỡ lượt nạp cũ ngay trong khối cảnh báo', t2.coNutGo === true);
 
+  /* ---- HAI LỚP, HAI CỬA (REV-0060 vòng 2 · CAO-⑤) ----
+     Đây là ca TRÙNG NGUYÊN FILE = lớp (a), tín hiệu mạnh nhất: đúng từng dòng
+     từng con số. Cửa của nó phải là GÕ LẠI TÊN FILE chứ không phải cái tick —
+     cái tick còn dùng cho lớp (b), mà lớp (b) kêu ở mọi lần kho nhập lại cùng
+     mã nên nó đã thành phản xạ. */
+  ok('Trùng NGUYÊN FILE: ô tick bị GIẤU ĐI, hiện ô gõ lại tên file',
+     t2.tickHien === false && t2.goHien === true, `tick hiện ${t2.tickHien} · ô gõ tên hiện ${t2.goHien}`);
+  ok('Và chỉ rõ phải gõ đúng chữ gì', /TonDauKy\.csv/.test(t2.goHint), String(t2.goHint));
+
   const tonGiuNguyen = tonCua();
+  const goTen = async ten => {
+    await chay(`(() => { const o = document.getElementById('napTrungGo');
+      o.value = ${JSON.stringify(ten)}; o.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+    await cho(250);
+    return chay(`document.getElementById('napB3Ghi').disabled`);
+  };
   await chay(`(() => { const t = document.getElementById('napTrungTick');
     t.checked = true; t.dispatchEvent(new Event('change', { bubbles: true })); })()`);
-  await cho(300);
-  const moKhoa = await chay(`document.getElementById('napB3Ghi').disabled`);
-  ok('Tick xong nút mới mở ra (chặn chứ không khoá chết)', moKhoa === false, String(moKhoa));
-  ok('Trong lúc chưa tick, sổ cái KHÔNG đổi một dòng nào', tonCua() === tonGiuNguyen, String(tonCua()));
+  await cho(250);
+  ok('Tick vào ô kia KHÔNG mở được cửa lớp (a)',
+     await chay(`document.getElementById('napB3Ghi').disabled`) === true);
+  ok('Gõ SAI tên file: nút vẫn TẮT', await goTen('TonDauKy_sai.csv') === true);
+  const moKhoa = await goTen('TonDauKy.csv');
+  ok('Gõ ĐÚNG tên file thì nút mới mở ra (chặn chứ không khoá chết)', moKhoa === false, String(moKhoa));
+  ok('Trong suốt lúc đó, sổ cái KHÔNG đổi một dòng nào', tonCua() === tonGiuNguyen, String(tonCua()));
 
   /* ---- CẢNH ③: GỠ LƯỢT NẠP ---- */
   console.log('\n③ Gỡ lượt nạp — tồn phải về như cũ');

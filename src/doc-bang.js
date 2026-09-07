@@ -363,13 +363,15 @@ const TRAN_BANG = 30;
 
 /**
  * Đọc .xlsx.
- * @param {number} chon        chỉ số bảng cần đọc (0 = bảng đầu tiên)
+ * @param {number|null} chon   chỉ số bảng NGƯỜI chọn (0 = bảng đầu tiên).
+ *                             `null`/không truyền = chưa ai chọn, ERP tự mở
+ *                             bảng đầu tiên KHÔNG bị ẩn và CÓ dòng dữ liệu.
  * @param {boolean} demDong    có đếm số dòng của TỪNG bảng không (tốn thêm
  *                             một lượt bung mỗi bảng — chỉ bật ở bước 1, để
  *                             Sếp nhìn số dòng mà chọn đúng bảng)
  * @returns {{luoi, dsBang, chon, tenBang, he1904, canhBao}}
  */
-async function docXlsx(bytes, tranDong, chon = 0, demDong = false) {
+async function docXlsx(bytes, tranDong, chon = null, demDong = false) {
   const muc = mucLucNen(bytes);
   const canhBao = [];
 
@@ -393,25 +395,50 @@ async function docXlsx(bytes, tranDong, chon = 0, demDong = false) {
       const the = m[0];
       const ten = goThucThe((the.match(/\bname="([^"]*)"/) || [])[1] || '');
       const rid = (the.match(/r:id="([^"]+)"/) || [])[1];
+      /* ⚠️ BẢNG ĐANG BỊ ẨN (REV-0060 vòng 2 · CAO-⑦a).
+         Bản trước chỉ đọc `name` + `r:id`, bỏ qua `state="hidden"`. Bảng bị
+         ẩn đúng là bảng người ta KHÔNG muốn ai đọc — thường là bản nháp cũ,
+         số sai. Đo được: file có "Nháp cũ" (ẩn) + "Chính thức" thì ERP mặc
+         định đọc "Nháp cũ", không một chữ nào nói nó đang ẩn. */
+      const tt = ((the.match(/\bstate="([^"]*)"/) || [])[1] || '').toLowerCase();
+      const an = tt === 'hidden' || tt === 'veryhidden';
       let duong = null;
       if (rid) {
         const rel = rels.match(new RegExp(`<Relationship\\b[^>]*Id="${rid}"[^>]*>`));
         const t = rel && (rel[0].match(/Target="([^"]+)"/) || [])[1];
         if (t) duong = t.replace(/^\/?(xl\/)?/, 'xl/');
       }
-      if (duong && muc.has(duong)) dsBang.push({ ten: ten || `Bảng ${dsBang.length + 1}`, duong });
+      if (duong && muc.has(duong)) dsBang.push({ ten: ten || `Bảng ${dsBang.length + 1}`, duong, an });
     }
   }
   if (!dsBang.length) {
     for (const k of [...muc.keys()].filter(k => /^xl\/worksheets\/sheet\d+\.xml$/.test(k)).sort()) {
       if (dsBang.length >= TRAN_BANG) break;
-      dsBang.push({ ten: `Bảng ${dsBang.length + 1}`, duong: k });
+      dsBang.push({ ten: `Bảng ${dsBang.length + 1}`, duong: k, an: false });
     }
   }
   if (!dsBang.length) throw new LoiDocBang('File Excel này không có bảng dữ liệu nào đọc được. Xin kiểm tra lại file.');
 
-  const chonThat = (Number.isInteger(chon) && chon >= 0 && chon < dsBang.length) ? chon : 0;
-  const duongBang = dsBang[chonThat].duong;
+  /* --- CHỌN BẢNG ---
+     `chon` là con số NGƯỜI chọn ở bước 1. Không có (null/undefined) nghĩa là
+     chưa ai chọn, ERP phải tự mở một bảng — và lúc ĐÓ mới được quyền bỏ qua
+     bảng ẩn. Người đã chỉ đích danh bảng nào thì mở đúng bảng đó, kể cả bảng
+     ẩn: máy không cãi người (luật ① của nap-du-lieu.js). */
+  const nguoiChon = Number.isInteger(chon) && chon >= 0 && chon < dsBang.length;
+  const chonMacDinh = () => {
+    const i = dsBang.findIndex(b => !b.an);
+    return i >= 0 ? i : 0;
+  };
+  let chonThat = nguoiChon ? chon : chonMacDinh();
+  const soAn = dsBang.filter(b => b.an).length;
+  if (soAn) {
+    canhBao.push(
+      `File có ${soAn === dsBang.length ? 'toàn bộ' : soAn} bảng đang bị ẨN trong Excel ` +
+      `(${dsBang.filter(b => b.an).map(b => '“' + b.ten + '”').join(', ')}). ` +
+      `Bảng ẩn thường là bản nháp cũ — ERP ${dsBang[chonThat].an ? 'ĐANG ĐỌC ĐÚNG BẢNG ẨN theo lựa chọn của bạn' : 'không lấy bảng ẩn làm mặc định'}. ` +
+      `Xin xem kỹ trước khi nạp.`);
+  }
+  let duongBang = dsBang[chonThat].duong;
 
   /* --- Hệ ngày 1904 (Excel bản Mac cũ, hoặc file đối tác gửi) ---
      Excel có HAI mốc ngày. Không đọc cờ này thì mọi ô ngày lệch đúng 4 năm 1
@@ -436,59 +463,97 @@ async function docXlsx(bytes, tranDong, chon = 0, demDong = false) {
     }
   }
 
-  const xml = await bungPhan(bytes, muc.get(duongBang));
+  /* Bung MỘT bảng thành lưới ô. Tách hàm để còn đọc sang bảng khác được khi
+     bảng đang mở rỗng — xem khối "BẢNG RỖNG" ngay dưới. */
+  async function bungLuoi(duongB, tenB) {
+    const xml = await bungPhan(bytes, muc.get(duongB));
+    const rieng = [];
 
-  /* --- Ô GỘP: nói ra, đừng để Sếp tự đoán vì sao dòng dưới trống ---
-     Excel chỉ giữ giá trị ở ô TRÊN CÙNG của vùng gộp; các dòng dưới đọc ra
-     rỗng. Luật `batBuoc` bắt được và báo đúng dòng đúng cột, nên không có số
-     nào chạy êm vào sổ — chỉ thiếu một câu nói cho người dùng biết NGUYÊN
-     NHÂN, để họ đi bỏ gộp ô thay vì ngồi gõ lại tay. */
-  const soOGop = Number((xml.match(/<mergeCells\b[^>]*count="(\d+)"/) || [])[1] || 0) ||
-                 (xml.match(/<mergeCell\b/g) || []).length;
-  if (soOGop > 0) {
-    canhBao.push(`Bảng này có ${soOGop} vùng ô gộp (Merge & Center). ` +
+    /* --- Ô GỘP: nói ra, đừng để Sếp tự đoán vì sao dòng dưới trống ---
+       Excel chỉ giữ giá trị ở ô TRÊN CÙNG của vùng gộp; các dòng dưới đọc ra
+       rỗng. Luật `batBuoc` bắt được và báo đúng dòng đúng cột, nên không có
+       số nào chạy êm vào sổ — chỉ thiếu một câu nói cho người dùng biết
+       NGUYÊN NHÂN, để họ đi bỏ gộp ô thay vì ngồi gõ lại tay. */
+    const soOGop = Number((xml.match(/<mergeCells\b[^>]*count="(\d+)"/) || [])[1] || 0) ||
+                   (xml.match(/<mergeCell\b/g) || []).length;
+    if (soOGop > 0) {
+      rieng.push(`Bảng này có ${soOGop} vùng ô gộp (Merge & Center). ` +
                  `Excel chỉ giữ giá trị ở ô trên cùng, nên các dòng dưới sẽ đọc ra TRỐNG. ` +
                  `Xin bỏ gộp ô rồi điền đủ từng dòng, sau đó lưu lại và nạp lần nữa.`);
+    }
+
+    const luoi = [];
+    let cotVuotTran = 0;                 // cột thứ 201 trở đi mà CÓ nội dung thật
+    for (const md of xml.matchAll(/<row\b[^>]*>([\s\S]*?)<\/row>/g)) {
+      const o = [];
+      for (const mc of md[1].matchAll(/<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
+        const attr = mc[1], than = mc[2] || '';
+        const ref = (attr.match(/r="([A-Z]+\d+)"/) || [])[1];
+        const kieu = (attr.match(/t="([^"]+)"/) || [])[1] || 'n';
+        let v = '';
+        if (kieu === 'inlineStr') {
+          for (const g of than.matchAll(/<t\b[^>]*>([\s\S]*?)<\/t>/g)) v += g[1];
+          v = goThucThe(v);
+        } else {
+          const mv = than.match(/<v>([\s\S]*?)<\/v>/);
+          v = mv ? goThucThe(mv[1]) : '';
+          if (kieu === 's') v = kho[+v] ?? '';           // trỏ vào kho chuỗi
+        }
+        const ci = ref ? cotTuRef(ref) : o.length;
+        if (ci >= 0 && ci < TRAN_COT) { while (o.length < ci) o.push(''); o[ci] = v; }
+        /* ⚠️ KHÔNG CẮT ÂM THẦM. Đầu file này có hứa: "chạm là dừng và NÓI RA,
+           không âm thầm cắt" — CSV giữ lời hứa đó, .xlsx thì trước đây lặng lẽ
+           vứt cột 201 trở đi. Chỉ tính là mất mát khi ô đó CÓ nội dung: file
+           Excel hay đèo theo hàng trăm cột trống chỉ vì lỡ tô màu, vứt mấy cột
+           rỗng ấy đi thì không mất gì và cũng không cần kêu. */
+        else if (ci >= TRAN_COT && String(v).trim() !== '') cotVuotTran = Math.max(cotVuotTran, ci + 1);
+      }
+      luoi.push(o);
+      if (luoi.length > tranDong + 1) {
+        throw new LoiDocBang(
+          `File có nhiều hơn ${tranDong.toLocaleString('vi-VN')} dòng — vượt sức xử lý một lần. ` +
+          `Xin chia nhỏ file rồi nạp làm nhiều lần.`);
+      }
+    }
+    if (cotVuotTran) {
+      throw new LoiDocBang(
+        `Bảng “${tenB}” có tới ${cotVuotTran} cột có dữ liệu, vượt mức ${TRAN_COT} cột cho một lần nạp. ` +
+        `Xin mở file, xoá bớt những cột không cần nạp rồi lưu lại và nạp lần nữa.`);
+    }
+    return { luoi, rieng };
   }
 
-  const luoi = [];
-  let cotVuotTran = 0;                 // cột thứ 201 trở đi mà CÓ nội dung thật
-  for (const md of xml.matchAll(/<row\b[^>]*>([\s\S]*?)<\/row>/g)) {
-    const o = [];
-    for (const mc of md[1].matchAll(/<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
-      const attr = mc[1], than = mc[2] || '';
-      const ref = (attr.match(/r="([A-Z]+\d+)"/) || [])[1];
-      const kieu = (attr.match(/t="([^"]+)"/) || [])[1] || 'n';
-      let v = '';
-      if (kieu === 'inlineStr') {
-        for (const g of than.matchAll(/<t\b[^>]*>([\s\S]*?)<\/t>/g)) v += g[1];
-        v = goThucThe(v);
-      } else {
-        const mv = than.match(/<v>([\s\S]*?)<\/v>/);
-        v = mv ? goThucThe(mv[1]) : '';
-        if (kieu === 's') v = kho[+v] ?? '';           // trỏ vào kho chuỗi
-      }
-      const ci = ref ? cotTuRef(ref) : o.length;
-      if (ci >= 0 && ci < TRAN_COT) { while (o.length < ci) o.push(''); o[ci] = v; }
-      /* ⚠️ KHÔNG CẮT ÂM THẦM. Đầu file này có hứa: "chạm là dừng và NÓI RA,
-         không âm thầm cắt" — CSV giữ lời hứa đó, .xlsx thì trước đây lặng lẽ
-         vứt cột 201 trở đi. Chỉ tính là mất mát khi ô đó CÓ nội dung: file
-         Excel hay đèo theo hàng trăm cột trống chỉ vì lỡ tô màu, vứt mấy cột
-         rỗng ấy đi thì không mất gì và cũng không cần kêu. */
-      else if (ci >= TRAN_COT && String(v).trim() !== '') cotVuotTran = Math.max(cotVuotTran, ci + 1);
-    }
-    luoi.push(o);
-    if (luoi.length > tranDong + 1) {
-      throw new LoiDocBang(
-        `File có nhiều hơn ${tranDong.toLocaleString('vi-VN')} dòng — vượt sức xử lý một lần. ` +
-        `Xin chia nhỏ file rồi nạp làm nhiều lần.`);
+  let { luoi, rieng } = await bungLuoi(duongBang, dsBang[chonThat].ten);
+  const coDong = l => l.filter(d => d.some(o => String(o ?? '').trim() !== '')).length;
+
+  /* --- BẢNG ĐANG MỞ RỖNG MÀ FILE CÒN BẢNG KHÁC CÓ SỐ LIỆU (CAO-⑦b) ---
+     Bản trước ném thẳng "File không có dòng nào có dữ liệu — mở lại bằng
+     Excel xem có đúng file cần nạp không." Câu đó CHỈ SAI ĐƯỜNG: file đúng,
+     chỉ là số liệu nằm ở bảng khác. Không phải ca giả định —
+     `TongHop_SanPham_Theo_SKU.xlsx` của Sếp có `Sheet1` 0 dòng; đảo thứ tự
+     hai bảng trong file là cả lần nạp cụt đường.
+     Máy chưa ai chọn bảng thì được phép đi tiếp sang bảng có số liệu — nhưng
+     phải NÓI RA là đã đi. Người đã chọn đích danh thì không tự ý đổi. */
+  if (!nguoiChon && coDong(luoi) < 2 && dsBang.length > 1) {
+    dsBang[chonThat].so_dong = Math.max(0, coDong(luoi) - 1);
+    for (let i = 0; i < dsBang.length; i++) {
+      if (i === chonThat) continue;
+      let thu = null;
+      try { thu = await bungLuoi(dsBang[i].duong, dsBang[i].ten); }
+      catch { continue; }               // bảng hỏng/quá to thì bỏ, không làm hỏng cả lần đọc
+      dsBang[i].so_dong = Math.max(0, coDong(thu.luoi) - 1);
+      /* Đã đếm được số dòng của MỌI bảng rồi thì dù có đi tiếp được hay không,
+         câu lỗi ở `docBang` cũng kê ra được đúng bảng nào có số liệu. */
+      if (coDong(thu.luoi) < 2 || dsBang[i].an) continue;
+      canhBao.push(`Bảng “${dsBang[chonThat].ten}” không có dòng dữ liệu nào, ` +
+                   `nên ERP mở sang bảng “${dsBang[i].ten}”. ` +
+                   `Nếu số liệu nằm ở bảng khác, xin chọn lại bảng rồi xem trước lần nữa.`);
+      chonThat = i; duongBang = dsBang[i].duong;
+      luoi = thu.luoi; rieng = thu.rieng;
+      break;
     }
   }
-  if (cotVuotTran) {
-    throw new LoiDocBang(
-      `Bảng “${dsBang[chonThat].ten}” có tới ${cotVuotTran} cột có dữ liệu, vượt mức ${TRAN_COT} cột cho một lần nạp. ` +
-      `Xin mở file, xoá bớt những cột không cần nạp rồi lưu lại và nạp lần nữa.`);
-  }
+  canhBao.push(...rieng);
 
   /* --- Đếm số dòng của từng bảng để Sếp chọn cho đúng ---
      Chỉ chạy ở bước 1 (`demDong`), vì mỗi bảng là một lượt bung XML. Bảng nào
@@ -496,8 +561,10 @@ async function docXlsx(bytes, tranDong, chon = 0, demDong = false) {
      hơn ăn hết bộ nhớ của isolate. */
   for (let i = 0; i < dsBang.length; i++) {
     const b = dsBang[i];
-    b.so_dong = null;
     if (i === chonThat) { b.so_dong = Math.max(0, luoi.length - 1); continue; }
+    /* Đã đếm rồi (đường "bảng rỗng" ở trên) thì giữ, đừng xoá đi đếm lại. */
+    if (b.so_dong === undefined) b.so_dong = null;
+    if (b.so_dong !== null) continue;
     if (!demDong || dsBang.length < 2) continue;
     const m = muc.get(b.duong);
     if (!m || m.coThat > 8 * 1024 * 1024) continue;
@@ -513,13 +580,28 @@ async function docXlsx(bytes, tranDong, chon = 0, demDong = false) {
       `Nếu số liệu nằm ở bảng khác, xin chọn lại bảng rồi xem trước lần nữa.`);
   }
 
-  return { luoi, dsBang: dsBang.map(b => ({ ten: b.ten, so_dong: b.so_dong })), chon: chonThat,
-           tenBang: dsBang[chonThat].ten, he1904, canhBao };
+  return { luoi,
+           dsBang: dsBang.map(b => ({ ten: b.ten, so_dong: b.so_dong, an: !!b.an })),
+           chon: chonThat, tenBang: dsBang[chonThat].ten, he1904, canhBao };
 }
 
 /* ==========================================================================
    5. CỬA CHÍNH
    ========================================================================== */
+
+/** Câu lỗi "bảng đang đọc không có số liệu" — KÊ TÊN các bảng khác ra.
+ *  Trả `null` khi file chỉ có một bảng (lúc đó không có gì để chỉ sang, câu
+ *  lỗi cũ đã đúng). */
+function keBangRong(dsBang, tenBang) {
+  if (!dsBang || dsBang.length < 2) return null;
+  const ke = dsBang.map(b => `“${b.ten}” (${b.so_dong === null || b.so_dong === undefined
+    ? 'chưa đếm được' : b.so_dong.toLocaleString('vi-VN') + ' dòng'}${b.an ? ', đang ẩn' : ''})`).join(' · ');
+  const con = dsBang.filter(b => b.ten !== tenBang && Number(b.so_dong) > 0);
+  return `Bảng “${tenBang}” không có dòng dữ liệu nào. File này có ${dsBang.length} bảng: ${ke}. ` +
+         (con.length
+           ? `Xin chọn lại bảng ${con.map(b => '“' + b.ten + '”').join(' hoặc ')} ở bước ghép cột rồi xem trước lần nữa.`
+           : `Không bảng nào có dòng dữ liệu — mở lại bằng Excel xem có đúng file cần nạp không.`);
+}
 
 /**
  * Đọc file bảng thành lưới ô + tên cột.
@@ -583,7 +665,11 @@ export async function docBang(bytes, tenTep = 'file', tuyChon = {}) {
   while (luoi.length && luoi[0].every(o => String(o).trim() === '')) luoi.shift();
 
   if (!luoi.length) {
-    throw new LoiDocBang('File không có dòng nào có dữ liệu — mở lại bằng Excel xem có đúng file cần nạp không.');
+    /* Câu lỗi phải CHỈ ĐƯỜNG, không được cụt (REV-0060 vòng 2 · CAO-⑦b).
+       File .xlsx nhiều bảng thì kê tên từng bảng kèm số dòng ra đây — Sếp
+       nhìn là biết ngay bảng nào có số liệu để chọn lại. */
+    throw new LoiDocBang(keBangRong(dsBang, tenBang) ||
+      'File không có dòng nào có dữ liệu — mở lại bằng Excel xem có đúng file cần nạp không.');
   }
 
   // --- Dòng đầu là TÊN CỘT ---
@@ -591,7 +677,7 @@ export async function docBang(bytes, tenTep = 'file', tuyChon = {}) {
   const dong = luoi.slice(1).filter(d => d.some(o => String(o).trim() !== ''));
 
   if (!dong.length) {
-    throw new LoiDocBang(
+    throw new LoiDocBang(keBangRong(dsBang, tenBang) ||
       'File chỉ có dòng tiêu đề, chưa có dòng dữ liệu nào bên dưới. ' +
       'Kiểm tra lại xem đã xuất đúng file chưa.');
   }

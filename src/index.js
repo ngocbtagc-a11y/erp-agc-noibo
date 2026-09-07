@@ -2051,8 +2051,14 @@ function loiNap(e) {
 /* .xlsx nhiều bảng: Sếp chọn bảng ở bước 1, hai bước sau phải đọc ĐÚNG bảng
    đó — không thì xem trước một bảng, ghi vào sổ một bảng khác. */
 const bangChonCua = moTa => {
-  const n = Number(moTa && moTa.bang_chon);
-  return Number.isInteger(n) && n >= 0 ? n : 0;
+  /* `null` = CHƯA AI CHỌN — khác hẳn "chọn bảng số 0". Máy chưa được chọn thì
+     `doc-bang.js` mới được quyền bỏ qua bảng đang ẩn và bảng rỗng
+     (REV-0060 vòng 2 · CAO-⑦). Trả 0 ở đây là biến mọi lần mở file thành
+     "người đã chọn bảng đầu tiên", tức khoá luôn cái quyền đó. */
+  const v = moTa && moTa.bang_chon;
+  if (v === null || v === undefined || v === '') return null;
+  const n = Number(v);
+  return Number.isInteger(n) && n >= 0 ? n : null;
 };
 
 async function khoNapMo(req, env) {
@@ -2093,11 +2099,16 @@ async function khoNapGhi(req, env) {
       return loi('File đã đổi so với lúc xem trước. Xin xem lại một lần nữa rồi mới nạp.');
     }
 
-    /* Xác nhận nạp trùng: Sếp phải tick RIÊNG ô "tôi biết file này đã nạp
-       rồi" thì cờ này mới bật. Không có nó thì `ghiThat` trả 409. */
+    /* Xác nhận nạp trùng — HAI LỚP, HAI CỬA (REV-0060 vòng 2 · CAO-⑤):
+       · lớp (b) "có N mã trong file đã nạp tồn từ file trước" → cái tick;
+       · lớp (a) "ĐÚNG file này, đúng từng con số, đã nạp rồi" → Sếp phải GÕ
+         LẠI TÊN FILE. Một cái tick không mở được lớp (a) nữa, vì lớp (b) kêu
+         ở mọi lần nhập lại cùng mã nên cái tick đã thành phản xạ.
+       Máy chủ chặn lần nữa ở `ghiThat` (409) — giao diện chỉ là lớp ngoài. */
     const kq = await napdulieu.ghiThat(env, r.phien, {
       bang, ghep, maDich: r.maDich, tenTep,
-      xacNhanTrung: r.moTa.xac_nhan_trung === true || r.moTa.xac_nhan_trung === 1
+      xacNhanTrung: r.moTa.xac_nhan_trung === true || r.moTa.xac_nhan_trung === 1,
+      xacNhanTenTep: String(r.moTa.xac_nhan_ten_tep || '')
     });
     if (kq.loi) return loi(kq.loi, kq.ma || 400);
 

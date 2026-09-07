@@ -1476,10 +1476,25 @@
             <div class="nap-trung" id="napTrungO" hidden>
               <p class="nap-trung-cau" id="napTrungCau"></p>
               <div id="napTrungDs"></div>
-              <label class="nap-tick" for="napTrungTick">
+              <!-- LỚP (b): có mã trong file đã từng nạp tồn bằng file. Câu này
+                   kêu ở MỌI lần kho nhập lại cùng mã, nên nó chỉ là cái tick. -->
+              <label class="nap-tick" for="napTrungTick" id="napTrungTickO">
                 <input type="checkbox" id="napTrungTick">
                 <span>Tôi đã kiểm rồi. Vẫn nạp, và hiểu rằng số trong file sẽ CỘNG THÊM vào tồn đang có.</span>
               </label>
+              <!-- LỚP (a): trùng NGUYÊN FILE — đúng từng dòng từng con số. Đây
+                   là tín hiệu mạnh nhất, không được để chung ô tick với lớp (b)
+                   (REV-0060 vòng 2 · CAO-⑤): lớp (b) kêu hằng tuần nên cái tick
+                   thành phản xạ, mà phản xạ thì gạt luôn cả lớp (a). Muốn qua
+                   cửa này phải GÕ LẠI TÊN FILE — việc không làm được bằng phản xạ. -->
+              <div class="field field-rong nap-trung-go" id="napTrungGoO" hidden>
+                <label for="napTrungGo">Gõ lại đúng tên file để xác nhận vẫn muốn cộng thêm lần nữa</label>
+                <!-- `maxlength` 90: tên file Windows dài nhất ~80 ký tự đã là
+                     nhiều; ô một dòng không khai trần là ô nhận chữ vô hạn,
+                     gõ vào là tràn ngang màn 375px (luật `do-chu-dai`). -->
+                <input type="text" id="napTrungGo" maxlength="90" autocomplete="off" spellcheck="false" placeholder="tên file…">
+                <span class="nap-mau" id="napTrungGoHint"></span>
+              </div>
             </div>
 
             <div id="napBangLoi"></div>
