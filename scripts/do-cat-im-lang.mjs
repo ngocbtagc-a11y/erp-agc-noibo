@@ -31,6 +31,22 @@
    Không có bước này thì chữ "đã quét, sạch" chỉ là lời khai. Đúng cái lỗi mà
    BH-16 sinh ra để chặn.
 
+   ⚠️ CHỖ MÙ CÓ TÊN — FILE NÀY KHÔNG NHÌN THẤY CÁI KẸP CSS (REV-0063 CAO-1).
+   Nó đọc MÃ NGUỒN tìm `LIMIT` (máy chủ) và `.slice(0, N)` (giao diện). Có một
+   dạng cắt thứ ba nằm ngoài tầm nó hoàn toàn: CSS kẹp chữ lại rồi
+   `overflow: hidden` giấu phần thừa — không `LIMIT` nào, không `.slice` nào,
+   chỉ một dòng CSS và một cái ô cao 34px đang chứa 50px chữ.
+   Đã cắn thật: ô "Mã SKU · Tên hàng" ở màn Kinh doanh cắt cụt tên hàng ngay
+   trên màn 1440px của Sếp, mà file này báo SẠCH — và báo ĐÚNG, vì chuyện đó
+   không nằm trong phạm vi của nó. Đừng đọc chữ "SẠCH" ở đây thành "cả ERP
+   không còn chỗ nào cắt chữ âm thầm".
+   Lớp đó do `npm run do-bang-that` canh, bằng HAI arm: **K** (dòng mẫu do bàn
+   đo chèn — ô chữ phẳng) và **R7** (ĐƯỜNG VẼ THẬT của ứng dụng — ô nhiều lớp
+   con). Cả hai mở Chrome thật và so `scrollHeight` với `clientHeight` trên MỌI
+   ô của 30 bảng ở 4 bề ngang. Đúng lỗi ô SKU nói trên thì **chỉ R7 bắt được**
+   — đã thử gài lại: K xanh cả 4 mức.
+   Hai cổng, hai phạm vi, không chồng lấn — phải chạy cả hai.
+
    MÃ THOÁT: 0 = sạch · 1 = có chỗ cắt im lặng · 2 = bàn đo hỏng.
    ========================================================================== */
 

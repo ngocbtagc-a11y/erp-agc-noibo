@@ -260,15 +260,53 @@ lần sau **không ai biết nợ có tăng hay không** — nên ghi cả ba ra
   khai. Phải xử trước khi nó thành cái mái như `MOC_TRAN` cũ.
 - **`do-tu-lam-moi` 52 ĐẠT · 2 TRƯỢT** — nợ của `f1ac70b`, đã biết từ trước,
   vẫn còn nguyên.
-- **CẦN SẾP / HỒ LY XÁC NHẬN MỘT QUYẾT ĐỊNH HIỂN THỊ.** Bảng "Tổng quan 2 sàn"
-  (`kd-tq-bang`) có 7 cột tiền, không thể vừa khung 678px ở 1024px. Đã cho hai
-  cột **"Hủy"** và **"Hoàn"** xuống `.cot-phu` — vẫn xem được bằng nút "Chi
-  tiết" của từng dòng, và thẻ số ngay trên bảng đã báo "Hủy + Hoàn" kèm % trên
-  GMV. Lý do chọn đúng hai cột đó: câu hỏi khi nhìn một dòng là *"sàn nào mang
-  về bao nhiêu, có tụt không"* — Hủy/Hoàn là phần RÒ RỈ, không phải câu trả
-  lời. **Đây là quyết định hiển thị, không phải business rule** — nhưng nó đổi
-  cái Sếp nhìn thấy trên màn 1440px, nên khai ra để lật lại được: muốn giữ đủ
-  7 cột thì phải cho `kd-tq-bang` vào `BANG_GIU_CUON` kèm lý do viết bằng chữ.
+- ~~**CẦN SẾP / HỒ LY XÁC NHẬN MỘT QUYẾT ĐỊNH HIỂN THỊ.** Bảng "Tổng quan 2 sàn"
+  (`kd-tq-bang`) — đã cho hai cột "Hủy"/"Hoàn" xuống `.cot-phu`, vì thẻ số trên
+  bảng đã báo "Hủy + Hoàn" kèm % trên GMV.~~
+  ✅ **ĐÃ SỬA 07/09/2026 (vòng vá REV-0063 · VỪA-3).** Hồ Ly bác, và bác đúng
+  bằng số — cả hai điểm đều tái lập được:
+  1. `.cot-phu` là `display:none` ở **MỌI** bề ngang, nên hai cột biến mất cả
+     trên màn 1440px của Sếp — nơi bảng này **không hề tràn** (đo lại: khung
+     1094 · bảng 1094 · vừa). Trả giá ở màn rộng để chữa +26px ở màn hẹp.
+  2. **Lý do cũ SAI VỀ DỮ LIỆU:** thẻ "Hủy + Hoàn" đọc `dt.tong` — **tổng toàn
+     công ty, KHÔNG tách sàn** — nên nó không trả lời được đúng câu mà hai cột
+     ấy trả lời: *Shopee đang rò rỉ hay TikTok đang rò rỉ*. Với AGC đó là số
+     quyết định có đẩy ngân sách sang TikTok hay không: thông tin cấp một.
+  **Nay:** hai cột **ở lại trên bảng từ 1101px trở lên**, chỉ rời bảng từ
+  **≤1100px** — một khối `@media (min-width: 1101px)` trên `#kd-tq-wrap`
+  (style.css). `.cot-phu` vẫn giữ trên `<th>` để `luoiBang()` luôn cấp nút
+  "Chi tiết": đường tới dữ liệu có ở mọi bề ngang, không JS nào phải đo màn
+  hình, nên không hỏng khi người ta kéo co cửa sổ qua mốc 1100px.
+  Đo lại: `kd-tq-bang` **vừa khít ở 1440 · 1280 · 1024**, `do-bang-that` arm
+  A/B/B2/G/G2/G3 xanh cả 4 mức.
+  ⚠️ **Còn một chỗ cần NGƯỜI SOI sửa, không phải kho mã:**
+  `scripts/holy-rev63-quet-min560.mjs` là bản CHÉP của `do-bang-that`, đóng
+  băng TRƯỚC khi arm G được sửa nghĩa (nay chỉ đòi nút "Chi tiết" cho ô cột
+  phụ **đang thật sự `display:none`**, chứ không theo cái tên lớp). Bản chép
+  ấy vẫn chấm theo LỚP nên báo `G2 · kd-tq-bang 0x0` ở 1440 và 1280 — cái nút
+  ở đó bị ẩn **có chủ ý**, vì hai cột đã nằm trên bảng rồi. Bàn đo hiện hành
+  xanh cả G/G2/G3 ở cả 4 bề ngang.
+
+---
+
+## VÒNG VÁ REV-0063 — 07/09/2026, đã xử hết 2 CAO · 4 VỪA · 2 THẤP
+
+- **CAO-1 · cắt chữ âm thầm ở ô "Mã SKU · Tên hàng"** (đo: hiện 34px / thật
+  50px, cả 3 dòng `#kd-sku-chay` @1440px, KHÔNG có nút "Xem thêm"). Vá bằng
+  `capNutDongPhu()` trong `app.js`: đo `scrollHeight` vs `clientHeight` rồi
+  gắn/gỡ nút. Đo lại sau vá: @1440 bảng bán chạy **có nút**, bảng bán kém
+  không kẹp nên **không có nút thừa**; @1024 và @375 không kẹp, không nút.
+- **CAO-2 · luật CSS chết.** `main` 3/187 → nhánh này **0/190**. Có cổng mới
+  canh: `npm run do-luat-css-chet` (tự đối chứng 5 mẫu trước khi chấm).
+- **VỪA-1** arm D đổi `>=` → `===` (báo cả hai chiều). **VỪA-2** sửa lời khai
+  nbsp cho khớp số đo (dựng lại bằng `BO_NBSP=1`: giống hệt từng pixel).
+  **VỪA-3** xem ở trên. **VỪA-4** `MOC_CAO_DONG` nay có arm E4 dùng thật, và
+  arm A đỏ khi bảng đo ra `khung 0px` thay vì chấm là "vừa".
+- **THẤP-1** ghi mép của `min(560px, 100%)` vào ngay chỗ luật. **THẤP-2**
+  `do-bang-vua-man` thêm mức 1024px (39 → **46 ĐẠT · 0 TRƯỢT**).
+- Cổng mới đều **tự chứng minh bắt được**: gài lại đúng 3 lỗi rồi chạy —
+  arm R7 đỏ ở 1440/1280 ("hiện 34px / thật 50px"), arm D đỏ cả 4 mức, arm A
+  đỏ với "KHÔNG ĐO ĐƯỢC (khung 0px)"; `do-luat-css-chet` đỏ đúng 2 dòng.
 
 ---
 

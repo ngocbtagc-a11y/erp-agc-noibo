@@ -7221,17 +7221,36 @@ async function khoiDongTongQuanSan() {
       /* MỘT Ô DANH TÍNH, HAI DÒNG — xem ghi chú ở `app.html`. Mã SKU là thứ
          người ta HÀNH ĐỘNG lên (sửa mã trên sàn, tra trong kho) nên nó giữ
          dòng trên và giữ nét đậm cũ; tên hàng là thứ người ta ĐỌC để biết đó
-         là hàng gì nên nằm ngay dưới, không giấu đi đâu cả. `title` giữ trọn
-         tên khi CSS kẹp dòng phụ 2 dòng — không cắt chữ âm thầm. */
+         là hàng gì nên nằm ngay dưới, không giấu đi đâu cả.
+
+         CSS kẹp dòng phụ 2 dòng, nên tên hàng dài PHẢI có đường đọc tiếp —
+         `luoiBang()` đo `scrollHeight` vs `clientHeight` rồi gắn nút "Xem
+         thêm" (xem ghi chú dài ở đó, REV-0063 CAO-1). `title` là thứ TIỆN
+         THÊM cho người dùng chuột, KHÔNG phải đường thoát: nó không tồn tại
+         trên điện thoại/máy tính bảng, mà ERP là PWA Sếp mở trên cả hai. Lời
+         khai cũ ở đây ("`title` giữ trọn tên… không cắt chữ âm thầm") là SAI
+         và đã cắt cụt tên hàng thật ở màn 1440px — đo được hiện 34px / thật
+         50px trên cả 3 dòng của bảng bán chạy. */
       tr.innerHTML =
         `<td class="cot-chu"><div class="nm">${esc(s.sku)}</div>` +
           (s.ten ? `<div class="sm" title="${esc(s.ten)}">${esc(s.ten)}</div>` : '') + '</td>' +
         `<td class="num">${tienVN(s.so_luong)}</td>` +
-        /* DẤU CÁCH KHÔNG NGẮT giữa số và "đ". Ở chế độ thẻ (≤980px) ô bảng
-           thành `display:inline` kèm `overflow-wrap:anywhere`, nên một số tiền
-           13 chữ số bị ngắt và chữ "đ" rơi xuống một dòng RIÊNG — ảnh
-           `375-kinhdoanh-sau.png` bắt được, bàn đo số thì không (chữ không mất,
-           bảng không tràn). Đơn vị tiền phải dính với con số. */
+        /* DẤU CÁCH KHÔNG NGẮT (U+00A0) giữa số và "đ" — đơn vị tiền phải dính
+           với con số, không được rơi xuống dòng khác.
+
+           ⚠️ ĐÍNH CHÍNH LỜI KHAI (REV-0063 VỪA-2). Bản đầu ghi ở đây rằng
+           "chữ 'đ' rơi xuống một dòng RIÊNG ở 375px, ảnh `375-kinhdoanh-sau.png`
+           bắt được". KHÔNG TÁI LẬP ĐƯỢC, và cả hai bên đều đo:
+             · Hồ Ly mở chính tấm ảnh đó và cả tấm `-truoc`: cả hai hiện
+               `9.876.543.210 đ` TRÊN MỘT DÒNG.
+             · Dựng lại trạng thái trước khi vá bằng công tắc `BO_NBSP=1`
+               (thay mọi U+00A0 về dấu cách thường) rồi đo chiều cao ô tiền:
+               375px → 60px / 2 dòng · 1024px → 72px / 3 dòng · 1440px →
+               72px / 3 dòng. CÓ nbsp ra ĐÚNG BẰNG NGẦN ẤY, từng pixel một.
+           Nghĩa là ở bố cục hôm nay dấu cách không ngắt KHÔNG đổi gì cả.
+           Giữ lại vì nó ĐÚNG VỀ CHỮ NGHĨA và là chốt chặn cho ca xấu mai này
+           (số dài hơn, cột hẹp hơn) — nhưng đây là một phòng xa, KHÔNG phải
+           một lỗi đã bắt được. Khai không phải là đo. */
         `<td class="num">${s.doanh_thu ? tienVN(s.doanh_thu) + ' đ' : '—'}</td>`;
       tbody.appendChild(tr);
     });
@@ -11315,10 +11334,90 @@ function luoiBang() {
       }
     }
   });
+  capNutDongPhu();
   /* Cột vừa bị ẩn xong thì bảng hẹp lại — bảo dải "còn cột bên phải" đo lại,
      không thì nó giữ số đo của lúc bảng còn đủ cột và dán lời nhắc kéo ngang
      lên một cái bảng đã vừa màn. */
   if (typeof window.quetLaiBaoCuon === 'function') window.quetLaiBaoCuon();
+}
+
+/* ==========================================================================
+   DÒNG PHỤ BỊ KẸP THÌ PHẢI CÓ ĐƯỜNG ĐỌC TIẾP — REV-0063 CAO-1
+   ---------------------------------------------------------------------------
+   LỖI ĐÃ LỌT, kể lại để đừng lặp. Bản vá REV-0063 gộp "Mã SKU + Tên hàng" vào
+   MỘT ô hai dòng (`.nm` + `.sm`). Hai đường cấp nút "Xem thêm" của `luoiBang()`
+   đều TRƯỢT ô ấy:
+     · đường ① chỉ nhận ô CHỈ-CÓ-CHỮ (`!td.children.length`) — ô này có 2 lớp con;
+     · đường ② chỉ nhìn `.nm` — mã SKU 24 ký tự, không đủ dài.
+   Trong khi CSS `td.cot-chu .sm { max-height: 2.8em; overflow: hidden }` vẫn
+   kẹp và GIẤU phần thừa. Đo bằng Chrome ở 1440px (khung nửa bảng chỉ 537px):
+   cả 3 dòng của `#kd-sku-chay` có `clientHeight 34` mà `scrollHeight 50` —
+   mất hẳn dòng thứ ba của tên hàng, không một dấu hiệu nào.
+   `title` KHÔNG phải đường thoát hợp lệ: nó chỉ hiện khi rê chuột, mà ERP là
+   PWA Sếp mở cả trên điện thoại lẫn máy tính bảng.
+
+   VÌ SAO NẰM NGOÀI VÒNG `data-luoi`, KHÔNG NẰM TRONG. Vòng kia dập LỚP — làm
+   một lần là xong, và nó tự chặn bằng `data-luoi` để không gọi lại vô hạn qua
+   MutationObserver. Việc ở đây là ĐO, mà số đo đổi theo bề ngang cột: cùng một
+   cái tên 92 ký tự thì ở khung 537px là 3 dòng (bị kẹp), ở khung 678px là 2
+   dòng (không kẹp). Nhốt nó trong vòng dập-một-lần là đóng băng một số đo
+   nhất thời — đúng lỗi đã đo được ở bản đầu của chính chỗ vá này: lượt dập
+   đầu chạy lúc panel Kinh doanh còn `hidden` (`clientHeight` = 0), phép đo
+   lùi về đoán-theo-độ-dài, và ở 375px lẫn 1024px hiện ra một cái nút "Xem
+   thêm" dưới một cái tên KHÔNG hề bị cắt. Một cái nút mở ra đúng thứ đang bày
+   sẵn là một lời nói dối nhỏ, cùng họ với chính lỗi đang vá.
+
+   BA TRẠNG THÁI, VÀ KHÔNG CÓ CỬA DAO ĐỘNG:
+     · đo được + bị kẹp    → gắn nút THẬT (không cờ `doan`), và không gỡ nữa.
+     · đo được + không kẹp → chỉ gỡ nút MANG CỜ `doan`, tức nút do phép đoán
+       đặt ra. Nút thật để yên: gỡ nó là mở cửa cho vòng lặp "gỡ nút → cột hẹp
+       lại → kẹp → gắn nút → cột rộng ra → gỡ nút…" mà MutationObserver sẽ
+       chạy mãi không dừng.
+     · KHÔNG đo được (ô chưa được dàn, `clientHeight` = 0) → đoán theo độ dài
+       và ĐÁNH DẤU `doan`. Lùi về phía AN TOÀN: thà một cái nút thừa sống tạm
+       vài trăm mili-giây còn hơn một chỗ cắt chữ âm thầm sống mãi. Lượt dập
+       kế tiếp (mọi lần DOM đổi đều gọi lại hàm này) đo được thật và tự dọn.
+
+   ĐANG BUNG THÌ ĐỪNG ĐỤNG: `.dai-gon-mo` bỏ `max-height` nên `scrollHeight`
+   bằng `clientHeight`, tức trông như "không kẹp" — không loại trừ thì mỗi lần
+   DOM đổi là cái nút "Thu gọn" của người đang đọc bị giật mất khỏi tay.
+
+   DANH SÁCH SELECTOR PHẢI SOI GƯƠNG VỚI CÁI KẸP TRONG CSS
+   (`td .sm.dong-phu, td.cot-chu .sm` — style.css, khối "LƯỚI BẢNG"). Thêm một
+   chỗ kẹp trong CSS thì thêm vào đây, nếu không lại đúng lỗi này dưới một cái
+   tên khác.
+   CHỐT CANH: arm K và arm R7 của `npm run do-bang-that` so `scrollHeight` với
+   `clientHeight` trên MỌI ô của 30 bảng ở 4 bề ngang. R7 chạy trên ĐƯỜNG VẼ
+   THẬT và là arm DUY NHẤT bắt được đúng lỗi này — đã thử gài lại: K xanh cả 4
+   mức, R7 đỏ ở 1440 và 1280 với đúng số đo "hiện 34px / thật 50px".
+   (`do-cat-im-lang` KHÔNG canh được lớp này: nó đọc MÃ NGUỒN tìm `LIMIT` và
+   `.slice`, nó không nhìn thấy một cái kẹp CSS bao giờ.)
+   ========================================================================== */
+function capNutDongPhu() {
+  for (const sm of document.querySelectorAll('td.cot-chu .sm, td .sm.dong-phu')) {
+    if (sm.classList.contains('dai-gon-mo')) continue;
+    const ke = sm.nextElementSibling;
+    const nutCu = ke && ke.classList.contains('dai-gon-btn') ? ke : null;
+    if (sm.clientHeight <= 0) {                       // chưa dàn → đoán, có đánh dấu
+      if (!nutCu && sm.textContent.trim().length > 55) themNutXemThem(sm, true);
+      continue;
+    }
+    if (sm.scrollHeight > sm.clientHeight + 1) {
+      if (!nutCu) themNutXemThem(sm, false);
+      else delete nutCu.dataset.doan;                 // đoán đúng → thành nút thật
+    } else if (nutCu && nutCu.dataset.doan) {
+      nutCu.remove();                                 // đoán sai → dọn đi
+    }
+  }
+}
+function themNutXemThem(sau, laDoan) {
+  const nut = document.createElement('button');
+  nut.type = 'button';
+  nut.className = 'dai-gon-btn';
+  nut.textContent = 'Xem thêm';
+  if (laDoan) nut.dataset.doan = '1';
+  nut.addEventListener('click', () => window.toggleDaiGon(nut));
+  sau.after(nut);
 }
 
 /* Mở/đóng dòng chi tiết. Uỷ quyền trên `document` nên bảng vẽ lại bao nhiêu

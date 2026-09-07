@@ -1511,7 +1511,17 @@ img.av { object-fit: cover; display: block; cursor: default; }
    hai bảng SKU: mai ai đặt bảng vào cột hẹp, thẻ, hay lưới nào khác cũng
    không phải nhớ gì. Chi phí 0, một hàm CSS có sẵn, không thêm gói nào.
    `@media (max-width: 900px)` giữ nguyên: nó nói rõ ý định "màn hẹp thì bỏ
-   hẳn sàn", và không chồng chéo với luật trên. */
+   hẳn sàn", và không chồng chéo với luật trên.
+
+   ⚠️ MÉP CỦA CÁCH CHỮA NÀY, ghi ra để mai khỏi phải tìm (REV-0063 THẤP-1):
+   `100%` đo theo khối CHỨA, nên nó chỉ đúng khi khối chứa có bề ngang do bên
+   ngoài quyết định (khối thường, ô lưới, cột flex). Đặt bảng vào một khối CO
+   THEO NỘI DUNG — `display:inline-block`, `position:absolute` không đặt bề
+   ngang, `width:max-content` — thì bề ngang khối lại do chính bảng quyết định,
+   `100%` thành vòng tròn và sàn 560 quay lại cắn. Hôm nay ERP KHÔNG có ca nào:
+   Hồ Ly quét đủ 30 bảng ở 5 bề ngang (1440·1280·1024·768·375), 26 bảng không
+   xê dịch một pixel, kể cả bảng trong cửa sổ bật lên. Thêm bảng vào một khối
+   co-theo-nội-dung thì đây là chỗ đầu tiên phải nhìn. */
 table { width: 100%; border-collapse: collapse; min-width: min(560px, 100%); }
 @media (max-width: 900px) { table { min-width: 0; } }
 /* Bảng trong cửa sổ bật lên KHÔNG BAO GIỜ được nhận sàn 560px: cửa sổ chỉ
@@ -1622,8 +1632,18 @@ th.cot-chu, td.cot-chu {
   th.cot-chu, td.cot-chu { max-width: 180px; min-width: 90px; }
   /* Chỗ THẬT SỰ chặn ở bề ngang này là `min-width`, không phải `max-width`:
      bảng đã co hết cỡ rồi mà sàn của từng cột cộng lại vẫn vượt khung. Hạ sàn
-     mới cứu được, hạ trần thì không đổi gì cả (thử rồi, +36px vẫn nguyên). */
-  td.cot-chu.co-chitiet { min-width: 150px; }
+     mới cứu được, hạ trần thì không đổi gì cả (thử rồi, +36px vẫn nguyên).
+
+     ⚠️ `table td...` CHỨ KHÔNG PHẢI `td...` — LUẬT NÀY CHƯA TỪNG CHẠY (REV-0063
+     CAO-2). Luật nền `td.cot-chu.co-chitiet { min-width: 190px }` nằm phía
+     DƯỚI trong cùng tệp (khối "LƯỚI BẢNG") và ĐÚNG BẰNG độ ưu tiên (0,2,1) —
+     cùng độ ưu tiên thì đứa đứng sau thắng, kể cả khi đứa đứng trước nằm
+     trong @media. Tức sàn thật ở 1024px vẫn là 190px, và cái luật sinh ra để
+     cứu tràn ở đúng bề ngang đó ngồi im suốt mấy vòng.
+     Đây là ca THỨ HAI cùng một kiểu, sau `thead th` ở khối 1100px phía trên —
+     nên nay có máy canh: `npm run do-luat-css-chet` đếm cả lớp này và đỏ khi
+     con số vượt bảng miễn trừ. Thêm một tên thẻ là đủ thắng (0,2,2). */
+  table td.cot-chu.co-chitiet { min-width: 150px; }
 }
 /* CÁI KẸP 2 DÒNG NẰM Ở LỚP CON, TUYỆT ĐỐI KHÔNG NẰM TRÊN Ô.
    Bẫy đã dính một lần và bàn đo bắt được: đặt `display:-webkit-box` thẳng
@@ -1663,6 +1683,21 @@ td .sm.dong-phu, td.cot-chu .sm {
   max-height: 2.8em;
   overflow: hidden;
 }
+/* BUNG RA KHI BẤM "Xem thêm" — REV-0063 CAO-1.
+   Cái kẹp ngay trên đây GIẤU phần chữ thừa, và suốt vòng trước không có gì
+   bung nó ra: ô SKU trượt cả hai đường cấp nút của `luoiBang()`, nên ở màn
+   1440px tên hàng cụt ở dòng 2 mà không một dấu hiệu nào (đo được: hiện 34px
+   / thật 50px). Nay `luoiBang()` gắn nút, còn luật này là chỗ nút ấy có tác
+   dụng.
+   PHẢI CÓ ĐỦ HAI selector và phải ĐỦ ĐỘ ƯU TIÊN. `.dai-gon.dai-gon-mo` (0,2,0)
+   có sẵn ở khối `.dai-gon` KHÔNG cứu được chỗ này: cái kẹp ở đây là
+   `max-height` chứ không phải `-webkit-line-clamp`, và luật kẹp `td.cot-chu
+   .sm` (0,2,1) thắng nó. Thêm một lớp là đủ (0,3,1) — không cần dời khối,
+   đúng cách đã dùng cho `table thead th`. */
+td .sm.dong-phu.dai-gon-mo, td.cot-chu .sm.dai-gon-mo {
+  max-height: none;
+  overflow: visible;
+}
 
 /* --- Ô CHỨA NHÓM NÚT — `.o-nut` ---------------------------------------------
    Thay cho `style="white-space:nowrap"` viết thẳng trong JS ở 5 chỗ. Cái
@@ -1692,6 +1727,47 @@ td.o-nut > * { white-space: nowrap; }   /* mỗi nút vẫn nguyên khối, khô
    phải chỉ là chuyện màn hẹp. KHÔNG MẤT: `luoiBang()` gắn nút "Chi tiết" mở
    ra đúng những ô này, đọc thẳng từ DOM nên không thể lệch với bảng. */
 th.cot-phu, td.cot-phu { display: none; }
+
+/* NGOẠI LỆ CÓ TÊN — BẢNG "TỔNG QUAN 2 SÀN" (REV-0063 VỪA-3).
+   Hai cột "Hủy" / "Hoàn" của `#kd-tq-bang` KHÁC với người-giao / ngày-tạo ở
+   trên: tách theo TỪNG SÀN, chúng trả lời đúng câu Sếp hỏi ("Shopee rò rỉ hay
+   TikTok rò rỉ") và thẻ số phía trên KHÔNG thay được vì nó đọc tổng toàn công
+   ty. Chúng chỉ chật ở máy tính bảng nằm ngang: @1024px bảng tràn +26px,
+   nhưng @1280 và @1440 bảng vừa khít (khung 1094 · bảng 1094).
+   Nên chỉ THẮT ĐÚNG CHỖ HẸP: từ 1101px trở lên hai cột trở lại bảng.
+
+   `.cot-phu` vẫn được GIỮ trên `<th>`, không tháo ra. Đó là thứ bảo
+   `luoiBang()` cấp nút "Chi tiết", nên đường tới dữ liệu có sẵn ở mọi bề
+   ngang — không có JS nào phải đo màn hình, và không có gì hỏng khi người ta
+   kéo co cửa sổ qua mốc 1100px (`luoiBang()` chỉ chạy khi DOM đổi, KHÔNG chạy
+   khi cửa sổ đổi cỡ — một luật `.cot-phu` gắn theo bề ngang bằng JS sẽ chết
+   đúng ở đó).
+   Ở ≥1101px hai cột đã nằm trên bảng nên nút "Chi tiết" của bảng này không
+   còn gì để mở — ẩn nó đi, đừng để một cái nút hứa mở ra thứ đang bày sẵn.
+   Chốt canh: arm G của `do-bang-that` nay chỉ đòi nút cho ô cột phụ ĐANG THẬT
+   SỰ BỊ GIẤU (`display: none`), nên nó đỏ nếu ai đó ẩn nút mà cột vẫn mất.
+
+   ⚠️ HỆ QUẢ ĐÃ BIẾT, ĐÃ KHAI, KHÔNG PHẢI HỒI QUY:
+   `scripts/holy-rev63-quet-min560.mjs` — bản CHÉP của `do-bang-that` mà Hồ Ly
+   dựng ở REV-0063, đóng băng TRƯỚC khi arm G được sửa nghĩa — vẫn chấm theo
+   LỚP `.cot-phu` chứ không theo cái người dùng THẤY. Nó báo
+   `G2 · kd-tq-bang 0x0` ở 1440 và 1280 vì cái nút ở đó đang `display:none`
+   MỘT CÁCH CÓ CHỦ Ý. Bàn đo hiện hành (`npm run do-bang-that`) xanh cả
+   G/G2/G3 ở cả 4 bề ngang. Bản chép ấy là tài liệu soi của người soi, không
+   phải cổng của kho mã — nhưng phải khai ra, đừng để ai mở lên thấy đỏ rồi
+   tưởng có hồi quy.
+   VÌ SAO KHÔNG CHỌN CÁCH "cứ để nút hiện luôn ở ≥1101px cho bàn nào cũng
+   xanh": ở đó hai cột đã nằm trên bảng, nên cái nút sẽ mở ra ĐÚNG THỨ ĐANG
+   BÀY SẴN — trên một bảng chỉ có 2 dòng, ngay màn 1440px Sếp đang ngồi. Giữ
+   một cái nút vô nghĩa vĩnh viễn để một bản chép cũ khỏi đỏ là đổi sai chiều. */
+@media (min-width: 1101px) {
+  #kd-tq-wrap th.cot-phu, #kd-tq-wrap td.cot-phu { display: table-cell; }
+  #kd-tq-wrap .o-chitiet { display: none; }
+  /* Trả lại 50px lề phải mà `td.co-chitiet` chừa cho cái nút vừa ẩn. Không trả
+     là bảng vẫn gánh chỗ trống của một cái nút không có mặt — đúng 50px, ở
+     ngay cột đầu, trên chính bề ngang vừa được nới. 16px là lề của `tbody td`. */
+  #kd-tq-wrap td.co-chitiet { padding-right: 16px; }
+}
 
 /* --- Ô TICK CHỌN DÒNG — 44px cho ngón tay -----------------------------------
    REV-0059 CAO-2. Ô tick mặc định của trình duyệt là 13×13px — chưa tới một
@@ -2519,7 +2595,15 @@ tr.canh-bao:hover > td { background: #fbdbd6; }
      `env()` trả 0 trên máy không có tai thỏ nên không hại gì. */
   .chat-nhap { padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px)); }
   .cnb-ds-muc { min-height: 60px; }            /* ngón cái, không phải con trỏ chuột */
-  .chat-tin { max-width: 86%; }                /* màn hẹp: bó ở 72% là phí mất lề */
+  /* `div.chat-tin` CHỨ KHÔNG PHẢI `.chat-tin` — luật này cũng CHƯA TỪNG CHẠY
+     (REV-0063 CAO-2, ca thứ ba cùng kiểu). Luật nền `.chat-tin { max-width:
+     72% }` nằm ngay DƯỚI khối @media này, cùng độ ưu tiên (0,1,0) và đứng
+     sau, nên nó thắng: trên điện thoại bong bóng chat vẫn bó ở 72%, phí mất
+     14% bề ngang đúng chỗ chật nhất — kho vận đọc chat một tay giữa ca.
+     `.chat-tin` do `app.js` dựng luôn là `<div>` (`div.className = 'chat-tin'
+     …`), nên thêm tên thẻ là đủ thắng (0,1,1) mà không phải dời khối.
+     Canh bằng `npm run do-luat-css-chet`. */
+  div.chat-tin { max-width: 86%; }             /* màn hẹp: bó ở 72% là phí mất lề */
 }
 
 .chat-tin { display: flex; gap: 8px; max-width: 72%; margin-top: 12px; }
