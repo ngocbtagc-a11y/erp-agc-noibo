@@ -25,16 +25,22 @@
    `TBDay`, vì chỗ dùng nằm trong một hàm (Hồ Ly đã thử).
 
    ⚠️ CÁCH HỎNG THỨ SÁU — ghi thêm 07/09/2026 (GY-0007). CỔNG NÀY KHÔNG ĐÓNG NỔI:
-     ⑥ Lỗi được BẮT TỬ TẾ rồi IN RA MÀN HÌNH. Tab Kho tài liệu chết hoàn toàn
-        vì TDZ (`TL_NHOM_LUU_DUOC`) — đúng con bệnh `TBDay` ở trên — nhưng lần
-        này `try/catch` bọc kín và in ra một câu tiếng Việt đúng chuẩn nhà:
+     ⑥ Lỗi được BẮT TỬ TẾ rồi IN RA MÀN HÌNH. Tab Kho tài liệu chết ở LẦN VẼ
+        ĐẦU vì TDZ (`TL_NHOM_LUU_DUOC`) — đúng con bệnh `TBDay` ở trên — nhưng
+        lần này `try/catch` bọc kín và in ra một câu tiếng Việt đúng chuẩn nhà:
         "Không tải được kho tài liệu: Cannot access…". Không `console.error`,
         không ngoại lệ chưa bắt, nút cửa ngõ vẫn bấm ăn → CỔNG NÀY XANH suốt,
         trong khi Sếp mở tab ra thấy trống trơn.
-        → Thứ đóng được ⑥ là `scripts/do-man-mo-ra-xem-duoc.mjs`: nó ĐỌC CHỮ
-          hiện trên từng tab, cho từng vai trò, ở từng bề ngang. Chạy
-          `npm run do-mo-ra-xem-duoc` CÙNG với cổng khói — đừng chỉ chạy một
-          cái rồi tưởng đã xong.
+        (Đo lại REV-0062 ⓪: tab HỒI PHỤC sau MỘT cú bấm nút lọc, nên khai
+        "chết hoàn toàn" là nói quá — đã sửa. Cổng khói thì vẫn mù y như cũ,
+        vì nó chỉ bấm nút cửa ngõ chứ không hỏi màn CÓ NỘI DUNG hay không.)
+        → Thứ đóng được ⑥ là `scripts/do-man-mo-ra-xem-duoc.mjs`. Nhưng ĐỌC
+          CHỮ THÔI THÌ CHƯA ĐỦ (REV-0062 CHẶN-1): danh sách câu lỗi chép tay
+          bị lọt đúng hai kiểu hỏng để lại MÀN TRỐNG — `catch` in một câu
+          KHÁC, và không vẽ gì mà cũng không báo gì. Nay mỗi tab phải khai một
+          MỎ NEO chứng tỏ nó CÓ NỘI DUNG (mục Ⓕ), và bàn đo có bốn ca đối
+          chứng A·B·C·D. Chạy `npm run do-mo-ra-xem-duoc` CÙNG với cổng khói —
+          đừng chỉ chạy một cái rồi tưởng đã xong.
 
    CHẠY:
      npm run cong-khoi                → đo cây làm việc hiện tại
@@ -181,8 +187,41 @@ const CUA_NGO = [
     doi: `document.querySelector('#lsv-loc .seg-nut[data-lsv="toi"]').classList.contains('active')` }
 ];
 
+/* ==========================================================================
+   ĐỒNG HỒ CHẾT — CỔNG BẮT BUỘC THÌ KHÔNG ĐƯỢC PHÉP TREO
+   ---------------------------------------------------------------------------
+   REV-0062 CAO-5. Kiểm kê 40 bàn đo dùng Chrome: chỉ HAI cái có hạn giờ, 38
+   cái còn lại treo được vô hạn — trong đó có CHÍNH CỔNG NÀY, cái chạy bắt
+   buộc trước mọi lần đẩy của cả đội. `moChrome` chỉ đặt hạn 30s cho lúc
+   Chrome mở cổng gỡ lỗi; `chay()` (CDP `Runtime.evaluate`) KHÔNG có hạn nào —
+   trang treo là cổng treo, không đỏ không xanh, không một dòng chữ.
+
+   Đã trả giá đúng chuyện này trong chính đợt GY-0007: một bàn đo đứng im 20
+   phút vì dữ liệu giả sai bộ mã. Kết luận rút ra hôm đó: **một bàn đo treo
+   còn tệ hơn một bàn đo đỏ — người ta không đọc nó, người ta TẮT nó.** Với
+   cổng khói thì tệ hơn nữa: treo là cả đội đứng chờ, rồi ai đó bấm Ctrl-C và
+   đẩy đại.
+
+   Quá giờ = ĐỎ + dọn Chrome + thoát 1. Nói rõ đang treo ở đâu để còn đi tìm.
+   Hạn rộng tay (4 phút): cổng này chạy hai lượt Chrome, máy chậm vẫn phải kịp.
+   ========================================================================== */
+const HAN_CONG = 4 * 60 * 1000;
+let DANG_MO = [];           // { cr, may } đang mở — để dọn khi chuông reo
+let MOC = 'đang dựng máy giả';
+const dongHet = () => { for (const d of DANG_MO) { try { d.cr?.dong(); } catch {} try { d.may?.dong(); } catch {} } DANG_MO = []; };
+const chuong = setTimeout(() => {
+  console.error('');
+  console.error(`CỔNG KHÓI [@${RONG}px]: ❌ ĐỎ — TREO quá ${HAN_CONG / 1000}s ở bước "${MOC}"`);
+  console.error('  Cổng bắt buộc mà treo thì cả đội đứng chờ rồi đẩy đại — nên tính là ĐỎ.');
+  dongHet();
+  process.exit(1);
+}, HAN_CONG);
+chuong.unref?.();           // đừng giữ tiến trình sống thêm khi mọi việc đã xong
+
+MOC = 'lượt 1 — dựng máy giả + mở Chrome';
 const may = await dungMayGia({ commit: COMMIT, suaTep });
 const cr = await moChrome({ url: `http://127.0.0.1:${may.cong}/app.html`, rong: RONG, doiMs: 3000 });
+DANG_MO.push({ cr, may });
 
 const kq = { commit: COMMIT || 'cây làm việc', rong: RONG, tu_kiem: TU_KIEM, cua_ngo: [] };
 
@@ -213,17 +252,20 @@ kq.loi_console = cr.loiConsole;
 kq.ngoai_le = cr.ngoaiLe;
 kq.canh_bao_so = cr.canhBao.length;
 
-cr.dong(); may.dong();
+cr.dong(); may.dong(); DANG_MO = [];
 
 /* ---- ③ LƯỢT ĐỦ QUYỀN: nạp trang với vai thấy HẾT mô-đun -------------- */
+MOC = 'lượt 2 — vai đủ 17 quyền';
 const may2 = await dungMayGia({ commit: COMMIT, suaTep, apiRieng: apiVaiDuQuyen });
 const cr2 = await moChrome({ url: `http://127.0.0.1:${may2.cong}/app.html`, rong: RONG, doiMs: 3500 });
+DANG_MO.push({ cr: cr2, may: may2 });
 kq.du_quyen = {
   so_tab: await cr2.chay(`document.querySelectorAll('[data-tab]').length`),
   loi_console: cr2.loiConsole.slice(),
   ngoai_le: cr2.ngoaiLe.slice()
 };
-cr2.dong(); may2.dong();
+cr2.dong(); may2.dong(); DANG_MO = [];
+clearTimeout(chuong);       // xong việc — tháo chuông trước khi in kết luận
 /* Gộp vào cùng một rổ: một ngoại lệ ở lượt nào cũng là cổng ĐỎ. */
 kq.loi_console = kq.loi_console.concat(kq.du_quyen.loi_console);
 kq.ngoai_le = kq.ngoai_le.concat(kq.du_quyen.ngoai_le);

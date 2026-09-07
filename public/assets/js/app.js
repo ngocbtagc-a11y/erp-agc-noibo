@@ -132,13 +132,19 @@ let DS_NHAN_SU_DOC = [], NS_XEM_LUONG_DOC = true;
    ĐÃ MẤT TIỀN HAI LẦN VÌ ĐÚNG CHUYỆN NÀY:
      · `TBDay` — chat CHẾT HOÀN TOÀN nhiều tuần, hai vòng soi không thấy
        (chính là lý do có `scripts/cong-khoi.mjs`).
-     · `TL_NHOM_LUU_DUOC` — Kho tài liệu CHẾT HOÀN TOÀN: khai ở dòng ~10334
+     · `TL_NHOM_LUU_DUOC` — Kho tài liệu chết ở LẦN VẼ ĐẦU: khai ở dòng ~10334
        trong khi `await khoiDongKhoTaiLieu()` chạy ở dòng ~7462. Mỗi lần mở
        ERP, tab Kho tài liệu chỉ hiện một dòng chữ
        "Không tải được kho tài liệu: Cannot access 'TL_NHOM_LUU_DUOC' before
        initialization" và KHÔNG có tài liệu nào — đúng góp ý GY-0007 của Sếp
        ("không xem được, không kéo xuống được": danh sách rỗng thì lấy gì mà
        kéo). Lỗi bị `catch` nuốt thành một dòng chữ nên cổng khói vẫn XANH.
+       ĐO LẠI (REV-0062 ⓪): tab HỒI PHỤC sau MỘT cú bấm nút lọc hoặc một phím
+       gõ vào ô tìm — `veLoc()` vẽ và nối dây 8 nút lọc TRƯỚC dòng nổ, nên tới
+       lúc người dùng chạm vào thì mô-đun đã chạy hết tệp và `nap()` chạy trọn
+       vẹn. Khai "chết hoàn toàn" là NÓI QUÁ, đã sửa. Mức nghiêm trọng KHÔNG
+       đổi: người mở ERP ra thấy màn trống + một câu lỗi máy, và không ai bảo
+       họ "bấm một nút là hiện".
 
    LUẬT: biến top-level nào bị mã khởi động đụng tới thì khai TRONG khối này.
    Bàn đo `scripts/do-man-mo-ra-xem-duoc.mjs` canh cả lớp này.

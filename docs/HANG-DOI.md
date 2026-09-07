@@ -135,6 +135,57 @@ Sau khi dời: file `.sql` thẳng trong `migrations/` = 64, **file lùi = 0**.
   bản vá nào)*, và **dùng chung cổng 8903 với `do-tai-tep`** nên hai bàn đo
   không chạy song song được
 
+## NỢ MỚI GHI 07/09/2026 — REV-0062 (GY-0006 · GY-0007)
+
+### Ba cổng ĐỎ — nợ của `f1ac70b` (Dashboard Marketplace), KHÔNG phải của nhánh `fix/gopy-6-7`
+
+Hồ Ly xác minh trên cây `origin/main` tự dựng: **y hệt từng chữ**, nên nhánh vá
+không làm hỏng thêm gì. Nhưng "chạy hết cổng" mà bỏ cổng đỏ ra ngoài báo cáo thì
+lần sau **không ai biết nợ có tăng hay không** — nên ghi cả ba ra đây.
+
+| Cổng | Nhánh vá | `origin/main` sạch | Gốc |
+|---|---|---|---|
+| `do-tu-lam-moi` | **52 / 2 ĐỎ** | 52 / 2 ĐỎ, y hệt | `kdTachDongHang` chưa khai nhóm dữ liệu |
+| `do-bang-vua-man` | **36 / 3 ĐỎ** | 36 / 3 ĐỎ, y hệt | 3 bảng `kd-tq-bang` / `kd-sku-chay` / `kd-sku-kem` tràn cột |
+| `do-bang-that` | **73 / 2 ĐỎ** | 73 / 2 ĐỎ, y hệt | 2 bảng Dashboard Marketplace tràn ở 1440 và 1280, cột "Doanh thu" rơi |
+
+- ⚠️ Hai cổng đầu (`do-tu-lam-moi` · `do-bang-vua-man`) **đã KHÔNG được khai** ở
+  vòng báo cáo trước — đó là cái sai của người xây, không phải của bàn đo.
+- `do-bang-that` **không đo 1024px** — cùng họ với nợ 1024px ghi ngày 04/09.
+
+### Đồng hồ chết — 37 bàn đo còn lại
+
+- **38/40 bàn đo dùng Chrome KHÔNG có hạn giờ nào.** `moChrome` chỉ đặt hạn 30s
+  cho lúc Chrome mở cổng gỡ lỗi; `chay()` (CDP `Runtime.evaluate`) **không có
+  hạn** — trang treo là bàn đo treo vô hạn, không đỏ không xanh, không một dòng
+  chữ. Đã trả giá đúng chuyện này trong đợt GY-0007: một bàn đo đứng im 20 phút.
+  **Một bàn đo treo còn tệ hơn một bàn đo đỏ — người ta không đọc nó, người ta
+  TẮT nó.**
+- **Đã làm 07/09:** `cong-khoi` có đồng hồ chết 4 phút *(cổng bắt buộc thì không
+  được phép treo)*. Chứng minh có chạy: hạ hạn xuống 3s → cổng báo
+  `❌ ĐỎ — TREO quá 3s ở bước "lượt 1 — dựng máy giả + mở Chrome"`, dọn Chrome,
+  thoát 1.
+- **CÒN NỢ:** 37 bàn đo kia. **Cách đúng là nâng đồng hồ chết lên
+  `lib/ban-do-chrome.mjs`** (gói `goi()` / `chay()` bằng một hạn giờ) thay vì
+  chép tay vào từng bàn đo. Chưa làm ở vòng này vì `lib/` là tệp DÙNG CHUNG —
+  đổi hành vi của nó là lặng lẽ đổi bài của mọi bàn đo, kể cả hai worktree đang
+  có người làm (`agc-gy45`, `agc-napfile`). Xếp thành một việc riêng, làm khi
+  không ai đang đụng `lib/`.
+
+### Việc nhỏ còn lại
+
+- **Thêm `768px` vào `BE_NGANG` của `do-man-mo-ra-xem-duoc`** — gần như miễn phí.
+  Chú thích của chính bản vá `.cnb-popup` nói `dvh` cần cho **dải 641–820px**
+  (máy tính bảng, điện thoại nằm ngang), mà đó đúng là dải **không đo**.
+  *(REV-0062 mục ④.2 — tự mâu thuẫn)*
+- **Bộ ảnh `gy0007-*` chụp bằng ổ giả ĐỜI CŨ** (5 nút lọc, 4 nhóm bịa) chứ không
+  phải ổ 7 nhóm đúng mã hiện tại → **ảnh không tái hiện được bằng lệnh trong
+  `package.json` hôm nay**. Chụp lại khi có dịp.
+- **Lợi ích của `dvh` chưa ai chứng minh**: chưa đo trên điện thoại thật, chưa đo
+  trong PWA đã cài. Riêng PWA chạy standalone **không có thanh địa chỉ** nên ở đó
+  `dvh` = `vh` và bản vá vô tác dụng — lợi ích chỉ nằm ở tab trình duyệt trên
+  điện thoại. Rủi ro thì đã đo và đã chặn (cặp `vh`+`dvh`, BH-64).
+
 ## CHỜ SẾP — ghi 04/09/2026
 
 - **15/24 nhân viên kho vận CHƯA CÓ tài khoản ERP.** Anh Duy quản 12 fulltime

@@ -4,12 +4,16 @@
    VÌ SAO CÓ TỆP NÀY. Hai góp ý của Sếp nói cùng một câu:
      · GY-0006 "Không dùng được chat trên máy tính — bị lỗi, không mở ra xem được"
      · GY-0007 "Không xem được mục kho tài liệu trên app điện thoại, không kéo xuống được"
-   Đi đo thì ra gốc: tab Kho tài liệu CHẾT HOÀN TOÀN ở MỌI bề ngang, MỌI vai
-   trò — `let TL_NHOM_LUU_DUOC` khai ở dòng ~10334 trong khi
-   `await khoiDongKhoTaiLieu()` chạy ở dòng ~7462, tức chạm biến trong vùng
-   chết TDZ. Tab chỉ hiện đúng một dòng chữ "Không tải được kho tài liệu:
-   Cannot access 'TL_NHOM_LUU_DUOC' before initialization" và KHÔNG có tài
-   liệu nào — nên cũng chẳng có gì để kéo xuống.
+   Đi đo thì ra gốc: tab Kho tài liệu chết ở LẦN VẼ ĐẦU, ở MỌI bề ngang và
+   MỌI vai trò có quyền `khotailieu` — `let TL_NHOM_LUU_DUOC` khai ở dòng
+   ~10334 trong khi `await khoiDongKhoTaiLieu()` chạy ở dòng ~7462, tức chạm
+   biến trong vùng chết TDZ. Tab chỉ hiện đúng một dòng chữ "Không tải được
+   kho tài liệu: Cannot access 'TL_NHOM_LUU_DUOC' before initialization" và
+   KHÔNG có tài liệu nào — nên cũng chẳng có gì để kéo xuống.
+   (Đo lại REV-0062 ⓪: tab HỒI PHỤC sau MỘT cú bấm nút lọc hoặc một phím gõ
+   vào ô tìm, vì `veLoc()` nối dây nút lọc TRƯỚC dòng nổ. Bản đầu của tệp này
+   khai "CHẾT HOÀN TOÀN" — nói quá, đã sửa. Mức nghiêm trọng không đổi: người
+   mở ERP ra thấy màn trống + câu lỗi máy, không ai bảo họ bấm thử.)
 
    VÌ SAO CỔNG KHÓI KHÔNG BẮT ĐƯỢC. Lỗi bị một `catch` nuốt và IN RA MÀN HÌNH
    thành một dòng chữ tiếng Việt. Không `console.error`, không ngoại lệ chưa
@@ -19,13 +23,19 @@
 
    LỚP VẤN ĐỀ (docs/LUAT-GOP-Y-LA-TRIEU-CHUNG.md Mục 2):
      "MÀN MỞ RA MÀ KHÔNG XEM ĐƯỢC NỘI DUNG."
-   Ba dạng, bàn đo này canh cả ba:
+   Sáu dạng, bàn đo này canh cả sáu:
      Ⓐ Màn hiện CÂU LỖI KỸ THUẬT thay cho dữ liệu ("Không tải được…",
        "Cannot access…", "undefined", "[object Object]", "NaN").
      Ⓑ Có `console.error` hoặc ngoại lệ chưa bắt trong lúc đi qua các tab.
      Ⓒ Nội dung cao hơn khung nhìn mà KHÔNG cuộn xuống được — kể cả khi có ai
        đó quên gỡ khoá cuộn (`body{overflow:hidden}`) sau khi đóng cửa sổ chat
        hay màn quét tài liệu.
+     Ⓓ Trần chiều cao của thứ NỔI ĐÈ màn hình viết sai đơn vị (`vh` một mình,
+       hoặc `dvh` một mình không có đường lui) — lưới đọc CSS.
+     Ⓔ Ổ GIẢ CỦA CHÍNH BÀN ĐO lệch hợp đồng máy chủ, làm bàn đo đo một màn
+       nhỏ hơn màn thật mà không ai biết.
+     Ⓕ MÀN TRỐNG TRƠN — không câu lỗi nào, cũng chẳng có nội dung nào. Đây là
+       dạng Ⓐ bỏ lọt (REV-0062 CHẶN-1), và là dạng khó nhất vì nó IM LẶNG.
    Kèm một lượt đi trọn đường CHAT (GY-0006): bấm "Chat ngay" ở Danh bạ → cửa
    sổ phải hiện TRONG khung nhìn, có ô nhập, vùng tin cuộn được, gõ và gửi ăn.
 
@@ -33,10 +43,22 @@
 
    CHẠY:
      npm run do-mo-ra-xem-duoc            → đo cây làm việc hiện tại
+     npm run do-mo-ra-xem-duoc-luoi       → CHỈ mục Ⓓ + Ⓔ (đọc tệp, xong ngay).
+       Dùng khi sửa CSS hoặc sửa ổ giả — khỏi chờ 12 lượt Chrome.
      npm run do-mo-ra-xem-duoc-tu-kiem    → GÀI LẠI ĐÚNG LỖI GY-0007 (dời
-       `let TL_NHOM_LUU_DUOC` về chỗ cũ, dưới đáy tệp). Bàn đo PHẢI ĐỎ. Không
-       đỏ thì bàn đo mù, và số nó in ra không dùng được.
-   MÃ THOÁT: 0 = xanh, 1 = đỏ.
+       `let TL_NHOM_LUU_DUOC` về chỗ cũ, dưới đáy tệp). Bàn đo PHẢI ĐỎ.
+
+     ⚠️ GÀI LẠI LỖI CŨ CỦA CHÍNH MÌNH THÌ CHƯA CHỨNG MINH ĐƯỢC MẤY — đó là tự
+     chấm bài mình: bàn đo bắt được đúng thứ nó sinh ra để bắt. Bốn ca dưới
+     đây gài BỐN CÁCH HỎNG KHÁC NHAU, và bản trước của bàn đo này MÙ ĐÚNG HAI
+     CA ĐẦU (REV-0062 CHẶN-1):
+     npm run do-mo-ra-xem-duoc-ca-A   → chết y hệt, `catch` in câu KHÁC   → Ⓕ
+     npm run do-mo-ra-xem-duoc-ca-B   → không vẽ gì, im lặng hoàn toàn    → Ⓕ
+     npm run do-mo-ra-xem-duoc-ca-C   → ngoại lệ chưa bắt                 → Ⓑ
+     npm run do-mo-ra-xem-duoc-ca-D   → đóng chat quên gỡ khoá cuộn       → Ⓒ
+     Mỗi ca khai sẵn phép chấm nào PHẢI đỏ; đỏ vì lý do KHÁC cũng tính là
+     TRƯỢT, vì lần sau đổi chỗ một tí là mù lại mà không ai biết.
+   MÃ THOÁT: 0 = xanh, 1 = đỏ. (Ca đối chứng: 0 = bắt được, 1 = bàn đo MÙ.)
    ========================================================================== */
 
 import { dungMayGia, moChrome, TOI, TOI_ID, NGUOI, DANH_BA, dungTin } from './lib/ban-do-chrome.mjs';
@@ -44,6 +66,10 @@ import { dungMayGia, moChrome, TOI, TOI_ID, NGUOI, DANH_BA, dungTin } from './li
 const dso = process.argv;
 const TU_KIEM = dso.includes('--tu-kiem');
 const CHUP = dso.includes('--chup');
+/* `--chi-luoi`: chỉ chạy mục Ⓓ (đọc CSS), bỏ 12 lượt Chrome. Mục Ⓓ là lưới
+   đọc tệp, chạy trong một phần nghìn giây — bắt nó phải chờ 12 lượt Chrome
+   xong mới xem được kết quả là lý do người ta thôi không chạy nó nữa. */
+const CHI_LUOI = dso.includes('--chi-luoi');
 const lay = (co, mac) => { const i = dso.indexOf(co); return i > 0 ? dso[i + 1] : mac; };
 const THU_MUC_ANH = lay('--anh', '.anh-do-mo-ra-xem-duoc');
 
@@ -71,7 +97,75 @@ function gaiLoiCu(maGoc) {
     throw new Error('Mẫu hỏng giả trượt: không thấy `function nutSuaTaiLieu(t) {` — sửa bàn đo.');
   return ma.replace(NEO_KHAI_MOI, NEO_KHAI_MOI_THAY).replace(NEO_CHO_CU, NEO_CHO_CU_THAY);
 }
-const suaTep = TU_KIEM ? (s, ten) => (ten === 'assets/js/app.js' ? gaiLoiCu(s) : s) : null;
+/* ==========================================================================
+   BỐN CA ĐỐI CHỨNG A · B · C · D — GÀI BỐN CÁCH HỎNG KHÁC NHAU
+   ---------------------------------------------------------------------------
+   VÌ SAO CÓ (REV-0062 CHẶN-1). Bản trước chỉ tự kiểm bằng cách gài lại ĐÚNG
+   lỗi cũ của chính mình — cùng biến, cùng câu lỗi. Đó là tự chấm bài mình:
+   bàn đo bắt được thứ nó được viết ra để bắt, và mù đúng hai dạng khó nhất.
+   Hồ Ly gài bốn kiểu, bàn đo cũ XANH ở A và B.
+
+   Nay bốn ca nằm TRONG bàn đo, chạy lại được bằng một lệnh, và mỗi ca ghi rõ
+   phép chấm nào PHẢI đỏ. Ca nào gài trượt (không khớp mẫu) thì NÉM LỖI —
+   im lặng chạy trên bản lành rồi khai "đã đối chứng" là tự lừa.
+
+   CHẠY:  npm run do-mo-ra-xem-duoc-ca-A   (và -B, -C, -D)
+   ========================================================================== */
+const CA = lay('--ca', null);
+
+/** Đổi đúng một chuỗi, không thấy thì ném lỗi — không bao giờ gài âm thầm. */
+function doi(ma, tim, thay, nhan) {
+  if (!ma.includes(tim))
+    throw new Error(`Ca ${CA} gài TRƯỢT ở "${nhan}": không thấy mẫu trong app.js — sửa bàn đo, đừng chạy tiếp.`);
+  return ma.replace(tim, thay);
+}
+
+const CAC_CA = {
+  /* A — CHẾT Y HỆT LỖI CŨ, NHƯNG `catch` IN MỘT CÂU KHÁC.
+     Câu lỗi tử tế, đúng luật nhà, không có trong danh sách sáu câu của Ⓐ.
+     Màn ra 0 thẻ. Ⓐ mù (câu lạ), Ⓑ sạch (đã catch), Ⓒ mù (rỗng thì "vừa một
+     màn"). CHỈ Ⓕ bắt được — đây là ca chứng minh mục Ⓕ có lý do tồn tại. */
+  A: {
+    vi: 'chết TDZ y hệt lỗi cũ, nhưng `catch` in câu KHÁC — màn 0 thẻ, không câu nào trong danh sách Ⓐ',
+    phaiDo: 'Ⓕ khotailieu — SỐ ĐÚNG',
+    lam: s => doi(gaiLoiCu(s),
+      `oTrong.textContent = 'Không tải được kho tài liệu: ' + e.message;`,
+      `oTrong.textContent = 'Kho tài liệu đang bảo trì, Sếp quay lại sau giúp em.';`,
+      'câu lỗi thay thế')
+  },
+  /* B — IM LẶNG HOÀN TOÀN. Nạp xong, không lỗi, không ngoại lệ, không một chữ
+     nào trên màn — chỉ đơn giản là không vẽ gì. Đây là ca ĐỘC NHẤT: không có
+     câu lỗi nào để mà bắt, nên mọi lưới đọc-chữ đều mù theo định nghĩa. */
+  B: {
+    vi: 'nạp xong, KHÔNG lỗi, chỉ không vẽ gì — màn trống trơn và im lặng tuyệt đối',
+    phaiDo: 'Ⓕ khotailieu — SỐ ĐÚNG',
+    lam: s => doi(
+      doi(s, `oDanhSach.innerHTML = ds.map(veMot).join('');`,
+             `oDanhSach.innerHTML = '';`, 'chỗ vẽ thẻ'),
+      `oTrong.hidden = ds.length > 0;`,
+      `oTrong.hidden = true;`, 'chỗ bật dòng "chưa có gì"')
+  },
+  /* C — NGOẠI LỆ KHÔNG AI BẮT. Ⓑ phải đỏ. */
+  C: {
+    vi: 'ném một ngoại lệ KHÔNG bị catch trong lúc dựng màn',
+    phaiDo: 'Ⓑ không có ngoại lệ chưa bắt nào',
+    lam: s => doi(s, `  function veLoc() {`,
+      `  function veLoc() {\n    setTimeout(() => { throw new Error('ca C — nổ không ai bắt'); }, 50);`,
+      'đầu hàm veLoc')
+  },
+  /* D — ĐÓNG CHAT MÀ QUÊN GỠ KHOÁ CUỘN. Cả ERP đứng im. Ⓒ phải đỏ. */
+  D: {
+    vi: 'đóng cửa sổ chat mà QUÊN gỡ khoá cuộn `cnb-mo` — cả trang nền đứng im',
+    phaiDo: 'chat — đóng xong KHÔNG còn lớp khoá cuộn trên body',
+    lam: s => doi(s, `    document.body.classList.remove('cnb-mo');`,
+      `    /* ca D: cố ý quên gỡ */`, 'chỗ gỡ khoá cuộn')
+  }
+};
+
+if (CA && !CAC_CA[CA]) { console.error(`Không có ca "${CA}". Chọn A, B, C hoặc D.`); process.exit(2); }
+
+const suaTep = CA ? (s, ten) => (ten === 'assets/js/app.js' ? CAC_CA[CA].lam(s.replace(/\r\n/g, '\n')) : s)
+  : TU_KIEM ? (s, ten) => (ten === 'assets/js/app.js' ? gaiLoiCu(s) : s) : null;
 
 /* ==========================================================================
    BỐN VAI TRÒ THẬT — bộ tab lấy đúng từ `src/quyen.js`
@@ -143,6 +237,37 @@ const TAI_LIEU = [
 const loc = (ds, cho) => (cho === '*' ? ds : ds.filter(x => cho.includes(x.ma || x.nhom)));
 
 /* ==========================================================================
+   `dem_chu` — PHẢI ĐÚNG HỢP ĐỒNG MÁY CHỦ, KHÔNG ĐƯỢC BỊA KHOÁ
+   ---------------------------------------------------------------------------
+   BÀI HỌC 07/09/2026 (REV-0062 CAO-3). Bản đầu của ổ giả trả cứng
+   `{ tra_cuu_duoc, co_chu_chua_neo, khong_chu }` — hai khoá sau BỊA. Máy chủ
+   thật trả `{ tra_cuu_duoc, co_chu_chua_tra_duoc, chi_xem_duoc }`
+   (`src/tai-lieu.js`). Hậu quả trong `app.js`:
+       tong = tra_cuu_duoc + 0 + undefined  →  NaN
+       oDem.hidden = !tong                  →  DẢI ĐẾM BỊ ẨN HOÀN TOÀN
+   Tức là **đúng cái dải chữ Sếp chụp được thì bàn đo chưa bao giờ nhìn thấy**.
+   Ổ giả lệch hợp đồng là bàn đo tự bịt mắt mình: nó đo một màn NHỎ HƠN màn
+   thật, rồi khai là đã quét cả màn.
+
+   Nay đếm bằng ĐÚNG ba điều kiện SQL của máy chủ (`src/tai-lieu.js`), tính
+   trên đúng bộ tài liệu ĐÃ LỌC THEO QUYỀN của từng vai — y như máy chủ đếm
+   trên `dieuKien` của chính lượt đó:
+     · tra_cuu_duoc         = ocr_so_trang_neo > 0 AND nhay_cam = 0
+     · co_chu_chua_tra_duoc = ocr_so_trang > 0 AND NOT(điều kiện trên)
+     · chi_xem_duoc         = ocr_so_trang <= 0
+   ========================================================================== */
+const KHOA_DEM_CHU = ['tra_cuu_duoc', 'co_chu_chua_tra_duoc', 'chi_xem_duoc'];
+
+function demChu(ds) {
+  const traDuoc = t => t.ocr_so_trang_neo > 0 && !t.nhay_cam;
+  return {
+    tra_cuu_duoc: ds.filter(traDuoc).length,
+    co_chu_chua_tra_duoc: ds.filter(t => t.ocr_so_trang > 0 && !traDuoc(t)).length,
+    chi_xem_duoc: ds.filter(t => !(t.ocr_so_trang > 0)).length
+  };
+}
+
+/* ==========================================================================
    Ổ CHAT CÓ TRÍ NHỚ — máy giả phải NHẬN được tin vừa gửi
    ---------------------------------------------------------------------------
    Ổ chung của thư viện trả một danh sách 120 tin CỐ ĐỊNH. Gửi tin xong,
@@ -195,9 +320,9 @@ function oTraLoi(vai, chat) {
       const nhom = loc(NHOM_TL, vai.nhomXem);
       const ds = loc(TAI_LIEU, vai.nhomXem);
       return traJson({
-        ds, nhom,
+        ds, nhom, tong: ds.length, bi_cat: 0,
         nhom_luu_duoc: vai.nhomLuu === '*' ? NHOM_TL.map(n => n.ma) : vai.nhomLuu,
-        dem_chu: { tra_cuu_duoc: 1, co_chu_chua_neo: 1, khong_chu: 1 }
+        dem_chu: demChu(ds)
       }) || true;
     }
     if (duong === '/api/thong-bao') return traJson({ thong_bao: [], chua_doc: 0 }) || true;
@@ -242,6 +367,79 @@ const MAU_LOI_NGUOI = [
   /Không tải được/, /Không mở được/, /Không đọc được/, /Không xem được/,
   /Không dựng được/, /Không nạp được/
 ];
+
+/* ==========================================================================
+   Ⓕ MỎ NEO SỐNG — "TAB NÀY CÓ NỘI DUNG KHÔNG", HỎI THẲNG, KHÔNG ĐI ĐOÁN CÂU
+   ---------------------------------------------------------------------------
+   VÌ SAO CÓ MỤC NÀY (REV-0062 CHẶN-1). Mục Ⓐ ở trên là một DANH SÁCH SÁU CÂU
+   TIẾNG VIỆT CHÉP TAY. Hồ Ly gài bốn kiểu hỏng và bàn đo mù đúng hai kiểu khó
+   nhất — cả hai đều để lại MỘT MÀN TRỐNG TRƠN:
+     · kiểu A — vẫn chết y hệt, nhưng `catch` in câu KHÁC ("Kho tài liệu đang
+       bảo trì, Sếp quay lại sau giúp em."). Câu thứ bảy thì Ⓐ chưa từng nghe.
+     · kiểu B — nạp xong, KHÔNG lỗi, chỉ không vẽ gì. Im lặng hoàn toàn.
+   Cả hai đi qua Ⓐ (không có câu nào trong danh sách) VÀ đi qua Ⓒ (rỗng thì
+   lấy gì mà cuộn — "vừa một màn"). Bàn đo XANH, tính năng CHẾT.
+
+   Nguyên văn Hồ Ly: "cách hỏng thứ SÁU mới đóng được một CÂU, chưa đóng được
+   một CÁCH HỎNG."
+
+   CHỮA BẰNG CÁCH ĐẢO CÂU HỎI. Đi liệt kê thêm câu lỗi là thua sẵn — câu thứ
+   tám luôn lọt. Câu hỏi đúng không phải "màn có câu xấu nào không" mà là
+   "TAB NÀY CÓ NỘI DUNG KHÔNG". Nên mỗi tab TỰ KHAI một MỎ NEO: một thứ cụ
+   thể mà CHỈ CÓ nếu bộ vẽ của tab đã chạy xong. Không có mỏ neo → ĐỎ, bất kể
+   màn im lặng hay in ra câu gì, bất kể câu đó dễ thương tới đâu.
+
+   MỎ NEO PHẢI DO JS VẼ RA, KHÔNG ĐƯỢC NẰM SẴN TRONG `app.html`. Mỏ neo tĩnh
+   là mỏ neo mù: tab chết thì nó vẫn nằm đó. Cả bảng dưới đây được chọn bằng
+   cách ĐO — dựng `app.html` bằng `DOMParser` (không chạy script) rồi trừ đi
+   khỏi DOM sống, giữ lại đúng thứ JS THÊM VÀO. Số đo ngày 07/09/2026, vai
+   admin @1440px, ghi ở cột "đo được".
+
+   HAI HẠNG MỎ NEO
+     ① SỐ ĐÚNG — tab mà bàn đo có GIEO dữ liệu, nên biết chính xác phải ra bao
+       nhiêu. Mạnh nhất: rỗng là ĐỎ, mà thừa/thiếu cũng ĐỎ.
+     ② CÓ KHUNG — tab mà ổ giả trả mảng RỖNG. Ở đây rỗng là ĐÚNG, và đó chính
+       là "lý do chính đáng" nói trong REV-0062; nhưng bộ vẽ vẫn phải chạy và
+       vẫn phải dựng KHUNG (bảng, ô số, dòng "chưa có gì"). Khung không dựng
+       = bộ vẽ chết = ĐỎ. Tức là bàn đo không bao giờ đòi dữ liệu mà nó không
+       gieo — nó chỉ đòi đúng thứ nó có quyền đòi.
+   ========================================================================== */
+const MO_NEO = {
+  /* ① SỐ ĐÚNG — bàn đo gieo dữ liệu nên biết con số phải ra */
+  danhba: { chon: '.person', dung: () => DANH_BA.length,
+    vi: 'mỗi người trong danh bạ một thẻ `.person` (đo: 0→5 do JS vẽ)' },
+  khotailieu: { chon: '.tl-the', dung: vai => loc(TAI_LIEU, vai.nhomXem).length,
+    vi: 'mỗi giấy tờ một thẻ `.tl-the` (đo: 0→3 do JS vẽ) — ĐÂY là mỏ neo bắt kiểu A và B' },
+
+  /* ② CÓ KHUNG — ổ giả trả rỗng, nhưng bộ vẽ phải dựng được khung */
+  /* `.stat` ở Trạm Mục Tiêu ĐỔI THEO VAI — đo 07/09/2026: admin ra 3 ô,
+     ba vai còn lại (Người dùng · Quản lý kho · Kế toán trưởng) ra 2 ô, đều
+     nhau ở cả 375/414/1440px. Bản đầu tôi đặt cứng ≥3 và ăn 9 ĐỎ OAN — chính
+     bàn đo mới bắt được cái sai của tôi. Ngưỡng theo vai giữ được độ chặt cho
+     admin thay vì hạ sàn xuống 2 cho tất cả. */
+  tongquan: { chon: '.stat', toiThieu: vai => (vai.admin ? 3 : 2),
+    vi: 'ô số Trạm Mục Tiêu (đo: 0→3 admin / 0→2 vai hạn chế, do JS vẽ)' },
+  khovan: { chon: '.stat', toiThieu: 4,
+    vi: 'ô số tồn kho (đo: 0→4 do JS vẽ)' },
+  lichsuviec: { chon: '.luoi-bang', toiThieu: 1,
+    vi: 'khung bảng lịch sử (đo: 0→1 — `.luoi-bang` KHÔNG có trong app.html, chỉ JS thêm)' },
+  gopy: { chon: '.luoi-bang', toiThieu: 1, vi: 'khung bảng góp ý (đo: 0→1)' },
+  kinhdoanh: { chon: '.luoi-bang', toiThieu: 1, vi: 'khung bảng kinh doanh (đo: 0→7)' },
+  nhansu: { chon: '.luoi-bang', toiThieu: 1, vi: 'khung bảng nhân sự (đo: 0→2)' },
+  ketoan: { chon: '.luoi-bang', toiThieu: 1, vi: 'khung bảng kế toán (đo: 0→2)' },
+  taisan: { chon: '.luoi-bang', toiThieu: 1, vi: 'khung bảng tài sản (đo: 0→1)' },
+  quantri: { chon: '.luoi-bang', toiThieu: 1, vi: 'khung bảng quản trị (đo: 0→1)' },
+  xepca: { chon: '.het-cuon', toiThieu: 1,
+    vi: 'khung bảng xếp ca (đo: 0→2; tab này JS không thêm `.luoi-bang` nên neo vào `.het-cuon`)' },
+
+  /* ③ ĐỔI CHỮ — tab mà JS KHÔNG thêm một thẻ nào, chỉ ghi đè chữ có sẵn.
+     Đo được: `donhoan` sống mà số thẻ y hệt khung tĩnh, nên đếm thẻ là mù ở
+     đây. Neo vào việc chữ chờ trong `app.html` PHẢI bị thay. */
+  donhoan: { doiChu: [
+      { chon: '#dh-trangthai', chuTinh: 'Đang kiểm tra…' },
+      { chon: '#dh-tk-trangthai', chuTinh: 'Đang kiểm tra…' }
+    ], vi: 'chữ trạng thái kết nối sàn phải được ghi đè (app.html để sẵn "Đang kiểm tra…")' }
+};
 
 function batLoiTrongChu(chu) {
   const ra = [];
@@ -289,10 +487,19 @@ async function motLuot(vai, bn) {
     for (const tab of dsTab) {
       await b.chay(`document.querySelector('[data-tab="${tab}"]').click(); 1`);
       await b.doi(600);
+      const neo = MO_NEO[tab] || null;
       const kq = await b.chay(`(async () => {
         const v = document.getElementById('v-${tab}');
         const se = document.scrollingElement;
         const chu = v ? (v.innerText || '') : '';
+        /* Ⓕ mỏ neo: đếm thứ CHỈ CÓ khi bộ vẽ của tab đã chạy xong. */
+        const neo = ${JSON.stringify(neo)};
+        let soNeo = null, chuNeo = null;
+        if (v && neo && neo.chon) soNeo = v.querySelectorAll(neo.chon).length;
+        if (v && neo && neo.doiChu) chuNeo = neo.doiChu.map(d => {
+          const e = v.querySelector(d.chon);
+          return { chon: d.chon, co: !!e, chu: e ? (e.textContent || '').trim() : null, chuTinh: d.chuTinh };
+        });
         // Cuộn thật: đẩy xuống đáy rồi đọc lại scrollTop.
         const canCuon = se.scrollHeight - se.clientHeight;
         let cuonDuoc = true, cuonToi = 0;
@@ -305,7 +512,7 @@ async function motLuot(vai, bn) {
           window.scrollTo(0, 0);
         }
         return {
-          chu, canCuon, cuonDuoc, cuonToi,
+          chu, canCuon, cuonDuoc, cuonToi, soNeo, chuNeo,
           bodyOy: getComputedStyle(document.body).overflowY,
           htmlOy: getComputedStyle(document.documentElement).overflowY,
           coChu: chu.trim().length
@@ -315,6 +522,40 @@ async function motLuot(vai, bn) {
       const loi = batLoiTrongChu(kq.chu);
       cham(loi.length === 0, `Ⓐ ${tab} — không có câu lỗi trên màn`,
         loi.length ? loi.join(' | ') : `${kq.coChu} ký tự`);
+
+      /* ---- Ⓕ MỎ NEO SỐNG — "tab này CÓ NỘI DUNG không" ------------------
+         Đặt NGAY SAU Ⓐ để đọc nhật ký thấy được cặp đôi: Ⓐ nói "không có câu
+         xấu", Ⓕ nói "mà cũng chẳng có gì cả". Một mình Ⓐ thì màn trống trơn
+         là XANH — đúng lỗ hổng REV-0062 CHẶN-1. */
+      if (!neo) {
+        cham(false, `Ⓕ ${tab} — có khai mỏ neo sống`,
+          `tab này CHƯA khai mỏ neo trong bảng MO_NEO — thêm tab mới thì phải khai, ` +
+          `không thì nó đi qua bàn đo mà không ai chứng minh nó có nội dung`);
+      } else if (neo.doiChu) {
+        for (const d of kq.chuNeo) {
+          cham(d.co && d.chu !== d.chuTinh && d.chu.length > 0,
+            `Ⓕ ${tab} — \`${d.chon}\` đã được bộ vẽ ghi đè`,
+            !d.co ? 'KHÔNG THẤY THẺ — sửa mỏ neo'
+              : d.chu === d.chuTinh
+                ? `VẪN LÀ CHỮ CHỜ TĨNH "${d.chuTinh}" → bộ vẽ KHÔNG chạy tới nơi`
+                : `"${d.chu.slice(0, 60)}"`);
+        }
+      } else if (neo.dung) {
+        const phai = neo.dung(vai);
+        cham(kq.soNeo === phai, `Ⓕ ${tab} — SỐ ĐÚNG: \`${neo.chon}\` phải ra ${phai}`,
+          kq.soNeo === phai ? `${kq.soNeo} — ${neo.vi}`
+            : `ra ${kq.soNeo} — bàn đo GIEO ${phai}, tab vẽ ra ${kq.soNeo}. ` +
+              (kq.soNeo === 0
+                ? 'MÀN TRỐNG mà ổ giả CÓ trả dữ liệu → bộ vẽ chết, dù màn im lặng hay in ra câu gì.'
+                : 'số không khớp dữ liệu đã gieo.'));
+      } else {
+        const san = typeof neo.toiThieu === 'function' ? neo.toiThieu(vai) : neo.toiThieu;
+        cham(kq.soNeo >= san, `Ⓕ ${tab} — CÓ KHUNG: \`${neo.chon}\` ≥ ${san}`,
+          kq.soNeo >= san ? `${kq.soNeo} — ${neo.vi}`
+            : `ra ${kq.soNeo} — ổ giả trả RỖNG nên không đòi dữ liệu, nhưng KHUNG cũng không dựng ` +
+              `→ bộ vẽ của tab không chạy. (${neo.vi})`);
+      }
+
       cham(kq.cuonDuoc, `Ⓒ ${tab} — cuộn xuống được`,
         kq.canCuon > 8 ? `cần cuộn ${kq.canCuon}px, cuộn tới ${kq.cuonToi}px` : 'vừa một màn');
     }
@@ -457,6 +698,30 @@ async function motLuot(vai, bn) {
     if (dsTab.includes('khotailieu')) {
       await b.chay(`document.querySelector('[data-tab="khotailieu"]').click(); 1`);
       await b.doi(600);
+
+      /* ---- DẢI ĐẾM `dem_chu` — CHÍNH LÀ DẢI SẾP CHỤP ĐƯỢC ----------------
+         REV-0062 CAO-3: ổ giả cũ trả sai khoá → `NaN` → `oDem.hidden` bật →
+         bàn đo chưa BAO GIỜ nhìn thấy dải này, dù nó nằm ngay giữa màn Sếp
+         chụp. Sửa ổ giả thôi chưa đủ: không có phép chấm thì lần sau khoá
+         lệch lại, dải lại ẩn, và bàn đo lại im. */
+      const dem = demChu(loc(TAI_LIEU, vai.nhomXem));
+      const tongDem = dem.tra_cuu_duoc + dem.co_chu_chua_tra_duoc + dem.chi_xem_duoc;
+      const oDem = await b.chay(`(() => {
+        const o = document.querySelector('#tl-dem-chu');
+        if (!o) return { co: false };
+        return { co: true, an: !!o.hidden, chu: (o.textContent || '').trim().replace(/\\s+/g, ' ') };
+      })()`);
+      cham(oDem.co, 'dải đếm — có thẻ `#tl-dem-chu` trên màn');
+      if (oDem.co) {
+        cham(!oDem.an, 'dải đếm — HIỆN RA (không bị ẩn vì NaN)',
+          oDem.an ? `bị ẩn dù ổ giả trả tổng ${tongDem} — khoá \`dem_chu\` lệch hợp đồng?`
+                  : `"${oDem.chu.slice(0, 80)}"`);
+        cham(!/NaN|undefined/.test(oDem.chu), 'dải đếm — không in NaN/undefined ra màn', oDem.chu.slice(0, 80));
+        cham(oDem.chu.includes(String(dem.tra_cuu_duoc)) && oDem.chu.includes(String(dem.chi_xem_duoc)),
+          `dải đếm — khoe đúng số ổ giả gieo (${dem.tra_cuu_duoc} tra được · ${dem.chi_xem_duoc} chỉ xem được)`,
+          oDem.chu.slice(0, 100));
+      }
+
       const coNutQuet = await b.chay(`(() => { const n = document.querySelector('#tl-nut-quet'); return !!n && !n.hidden; })()`);
       if (coNutQuet) {
         await b.chay(`document.querySelector('#tl-nut-quet').click(); 1`);
@@ -538,6 +803,21 @@ async function motLuot(vai, bn) {
    cao bằng `vh` thì ĐỎ. Đây là lưới chống tái phát, không phải phép đo giả
    vờ. Danh sách chỗ nổi được liệt kê tay và có kèm lý do — thêm chỗ nổi mới
    thì thêm vào đây.
+
+   SỬA 07/09/2026 (REV-0062 CHẶN-2) — LUẬT CŨ THIẾU MỘT NỬA.
+   Bản đầu của lưới này chỉ đòi "không được có `vh`", nên nó chấm XANH cho một
+   dòng `dvh` ĐỨNG MỘT MÌNH. Mà `dvh` một mình là cái bẫy NẶNG HƠN: `dvh` chỉ
+   có từ Chrome 108 / Safari 15.4 / Firefox 101 (cuối 2022), và trình duyệt cũ
+   hơn vứt CẢ DÒNG luật có đơn vị lạ — mất sạch trần chiều cao, chứ không lùi
+   về `vh`. Đo thật bằng `getComputedStyle`, dùng đơn vị bịa `qvh` đóng vai máy
+   cũ: `calc(100qvh - 40px)` một mình → `none`; `92qvh` một mình → `none`; cặp
+   `calc(100vh - 40px)` rồi `calc(100qvh - 40px)` → `772px` (giữ được trần);
+   cặp `100vh` rồi `50dvh` trên Chrome mới → `406px`, tức dòng SAU vẫn thắng.
+   → Luật ĐÚNG là CẶP: `vh` trước làm nền, `dvh` sau đè lên. Lưới nay chấm ba
+     trạng thái, không phải hai:
+       · `vh` một mình              → ĐỎ (bẫy cũ: cao hơn vùng nhìn thấy)
+       · `dvh` một mình             → ĐỎ (bẫy mới: máy cũ mất sạch trần)
+       · CẶP `vh` rồi `dvh`         → ĐẠT
    ========================================================================== */
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -553,26 +833,133 @@ const THU_NOI = [
   { chon: '.cnb-popup', vi: 'cửa sổ chat' }
 ];
 
+/* `(?<![a-z])vh\b` chứ KHÔNG phải `\bvh\b`: trong `100vh` thì trước `vh` là
+   chữ số, mà chữ số cũng là ký tự từ nên KHÔNG có ranh giới `\b` ở đó — bản
+   đầu tiên của bàn đo này viết `\bvh\b` và bỏ lọt SẠCH cả BỐN chỗ hỏng thật
+   trên `main` (`.modal` · `.tlq-tam` · `.tb-panel` · `.cnb-popup`). Đúng kiểu
+   phép đo im lặng nói dối. Lookbehind chặn chữ cái đứng trước cũng là cách
+   tách `vh` khỏi `dvh`/`svh`/`lvh`. */
+const LA_VH = /(?<![a-z])vh\b/;
+const LA_DVH = /(?<![a-z])dvh\b/;
+
+/* ==========================================================================
+   Ⓔ HỢP ĐỒNG Ổ GIẢ — KHOÁ BÀN ĐO TRẢ PHẢI ĐÚNG KHOÁ HAI ĐẦU THẬT ĐANG DÙNG
+   ---------------------------------------------------------------------------
+   Sinh ra từ REV-0062 CAO-3: ổ giả bịa hai khoá `dem_chu`, `app.js` đọc ra
+   `undefined`, cộng thành `NaN`, dải đếm bị ẩn — và bàn đo vẫn XANH suốt vì
+   nó không hề biết mình đang đo một màn thiếu mất một dải.
+
+   Đây là cách hỏng riêng của BÀN ĐO, không phải của sản phẩm, và nó độc ở chỗ
+   im lặng: ổ giả lệch hợp đồng thì mọi phép chấm phía sau đều đo nhầm màn.
+   Chốt bằng cách đối chiếu BA ĐẦU:
+     ① khoá ổ giả trả   ② khoá `src/tai-lieu.js` (máy chủ thật) trả
+     ③ khoá `app.js` thật sự ĐỌC
+   Lệch bất kỳ hướng nào cũng ĐỎ — kể cả ổ giả trả THỪA một khoá mà `app.js`
+   không đọc, vì khoá thừa là dấu hiệu hợp đồng đã trôi ở đâu đó.
+   ========================================================================== */
+function doHopDongODa() {
+  muc('Ⓔ hợp đồng ổ giả — khoá `dem_chu` phải khớp máy chủ thật và `app.js`');
+  LUOT = 'hợp đồng ổ giả';
+  const doc = f => readFileSync(GOC_REPO + '/' + f, 'utf8').replace(/\r\n/g, '\n');
+  const app = doc('public/assets/js/app.js');
+  const may = doc('src/tai-lieu.js');
+
+  /* Khoá `app.js` ĐỌC: mọi `d.<khoá>` quanh khối vẽ dải đếm. Lấy hẹp quanh
+     `#tl-dem-chu` để không quét nhầm cả tệp. */
+  const i = app.indexOf("$('#tl-dem-chu')");
+  const khuc = i >= 0 ? app.slice(i, i + 2000) : '';
+  if (!khuc) { cham(false, 'Ⓔ tìm được khối vẽ dải đếm trong app.js', 'không thấy `#tl-dem-chu` — sửa bàn đo'); return; }
+  const docBoi = [...new Set([...khuc.matchAll(/\bd\.([a-z_]+)/g)].map(m => m[1]))].sort();
+
+  /* Khoá máy chủ THẬT trả: đọc thẳng khối dựng `dem` trong `src/tai-lieu.js`. */
+  const j = may.indexOf('dem = {');
+  const khucMay = j >= 0 ? may.slice(j, may.indexOf('};', j)) : '';
+  const mayTra = [...new Set([...khucMay.matchAll(/^\s*([a-z_]+):/gm)].map(m => m[1]))].sort();
+
+  const oGiaTra = [...KHOA_DEM_CHU].sort();
+  const nhu = a => a.join(', ') || '(rỗng)';
+
+  cham(mayTra.length > 0, 'Ⓔ đọc được khoá máy chủ thật trả', nhu(mayTra));
+  cham(docBoi.length > 0, 'Ⓔ đọc được khoá app.js dùng', nhu(docBoi));
+  cham(JSON.stringify(oGiaTra) === JSON.stringify(mayTra),
+    'Ⓔ khoá ổ giả == khoá máy chủ thật',
+    `ổ giả [${nhu(oGiaTra)}] · máy chủ [${nhu(mayTra)}]`);
+
+  const thua = oGiaTra.filter(k => !docBoi.includes(k));
+  const thieu = docBoi.filter(k => !oGiaTra.includes(k));
+  cham(thieu.length === 0, 'Ⓔ app.js không đọc phải khoá ổ giả THIẾU',
+    thieu.length ? `app.js đọc \`d.${thieu.join('`, `d.')}\` mà ổ giả không trả → undefined → NaN → dải đếm bị ẩn`
+                 : `app.js đọc ${nhu(docBoi)}`);
+  cham(thua.length === 0, 'Ⓔ ổ giả không trả khoá THỪA mà app.js chẳng đọc',
+    thua.length ? `thừa: ${nhu(thua)}` : 'không thừa khoá nào');
+
+  /* Số ổ giả sinh ra phải cộng ĐƯỢC, không ra NaN — chốt luôn cái hậu quả. */
+  for (const vai of VAI_TRO) {
+    const d = demChu(loc(TAI_LIEU, vai.nhomXem));
+    const tong = d.tra_cuu_duoc + (d.co_chu_chua_tra_duoc || 0) + d.chi_xem_duoc;
+    cham(Number.isFinite(tong) && tong > 0,
+      `Ⓔ ${vai.ma} — dải đếm có số để hiện (không NaN, không 0)`,
+      `tra ${d.tra_cuu_duoc} · chưa ${d.co_chu_chua_tra_duoc} · xem ${d.chi_xem_duoc} → tổng ${tong}`);
+  }
+}
+
 function doTranChieuCao() {
-  muc('Ⓓ trần chiều cao của thứ nổi đè màn hình — phải là dvh, không phải vh');
+  muc('Ⓓ trần chiều cao của thứ nổi đè màn hình — phải là CẶP `vh` rồi `dvh`');
   LUOT = 'luật CSS';
-  const css = readFileSync(GOC_REPO + '/public/assets/css/style.css', 'utf8').replace(/\r\n/g, '\n');
+  /* GỠ CHÚ THÍCH TRƯỚC KHI SOI. Bắt được lúc tự thử 07/09/2026: chú thích
+     mới viết ở `.modal` có nhắc lại nguyên văn mấy dòng `max-height:
+     calc(100qvh - 40px)` làm ví dụ, và lưới ĐỌC LUÔN CHÚNG như khai báo thật
+     — một khối hỏng có thể mượn chữ trong chú thích để qua cửa, hoặc một khối
+     lành bị chú thích của chính nó làm cho đỏ. Lưới đọc chữ thì phải đọc đúng
+     phần chữ CÓ HIỆU LỰC. */
+  const css = readFileSync(GOC_REPO + '/public/assets/css/style.css', 'utf8')
+    .replace(/\r\n/g, '\n').replace(/\/\*[\s\S]*?\*\//g, '');
   for (const t of THU_NOI) {
-    /* Lấy mọi khối luật mở đầu bằng đúng bộ chọn đó, rồi soi phần thân. */
+    /* Lấy mọi khối luật mở đầu bằng đúng bộ chọn đó. Soi TỪNG KHỐI RIÊNG, không
+       gộp thân lại: `.cnb-popup` có hai khối (luật gốc + khối trong
+       `@media (max-width: 640px)`), mà mỗi khối phải TỰ có đường lui của mình.
+       Gộp lại rồi soi chung là để một khối mượn cặp của khối kia — đúng kiểu
+       lưới tự bịt mắt. */
     const re = new RegExp('(?<![\\w.#-])\\' + t.chon + '\\s*(?:,[^{}]*)?\\{([^{}]*)\\}', 'g');
-    const than = [...css.matchAll(re)].map(m => m[1]).join('\n');
-    if (!than.trim()) { cham(false, `Ⓓ ${t.chon} — tìm thấy luật CSS`, 'không thấy khối nào, sửa bàn đo'); continue; }
-    /* Chỉ soi TRẦN chiều cao (`height` / `max-height`). `max-width: 90vw` là
-       chuyện khác, không đụng. */
-    /* `(?<![a-z])vh\b` chứ KHÔNG phải `\bvh\b`: trong `100vh` thì trước `vh`
-       là chữ số, mà chữ số cũng là ký tự từ nên KHÔNG có ranh giới `\b` ở đó
-       — bản đầu tiên của bàn đo này viết `\bvh\b` và bỏ lọt SẠCH cả ba chỗ
-       hỏng thật trên `main`. Đúng kiểu phép đo im lặng nói dối. Lookbehind
-       chặn chữ cái đứng trước cũng là cách loại `dvh`/`svh`/`lvh`. */
-    const xau = [...than.matchAll(/(max-height|height)\s*:\s*([^;]*?(?<![a-z])vh\b[^;]*);/g)]
-      .map(m => m[0].trim());
-    cham(xau.length === 0, `Ⓓ ${t.chon} — trần chiều cao không dùng \`vh\``,
-      xau.length ? `${t.vi}: ${xau.join(' ')}` : t.vi);
+    const khoi = [...css.matchAll(re)].map(m => m[1]);
+    if (!khoi.length) { cham(false, `Ⓓ ${t.chon} — tìm thấy luật CSS`, 'không thấy khối nào, sửa bàn đo'); continue; }
+
+    khoi.forEach((than, i) => {
+      const ten = `Ⓓ ${t.chon}${khoi.length > 1 ? ` (khối ${i + 1}/${khoi.length})` : ''}`;
+      /* Chỉ soi TRẦN chiều cao (`height` / `max-height`). `max-width: 90vw` là
+         chuyện khác, không đụng. */
+      const khai = [...than.matchAll(/(max-height|height)\s*:\s*([^;]*);/g)]
+        .map(m => ({ ten: m[1], gt: m[2].trim() }));
+      /* Gom theo TỪNG thuộc tính: `height` và `max-height` là hai trần rời
+         nhau, mỗi cái phải có cặp của chính nó. */
+      const theoThuocTinh = new Map();
+      for (const k of khai) {
+        if (!theoThuocTinh.has(k.ten)) theoThuocTinh.set(k.ten, []);
+        theoThuocTinh.get(k.ten).push(k.gt);
+      }
+      let coDoDuoc = false;
+      for (const [thuocTinh, ds] of theoThuocTinh) {
+        const cheDo = ds.map(g => (LA_DVH.test(g) ? 'dvh' : LA_VH.test(g) ? 'vh' : 'khac'));
+        if (!cheDo.some(c => c !== 'khac')) continue;   // trần cố định (px…) — không phải việc của lưới này
+        coDoDuoc = true;
+        const iVh = cheDo.indexOf('vh');
+        const iDvh = cheDo.lastIndexOf('dvh');
+        const viet = ds.map((g, j) => `${thuocTinh}: ${g} [${cheDo[j]}]`).join(' · ');
+        if (iVh < 0)
+          cham(false, `${ten} — \`${thuocTinh}\` có CẶP vh+dvh`,
+            `${t.vi}: \`dvh\` ĐỨNG MỘT MÌNH → máy cũ (Chrome <108 / Safari <15.4) vứt cả dòng, MẤT SẠCH TRẦN. Thiếu dòng nền \`vh\`. ${viet}`);
+        else if (iDvh < 0)
+          cham(false, `${ten} — \`${thuocTinh}\` có CẶP vh+dvh`,
+            `${t.vi}: chỉ có \`vh\`, thiếu dòng \`dvh\` → trên điện thoại trần cao hơn vùng nhìn thấy ~60-90px. ${viet}`);
+        else if (iDvh < iVh)
+          cham(false, `${ten} — \`${thuocTinh}\` có CẶP vh+dvh`,
+            `${t.vi}: SAI THỨ TỰ — \`vh\` phải đứng TRƯỚC làm nền, \`dvh\` đứng SAU đè lên. ${viet}`);
+        else
+          cham(true, `${ten} — \`${thuocTinh}\` có CẶP vh+dvh`, `${t.vi}: ${viet}`);
+      }
+      if (!coDoDuoc)
+        cham(true, `${ten} — không đặt trần bằng vh/dvh`, `${t.vi}: trần cố định, không dính bẫy này`);
+    });
   }
 }
 
@@ -580,10 +967,18 @@ function doTranChieuCao() {
    CHẠY
    ========================================================================== */
 console.log('BÀN ĐO "MỞ RA XEM ĐƯỢC" — lớp: màn mở ra mà không xem được nội dung');
-console.log(TU_KIEM ? '⚠ CHẾ ĐỘ TỰ KIỂM: đã gài lại đúng lỗi GY-0007 — bàn đo PHẢI ĐỎ\n'
+console.log(CA ? `⚠ CA ĐỐI CHỨNG ${CA}: ${CAC_CA[CA].vi}\n  → phép chấm PHẢI đỏ: "${CAC_CA[CA].phaiDo}"\n`
+          : TU_KIEM ? '⚠ CHẾ ĐỘ TỰ KIỂM: đã gài lại đúng lỗi GY-0007 — bàn đo PHẢI ĐỎ\n'
                     : `Quét ${VAI_TRO.length} vai trò × ${BE_NGANG.length} bề ngang\n`);
 
 doTranChieuCao();
+doHopDongODa();
+
+if (CHI_LUOI) {
+  console.log(`\nChỉ chạy lưới Ⓓ · Chấm ${soCham} phép · HỎNG ${soHong}`);
+  if (HONG.length) { console.log('\nDanh sách chỗ hỏng:'); for (const h of HONG) console.log('  · ' + h); }
+  process.exit(soHong ? 1 : 0);
+}
 
 /* ==========================================================================
    ĐỒNG HỒ CHẾT CHO TỪNG LƯỢT — MỘT BÀN ĐO TREO LÀ MỘT BÀN ĐO BỊ TẮT
@@ -619,6 +1014,24 @@ console.log(`Chấm ${soCham} phép · HỎNG ${soHong}`);
 if (HONG.length) {
   console.log('\nDanh sách chỗ hỏng:');
   for (const h of HONG) console.log('  · ' + h);
+}
+
+if (CA) {
+  const c = CAC_CA[CA];
+  console.log(`\n─── ĐỐI CHỨNG CA ${CA} ───\n${c.vi}`);
+  const trung = HONG.filter(h => h.includes(c.phaiDo));
+  if (soHong === 0) {
+    console.log(`\n✗ CA ${CA} TRƯỢT: đã gài hỏng mà bàn đo vẫn XANH — BÀN ĐO MÙ ĐÚNG CÁCH HỎNG NÀY.`);
+    process.exit(1);
+  }
+  if (!trung.length) {
+    console.log(`\n✗ CA ${CA} TRƯỢT: bàn đo có đỏ, nhưng KHÔNG đỏ ở phép chấm phải bắt được ` +
+      `("${c.phaiDo}"). Đỏ vì lý do khác thì lần sau đổi chỗ là mù lại.`);
+    process.exit(1);
+  }
+  console.log(`\n✔ CA ${CA} ĐẠT: phép chấm "${c.phaiDo}" ĐỎ ${trung.length} lượt.`);
+  console.log(`  ví dụ: ${trung[0]}`);
+  process.exit(0);
 }
 
 if (TU_KIEM) {
