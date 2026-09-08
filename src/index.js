@@ -6923,6 +6923,7 @@ async function gopYNhacSlaVoi(env, NGAY_CHO) {
    thành một trận bão ghi.
    ========================================================================== */
 const DEPLOY_TOI_DA_MOI_LUOT = 30;   // trần cứng số góp ý đụng tới trong 1 lượt
+const DEPLOY_TOI_DA_COMMIT   = 200;  // trần cứng số commit đọc trong 1 bản tin
 const DEPLOY_HAN_PHUT        = 30;   // mốc `luc` cũ hơn thế thì từ chối
 
 /* Hex → byte. Trả null nếu không phải hex sạch (số ký tự lẻ, có ký tự lạ).
@@ -7010,23 +7011,41 @@ async function gopYDaLenThat(req, env) {
      điệp commit chỉ là lời khai (REV-0042 C1). Thiếu hẳn trường này (script
      cũ, hoặc git không đọc được) → để `null`, KHÔNG phải `[]`: hai thứ khác
      nhau hoàn toàn, `[]` nghĩa là "không đổi file nào". */
-  const cacCommit = (Array.isArray(b.cac_commit) ? b.cac_commit : []).slice(0, 200)
+  const guiLen = Array.isArray(b.cac_commit) ? b.cac_commit : [];
+  const cacCommit = guiLen.slice(0, DEPLOY_TOI_DA_COMMIT)
     .map(c => ({ sha: String(c.sha || '').trim(), tieu_de: String(c.tieu_de || '').slice(0, 300),
                  than: String(c.than || '').slice(0, 2000),
                  cac_tep: Array.isArray(c.cac_tep)
                    ? c.cac_tep.slice(0, 300).map(t => String(t || '').slice(0, 400)) : null }))
     .filter(c => /^[0-9a-f]{7,40}$/i.test(c.sha));
+
+  /* ✂️ TRẦN COMMIT PHẢI NÓI RA (luật ab92afc — "danh sách bị cắt PHẢI NÓI RA";
+     cổng do-cat-im-lang bắt được chỗ này lúc gộp main). Một lượt gộp nhánh dài
+     có thể mang hơn 200 commit; commit thứ 201 nhắc GY-12 mà máy im thì góp ý
+     đó KHÔNG BAO GIỜ được chốt và KHÔNG AI BIẾT — đúng cái nỗi đau gốc.
+     Trần vẫn giữ (chống bản tin khổng lồ), nhưng cắt thì phải kêu. */
+  const catCommit = guiLen.length - cacCommit.length;
+  if (guiLen.length > DEPLOY_TOI_DA_COMMIT)
+    guiTelegram(env, `[Góp ý ERP] Lượt deploy này mang ${guiLen.length} commit — máy chỉ đọc ` +
+      `${DEPLOY_TOI_DA_COMMIT} cái đầu. Commit sau đó có nhắc mã góp ý thì KHÔNG được chốt. ` +
+      'Đẩy thêm một lượt nữa hoặc chạy scripts/dong-lui-gop-y.mjs.').catch(() => {});
   if (!cacCommit.length) return json({ ok: true, da_doi: 0, chi_tiet: [], ly_do: 'khong_co_commit' });
 
   /* Chỉ ĐỌC những góp ý thật sự được nhắc tên — không quét cả bảng. */
   const ma = new Set();
   for (const c of cacCommit) for (const n of docMaGopY(`${c.tieu_de}\n${c.than}`)) ma.add(n);
 
+  /* ✂️ Trần mã góp ý — cũng phải nói ra, cùng lý do như trần commit ở trên. */
+  const catMa = Math.max(0, ma.size - DEPLOY_TOI_DA_COMMIT);
+  if (catMa > 0)
+    guiTelegram(env, `[Góp ý ERP] Lượt deploy này nhắc tới ${ma.size} mã góp ý — máy chỉ tra ` +
+      `${DEPLOY_TOI_DA_COMMIT} mã đầu, CÒN ${catMa} MÃ CHƯA TRA.`).catch(() => {});
+
   const theoId = new Map(), theoSha = new Map();
   const COT = `id, tieu_de, trang_thai, nguoi_gui_id, bang_chung_url, deploy_sha, bao_da_len_luc`;
   try {
     if (ma.size) {
-      const ds = [...ma].slice(0, 200);
+      const ds = [...ma].slice(0, DEPLOY_TOI_DA_COMMIT);
       const { results } = await env.DB.prepare(
         `SELECT ${COT} FROM gop_y WHERE id IN (${ds.map(() => '?').join(',')})`).bind(...ds).all();
       for (const g of results || []) theoId.set(g.id, g);
@@ -7155,7 +7174,8 @@ async function gopYDaLenThat(req, env) {
   }
 
   return json({ ok: true, da_doi: chiTiet.filter(q => q.hanh_dong !== 'bo_qua').length,
-                bi_cat: biCat, tong_nhac_toi: tatCa.length, chi_tiet: chiTiet });
+                bi_cat: biCat, cat_commit: catCommit, cat_ma: catMa,
+                tong_nhac_toi: tatCa.length, chi_tiet: chiTiet });
 }
 
 /* ---- ĐƯỜNG SỬA TAY ① — Sếp chốt hoặc gỡ cái máy đoán --------------------

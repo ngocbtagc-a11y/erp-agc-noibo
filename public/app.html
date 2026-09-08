@@ -719,8 +719,12 @@
             </div>
             <div class="field field-rong">
               <label>Viết cho người gửi (bắt buộc, từ 20 ký tự)</label>
-              <input type="text" id="gyCtKhongCodeGhiChu" maxlength="500"
-                     placeholder="Ví dụ: Chỗ này đã có sẵn ở mục Kho vận → nút Lọc, chị bấm vào đó nhé.">
+              <!-- Ô này nhận tới 500 ký tự — câu trả lời gửi thẳng cho người
+                   góp ý. Ô MỘT DÒNG thì người viết không nhìn thấy hết câu
+                   mình vừa viết (rõ nhất ở 375px), nên dùng textarea đúng
+                   khuôn các ô góp ý khác. Cổng do-chu-dai bắt được chỗ này. -->
+              <textarea id="gyCtKhongCodeGhiChu" class="o-nhieu-dong" rows="1" maxlength="500"
+                        placeholder="Ví dụ: Chỗ này đã có sẵn ở mục Kho vận → nút Lọc, chị bấm vào đó nhé."></textarea>
             </div>
             <div class="field field-nut">
               <button type="submit" class="btn-primary" id="gyCtNutKhongCode" style="width:auto">Đóng góp ý này</button>
