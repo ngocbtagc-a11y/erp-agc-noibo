@@ -1475,7 +1475,7 @@ export function moQuetTaiLieu(t) {
             mang số sai. Máy chủ chặn, không phải nhắc suông.</p>` : ''}
 
           <label class="tlq-nhan">Ngày ban hành</label>
-          <input class="tlq-o" id="tlqBanHanh" type="date" value="${esc(hs.ngayBanHanh)}">
+          <input class="tlq-o" id="tlqBanHanh" type="date" data-ngay-kieu="qua-khu" value="${esc(hs.ngayBanHanh)}">
 
           <label class="tlq-nhan">Ngày hết hạn</label>
           <input class="tlq-o" id="tlqHetHan" type="date" value="${esc(hs.ngayHetHan)}">

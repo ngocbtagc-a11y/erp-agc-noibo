@@ -21,6 +21,8 @@ import { nenAnhChung, coByteCuaDataUrl } from './anh-chung.js';
 import { moQuetTaiLieu } from './quet-tai-lieu.js';
 import { soDoHienThi, chuHuyHieu, datSoDo, nenNhacCai, CHU_NHAC_CAI, KHOA_BO_QUA }
   from './so-do-bieu-tuong.js';
+/* Ô nhập ngày dùng chung (GY-0004) — MỘT chỗ cho cả 15 ô ngày của ERP. */
+import { theoDoiONgay, cauSaiONgay } from './o-ngay.js';
 /* ---- MÀN HÌNH TỰ LÀM MỚI (Sếp Ngọc 03/09/2026: "đã duyệt hoàn thành mà nó
    vẫn hiện ở đây") ---------------------------------------------------------
    `ngheDuLieu(nhóm, hàm)` đăng ký "màn này đang hiện nhóm dữ liệu đó" VÀ trả
@@ -208,6 +210,44 @@ let DS_VAI_TRO_HE_THONG = [], DS_VI_TRI_CONG_VIEC = [], QT_CO_COT_VI_TRI = null;
 // (không cột lương nếu không có quyền) — vẫn cần lưu lại để Search/Filter
 // lọc phía client không phải gọi lại API mỗi lần gõ.
 let DS_NHAN_SU_DOC = [], NS_XEM_LUONG_DOC = true;
+
+/* ==========================================================================
+   BIẾN DÙNG LÚC KHỞI ĐỘNG — PHẢI KHAI Ở ĐÂY, KHÔNG KHAI CẠNH CHỖ DÙNG
+   ---------------------------------------------------------------------------
+   VÌ SAO. Tệp này chạy từ trên xuống, và giữa chừng có một dãy
+   `await khoiDong…()` ở TẦNG TOP-LEVEL (Danh bạ · Kho vận · Kho tài liệu ·
+   Đơn hoàn…). Hàm `function` được cẩu lên nên gọi từ trên vẫn chạy; nhưng
+   biến `let`/`const` thì KHÔNG — chạm vào nó trước dòng khai là ném
+   `Cannot access 'X' before initialization` (vùng chết TDZ).
+
+   ĐÃ MẤT TIỀN HAI LẦN VÌ ĐÚNG CHUYỆN NÀY:
+     · `TBDay` — chat CHẾT HOÀN TOÀN nhiều tuần, hai vòng soi không thấy
+       (chính là lý do có `scripts/cong-khoi.mjs`).
+     · `TL_NHOM_LUU_DUOC` — Kho tài liệu chết ở LẦN VẼ ĐẦU: khai ở dòng ~10334
+       trong khi `await khoiDongKhoTaiLieu()` chạy ở dòng ~7462. Mỗi lần mở
+       ERP, tab Kho tài liệu chỉ hiện một dòng chữ
+       "Không tải được kho tài liệu: Cannot access 'TL_NHOM_LUU_DUOC' before
+       initialization" và KHÔNG có tài liệu nào — đúng góp ý GY-0007 của Sếp
+       ("không xem được, không kéo xuống được": danh sách rỗng thì lấy gì mà
+       kéo). Lỗi bị `catch` nuốt thành một dòng chữ nên cổng khói vẫn XANH.
+       ĐO LẠI (REV-0062 ⓪): tab HỒI PHỤC sau MỘT cú bấm nút lọc hoặc một phím
+       gõ vào ô tìm — `veLoc()` vẽ và nối dây 8 nút lọc TRƯỚC dòng nổ, nên tới
+       lúc người dùng chạm vào thì mô-đun đã chạy hết tệp và `nap()` chạy trọn
+       vẹn. Khai "chết hoàn toàn" là NÓI QUÁ, đã sửa. Mức nghiêm trọng KHÔNG
+       đổi: người mở ERP ra thấy màn trống + một câu lỗi máy, và không ai bảo
+       họ "bấm một nút là hiện".
+
+   LUẬT: biến top-level nào bị mã khởi động đụng tới thì khai TRONG khối này.
+   Bàn đo `scripts/do-man-mo-ra-xem-duoc.mjs` canh cả lớp này.
+   ========================================================================== */
+
+/** Nhóm giấy tờ người này LƯU được — máy chủ trả (`nhom_luu_duoc`), giao diện
+ *  không tự đoán. Cả hai cửa (kho chung · hồ sơ nhân sự) cùng ghi vào đây sau
+ *  mỗi lượt nạp.
+ *  Ẩn nút khi không sửa được là để KHÔNG HỨA SUÔNG (bài học REV-0040 #8): máy
+ *  chủ vẫn chặn 403 thật, nhưng bày một cái nút bấm vào là ăn lỗi thì tệ. */
+let TL_NHOM_LUU_DUOC = [];
+
 const taiDanhMucNen = ngheDuLieu('du_lieu_nen', async function taiDanhMucNen() {
   const [pb, cd, dv] = await Promise.all([
     API.dlnPhongBan().catch(() => ({ ds: [] })),
@@ -563,7 +603,10 @@ function veBangNsQuanTri() {
       `<td><span class="tag ${tt.mau}">${esc(tt.chu)}</span></td>` +
       `<td>${veOHopDong(n)}</td>` +
       `<td class="sm">${esc(n.ngay_vao || '')}</td>` +
-      `<td>${thaoTac}</td>`;
+      /* `.o-nut` — xem ghi chú ở `veDongTaiKhoan`. Ba nút Sửa/Hoàn tất/Xoá
+         dính `tbody td { white-space: nowrap }` nên nằm một hàng cứng và kéo
+         `ns-bang` tràn +54px @1024px. */
+      `<td class="o-nut">${thaoTac}</td>`;
   });
   veTrongNS(DS_NHAN_SU_QT, ds);
   veDaiThieuHopDong();
@@ -658,7 +701,12 @@ function veBangQtTaiKhoan() {
       `<td>${esc(n.bo_phan || '—')}</td>` +
       `<td>${cotTK}</td>` +
       `<td class="sm">${esc(tenVaiTro || '—')}</td>` +
-      `<td class="qt-thaotac">${thaoTac}</td>`;
+      /* `.o-nut` — nhóm nút TỰ XUỐNG HÀNG khi hết chỗ. Thiếu nó thì
+         `.qt-thaotac { white-space: nowrap }` giữ cả ba nút trên MỘT dòng và
+         bề ngang tối thiểu của cột thành tổng ba nút: đo được 337px, kéo
+         `qtBang` tràn +51px @1024px. Đúng lớp lỗi mà `.o-nut` sinh ra để
+         chặn, không đẻ cách thứ hai. */
+      `<td class="qt-thaotac o-nut">${thaoTac}</td>`;
   });
 
   const o = $('#qt-trong');
@@ -2484,6 +2532,11 @@ const TBDay = (() => {
    mà các `khoiDong*` bên dưới dựng ra sau. Đặt TRƯỚC chúng, không phải sau. */
 noiDayONhieuDong();
 
+/* Ô nhập NGÀY — cùng lý do, cùng chỗ đặt (GY-0004). `theoDoiONgay` nâng cấp
+   mọi ô đang có RỒI theo dõi ô sinh ra sau (Kho tài liệu dựng ô bằng chuỗi
+   HTML), nên không còn cửa hậu nào để lỗi cũ quay lại qua ô mới. */
+theoDoiONgay();
+
 await khoiDongVinhDanh();
 await khoiDongMucTieu();
 
@@ -2964,6 +3017,29 @@ async function veTongQuanTheoVaiTro() {
   const the = [];
   const canhBao = [];
   const laManager = !TOI.la_admin && (TOI.phong_ban_quan_ly || []).length > 0;
+
+  /* CON SỐ TRÊN THẺ ĐẾM TRÊN MỘT DANH SÁCH ĐÃ BỊ CẮT (REV-0061 — cùng lớp với
+     CHẶN-1). `cvDanhSach` trần 100 mỗi phạm vi và NÓI RA bằng `cat_nhan` /
+     `cat_giao` / `cat_phoi_hop`; bản trước nhận rồi vứt, nên "Việc đang mở: 100"
+     đọc như con số thật trong khi nó là con số CẮT. Thẻ Home là chỗ Sếp nhìn
+     đầu tiên mỗi sáng — nói dối ở đây là nói dối ở chỗ đắt nhất. */
+  const catCv = [cv.cat_nhan, cv.cat_giao, cv.cat_phoi_hop].filter(Boolean);
+  if (catCv.length) {
+    const tong = catCv.reduce((s, c) => s + (c.tong || 0), 0);
+    const hien = catCv.reduce((s, c) => s + (c.gioi_han || 0), 0);
+    canhBao.push({ m: 'warn', b: 'Số liệu việc trên đây đang đếm thiếu',
+      s: tong > hien
+        ? `Mỗi mục chỉ lấy ${catCv[0].gioi_han} việc gần nhất — còn ${tong - hien} việc cũ hơn chưa tính. Xem đủ ở Lịch sử làm việc.`
+        : 'Danh sách việc đã chạm trần — xem đủ ở Lịch sử làm việc.',
+      t: 'Công việc',
+      onClick: () => window.MO_DEN_LICHSU_TIM && window.MO_DEN_LICHSU_TIM('') });
+  }
+  if (mt.cat) {
+    canhBao.push({ m: 'warn', b: 'Danh sách mục tiêu đang bị cắt bớt',
+      s: `Đang hiện ${mt.cat.gioi_han} mục tiêu` +
+         (mt.cat.tong ? ` trên tổng ${mt.cat.tong}` : '') + ' — mở Trạm Mục Tiêu để xem đủ.',
+      t: 'Mục tiêu', onClick: () => moTab('muctieu') });
+  }
 
   if (TOI.la_admin) {
     ((mt.cong_ty || [])).filter(m => m.trang_thai === 'dang_thuc_hien' && !m.da_chot)
@@ -3646,6 +3722,16 @@ async function khoiDongCongViec() {
      (`CV_MO_THEO_TRANG_THAI`, `cvSua`) — gọi thẳng API vẫn bị chặn 403/409. */
   function htmlNutDongViec(r, loai) {
     const chuaXong = ['moi', 'dang_lam', 'cho_duyet'].includes(r.trang_thai);
+    /* NÚT NHẬN XÉT (GY-0005) — có mặt ở CẢ HAI phía và ở MỌI trạng thái, kể
+       cả việc đã nghiệm thu. Hai lý do, cả hai đều là lý do quản trị:
+         · người NHẬN việc phải có đường mở ra ĐỌC nhận xét về mình — hộp
+           "Sửa" không mở cho họ, nên nếu chỉ gắn nút ở phía người giao thì
+           nhận xét thành hồ sơ ngầm;
+         · việc vừa nghiệm thu xong mới đúng là lúc nhận xét có ích nhất, mà
+           đó lại đúng lúc mọi nút khác biến mất.
+       Cố ý ĐỂ NÂU (`.btn-nho` trần): một khung nhìn chỉ MỘT thứ được cam đậm
+       (luật ba màu ③), chỗ đó dành cho "Duyệt xong" / "Nộp kết quả". */
+    const nutNx = ` <button type="button" class="btn-nho" data-cv-nhanxet="${r.id}">Nhận xét</button>`;
     if (loai === 'toi') {
       // Người nhận là tôi; nếu người giao cũng là tôi => TODO CÁ NHÂN: bấm 1
       // phát là XONG, khỏi nộp + chờ duyệt. Tự giao cho mình thì tự sửa thoải
@@ -3655,11 +3741,11 @@ async function khoiDongCongViec() {
           ? `<button type="button" class="btn-nho btn-primary" data-cv-xongngay="${r.id}">✓ Xong</button>` +
             ` <button type="button" class="btn-nho cv-nut-sua" data-cv-sua="${r.id}">Sửa</button>` +
             ` <button type="button" class="btn-nho" data-cv-huy="${r.id}">Bỏ</button>`
-          : '';
+          : '';   // TODO cá nhân đã xong: không tự nhận xét mình, đỡ một nút thừa
       }
-      if (r.trang_thai === 'moi') return `<button type="button" class="btn-nho btn-primary" data-cv-batdau="${r.id}">Bắt đầu làm</button>`;
-      if (r.trang_thai === 'dang_lam') return `<button type="button" class="btn-nho btn-primary" data-cv-nop="${r.id}">Nộp kết quả</button>`;
-      return '';
+      if (r.trang_thai === 'moi') return `<button type="button" class="btn-nho btn-primary" data-cv-batdau="${r.id}">Bắt đầu làm</button>` + nutNx;
+      if (r.trang_thai === 'dang_lam') return `<button type="button" class="btn-nho btn-primary" data-cv-nop="${r.id}">Nộp kết quả</button>` + nutNx;
+      return nutNx.trim();
     }
     if (loai === 'giao') {
       let nut = '';
@@ -3675,7 +3761,7 @@ async function khoiDongCongViec() {
         nut += ` <button type="button" class="btn-nho cv-nut-sua" data-cv-sua="${r.id}">Sửa</button>`;
         nut += ` <button type="button" class="btn-nho" data-cv-huy="${r.id}">Huỷ</button>`;
       }
-      return nut;
+      return (nut + nutNx).trim();
     }
     return '';
   }
@@ -3839,6 +3925,126 @@ async function khoiDongCongViec() {
   $('#cv-sua-han-chot').addEventListener('change', capNhatHopLyDo);
   $('#cv-sua-han-chot').addEventListener('input', capNhatHopLyDo);
 
+  /* ==================== NHẬN XÉT MỘT VIỆC (GY-0005) ====================
+     Đọc lại nhận xét bằng ĐÚNG cửa `suaLichSu` mà hộp Sửa đang dùng — không
+     dựng cửa đọc thứ hai, hai cửa cho một sổ là hai màn nói hai chuyện khác
+     nhau, sớm hay muộn.
+
+     NHƯNG PHẢI HỎI RIÊNG `truong='nhan_xet'`, KHÔNG lọc ở trình duyệt
+     (REV-0061 · CHẶN-1). Bản đầu gọi cửa chung rồi `.filter()` trên 100 dòng
+     đã tải về: một việc chạy dài có 110 lần sửa thì 3 câu nhận xét viết từ
+     tháng 6 — luôn là dòng CŨ NHẤT — rơi hết ra ngoài trần, `ls.cat` nói rõ
+     là đã cắt, mà màn hình vứt câu đó đi rồi in "Chưa có nhận xét nào cho
+     việc này". Không phải để trống: KHẲNG ĐỊNH SAI, đúng cái lỗi mà chính
+     `suaLichSu` viết "KHÔNG XIN MIỄN TRỪ". */
+  const cvNxModal = $('#cvNxModalNen');
+  let cvNxId = null;
+
+  function dongHopNhanXet() { cvNxModal.hidden = true; cvNxId = null; }
+  cvNxModal.addEventListener('click', e => { if (e.target === cvNxModal) dongHopNhanXet(); });
+  $('#cv-nx-nut-dong').addEventListener('click', dongHopNhanXet);
+
+  const noiNhanXet = (chu) => {
+    const o = $('#cv-nx-loi');
+    o.textContent = chu || '';
+    o.classList.toggle('show', !!chu);
+  };
+
+  async function veSoNhanXet(id) {
+    const khoi = $('#cv-nx-so-khoi'), trong = $('#cv-nx-trong');
+    khoi.hidden = true; trong.hidden = true;
+    veDaiCat('#cv-nx-cat', null);
+    try {
+      const ls = await API.suaLichSu('cong_viec', id, 'nhan_xet');
+      const ds = ls.ds || [];
+      /* Dải cắt vẽ TRƯỚC cả nhánh "trống" — sổ mà rỗng vì bị cắt thì càng
+         phải nói ra, đó đúng là ca CHẶN-1. Đơn vị là "nhận xét", không phải
+         "lần sửa": cửa đọc nay chỉ đếm nhận xét. */
+      veDaiCat('#cv-nx-cat', ls.cat, { don_vi: 'nhận xét' });
+      if (!ds.length) { trong.hidden = false; return; }
+      $('#cv-nx-so').innerHTML = ds.map(d =>
+        `<li>${esc(d.cau)} <span class="luc">· ${esc(String(d.luc || '').slice(0, 16))}</span></li>`).join('');
+      khoi.hidden = false;
+    } catch {
+      /* KHÔNG im lặng: đọc hỏng mà hộp trống trơn thì người ta tưởng chưa ai
+         nhận xét bao giờ — đúng kiểu nói dối nguy hiểm nhất của một cái sổ. */
+      trong.textContent = 'Chưa đọc được sổ nhận xét (mạng hoặc quyền). Nhận xét cũ có thể đang có mà chưa hiện.';
+      trong.hidden = false;
+    }
+  }
+
+  async function moHopNhanXet(id) {
+    const r = CV_THEO_ID[id] || {};
+    cvNxId = id;
+    $('#cv-nx-viec').textContent = r.tieu_de
+      ? `Việc: "${r.tieu_de}" · người nhận: ${r.nguoi_nhan_ten || '—'}` + (r.dau_ra ? ` · đầu ra đã giao: ${r.dau_ra}` : '')
+      : 'Việc #' + id;
+    $('#cv-nx-noi-dung').value = '';
+    $('#cv-nx-xong').hidden = true;
+    noiNhanXet('');
+    /* Nút Vinh danh CHỈ hiện khi có người khác để khen — tự khen mình trên
+       bảng công khai thì không. */
+    $('#cv-nx-nut-khen').hidden = !(r.nguoi_nhan_id && r.nguoi_nhan_id !== TOI.id);
+    cvNxModal.hidden = false;
+    await veSoNhanXet(id);
+  }
+
+  // Hai chip gợi ý — CHÈN chữ mở đầu rồi nhường lại cho người viết.
+  $('#cv-nx-form').addEventListener('click', (e) => {
+    const chip = e.target.closest('[data-nx-them]');
+    if (!chip) return;
+    const o = $('#cv-nx-noi-dung');
+    const dau = o.value.trim();
+    o.value = (dau ? dau + '\n' : '') + chip.getAttribute('data-nx-them');
+    o.focus();
+    o.setSelectionRange(o.value.length, o.value.length);
+  });
+
+  $('#cv-nx-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!cvNxId) return;
+    const noi = $('#cv-nx-noi-dung').value.trim();
+    const nut = $('#cv-nx-nut-gui');
+    noiNhanXet('');
+    if (noi.length < 5) { noiNhanXet('Viết rõ chỗ làm tốt hoặc chỗ cần sửa giúp tôi — ít nhất 5 ký tự.'); return; }
+    nut.disabled = true;
+    try {
+      await API.cvNhanXet(cvNxId, noi);
+      $('#cv-nx-noi-dung').value = '';
+      $('#cv-nx-xong').textContent = 'Đã gửi. Người nhận việc vừa nhận được thông báo và đọc được câu này.';
+      $('#cv-nx-xong').hidden = false;
+      await veSoNhanXet(cvNxId);
+    } catch (err) {
+      noiNhanXet(err.message || 'Chưa gửi được nhận xét, thử lại nhé.');
+    } finally { nut.disabled = false; }
+  });
+
+  /* BẮC CẦU SANG VINH DANH — dùng LẠI `vdGui` sẵn có, không đẻ đường khen
+     thứ hai. Lời khen đi thẳng lên bảng Vinh danh ở Tổng quan, và người được
+     khen ăn đúng một thông báo của cửa đó. */
+  $('#cv-nx-nut-khen').addEventListener('click', async () => {
+    if (!cvNxId) return;
+    const r = CV_THEO_ID[cvNxId] || {};
+    const noi = $('#cv-nx-noi-dung').value.trim();
+    noiNhanXet('');
+    if (noi.length < 5) { noiNhanXet('Viết lời khen vào ô trên trước đã — Vinh danh cần một câu cụ thể.'); return; }
+    if (!r.nguoi_nhan_id) { noiNhanXet('Không rõ người nhận việc này để vinh danh.'); return; }
+    const nut = $('#cv-nx-nut-khen');
+    nut.disabled = true;
+    try {
+      // Nhận xét vẫn được ghi vào sổ việc: khen công khai KHÔNG thay cho
+      // việc chấm đầu ra, nó đứng thêm bên cạnh.
+      await API.cvNhanXet(cvNxId, noi);
+      await API.vdGui(r.nguoi_nhan_id, `${noi} (việc: ${r.tieu_de || '#' + cvNxId})`.slice(0, 500), 5);
+      $('#cv-nx-noi-dung').value = '';
+      $('#cv-nx-xong').textContent = `Đã ghi nhận xét VÀ vinh danh ${r.nguoi_nhan_ten || 'người nhận'} (+5 ⭐) trên bảng Vinh danh ở Tổng quan.`;
+      $('#cv-nx-xong').hidden = false;
+      await veSoNhanXet(cvNxId);
+    } catch (err) {
+      noiNhanXet(err.message || 'Chưa vinh danh được, thử lại nhé.');
+    } finally { nut.disabled = false; }
+  });
+
   $('#cv-sua-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     $('#cv-sua-loi').textContent = '';
@@ -3874,6 +4080,8 @@ async function khoiDongCongViec() {
   async function xuLyNut(e) {
     const nutSua = e.target.closest('[data-cv-sua]');
     if (nutSua) { await moHopSuaViec(nutSua.getAttribute('data-cv-sua')); return; }
+    const nutNx = e.target.closest('[data-cv-nhanxet]');
+    if (nutNx) { await moHopNhanXet(nutNx.getAttribute('data-cv-nhanxet')); return; }
     const nutBatDau = e.target.closest('[data-cv-batdau]');
     const nutNop = e.target.closest('[data-cv-nop]');
     const nutXongNgay = e.target.closest('[data-cv-xongngay]');
@@ -3937,10 +4145,16 @@ async function khoiDongCongViec() {
     $('#cv-tqct-panel').hidden = false;
     try {
       const kq = await API.cvTongQuanCongTy();
+      /* `|| 0` KHÔNG phải cho đẹp: `String(undefined)` in ra đúng chữ
+         "undefined" ngay trên ô số của Trạm Mục Tiêu — chữ máy lọt ra màn
+         hình, thứ người dùng đọc không hiểu gì. Ba ô y hệt ở
+         `taiLaiTongQuan()` đã chặn sẵn bằng `|| 0` từ lâu; ba ô này là bản
+         chép tay thứ hai và quên mất. Bắt được bằng bàn đo
+         `do-man-mo-ra-xem-duoc` khi đi quét cả lớp của GY-0006/GY-0007. */
       veThe('#cv-tqct-the', [
-        { k: 'Việc đang mở', v: String(kq.dang_mo), d: 'Toàn công ty' },
-        { k: 'Việc quá hạn', v: String(kq.qua_han), d: kq.qua_han ? 'Cần xử lý' : 'Không có', dir: kq.qua_han ? 'down' : '' },
-        { k: 'Chờ duyệt', v: String(kq.cho_duyet), d: 'Toàn công ty' }
+        { k: 'Việc đang mở', v: String(kq.dang_mo || 0), d: 'Toàn công ty' },
+        { k: 'Việc quá hạn', v: String(kq.qua_han || 0), d: kq.qua_han ? 'Cần xử lý' : 'Không có', dir: kq.qua_han ? 'down' : '' },
+        { k: 'Chờ duyệt', v: String(kq.cho_duyet || 0), d: 'Toàn công ty' }
       ]);
 
       const oPhong = $('#cv-tqct-phongban');
@@ -3966,6 +4180,12 @@ async function khoiDongCongViec() {
   }
 
   window.LAM_MOI_CONGVIEC = lamMoiCacManLienQuanCv;
+  /* Chuông thông báo nằm ở một khối khác (IIFE `chuongThongBao`) nên phải bắc
+     cầu ra ngoài — bấm dòng "… nhận xét việc …" mà không mở được đúng hộp thì
+     tin nhắn ấy chỉ là một dòng chữ (REV-0061 · VỪA-1). Việc chưa nằm trong
+     danh sách đã tải thì hộp vẫn mở và vẫn đọc được sổ nhận xét, chỉ thiếu
+     dòng tiêu đề việc — vẫn hơn hẳn một cú bấm chết. */
+  window.MO_HOP_NHANXET = moHopNhanXet;
   await taiLai();
   await taiLaiTongQuanCongTy();
 }
@@ -4215,7 +4435,8 @@ async function khoiDongLichSuViec() {
      Sếp Ngọc bấm mãi vào một cái nút đã chết mà console thì im). */
   $('#ls-cv-bang').addEventListener('click', (e) => {
     if (!e.target.closest('button[data-cv-batdau],button[data-cv-nop],button[data-cv-xongngay],' +
-                          'button[data-cv-duyet],button[data-cv-tralai],button[data-cv-sua],button[data-cv-huy]')) return;
+                          'button[data-cv-duyet],button[data-cv-tralai],button[data-cv-sua],button[data-cv-huy],' +
+                          'button[data-cv-nhanxet]')) return;
     goiMocNoi('CV_XU_LY_NUT', 'congviec', e);
   });
 
@@ -5377,6 +5598,16 @@ if (TOI.quyen.includes('nhansu')) {
          nên phải hỏi riêng khi mở hồ sơ. */
       const oNg = $('#nsSua-ngaysinh');
       if (!oNg) return;
+      /* GÁN THẲNG `.value` LÀ ĐỦ — KHÔNG bắn `input` thủ công ở đây nữa.
+         Bản vá REV-0061 vòng 2 (CAO-1) chuyển việc "vẽ lại dòng dưới ô sau
+         mỗi lần gán `.value`" vào ĐÚNG MỘT CHỖ: cái bẫy trên `value` mà
+         `nangCapMot()` của `o-ngay.js` đặt lên chính ô này.
+         Vòng trước luật ấy là luật NGƯỜI VIẾT MÃ phải nhớ, và trong ERP có 9
+         lệnh gán trên 6 ô ngày — nhớ được đúng 1 (chính chỗ này), 6 ô kia giữ
+         nguyên câu đỏ của bản ghi TRƯỚC dưới một giá trị HỢP LỆ của bản ghi
+         SAU. Nay mọi lệnh gán ở mọi màn đều đi qua bẫy đó.
+         Ai định thêm `dispatchEvent('input')` lại vào đây: đừng — đọc khối
+         "GÁN `.value` BẰNG MÃ CŨNG PHẢI VẼ LẠI" trong `o-ngay.js` trước. */
       oNg.value = '';
       try {
         const kq = await API.nsSinhNhat(n.id);
@@ -5386,18 +5617,49 @@ if (TOI.quyen.includes('nhansu')) {
     }
 
     /* Lưu ngay khi đổi, không chờ nút Lưu hồ sơ: ô này KHÔNG thuộc form hồ
-       sơ, gộp vào là phải sửa đường lưu nhân sự mà người khác đang dùng. */
-    $('#nsSua-ngaysinh')?.addEventListener('change', async () => {
+       sơ, gộp vào là phải sửa đường lưu nhân sự mà người khác đang dùng.
+
+       ⚠️ ĐÂY ĐÚNG LÀ CHỖ HỎNG CỦA GY-0004 ("nhập năm sinh ko đc"). Bản cũ
+       `o.disabled = true` NGAY trong `change`. Mà `<input type="date">` bắn
+       `change` từ chữ số ĐẦU TIÊN của năm (value = `0001-01-01`), nên vừa
+       gõ số "1" của "1990" là ô bị KHOÁ ⇒ MẤT TIÊU ĐIỂM ⇒ ba số "990" rơi
+       ra ngoài, còn máy chủ trả về "Năm sinh không hợp lý". Đo lại trong
+       Chrome thật: tiêu điểm mất ở đúng cú gõ thứ 5, value đứng ở
+       `0001-01-01`. Ba chốt mới, không chốt nào thừa:
+         ① KHÔNG khoá ô đang gõ. Đang gửi thì nói bằng chữ, không bằng khoá.
+         ② Chỉ gửi khi giá trị NẰM TRONG khoảng (`checkValidity` — `min`/`max`
+            do `o-ngay.js` đặt, khớp đúng chốt 1930…nay−14 của máy chủ).
+         ③ HOÃN 700ms: gõ tiếp thì huỷ lượt cũ, một lần gõ = một lần ghi D1,
+            không phải bốn. */
+    let hoanLuuNgaySinh = null, lanLuuNgaySinh = 0;
+    /* `#nsSua-loi` là `.form-loi`, mà `.form-loi` mặc định `display:none` —
+       bản cũ chỉ gán `textContent` nên câu "Chưa lưu được ngày sinh" CHƯA
+       BAO GIỜ hiện lên màn. Đó là im lặng đúng lúc cần nói nhất. */
+    const noiNgaySinh = (chu) => {
+      const oLoi = $('#nsSua-loi');
+      oLoi.textContent = chu || '';
+      oLoi.classList.toggle('show', !!chu);
+    };
+    $('#nsSua-ngaysinh')?.addEventListener('change', () => {
       const o = $('#nsSua-ngaysinh'), id = NS_SN_DANG_MO;
       if (!id) return;
-      o.disabled = true;
-      try {
-        await API.nsNgaySinhLuu(id, o.value || null);
-        $('#nsSua-loi').textContent = '';
-        taiViecCanLam();     // dải "sinh nhật tháng sau" phải đổi theo ngay
-      } catch (err) {
-        $('#nsSua-loi').textContent = err.message || 'Chưa lưu được ngày sinh.';
-      } finally { o.disabled = false; }
+      clearTimeout(hoanLuuNgaySinh);
+      // Đang gõ dở (năm mới có 1–3 chữ số) — `o-ngay.js` đã hiện câu ngay
+      // dưới ô rồi, ở đây chỉ việc KHÔNG gửi và KHÔNG khoá ô.
+      if (cauSaiONgay(o)) { noiNgaySinh(''); return; }
+      noiNgaySinh('');
+      const luot = ++lanLuuNgaySinh;
+      hoanLuuNgaySinh = setTimeout(async () => {
+        try {
+          await API.nsNgaySinhLuu(id, o.value || null);
+          if (luot !== lanLuuNgaySinh || NS_SN_DANG_MO !== id) return;  // đã có lượt mới
+          noiNgaySinh('');
+          taiViecCanLam();   // dải "sinh nhật tháng sau" phải đổi theo ngay
+        } catch (err) {
+          if (luot !== lanLuuNgaySinh || NS_SN_DANG_MO !== id) return;
+          noiNgaySinh(err.message || 'Chưa lưu được ngày sinh.');
+        }
+      }, 700);
     });
 
     $('#nsSua-sinhnhat')?.addEventListener('change', async () => {
@@ -6386,7 +6648,10 @@ if (TOI.quyen.includes('kinhdoanh')) {
     const nut = e.target.closest('.seg-nut');
     if (!nut) return;
     document.querySelectorAll('#kdSeg .seg-nut').forEach(b => b.classList.toggle('active', b === nut));
-    ['vanhanh', 'sanpham', 'rnd', 'cskh'].forEach(k => {
+    /* 'napfile' chỉ có mặt khi người dùng KHÔNG có tab Kho vận — lúc đó
+       `khoiDongNapFile` dời màn nạp sang `#kd-pane-napfile` rồi cắm thêm một
+       nút vào thanh này. Kê sẵn ở đây để khỏi phải sửa hai chỗ. */
+    ['vanhanh', 'sanpham', 'rnd', 'cskh', 'napfile'].forEach(k => {
       const pane = document.getElementById('kd-pane-' + k);
       if (pane) pane.hidden = (k !== nut.dataset.kd);
     });
@@ -7418,16 +7683,45 @@ async function khoiDongTongQuanSan() {
     const tbody = $(dich);
     tbody.innerHTML = '';
     if (!ds.length) {
-      tbody.innerHTML = `<tr><td colspan="4" class="empty">Chưa có dữ liệu.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="3" class="empty">Chưa có dữ liệu.</td></tr>`;
       return;
     }
     ds.forEach(s => {
       const tr = el('tr', s.so_luong === 0 ? 'kd-sku-chet' : '');
+      /* MỘT Ô DANH TÍNH, HAI DÒNG — xem ghi chú ở `app.html`. Mã SKU là thứ
+         người ta HÀNH ĐỘNG lên (sửa mã trên sàn, tra trong kho) nên nó giữ
+         dòng trên và giữ nét đậm cũ; tên hàng là thứ người ta ĐỌC để biết đó
+         là hàng gì nên nằm ngay dưới, không giấu đi đâu cả.
+
+         CSS kẹp dòng phụ 2 dòng, nên tên hàng dài PHẢI có đường đọc tiếp —
+         `luoiBang()` đo `scrollHeight` vs `clientHeight` rồi gắn nút "Xem
+         thêm" (xem ghi chú dài ở đó, REV-0063 CAO-1). `title` là thứ TIỆN
+         THÊM cho người dùng chuột, KHÔNG phải đường thoát: nó không tồn tại
+         trên điện thoại/máy tính bảng, mà ERP là PWA Sếp mở trên cả hai. Lời
+         khai cũ ở đây ("`title` giữ trọn tên… không cắt chữ âm thầm") là SAI
+         và đã cắt cụt tên hàng thật ở màn 1440px — đo được hiện 34px / thật
+         50px trên cả 3 dòng của bảng bán chạy. */
       tr.innerHTML =
-        `<td><b>${esc(s.sku)}</b></td>` +
-        `<td>${esc(s.ten || '')}</td>` +
+        `<td class="cot-chu"><div class="nm">${esc(s.sku)}</div>` +
+          (s.ten ? `<div class="sm" title="${esc(s.ten)}">${esc(s.ten)}</div>` : '') + '</td>' +
         `<td class="num">${tienVN(s.so_luong)}</td>` +
-        `<td class="num">${s.doanh_thu ? tienVN(s.doanh_thu) + ' đ' : '—'}</td>`;
+        /* DẤU CÁCH KHÔNG NGẮT (U+00A0) giữa số và "đ" — đơn vị tiền phải dính
+           với con số, không được rơi xuống dòng khác.
+
+           ⚠️ ĐÍNH CHÍNH LỜI KHAI (REV-0063 VỪA-2). Bản đầu ghi ở đây rằng
+           "chữ 'đ' rơi xuống một dòng RIÊNG ở 375px, ảnh `375-kinhdoanh-sau.png`
+           bắt được". KHÔNG TÁI LẬP ĐƯỢC, và cả hai bên đều đo:
+             · Hồ Ly mở chính tấm ảnh đó và cả tấm `-truoc`: cả hai hiện
+               `9.876.543.210 đ` TRÊN MỘT DÒNG.
+             · Dựng lại trạng thái trước khi vá bằng công tắc `BO_NBSP=1`
+               (thay mọi U+00A0 về dấu cách thường) rồi đo chiều cao ô tiền:
+               375px → 60px / 2 dòng · 1024px → 72px / 3 dòng · 1440px →
+               72px / 3 dòng. CÓ nbsp ra ĐÚNG BẰNG NGẦN ẤY, từng pixel một.
+           Nghĩa là ở bố cục hôm nay dấu cách không ngắt KHÔNG đổi gì cả.
+           Giữ lại vì nó ĐÚNG VỀ CHỮ NGHĨA và là chốt chặn cho ca xấu mai này
+           (số dài hơn, cột hẹp hơn) — nhưng đây là một phòng xa, KHÔNG phải
+           một lỗi đã bắt được. Khai không phải là đo. */
+        `<td class="num">${s.doanh_thu ? tienVN(s.doanh_thu) + ' đ' : '—'}</td>`;
       tbody.appendChild(tr);
     });
   }
@@ -7922,6 +8216,21 @@ if (TOI.quyen.includes('khovan')) {
   try { await khoiDongKho(); } catch (e) { console.error('Kho vận:', e); }
 }
 
+/* -- Nạp file số liệu — ĐỘC LẬP với tab Kho vận (REV-0060 CAO-⑥) --
+   Cắt theo ĐÚNG hai cờ mà máy chủ cắt (`san_pham.sua` · `kho.thao_tac`),
+   không theo tab. Kinh doanh (van_hanh_san) là chủ sở hữu danh mục SKU và
+   máy chủ vẫn cho họ nạp danh mục — nhưng họ KHÔNG có tab Kho vận, nên gọi
+   hàm này bên trong `khoiDongKho` là khoá luôn cửa của đúng người sở hữu
+   danh mục. `khoiDongNapFile` tự lo chỗ đặt màn: có tab Kho vận thì để
+   nguyên, không có thì dời khối màn sang tab Kinh doanh. */
+{
+  const qKhoNap = TOI.kho || { thao_tac: false, quan_ly: false, gia_von: false };
+  const qSpNap  = TOI.san_pham || { sua: false, khoa: false };
+  if (qSpNap.sua || qKhoNap.thao_tac) {
+    try { khoiDongNapFile(qKhoNap, qSpNap); } catch (e) { console.error('Nạp từ file:', e); }
+  }
+}
+
 /* -- Dữ liệu nền: Phòng ban / Chức danh / Đơn vị tính -- */
 if (TOI.quyen.includes('dulieunen')) {
   try { await khoiDongDuLieuNen(); } catch (e) { console.error('Dữ liệu nền:', e); }
@@ -7956,7 +8265,8 @@ if (TOI.quyen.includes('xepca')) {
    Ẩn nút khi không sửa được là để KHÔNG HỨA SUÔNG (REV-0040 #8): máy chủ vẫn
    chặn 403 thật, nhưng bày một cái nút bấm vào là ăn lỗi thì tệ.
    ========================================================================== */
-let TL_NHOM_LUU_DUOC = [];
+/* Khai báo THẬT đã dời lên khối "BIẾN DÙNG LÚC KHỞI ĐỘNG" đầu tệp. Khai lại
+   ở đây là Kho tài liệu chết ngay lúc mở ERP (TDZ). ĐỪNG khai lại. */
 
 /* -- Kho tài liệu quản trị (CTL-0026 Đợt 1) -- */
 if (TOI.quyen.includes('khotailieu')) {
@@ -7981,7 +8291,10 @@ if (TOI.shopee && TOI.shopee.xem) {
   chuong.hidden = false;
 
   const ICO = { day_kho: '📦', day_ke_toan: '💰', khieu_nai: '⚠️', canh_bao: '🔔',
-                cong_viec_moi: '🎯', cong_viec_phoi_hop: '🤝' };
+                cong_viec_moi: '🎯', cong_viec_phoi_hop: '🤝',
+                /* GY-0005 · REV-0061 · VỪA-1 — thiếu dòng này thì tin nhận xét
+                   rơi về 🔔 chung, lẫn với cảnh báo hệ thống. */
+                cong_viec_nhan_xet: '💬' };
 
   /* RỔ B của góp ý 03/09/2026 — chỗ dễ bỏ sót nhất. Trước bản này chuông chỉ
      tự hỏi lại 5 PHÚT/LẦN: giao việc xong, danh sách đã đúng nhưng con số đỏ
@@ -7995,7 +8308,7 @@ if (TOI.shopee && TOI.shopee.xem) {
     if (kq.chua_doc > 0) { badge.textContent = kq.chua_doc > 99 ? '99+' : kq.chua_doc; badge.hidden = false; }
     else badge.hidden = true;
     ds.innerHTML = list.map(t =>
-      `<div class="tb-item" data-loai="${esc(t.loai || '')}">` +
+      `<div class="tb-item" data-loai="${esc(t.loai || '')}" data-lien-ket="${esc(t.lien_ket || '')}">` +
       `${ICO[t.loai] || '🔔'} ${esc(t.noi_dung)}<div class="tb-gio">${esc(t.tao_luc || '')}</div></div>`
     ).join('');
     trong.hidden = list.length > 0;
@@ -8033,6 +8346,26 @@ if (TOI.shopee && TOI.shopee.xem) {
     } else if (it.dataset.loai === 'cong_viec_moi' || it.dataset.loai === 'cong_viec_phoi_hop') {
       moTab('tongquan');
       if (window.LAM_MOI_CONGVIEC) window.LAM_MOI_CONGVIEC();
+    } else if (it.dataset.loai === 'cong_viec_nhan_xet') {
+      /* REV-0061 · VỪA-1 — trước bản này bấm vào là panel đóng, KHÔNG đổi tab,
+         KHÔNG mở hộp. Trái hẳn lập luận trụ cột của cả thiết kế nhận xét:
+         "người bị nhận xét PHẢI đọc được → nên bắn thông báo". Thông báo mà
+         bấm không đi đâu thì lời hứa đó không có đường thực hiện.
+         `lien_ket` chính là id việc (xem `cvNhanXet` → `guiThongBao`). */
+      const idViec = it.dataset.lienKet;
+      if (idViec && window.MO_HOP_NHANXET) {
+        moTab('tongquan');
+        if (window.LAM_MOI_CONGVIEC) window.LAM_MOI_CONGVIEC();
+        window.MO_HOP_NHANXET(idViec);
+      } else if (window.MO_DEN_LICHSU_TIM) {
+        /* Tin cũ (hoặc tin lỗi) không kèm `lien_ket` thì VẪN phải đi tới một
+           chỗ CÓ THẬT — Lịch sử làm việc là nơi có nút "Nhận xét" của mọi
+           việc. Bỏ mặc ở đây là quay lại đúng cú bấm chết đang vá. */
+        window.MO_DEN_LICHSU_TIM('');
+      } else {
+        moTab('tongquan');
+        if (window.LAM_MOI_CONGVIEC) window.LAM_MOI_CONGVIEC();
+      }
     }
     panel.hidden = true;
   });
@@ -9478,6 +9811,12 @@ async function khoiDongKho() {
   } else {
     document.querySelectorAll('#kvSeg .seg-nut[data-kv="danhmuc"]').forEach(b => b.remove());
   }
+  /* Phiếu ĐIỀU CHỈNH chỉ dành cho quản lý kho (anh Duy + Admin) — máy chủ
+     kiểm `duocQuanLyKho` độc lập trong `kho.js`, giấu nút chỉ để không hứa
+     suông với người bấm vào cũng ăn 403. */
+  if (!qKho.quan_ly) {
+    document.querySelectorAll('#kvSeg .seg-nut[data-kv="dieuchinh"]').forEach(b => b.remove());
+  }
   // Không xem được giá vốn → bỏ cột giá trị tồn và ô đơn giá
   if (!qKho.gia_von) {
     const th = $('#kv-thGiaTri'); if (th) th.remove();
@@ -9490,11 +9829,35 @@ async function khoiDongKho() {
     const nut = e.target.closest('.seg-nut');
     if (!nut) return;
     document.querySelectorAll('#kvSeg .seg-nut').forEach(b => b.classList.toggle('active', b === nut));
-    ['ton', 'nhap', 'xuat', 'baocao', 'donhoan', 'lichsu', 'danhmuc'].forEach(k => {
+    ['ton', 'nhap', 'xuat', 'dieuchinh', 'baocao', 'donhoan', 'lichsu', 'danhmuc', 'napfile'].forEach(k => {
       const pane = document.getElementById('kv-pane-' + k);
       if (pane) pane.hidden = (k !== nut.dataset.kv);
     });
   });
+
+  /* ---- Nạp từ file ----
+     Giấu hẳn nút khi không có quyền GHI. Máy chủ vẫn chặn độc lập (403 ở
+     `batBuocNapDuLieu` trong index.js) — giấu nút chỉ để không hứa suông
+     với người bấm vào cũng không nạp được, KHÔNG phải lớp bảo vệ.
+
+     ⚠️ CẮT ĐÚNG LUẬT MÀ MÁY CHỦ ĐANG CẮT, không cắt theo luật gần giống.
+     Nạp danh mục sản phẩm đi theo quyền SẢN PHẨM (`TOI.san_pham.sua`), KHÔNG
+     đi theo `qKho.quan_ly`. Hai cái này khác nhau ở đúng một vai trò, mà lại
+     là vai trò quan trọng nhất với danh mục: Kinh doanh (van_hanh_san) là
+     CHỦ SỞ HỮU SKU nhưng không có mặt trong bảng quyền Kho. Cắt theo
+     `qKho.quan_ly` là giấu chức năng nạp danh mục khỏi đúng người sở hữu
+     danh mục, trong khi máy chủ vẫn cho họ nạp.
+
+     ⚠️ LỜI GỌI KHÔNG CÒN NẰM Ở ĐÂY NỮA (REV-0060 CAO-⑥).
+     Đổi luật cắt nút cho đúng là mới xong một nửa: màn nạp nằm TRONG tab Kho
+     vận, mà Kinh doanh (van_hanh_san) — chủ sở hữu danh mục SKU — không có
+     tab đó. Nút hiện đúng người nhưng nằm trong căn phòng người đó không mở
+     được cửa. Nên `khoiDongNapFile` giờ được gọi từ khối khởi động chung,
+     độc lập với tab Kho vận; ở đây chỉ còn việc dọn nút thừa. */
+  const qSanPham = TOI.san_pham || { sua: false, khoa: false };
+  if (!(qSanPham.sua || qKho.thao_tac)) {
+    document.querySelectorAll('#kvSeg .seg-nut[data-kv="napfile"]').forEach(b => b.remove());
+  }
 
   /* ---- Vẽ bảng tồn kho + thẻ tổng quan + đổ dropdown ---- */
   function veTonKho(tuKhoa) {
@@ -9571,9 +9934,14 @@ async function khoiDongKho() {
     hienThi: $('#kvXuatSPHienThi'), panel: $('#kvXuatSPPanel'),
     tim: $('#kvXuatSPTim'), goiY: $('#kvXuatSPGoiY'), giaTri: $('#kvXuatSP')
   }, () => DS_SP.map(s => ({ gia_tri: s.id, nhan: `${s.ten} — tồn ${s.ton} ${s.don_vi}` })), null, 'Chọn sản phẩm...').capNhatHienThi : null;
+  const veDcSP = $('#kvDcSP') ? ganCombo({
+    hienThi: $('#kvDcSPHienThi'), panel: $('#kvDcSPPanel'),
+    tim: $('#kvDcSPTim'), goiY: $('#kvDcSPGoiY'), giaTri: $('#kvDcSP')
+  }, () => DS_SP.map(s => ({ gia_tri: s.id, nhan: `${s.ten} — tồn ${s.ton} ${s.don_vi}` })), null, 'Chọn sản phẩm...').capNhatHienThi : null;
   function doDropdown() {
     veNhapSP?.();
     veXuatSP?.();
+    veDcSP?.();
   }
 
   /* ---- Nạp lại toàn bộ dữ liệu kho từ máy chủ ---- */
@@ -9797,6 +10165,123 @@ async function khoiDongKho() {
     });
   }
 
+  /* ---- Phiếu điều chỉnh tồn (chỉ quản lý kho) — REV-0060 vòng 3 · CHẶN-ⓑ ----
+     Đây là ĐƯỜNG RA cho ca "nạp nhầm tồn rồi kho đã bán mất một phần": nút Gỡ
+     lượt nạp từ chối (đúng — gỡ đi là tồn ÂM), và trước bản vá này câu từ chối
+     chỉ sang một cái màn KHÔNG TỒN TẠI, tức là Sếp kẹt vĩnh viễn, lối duy nhất
+     là mở CSDL sửa tay. */
+  if (qKho.quan_ly && $('#kvFormDieuChinh')) {
+    let dcLoDs = [];
+    const dcSpDangChon = () => DS_SP.find(x => x.id === $('#kvDcSP').value) || null;
+
+    async function veDcLo() {
+      const sp = dcSpDangChon();
+      const oLoO = $('#kvDcLoO'), oLo = $('#kvDcLo');
+      const oTonBox = $('#kvDcTonBox'), oTon = $('#kvDcTonNhac');
+      dcLoDs = [];
+      if (!sp) { oLoO.hidden = true; oTonBox.hidden = true; oLo.required = false; return; }
+      oTonBox.hidden = false;
+      oTon.innerHTML = `Sổ đang ghi tồn: <b>${tienVN(sp.ton)} ${esc(sp.don_vi)}</b> cho “${esc(sp.ten)}”`;
+      /* `required` bật/tắt THEO MÃ, không viết cứng trong HTML: một `<select
+         required>` nằm trong khối `hidden` làm trình duyệt từ chối gửi cả biểu
+         mẫu mà không hiện nổi lời nhắc (phần tử ẩn thì không focus được).
+         Và đây chỉ là phép lịch sự — cửa chặn THẬT nằm ở `dieuChinhKho` phía
+         máy chủ (REV-0060 vòng 4 · CHẶN-①): gọi thẳng API vẫn ăn 400. */
+      if (!sp.theo_doi_hsd) { oLoO.hidden = true; oLo.required = false; oLo.innerHTML = ''; return; }
+      oLoO.hidden = false;
+      oLo.required = true;
+      oLo.innerHTML = '<option value="">— Đang tải lô... —</option>';
+      try {
+        /* `true` = lấy CẢ lô đang âm VÀ lô đang 0. Lô âm chính là cái thường
+           phải sửa, mà lưới mặc định (`ton > 0`) lọc mất đúng nó; lô 0 là ca
+           “sổ ghi 0 mà ngoài kho vẫn còn hàng”. Từ vòng 4 ô này là lối đi DUY
+           NHẤT cho hàng theo lô, nên lô nào không hiện ở đây là lô không sửa
+           được — vì thế lưới phải mở hết. */
+        const kq = await API.khoLo(sp.id, true);
+        dcLoDs = kq.lo || [];
+        /* Hai lượt nạp cùng “Số lô LO-A” đẻ ra HAI dòng `lo_hang` khác nhau,
+           cùng tên, cùng HSD — ô chọn hiện hai dòng giống hệt nhau thì người
+           đi sửa không biết mình đang sửa cái nào (REV-0060 vòng 4 · THẤP-③).
+           Chỉ gắn thêm dấu phân biệt cho nhãn THẬT SỰ trùng, để ca thường
+           (mỗi lô một tên) không bị làm rối thêm. */
+        const nhanGoc = l => `${l.so_lo || l.id}` +
+          `${l.han_su_dung ? ' · HSD ' + l.han_su_dung.split('-').reverse().join('/') : ''}`;
+        const demNhan = {};
+        for (const l of dcLoDs) { const n = nhanGoc(l); demNhan[n] = (demNhan[n] || 0) + 1; }
+        oLo.innerHTML = dcLoDs.length
+          ? '<option value="">— Chọn lô —</option>' + dcLoDs.map(l =>
+              `<option value="${esc(l.id)}">${esc(nhanGoc(l))}` +
+              (demNhan[nhanGoc(l)] > 1
+                ? ` · nhập ${esc(String(l.tao_luc || '').slice(0, 16) || String(l.id).slice(-4))}`
+                : '') +
+              ` · sổ ghi ${tienVN(l.ton)}${l.ton < 0 ? ' ⚠ ÂM' : ''}</option>`).join('')
+          : '<option value="">— Mã này chưa có lô nào trong sổ —</option>';
+      } catch (err) {
+        oLo.innerHTML = `<option value="">— Không tải được lô: ${esc(err.message || '')} —</option>`;
+      }
+    }
+    $('#kvDcSP').addEventListener('change', veDcLo);
+    $('#kvDcSPHienThi').addEventListener('click', () => setTimeout(veDcLo, 0));
+    $('#kvDcLo').addEventListener('change', () => {
+      const l = dcLoDs.find(x => x.id === $('#kvDcLo').value);
+      const sp = dcSpDangChon();
+      if (l && sp) {
+        $('#kvDcTonNhac').innerHTML =
+          `Sổ đang ghi cho lô “${esc(l.so_lo || l.id)}”: <b>${tienVN(l.ton)} ${esc(sp.don_vi)}</b>` +
+          (l.ton < 0 ? ' — lô này đang ÂM, màn Xuất kho KHÔNG nhìn thấy nó.' : '');
+      }
+    });
+
+    /* ---- Ô BẮT BUỘC TRỐNG THÌ PHẢI NÓI RA, KHÔNG ĐƯỢC IM ------------------
+       `required` một mình là chốt CÂM: trình duyệt chặn `submit` rồi cố mở
+       bong bóng nhắc, và khi không focus được ô đó (màn đang cuộn, ô nằm
+       trong khối vừa hiện ra, hoặc trình duyệt từ chối) thì nó chỉ ghi một
+       dòng vào console — Sếp bấm nút, KHÔNG có gì xảy ra, KHÔNG có câu nào.
+       Im lặng đúng là lớp lỗi cả REV-0060 đang đuổi. Bắt lấy `invalid` và
+       viết câu ra đúng cái hộp lỗi mà máy chủ vẫn dùng. */
+    for (const o of [$('#kvDcLo'), $('#kvDcTonThuc'), $('#kvDcLyDo')]) {
+      if (!o) continue;
+      o.addEventListener('invalid', () => {
+        const cau = o.id === 'kvDcLo'
+          ? 'Xin chọn LÔ HÀNG: mã này theo dõi hạn sử dụng nên tồn nằm ở từng lô — ' +
+            'sửa ở mức mã sẽ để lại lô âm mà màn Xuất kho không nhìn thấy.'
+          : o.id === 'kvDcTonThuc'
+            ? 'Xin nhập số tồn THẬT đếm được (số nguyên từ 0 trở lên).'
+            : 'Xin ghi rõ LÝ DO điều chỉnh — sổ cái không nhận một con số không có lý do.';
+        const oLoi = $('#kvLoiDieuChinh');
+        oLoi.textContent = cau; oLoi.classList.add('show');
+        $('#kvOkDieuChinh').hidden = true;
+      });
+    }
+
+    $('#kvFormDieuChinh').addEventListener('submit', async ev => {
+      ev.preventDefault();
+      const oLoi = $('#kvLoiDieuChinh'), oOk = $('#kvOkDieuChinh');
+      oLoi.classList.remove('show'); oOk.hidden = true;
+      const nut = $('#kvNutDieuChinh'); nut.disabled = true; nut.textContent = 'Đang lưu…';
+      try {
+        const kq = await API.khoDieuChinh({
+          san_pham_id: $('#kvDcSP').value,
+          lo_hang_id: $('#kvDcLo').value || null,
+          ton_thuc: $('#kvDcTonThuc').value,
+          ly_do: $('#kvDcLyDo').value
+        });
+        $('#kvFormDieuChinh').reset();
+        /* Gỡ `required` TRƯỚC khi giấu ô lô đi — bỏ sót là lần bấm sau trình
+           duyệt chặn cả biểu mẫu vì một ô bắt buộc đang ẩn. */
+        $('#kvDcLo').required = false;
+        $('#kvDcLoO').hidden = true; $('#kvDcTonBox').hidden = true;
+        oOk.textContent = '✓ ' + (kq.tin || 'Đã lập phiếu điều chỉnh.'); oOk.hidden = false;
+        await taiLai();
+        doDropdown();
+      } catch (err) {
+        oLoi.textContent = err.message; oLoi.classList.add('show');
+      } finally {
+        nut.disabled = false; nut.textContent = 'Lập phiếu điều chỉnh';
+      }
+    });
+  }
+
   /* ---- Thêm mã hàng (chỉ quản lý kho) ---- */
   if (qKho.quan_ly) {
     $('#kvFormThemSP').addEventListener('submit', async ev => {
@@ -9864,6 +10349,542 @@ const NEN_ANH_KHIEU_NAI = { canhToiDa: 1280, chatLuong: 0.72 };
 /* ==========================================================================
    ĐƠN HOÀN — Shopee
    ========================================================================== */
+
+/* ==========================================================================
+   NẠP TỪ FILE — bốn bước: chọn file → ghép cột → xem trước → ghi
+   ---------------------------------------------------------------------------
+   HAI LUẬT KHÔNG ĐƯỢC PHÁ Ở MÀN NÀY:
+
+   ① MÁY KHÔNG TỰ QUYẾT CỘT NÀO LÀ CỘT NÀO. Máy chỉ điền sẵn gợi ý; Sếp nhìn
+      MẪU DỮ LIỆU THẬT đọc từ cột đó rồi mới xác nhận. File Shopee, file kế
+      toán, file Excel tự làm đặt tên cột khác nhau hết — đoán sai một cột là
+      cả bảng sai, mà sai êm (số vẫn vào, chỉ vào nhầm ô).
+
+   ② KHÔNG BAO GIỜ GHI THẲNG. Bước 3 hiện rõ: thêm mấy dòng, sửa mấy dòng,
+      giữ nguyên mấy dòng, dòng nào lỗi và lỗi gì, tốn bao nhiêu lượt ghi.
+      Bấm xác nhận rồi mới gọi `API.napGhi`.
+
+   Byte của file được giữ trong biến `tepByte` giữa các bước để không bắt Sếp
+   chọn lại file ba lần. Chọn file khác thì xoá sạch trạng thái cũ.
+   ========================================================================== */
+function khoiDongNapFile(qKho, qSanPham) {
+  let tepByte = null;       // Uint8Array nội dung file đang xử lý
+  let tepTen  = '';
+  let mo      = null;       // kết quả /nap-mo  (cột, gợi ý ghép, vân tay)
+  let xem     = null;       // kết quả /nap-xem (bảng tóm tắt)
+  /* `null` = CHƯA AI CHỌN BẢNG. Máy chủ chỉ được tự bỏ qua bảng ẩn / bảng
+     rỗng khi chưa ai chọn (REV-0060 vòng 2 · CAO-⑦); gửi 0 là biến mọi lần
+     mở file thành "người đã chọn bảng đầu tiên". Mở xong thì nhận lại đúng
+     số bảng máy chủ ĐANG đọc, để hai bước sau không đọc lệch bảng. */
+  let bangChon = null;      // .xlsx nhiều bảng: đang đọc bảng thứ mấy
+  /* Bằng ĐÚNG `maxlength` của #napTrungGo trong app.html và `TRAN_GO_TEN_TEP`
+     ở src/nap-du-lieu.js — ba chỗ phải cùng một con số, lệch là màn mở nút mà
+     máy chủ vẫn 409 (hoặc ngược lại). */
+  const TRAN_GO_TEN = 90;
+  let phieuVuaNap = null;   // phiếu của lượt nạp tồn vừa xong (để gỡ lại)
+
+  const oDich = $('#napDich');
+  if (!oDich) return;
+
+  /* ---- CHỖ ĐẶT MÀN (REV-0060 CAO-⑥) ----
+     Có tab Kho vận thì để nguyên màn nạp trong Kho vận. KHÔNG có tab đó
+     (Kinh doanh — chủ sở hữu danh mục SKU) thì DỜI nguyên khối sang tab Kinh
+     doanh rồi cắm thêm một nút vào thanh chuyển màn. Dời chứ không chép: hai
+     khối cùng id là hỏng cả hai.
+     ⚠️ Đây là chỗ đặt TẠM về mặt kỹ thuật để Kinh doanh có đường vào. Màn
+     này thuộc tab nào là quyết định của Sếp — xem CHANGELOG. */
+  if (!TOI.quyen.includes('khovan')) {
+    const khoi = document.getElementById('kv-pane-napfile');
+    const oCho = document.getElementById('kd-pane-napfile');
+    if (khoi && oCho) {
+      oCho.appendChild(khoi);
+      khoi.hidden = false;          // trong Kinh doanh, khối này LÀ cả màn
+      /* ⚠️ CHỈ CẮM NÚT KHI CÓ NGƯỜI NGHE (REV-0060 vòng 2 · THẤP-⑩).
+         Listener của `#kdSeg` chỉ được gắn khi người dùng có tab 'kinhdoanh'
+         (app.js, khối "-- Kinh doanh --"). Hôm nay chưa vai nào rơi vào khe
+         này, nhưng thêm một vị trí công việc mới — có `san_pham.sua`, không
+         có 'khovan', cũng không có 'kinhdoanh' — là có ngay một cái nút bấm
+         không ra gì. Nút chết còn tệ hơn không có nút. */
+      const seg = TOI.quyen.includes('kinhdoanh') ? document.getElementById('kdSeg') : null;
+      if (seg && !seg.querySelector('.seg-nut[data-kd="napfile"]')) {
+        const nut = document.createElement('button');
+        nut.type = 'button';
+        nut.className = 'seg-nut';
+        nut.dataset.kd = 'napfile';
+        nut.textContent = 'Nạp từ file';
+        seg.appendChild(nut);
+      }
+    }
+  }
+
+  /* Tồn kho cần quyền THAO TÁC KHO; danh mục cần quyền SỬA SẢN PHẨM.
+     Không có quyền nào thì bỏ hẳn lựa chọn đó khỏi danh sách — thà không
+     hiện, còn hơn hiện rồi báo 403 sau khi Sếp đã chọn xong file.
+     Hai dòng dưới đây phải soi CÙNG hàm quyền mà máy chủ soi
+     (duocSuaSanPham · duocThaoTacKho) — lệch một chút là hoặc giấu nhầm
+     người, hoặc hứa suông rồi 403. */
+  if (!qSanPham.sua) { const o = oDich.querySelector('option[value="san_pham"]'); if (o) o.remove(); }
+  if (!qKho.thao_tac) { const o = oDich.querySelector('option[value="ton_kho"]'); if (o) o.remove(); }
+
+  const MO_TA_DICH = {
+    san_pham: 'Nạp mã hàng, tên, nhóm hàng, đơn vị tính. Nạp cái này TRƯỚC — tồn kho và báo cáo đều cần có sản phẩm.',
+    ton_kho:  'Nạp số lượng đang có trong kho. Mỗi dòng thành một lần nhập trong sổ cái, nên tồn vẫn truy được nguồn gốc.'
+  };
+  function veMoTaDich() { $('#napDichMoTa').textContent = MO_TA_DICH[oDich.value] || ''; }
+  oDich.addEventListener('change', () => { veMoTaDich(); veBuoc(1); });
+  veMoTaDich();
+
+  /* ---- Chuyển bước. Mỗi lúc CHỈ MỘT bước trên màn (vừa màn 375px) ---- */
+  function veBuoc(n) {
+    [1, 2, 3, 4].forEach(i => { const p = $('#nap-b' + i); if (p) p.hidden = (i !== n); });
+    ['#nap-loi', '#nap-loi2', '#nap-loi3'].forEach(s => {
+      const o = $(s); if (o) { o.textContent = ''; o.classList.remove('show'); }
+    });
+  }
+  function baoLoi(oId, tin) {
+    const e = $(oId);
+    if (!e) return;
+    e.textContent = tin;
+    e.classList.add('show');
+  }
+
+  /* ---- Bước 1: chọn file ---- */
+  ganVungThaTep({
+    vungTha: $('#napVungTha'),
+    oChonFile: $('#napChonTep'),
+    nutChon: $('#napNutChon'),
+    vungBamCamUng: $('#napVungTha'),
+    khiCoTep: nhanTep
+  });
+
+  async function nhanTep(f) {
+    veBuoc(1);
+    const nut = $('#napNutChon');
+    const chuCu = nut.textContent;
+    nut.disabled = true;
+    nut.textContent = 'Đang đọc file…';
+    try {
+      tepByte = new Uint8Array(await f.arrayBuffer());
+      tepTen = f.name || 'file';
+      bangChon = null;                    // file mới thì để máy chủ tự mở bảng
+      mo = await API.napMo({ dich: oDich.value, ten_tep: tepTen, bang_chon: bangChon }, tepByte);
+      bangChon = Number(mo.bang_chon) || 0;   // đọc bảng nào thì hai bước sau bám đúng bảng đó
+      veGhepCot();
+      veBuoc(2);
+    } catch (err) {
+      tepByte = null; mo = null;
+      baoLoi('#nap-loi', err.message || 'Không đọc được file này, thử lại nhé.');
+    } finally {
+      nut.disabled = false;
+      nut.textContent = chuCu;
+    }
+  }
+
+  /* Đọc lại chính file đó nhưng ở BẢNG KHÁC. Không đọc lại là xem trước một
+     bảng rồi ghi vào sổ một bảng khác. */
+  async function doiBang(i) {
+    if (!tepByte) return;
+    bangChon = Number(i) || 0;
+    const o = $('#napChonBang');
+    if (o) o.disabled = true;
+    try {
+      mo = await API.napMo({ dich: oDich.value, ten_tep: tepTen, bang_chon: bangChon }, tepByte);
+      veGhepCot();
+    } catch (err) {
+      baoLoi('#nap-loi2', err.message || 'Không đọc được bảng này, chọn bảng khác nhé.');
+    } finally {
+      const o2 = $('#napChonBang');
+      if (o2) o2.disabled = false;
+    }
+  }
+
+  /* ---- Bước 2: ghép cột ----
+     Mỗi ô trong ERP là một dòng: nhãn + ô chọn cột của file + MẪU DỮ LIỆU
+     đọc được từ cột đang chọn. Cái mẫu đó là thứ giúp Sếp phát hiện ghép
+     nhầm NGAY TẠI CHỖ, thay vì phát hiện sau khi số đã vào sổ. */
+  function veGhepCot() {
+    $('#napB2Hint').textContent =
+      tepTen + ' · ' + mo.tep.dinh_dang + ' · ' + mo.tep.bang_ma + ' · ' + mo.tep.so_dong + ' dòng';
+
+    const oNho = $('#napB2Nho');
+    oNho.hidden = !mo.da_nho;
+    if (mo.da_nho) {
+      oNho.textContent = 'Lần trước đã ghép file dạng này rồi, ERP điền sẵn theo trí nhớ. ' +
+                         'Xin xem lại một lượt rồi bấm Xem trước.';
+    }
+
+    /* ---- Chọn bảng khi .xlsx có nhiều hơn một bảng ----
+       Hiện TÊN kèm SỐ DÒNG của từng bảng: tên bảng thôi thì vẫn phải đoán,
+       còn thấy "Hướng dẫn nhập khẩu · 12 dòng" cạnh "Tep nhap khau · 797
+       dòng" là biết ngay bảng nào là bảng số liệu. */
+    const oBangO = $('#napChonBangO'), oBang = $('#napChonBang');
+    const dsBang = mo.ds_bang || [];
+    if (oBangO && oBang) {
+      const nhieuBang = dsBang.length > 1;
+      oBangO.hidden = !nhieuBang;
+      if (nhieuBang) {
+        oBang.innerHTML = dsBang.map((b, i) => {
+          const sd = (b.so_dong === null || b.so_dong === undefined)
+            ? 'chưa đếm được' : b.so_dong.toLocaleString('vi-VN') + ' dòng';
+          /* Bảng đang ẩn trong Excel thì NÓI RA (REV-0060 vòng 2 · CAO-⑦):
+             bảng bị ẩn thường là bản nháp cũ, số sai. */
+          return '<option value="' + i + '"' + (i === (mo.bang_chon || 0) ? ' selected' : '') + '>' +
+                 esc(b.ten) + ' · ' + sd + (b.an ? ' · đang ẩn' : '') + '</option>';
+        }).join('');
+        $('#napChonBangHint').textContent =
+          'File có ' + dsBang.length + ' bảng. Chọn nhầm bảng là nạp nhầm số — xin xem số dòng cho chắc.';
+      }
+    }
+
+    const hop = $('#napGhepO');
+    hop.innerHTML = mo.truong.map(t => {
+      const chon = mo.ghep[t.ma];
+      const opt = ['<option value="">— Không nạp cột này —</option>'].concat(
+        mo.cot.map((c, i) =>
+          '<option value="' + i + '"' + (String(chon) === String(i) ? ' selected' : '') + '>' + esc(c) + '</option>')
+      ).join('');
+      return '<div class="field field-rong nap-ghep-dong">' +
+        '<label for="napG-' + esc(t.ma) + '">' + esc(t.nhan) +
+          (t.bat_buoc ? ' <span class="nap-bb">(bắt buộc)</span>' : '') + '</label>' +
+        '<select id="napG-' + esc(t.ma) + '" data-truong="' + esc(t.ma) + '">' + opt + '</select>' +
+        '<span class="nap-mau" id="napM-' + esc(t.ma) + '"></span>' +
+      '</div>';
+    }).join('');
+
+    hop.querySelectorAll('select').forEach(s => {
+      s.addEventListener('change', () => veMau(s));
+      veMau(s);
+    });
+  }
+
+  /* Đổi giá trị thô thành thứ NGƯỜI đọc hiểu, theo đúng KIỂU Ô đang ghép.
+     ⚠️ VÌ SAO CẦN (REV-0060 VỪA-③): Excel lưu 31/12/2026 thành số 46387.
+     Cả màn ghép cột được dựng quanh cái mẫu này — để Sếp phát hiện ghép nhầm
+     NGAY TẠI CHỖ. In ra `Đọc thử: "46387"` ở dòng "Hạn sử dụng" thì Sếp
+     không xác nhận được gì, và cửa chặn bằng mắt người mất tác dụng đúng ở
+     cột dễ sai nhất.
+     Giá trị đã đọc do MÁY CHỦ gửi xuống (`mau_doc`), không đọc lại ở đây —
+     hai bản đọc là hai bản sẽ lệch nhau, mà lệch thì Sếp duyệt một đằng sổ
+     ghi một nẻo. */
+  function docHieu(kieu, d) {
+    if (!d) return '';
+    if (kieu === 'ngay' && d.ngay) return d.ngay.split('-').reverse().join('/');
+    if ((kieu === 'tien' || kieu === 'nguyen' || kieu === 'nguyen_khong_am') && d.so !== undefined) {
+      return Number(d.so).toLocaleString('vi-VN');
+    }
+    return '';
+  }
+
+  /* Hiện vài giá trị đầu đọc được từ cột đang chọn — "đọc thử cho Sếp xem". */
+  function veMau(sel) {
+    const o = $('#napM-' + sel.dataset.truong);
+    if (!o) return;
+    const i = sel.value === '' ? -1 : Number(sel.value);
+    if (i < 0) { o.textContent = ''; return; }
+    const truong = (mo.truong || []).find(t => t.ma === sel.dataset.truong) || {};
+    const daDoc = mo.mau_doc || [];
+    const mau = [];
+    (mo.mau_dong || []).forEach((d, r) => {
+      const v = d[i];
+      if (v === undefined || v === '') return;
+      const hieu = docHieu(truong.kieu, (daDoc[r] || [])[i]);
+      mau.push('“' + v + '”' + (hieu && hieu !== String(v) ? ' → ' + hieu : ''));
+    });
+    if (!mau.length) { o.textContent = 'Cột này trống ở mấy dòng đầu'; return; }
+    /* Chỉ hiện vài giá trị đầu cho gọn — nhưng phải NÓI RA là đang cắt, chứ
+       không lẳng lặng hiện 2 cái rồi để Sếp tưởng cả cột chỉ có bấy nhiêu. */
+    const HIEN = 2;
+    const dau = mau.slice(0, HIEN).join(' · ');
+    o.textContent = mau.length > HIEN
+      ? 'Đọc thử ' + HIEN + ' giá trị đầu: ' + dau + ' … (còn ' + (mau.length - HIEN) + ' giá trị nữa trong mẫu)'
+      : 'Đọc thử: ' + dau;
+  }
+
+  function ghepHienTai() {
+    const g = {};
+    $('#napGhepO').querySelectorAll('select').forEach(s => {
+      if (s.value !== '') g[s.dataset.truong] = Number(s.value);
+    });
+    return g;
+  }
+
+  $('#napB2Huy').addEventListener('click', () => { tepByte = null; mo = null; veBuoc(1); });
+
+  $('#napChonBang')?.addEventListener('change', e => doiBang(e.target.value));
+
+  $('#napB2Tiep').addEventListener('click', async () => {
+    const nut = $('#napB2Tiep');
+    nut.disabled = true;
+    try {
+      xem = await API.napXem({ dich: oDich.value, ten_tep: tepTen, bang_chon: bangChon,
+                               ghep: ghepHienTai() }, tepByte);
+      veXemTruoc();
+      veBuoc(3);
+    } catch (err) {
+      baoLoi('#nap-loi2', err.message || 'Không xem trước được, thử lại nhé.');
+    } finally { nut.disabled = false; }
+  });
+
+  /* ---- Bước 3: xem trước, CHƯA GHI GÌ ---- */
+  function veXemTruoc() {
+    $('#napB3Hint').textContent = tepTen + ' · đọc được ' + xem.so_dong_doc + ' dòng';
+
+    /* Bốn con số Sếp cần biết TRƯỚC KHI ghi. Chỉ ô "Dòng lỗi" mới được đỏ,
+       và chỉ khi thật sự có lỗi — đỏ nhan nhản là không ai nhìn nữa.
+
+       Chữ dưới mỗi con số đổi theo ĐÍCH NẠP. Nạp tồn kho KHÔNG tạo mã hàng
+       mới — nó ghi từng dòng vào SỔ CÁI kho. Để nguyên chữ "Mã hàng mới" là
+       nói sai việc đang làm với chính người đọc nó (anh Duy ở kho), rồi
+       người ta tưởng file tồn kho đẻ ra 4 mã hàng lạ. */
+    const laTonKho = oDich.value === 'ton_kho';
+    veThe('#napTomTat', [
+      { k: laTonKho ? 'Ghi vào sổ' : 'Thêm mới', v: String(xem.so_them),
+        d: laTonKho ? 'Dòng nhập vào sổ cái kho' : 'Mã chưa có trong ERP' },
+      { k: 'Cập nhật',   v: String(xem.so_sua),
+        d: laTonKho ? 'Nạp tồn không sửa mã hàng' : 'Mã đã có, thông tin đổi' },
+      { k: laTonKho ? 'Bỏ qua' : 'Giữ nguyên', v: String(xem.so_bo_qua),
+        d: laTonKho ? 'Số lượng bằng 0, không ghi' : 'Giống hệt, không ghi' },
+      { k: 'Dòng lỗi',   v: String(xem.so_dong_loi),
+        d: xem.so_dong_loi ? 'Sẽ bỏ qua' : 'Không có',
+        dir: xem.so_dong_loi ? 'down' : '' }
+    ]);
+
+    // Cảnh báo mềm (vàng nâu, KHÔNG đỏ): không chặn, nhưng Sếp nên biết.
+    const canh = [];
+    if (xem.ghi_du_tinh) {
+      canh.push('File này tốn khoảng <b>' + Number(xem.ghi_du_tinh).toLocaleString('vi-VN') +
+                '</b> lượt ghi. Hôm nay còn khoảng ' +
+                Number(xem.ghi_con_lai_hom_nay).toLocaleString('vi-VN') + ' lượt.');
+    }
+    if (xem.da_khoa) {
+      canh.push('<b>' + xem.da_khoa + '</b> mã hàng đã “Hoàn tất” nên file KHÔNG ghi đè được. ' +
+                'Muốn sửa thì mở khoá ở màn Tồn kho trước.');
+    }
+    if (xem.so_trung_trong_file) {
+      canh.push('Có <b>' + xem.so_trung_trong_file + '</b> mã bị lặp ngay trong file. ' +
+                'Chỉ dòng đầu tiên được dùng.');
+    }
+    (xem.canh_bao || []).forEach(c => canh.push(esc(c)));
+    $('#napCanhBao').innerHTML = canh.map(c => '<div class="nap-canh-dong">' + c + '</div>').join('');
+
+    // Danh sách lỗi — đúng dòng, đúng cột, bằng tiếng người
+    const ds = xem.loi || [];
+    $('#napBangLoi').innerHTML = !ds.length ? '' :
+      '<div class="nap-loi-ds">' +
+        '<h5>Những dòng ERP không nhận (sẽ bỏ qua, không nạp)</h5>' +
+        ds.map(l => '<div class="nap-loi-dong">' + esc(l.thongDiep) + '</div>').join('') +
+        (xem.loi_con_lai
+          ? '<p class="nap-loi-them">…và ' + xem.loi_con_lai + ' dòng lỗi nữa không liệt kê hết ở đây.</p>'
+          : '') +
+      '</div>';
+
+    /* ---- CỬA CHẶN NẠP TRÙNG ----
+       Nạp tồn kho lần hai là CỘNG THÊM chứ không ghi đè. Ở đây không nhắc
+       suông: nút nạp TẮT HẲN cho tới khi Sếp tick riêng ô xác nhận, và có
+       sẵn đường gỡ lượt nạp cũ ngay trong khối này. Máy chủ chặn lần nữa
+       bằng 409 — tick chỉ là cách nói "tôi biết", không phải cửa bảo vệ. */
+    const oTrung = $('#napTrungO'), oTick = $('#napTrungTick');
+    const coTrung = !!(xem.can_xac_nhan_trung && xem.nap_trung);
+    /* HAI LỚP, HAI CỬA (REV-0060 vòng 2 · CAO-⑤). Lớp (a) — trùng NGUYÊN
+       FILE — bắt gõ lại tên file; lớp (b) — trùng mã hàng, kêu mọi lần kho
+       nhập lại cùng mã — vẫn là cái tick. Để chung một ô tick thì cái tick
+       thành phản xạ và gạt luôn tín hiệu mạnh nhất. */
+    const goTen = !!(coTrung && xem.nap_trung.can_go_ten_tep);
+    const oTickO = $('#napTrungTickO'), oGoO = $('#napTrungGoO'), oGo = $('#napTrungGo');
+    if (oTickO) oTickO.hidden = goTen;
+    if (oGoO) oGoO.hidden = !goTen;
+    if (oGo) oGo.value = '';
+    if (goTen && $('#napTrungGoHint')) {
+      /* Cắt đúng bằng `maxlength` của ô: bảo người ta gõ một chuỗi dài hơn
+         thứ ô nhận được là bảo họ làm một việc không thể. */
+      $('#napTrungGoHint').textContent =
+        'Gõ đúng: ' + String(xem.nap_trung.ten_tep || tepTen || '').slice(0, TRAN_GO_TEN);
+    }
+    if (oTrung) {
+      oTrung.hidden = !coTrung;
+      if (oTick) oTick.checked = false;
+      if (coTrung) {
+        $('#napTrungCau').textContent = xem.nap_trung.cau;
+        const ds = xem.nap_trung.lan_truoc || [];
+        $('#napTrungDs').innerHTML = !ds.length ? '' :
+          ds.map(v =>
+            '<div class="nap-luot-dong">' +
+              '<div class="nap-luot-chu">' + esc(String(v.ly_do || '').replace(/^Nạp từ file\s*/, '')) +
+                '<div class="phu">' + esc(v.nguoi_ten || '') + ' · ' + esc(v.luc || '') + '</div>' +
+              '</div>' +
+              '<button type="button" class="btn-nho" data-nap-go="' + esc(v.phieu_id) + '">Gỡ lượt này</button>' +
+            '</div>').join('');
+      }
+    }
+
+    /* Chặn cứng khi vượt hạn mức ghi trong ngày — nút xác nhận TẮT HẲN.
+       Vượt hạn mức là D1 chặn ghi cả hệ thống: đơn hoàn ngừng cập nhật,
+       kho vận không thấy đơn quá hạn. Máy chủ chặn lần nữa ở `ghiThat`. */
+    const nut = $('#napB3Ghi');
+    const khongCoGi = (xem.so_them + xem.so_sua) === 0;
+    if (xem.vuot_han_muc) {
+      nut.disabled = true;
+      baoLoi('#nap-loi3', xem.loi_han_muc);
+    } else if (khongCoGi) {
+      nut.disabled = true;
+      baoLoi('#nap-loi3', 'Không có gì để nạp — mọi dòng trong file đều đã có sẵn và giống hệt trong ERP.');
+    } else if (coTrung) {
+      nut.disabled = true;                 // mở ra khi Sếp tick
+      nut.textContent = 'Xác nhận nạp ' + (xem.so_them + xem.so_sua) + ' dòng vào ERP';
+    } else {
+      nut.disabled = false;
+      nut.textContent = 'Xác nhận nạp ' + (xem.so_them + xem.so_sua) + ' dòng vào ERP';
+    }
+  }
+
+  /* Tick "tôi đã kiểm" (lớp b) — hoặc GÕ ĐÚNG TÊN FILE (lớp a) — mới mở nút
+     nạp. So tên ngay ở đây cho Sếp thấy nút bật lên; máy chủ so lại lần nữa
+     trong `ghiThat`, cửa chặn thật nằm ở đó. */
+  const moNutNeuXacNhan = () => {
+    const nut = $('#napB3Ghi');
+    if (!nut || xem?.vuot_han_muc || !((xem?.so_them + xem?.so_sua) > 0)) return;
+    const goTen = !!(xem?.nap_trung && xem.nap_trung.can_go_ten_tep);
+    if (goTen) {
+      const can = String(xem.nap_trung.ten_tep || tepTen || '').trim().toLowerCase();
+      const da = String($('#napTrungGo')?.value || '').trim().toLowerCase();
+      const boDuoi = s => s.replace(/\.(csv|xlsx|xls|tsv|txt)$/, '');
+      /* Tên dài hơn trần `maxlength` của ô thì nhận đúng phần đầu — cùng luật
+         với `khopTenTep` ở máy chủ (src/nap-du-lieu.js). */
+      const dai = can.length > TRAN_GO_TEN;
+      nut.disabled = !(da && (da === can || boDuoi(da) === boDuoi(can) ||
+                              (dai && da === can.slice(0, TRAN_GO_TEN))));
+    } else {
+      nut.disabled = !$('#napTrungTick')?.checked;
+    }
+  };
+  $('#napTrungTick')?.addEventListener('change', moNutNeuXacNhan);
+  $('#napTrungGo')?.addEventListener('input', moNutNeuXacNhan);
+
+  $('#napB3Lui').addEventListener('click', () => veBuoc(2));
+
+  $('#napB3Ghi').addEventListener('click', async () => {
+    const nut = $('#napB3Ghi');
+    const chuCu = nut.textContent;
+    nut.disabled = true;
+    nut.textContent = 'Đang nạp…';
+    try {
+      const kq = await API.napGhi({
+        dich: oDich.value, ten_tep: tepTen, bang_chon: bangChon,
+        ghep: ghepHienTai(), van_tay: xem.van_tay,
+        xac_nhan_trung: !!$('#napTrungTick')?.checked,
+        xac_nhan_ten_tep: String($('#napTrungGo')?.value || '')
+      }, tepByte);
+      const laTK = oDich.value === 'ton_kho';
+      phieuVuaNap = kq.phieu_id || null;
+      veThe('#napKetQua', [
+        { k: laTK ? 'Đã ghi vào sổ' : 'Đã thêm', v: String(kq.da_them),
+          d: laTK ? 'Dòng nhập trong sổ cái kho' : 'Mã hàng mới' },
+        { k: 'Đã cập nhật', v: String(kq.da_sua),
+          d: laTK ? 'Nạp tồn không sửa mã hàng' : 'Mã hàng có sẵn' },
+        { k: laTK ? 'Bỏ qua' : 'Giữ nguyên', v: String(kq.bo_qua),
+          d: laTK ? 'Số lượng bằng 0' : 'Không có gì đổi' },
+        { k: 'Lượt ghi đã dùng', v: Number(kq.luot_ghi_that).toLocaleString('vi-VN'),
+          d: 'Trên hạn mức 100.000/ngày' }
+      ]);
+      /* Đường lùi ngay tại chỗ: nạp xong mới nhìn ra nhầm là chuyện thường,
+         và lúc đó tồn kho ĐÃ sai rồi. Nút gỡ phải nằm ngay đây, không bắt
+         Sếp đi tìm. */
+      const oGo = $('#napB4Go'), nutGo = $('#napB4GoNut');
+      if (oGo && nutGo) {
+        if (laTK && phieuVuaNap) {
+          oGo.textContent = 'Nhìn lại thấy nhầm file? Gỡ được cả lượt nạp này ra khỏi sổ cái, ' +
+                            'tồn kho tính lại ngay — không cần ai sửa tay trong cơ sở dữ liệu.';
+          nutGo.hidden = false;
+          nutGo.disabled = false;
+          nutGo.textContent = 'Gỡ lượt nạp vừa rồi';
+        } else {
+          oGo.textContent = '';
+          nutGo.hidden = true;
+        }
+      }
+      veBuoc(4);
+      taiLuotNap();
+    } catch (err) {
+      nut.disabled = false;
+      nut.textContent = chuCu;
+      baoLoi('#nap-loi3', err.message || 'Không nạp được, thử lại nhé.');
+    }
+  });
+
+  $('#napB4Moi').addEventListener('click', () => {
+    tepByte = null; mo = null; xem = null; phieuVuaNap = null;
+    veBuoc(1);
+    taiLuotNap();
+  });
+
+  /* ==== ĐƯỜNG LÙI: gỡ một lượt nạp tồn kho ra khỏi sổ cái ================
+     Trước REV-0060 không có đường nào — `grep -c "DELETE FROM" src/kho.js`
+     bằng 0 — nên nạp nhầm tồn là phải mở cơ sở dữ liệu sửa tay. Chống nạp
+     lại mà không có đường lùi thì việc chưa xong: chặn nhầm cũng có, mà nạp
+     nhầm file cũng có. */
+  async function goLuot(phieuId, nut) {
+    if (!phieuId) return;
+    if (!confirm('Gỡ lượt nạp này? Toàn bộ dòng của lượt nạp đó sẽ bị bỏ khỏi sổ cái kho ' +
+                 'và tồn kho tính lại ngay. Việc gỡ có ghi vết đầy đủ.')) return;
+    const chuCu = nut ? nut.textContent : '';
+    if (nut) { nut.disabled = true; nut.textContent = 'Đang gỡ…'; }
+    try {
+      const kq = await API.napHuy(phieuId);
+      if (nut) { nut.textContent = 'Đã gỡ'; }
+      if (phieuId === phieuVuaNap) {
+        const oGo = $('#napB4Go');
+        if (oGo) oGo.textContent = kq.tin || 'Đã gỡ lượt nạp này khỏi sổ cái.';
+      }
+      await taiLuotNap();
+    } catch (err) {
+      if (nut) { nut.disabled = false; nut.textContent = chuCu; }
+      baoLoi('#nap-loi5', err.message || 'Không gỡ được lượt nạp này, thử lại nhé.');
+    }
+  }
+
+  $('#napB4GoNut')?.addEventListener('click', e => goLuot(phieuVuaNap, e.currentTarget));
+  /* Nút gỡ nằm trong hai danh sách vẽ động (khối cảnh báo trùng ở bước 3 và
+     danh sách lượt nạp gần đây) — bắt một chỗ ở gốc, khỏi gắn lại mỗi lần vẽ. */
+  document.getElementById('kv-pane-napfile')?.addEventListener('click', e => {
+    const b = e.target.closest('[data-nap-go]');
+    if (b) goLuot(b.dataset.napGo, b);
+  });
+
+  async function taiLuotNap() {
+    const khoi = $('#nap-luot'), oDs = $('#napLuotDs');
+    if (!khoi || !oDs) return;
+    /* Chỉ ai THAO TÁC KHO mới thấy — Kinh doanh nạp danh mục thì không dính
+       tới sổ cái kho, hiện ra chỉ tổ rối màn. */
+    if (!qKho.thao_tac) { khoi.hidden = true; return; }
+    try {
+      const kq = await API.napLuot(10);
+      const ds = kq.ds || [];
+      khoi.hidden = ds.length === 0;
+      oDs.innerHTML = ds.map(v => {
+        const trangThai = v.da_go
+          ? '<span class="tag mute">đã gỡ</span>'
+          : (v.dang_ghi ? '<span class="tag warn">chưa ghi xong</span>' : '');
+        /* Chỉ người ĐÃ NẠP lượt đó, hoặc quản lý kho, mới gỡ được — máy chủ
+           chặn thật ở `huyLuotNap` (REV-0060 vòng 2 · CHẶN-②). Ở đây chỉ là
+           phép lịch sự: đừng vẽ một cái nút bấm vào là ăn 403. */
+        const nut = !v.go_duoc ? '' :
+          '<button type="button" class="btn-nho" data-nap-go="' + esc(v.phieu_id) + '">Gỡ lượt này</button>';
+        return '<div class="nap-luot-dong">' +
+                 '<div class="nap-luot-chu">' + esc(v.ten_tep || '(không rõ tên file)') + ' ' + trangThai +
+                   '<div class="phu">' + esc(v.nguoi_ten || '') + ' · ' + esc(v.luc || '') +
+                   ' · ' + Number(v.so_dong || 0).toLocaleString('vi-VN') + ' dòng · ' +
+                   Number(v.so_luong || 0).toLocaleString('vi-VN') + ' đơn vị</div>' +
+                 '</div>' + nut +
+               '</div>';
+      }).join('');
+    } catch (e) {
+      khoi.hidden = true;             // đọc không được thì im, đừng doạ người dùng
+      console.error('Lượt nạp gần đây:', e);
+    }
+  }
+  taiLuotNap();
+}
+
 async function khoiDongDonHoan() {
 
   /* Danh sách đơn hoàn dùng chung — Nguồn + mã vận đơn + tìm kiếm + quẹt QR */
@@ -10830,6 +11851,9 @@ function veChuCoSo(chu, viTri, nhan) {
    được xem — một quyết định về quyền, không phải sửa chính tả).
    ========================================================================== */
 
+/* `TL_NHOM_LUU_DUOC` đã DỜI LÊN khối "BIẾN DÙNG LÚC KHỞI ĐỘNG" ở đầu tệp
+   (vá GY-0007). Khai ở đây thì Kho tài liệu chết ngay lúc mở ERP — lý do đầy
+   đủ nằm ở đúng chỗ khai mới. ĐỪNG khai lại ở đây. */
 
 function nutSuaTaiLieu(t) {
   if (!TL_NHOM_LUU_DUOC.includes(t.nhom)) return '';
@@ -10884,10 +11908,21 @@ function noiNutSuaTaiLieu(goc, khiXong) {
         const d = r.ds || [];
         if (!d.length) { ols.textContent = 'Chưa ai sửa tài liệu này.'; return; }
         const ten = { tieu_de: 'tên tài liệu', so_hieu: 'số hiệu' };
+        /* SỔ BẰNG CHỨNG CẮT THÌ PHẢI NÓI (REV-0061 — cùng lớp với CHẶN-1).
+           `tlLichSu` có gọi `nhanCat` nên gói trả về kèm `r.cat`; bản trước
+           nhận rồi vứt đi, in ra 100 dòng đầu như thể đó là tất cả. Đây không
+           có thẻ `.dai-cat` sẵn nên nói bằng một dòng chữ ngay dưới danh sách,
+           đúng chỗ mắt người ta dừng lại. */
+        const c = r.cat;
+        const dongCat = c
+          ? `<div class="tl-nk-cat">Đang hiện ${c.gioi_han} lần sửa gần nhất` +
+            (c.tong ? ` trên tổng ${c.tong} — còn ${c.tong - c.gioi_han} lần sửa cũ hơn chưa hiện.` : ' — sổ này còn dài hơn.') +
+            '</div>'
+          : '';
         ols.innerHTML = '<ul class="tl-nk-ds">' + d.map(k =>
           `<li><b>${esc(k.nguoi_ten || '—')}</b> đổi ${esc(ten[k.truong] || k.truong)}: ` +
           `"${esc(k.gia_tri_cu || '(trống)')}" → "${esc(k.gia_tri_moi || '(trống)')}" ` +
-          `lúc ${esc(String(k.luc || '').slice(0, 16))}</li>`).join('') + '</ul>';
+          `lúc ${esc(String(k.luc || '').slice(0, 16))}</li>`).join('') + '</ul>' + dongCat;
       } catch (e) { ols.textContent = e.message; }
     });
 
@@ -11509,10 +12544,200 @@ function luoiBang() {
       }
     }
   });
+  capNutDongPhu();
   /* Cột vừa bị ẩn xong thì bảng hẹp lại — bảo dải "còn cột bên phải" đo lại,
      không thì nó giữ số đo của lúc bảng còn đủ cột và dán lời nhắc kéo ngang
      lên một cái bảng đã vừa màn. */
   if (typeof window.quetLaiBaoCuon === 'function') window.quetLaiBaoCuon();
+}
+
+/* ==========================================================================
+   DÒNG PHỤ BỊ KẸP THÌ PHẢI CÓ ĐƯỜNG ĐỌC TIẾP — REV-0063 CAO-1
+   ---------------------------------------------------------------------------
+   LỖI ĐÃ LỌT, kể lại để đừng lặp. Bản vá REV-0063 gộp "Mã SKU + Tên hàng" vào
+   MỘT ô hai dòng (`.nm` + `.sm`). Hai đường cấp nút "Xem thêm" của `luoiBang()`
+   đều TRƯỢT ô ấy:
+     · đường ① chỉ nhận ô CHỈ-CÓ-CHỮ (`!td.children.length`) — ô này có 2 lớp con;
+     · đường ② chỉ nhìn `.nm` — mã SKU 24 ký tự, không đủ dài.
+   Trong khi CSS `td.cot-chu .sm { max-height: 2.8em; overflow: hidden }` vẫn
+   kẹp và GIẤU phần thừa. Đo bằng Chrome ở 1440px (khung nửa bảng chỉ 537px):
+   cả 3 dòng của `#kd-sku-chay` có `clientHeight 34` mà `scrollHeight 50` —
+   mất hẳn dòng thứ ba của tên hàng, không một dấu hiệu nào.
+   `title` KHÔNG phải đường thoát hợp lệ: nó chỉ hiện khi rê chuột, mà ERP là
+   PWA Sếp mở cả trên điện thoại lẫn máy tính bảng.
+
+   VÌ SAO NẰM NGOÀI VÒNG `data-luoi`, KHÔNG NẰM TRONG. Vòng kia dập LỚP — làm
+   một lần là xong, và nó tự chặn bằng `data-luoi` để không gọi lại vô hạn qua
+   MutationObserver. Việc ở đây là ĐO, mà số đo đổi theo bề ngang cột: cùng một
+   cái tên 92 ký tự thì ở khung 537px là 3 dòng (bị kẹp), ở khung 678px là 2
+   dòng (không kẹp). Nhốt nó trong vòng dập-một-lần là đóng băng một số đo
+   nhất thời — đúng lỗi đã đo được ở bản đầu của chính chỗ vá này: lượt dập
+   đầu chạy lúc panel Kinh doanh còn `hidden` (`clientHeight` = 0), phép đo
+   lùi về đoán-theo-độ-dài, và ở 375px lẫn 1024px hiện ra một cái nút "Xem
+   thêm" dưới một cái tên KHÔNG hề bị cắt. Một cái nút mở ra đúng thứ đang bày
+   sẵn là một lời nói dối nhỏ, cùng họ với chính lỗi đang vá.
+
+   BA TRẠNG THÁI:
+     · đo được + bị kẹp    → gắn nút THẬT (không cờ `doan`).
+     · đo được + không kẹp → GỠ nút, kể cả nút THẬT. Xem "VÌ SAO GỠ CẢ NÚT
+       THẬT" ngay dưới.
+     · KHÔNG đo được (ô chưa được dàn, `clientHeight` = 0) → đoán theo độ dài
+       và ĐÁNH DẤU `doan`. Lùi về phía AN TOÀN: thà một cái nút thừa sống tạm
+       vài trăm mili-giây còn hơn một chỗ cắt chữ âm thầm sống mãi. Lượt dập
+       kế tiếp (mọi lần DOM đổi đều gọi lại hàm này) đo được thật và tự dọn.
+
+   ⚠️ VÌ SAO GỠ CẢ NÚT THẬT — VÀ VÌ SAO CÂU KHAI CŨ Ở ĐÂY LÀ SAI.
+   Chỗ này từng chỉ gỡ nút MANG CỜ `doan`, với lý do viết ra như một sự thật:
+   *"gỡ nút thật là mở cửa cho vòng lặp gỡ nút → cột hẹp lại → kẹp → gắn nút →
+   cột rộng ra → gỡ nút… mà MutationObserver sẽ chạy mãi không dừng."*
+   Đó là một GIẢ THUYẾT được trình bày như một SỐ ĐO. Hồ Ly dựng hẳn bản CÓ GỠ
+   rồi đo 40 mẫu × 50ms ở 1440px: số nút là 6 ở cả 40 mẫu — KHÔNG dao động,
+   không tái lập được (REV-0063 vòng 2, VỪA-2).
+   Còn cái GIÁ của việc không gỡ thì đo được ngay: mở ở 1440 (khung 537 → kẹp
+   → nút thật), rồi nới khung ra (mô phỏng xoay máy / kéo co cửa sổ) và ép vẽ
+   lại — 11 cái nút "Xem thêm" Ở LẠI trên những ô ĐÃ HẾT KẸP. Mười một cái nút
+   mở ra đúng thứ đang bày sẵn: chính là "một lời nói dối nhỏ, cùng họ với lỗi
+   đang vá" mà đoạn ngay phía trên lên án, và là lý do cờ `data-doan` ra đời.
+   Giữ lại một cái nút nói dối để phòng một vòng lặp chưa ai thấy là đổi sai
+   chiều — đo được thắng đoán được.
+
+   CHỐT CHẶN DAO ĐỘNG, ĐỂ KHÔNG PHẢI TIN AI: `GO_TOI_DA` — nhưng ĐẾM THEO
+   CHÙM, không đếm theo cả đời DOM. Xem khối ngay trên hai hằng số dưới đây;
+   bản trước đếm theo đời DOM với trần 2 và chạm trần thật ở lượt nới thứ BA.
+
+   ĐANG BUNG THÌ ĐỪNG ĐỤNG: `.dai-gon-mo` bỏ `max-height` nên `scrollHeight`
+   bằng `clientHeight`, tức trông như "không kẹp" — không loại trừ thì mỗi lần
+   DOM đổi là cái nút "Thu gọn" của người đang đọc bị giật mất khỏi tay.
+
+   DANH SÁCH SELECTOR PHẢI SOI GƯƠNG VỚI CÁI KẸP TRONG CSS
+   (`td .sm.dong-phu, td.cot-chu .sm` — style.css, khối "LƯỚI BẢNG"). Thêm một
+   chỗ kẹp trong CSS thì thêm vào đây, nếu không lại đúng lỗi này dưới một cái
+   tên khác.
+   CHỐT CANH: arm K và arm R7 của `npm run do-bang-that` so `scrollHeight` với
+   `clientHeight` trên MỌI ô của 30 bảng ở mọi bề ngang trong `RONGS`. R7 chạy
+   trên ĐƯỜNG VẼ THẬT và là arm DUY NHẤT bắt được đúng lỗi này — nay có một ca
+   `--tu-kiem` ĐỨNG SẴN tự gỡ `capNutDongPhu()` rồi đòi R7 phải đỏ, chứ không
+   còn chỉ chứng minh bằng lời (REV-0063 vòng 2, THẤP-4). Số đo khi gài lại:
+   K xanh ở mọi mức, R7 đỏ ở **BA** mức — 1440 · 1280 · 1200 — "hiện 34px /
+   thật 50px". (Câu cũ ghi "1440 và 1280", thiếu 1200; mức ấy đã vào `RONGS`
+   từ vòng 2. REV-0063 vòng 3, THẤP-4.)
+   ⚠️ VÀ R7 MỚI ĐƯỢC CHỨNG MINH Ở 3/5 MỨC, KHÔNG PHẢI MỌI BỀ NGANG. Ở 1024px
+   và 375px ca `--tu-kiem` KHÔNG gài được ô nào (arm R7 hỏi theo Ô, mà ở hai
+   mức ấy hai bảng SKU đã xếp chồng nên cột rộng ra và không ô nào còn kẹp) —
+   bàn đo nói thẳng "không gài được ca nào ở bề ngang này, KHÔNG KẾT LUẬN GÌ"
+   thay vì in một dấu tick. Đừng đọc "132 ĐẠT / 7 TRƯỢT" thành "R7 được chứng
+   minh ở mọi bề ngang". (REV-0063 vòng 3, THẤP-2.)
+   Tập bắt của K là TẬP CON THỰC SỰ của R7 — xem đính chính trong
+   `scripts/do-cat-im-lang.mjs`; đừng lấy "vẫn còn K" làm lý do bỏ R7.
+   (`do-cat-im-lang` KHÔNG canh được lớp này: nó đọc MÃ NGUỒN tìm `LIMIT` và
+   `.slice`, nó không nhìn thấy một cái kẹp CSS bao giờ.)
+
+   ⚠️ MỘT CHỖ LỆCH PHẠM VI, GHI RA ĐỂ ĐỪNG NGẠC NHIÊN (REV-0063 vòng 2,
+   THẤP-5). Hàm này chấm theo `scrollHeight > clientHeight`, KHÔNG hỏi bên
+   trong ô là chữ hay ảnh — nên một ô `.sm` chỉ chở ẢNH mà bị kẹp vẫn được cấp
+   nút "Xem thêm" (Hồ Ly đo: hiện 34px / thật 45px, `chu: 0`). Arm K/R7 thì bỏ
+   qua đúng ô ấy (`if (!chu) continue` — ảnh không phải chữ, đã khai đích danh
+   trong `DO_KEP_IM_LANG`). Hai bên lệch nhau đúng một ca.
+   Hôm nay VÔ HẠI: không ô `.sm` nào trong ERP chở ảnh. Và lệch theo chiều AN
+   TOÀN: bên vá rộng hơn bên đo, tức có thừa một cái nút chứ không thiếu. Nếu
+   mai có ô ảnh thật thì cân nhắc lại — nút "Xem thêm" dưới một tấm ảnh bị cắt
+   là đúng việc, chỉ là không arm nào canh nó.
+   ========================================================================== */
+/* ⚠️ TRẦN ĐẾM THEO CHÙM, KHÔNG THEO ĐỜI DOM — REV-0063 vòng 3, VỪA-1.
+   Bản trước: `GO_TOI_DA = 2` đếm trên CẢ ĐỜI DOM, kèm lời khai *"2 là đủ để
+   dọn sạch mọi ca kéo co / xoay máy ĐO ĐƯỢC"*. Câu ấy SAI, và Hồ Ly đo được
+   nó sai: nới rồi thu 5 vòng liên tiếp trên bảng SKU (không có lượt tải dữ
+   liệu nào xen vào), từ lượt nới thứ BA trần chạm và **4 nút "Xem thêm" ở lại
+   trên ô đã hết kẹp** — đúng cái "nút nói dối" mà chính vòng ấy đi chữa.
+   `soGo={"0":7,"2":4}`. Đường thật để tới đó CÓ TỒN TẠI: `luoiBang()` chỉ
+   chạy lại khi `childList` đổi, `resize` chỉ gọi `quetHet` chứ KHÔNG vẽ lại
+   bảng — nên ba lần xoay máy tính bảng / kéo co cửa sổ là đủ, bộ đếm không
+   được xoá vì bảng chưa vẽ lại. Một lời khai trình bày giả thuyết như số đo,
+   đúng thứ đoạn bình luận ngay trên nó đang lên án.
+
+   VÌ SAO KHÔNG DÙNG ĐỀ NGHỊ "ĐẶT LẠI BỘ ĐẾM KHI SỐ LẦN GẮN CŨNG TĂNG".
+   Đề nghị ấy dựa trên giả định *"dao động thật thì gắn/gỡ xen kẽ, còn kéo co
+   thì không"*. Chính số đo của ca kéo co bác nó: mỗi lượt THU gắn lại đúng 4
+   nút thật, tức kéo co CŨNG xen kẽ gắn/gỡ. Hai cảnh giống hệt nhau nếu chỉ
+   nhìn ĐẾM. Không có tín hiệu cục bộ nào tách được chúng bằng số lần.
+
+   THỨ TÁCH ĐƯỢC LÀ NHỊP, VÀ NÓ ĐO ĐƯỢC. Vòng lặp giả định (gỡ nút → cột hẹp
+   lại → kẹp → gắn nút → cột rộng ra → gỡ nút) TỰ NUÔI NÓ: không cần gì bên
+   ngoài, nên nó chạy hết tốc độ `MutationObserver` + `requestAnimationFrame`.
+   Kéo co thì phải đợi NGƯỜI hoặc đợi một lượt tải dữ liệu. SỐ ĐO THẬT, cả hai
+   ca đều dựng lên và chạy trong `npm run do-nut-noi-doi`:
+     · kéo co nới/thu 5 vòng  : hai lần gỡ liên tiếp trên CÙNG một ô cách nhau
+                                nhỏ nhất 649ms · giữa 655ms — và đó là BÀN ĐO
+                                TỰ ĐỘNG chạy hết sức, người thật còn chậm hơn.
+     · vòng lặp tự nuôi (gài) : cách nhau nhỏ nhất 0ms · giữa 0ms — cả chuỗi
+                                nằm gọn trong vài khung hình đầu.
+   Hai dải KHÔNG chạm nhau và cũng không gần nhau: nhịp CHẬM NHẤT của vòng lặp
+   vẫn dưới một mili-giây, nhịp NHANH NHẤT của kéo co là 649ms. CHUM_MS = 250
+   nằm giữa — lớn hơn mọi nhịp của vòng lặp, và bằng 38% nhịp nhanh nhất của
+   kéo co. Đây là chỗ DUY NHẤT trong khối này là một lựa chọn chứ không phải
+   một số đo, nên nó có bàn đo canh CẢ HAI đầu, và mỗi đầu có một ca đối chứng
+   ĐỎ chạy trong cùng lượt:
+     · nới CHUM_MS quá nhịp kéo co → mọi lượt gỡ gộp làm một chùm, bộ đếm
+       không bao giờ đặt lại, chạm trần ở vòng thứ 7 → ca A đỏ
+       (đối chứng A2: giữ GO_TOI_DA thật, đặt CHUM_MS = 1e12).
+     · thu CHUM_MS xuống dưới nhịp khung hình → vòng lặp tự nuôi cũng được
+       đặt lại mỗi khung → không bao giờ dừng → ca B đỏ
+       (đối chứng B: bỏ hẳn trần).
+   Vì thế ca A phải chạy 8 vòng chứ không 5: 5 vòng chỉ bắt được đầu thứ nhất.
+
+   CÁCH CHẶN VẪN LÀ CHẶN CỨNG, KHÔNG PHẢI BÓP NHỊP. Gỡ tới lần thứ
+   `GO_TOI_DA` trong cùng một chùm thì ô ấy THÔI, không gỡ nữa → DOM ngừng
+   đổi → `MutationObserver` ngừng bắn → vòng lặp CHẾT, không phải chạy chậm
+   lại. Đo được ở ca gài: **24 lần gỡ rồi im lặng 2351ms** (đúng 4 ô × 6), so
+   với **304 lần và vẫn đang chạy** ở bản bỏ trần. Sau đó, nếu có một lượt vẽ
+   lại THẬT (cách hơn 250ms) thì bộ đếm về 0 và cái nút nói dối — nếu có —
+   được dọn ngay lượt ấy, thay vì nằm lại vĩnh viễn như bản trần-theo-đời-DOM.
+   GO_TOI_DA = 6 chứ không phải 2: kéo co không bao giờ chạm tới nó (đo được:
+   mỗi chùm của kéo co chỉ có ĐÚNG MỘT lần gỡ, `soGo` đứng nguyên ở 1 suốt 5
+   vòng), còn vòng lặp thì 6 nhịp là đã dừng trong vòng vài chục mili-giây.
+   Chọn 6 để một chuỗi vẽ lại dồn dập HỢP LỆ (nạp dữ liệu + dập lớp + gắn nút
+   chi tiết trong cùng một khung hình) vẫn có chỗ thở.
+   CHỐT CANH: `npm run do-nut-noi-doi` — chạy cả ca kéo co lẫn ca vòng lặp
+   gài sẵn, đòi 0 nút nói dối ở ca đầu và vòng lặp phải DỪNG ở ca sau. */
+const GO_TOI_DA = 6;
+const CHUM_MS = 250;
+function capNutDongPhu() {
+  for (const sm of document.querySelectorAll('td.cot-chu .sm, td .sm.dong-phu')) {
+    if (sm.classList.contains('dai-gon-mo')) continue;
+    const ke = sm.nextElementSibling;
+    const nutCu = ke && ke.classList.contains('dai-gon-btn') ? ke : null;
+    if (sm.clientHeight <= 0) {                       // chưa dàn → đoán, có đánh dấu
+      if (!nutCu && sm.textContent.trim().length > 55) themNutXemThem(sm, true);
+      continue;
+    }
+    if (sm.scrollHeight > sm.clientHeight + 1) {
+      if (!nutCu) themNutXemThem(sm, false);
+      else delete nutCu.dataset.doan;                 // đoán đúng → thành nút thật
+    } else if (nutCu) {
+      if (nutCu.dataset.doan) { nutCu.remove(); continue; }   // đoán sai → dọn đi
+      /* Nút THẬT trên ô đã HẾT KẸP cũng là rác — gỡ. Chốt chặn dao động ở đây,
+         không phải ở việc từ chối dọn (REV-0063 vòng 2, VỪA-2).
+         Đếm THEO CHÙM: cách lần gỡ trước quá `CHUM_MS` thì đây là một nhịp
+         mới, đếm lại từ 0. Xem khối dài ở `GO_TOI_DA` để biết vì sao nhịp
+         mới là thứ tách được kéo co với vòng lặp, còn số lần thì không. */
+      const gio = performance.now();
+      const cungChum = gio - Number(sm.dataset.goLuc || 0) <= CHUM_MS;
+      const soGo = cungChum ? Number(sm.dataset.soGo || 0) : 0;
+      if (soGo >= GO_TOI_DA) continue;
+      sm.dataset.soGo = String(soGo + 1);
+      sm.dataset.goLuc = String(gio);
+      nutCu.remove();
+    }
+  }
+}
+function themNutXemThem(sau, laDoan) {
+  const nut = document.createElement('button');
+  nut.type = 'button';
+  nut.className = 'dai-gon-btn';
+  nut.textContent = 'Xem thêm';
+  if (laDoan) nut.dataset.doan = '1';
+  nut.addEventListener('click', () => window.toggleDaiGon(nut));
+  sau.after(nut);
 }
 
 /* Mở/đóng dòng chi tiết. Uỷ quyền trên `document` nên bảng vẽ lại bao nhiêu

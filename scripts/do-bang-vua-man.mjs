@@ -12,8 +12,8 @@
      "Một cột chỉ xứng đáng có chỗ nếu nó trả lời câu hỏi người dùng mang tới
       TRƯỚC khi bấm vào. Chọn 3–4 cột cho điện thoại trước."
 
-   CÁCH ĐO — Chrome thật, app.js thật, 5 bề ngang thật (1440 · 1100 · 900 ·
-   375 · 320). Với MỖI bảng trong app.html:
+   CÁCH ĐO — Chrome thật, app.js thật, 6 bề ngang thật (1440 · 1100 · 1024 ·
+   900 · 375 · 320). Với MỖI bảng trong app.html:
      · mở đủ tổ tiên của nó (view/panel/modal) rồi trả lại nguyên trạng
      · nếu thân bảng rỗng thì CHÈN MỘT DÒNG MẪU, nội dung ngắn và thật
        ("Nguyễn Văn An", "29/08/2026", "1.234.567", một chip) — không nhồi
@@ -50,7 +50,16 @@ const lay = (co, mac) => { const i = dso.indexOf(co); return i > 0 ? dso[i + 1] 
 const COMMIT = lay('--commit', null);
 const BANG_KE = dso.includes('--bang-ke');
 const TU_KIEM = dso.includes('--tu-kiem');
-const RONGS = [1440, 1100, 900, 375, 320];
+/* ⚠️ 1024 KHÔNG ĐƯỢC BỎ — REV-0063 THẤP-2. Danh sách cũ (1440·1100·900·375·320)
+   NHẢY QUA dải 981–1100px, tức máy tính bảng nằm ngang. Chính dải đó là nơi
+   khối `@media (max-width: 1100px)` của style.css có hiệu lực (đệm ngang 10px ·
+   tiêu đề cột xuống dòng · hạ trần `.cot-chu`), và 1100 đo ở đúng MÉP TRÊN của
+   khối chứ không phải ở giữa. Lời cấm đã viết ở `RONGS` trong
+   `do-bang-that.mjs` từ 06/09/2026 — nhưng lời cấm chỉ có hiệu lực trong MỘT
+   tệp, còn bàn này vẫn mù. Bật 1024 ở `do-bang-that` là lòi ra ngay 5 chỗ
+   tràn; arm G (chiều cao dòng) của bàn này tới nay chưa canh dải đó lần nào.
+   Thêm mức mới thì THÊM, đừng thay. */
+const RONGS = [1440, 1100, 1024, 900, 375, 320];
 
 /* ---- BẢNG CỐ Ý GIỮ CUỘN NGANG ------------------------------------------
    ĐỌC BẢN GỐC Ở app.js. Danh sách này TRƯỚC ĐÂY chép tay 6 bảng và đã lạc
@@ -90,14 +99,14 @@ const DUOC_CUON = (function () {
    chữ, và `do-bang-that.mjs` arm C sẽ đọc lại lý do đó. Một con số thì ai
    cũng thêm được trong ba giây và không ai đọc lại; một câu lý do thì người
    thêm phải nghĩ, và người sau đọc được để cãi. */
-const MOC_TRAN = { 1440: {}, 1100: {}, 900: {}, 375: {}, 320: {} };
+const MOC_TRAN = { 1440: {}, 1100: {}, 1024: {}, 900: {}, 375: {}, 320: {} };
 
 /* Mốc CỠ CHỮ và CHIỀU CAO DÒNG đo trên cùng cây 755d556. Sếp dặn thẳng: bỏ
    bớt CỘT chứ không thu nhỏ CHỮ, và không được làm giảm số dòng thấy được.
    Hai con số này là chốt cho cả hai câu đó — cỡ chữ không được nhỏ hơn, dòng
    không được cao hơn (dòng cao hơn = ít dòng hơn trên cùng một màn). */
 const MOC_CHU = { chuBody: 15, chuO: 13.5, chuTieuDe: 11 };
-const MOC_CAO_DONG = { 1440: 55, 1100: 55, 900: 54, 375: 50, 320: 50 };
+const MOC_CAO_DONG = { 1440: 55, 1100: 55, 1024: 55, 900: 54, 375: 50, 320: 50 };
 
 /* Dòng mẫu: nội dung NGẮN và THẬT. Không nhồi chữ dài — mục đích là đo bề
    ngang tự nhiên của bảng, không phải thi xem chữ nào dài hơn. */

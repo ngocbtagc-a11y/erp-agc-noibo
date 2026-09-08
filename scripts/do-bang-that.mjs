@@ -36,9 +36,14 @@
    CÁCH ĐO — Chrome thật, app.js thật, bề ngang đổi bằng
    `Emulation.setDeviceMetricsOverride` (co khung bằng CSS thì
    `window.innerWidth` vẫn là số cũ và phép đo nói dối).
-   Ba bề ngang, đúng bề ngang người ta thật sự dùng:
+   Năm bề ngang, đúng bề ngang người ta thật sự dùng:
      1440 — màn máy tính Sếp đang ngồi (ảnh Sếp gửi chụp ở đây)
      1280 — laptop phổ thông
+     1200 — PHÍA DƯỚI vạch 1246px của `#kd-tq-wrap`. Xem lời cấm ở `RONGS`:
+            dải 1101–1279 từng không ai đo, và ở đó bảng tràn tới +145px.
+     1024 — máy tính bảng NẰM NGANG. Xem lời cấm ở `RONGS` bên dưới: nửa số
+            luật bảng trong style.css sinh ra từ số đo 1024, mà tới
+            06/09/2026 vẫn chưa cổng nào đo ở 1024. Đừng bỏ mức này.
       375 — điện thoại
 
    CHẠY:
@@ -64,22 +69,87 @@ const COMMIT = lay('--commit', null);
 const BANG_KE = dso.includes('--bang-ke');
 const TU_KIEM = dso.includes('--tu-kiem');
 
-/* Ba bề ngang người ta THẬT SỰ dùng. Không đo 900/320 nữa: chúng nằm giữa hai
-   mốc đã đo và chỉ làm loãng con số phải báo cho Sếp. */
-const RONGS = [1440, 1280, 375];
+/* Năm bề ngang người ta THẬT SỰ dùng. Không đo 900/320 nữa: chúng nằm giữa hai
+   mốc đã đo và chỉ làm loãng con số phải báo cho Sếp.
 
-/* MẪU SỐ. ERP hiện có 27 bảng: 26 viết sẵn trong `app.html` + 1 dựng bằng JS
+   ⚠️⚠️ 1024 KHÔNG BAO GIỜ ĐƯỢC BỎ KHỎI DANH SÁCH NÀY. ⚠️⚠️
+   Lý do, và nó buồn cười theo đúng nghĩa đen: luật CSS
+   `@media (max-width: 1100px)` trong `style.css` (đệm ngang 10px · tiêu đề cột
+   xuống dòng · hạ trần `.cot-chu`) SINH RA TỪ SỐ ĐO 1024px của Hồ Ly — mà
+   KHÔNG CỔNG NÀO đo ở 1024. Cả dải 981–1100px, tức máy tính bảng nằm ngang,
+   không có ai canh. Bench xanh trong khi thật ra tràn.
+   Bật mức này lên (06/09/2026) lòi ra ngay 5 chỗ, trong đó có hai chỗ mà bàn
+   đo ba mức không thể thấy:
+     · `thead th { white-space: normal }` của chính khối 1100px đã CHẾT nhiều
+       vòng — một luật nền đứng sau nó trong tệp, cùng độ ưu tiên, đè mất.
+       `kd-tq-bang` +139px · `cskh-bang` +12px.
+     · `ns-bang` +54px · `qtBang` +51px — ô nhóm nút giữ `nowrap`.
+     · `dh-bang` +102px — cột "Kho nhận" chở tên người mà không có trần.
+   Bỏ 1024 đi là mù lại đúng dải mà nửa số luật bảng đang phục vụ.
+   Thêm mức mới thì THÊM, đừng thay.
+
+   ⚠️⚠️ 1200 CŨNG KHÔNG ĐƯỢC BỎ — VÀ NÓ LÀ CÙNG MỘT BÀI HỌC, LẶP LẠI. ⚠️⚠️
+   Vòng vá REV-0063 dựng một vạch mới `@media (min-width: 1101px)` cho
+   `#kd-tq-wrap`, và giải trình vạch ấy bằng ĐÚNG HAI SỐ ĐO: 1280 và 1440.
+   Hai số ấy đúng. Nhưng danh sách này khi ấy là [1440, 1280, 1024, 375] —
+   NHẢY QUA cả dải 1101–1279. Hồ Ly quét cả dải và thấy `kd-tq-bang` TRÀN
+   +145px @1101 · +94 @1152 · +46 @1200, cột rơi là "Doanh thu tạm tính" và
+   "So kỳ trước", mà nút "Chi tiết" thì bị chính khối CSS mới ẩn ⇒ đường duy
+   nhất tới hai cột ấy là KÉO NGANG — đúng thứ Sếp gửi ảnh bảo bỏ, nhắc hai
+   lần. Cổng vẫn xanh 109/0 suốt, chỉ vì không ai đo ở đó.
+   Tức là: cùng một lỗi "vẽ một cái vạch rồi không đo bên kia vạch", tái phạm
+   ngay trong vòng vá cái lỗi đó. Vạch nay dời lên 1246px (bề ngang đầu tiên
+   mà 7 cột thật sự đủ chỗ) và 1200 nằm đây để canh phía DƯỚI vạch.
+   LUẬT CHUNG rút ra, viết vào đây cho vòng sau: VẼ MỘT VẠCH `min-width` /
+   `max-width` MỚI THÌ PHẢI THÊM MỘT MỨC ĐO NẰM Ở PHÍA CHƯA AI ĐO CỦA VẠCH.
+   (REV-0063 vòng 2, CAO-2) */
+const RONGS = [1440, 1280, 1200, 1024, 375];
+
+/* MẪU SỐ. ERP hiện có 30 bảng: 29 viết sẵn trong `app.html` + 1 dựng bằng JS
    (`#cv-tqct-phongban`, xem `API_CHO_BANG_27` bên dưới). Nếu một hôm nó soi
    được ít hơn, hoặc là có bảng bị mất, hoặc là bàn đo hỏng — cả hai đều phải
    báo, không được im. Thêm bảng mới thì SỬA SỐ NÀY LÊN, và việc phải sửa
-   chính là lời nhắc "bảng mới của mày đã đo chưa?". */
-const SO_BANG_PHAI_SOI = 27;
+   chính là lời nhắc "bảng mới của mày đã đo chưa?".
+
+   27 → 30 (06/09/2026): `f1ac70b` thêm ba bảng (`kd-tq-bang` Tổng quan 2 sàn,
+   `kd-sku-chay`, `kd-sku-kem`) mà KHÔNG sửa con số này. Arm D dùng `>=` nên
+   nó vẫn xanh — mẫu số im lặng tụt lại, và hai trong ba bảng mới ấy tràn ngay
+   ở màn 1440px của Sếp. Lời nhắc chỉ có tác dụng khi con số được giữ đúng. */
+const SO_BANG_PHAI_SOI = 30;
 
 /* MỐC CHỮ và MỐC CHIỀU CAO DÒNG — hai chốt chống "sửa quá tay". Sếp dặn
    thẳng: bỏ bớt CỘT, không thu nhỏ CHỮ; và không được làm giảm số dòng thấy
    được. Số lấy từ cây trước bản vá (755d556), giữ nguyên không nới. */
 const MOC_CHU = { chuBody: 15, chuO: 13.5, chuTieuDe: 11 };
-const MOC_CAO_DONG = { 1440: 55, 1280: 55, 375: 50 };
+/* ⚠️ MỐC NÀY TỪNG LÀ CHỐT GIẢ — REV-0063 VỪA-4. Nó được khai báo ở đây kèm
+   chữ "hai chốt chống sửa quá tay" từ mấy vòng trước, và grep cả tệp thì nó
+   xuất hiện ĐÚNG MỘT LẦN: chính dòng khai báo. KHÔNG ARM NÀO DÙNG. Nghĩa là
+   suốt thời gian ấy bàn đo tự nhận có canh "chiều cao dòng không tăng" mà
+   thật ra không canh gì cả — và ở 1024px, mức vừa bật, cũng không có bàn nào
+   khác canh hộ (`do-bang-vua-man` arm G đo 1440·1100·900·375·320, nhảy qua
+   đúng dải 981–1100px). Đúng lúc bản vá REV-0063 làm dòng CAO LÊN ở dải đó
+   (`thead th` xuống dòng · `dh-bang` thành `.cot-chu` · nút "Xem thêm" mới
+   dưới tên hàng).
+   Nay arm E4 dùng nó thật. Số 1024 lấy từ chính cây này sau khi vá, cộng biên
+   0 — mốc là TRẦN, vượt là đỏ. Sửa số ở đây phải kèm lý do, y như MOC_CHU.
+
+   MỐC 1200px thêm ở REV-0063 vòng 2 cùng lúc với mức đo 1200. Số 55 là ĐO
+   ĐƯỢC trên chính cây này, không phải chép từ 1280 cho tiện: ở 1200px các
+   bảng vẫn là bảng (chưa đổi thẻ) và vẫn nằm trên nhánh `>1100px` của mọi
+   luật đệm, nên chiều cao dòng đúng bằng 1280. Arm E4 vừa ĐỎ đúng chỗ này khi
+   mức 1200 được bật mà mốc chưa có — chốt "thêm mức đo thì phải thêm mốc" có
+   răng thật, không phải câu chữ. */
+const MOC_CAO_DONG = { 1440: 55, 1280: 55, 1200: 55, 1024: 55, 375: 50 };
+/* MỐC RIÊNG CHO CHẾ ĐỘ THẺ. Ở 375px KHÔNG CÒN bảng nào là bảng — mọi bảng đã
+   đổi sang thẻ — nên `MOC_CAO_DONG[375]` không có chỗ bám. Bàn `do-bang-vua-man`
+   xử chuyện này bằng cách BỎ QUA cả arm ở chế độ thẻ, và hệ quả là con số 50
+   ở đó chưa bao giờ được dùng: lại một chốt giả nữa, cùng họ VỪA-4.
+   Ở đây làm khác: đổi THƯỚC chứ không bỏ phép đo. Điều Sếp cấm là "số dòng
+   thấy được giảm" — trên điện thoại "một dòng" chính là MỘT CÁI THẺ, nên thẻ
+   cao lên cũng là ít thẻ trên màn, y hệt. 63px là số đo trên `origin/main`
+   407d2df VÀ trên cây này (đo hai lượt, giống nhau), tức mốc là hiện trạng
+   chứ không phải giấy phép nới. */
+const MOC_CAO_THE = { 375: 63 };
 
 /* ---- DÒNG MẪU: DỮ LIỆU THẬT, KHÔNG PHẢI DỮ LIỆU DỄ ------------------------
    Đây là điểm khác cốt lõi với bàn đo cũ. Chữ lấy đúng giọng người trong công
@@ -169,9 +239,18 @@ const DO_MOI_BANG = `(function(){
    bị giấu VẪN TỚI ĐƯỢC. ERP này đã bị chị Vũ Lan Hương góp ý vì cắt danh sách
    âm thầm (`npm run do-cat-im-lang`) — đừng phạm lại dưới cái tên khác. Kiểm
    ba việc, tại chỗ, trên trình duyệt thật:
-     · dòng nào có ô `.cot-phu` CÓ NỘI DUNG thì phải có nút "Chi tiết"
+     · dòng nào có ô `.cot-phu` ĐANG THẬT SỰ BỊ GIẤU và CÓ NỘI DUNG thì phải
+       có nút "Chi tiết"
      · nút đó phải ≥44px cả hai chiều (ngón tay ở kho, ngoài nắng)
-     · bấm vào phải MỞ RA đúng những trường đang bị giấu, không phải mở suông */
+     · bấm vào phải MỞ RA đúng những trường đang bị giấu, không phải mở suông
+
+   "ĐANG THẬT SỰ BỊ GIẤU" = `display: none`, KHÔNG PHẢI = có lớp `.cot-phu` —
+   REV-0063 VỪA-3. Trước đây hai thứ đó là một, vì `.cot-phu` ẩn ở mọi bề
+   ngang. Nay `#kd-tq-bang` có ngoại lệ CÓ TÊN: hai cột "Hủy"/"Hoàn" giữ lớp
+   `.cot-phu` (để `luoiBang()` luôn cấp đường thoát) nhưng CSS cho chúng trở
+   lại bảng từ 1246px lên, nơi bảng vốn không tràn. Ở đó không còn gì bị giấu,
+   nên đòi một cái nút "Chi tiết" là đòi một cái nút hứa mở ra thứ đang bày
+   sẵn. Đo cái NGƯỜI DÙNG THẤY, đừng đo cái tên lớp. */
 const DO_DUONG_XEM = `(function(){
   const thieuNut = [], nutNho = [], khongMo = [];
   let soDongCoPhu = 0, soMoDuoc = 0;
@@ -185,7 +264,8 @@ const DO_DUONG_XEM = `(function(){
     if (getComputedStyle(w).display === 'none') continue;
     for (const tr of [...tb.rows]) {
       if (tr.classList.contains('dong-chitiet')) continue;
-      const oPhu = [...tr.cells].filter(td => td.classList.contains('cot-phu') && td.textContent.trim());
+      const oPhu = [...tr.cells].filter(td => td.classList.contains('cot-phu') &&
+        td.textContent.trim() && getComputedStyle(td).display === 'none');
       if (!oPhu.length) continue;
       soDongCoPhu++;
       const nut = tr.querySelector('button[data-chitiet]');
@@ -202,6 +282,68 @@ const DO_DUONG_XEM = `(function(){
     }
   }
   return { thieuNut, nutNho, khongMo, soDongCoPhu, soMoDuoc };
+})()`;
+
+/* CẮT CHỮ ÂM THẦM BẰNG CÁI KẸP CSS — arm K. Xem ghi chú dài ở chỗ gọi.
+   Quét MỌI phần tử trong MỌI ô của MỌI bảng đang hiện: cái nào đang cắt theo
+   chiều dọc (`overflow-y` hidden/clip và `scrollHeight > clientHeight`) mà
+   không có nút "Xem thêm" đi kèm thì đang giấu chữ mà không nói.
+
+   BỐN CHỖ CỐ Ý BỎ QUA, ghi ra đích danh để đây là chỗ CỐ Ý chứ không phải chỗ
+   lọt — cả bốn đều không phải "chữ bị giấu":
+     · `button`/`input`/`select`  — ô chọn, nút bấm: nội dung là nhãn cố định.
+     · `img`                      — ảnh không phải chữ.
+     · phần tử KHÔNG CÓ CHỮ       — khung, gạch, ô màu.
+     · `text-overflow: ellipsis`  — nó CÓ NÓI RA bằng dấu "…" ngay tại chỗ.
+       Đây là đường thoát hợp lệ theo luật nhà (khác `title`, thứ chỉ hiện khi
+       rê chuột). Ellipsis chỉ chạy được khi cắt theo chiều NGANG, mà arm này
+       đo chiều DỌC, nên thực tế nó gần như không cắn — vẫn ghi ra cho rõ.
+
+   ĐƯỜNG THOÁT HỢP LỆ: một `.dai-gon-btn` là anh em ruột (cơ chế `dg()`), hoặc
+   nằm bên trong phần tử. `title` KHÔNG tính — xem lý do ở chỗ gọi.
+
+   ⚠️ CHỖ MÙ CÓ TÊN — PHÉP HỎI NÀY HỎI THEO Ô, KHÔNG THEO TỪNG PHẦN TỬ.
+   `e.parentElement.querySelector(':scope > .dai-gon-btn')` chỉ hỏi "trong ô
+   này có nút nào không", nên một ô chở HAI dòng phụ mà chỉ MỘT dòng có nút thì
+   dòng kia vẫn được tính là "có đường đọc tiếp". Đo được khi dựng ca đối chứng
+   `--tu-kiem`: ở 1024px và 375px có 31 và 24 ô kiểu ấy.
+   Hôm nay chưa cắn: mọi ô nhiều dòng phụ trong ERP đều được `luoiBang()` cấp
+   nút cho TỪNG dòng, nên không có ô nào một-có-một-không. Ca đối chứng vì thế
+   CỐ Ý không gài vào loại ô này (xem `GAI_GO_NUT_ROI_DO_R7`) — gài vào đó rồi
+   bắt đỏ là đòi bàn đo bắt một thứ nó chưa bao giờ nhận, tức đỏ nhầm lý do.
+   Muốn siết thì siết ở đây: đổi thành "nút phải là ANH EM LIỀN KỀ của chính
+   phần tử bị kẹp". Đó là một quyết định riêng, có giá riêng, không lẫn vào
+   vòng vá này. */
+const DO_KEP_IM_LANG = `(function(){
+  const xau = [];
+  for (const t of document.querySelectorAll('table')) {
+    const tb = t.tBodies[0]; if (!tb) continue;
+    const ma = (tb && tb.id) || t.id || '(không tên)';
+    const w = t.closest('.table-wrap, .table-wrap-cuon') || t.parentElement;
+    if (getComputedStyle(w).display === 'none') continue;
+    for (const tr of [...tb.rows]) {
+      if (tr.classList.contains('dong-chitiet')) continue;
+      for (const td of [...tr.cells]) {
+        if (getComputedStyle(td).display === 'none') continue;
+        for (const e of [td, ...td.querySelectorAll('*')]) {
+          const chu = e.textContent.trim();
+          if (!chu) continue;
+          if (/^(BUTTON|INPUT|SELECT|IMG|SVG)$/.test(e.tagName)) continue;
+          const cs = getComputedStyle(e);
+          if (cs.overflowY !== 'hidden' && cs.overflowY !== 'clip') continue;
+          if (cs.textOverflow === 'ellipsis') continue;
+          if (e.scrollHeight <= e.clientHeight + 1) continue;
+          const coNut = !!(e.parentElement && e.parentElement.querySelector(':scope > .dai-gon-btn'))
+                     || !!e.querySelector('.dai-gon-btn');
+          if (coNut) continue;
+          xau.push(ma + ' · ' + (e.className || e.tagName) +
+                   ' · hiện ' + e.clientHeight + 'px / thật ' + e.scrollHeight + 'px' +
+                   ' · "' + chu.slice(0, 40) + '"');
+        }
+      }
+    }
+  }
+  return xau;
 })()`;
 
 /* ĐƯỜNG BẤM CHO MỌI THỨ NẰM TRONG `<thead>` — REV-0059 vòng 2, CAO-2.
@@ -239,6 +381,21 @@ const DO_CHU_VA_DONG = `(function(){
     const r = td.getBoundingClientRect();
     if (r.height > 0) { o = td; dong = td.parentElement; break; }
   }
+  /* CHIỀU CAO DÒNG PHẢI ĐO TRÊN MỘT CÁI BẢNG, KHÔNG PHẢI TRÊN MỘT CÁI THẺ.
+     Ở dưới 980px phần lớn bảng đổi sang chế độ THẺ (table display block) —
+     một "dòng" khi ấy là cả một cái thẻ nhiều hàng, cao 63px là bình thường
+     chứ không phải hồi quy, và đem chấm với mốc 50px của BẢNG thì con số
+     không nói gì cả. Nhưng cũng KHÔNG bỏ qua cả mức đo như bàn do-bang-vua-man
+     đang làm: ở 375px vẫn còn bảng THẬT (danh sách BANG_KHONG_THANH_THE —
+     ma trận xếp ca), và chính chúng là chỗ mốc này còn có nghĩa. Nên tìm dòng
+     đầu tiên của một bảng CÒN LÀ BẢNG; không có thì mới trả null. */
+  let dongBang = null;
+  for (const td of document.querySelectorAll('tbody td')) {
+    if (td.getBoundingClientRect().height <= 0) continue;
+    const b = td.closest('table');
+    if (!b || getComputedStyle(b).display === 'block') continue;
+    dongBang = td.parentElement; break;
+  }
   return {
     chuBody: parseFloat(cs.fontSize),
     chuO: o ? parseFloat(getComputedStyle(o).fontSize) : null,
@@ -256,7 +413,8 @@ const DO_CHU_VA_DONG = `(function(){
       }
       return null;
     })(),
-    caoDong: dong ? Math.round(dong.getBoundingClientRect().height) : null
+    caoDong: dongBang ? Math.round(dongBang.getBoundingClientRect().height) : null,
+    caoDongThe: dong ? Math.round(dong.getBoundingClientRect().height) : null
   };
 })()`;
 
@@ -299,6 +457,54 @@ const GAI_BANG_TRAN = `(function(){
     '</tr></thead><tbody id="bang-gai-tu-kiem"></tbody></table>';
   v.appendChild(wrap);
   return 1;
+})()`;
+
+/* MẪU HỎNG GIẢ THỨ HAI (--tu-kiem) — DÀNH RIÊNG CHO ARM R7.
+   ---------------------------------------------------------------------------
+   REV-0063 vòng 2, THẤP-4: "Mắt của arm R7 chỉ được chứng minh bằng LỜI, không
+   bằng ca đối chứng đứng sẵn. `--tu-kiem` đỏ 3 chỗ, cả 3 đều là arm A trên
+   `bang-gai-tu-kiem`; không có ca nào bắt K/R7 phải đỏ. Tôi đã tự gài và R7 đỏ
+   đúng — nhưng lần sau ai sẽ làm lại?" Đúng. BH-16 nói bàn đo phải TỰ chứng
+   minh, không phải người soi chứng minh hộ. Đây là ca đó, đứng sẵn.
+
+   GÀI CÁI GÌ: gỡ đúng những nút mà `capNutDongPhu()` vừa gắn — tức tái lập
+   nguyên trạng lỗi REV-0063 CAO-1 (ô danh tính hai lớp con `.nm` + `.sm` bị
+   `max-height: 2.8em` kẹp, không có đường đọc tiếp). Chỉ gỡ nút NẰM NGAY SAU
+   một `.sm` bị kẹp, không quét sạch mọi `.dai-gon-btn`: gài đúng hình dạng lỗi
+   thật thì dòng đỏ mới chỉ đúng chỗ.
+
+   GÀI Ở ĐÂU: CHỈ trong vòng ĐƯỜNG VẼ THẬT, ngay trước phép quét R7 — không
+   đụng vòng trên. Nhờ vậy `--tu-kiem` chứng minh luôn điều mà REV-0063 vòng 2
+   đo được: **K vẫn XANH, chỉ R7 đỏ**. Nếu một ngày K cũng đỏ ở đây, tức ai đó
+   đã đổi cách chèn dòng mẫu và hai arm không còn là hai lớp nữa — cũng là tin
+   đáng biết.
+
+   ⚠️ GÀI RỒI ĐO PHẢI NẰM TRONG CÙNG MỘT LƯỢT CHẠY — bài học trả bằng một lần
+   đỏ nhầm. Bản đầu gỡ nút ở một lệnh, quét R7 ở lệnh sau: R7 XANH cả 5 mức dù
+   đã gỡ 44–89 nút. Không phải R7 mù — mà vì gỡ nút LÀ MỘT THAY ĐỔI DOM, nó
+   đánh thức MutationObserver, `luoiBang()` chạy lại và `capNutDongPhu()` gắn
+   nút về chỗ cũ trước khi phép quét kịp nhìn. Ứng dụng TỰ CHỮA lỗi gài — tin
+   tốt cho ứng dụng, nhưng nó làm ca đối chứng thành vô nghĩa.
+   Nên gỡ và quét gộp vào MỘT biểu thức, chạy đồng bộ, không nhả cho vòng lặp
+   sự kiện chen vào giữa. */
+const GAI_GO_NUT_ROI_DO_R7 = `(function(){
+  let go = 0, boQuaOChungNut = 0;
+  for (const sm of document.querySelectorAll('td.cot-chu .sm, td .sm.dong-phu')) {
+    if (sm.scrollHeight <= sm.clientHeight + 1) continue;   // ô không kẹp thì không có gì để gài
+    const ke = sm.nextElementSibling;
+    if (!ke || !ke.classList.contains('dai-gon-btn')) continue;
+    const td = sm.closest('td');
+    /* Chỉ gài ở ô mà gỡ xong là ô KHÔNG CÒN nút nào — xem "CHỖ MÙ CÓ TÊN" ở
+       ghi chú arm R7: phép hỏi "có đường đọc tiếp không" của R7 hỏi theo Ô chứ
+       không theo TỪNG phần tử, nên ô có hai dòng phụ hai nút thì gỡ một nút
+       vẫn được tính là "còn đường". Gài vào đó là gài một ca R7 vốn không nhận,
+       rồi bắt nó đỏ — đỏ nhầm lý do, thứ dạy người ta bỏ qua màu đỏ. */
+    if (!td || td.querySelectorAll(':scope > .dai-gon-btn').length !== 1 ||
+        sm.querySelector('.dai-gon-btn')) { boQuaOChungNut++; continue; }
+    ke.remove(); go++;
+  }
+  const xau = ${DO_KEP_IM_LANG};
+  return { go, boQuaOChungNut, xau };
 })()`;
 
 /* ---- BẢNG THỨ 27, DỰNG BẰNG JS — REV-0059 THẤP-1 ------------------------
@@ -346,18 +552,49 @@ for (const RONG of RONGS) {
   const tran = hien.filter(b => b.tran);
   const tranKhongPhep = tran.filter(b => !(MIEN_TRU && MIEN_TRU[b.ma]));
 
-  /* ---- D. MẪU SỐ — bàn đo có soi hết bảng không? ------------------------ */
-  ok(`D @${RONG}px · đã soi ${ds.length} bảng (tối thiểu ${SO_BANG_PHAI_SOI}) · chèn dòng thật vào ${soChen} bảng`,
-     ds.length >= SO_BANG_PHAI_SOI && soChen > 0,
-     `soi ${ds.length} · chèn ${soChen}`);
+  /* ---- D. MẪU SỐ — bàn đo có soi hết bảng không? ------------------------
+     `===` CHỨ KHÔNG PHẢI `>=` — REV-0063 VỪA-1. Bản cũ dùng `>=`, và cái bẫy
+     ấy đã cắn thật: `f1ac70b` thêm ba bảng mà quên sửa mẫu số, arm D vẫn xanh
+     như không có gì, trong khi hai trong ba bảng mới tràn ngay ở màn 1440px
+     của Sếp. Vòng trước sửa CON SỐ 27→30 mà để nguyên CƠ CHẾ — tức chỉ nạp
+     lại đạn cho đúng cái bẫy đó, chờ bảng thứ 31.
+     `===` báo cả HAI chiều, và cả hai chiều đều là tin phải báo:
+       · soi ÍT hơn → mất bảng, hoặc bàn đo hỏng;
+       · soi NHIỀU hơn → có bảng MỚI chưa ai đo, đúng ca `f1ac70b`.
+     Sửa con số ở `SO_BANG_PHAI_SOI` là việc BẮT BUỘC khi thêm/bớt bảng, và
+     giờ thì không có cách nào lách.
+
+     `--tu-kiem` CỘNG ĐÚNG MỘT: chế độ đối chứng tự dựng thêm `bang-gai-tu-kiem`
+     để bắt bàn đo phải đỏ. Không cộng thì arm D đỏ vì chính cái bảng mình vừa
+     dựng — đỏ đúng nhưng đỏ nhầm lý do, và một dòng đỏ nhầm lý do là dòng đỏ
+     người ta học cách bỏ qua. */
+  const soPhaiSoi = SO_BANG_PHAI_SOI + (TU_KIEM ? 1 : 0);
+  ok(`D @${RONG}px · đã soi ${ds.length} bảng (phải đúng ${soPhaiSoi}` +
+     `${TU_KIEM ? ' — gồm 1 bảng gài của --tu-kiem' : ''}) · chèn dòng thật vào ${soChen} bảng`,
+     ds.length === soPhaiSoi && soChen > 0,
+     `soi ${ds.length} (cần đúng ${soPhaiSoi}` +
+     `${ds.length > soPhaiSoi ? ' — có bảng MỚI chưa đo, sửa SO_BANG_PHAI_SOI'
+      : ds.length < soPhaiSoi ? ' — MẤT bảng, hoặc bàn đo hỏng' : ''}) · chèn ${soChen}`);
 
   /* ---- A. VỚI DỮ LIỆU THẬT, 0 BẢNG TRÀN --------------------------------
      Không mốc, không tha. Muốn tràn thì phải có tên + LÝ DO trong
-     BANG_GIU_CUON của app.js, và arm C kiểm lý do đó có thật hay không. */
+     BANG_GIU_CUON của app.js, và arm C kiểm lý do đó có thật hay không.
+
+     "VỪA" VÀ "KHÔNG CÓ GÌ ĐỂ ĐO" LÀ HAI CHUYỆN KHÁC NHAU — REV-0063 VỪA-4.
+     Phép chấm tràn là `rong > khung + 1`, nên một bảng đo ra `khung 0 · bảng 0`
+     được chấm là "vừa" (vì `0 > 1` sai) và arm A vẫn xanh — trong khi thật ra
+     KHÔNG CÓ GÌ được vẽ ra để mà đo. Đã xảy ra thật trong lượt quét
+     `--commit 407d2df` ở 1024px: 23 bảng chính ra `khung 0 · bảng 0`, arm A
+     và arm D đều xanh, chỉ arm R (đòi dòng THẬT) mới bắt được. Cùng họ với
+     lỗi arm D ở trên: một phép đo không phân biệt được "đạt" với "không đo
+     được gì". Bảng nào không bị CSS ẩn mà khung 0px thì đây là đỏ. */
+  const khungRong0 = hien.filter(b => !(b.khung > 0));
   ok(`A @${RONG}px · 0 bảng tràn với dữ liệu thật ` +
      `(hiện ${hien.length} · tràn ${tran.length} · miễn trừ có lý do ${tran.length - tranKhongPhep.length})`,
-     tranKhongPhep.length === 0,
-     tranKhongPhep.map(b => `${b.ma} +${b.thua}px [rơi: ${(b.roiRa || []).join(', ') || '—'}]`).join(' · '));
+     tranKhongPhep.length === 0 && khungRong0.length === 0,
+     [tranKhongPhep.map(b => `${b.ma} +${b.thua}px [rơi: ${(b.roiRa || []).join(', ') || '—'}]`).join(' · '),
+      khungRong0.length ? `KHÔNG ĐO ĐƯỢC (khung 0px, không phải "vừa"): ${khungRong0.map(b => b.ma).join(', ')}` : ''
+     ].filter(Boolean).join(' || '));
 
   /* ---- B. BẢNG CÒN CUỘN THÌ PHẢI NÓI RA --------------------------------- */
   const cuonMaCam = tran.filter(b => !b.coBao);
@@ -395,6 +632,59 @@ for (const RONG of RONGS) {
      cd.chuO != null && cd.chuO >= MOC_CHU.chuO, `${cd.chuO}px`);
   ok(`E3 @${RONG}px · cỡ chữ tiêu đề cột không nhỏ đi (mốc ${MOC_CHU.chuTieuDe}px)`,
      cd.chuTieuDe != null && cd.chuTieuDe >= MOC_CHU.chuTieuDe, `${cd.chuTieuDe}px`);
+
+  /* ---- E4. KHÔNG LÀM DÒNG CAO LÊN — chốt thứ hai của Sếp -----------------
+     REV-0063 VỪA-4: `MOC_CAO_DONG` được khai báo từ mấy vòng trước với chữ
+     "hai chốt chống sửa quá tay" mà KHÔNG ARM NÀO DÙNG. `caoDong` cũng đã
+     được đo sẵn ở `DO_CHU_VA_DONG` rồi bỏ đó. Đây là chỗ nối hai đầu ấy lại.
+     Vì sao quan trọng đúng lúc này: chữa tràn bằng cách cho chữ XUỐNG DÒNG là
+     đổi bề ngang lấy chiều cao — mỗi dòng cao thêm một nhịp là một dòng ít đi
+     trong màn, đúng thứ Sếp cấm. Bản vá vòng này làm dòng cao lên ở ba chỗ
+     (tiêu đề cột xuống dòng ở 981–1100px · `dh-bang` thành `.cot-chu` · nút
+     "Xem thêm" mới dưới tên hàng), nên phải có trần. */
+  const doBang = cd.caoDong != null;
+  const mocE4 = doBang ? MOC_CAO_DONG[RONG] : MOC_CAO_THE[RONG];
+  const caoE4 = doBang ? cd.caoDong : cd.caoDongThe;
+  ok(`E4 @${RONG}px · chiều cao một ${doBang ? 'dòng bảng' : 'THẺ'} không tăng ` +
+     `(trần ${mocE4}px · đo ${caoE4}px)`,
+     mocE4 != null && caoE4 != null && caoE4 <= mocE4,
+     mocE4 == null
+       ? `KHÔNG có mốc cho ${doBang ? 'bảng' : 'thẻ'} ở ${RONG}px — thêm mức đo thì phải thêm mốc, ` +
+         `không được để arm này im lặng đi qua`
+       : `${caoE4}px > ${mocE4}px`);
+
+  /* ---- K. KHÔNG CẮT CHỮ ÂM THẦM BẰNG CÁI KẸP CSS -------------------------
+     REV-0063 CAO-1 — ARM NÀY SINH RA TỪ MỘT LỖI ĐÃ LỌT.
+     Bản vá vòng trước gộp "Mã SKU + Tên hàng" vào một ô hai dòng. CSS kẹp
+     dòng phụ ở 2 dòng (`max-height: 2.8em; overflow: hidden`) nhưng `luoiBang()`
+     không cấp nút "Xem thêm" cho nó, nên ở đúng màn 1440px của Sếp tên hàng
+     bị cắt cụt mà không một dấu hiệu nào (đo: hiện 34px / thật 50px, cả 3
+     dòng). MƯỜI HAI cổng đều xanh:
+       · `do-cat-im-lang` đọc MÃ NGUỒN tìm `LIMIT`/`.slice` — nó không nhìn
+         thấy một cái kẹp CSS bao giờ. Xanh, và xanh ĐÚNG với phạm vi của nó.
+       · arm A/B ở trên chỉ đo bảng có TRÀN NGANG hay không — chữ bị cắt theo
+         CHIỀU DỌC trong một ô thì bảng vẫn vừa khít.
+     Nên chỗ mù nằm giữa hai cổng, và đây là chỗ bịt: đo trên DOM thật, mọi ô
+     của mọi bảng, ở MỌI bề ngang trong RONGS.
+
+     PHÉP ĐO: phần tử nào có `overflow-y: hidden|clip` mà `scrollHeight` lớn
+     hơn `clientHeight` thì đang GIẤU chữ. Giấu là được — miễn có đường đọc
+     tiếp (`.dai-gon-btn`). Giấu mà không có đường là đỏ.
+     `title` KHÔNG được tính là đường thoát: nó chỉ hiện khi rê chuột, mà ERP
+     là PWA Sếp mở trên cả điện thoại lẫn máy tính bảng.
+
+     ⚠️ ARM K MỘT MÌNH KHÔNG ĐỦ, VÀ CHUYỆN NÀY ĐÃ ĐO CHỨ KHÔNG ĐOÁN. Vòng này
+     chấm dòng do CHÍNH BÀN ĐO chèn vào, mà dòng chèn là CHỮ PHẲNG — ô chữ
+     phẳng trong cột chữ được `luoiBang()` bọc vào `.dai-gon` kèm nút ngay từ
+     đường ①, nên ở đây không bao giờ có chỗ kẹp thiếu nút. Thử gài lại đúng
+     lỗi CAO-1 rồi chạy: K vẫn XANH ở mọi mức, chỉ **R7** đỏ (@1440 và @1280,
+     "hiện 34px / thật 50px"). Lỗi thật nằm ở ô NHIỀU LỚP CON — thứ chỉ tồn
+     tại trên đường vẽ THẬT của ứng dụng.
+     Nên hai arm chia nhau hai lớp và cả hai đều phải xanh: K = ô chữ phẳng,
+     R7 = ô nhiều lớp con trên đường vẽ thật. Bỏ R7 là mù lại đúng chỗ cũ. */
+  const kep = await cr.chay(DO_KEP_IM_LANG);
+  ok(`K @${RONG}px · 0 ô bị kẹp CSS mà không có đường đọc tiếp`,
+     kep.length === 0, kep.join(' · '));
 
   ok(`Z @${RONG}px · 0 lỗi console, 0 ngoại lệ`,
      cr.loiConsole.length === 0 && cr.ngoaiLe.length === 0,
@@ -506,6 +796,33 @@ const API_THAT = (duong, u, traJson) => {
     return R({ co_bang: true, co_van_don: false, don_huy: HOAN_THAT.map(r => ({
       ...r, gia_tri_don: 1234567, ai_huy: TEN_NGUOI, huy_ly_do_khach: CHU_DAI.slice(0, 90),
       ngay: '2026-08-21' })) });
+  /* Dashboard Marketplace (`f1ac70b`). Số tiền để ĐÚNG cỡ người ta thật sự
+     thấy: GMV một tháng của AGC là hàng tỷ, tức 10–13 chữ số — bề ngang cột
+     tiền do CHÍNH con số dài nhất quyết định, y như bề ngang cột chữ do câu
+     dài nhất quyết định. Mock bằng "1.234.567" là lại đo bằng dữ liệu dễ. */
+  if (duong === '/api/kinh-doanh/tong-quan-kenh') {
+    const kenh = (nguon) => ({ nguon, so_don: 12345, gmv: 9876543210,
+      so_don_huy: 234, tien_huy: 1234567890, so_don_hoan: 123, tien_hoan: 987654321,
+      doanh_thu: 7654321098, truoc_doanh_thu: 8765432109, truoc_so_don: 13000,
+      truoc_du_du_lieu: true });
+    return R({ co_bang: true,
+      ky: { ma: 'thang_nay', nhan: 'Tháng này', truoc_nhan: 'Tháng trước' },
+      kenh: [kenh('shopee'), kenh('tiktok')],
+      tong: { so_don: 24690, gmv: 19753086420, tien_huy: 2469135780,
+              tien_hoan: 1975308642, doanh_thu: 15308642196,
+              truoc_doanh_thu: 17530864218, truoc_so_don: 26000, truoc_du_du_lieu: true },
+      chan_doan: { hoan: [] } });
+  }
+  if (duong === '/api/kinh-doanh/xep-hang-sku') {
+    const hang = (i, sl) => ({ sku: 'AGC-HDRM-500G-LOAI-A-' + i, ten: SP_TEN,
+      so_luong: sl, doanh_thu: sl ? 9876543210 : 0 });
+    return R({ co_bang: true,
+      ky: { ma: 'thang_nay', nhan: 'Tháng này', tu: '2026-09-01', den: '2026-09-30' },
+      nguon_xep_hang: 'danh_muc', so_ma_hang: 120, so_ma_ban_duoc: 87,
+      ban_chay: [1, 2].map(i => hang(i, 1234)),
+      ban_kem: [3, 4].map(i => hang(i, 0)),
+      chua_khop: [], chua_tach: 0 });
+  }
   if (duong === '/api/kinh-doanh/khach-hoan-nhieu')
     return R({ khach_hang: [{ nguoi_mua: TEN_NGUOI, nguon: 'shopee,tiktok',
                               so_don: 12, so_huy: 4, gan_nhat: '2026-08-28' }] });
@@ -618,7 +935,14 @@ const ARM_R_PHAI_CO = [
   'kt-ts-bang',   // Kế toán tra soát — ô tick chị Hằng
   'kt-hh-bang',   // Kế toán hàng hoàn — ô tick chị Hằng
   'ts-bang',      // Tài sản — ô tick anh Duy
-  'qtBang'        // Quản trị tài khoản
+  'qtBang',       // Quản trị tài khoản
+  /* Ba bảng của `f1ac70b` (Dashboard Marketplace). Chúng vào đây MUỘN, và cái
+     giá của việc vào muộn đã trả rồi: `kd-sku-chay` và `kd-sku-kem` tràn +23px
+     ngay trên màn 1440px của Sếp, cột "Doanh thu" rơi khỏi mép phải, và không
+     arm nào kêu vì arm R không có dữ liệu để vẽ chúng ra. */
+  'kd-tq-bang',   // Tổng quan 2 sàn — 7 cột tiền
+  'kd-sku-chay',  // 10 SKU bán chạy — nằm trong lưới 2 cột, khung chỉ nửa panel
+  'kd-sku-kem'    // 10 SKU bán kém
 ];
 
 /* Bấm qua từng tab VÀ TỪNG TAB CON, đo SAU MỖI LẦN BẤM. Bấm hết một lượt rồi
@@ -670,6 +994,9 @@ const DO_CHON_TAT_CA = `(function(){
 const mayThat = await dungMayGia({ commit: COMMIT, tatHoatAnh: true, apiRieng: API_THAT });
 for (const RONG of RONGS) {
   const chuaDap = [], thieuNhan = [], tran = [], rong = [], loi = [], nhanLech = [];
+  const kepIm = [];
+  let soNutDaGo = 0;   // --tu-kiem: đếm nút "Xem thêm" đã gỡ để gài lỗi cho R7
+  let soOChungNut = 0; // --tu-kiem: ô có >1 nút — R7 không nhận, không gài vào đó
   const daThay = new Map();
   let chonTatCa = null;
   for (const vai of [{ them_nhan_su: false, la_admin: false },
@@ -695,6 +1022,28 @@ for (const RONG of RONGS) {
              tụt âm thầm. Đòi chữ THẬT trong dòng đầu. */
           if (b.chuDong0 < 25) rong.push(`${b.ma} (dòng chỉ ${b.chuDong0} ký tự — mock lệch tên trường?)`);
         }
+        /* CẮT CHỮ ÂM THẦM PHẢI ĐO Ở ĐÂY, KHÔNG PHẢI Ở VÒNG TRÊN — và đây
+           chính là chỗ arm K của vòng trên KHÔNG thấy được (đã thử: gài lại
+           lỗi CAO-1 thì K vẫn xanh, chỉ R7 mới đỏ).
+           Lý do: vòng trên CHÈN dòng mẫu vào tbody rỗng, và dòng chèn ấy là
+           CHỮ PHẲNG — một ô chữ phẳng trong cột chữ được `luoiBang()` bọc vào
+           `.dai-gon` kèm nút "Xem thêm" ngay từ đường ①, nên không bao giờ có
+           chỗ kẹp mà thiếu nút. Ô danh tính hai dòng của ứng dụng thật
+           (`<div class="nm">` + `<div class="sm">`) chỉ tồn tại trên đường vẽ
+           THẬT — đúng cái đường mà lỗi CAO-1 nằm.
+           Giữ cả hai arm: K canh lớp ô-chữ-phẳng, R7 canh lớp ô-nhiều-lớp-con.
+           ⚠️ ĐÍNH CHÍNH (REV-0063 vòng 2, VỪA-1): "hai arm chia nhau hai lớp"
+           KHÔNG có nghĩa là hai PHẠM VI rời nhau. Hồ Ly đo được tập bắt của K
+           là TẬP CON THỰC SỰ của R7 — không có ca nào "chỉ K thấy". K là chốt
+           tự-kiểm của phép đo, R7 mới là chốt canh ứng dụng. */
+        if (TU_KIEM) {
+          const g = await cr.chay(GAI_GO_NUT_ROI_DO_R7);   // gỡ nút RỒI quét, cùng một lượt
+          soNutDaGo += g.go;
+          soOChungNut += g.boQuaOChungNut;
+          kepIm.push(...g.xau);
+        } else {
+          kepIm.push(...await cr.chay(DO_KEP_IM_LANG));
+        }
       }
     }
     if (vai.la_admin) {   // vai admin mới có quyền thao tác nên ô tick mới tồn tại
@@ -706,10 +1055,20 @@ for (const RONG of RONGS) {
     cr.dong();
   }
   /* Hai bảng này có DANH SÁCH THẺ VẼ TAY riêng (`.kv-card-list`, thẻ góp ý) và
-     ở ≤980px thì chính cái `<table>` bị CSS ẩn hẳn — không có gì để chấm, và
-     đó là đúng thiết kế có từ trước bản vá này. Ghi ra ĐÍCH DANH kèm bề ngang,
-     để đây là chỗ CỐ Ý bỏ chứ không phải chỗ lọt. */
-  const THE_VE_TAY = RONG <= 980 ? ['gy-bang', 'kv-ton-bang'] : [];
+     ở dưới mốc của mình thì chính cái `<table>` bị CSS ẩn hẳn — không có gì để
+     chấm, và đó là đúng thiết kế có từ trước bản vá này. Ghi ra ĐÍCH DANH kèm
+     bề ngang, để đây là chỗ CỐ Ý bỏ chứ không phải chỗ lọt.
+
+     MỖI BẢNG MỘT MỐC, KHÔNG DÙNG CHUNG MỘT SỐ. Bản cũ viết `RONG <= 980` cho
+     cả hai, và con số đó không đúng với cái nào: Góp ý đổi sang thẻ ở ≤1100px
+     (`.gy-chi-dienthoai`, style.css), Tồn kho ở ≤780px (`.kv-card-list`). Với
+     ba mức đo cũ (1440·1280·375) sai số này không lộ ra. Vừa bật mức 1024px
+     là lộ ngay: `gy-bang` bị báo "KHÔNG VẼ RA DÒNG NÀO" trong khi nó CỐ Ý
+     không có bảng ở bề ngang đó. Lấy đúng mốc CSS thật. */
+  const THE_VE_TAY = [
+    ...(RONG <= 1100 ? ['gy-bang'] : []),
+    ...(RONG <= 780 ? ['kv-ton-bang'] : [])
+  ];
   const thieuBang = ARM_R_PHAI_CO.filter(m => !daThay.has(m) && !THE_VE_TAY.includes(m));
 
   ok(`R @${RONG}px · phủ đủ ${ARM_R_PHAI_CO.length} bảng bắt buộc, mỗi bảng ≥1 dòng THẬT ` +
@@ -731,6 +1090,20 @@ for (const RONG of RONGS) {
      rong.length === 0, [...new Set(rong)].join(' · '));
   ok(`R6 @${RONG}px · 0 lỗi console, 0 ngoại lệ khi ứng dụng tự vẽ`,
      loi.length === 0, [...new Set(loi)].join(' | '));
+  /* R7 — KHÔNG CẮT CHỮ ÂM THẦM TRÊN ĐƯỜNG VẼ THẬT. Xem ghi chú dài ở chỗ thu
+     `kepIm` phía trên và ở arm K. Đây là arm bắt được REV-0063 CAO-1. */
+  ok(`R7 @${RONG}px · 0 ô bị kẹp CSS mà không có đường đọc tiếp (đường vẽ thật)`,
+     kepIm.length === 0, [...new Set(kepIm)].join(' · '));
+  /* Ở chế độ đối chứng, R7 KHÔNG ĐƯỢC PHÉP XANH: lỗi đã được gài vào tận tay
+     nó. R7 xanh ở đây nghĩa là arm R7 đã MẤT MẮT — tin xấu về BÀN ĐO, không
+     phải tin tốt về ứng dụng. (REV-0063 vòng 2, THẤP-4) */
+  if (TU_KIEM)
+    ok(`R7-TỰ-KIỂM @${RONG}px · gỡ ${soNutDaGo} nút "Xem thêm" khỏi ô ĐANG KẸP ` +
+       `(bỏ qua ${soOChungNut} ô còn nút khác) — R7 PHẢI ĐỎ`,
+       soNutDaGo === 0 || kepIm.length > 0,
+       soNutDaGo === 0 ? 'không gài được ca nào ở bề ngang này — KHÔNG KẾT LUẬN GÌ'
+       : kepIm.length ? `R7 đỏ đúng ${kepIm.length} chỗ — arm R7 CÒN MẮT`
+                      : `gài ${soNutDaGo} lỗi mà R7 vẫn xanh — ARM R7 ĐÃ MẤT MẮT`);
 }
 mayThat.dong();
 

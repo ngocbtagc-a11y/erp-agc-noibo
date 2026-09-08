@@ -105,6 +105,10 @@ export const NHOM_DU_LIEU = {
   cvTao:              ['viec', 'muc_tieu', 'thong_bao'],
   cvCapNhat:          ['viec', 'muc_tieu', 'thong_bao'],
   cvSua:              ['viec', 'muc_tieu', 'thong_bao'],
+  /* Nhận xét KHÔNG đổi việc (tiêu đề, hạn, trạng thái đều nguyên) — chỉ đẻ
+     một dòng sổ + một thông báo. Bắn 'viec' là bắt mọi màn việc vẽ lại vô
+     ích; chỉ bắn 'thong_bao' để chuông của người được nhận xét kêu ngay. */
+  cvNhanXet:          ['thong_bao'],
 
   /* -- Mục tiêu -- */
   mtTao:              ['muc_tieu', 'viec'],
@@ -158,6 +162,11 @@ export const NHOM_DU_LIEU = {
   khoKhoaSanPham:     ['kho'],
   khoNhap:            ['kho'],
   khoXuat:            ['kho'],
+  /* Nạp file số liệu. CHỈ `napGhi` ghi vào CSDL nên chỉ nó làm cũ màn hình;
+     `napMo` / `napXem` / `napLuot` chỉ đọc — xem MIEN_TRU bên dưới. */
+  napGhi:             ['kho'],
+  /* Gỡ một lượt nạp là XOÁ dòng khỏi sổ cái — tồn kho đổi ngay, phải vẽ lại. */
+  napHuy:             ['kho'],
 
   /* -- Dữ liệu nền. Đổi tên phòng ban là đổi luôn mọi dropdown đang mở ở
         Nhân sự / Kho vận / Tài sản, nên bắn cả `nhan_su` và `tai_san`. -- */
@@ -244,6 +253,11 @@ export const MIEN_TRU = {
   dangXuat:   'Thành công là CHUYỂN TRANG về index.html.',
   doiMatKhau: 'Đổi xong là chuyển trang; không màn nào đang hiện mật khẩu.',
   nsDocCCCD:  'Chỉ ĐỌC chữ trong ảnh rồi trả về, không ghi vào bảng nào cả.',
+  napMo:      'Chỉ ĐỌC file để lấy tên cột — không chạm vào CSDL. Bước ghi là napGhi.',
+  napXem:     'Chỉ ĐỌC để đối chiếu rồi trả bảng xem trước — không ghi dòng nào. ' +
+              'Đây chính là bước cho Sếp xem trước KHI CHƯA ghi, nên nó mà ghi là hỏng cả ý đồ.',
+  napLuot:    'Chỉ ĐỌC danh sách các lượt nạp tồn gần đây để Sếp biết cái nào cần gỡ. ' +
+              'Bước gỡ thật là napHuy, và nó có bắn tín hiệu.',
   /* Ba cái dưới đây KHÔNG phải "quên": bắn tín hiệu ở đây là gọi trùng, mà
      gọi trùng là đốt lượt đọc D1 — ERP này từng vượt hạn mức miễn phí. */
   chatGui:    'Màn chat đã có nhịp tim 6 giây/lần tự hỏi tin mới (nhip-tim-chat.js); ' +

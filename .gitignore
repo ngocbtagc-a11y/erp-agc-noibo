@@ -51,3 +51,6 @@ erp-agc-noibo/
 
 # Lối vào nhanh cho bản chạy thử ở máy — CHỨA MẬT KHẨU, không đưa lên bản thật
 public/vao-thu.html
+# Ảnh chụp màn hình do bàn đo sinh ra (`--chup`) — bằng chứng của MỘT lượt
+# chạy, không phải tài sản của repo. Xem lại thì chạy lại.
+.anh-*/

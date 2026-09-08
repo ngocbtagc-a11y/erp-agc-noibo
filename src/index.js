@@ -19,10 +19,15 @@ import {
   duocDuyetGopY,
   // Hai ô — vai trò hệ thống tách khỏi vị trí công việc (Sếp chốt 04/09/2026)
   VAI_TRO_HE_THONG, VI_TRI_CONG_VIEC, laVaiTroHeThong, laViTriCongViec,
-  duocDatViTriCongViec, viTriCoXemLuong, moTaVaiTro, boVaiTro
+  duocDatViTriCongViec, viTriCoXemLuong, moTaVaiTro, boVaiTro,
+  // Nạp file số liệu — cắt quyền GHI ở máy chủ (xem batBuocNapDuLieu)
+  duocSuaSanPham, quyenSanPham
 } from './quyen.js';
 import { kiemTraMatKhauDat, DAI_TOI_THIEU } from './mat-khau.js';
 import * as kho from './kho.js';
+/* Nạp file số liệu vào sổ sách (CSV/Excel). Tách hẳn khỏi kho tài liệu:
+   đường này ĐỌC ĐỂ TÍNH nên TUYỆT ĐỐI không gọi AI — xem đầu src/doc-bang.js. */
+import * as napdulieu from './nap-du-lieu.js';
 import * as shopee from './shopee.js';
 import * as tiktok from './tiktok.js';
 import * as nhansu from './nhansu.js';
@@ -297,6 +302,14 @@ async function toiLaAi(req, env) {
     // 28/08/2026). Giao diện dùng để vẽ nút; luật thật ở gopYDuyet().
     duyet_gopy: duocDuyetGopY(phien),
     kho: quyenKho(phien),           // { thao_tac, quan_ly, gia_von } cho tab Kho
+    /* { sua, khoa } cho Sản phẩm/SKU. TÁCH KHỎI `kho` là cố ý: chủ sở hữu
+       SKU là Kinh doanh (van_hanh_san) — họ quyết định bán gì — mà vai trò
+       đó KHÔNG có mặt trong bảng quyền Kho, nên suy quyền sản phẩm ra từ
+       `kho.quan_ly` là suy sai. Màn "Nạp từ file" từng cắt theo `kho.quan_ly`
+       nên giấu mất chức năng nạp danh mục khỏi đúng người sở hữu danh mục,
+       trong khi máy chủ vẫn cho qua (duocSuaSanPham). Gửi thẳng cờ thật
+       xuống để giao diện cắt CÙNG MỘT LUẬT với máy chủ. */
+    san_pham: quyenSanPham(phien),
     shopee: quyenShopee(phien),     // { xem, quan_ly } cho tab Đơn hoàn
     thao_tac_van_hanh: duocThaoTacVanHanh(phien),   // được bấm nút ở bước Vận hành sàn (Cần đối soát) hay chỉ xem
     // Để giao diện khỏi ghi cứng con số, sau này đổi một chỗ là xong
@@ -1932,11 +1945,24 @@ async function khoXuat(req, env) {
   return kho.xuatKho(env, phien, b);
 }
 
+/* Phiếu điều chỉnh tồn — ĐƯỜNG RA cho ca "nạp nhầm rồi bán mất" (REV-0060
+   vòng 3 · CHẶN-ⓑ). Cửa ngoài chỉ kiểm "có tab Kho vận"; ai được LẬP thì
+   `kho.js` tự kiểm `duocQuanLyKho` bên trong — chặn kép như mọi cửa kho. */
+async function khoDieuChinh(req, env) {
+  const { phien, loi: l } = await batBuocXemKho(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return kho.dieuChinhKho(env, phien, b);
+}
+
 async function khoLo(req, env) {
   const { phien, loi: l } = await batBuocXemKho(req, env);
   if (l) return l;
   const u = new URL(req.url);
-  return kho.loTheoSanPham(env, phien, u.searchParams.get('san_pham_id'));
+  /* `tat_ca=1` — lấy CẢ lô đang âm, cho màn điều chỉnh nhìn thấy đúng cái
+     phải sửa. Màn xuất kho vẫn dùng lưới cũ (chỉ lô còn hàng). */
+  return kho.loTheoSanPham(env, phien, u.searchParams.get('san_pham_id'),
+                           u.searchParams.get('tat_ca') === '1');
 }
 
 async function khoBaoCao(req, env) {
@@ -1972,6 +1998,214 @@ async function khoKhoaSP(req, env) {
   if (l) return l;
   let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
   return kho.khoaSanPham(env, phien, b);
+}
+
+/* ==========================================================================
+   NẠP FILE SỐ LIỆU  (danh mục sản phẩm · tồn kho đầu kỳ)
+   ---------------------------------------------------------------------------
+   Ba bước, ba đường riêng — CỐ Ý tách ra để không bao giờ có chuyện "lỡ tay
+   ghi": chỉ MỘT trong ba đường dưới đây động vào CSDL, hai đường kia đọc rồi
+   thôi.
+
+     ① nap-mo   — đọc file, trả TÊN CỘT + gợi ý ghép.        KHÔNG ghi.
+     ② nap-xem  — đối chiếu CSDL, trả thêm/sửa/bỏ qua/lỗi.   KHÔNG ghi.
+     ③ nap-ghi  — ghi thật, SAU KHI Sếp đã bấm xác nhận.
+
+   Cả ba nhận cùng một khuôn byte như `tlLuuTep`:
+       [4 byte độ dài mô tả][JSON mô tả][byte file]
+   Vì sao không nhét file vào JSON dạng base64: file 8 MB thành ~11 MB chữ,
+   rồi nhân thêm mấy bản trong bộ nhớ — mà Worker chỉ có 128 MB cho CẢ
+   isolate dùng chung. Đường byte thẳng đã được chọn ở kho tài liệu đúng vì
+   lý do đó (xem chú thích ở `tlLuu`).
+
+   ⚠️ File gửi lên KHÔNG được lưu lại ở đâu cả. Đọc xong, lấy số, rồi bỏ.
+      Ghi vết (ai nạp, file gì, bao nhiêu dòng) nằm ở `lich_su_thay_doi_nen`.
+   ========================================================================== */
+
+/* Bóc khuôn byte -> { moTa, byte }. Dùng chung cho cả ba bước. */
+function bocKhungNap(khung) {
+  if (khung.length < 5) return { loi: 'Dữ liệu gửi lên không hợp lệ' };
+  const dai = ((khung[0] << 24) | (khung[1] << 16) | (khung[2] << 8) | khung[3]) >>> 0;
+  if (dai < 2 || dai > 1048576 || 4 + dai > khung.length) {
+    return { loi: 'Dữ liệu gửi lên không hợp lệ' };
+  }
+  let b;
+  try { b = JSON.parse(new TextDecoder().decode(khung.subarray(4, 4 + dai))); }
+  catch { return { loi: 'Dữ liệu gửi lên không hợp lệ' }; }
+  if (!b || typeof b !== 'object' || Array.isArray(b)) {
+    return { loi: 'Dữ liệu gửi lên không hợp lệ' };
+  }
+  return { moTa: b, byte: khung.subarray(4 + dai) };
+}
+
+/* Cửa vào chung: đăng nhập + đúng tab + đúng quyền GHI.
+   Cắt ở MÁY CHỦ, không cắt ở trình duyệt — gọi thẳng API phải 403. Nạp danh
+   mục sản phẩm là việc nặng (đổi định nghĩa hàng hoá của cả công ty), nên
+   xem được tab thôi CHƯA ĐỦ: phải có quyền sửa mã hàng / thao tác kho. */
+async function batBuocNapDuLieu(req, env, maDich) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return { loi: l };
+  if (!duocXemTab(phien, 'khovan') && !duocXemTab(phien, 'kinhdoanh')) {
+    return { loi: loi('Bạn không có quyền nạp dữ liệu kho', 403) };
+  }
+  if (maDich === 'san_pham' && !duocSuaSanPham(phien)) {
+    return { loi: loi('Bạn không có quyền nạp danh mục sản phẩm — việc này cần quyền sửa mã hàng', 403) };
+  }
+  if (maDich === 'ton_kho' && !duocThaoTacKho(phien)) {
+    return { loi: loi('Bạn không có quyền nạp tồn kho — việc này cần quyền thao tác kho', 403) };
+  }
+  return { phien };
+}
+
+/* Đọc khung byte + kiểm quyền. Trả { phien, moTa, byte, maDich } hoặc { loi }. */
+async function nhanFileNap(req, env) {
+  /* ⚠️ CHẶN THEO Content-Length TRƯỚC KHI ĐỌC THÂN.
+     `req.arrayBuffer()` kéo TOÀN BỘ file vào bộ nhớ, mà Worker chỉ có 128 MB
+     cho CẢ isolate dùng chung. Đọc xong 50 MB rồi mới bảo "file to quá" là
+     đã trả cái giá đắt nhất trước khi từ chối — và hai người cùng làm vậy
+     một lúc thì chết isolate, kéo theo yêu cầu của người khác.
+     Trần ở đây rộng hơn trần của bộ đọc bảng một chút, vì khung byte còn
+     đèo thêm phần mô tả; `docBang` vẫn chặn lần nữa theo số byte thật. */
+  const TRAN_KHUNG = 9 * 1024 * 1024;
+  const dai = parseInt(req.headers.get('Content-Length') || '0', 10);
+  if (Number.isFinite(dai) && dai > TRAN_KHUNG) {
+    return { loi: loi(
+      `File nặng ${(dai / 1048576).toFixed(1)} MB, vượt mức 8 MB cho một lần nạp số liệu. ` +
+      `Xin chia nhỏ file (mỗi lần một tháng, hoặc một nhóm hàng) rồi nạp làm nhiều lần.`, 413) };
+  }
+
+  let khung;
+  try { khung = new Uint8Array(await req.arrayBuffer()); }
+  catch { return { loi: loi('Không nhận được file gửi lên. Chọn lại file rồi gửi lần nữa.') }; }
+  if (khung.length > TRAN_KHUNG) {
+    return { loi: loi(
+      `File nặng ${(khung.length / 1048576).toFixed(1)} MB, vượt mức 8 MB cho một lần nạp số liệu. ` +
+      `Xin chia nhỏ file rồi nạp làm nhiều lần.`, 413) };
+  }
+
+  const k = bocKhungNap(khung);
+  if (k.loi) return { loi: loi(k.loi) };
+
+  const maDich = String(k.moTa.dich || '');
+  if (!(maDich in napdulieu.DICH)) return { loi: loi('Chưa chọn nạp vào đâu — chọn lại loại dữ liệu.') };
+
+  const { phien, loi: l } = await batBuocNapDuLieu(req, env, maDich);
+  if (l) return { loi: l };
+
+  return { phien, moTa: k.moTa, byte: k.byte, maDich };
+}
+
+/* Câu lỗi của bộ đọc file đã là tiếng người rồi (xem src/doc-bang.js) nên
+   trả nguyên văn. Lỗi lạ mới giấu đi — không rò chi tiết kỹ thuật ra ngoài,
+   đúng lối index.js vẫn làm. */
+function loiNap(e) {
+  if (e && e.name === 'LoiDocBang') return loi(e.message);
+  /* `LoiGhiNua` = ngã GIỮA LÚC GHI. Câu này BẮT BUỘC tới tay Sếp nguyên văn:
+     nó nói đã ghi được bao nhiêu dòng, đã gỡ sạch hay còn sót, và có được nạp
+     lại hay không. Nuốt nó thành "Không nạp được, thử lại nhé" là đúng cái đã
+     đẩy tồn lên 45.000 cho một file 30.000 (REV-0060 CHẶN-②). */
+  if (e && e.name === 'LoiGhiNua') return loi(e.message, e.da_don_sach ? 503 : 409);
+  console.error('Nạp file:', e && e.message);
+  return loi('Không đọc được file này. Xin kiểm tra lại file rồi thử lần nữa.');
+}
+
+/* .xlsx nhiều bảng: Sếp chọn bảng ở bước 1, hai bước sau phải đọc ĐÚNG bảng
+   đó — không thì xem trước một bảng, ghi vào sổ một bảng khác. */
+const bangChonCua = moTa => {
+  /* `null` = CHƯA AI CHỌN — khác hẳn "chọn bảng số 0". Máy chưa được chọn thì
+     `doc-bang.js` mới được quyền bỏ qua bảng đang ẩn và bảng rỗng
+     (REV-0060 vòng 2 · CAO-⑦). Trả 0 ở đây là biến mọi lần mở file thành
+     "người đã chọn bảng đầu tiên", tức khoá luôn cái quyền đó. */
+  const v = moTa && moTa.bang_chon;
+  if (v === null || v === undefined || v === '') return null;
+  const n = Number(v);
+  return Number.isInteger(n) && n >= 0 ? n : null;
+};
+
+async function khoNapMo(req, env) {
+  const r = await nhanFileNap(req, env);
+  if (r.loi) return r.loi;
+  try {
+    return json(await napdulieu.moFile(env, r.phien, r.byte, String(r.moTa.ten_tep || 'file'),
+                                       r.maDich, bangChonCua(r.moTa)));
+  } catch (e) { return loiNap(e); }
+}
+
+async function khoNapXem(req, env) {
+  const r = await nhanFileNap(req, env);
+  if (r.loi) return r.loi;
+  try {
+    const bang = await napdulieu.docBangTuByte(r.byte, String(r.moTa.ten_tep || 'file'),
+                                               { bangChon: bangChonCua(r.moTa) });
+    return json(await napdulieu.xemTruoc(env, r.phien, {
+      bang, ghep: r.moTa.ghep || {}, maDich: r.maDich,
+      vanTay: await napdulieu.vanTayCot(bang.cot)
+    }));
+  } catch (e) { return loiNap(e); }
+}
+
+async function khoNapGhi(req, env) {
+  const r = await nhanFileNap(req, env);
+  if (r.loi) return r.loi;
+  try {
+    const tenTep = String(r.moTa.ten_tep || 'file');
+    const bang = await napdulieu.docBangTuByte(r.byte, tenTep, { bangChon: bangChonCua(r.moTa) });
+    const ghep = r.moTa.ghep || {};
+
+    /* Vân tay cột phải khớp với lúc xem trước. Nếu Sếp mở màn xem trước rồi
+       lỡ chọn nhầm file khác lúc bấm xác nhận, những con số vừa duyệt sẽ
+       không còn đúng với file đang ghi — chặn ngay ở đây. */
+    const vanTay = await napdulieu.vanTayCot(bang.cot);
+    if (r.moTa.van_tay && r.moTa.van_tay !== vanTay) {
+      return loi('File đã đổi so với lúc xem trước. Xin xem lại một lần nữa rồi mới nạp.');
+    }
+
+    /* Xác nhận nạp trùng — HAI LỚP, HAI CỬA (REV-0060 vòng 2 · CAO-⑤):
+       · lớp (b) "có N mã trong file đã nạp tồn từ file trước" → cái tick;
+       · lớp (a) "ĐÚNG file này, đúng từng con số, đã nạp rồi" → Sếp phải GÕ
+         LẠI TÊN FILE. Một cái tick không mở được lớp (a) nữa, vì lớp (b) kêu
+         ở mọi lần nhập lại cùng mã nên cái tick đã thành phản xạ.
+       Máy chủ chặn lần nữa ở `ghiThat` (409) — giao diện chỉ là lớp ngoài. */
+    const kq = await napdulieu.ghiThat(env, r.phien, {
+      bang, ghep, maDich: r.maDich, tenTep,
+      xacNhanTrung: r.moTa.xac_nhan_trung === true || r.moTa.xac_nhan_trung === 1,
+      xacNhanTenTep: String(r.moTa.xac_nhan_ten_tep || '')
+    });
+    if (kq.loi) return loi(kq.loi, kq.ma || 400);
+
+    /* Nhớ bảng ghép cột cho lần sau — CHỈ nhớ sau khi đã ghi thật, tức là
+       cách ghép này đã được Sếp nhìn tận mắt và duyệt. */
+    await napdulieu.nhoGhep(env, r.maDich, vanTay, ghep, r.phien);
+    return json(kq);
+  } catch (e) { return loiNap(e); }
+}
+
+/* ---- ĐƯỜNG LÙI: gỡ một lượt nạp tồn kho ra khỏi sổ cái -------------------
+   Chống nạp lại mà không có đường lùi thì chưa xong việc: chặn nhầm cũng có,
+   mà nạp nhầm file cũng có. Hai cửa này chỉ mở cho người có quyền THAO TÁC
+   KHO — `nap-du-lieu.js` kiểm lần nữa bên trong, không tin mỗi cửa này. */
+async function khoNapLuot(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  if (!duocXemTab(phien, 'khovan') && !duocXemTab(phien, 'kinhdoanh')) {
+    return loi('Bạn không có quyền xem lượt nạp tồn kho', 403);
+  }
+  const n = Number(new URL(req.url).searchParams.get('so') || 10);
+  const kq = await napdulieu.dsLuotNap(env, phien, n);
+  if (kq.loi) return loi(kq.loi, kq.ma || 400);
+  return json(kq);
+}
+
+async function khoNapHuy(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  if (!duocXemTab(phien, 'khovan') && !duocXemTab(phien, 'kinhdoanh')) {
+    return loi('Bạn không có quyền gỡ lượt nạp tồn kho', 403);
+  }
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  const kq = await napdulieu.huyLuotNap(env, phien, b && b.phieu_id);
+  if (kq.loi) return loi(kq.loi, kq.ma || 400);
+  return json(kq);
 }
 
 /* ==========================================================================
@@ -3329,7 +3563,11 @@ const CV_BAO_NGUOI_NHAN = new Set(['dau_ra', 'han_chot', 'nguoi_nhan_id', 'muc_t
 
 const NHAN_TRUONG = {
   tieu_de: 'tên việc', dau_ra: 'đầu ra', mo_ta: 'mô tả', han_chot: 'hạn chót',
-  nguoi_nhan_id: 'người nhận', muc_tieu_id: 'mục tiêu', phoi_hop: 'người phối hợp'
+  nguoi_nhan_id: 'người nhận', muc_tieu_id: 'mục tiêu', phoi_hop: 'người phối hợp',
+  /* Nạp file số liệu — không có nhãn thì sổ in ra tên cột trần trụi
+     ("đổi ton_toi_thieu 20 → 30"), mà sổ đọc không hiểu thì bằng không ghi. */
+  ten: 'tên sản phẩm', danh_muc: 'nhóm hàng', don_vi: 'đơn vị tính',
+  ton_toi_thieu: 'tồn tối thiểu', theo_doi_hsd: 'theo dõi hạn dùng'
 };
 
 /* ==========================================================================
@@ -3414,6 +3652,30 @@ function cauSuaDoc(d, bang) {
       : `${d.nguoi_ten} gỡ việc "${d.gia_tri_cu}" khỏi mục tiêu này`;
   }
   if (d.truong === 'go') return `${d.nguoi_ten} đã gỡ lời khen: "${d.gia_tri_cu}"`;
+  /* NHẬN XÉT (GY-0005) — cũng KHÔNG phải "đổi A thành B". Ép vào khuôn chung
+     ra câu *"đổi nhan_xet (trống) → làm tốt phần đóng gói"*, đọc không hiểu,
+     mà một dòng sổ đọc không hiểu thì đúng bằng không ghi. */
+  if (d.truong === 'nhan_xet') return `${d.nguoi_ten} nhận xét: "${d.gia_tri_moi}"`;
+
+  /* Vết NẠP TỪ FILE cũng không phải "đổi A thành B": đây là dòng được TẠO
+     RA từ một file. Ép vào khuôn chung ra câu "đổi nap_file (trống) → SP-001",
+     đọc không ra nghĩa gì. */
+  if (d.truong === 'nap_file') {
+    /* Vết của lượt nạp TỒN KHO còn mang trạng thái ở `gia_tri_moi`, vì nó là
+       cái mốc để gỡ lại cả lượt (xem `huyLuotNap`). Ba trạng thái, ba câu —
+       ép cả ba vào một khuôn ra câu 'nạp "đã gỡ" vào ERP', đọc không ra
+       nghĩa. */
+    if (d.gia_tri_moi === 'đã gỡ') {
+      return `${d.nguoi_ten} nạp một lượt tồn kho từ file, sau đó lượt này ĐÃ ĐƯỢC GỠ khỏi sổ cái` +
+             (d.ly_do ? ` — ${d.ly_do}` : '');
+    }
+    if (d.gia_tri_moi === 'đang ghi') {
+      return `${d.nguoi_ten} bắt đầu nạp một lượt tồn kho từ file — lượt này CHƯA GHI XONG` +
+             (d.ly_do ? ` — ${d.ly_do}` : '');
+    }
+    return `${d.nguoi_ten} nạp "${d.gia_tri_moi}" vào ERP từ file` +
+           (d.ly_do ? ` — ${d.ly_do}` : '');
+  }
 
   /* CÙNG MỘT TÊN CỘT, HAI NGHĨA KHÁC NHAU. `tieu_de` ở `cong_viec` là "tên
      việc", ở `muc_tieu` là "tên mục tiêu" — in nhầm thì Sếp mở sổ mục tiêu
@@ -3454,20 +3716,79 @@ async function laCapTrenCua(env, nguoiId, nhanVienId) {
 /* Đọc lịch sử sửa của MỘT bản ghi — dùng chung cho MỌI thực thể
    (bang = 'cong_viec' | 'muc_tieu' | ...). MỘT cửa cho cả lớp, không đẻ mỗi
    module một cửa. Trả kèm `cau` đã dựng sẵn để giao diện chỉ việc in ra. */
-const SUA_BANG_HOP_LE = new Set(['cong_viec', 'muc_tieu']);
+/* Thêm 'san_pham' + 'giao_dich_kho': nạp file ghi vết vào `lich_su_thay_doi_nen`
+   như mọi thay đổi khác, nên phải mở đường ĐỌC lại — nếu không thì ghi vết có
+   mà không ai tra được, tức là không có ghi vết. */
+const SUA_BANG_HOP_LE = new Set(['cong_viec', 'muc_tieu', 'san_pham', 'giao_dich_kho']);
+/* Lọc theo LOẠI VẾT — `?truong=nhan_xet`.
+   ---------------------------------------------------------------------------
+   VÌ SAO PHẢI CÓ (REV-0061 · CHẶN-1). Sổ sửa và sổ nhận xét dùng CHUNG một
+   bảng, mà trần 100 dòng cũng dùng chung. Một việc chạy dài có 110 lần sửa
+   bình thường thì 3 câu nhận xét viết từ tháng 6 — LUÔN là dòng CŨ NHẤT —
+   rơi ra ngoài trần trước tiên, và hộp Nhận xét in ra "Chưa có nhận xét nào
+   cho việc này". Không phải để trống: KHẲNG ĐỊNH SAI.
+
+   Vá bằng dải cắt thôi thì chưa đủ — dải cắt chỉ nói "còn N dòng nữa", trong
+   khi thứ rơi mất là TOÀN BỘ nhận xét. Nên chữa ở tầng bệnh: hỏi RIÊNG loại
+   vết mình cần, để lời nhận xét về một con người không bao giờ bị đẩy ra khỏi
+   màn hình vì ai đó sửa việc nhiều lần. Trần 100 khi ấy là 100 NHẬN XÉT của
+   một việc — con số không đời nào chạm tới; mà chạm thì `cat` nói đúng số
+   nhận xét, không phải số dòng sổ.
+
+   Danh sách trắng chứ không nhận chuỗi tự do: `truong` đi thẳng vào WHERE
+   (đã tham số hoá, nhưng cửa nào cũng nên đóng cả hai lớp), và một tên trường
+   gõ sai mà trả về rỗng thì lại đúng cái "màn hình khẳng định sai" đang chữa. */
+/* CHỐT THEO CẶP `bang × truong`, KHÔNG hai danh sách trắng rời (REV-0061
+   vòng 2 · THẤP-1). Hai danh sách rời thì `?bang=muc_tieu&truong=nhan_xet`
+   qua được cả hai cửa rồi trả rỗng kèm HTTP 200 — hôm nay vô hại vì mục tiêu
+   chưa có nhận xét, nhưng ngày ai thêm nhận xét cho mục tiêu mà quên nối vào
+   đây thì màn hình in "chưa có nhận xét nào" ĐÚNG KIỂU CHẶN-1: rỗng vì hỏi
+   sai cửa, mà nói như thể đã hỏi đúng. Thêm loại vết cho một bảng thì thêm
+   vào ĐÚNG dòng của bảng ấy. */
+const SUA_TRUONG_LOC = new Map([
+  ['cong_viec', new Set(['nhan_xet'])],
+  ['muc_tieu', new Set()],
+  /* Hai bảng của nhánh nạp file. Chưa có loại vết nào lọc riêng, nhưng phải
+     CÓ DÒNG của mình ở đây — thiếu dòng thì `SUA_TRUONG_LOC.get(bang)` là
+     `undefined`, và cái `|| new Set()` bên dưới lại biến một bảng chưa khai
+     báo thành "hợp lệ nhưng rỗng", đúng kiểu khẳng định sai mà chốt này dựng
+     lên để cấm. Có dòng rỗng thì `?truong=` bất kỳ bị từ chối rõ ràng. */
+  ['san_pham', new Set()],
+  ['giao_dich_kho', new Set()]
+]);
 async function suaLichSu(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
   const u = new URL(req.url);
   const bang = String(u.searchParams.get('bang') || '').trim();
-  const id = parseInt(u.searchParams.get('id'), 10);
+  const truong = String(u.searchParams.get('truong') || '').trim();
   if (!SUA_BANG_HOP_LE.has(bang)) return loi('Bảng không hợp lệ');
+
+  /* Mã bản ghi: `cong_viec`/`muc_tieu` dùng số, còn `san_pham`/`giao_dich_kho`
+     dùng chữ (`sp_ab12…`, `pn_ab12…`). Bản cũ `parseInt()` cho mọi bảng, nên
+     mã chữ thành NaN và cửa này trả "Thiếu id bản ghi" — ghi vết có mà không
+     tra được, tức là KHÔNG có ghi vết. Cột `ban_ghi_id` vốn là TEXT và câu
+     đọc bên dưới đã `String(id)` sẵn, nên chỉ chỗ KIỂM này cần nới. */
+  const BANG_MA_SO = new Set(['cong_viec', 'muc_tieu']);
+  const idTho = String(u.searchParams.get('id') || '').trim();
+  const id = BANG_MA_SO.has(bang) ? parseInt(idTho, 10) : idTho;
   if (!id) return loi('Thiếu id bản ghi');
+  if (truong && !(SUA_TRUONG_LOC.get(bang) || new Set()).has(truong)) {
+    return loi(`Bảng "${bang}" không có loại vết "${truong}"`);
+  }
   /* Quyền XEM đi theo quyền xem của chính thực thể đó. Trạm Mục Tiêu vốn đã
      minh bạch toàn công ty (tinh thần MBOs) — ai xem được việc thì xem được
      lịch sử sửa của việc đó. Cái phải siết là quyền SỬA, không phải quyền
-     BIẾT ai đã sửa; giấu vết sửa đi thì đúng bằng không ghi vết. */
-  if (!duocXemTab(phien, 'congviec')) return loi('Bạn không có quyền', 403);
+     BIẾT ai đã sửa; giấu vết sửa đi thì đúng bằng không ghi vết.
+     Cùng lẽ đó: vết của `san_pham`/`giao_dich_kho` đi theo quyền xem KHO VẬN
+     (hoặc Kinh doanh — hai chủ của danh mục mã hàng), không đi theo Công việc. */
+  const TAB_CUA_BANG = {
+    cong_viec: ['congviec'], muc_tieu: ['congviec'],
+    san_pham: ['khovan', 'kinhdoanh'], giao_dich_kho: ['khovan']
+  };
+  if (!(TAB_CUA_BANG[bang] || ['congviec']).some(t => duocXemTab(phien, t))) {
+    return loi('Bạn không có quyền', 403);
+  }
 
   /* CẮT THÌ PHẢI NÓI LÀ ĐÃ CẮT — và ở ĐÂY thì gắt hơn mọi màn khác.
      Đây là SỔ BẰNG CHỨNG: cả nhánh CTL-0017 đứng trên lời hứa "sửa được
@@ -3481,22 +3802,26 @@ async function suaLichSu(req, env) {
   /* `ly_do` là cột migration `them-ly-do-sua.sql` mới thêm. Deploy có thể
      chạy TRƯỚC migration (REV-0037 · L2) — đọc phòng thủ để cửa này hỏng
      theo chiều an toàn: mất cột lý do chứ không mất cả sổ. */
+  /* Lọc nằm TRONG câu SQL, không lọc sau khi đã cắt — lọc sau trần là đúng
+     cái lỗi CHẶN-1 chép lại một tầng thấp hơn. */
+  const locTruong = truong ? ' AND truong = ?' : '';
+  const thamSo = truong ? [bang, String(id), truong] : [bang, String(id)];
   const cauDoc = (coLyDo) => `
     SELECT truong, gia_tri_cu, gia_tri_moi, nguoi_id, nguoi_ten,
            ${coLyDo ? 'ly_do' : 'NULL AS ly_do'}, luc
-      FROM lich_su_thay_doi_nen WHERE bang = ? AND ban_ghi_id = ?
+      FROM lich_su_thay_doi_nen WHERE bang = ? AND ban_ghi_id = ?${locTruong}
      ORDER BY luc DESC, id DESC LIMIT ${GH + 1}`;
   let kq;
   try {
-    kq = await env.DB.prepare(cauDoc(true)).bind(bang, String(id)).all();
+    kq = await env.DB.prepare(cauDoc(true)).bind(...thamSo).all();
   } catch (e) {
     if (!/no such column/i.test(String(e && e.message || e))) throw e;
-    kq = await env.DB.prepare(cauDoc(false)).bind(bang, String(id)).all();
+    kq = await env.DB.prepare(cauDoc(false)).bind(...thamSo).all();
   }
   const { ds, biCat } = catBot(kq, GH);
   const cat = await nhanCat(env, biCat, GH,
-    'SELECT COUNT(*) AS n FROM lich_su_thay_doi_nen WHERE bang = ? AND ban_ghi_id = ?',
-    [bang, String(id)], null);
+    `SELECT COUNT(*) AS n FROM lich_su_thay_doi_nen WHERE bang = ? AND ban_ghi_id = ?${locTruong}`,
+    thamSo, null);
   return json({ ds: ds.map(d => ({ ...d, cau: cauSuaDoc(d, bang) })), cat });
 }
 
@@ -3747,6 +4072,100 @@ async function cvSua(req, env) {
   }
 
   return json({ ok: true, da_doi: doi.map(d => d.truong), so_dong_ghi: lenh.length });
+}
+
+/* ==========================================================================
+   NHẬN XÉT MỘT VIỆC ĐÃ GIAO — GY-0005
+   ---------------------------------------------------------------------------
+   Sếp Ngọc: *"Cần thêm nút hoặc mục nhận xét để nhận xét công việc của người
+   được giao."*
+
+   HAI CHỐT THIẾT KẾ, cả hai đều là chốt QUẢN TRỊ chứ không phải chốt kỹ thuật:
+
+   ① NHẬN XÉT GẮN VÀO MỘT VIỆC, KHÔNG GẮN VÀO MỘT NGƯỜI. Công ty quản theo
+      MBOs — chấm ĐẦU RA, không chấm con người. Một ô chữ tự do treo trên hồ
+      sơ nhân sự là lời phán về tính cách; cùng câu chữ ấy gắn vào một việc
+      có `dau_ra` viết sẵn thì thành lời chấm một kết quả, cãi lại được bằng
+      bằng chứng. Nên `ban_ghi_id` ở đây LUÔN là id một việc.
+
+   ② NGƯỜI BỊ NHẬN XÉT PHẢI ĐỌC ĐƯỢC. Nhận xét mà người ta không thấy thì là
+      ghi chép nội bộ, không phải quản lý — và tệ hơn: nó thành hồ sơ ngầm.
+      Nên mỗi lần nhận xét là một thông báo tới đúng người đó, và câu nhận
+      xét nằm ngay trong sổ việc mà họ mở được.
+
+   KHÔNG ĐẺ BẢNG MỚI. `lich_su_thay_doi_nen` đã được `them-ly-do-sua.sql`
+   tuyên bố là SỔ SỬA CHUNG của cả ERP, và đã có sẵn tiền lệ cho những vết
+   KHÔNG phải "đổi A thành B" (`viec_gan`, `go` — xem `cauSuaDoc`). Một nhận
+   xét là đúng khuôn đó: (bang, ban_ghi_id, truong, gia_tri_moi, ai, lúc).
+   Nhờ vậy nhận xét hiện luôn trong "Đã sửa những gì" của thẻ việc mà không
+   phải viết thêm một cửa đọc thứ hai.
+
+   AI ĐƯỢC VIẾT: người giao · quản lý cấp trên của người nhận · Admin ·
+   và CHÍNH người nhận (để nói lại). Nhận xét một chiều không cãi được thì
+   người ta không đọc nữa — và mất luôn cái kênh này.
+
+   ⚠️ AI ĐƯỢC ĐỌC THÌ RỘNG HƠN HẲN — VÀ PHẢI NÓI RA (REV-0061 · VỪA-4).
+   Cửa ĐỌC là `suaLichSu`, mà nó chỉ hỏi `duocXemTab(phien, 'congviec')`:
+   người khác phòng, không dính dây gì tới việc này, vẫn `GET /api/sua/lich-su`
+   ra nguyên văn câu nhận xét. Đo được: chị Hằng (kế toán trưởng) đọc được
+   nhận xét trong một việc của kho.
+
+   Bản mô tả cũ ở đây và trên hộp Nhận xét viết *"chỉ hai người trong cuộc"* —
+   ĐÓ LÀ SAI SỰ THẬT, và sai theo chiều nguy hiểm nhất: người viết tưởng mình
+   đang viết riêng cho một người, trong khi cả công ty đọc được. Nay sửa LỜI
+   MÔ TẢ cho khớp sự thật, KHÔNG tự sửa quyền: "ai được đọc nhận xét" là
+   chính sách nhân sự, đã ghi thành câu chờ Sếp Ngọc chốt (CHANGELOG).
+   ========================================================================== */
+async function cvNhanXet(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  if (!duocXemTab(phien, 'congviec')) return loi('Bạn không có quyền', 403);
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+
+  const id = parseInt(b.id, 10);
+  if (!id) return loi('Thiếu id công việc');
+  /* TỪ CHỐI CHỨ KHÔNG CẮT (REV-0061 · VỪA-3). Bản trước `.slice(0, 1000)` rồi
+     trả HTTP 200 — gọi thẳng API 1500 ký tự thì mất 500 ký tự cuối mà không
+     một chữ nào nói là đã cắt. `maxlength="1000"` chỉ che được đường trình
+     duyệt; một tích hợp sau này (hay chính bản ERP trên điện thoại) thì không.
+     Cùng một lẽ với `suaLichSu`: sổ này cắt im lặng là nói dối. */
+  const noiDung = String(b.noi_dung || '').trim();
+  if (noiDung.length < 5) return loi('Nhận xét quá ngắn — viết rõ chỗ làm tốt hoặc chỗ cần sửa giúp tôi');
+  if (noiDung.length > 1000) {
+    return loi(`Nhận xét dài ${noiDung.length} ký tự — tối đa 1000. Cắt bớt giúp tôi, đừng để tôi tự cắt mất phần cuối.`);
+  }
+
+  const cv = await env.DB.prepare(
+    'SELECT id, tieu_de, nguoi_giao_id, nguoi_giao_ten, nguoi_nhan_id, nguoi_nhan_ten FROM cong_viec WHERE id = ?'
+  ).bind(id).first();
+  if (!cv) return loi('Không tìm thấy công việc', 404);
+
+  /* KHÁC `cvSua` MỘT CHỖ QUAN TRỌNG: việc đã `hoan_thanh` hay `huy` vẫn nhận
+     xét được. Sửa nội dung việc đã nghiệm thu là sửa bằng chứng; còn nhận
+     xét một việc đã xong mới đúng là lúc nhận xét có ích nhất. */
+  const laNguoiGiao = cv.nguoi_giao_id === phien.nhan_su_id || laAdmin(phien);
+  const laNguoiNhan = cv.nguoi_nhan_id === phien.nhan_su_id;
+  const laQuanLy = !laNguoiGiao && await laCapTrenCua(env, phien.nhan_su_id, cv.nguoi_nhan_id);
+  if (!laNguoiGiao && !laQuanLy && !laNguoiNhan) {
+    return loi('Chỉ người giao việc, quản lý cấp trên hoặc chính người nhận mới nhận xét được việc này', 403);
+  }
+
+  const ten = phien.ho_ten || phien.ten_dang_nhap;
+  const r = await env.DB.prepare(
+    `INSERT INTO lich_su_thay_doi_nen (bang, ban_ghi_id, truong, gia_tri_cu, gia_tri_moi,
+                                       nguoi_id, nguoi_ten, luc)
+     VALUES ('cong_viec', ?, 'nhan_xet', NULL, ?, ?, ?, datetime('now','+7 hours'))`
+  ).bind(String(id), noiDung, phien.nhan_su_id, ten).run();
+
+  /* BÁO CHO NGƯỜI CÒN LẠI — không báo cho chính mình (tự nhận xét việc mình
+     tự giao là TODO cá nhân, ăn thông báo của chính mình là làm phiền). */
+  const nhan = laNguoiNhan ? cv.nguoi_giao_id : cv.nguoi_nhan_id;
+  if (nhan && nhan !== phien.nhan_su_id) {
+    await guiThongBao(env, null,
+      `${ten} nhận xét việc "${cv.tieu_de}": ${noiDung.slice(0, 160)}${noiDung.length > 160 ? '…' : ''}`,
+      'cong_viec_nhan_xet', String(id), nhan);
+  }
+  return json({ ok: true, id: r.meta.last_row_id, nguoi_ten: ten });
 }
 
 /* Lịch sử làm việc — kho lưu trữ TOÀN CỤC mọi việc trong Trạm Mục Tiêu,
@@ -7221,8 +7640,15 @@ const DUONG_DAN = {
   'POST /api/kho/sua-san-pham':  khoSuaSP,
   'POST /api/kho/an-hien-san-pham': khoAnHienSP,
   'POST /api/kho/khoa-san-pham':    khoKhoaSP,
+  /* Nạp file số liệu — ba bước tách riêng, chỉ `nap-ghi` động vào CSDL. */
+  'POST /api/kho/nap-mo':           khoNapMo,
+  'POST /api/kho/nap-xem':          khoNapXem,
+  'POST /api/kho/nap-ghi':          khoNapGhi,
+  'GET /api/kho/nap-luot':          khoNapLuot,
+  'POST /api/kho/nap-huy':          khoNapHuy,
   'POST /api/kho/nhap':          khoNhap,
   'POST /api/kho/xuat':          khoXuat,
+  'POST /api/kho/dieu-chinh':    khoDieuChinh,
   'GET  /api/kho/lo':            khoLo,
   'GET  /api/kho/bao-cao':       khoBaoCao,
   'GET  /api/kho/lich-su':       khoLichSu,
@@ -7313,6 +7739,7 @@ const DUONG_DAN = {
   /* CTL-0017 — sửa NỘI DUNG việc đã giao. Tách hẳn khỏi `cap-nhat` (đổi
      trạng thái + kết quả): hai luật khác hẳn nhau, gộp một cửa là mời lỗi. */
   'POST /api/cong-viec/sua':       cvSua,
+  'POST /api/cong-viec/nhan-xet':  cvNhanXet,
   /* Sổ sửa dùng chung cho cả lớp — ?bang=cong_viec|muc_tieu&id=… */
   'GET  /api/sua/lich-su':         suaLichSu,
   'GET  /api/cong-viec/lich-su':   cvLichSu,

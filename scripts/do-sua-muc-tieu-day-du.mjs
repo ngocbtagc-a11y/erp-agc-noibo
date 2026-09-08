@@ -512,8 +512,14 @@ console.log('\n--- DC-C · bỏ chốt Admin khi nâng lên cấp công ty ---\n
   /* `src/index.js` xuống dòng kiểu CRLF — neo nhiều dòng bằng '\n' sẽ KHÔNG
      khớp và ca đối chứng lặng lẽ thành vô nghĩa. Neo trong MỘT dòng cho chắc
      (`banBeGay` cũng ném lỗi nếu không bẻ được gì — hai lớp cho một luật). */
+  /* ⚠️ NEO NÀY ĐÃ GÃY SẴN TRÊN `main` (thấy 07/09/2026 — KHÔNG phải của
+     nhánh GY-0004/0005). `laAdmin(phien.vai_tro)` đã đổi thành
+     `laAdmin(phien)` ở một đợt trước, nên `banBeGay` ném lỗi và CẢ BÀN ĐO
+     chết ngay tại đây: DC-C lặng lẽ ngừng canh chốt "người thường tự phong
+     mục tiêu cấp công ty", và mọi phép kiểm SAU nó cũng không chạy nữa.
+     Neo lại đúng chữ đang có. Chỉ sửa NEO, không đụng phép đo. */
   const src = banBeGay('dc-c', s => s.replace(
-    "capMoi === 'cong_ty' && !laAdmin(phien.vai_tro)", 'false'));
+    "capMoi === 'cong_ty' && !laAdmin(phien)", 'false'));
   const V = await dungVong(src);
   const r = await V.suaMT('DUY', { id: 1, cap: 'cong_ty', ly_do: 'tôi tự nâng lên cấp công ty' });
   ok('BẢN GÃY: người thường tự phong mục tiêu cấp CÔNG TY', r.status === 200, `HTTP ${r.status}`);

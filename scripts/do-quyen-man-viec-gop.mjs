@@ -173,14 +173,22 @@ console.log('\n=== ④ CA ĐỐI CHỨNG (BH-16) — bẻ chỗ vá, phép kiể
     idNhan(r).length > 1, JSON.stringify(idNhan(r)));
 }
 {
-  /* Cắt cửa Admin CHỈ trong `cvTongQuanCongTy` — `laAdmin(phien.vai_tro)` còn
-     ở nhiều hàm khác, thay hết là bẻ nhầm nửa ERP rồi kết luận sai. Chặt file
-     tại đầu hàm rồi mới thay lần XUẤT HIỆN ĐẦU TIÊN sau đó. */
+  /* Cắt cửa Admin CHỈ trong `cvTongQuanCongTy` — `laAdmin(phien)` còn ở nhiều
+     hàm khác, thay hết là bẻ nhầm nửa ERP rồi kết luận sai. Chặt file tại đầu
+     hàm rồi mới thay lần XUẤT HIỆN ĐẦU TIÊN sau đó.
+
+     ⚠️ NEO ĐÃ CHẾT MỘT LẦN — ĐỪNG ĐỂ CHẾT LẦN NỮA (REV-0061 · CAO-3).
+     Neo cũ là `laAdmin(phien.vai_tro)`. Cửa phân quyền đã đổi sang
+     `laAdmin(phien)` (chuỗi cũ xuất hiện 0 lần trong `src/index.js`), nên
+     `banBeGay` không bẻ được gì và cả bàn đo này chết ở đây bằng exit 1 —
+     DC-2 "nhân viên xem được số liệu toàn công ty" NGỪNG CANH mà không ai
+     hay, vì bàn đo lúc đó còn không nằm trong danh sách cổng bắt buộc.
+     Nay neo bằng `laAdmin(phien)` và bàn đo đã vào danh sách cổng. */
   const b = await dungVong(banBeGay('dc2', 'index.js', s => {
     const moc = s.indexOf('async function cvTongQuanCongTy');
     if (moc < 0) return s;
     const dau = s.slice(0, moc), duoi = s.slice(moc);
-    return dau + duoi.replace("if (!laAdmin(phien.vai_tro)) return loi('Bạn không có quyền', 403);", '');
+    return dau + duoi.replace("if (!laAdmin(phien)) return loi('Bạn không có quyền', 403);", '');
   }));
   const r = await b.tongQuan('AN');
   ok('DC-2 bỏ cửa laAdmin → nhân viên xem được số liệu toàn công ty', r.status === 200, `HTTP ${r.status}`);
