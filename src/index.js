@@ -7644,7 +7644,10 @@ const DUONG_DAN = {
   'POST /api/kho/nap-mo':           khoNapMo,
   'POST /api/kho/nap-xem':          khoNapXem,
   'POST /api/kho/nap-ghi':          khoNapGhi,
-  'GET /api/kho/nap-luot':          khoNapLuot,
+  /* HAI dấu cách sau GET: khoá bảng đường ghép bằng method.padEnd(4)
+     rồi mới tới dấu cách phân cách, nên 'GET' hoá 'GET '. Viết một dấu cách là
+     đường chết lặng — 404 chứ không phải 401, tìm mỏi mắt. */
+  'GET  /api/kho/nap-luot':          khoNapLuot,
   'POST /api/kho/nap-huy':          khoNapHuy,
   'POST /api/kho/nhap':          khoNhap,
   'POST /api/kho/xuat':          khoXuat,
