@@ -18,7 +18,11 @@ const CAU_HINH_MA = {
   nhan_su_toan_thoi_gian: { prefix: '01-', so_chu_so: 4 },   // 01-0001
   nhan_su_ban_thoi_gian:  { prefix: '02-', so_chu_so: 4 },   // 02-0001
   nhan_su_thoi_vu:        { prefix: '03-', so_chu_so: 4 },   // 03-0001
-  tai_san: { prefix: 'TS', so_chu_so: 4 }    // TS0001
+  tai_san: { prefix: 'TS', so_chu_so: 4 },   // TS0001
+
+  // Dự án R&D sản phẩm (xem src/rnd.js) — RD0001. Dự án đi qua 12 giai
+  // đoạn nhưng mã sinh 1 lần lúc tạo và không đổi theo giai đoạn.
+  rnd_du_an: { prefix: 'RD', so_chu_so: 4 }  // RD0001
 };
 
 /* Tăng bộ đếm và trả mã mới trong 1 câu lệnh (RETURNING) — tránh 2 người

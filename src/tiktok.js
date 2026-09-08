@@ -24,6 +24,7 @@
    ========================================================================== */
 
 import { duocXemDonHoan, duocQuanLyShopee, duocXemTab } from './quyen.js';
+import * as donHangItem from './don-hang-item.js';
 
 function json(d, status = 200) {
   return new Response(JSON.stringify(d), {
@@ -345,6 +346,8 @@ export async function dongBoDonHangNen(env) {
 
   const tuGoc = moGocDongBoDonHang(kn);
   const denGoc = nowSec();
+  // Bảng dòng hàng nạp sau — chưa có thì bỏ qua êm (migrations/them-donhang-dong.sql).
+  const coDong = await donHangItem.coBangDong(env);
   const path = '/order/202309/orders/search';
   let pageToken = '', con = true, trang = 0, them = 0, subReq = 0, mocMoi = null;
 
@@ -395,6 +398,13 @@ export async function dongBoDonHangNen(env) {
         o.update_time ? String(o.update_time) : null,
         JSON.stringify(o)
       ));
+      // Bóc dòng hàng ngay trong cùng lô ghi. Lưu ý TikTok: mỗi phần tử
+      // line_items là 1 ĐƠN VỊ hàng, bộ tách tự gộp theo SKU rồi mới đếm.
+      if (coDong) {
+        cauLenh.push(...donHangItem.cauLenhGhiDong(env, orderId, 'tiktok', o.create_time,
+                                                   donHangItem.tachDong('tiktok', o)));
+        cauLenh.push(donHangItem.cauLenhDanhDauDaTach(env, orderId));
+      }
       const ut = Number(o.update_time) || 0;
       if (ut && (mocMoi === null || ut > mocMoi)) mocMoi = ut;
       them++;

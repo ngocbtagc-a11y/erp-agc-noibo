@@ -19,6 +19,7 @@
    ========================================================================== */
 
 import { duocQuanLyShopee, duocXemDonHoan, duocXemTab } from './quyen.js';
+import * as donHangItem from './don-hang-item.js';
 
 /* ---- Trả lời JSON ------------------------------------------------------- */
 function json(d, status = 200) {
@@ -459,6 +460,9 @@ export async function dongBoDonHangNen(env) {
   if (!kn) return null;
 
   const coHuy = await coCotDonHangHuy(env);
+  // Bảng dòng hàng (don_hang_item) nạp sau — chưa có thì bỏ qua êm, đồng bộ
+  // đơn vẫn chạy bình thường (migrations/them-donhang-dong.sql).
+  const coDong = await donHangItem.coBangDong(env);
   const coVanDon = await coCotMaVanDon(env);
   const tuGoc = moGocDongBoDonHang(kn);
   const denGoc = nowSec();
@@ -491,6 +495,15 @@ export async function dongBoDonHangNen(env) {
       if (kqCt.error) throw new Error('Shopee báo lỗi (get_order_detail): ' + (kqCt.message || kqCt.error));
       const dsCt = (kqCt.response && kqCt.response.order_list) || [];
       const cauLenh = dsCt.map(o => cauLenhDonHang(env, o, coHuy, coVanDon));
+      // Bóc dòng hàng ngay trong cùng lô ghi — đơn mới về là có SKU để xếp
+      // hạng luôn, không phải chạy bù lại sau (dùng chung bộ tách với tachBu).
+      if (coDong) {
+        for (const o of dsCt) {
+          cauLenh.push(...donHangItem.cauLenhGhiDong(env, o.order_sn, 'shopee', o.create_time,
+                                                     donHangItem.tachDong('shopee', o)));
+          cauLenh.push(donHangItem.cauLenhDanhDauDaTach(env, o.order_sn));
+        }
+      }
       if (cauLenh.length) {
         await env.DB.batch(cauLenh);
         subReq++;

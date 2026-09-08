@@ -28,7 +28,14 @@ async function goi(duongDan, tuyChon = {}, tuDongVeDangNhap = true) {
   let duLieu = null;
   try { duLieu = await res.json(); } catch { /* không phải JSON */ }
 
-  if (!res.ok) throw new Error((duLieu && duLieu.loi) || 'Máy chủ gặp sự cố');
+  if (!res.ok) {
+    // Đính nguyên phần JSON máy chủ trả về lên Error để nơi gọi hiển thị
+    // được chi tiết kèm theo lỗi (VD R&D trả `con_thieu` = danh sách việc
+    // bắt buộc còn thiếu). Mọi chỗ đang dùng `err.message` không đổi gì.
+    const err = new Error((duLieu && duLieu.loi) || 'Máy chủ gặp sự cố');
+    err.du_lieu = duLieu;
+    throw err;
+  }
   return duLieu;
 }
 
@@ -242,6 +249,17 @@ export const API = {
   taiSanBaoTriXong: (d) => goi('/api/tai-san/bao-tri-xong', { method: 'POST', body: JSON.stringify(d) }),
   taiSanThanhLy: (d) => goi('/api/tai-san/thanh-ly', { method: 'POST', body: JSON.stringify(d) }),
 
+  /* ---- R&D sản phẩm (Kinh doanh) — xem docs/FEATURE-SPEC-RND-SANPHAM.md ---- */
+  rndDanhSach: () => goi('/api/rnd'),
+  rndChiTiet: (id) => goi('/api/rnd/chi-tiet?id=' + encodeURIComponent(id)),
+  rndTao: (d) => goi('/api/rnd/tao', { method: 'POST', body: JSON.stringify(d) }),
+  rndSua: (d) => goi('/api/rnd/sua', { method: 'POST', body: JSON.stringify(d) }),
+  rndBuoc: (d) => goi('/api/rnd/buoc', { method: 'POST', body: JSON.stringify(d) }),
+  rndChuyenGiaiDoan: (d) => goi('/api/rnd/chuyen-giai-doan', { method: 'POST', body: JSON.stringify(d) }),
+  rndQuayLai: (d) => goi('/api/rnd/quay-lai', { method: 'POST', body: JSON.stringify(d) }),
+  rndDoiTrangThai: (d) => goi('/api/rnd/doi-trang-thai', { method: 'POST', body: JSON.stringify(d) }),
+  rndGanSanPham: (d) => goi('/api/rnd/gan-san-pham', { method: 'POST', body: JSON.stringify(d) }),
+
   /* ---- Đón nhân sự mới (ảnh CCCD) ---- */
   nsDocCCCD: (anhBase64) => goi('/api/nhan-su/doc-cccd', {
     method: 'POST', body: JSON.stringify({ anh: anhBase64 })
@@ -299,6 +317,11 @@ export const API = {
   }),
   kdDonHangHuy: () => goi('/api/kinh-doanh/don-hang-huy'),
   kdDongBoDonHang: () => goi('/api/kinh-doanh/dong-bo-don-hang', { method: 'POST' }),
+  /* Tổng quan 2 sàn — trả tiền ở dạng VNĐ đã chia sẵn, KHÔNG chia lại 100000
+     (xem khối TỔNG QUAN 2 SÀN trong src/index.js). ky = hom_nay|7ngay|30ngay|thang_nay */
+  kdTongQuanKenh: (ky) => goi('/api/kinh-doanh/tong-quan-kenh?ky=' + encodeURIComponent(ky || 'hom_nay')),
+  kdXepHangSku: (ky) => goi('/api/kinh-doanh/xep-hang-sku?ky=' + encodeURIComponent(ky || 'thang_nay')),
+  kdTachDongHang: () => goi('/api/kinh-doanh/tach-dong-hang', { method: 'POST' }),
 
   /* ---- Kế toán: đơn hoàn cần tra soát tiền ---- */
   ktCanTraSoat: () => goi('/api/ke-toan/can-tra-soat'),
