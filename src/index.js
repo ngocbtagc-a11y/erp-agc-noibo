@@ -6918,8 +6918,9 @@ async function gopYNhacSlaVoi(env, NGAY_CHO) {
 
    HẠN MỨC GHI D1 (vừa vá hôm 28/08): deploy không nhắc mã góp ý nào → 0 câu
    ghi. Có nhắc → mỗi góp ý đúng 1 UPDATE + 1 dòng lịch sử + (tối đa) 1 thông
-   báo. Trần cứng `DEPLOY_TOI_DA_MOI_LUOT` để một lần gộp nhánh dài không
-   bao giờ thành một trận bão ghi.
+   báo, cộng 1 câu đóng dấu đồng hồ CHỈ khi trạng thái đổi thật (cửa 14).
+   Trần cứng `DEPLOY_TOI_DA_MOI_LUOT` để một lần gộp nhánh dài không bao giờ
+   thành một trận bão ghi.
    ========================================================================== */
 const DEPLOY_TOI_DA_MOI_LUOT = 30;   // trần cứng số góp ý đụng tới trong 1 lượt
 const DEPLOY_HAN_PHUT        = 30;   // mốc `luc` cũ hơn thế thì từ chối
@@ -7114,6 +7115,22 @@ async function gopYDaLenThat(req, env) {
     gia.push(q.gop_y_id);
 
     await env.DB.prepare(`UPDATE gop_y SET ${gan.join(', ')} WHERE id = ?`).bind(...gia).run();
+
+    /* ⏱ CỬA THỨ 14 ÁP CHO ĐƯỜNG DEPLOY (vá lúc gộp 102 commit của main).
+       Cột `cho_duyet_tu_luc` ra đời SAU nhánh này, nên bản cũ đổi `trang_thai`
+       mà bỏ quên đồng hồ. Đo được: 4 góp ý nằm ở `cho_phan_tich` từ 28/08,
+       máy đẩy sang `cho_nghiem_thu` hôm nay thì đồng hồ vẫn ở 28/08 → nhánh 3
+       của gopYNhacSla() thấy ngay >= 7 ngày và nhắn người gửi "chờ bạn xác
+       nhận" NGAY LƯỢT CRON ĐẦU, cùng ngày bản vá vừa lên. Sai và ồn.
+
+       Luật của cửa 14: đóng dấu khi việc THẬT SỰ vào hàng chờ MỚI. Nên chỉ
+       đóng khi `trang_thai` ĐỔI THẬT — `dong_dau` và `cho_xac_nhan` không đổi
+       trạng thái thì KHÔNG đụng đồng hồ, vì đó đúng là "lưu tại chỗ" mà cửa 14
+       cấm đẩy lùi. Gọi qua gopYDongDauChoDuyet() để dùng chung đúng một lớp
+       phòng thủ "no such column" (Rule 1), thay vì nhét cột vào câu UPDATE
+       trên — nhét vào đó là cả lượt chốt sập khi máy chủ chưa nạp migration. */
+    if (q.trang_thai_moi && q.trang_thai_moi !== g.trang_thai)
+      await gopYDongDauChoDuyet(env, q.gop_y_id);
 
     /* Lịch sử: nguoi_doi_id = NULL, tac_nhan = 'DEPLOY'. KHÔNG mạo danh ai —
        đây đúng là thứ bảng gop_y_lich_su v2 (SPEC-0002) sinh ra để ghi. */

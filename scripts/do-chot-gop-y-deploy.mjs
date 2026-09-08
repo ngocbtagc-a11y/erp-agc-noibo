@@ -883,6 +883,114 @@ async function main() {
     ok('  cả 4 đều lùi được nếu máy sai', THAT.every(id => !!xem(db, id).deploy_tt_cu));
   }
 
+  /* ══════════════════════════════════════════════════════════════════════
+     ⑭ ĐỒNG HỒ CHỜ (`cho_duyet_tu_luc`) — CỬA THỨ 14 ÁP CHO ĐƯỜNG DEPLOY
+     ----------------------------------------------------------------------
+     Cột này ra đời SAU nhánh này (nằm trong 102 commit của main). Bản cũ đổi
+     `trang_thai` mà bỏ quên đồng hồ, nên góp ý nằm ở `cho_phan_tich` từ lâu
+     bị máy đẩy sang `cho_nghiem_thu` là đồng hồ VẪN Ở NGÀY CŨ → nhánh 3 của
+     gopYNhacSla() thấy ngay >= 7 ngày và nhắn người gửi "chờ bạn dùng thử"
+     NGAY LƯỢT CRON ĐẦU, cùng ngày bản vá vừa lên. Sai và ồn.
+
+     Đo bằng ĐÚNG biểu thức tuổi hàng chờ của gopYNhacSla(), không đo câu chữ.
+     ════════════════════════════════════════════════════════════════════ */
+  console.log('\n⑭ Đồng hồ chờ sau khi máy đẩy trạng thái');
+  {
+    const SLA_NGHIEM_THU_NGAY = 7;          // = GOPY_SLA_NGHIEM_THU_NGAY trong src/index.js
+    const db = dungDB(); idTiep = 1;
+    const tuoi = (id) => db.prepare(
+      `SELECT julianday(datetime('now','+7 hours'))
+            - julianday(COALESCE(g.cho_duyet_tu_luc, g.cap_nhat_luc, g.tao_luc)) AS d
+         FROM gop_y g WHERE g.id = ?`).get(id).d;
+
+    const A = themGopY(db, { trang_thai: 'cho_phan_tich', tieu_de: 'Nằm chờ đã 20 ngày' });
+    const B = themGopY(db, { trang_thai: 'cho_nghiem_thu', nguoi: 'ns_huong',
+                             tieu_de: 'Đã ở đúng chỗ, người gửi đang thử' });
+    db.prepare(`UPDATE gop_y SET cho_duyet_tu_luc = datetime('now','+7 hours','-20 days')`).run();
+    ok('trước khi đẩy: cả hai đều đã quá hạn nghiệm thu',
+      tuoi(A) >= 19 && tuoi(B) >= 19, `A=${tuoi(A).toFixed(1)}d · B=${tuoi(B).toFixed(1)}d`);
+
+    await goiDeploy(worker, db, [
+      { sha: 'e'.repeat(40), tieu_de: `GY-${A}: vá thật`, than: '', cac_tep: ['src/index.js'] },
+      { sha: 'f'.repeat(40), tieu_de: `GY-${B}: vá thật`, than: '', cac_tep: ['src/index.js'] }
+    ]);
+
+    /* A — máy ĐỔI trạng thái, tức việc vào một hàng chờ MỚI → phải bấm lại. */
+    ok(`GY-${A} đã sang chờ nghiệm thu`, xem(db, A).trang_thai === 'cho_nghiem_thu', xem(db, A).trang_thai);
+    ok('  đồng hồ bấm lại từ hôm nay (bản trước: giữ nguyên 20 ngày)',
+      tuoi(A) < 1, `${tuoi(A).toFixed(1)} ngày`);
+    ok(`  nên SLA KHÔNG nhắn người gửi ngay hôm nay (< ${SLA_NGHIEM_THU_NGAY} ngày)`,
+      tuoi(A) < SLA_NGHIEM_THU_NGAY, `${tuoi(A).toFixed(1)} ngày`);
+
+    /* ĐỐI CHỨNG — cửa 14 CẤM đẩy lùi đồng hồ bằng một cú "lưu tại chỗ".
+       GY-B đã ở sẵn `cho_nghiem_thu`: máy chỉ đóng dấu bằng chứng, KHÔNG đổi
+       trạng thái. Bấm lại đồng hồ ở đây là xoá sạch 20 ngày người gửi đã chờ —
+       đúng cái lỗ mà cửa 14 bịt. */
+    ok(`ĐỐI CHỨNG GY-${B}: máy chỉ đóng dấu, KHÔNG đổi trạng thái`,
+      xem(db, B).trang_thai === 'cho_nghiem_thu' && /^f{40}$/.test(xem(db, B).deploy_sha || ''));
+    ok('  → đồng hồ GIỮ NGUYÊN 20 ngày, không bị bấm lại (cửa 14)',
+      tuoi(B) >= 19, `${tuoi(B).toFixed(1)} ngày`);
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════
+     ⑮ KHÔNG ĐƯỢC ĐỤNG 4 PHIẾU SẾP VỪA ĐÓNG TAY
+     ----------------------------------------------------------------------
+     ⚠️ §⑬ ở trên đo THỰC TẾ NGÀY 29/08 (4 góp ý đang ở `cho_phan_tich`).
+     Thực tế đó KHÔNG CÒN. Đọc DB thật 08/09/2026: 8 góp ý, 7 `hoan_thanh` +
+     1 `moi`. GY-4·5·6·7 đã được Sếp ĐÓNG TAY, lịch sử ghi
+     `nguoi_thuc_hien_loai='nguoi'`, `nguoi_doi_id='ns_admin1'`.
+
+     Giữ §⑬ vì nó vẫn chứng minh đường `quy_trinh_hut` chạy đúng. Nhưng phải
+     có thêm phép đo cho thực tế HÔM NAY: lượt deploy tới đây gần như chắc
+     chắn mang commit nhắc GY-4…7 (chính các bản vá đó), nên câu hỏi sống còn
+     là máy có mở lại / ghi đè / đếm nhầm việc Sếp vừa làm tay không.
+     ════════════════════════════════════════════════════════════════════ */
+  console.log('\n⑮ 4 phiếu Sếp vừa đóng tay — máy có đụng vào không');
+  {
+    const db = dungDB(); idTiep = 1;
+    // Tài khoản Sếp dùng để đóng tay trên DB thật.
+    db.exec(`INSERT INTO nhan_su (id, ho_ten, viet_tat, chuc_vu, bo_phan, dang_lam)
+             VALUES ('ns_admin1','Bùi Thị Ngọc','Ngọc','Giám đốc','Ban giám đốc',1)`);
+    // Dựng lại ĐÚNG trạng thái thật của GY-4·5·6·7 sáng 08/09.
+    const TAY = [4, 5, 6, 7].map(() => themGopY(db, { trang_thai: 'hoan_thanh' }));
+    db.prepare(`UPDATE gop_y SET current_owner='NONE', next_owner='NONE',
+                                 can_xac_minh_lai=0, cho_duyet_tu_luc=datetime('now','+7 hours','-9 days')`).run();
+    // Dòng lịch sử "người đóng tay" — để đếm được máy có ghi đè lên không.
+    for (const id of TAY)
+      db.prepare(`INSERT INTO gop_y_lich_su (gop_y_id, tu_trang_thai, den_trang_thai,
+                    nguoi_thuc_hien_loai, nguoi_doi_id, luc)
+                  VALUES (?, 'da_duyet', 'hoan_thanh', 'nguoi', 'ns_admin1', datetime('now','+7 hours'))`).run(id);
+
+    const truoc = anhChup(db);
+    const suKienTruoc = db.prepare('SELECT COUNT(*) n FROM gop_y_lich_su').get().n;
+    const tinTruoc = demTin(db, 'ns_lan') + demTin(db, 'ns_huong');
+
+    /* Lượt deploy nhắc ĐÚNG 4 mã đó, kèm file code thật — ca xấu nhất. */
+    const kq = await goiDeploy(worker, db, TAY.map((id, i) => ({
+      sha: String.fromCharCode(97 + i).repeat(40), tieu_de: `GY-${id}: vá thật`, than: '',
+      cac_tep: ['src/index.js', 'public/assets/js/app.js']
+    })));
+
+    ok('cửa vẫn trả 200 (không nổ)', kq.ma === 200, `mã ${kq.ma}`);
+    ok('KHÔNG một cột nào của 4 phiếu bị đổi', anhChup(db) === truoc);
+    ok('  cả 4 vẫn "hoan_thanh" — máy KHÔNG mở lại',
+      TAY.every(id => xem(db, id).trang_thai === 'hoan_thanh'));
+    ok("  next_owner vẫn 'NONE', KHÔNG bị để trống",
+      TAY.every(id => xem(db, id).next_owner === 'NONE' && xem(db, id).current_owner === 'NONE'));
+    ok('  KHÔNG ghi đè bằng chứng / dấu deploy của Sếp',
+      TAY.every(id => !xem(db, id).deploy_sha && !xem(db, id).deploy_tt_cu));
+    ok('  đồng hồ chờ KHÔNG bị bấm lại', TAY.every(id => !!xem(db, id).cho_duyet_tu_luc));
+    ok('  KHÔNG đè lên dòng lịch sử "người đóng tay"',
+      db.prepare(`SELECT COUNT(*) n FROM gop_y_lich_su
+                   WHERE nguoi_thuc_hien_loai='nguoi' AND nguoi_doi_id='ns_admin1'`).get().n === 4);
+    ok('  KHÔNG sinh thêm dòng lịch sử nào',
+      db.prepare('SELECT COUNT(*) n FROM gop_y_lich_su').get().n === suKienTruoc);
+    ok('  KHÔNG nhắn lại người gửi (họ đã biết là xong)',
+      demTin(db, 'ns_lan') + demTin(db, 'ns_huong') === tinTruoc);
+    ok('  và máy ĐẾM ĐÚNG: 0 phiếu bị đụng trong lượt này',
+      (kq.than.da_doi || 0) === 0, JSON.stringify(kq.than).slice(0, 160));
+  }
+
   console.log(`\n═══ ${dat} đạt · ${truot} trượt ═══\n`);
   process.exit(truot ? 1 : 0);
 }
