@@ -143,7 +143,7 @@ _(kết quả chạy thật — điền ở lượt sau)_
 |---|---|---|
 | **CAO** | Đường lui trưởng phòng nối bằng chuỗi tên; đổi tên phòng ban là rơi cả phòng lên Sếp. Nối bằng `phong_ban_id` | `src/index.js:3092-3098` |
 | **CAO** | Chú thích sai sự thật về schema — xoá, nếu không vòng sau lại tin theo | `src/index.js:3089-3091` |
-| TRUNG BÌNH | Lùi xong không chạy lại được (còn bảng `_v2` / còn cột) | `migrations/lui-gopy-*.sql` |
+| TRUNG BÌNH | Lùi xong không chạy lại được (còn bảng `_v2` / còn cột) | `migrations/lui/lui-gopy-*.sql` |
 | THẤP | `CHECK` không cấm dòng `nguoi` mang nhãn `tac_nhan` | `them-gopy-lichsu-tacnhan.sql:48` |
 | THẤP | Human Cost là ước đoán, cần đếm thật 2 tuần | — |
 

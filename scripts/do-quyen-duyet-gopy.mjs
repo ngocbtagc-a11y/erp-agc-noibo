@@ -692,7 +692,7 @@ console.log('\n=== MIGRATION (thêm–lùi–thêm–lùi–thêm) =============
   const { db } = dungDB();          // đã có sẵn them-quyen-duyet-gopy.sql
   const cot = (b) => db.prepare(`SELECT name FROM pragma_table_info('${b}')`).all().map(r => r.name);
   const chay = (f) => {
-    for (const c of cacCauSQL(readFileSync(path.join(GOC, 'migrations', f), 'utf8'))) db.exec(c);
+    for (const c of cacCauSQL(readFileSync(path.join(GOC, 'migrations', /^lui-/.test(f) ? 'lui' : '.', f), 'utf8'))) db.exec(c);
   };
 
   db.exec("DELETE FROM tai_khoan; DELETE FROM nhan_su;");
@@ -737,7 +737,7 @@ console.log('\n=== MIGRATION (thêm–lùi–thêm–lùi–thêm) =============
 console.log('\n=== MIGRATION TỰ KIỂM (REV-0027 L5) ============================\n');
 {
   const chayTren = (db, f) => {
-    for (const c of cacCauSQL(readFileSync(path.join(GOC, 'migrations', f), 'utf8'))) db.exec(c);
+    for (const c of cacCauSQL(readFileSync(path.join(GOC, 'migrations', /^lui-/.test(f) ? 'lui' : '.', f), 'utf8'))) db.exec(c);
   };
   // Ca hỏng: số điện thoại của Sếp đã đổi VÀ họ tên trong hồ sơ cũng khác →
   // backfill bắt trúng 0 người. Trước bản vá, migration báo thành công.
@@ -777,7 +777,7 @@ console.log('\n=== MIGRATION cho_duyet_tu_luc (thêm–lùi–thêm–lùi–th�
   const { db } = dungDB();          // đã có sẵn them-gopy-cho-duyet-tu-luc.sql
   const cot = () => db.prepare("SELECT name FROM pragma_table_info('gop_y')").all().map(r => r.name);
   const chay = (f) => {
-    for (const c of cacCauSQL(readFileSync(path.join(GOC, 'migrations', f), 'utf8'))) db.exec(c);
+    for (const c of cacCauSQL(readFileSync(path.join(GOC, 'migrations', /^lui-/.test(f) ? 'lui' : '.', f), 'utf8'))) db.exec(c);
   };
   ok('Cột cho_duyet_tu_luc có mặt sau khi nạp migrations', cot().includes('cho_duyet_tu_luc'));
 
@@ -801,7 +801,7 @@ console.log('\n=== MIGRATION cho_duyet_tu_luc (thêm–lùi–thêm–lùi–th�
   // Backfill lấy ĐÚNG đồng hồ cũ, không để việc nào nhảy vọt hay bị lùi.
   {
     const { db: db2 } = dungDB();
-    for (const c of cacCauSQL(readFileSync(path.join(GOC, 'migrations', 'lui-gopy-cho-duyet-tu-luc.sql'), 'utf8'))) db2.exec(c);
+    for (const c of cacCauSQL(readFileSync(path.join(GOC, 'migrations', 'lui', 'lui-gopy-cho-duyet-tu-luc.sql'), 'utf8'))) db2.exec(c);
     db2.exec("DELETE FROM gop_y_lich_su; DELETE FROM gop_y; DELETE FROM tai_khoan; DELETE FROM nhan_su;");
     db2.exec("INSERT INTO nhan_su (id, ho_ten, viet_tat, chuc_vu, bo_phan) VALUES ('N1','Nguyễn Văn An','NVA','NV','Kho vận')");
     db2.exec(`INSERT INTO gop_y (id, nguoi_gui_id, tieu_de, boi_canh, vuong_o_dau, mong_muon,
@@ -1634,8 +1634,13 @@ const DC = [
     (d) => d.phongCuaSauDuyet !== 403 || d.phongCuaSauHuy !== 403,
     'anh Phong duyệt/huỷ lọt qua /api/gop-y/trang-thai'],
 
+  /* NEO CẬP NHẬT 04/09/2026 (tách vai trò hệ thống khỏi vị trí công việc):
+     `laAdmin(phien.vai_tro)` nay là `laAdmin(phien)` — mọi cửa phân quyền
+     nhận CẢ PHIÊN để hợp được hai ô. Ca đối chứng vẫn TIÊM ĐÚNG khiếm khuyết
+     cũ (bỏ vế laAdmin ⇒ anh Phong mất quyền xem), chỉ đổi chuỗi neo. Điều
+     kiện bắt lỗi ở dòng dưới GIỮ NGUYÊN VĂN — không nới một chữ. */
   ['C-cat-thua-quyen-xem', (f, s) => f === 'index.js'
-    ? s.replace('const laAd = laAdmin(phien.vai_tro) || duocDuyetGopY(phien);',
+    ? s.replace('const laAd = laAdmin(phien) || duocDuyetGopY(phien);',
                 'const laAd = duocDuyetGopY(phien);') : s,
     (d) => d.phongThay !== 7 || d.phongThieuKhoa.length > 0 || !d.phongDocGhiChu,
     'anh Phong bị cắt mất quyền xem (cắt quá tay)'],
@@ -1674,8 +1679,25 @@ const DC2 = [
     (d) => d.khoaSep !== 409 || d.xoaTkSep !== 409 || d.xoaNsSep !== 409 || d.datLaiMkSep !== 403,
     'anh Phong khoá/xoá/đặt lại mật khẩu tài khoản Sếp (L3 + cửa 5)'],
 
+  /* NEO CẬP NHẬT 04/09/2026: docPhien nay bỏ dần TỪNG cột thiếu trong một
+     vòng lặp (hai cột tuỳ chọn: duyet_gopy + vi_tri_cong_viec), nên không còn
+     chuỗi `cauPhien('0 AS duyet_gopy')` để neo vào. Khiếm khuyết TIÊM VÀO
+     KHÔNG ĐỔI — vẫn là "ném thẳng lỗi thiếu cột thay vì lùi về đường an
+     toàn", tức đúng lỗi REV-0027 L4. Điều kiện bắt lỗi giữ nguyên văn.
+
+     NEO KÈM ĐỘ THỤT (REV-0058 vòng 2 ③): `auth.js` nay có HAI chốt đọc GIỐNG
+     HỆT NHAU — một ở `coCotViTri` (thụt 4 dấu cách), một ở `docPhien` (thụt
+     6). `String.replace` chỉ thay chỗ ĐẦU TIÊN, nên neo trần găm nhầm sang
+     `coCotViTri` và ca này hoá ra đo nhầm hàm — đo được: bàn đo đỏ oan
+     (190/2) trong khi `docPhien` vẫn phòng thủ đúng. Neo cả xuống dòng + 6
+     dấu cách là trỏ đúng `docPhien`.
+     Thử LF trước rồi CRLF: tệp nguồn trên máy này lưu CRLF, thiếu vế sau thì
+     mũi tiêm không găm vào đâu cả và ca đối chứng "lọt" vì lý do chẳng liên
+     quan gì tới lỗi đang đo. */
   ['H-doc-khong-phong-thu', (f, s) => f === 'auth.js'
-    ? s.replace("cauPhien('0 AS duyet_gopy')", "cauPhien('t.duyet_gopy')") : s,
+    ? (s.includes('\n      if (!/no such column/i.test(tin)) throw e;')
+        ? s.replace('\n      if (!/no such column/i.test(tin)) throw e;', '\n      throw e;')
+        : s.replace('\r\n      if (!/no such column/i.test(tin)) throw e;', '\r\n      throw e;')) : s,
     doThieuCot,
     (d) => !d.maAn.every(x => x === 200) || !d.maSep.every(x => x === 200),
     'thiếu cột duyet_gopy làm sập đăng nhập toàn hệ thống (L4)'],

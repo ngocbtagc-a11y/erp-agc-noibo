@@ -1,0 +1,60 @@
+-- ==========================================================================
+-- MIGRATION — CỘT `ocr_so_trang_neo` CHO BẢNG `tai_lieu`  ·  CTL-0026 / REV-0046
+-- --------------------------------------------------------------------------
+--   Nạp máy:  node scripts/chay-migration.mjs them-kho-tai-lieu-cot-ocr-neo.sql
+--   Nạp mây:  node scripts/chay-migration.mjs them-kho-tai-lieu-cot-ocr-neo.sql --remote
+--
+--   ⚠️ PHẢI CHẠY SAU `them-kho-tai-lieu.sql` (bảng phải có trước đã).
+--      TÊN FILE ĐẶT RA ĐỂ ÉP ĐÚNG THỨ TỰ ẤY, không phải để đọc cho xuôi:
+--      cơ chế tự nạp CSDL (nhánh feature/tu-nap-db) sắp file theo tên ĐÃ BỎ
+--      ĐUÔI `.sql`, nên `them-kho-tai-lieu` < `them-kho-tai-lieu-cot-ocr-neo`
+--      — bảng chạy trước, cột vá sau. Bản nháp tên `them-cot-ocr-neo.sql` đã
+--      BỊ BỎ vì "them-cot-" < "them-kho-": máy trắng sẽ chạy ALTER trước khi
+--      có bảng và chết `no such table: tai_lieu`.
+--      ĐỔI TÊN FILE NÀY LÀ ĐỔI THỨ TỰ NẠP. Bàn đo `do-kho-tai-lieu` mục ⑫
+--      canh chỗ này.
+--
+-- VÌ SAO CÓ FILE NÀY (REV-0046 lỗi #1 — lỗi CHẶN PHÁT HÀNH)
+--   Bản trước thêm `ocr_so_trang_neo` vào GIỮA câu `CREATE TABLE IF NOT
+--   EXISTS tai_lieu (...)`. Máy trắng thì đúng. Nhưng máy nào ĐÃ chạy bản 1
+--   (`nap-khotailieu-may`) thì bảng đã tồn tại ⇒ `IF NOT EXISTS` bỏ qua toàn
+--   bộ câu ⇒ cột KHÔNG BAO GIỜ sinh ra, mà `INSERT` trong src/tai-lieu.js
+--   lại liệt kê nó ⇒ MỌI LƯỢT QUÉT CHẾT. Hỏng âm thầm: nạp lại bao nhiêu lần
+--   cũng báo "xong".
+--
+--   Cách vá: cột ĐÃ ĐƯỢC GỠ khỏi `CREATE TABLE` và chuyển hẳn về đây.
+--   Gỡ khỏi `CREATE TABLE` chứ không để cả hai chỗ, vì SQLite không có
+--   `ADD COLUMN IF NOT EXISTS`: để ở cả hai chỗ thì máy TRẮNG sẽ vấp
+--   `duplicate column name` và `wrangler d1 execute --file` dừng ngay ở đó —
+--   tức là vá xong lại đẻ ra một đường hỏng mới, lần này cho máy trắng.
+--   Để đúng MỘT chỗ thì cả hai loại máy đều đi đúng một lần, không có nhánh
+--   nào phải "coi lỗi là bình thường".
+--     · máy TRẮNG:  CREATE TABLE (không cột) → file này ADD COLUMN → có cột
+--     · máy CŨ:     bảng đã có (không cột)   → file này ADD COLUMN → có cột
+--
+-- CỘT NÀY LÀ GÌ
+--   Trong số các trang đã bóc được chữ (`ocr_so_trang`), mấy trang ĐỐI CHIẾU
+--   ĐƯỢC với một mỏ neo MẠNH — số hiệu người gõ · tên công ty · cụm chữ bắt
+--   buộc của loại giấy. Xem `docTinChu()` trong src/tai-lieu.js.
+--   Mỏ neo KHÔNG dùng để vứt chữ: chữ LUÔN được lưu. Con số này chỉ nói phần
+--   chữ ấy tin được tới đâu, và chỉ trang đã đối chiếu mới được vào `tim_kiem`.
+--
+--   DEFAULT 0 nên mọi dòng CŨ hạ về "chưa đối chiếu trang nào" — đúng nghĩa
+--   an toàn: dòng lưu trước bản vá thì thật sự chưa ai đối chiếu.
+--
+-- LÙI LẠI (rollback) — chạy TAY hai câu này, KHÔNG có file `lui-*.sql` riêng:
+--   ALTER TABLE tai_lieu DROP COLUMN ocr_so_trang_neo;
+--   DELETE FROM schema_migrations WHERE filename = 'them-kho-tai-lieu-cot-ocr-neo.sql';
+--   (cột không nằm trong chỉ mục nào, gỡ ra không kéo theo gì; mã nguồn sẽ
+--    gãy ở đường quét — đó là lý do lùi, phải lùi mã cùng lúc.)
+--
+--   ⚠️ CỐ Ý KHÔNG tạo `migrations/lui-them-kho-tai-lieu-cot-ocr-neo.sql`. Mọi công cụ
+--   migration đều đọc `migrations/*.sql` là "danh sách PHẢI chạy" —
+--   `kiem-tra-migration` liệt kê 4 file `lui-*` sẵn có thành "chưa chạy", và
+--   cơ chế tự nạp CSDL (nhánh feature/tu-nap-db) sẽ đâm vào hàng rào chặn câu
+--   nguy hiểm vì `DROP` không nằm trong danh sách cho phép. Đặt câu lùi ở đây
+--   giống hệt `them-kho-tai-lieu.sql` đang làm: người cần lùi vẫn đọc được,
+--   mà máy không bao giờ tự chạy nhầm.
+-- ==========================================================================
+
+ALTER TABLE tai_lieu ADD COLUMN ocr_so_trang_neo INTEGER NOT NULL DEFAULT 0;

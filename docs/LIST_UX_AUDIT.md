@@ -138,6 +138,99 @@ bảng "Top 5" im lặng vẫn là một bảng khẳng định sai "đây là t
 700 việc) và `npm run do-nut-dai-cat` (trình duyệt thật, có khung "bản trước"
 để so, có ca đối chứng gỡ luật 44px).
 
+## Đợt 29/08/2026 — quét lớp "TẠO XONG LÀ ĐÓNG BĂNG" (CTL-0017)
+
+Yêu cầu gốc: **Sếp Ngọc, nhắc HAI lần** — *"việc giao xong không sửa được"*,
+rồi *"mục tiêu đã giao không sửa được nữa kìa"*. Áp `LUAT-GOP-Y-LA-TRIEU-CHUNG`
+§4 + §5: quét cả LỚP và **ghi ra**, không chỉ vá hai chỗ được chỉ.
+
+### Trước hết: con số 22 trong báo cáo miệng — BỎ
+
+Vòng trước tôi khai *"quét 22 chỗ"* mà **không viết vào file nào**. Hồ Ly quét
+độc lập ra **29**, và **không ai đối chiếu được** vì không có danh sách. Con số
+22 **không tái dựng được nên bỏ hẳn** — đó đúng là điều §5 nói: thiếu danh sách
+thì con số chỉ là lời khai. Dưới đây là bản đếm có **luật viết ra**, đếm lại từ
+đầu bằng bảng định tuyến chứ không bằng trí nhớ.
+
+### Luật đếm (viết ra để ai cũng đếm lại được)
+
+> **Một "cửa TẠO" = một route `POST` trong bảng định tuyến `src/index.js`, do
+> NGƯỜI DÙNG BẤM, mà thân hàm (kể cả hàm nó gọi trong `src/`) `INSERT INTO`
+> một bảng NGHIỆP VỤ.**
+> Không tính: đồng bộ từ sàn (`hoan/dong-bo`, `tiktok/dong-bo`,
+> `kinh-doanh/dong-bo-don-hang`) — không ai bấm, dữ liệu là bản sao của sàn;
+> cron; và bảng hạ tầng (`phien`, `push_*`, `sao_luu_*`, `bo_dem_ma`,
+> `thong_bao`, các sổ vết do một cửa KHÁC đẻ ra).
+
+**Số:** **39 cửa TẠO** → **2 xử trong vòng này** · **7 bất biến ĐÚNG** ·
+**5 thiếu đường sửa → hàng đợi (ghi ra ở dưới)** · **25 đã có sẵn đường sửa**.
+(2 + 7 + 5 + 25 = 39.)
+
+### Đối chiếu với con số 29 của Hồ Ly — lệch ở ĐỘ GỘP, không ở kho mã
+
+Cùng một kho mã, khác một luật đếm. Gộp lại theo cách Hồ Ly đếm thì **trùng
+khít**:
+
+| Bước gộp | Còn lại |
+|---|---|
+| 39 cửa (1 route = 1 cửa) | 39 |
+| 5 cửa vòng đời tài sản (cấp phát/thu hồi/báo hỏng/bảo trì xong/thanh lý) → **1** | 35 |
+| 5 cửa danh mục nền (phòng ban/chức danh/đơn vị tính/danh mục TS/vị trí TS, đều qua `themDanhMuc`) → **1** | 31 |
+| `ca/duyet` + `ca/duyet-hang-loat` → **1** | 30 |
+| `hoan/khieu-nai` + `hoan/khieu-nai/video` → **1** | **29** ✔ |
+
+→ **Chốt 39** cho bảng dưới (đếm theo route thì đối chiếu được với bảng định
+tuyến, không phải cãi nhau về "thế nào là một cửa"). **29 là cùng danh sách
+đó, gộp lại.** Chỗ còn lệch thật: Hồ Ly xếp **9 chỗ "không có đường sửa"**,
+tôi tách làm **7 bất biến ĐÚNG + 5 thiếu** — vì "sổ nhập kho không sửa được"
+là một QUYẾT ĐỊNH đúng, không phải một thiếu sót; trộn hai loại vào một con số
+là chỗ hàng đợi bắt đầu mục ruỗng.
+
+### Đã xử trong vòng này (2)
+
+| Cửa tạo | Đường sửa mới | Ghi vết |
+|---|---|---|
+| `POST /api/cong-viec/tao` (`cvTao`) | `POST /api/cong-viec/sua` — 4 nhóm trường, cắt ở máy chủ | ✅ + **lý do bắt buộc** cho `han_chot`/`nguoi_nhan_id` (2 lớp) |
+| `POST /api/muc-tieu/tao` (`mtTao`) | `mtCapNhat` đã sửa được từ `28976b6` — nay **có ghi vết** | ✅ |
+
+### Bất biến ĐÚNG — không phải thiếu sót (7)
+
+| Cửa | Vì sao đúng khi không sửa được |
+|---|---|
+| `kho/nhap` · `kho/xuat` | `giao_dich_kho`/`lo_hang` là **sổ cái kho**. Sửa được một dòng nhập là tồn kho không còn đối chiếu được với chứng từ. Sai thì ghi bút toán ngược, không tẩy |
+| `tai-san/cap-phat` · `thu-hoi` · `bao-hong` · `bao-tri-xong` · `thanh-ly` | 5 cửa cùng ghi vào `tai_san_lich_su` — **sổ vòng đời tài sản**. Trạng thái tài sản vẫn sửa được qua `tai-san/sua`; cái khoá là LỊCH SỬ |
+
+### Hàng đợi — thiếu đường sửa, GHI RA kèm mức và lý do (5)
+
+| Cửa tạo | Mức | Vì sao đau | Vì sao chưa làm trong vòng này |
+|---|---|---|---|
+| `POST /api/vinh-danh` (`vdGui`) | **P1** | Gõ nhầm tên/nội dung là **lời khen đóng băng vĩnh viễn vào hồ sơ người khác**, `sao = sao + ?` **không lùi được**, và tin đã bắn cho người được khen. Sếp Ngọc đang tập thói quen ghi nhận — chỗ này lời khen **quay ra phản tác dụng** | **Đã làm trong vòng này** — xem `docs/CHANGELOG.md` |
+| `POST /api/chat/gui` (`chatGui`) | P2 | Gõ nhầm tin nhắn nội bộ, không thu hồi được. Đã có thông báo đẩy nên người kia đọc rồi | Thu hồi tin nhắn kéo theo sửa cả `thong_bao` + push đã bắn + `chatDanhSach` đang cắt 50 dòng. Không phải việc vá một cửa |
+| `POST /api/hoan/khieu-nai` | P2 | Nội dung khiếu nại gửi Shopee/TikTok gõ sai thì phải huỷ đơn khiếu nại làm lại | Là **hồ sơ gửi ra ngoài** — cần bàn với anh Phong xem sửa sau khi gửi có hợp lệ với sàn không. Business policy, không phải kỹ thuật |
+| `POST /api/hoan/khieu-nai/video` | P2 | Tải nhầm video minh chứng, không gỡ được | Cùng lý do trên, và còn dính xoá file ở R2 |
+| `POST /api/gop-y` (`gopYGui`) | P3 | Nội dung góp ý gốc không sửa được (chỉ đổi được trạng thái/đề xuất) | **Nghiêng về ĐÚNG**: góp ý là lời của người gửi, đã vào cổng duyệt và đã có người đọc. Sửa lời sau khi người khác đã duyệt là đổi thứ đang được đo |
+
+### Còn nợ của chính đợt này — hoãn CÓ LÝ DO, không im (3)
+
+| Việc | Mức | Vì sao hoãn |
+|---|---|---|
+| Nút **"Xin sửa"** cho người nhận việc (REV-0037 · L6) | P2 | Người nhận bị 403 kèm câu *"báo người giao việc"* mà trong app **không có nút nào** làm việc đó → phải nhắn tay. Rẻ (dùng lại `guiThongBao`) nhưng là **đường đi mới giữa hai người**, cần một vòng nghĩ về chống làm phiền (SPEC-0004) chứ không phải một nút |
+| Nút Sửa cho **quản lý cấp trên** (L7) | P2 | Quyền `laCapTrenCua` chỉ tồn tại ở máy chủ; nút "Sửa" chỉ vẽ ở bảng *Việc tôi giao* và todo cá nhân → **anh Duy không có đường nào trên màn hình** để dời hạn cho team kho. Phải đổi cách dựng bảng *Việc cần làm* (thêm cột thao tác cho việc của cấp dưới), không phải thêm một `if` |
+| Hộp Sửa mở **4/7 trường** API nhận (L8) | P3 | Thiếu `muc_tieu_id`, `nguoi_nhan_id`, `phoi_hop`. Luật ở máy chủ **đã cắt xong** cho cả ba (đo được: 88 phép). Nhưng `nguoi_nhan_id` mở ra là kéo theo ô lý do + hai luồng thông báo trên giao diện, và **yêu cầu lần hai của Sếp có thể là mấy ô KHÁC** (`cap`/`bo_phan`/`nam`/`quy` của mục tiêu — Gạo đang hỏi lại). Mở bừa 3 ô rồi phải sửa lại là tệ hơn chờ một câu trả lời |
+
+### 25 cửa còn lại — đã có sẵn đường sửa
+
+`quan-tri/them-nhan-su` · `nhan-su/don-moi` (→ `quan-tri/sua-nhan-su`, `xoa-nhan-su`) ·
+`quan-tri/tao-tai-khoan` (→ `sua-vai-tro`, `dat-lai-mat-khau`, `khoa-tai-khoan`, `xoa-tai-khoan`) ·
+`kho/them-san-pham` (→ `kho/sua-san-pham`) ·
+`dulieunen/{phong-ban,chuc-danh,don-vi,tai-san-danh-muc,tai-san-vi-tri,ncc,kho}/them` (→ `…/sua`, `…/khoa`) ·
+`tai-san/them` (→ `tai-san/sua`) ·
+`ca/mau-ca/them` (→ `sua`, `xoa`) · `ca/mo/them` · `ca/mo/mo-tuan` (→ `ca/mo/khoa`) ·
+`ca/dang-ky` (→ `ca/dang-ky/huy`) · `ca/gan-thu-cong` · `ca/duyet` · `ca/duyet-hang-loat` (→ `ca/tu-choi`) ·
+`ca/xep-tu-dong` (chạy lại đè) · `hoan/sku-map` (gán lại/xoá) ·
+`ky-nang/cham` (→ `ky-nang/go`) · `nhan-su/hop-dong/luu` (→ `hop-dong/an`) ·
+`mo-ta-cong-viec/luu` (→ `mo-ta-cong-viec/an`) · `nhan-su/trang-thai-hd` (đặt lại đè).
+
 ## Khi nào quay lại làm đầy đủ hơn
 
 Nếu Sản phẩm/SKU bắt đầu có dữ liệu thật (hiện 0 dòng) hoặc Nhân sự vượt

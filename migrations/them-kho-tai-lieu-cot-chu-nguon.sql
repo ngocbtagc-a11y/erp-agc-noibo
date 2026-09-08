@@ -1,0 +1,46 @@
+-- ==========================================================================
+-- MIGRATION — CỘT `chu_nguon` CHO BẢNG `tai_lieu`  ·  CTL-0026 vòng 7
+-- --------------------------------------------------------------------------
+--   Nạp máy:  node scripts/chay-migration.mjs them-kho-tai-lieu-cot-chu-nguon.sql
+--   Nạp mây:  node scripts/chay-migration.mjs them-kho-tai-lieu-cot-chu-nguon.sql --remote
+--
+--   ⚠️ PHẢI CHẠY SAU `them-kho-tai-lieu.sql` (bảng phải có trước đã).
+--      TÊN FILE ĐẶT RA ĐỂ ÉP ĐÚNG THỨ TỰ ẤY, không phải để đọc cho xuôi: cơ
+--      chế tự nạp CSDL sắp file theo tên đã bỏ đuôi `.sql`, nên
+--      `them-kho-tai-lieu` < `them-kho-tai-lieu-cot-chu-nguon` — bảng trước,
+--      cột sau. ĐỔI TÊN FILE NÀY LÀ ĐỔI THỨ TỰ NẠP.
+--      Cột mới của một bảng ĐÃ PHÁT HÀNH thì PHẢI đi bằng `ALTER TABLE` ở file
+--      riêng, không nhét vào giữa `CREATE TABLE IF NOT EXISTS` — máy nào đã có
+--      bảng sẽ bỏ qua toàn bộ câu và cột vĩnh viễn không sinh ra, rồi MỌI lượt
+--      quét chết vì `INSERT` liệt kê cột đó (đúng lỗi REV-0046 #1).
+--
+-- VÌ SAO CÓ CỘT NÀY
+--   Sếp Ngọc 03/09/2026: *"định dạng file sẽ là scan pdf"*. Máy scan ra HAI
+--   loại PDF trông y hệt nhau khi mở lên:
+--     · CÓ LỚP CHỮ  — máy scan đã nhận dạng chữ sẵn ⇒ TRA CỨU ĐƯỢC theo nội dung
+--     · CHỈ CÓ ẢNH  — không một ký tự nào bên trong ⇒ CHỈ XEM ĐƯỢC
+--   Sếp cần biết TỈ LỆ hai loại đó trong kho để quyết định có phải đi chỉnh
+--   máy scan hay không. Suy ra từ `ocr_so_trang > 0` thì không phân biệt được
+--   "PDF chỉ có ảnh" với "AI đọc ảnh hụt" — hai ca cần hai cách xử khác nhau
+--   (một cái chỉnh máy scan, một cái chụp lại rõ hơn).
+--
+-- GIÁ TRỊ (khớp `NGUON_CHU` trong src/tai-lieu.js — sửa một chỗ thì sửa cả hai):
+--   'pdf_lop_chu' — chữ lấy từ lớp chữ có sẵn trong file PDF
+--   'anh_ai'      — chữ do Workers AI đọc từ ảnh chụp
+--   'khong'       — không có chữ nào
+--   NULL          — dòng lưu TRƯỚC bản này. Cố ý KHÔNG đặt DEFAULT: NULL nói
+--                   thật rằng "chưa từng đo", còn một giá trị mặc định là một
+--                   lời khai bịa cho vài trăm dòng cũ.
+--
+-- LÙI LẠI (rollback) — chạy TAY, KHÔNG có file `lui-*.sql` riêng (mọi công cụ
+-- migration coi `migrations/*.sql` là danh sách PHẢI chạy):
+--   ALTER TABLE tai_lieu DROP COLUMN chu_nguon;
+--   DELETE FROM schema_migrations WHERE filename = 'them-kho-tai-lieu-cot-chu-nguon.sql';
+--   (cột không nằm trong chỉ mục nào; mã nguồn sẽ gãy ở đường quét, nên lùi mã
+--    cùng lúc.)
+--
+-- Chạy lần hai báo "duplicate column name: chu_nguon" tức là ĐÃ CHẠY RỒI,
+-- không phải hỏng.
+-- ==========================================================================
+
+ALTER TABLE tai_lieu ADD COLUMN chu_nguon TEXT;

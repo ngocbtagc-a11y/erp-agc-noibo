@@ -56,7 +56,7 @@ Tin tốt: cả 3 vấn đề này đều **sửa được từng phần, không
      schema.sql (nền) + 27 file migrations/*.sql (chạy tay, không tracking)
                               │
                               ▼
-        Cloudflare Workers AI (@cf/meta/llama-3.2-vision — đọc CCCD)
+        Cloudflare Workers AI (@cf/meta/llama-4-scout-17b-16e — đọc ảnh)
 
 ┌─ CI/CD ───────────────────────────────────────────────────────────┐
 │ GitHub Actions (.github/workflows/deploy.yml)                     │

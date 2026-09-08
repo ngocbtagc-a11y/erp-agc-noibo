@@ -1,0 +1,545 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bàn soi Cắt khung — REV-0056 (Hồ Ly)</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+<style>
+  body { font: 14px/1.6 system-ui, sans-serif; margin: 0; padding: 12px; background: #f5ecdf; color: #2c2117; }
+  pre { background: #fffcf4; border: 1px solid #e2d0ba; border-radius: 8px; padding: 10px; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<h2>Bàn soi Cắt khung — REV-0056</h2>
+<pre id="kq">đang soi…</pre>
+
+<script type="module">
+import { nenAnhChung, coByteCuaDataUrl } from '/assets/js/anh-chung.js';
+import { moQuetTaiLieu, ANH_TRANG } from '/assets/js/quet-tai-lieu.js';
+import { doanBonGoc, duoiPhang, lamRoChu, taiAnh, canvasThanhTep, tuGiacLoi, laTronKhung }
+  from '/assets/js/cat-khung.js';
+import { veToGiay, datGiayVaoCanh, nenBanGo, themNhieu }
+  from '/lib/trang-giay-thu.js';
+
+const dong = [];
+const ghi = (s) => { dong.push(s); document.getElementById('kq').textContent = dong.join('\n'); };
+const dat = (ok, ten, phu = '') => ghi(`  ${ok ? 'ĐẠT ' : '✗ HỎNG'}  ${ten}${phu ? '   ' + phu : ''}`);
+const cho = (ms) => new Promise(r => setTimeout(r, ms));
+const kb = (b) => (b / 1024).toFixed(0) + ' KB';
+const doi = async (chon, hen = 8000) => {
+  const t = Date.now();
+  while (Date.now() - t < hen) { const e = document.querySelector(chon); if (e) return e; await cho(40); }
+  throw new Error('Không thấy ' + chon);
+};
+
+const W12 = 3024, H12 = 4032;
+const KHOA = 'tl_nhap_v1_kho_chung_chung';
+
+function canvasThanhFile(c, ten, cl = 0.95) {
+  return new Promise(r => c.toBlob(b => r(new File([b], ten, { type: 'image/jpeg' })), 'image/jpeg', cl));
+}
+async function bam(chuoi) { return (await import('data:text/javascript,export default 0'), 0); }
+async function bamChuoi(s) {
+  const b = new TextEncoder().encode(s);
+  const h = await crypto.subtle.digest('SHA-256', b);
+  return [...new Uint8Array(h)].map(x => x.toString(16).padStart(2, '0')).join('');
+}
+
+/* ---- Đếm canvas + tổng điểm ảnh cấp phát, để trả lời câu "mấy bản sao" --- */
+let demCanvas = 0, tongDiem = 0, dinhDiem = 0;
+{
+  const goc = document.createElement.bind(document);
+  document.createElement = function (t, ...r) {
+    const e = goc(t, ...r);
+    if (String(t).toLowerCase() === 'canvas') {
+      demCanvas++;
+      const oW = Object.getOwnPropertyDescriptor(HTMLCanvasElement.prototype, 'width');
+      const oH = Object.getOwnPropertyDescriptor(HTMLCanvasElement.prototype, 'height');
+      let w = 300, h = 150;
+      Object.defineProperty(e, 'width', {
+        get: () => oW.get.call(e),
+        set: (v) => { oW.set.call(e, v); w = oW.get.call(e); ke(w, h); }
+      });
+      Object.defineProperty(e, 'height', {
+        get: () => oH.get.call(e),
+        set: (v) => { oH.set.call(e, v); h = oH.get.call(e); ke(w, h); }
+      });
+      const ke = (a, b) => { const d = a * b; if (d > dinhDiem) dinhDiem = d; tongDiem += 0; };
+    }
+    return e;
+  };
+}
+
+function dungCanh(ten) {
+  const nen = nenBanGo(W12, H12);
+  const giay = veToGiay(1500, 2000, { nhieu: 10 });
+  const G = {
+    'ban-go': [[0.15, 0.12], [0.86, 0.10], [0.88, 0.90], [0.13, 0.88]],
+    'hai-to': [[0.06, 0.10], [0.47, 0.10], [0.47, 0.62], [0.06, 0.62]]
+  }[ten];
+  datGiayVaoCanh(nen, giay, G.map(g => [g[0] * W12, g[1] * H12]));
+  if (ten === 'hai-to') {
+    datGiayVaoCanh(nen, veToGiay(1500, 2000, { nhieu: 10 }),
+      [[0.53, 0.34], [0.95, 0.38], [0.93, 0.92], [0.51, 0.88]].map(g => [g[0] * W12, g[1] * H12]));
+  }
+  return { ten, canvas: nen, goc: G };
+}
+
+/** Ảnh ra có NaN / đen kịt / trắng trơn không. */
+function soiAnhRa(c) {
+  const W = c.width, H = c.height;
+  const d = c.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, W, H).data;
+  let den = 0, sang = 0, tong = 0;
+  for (let p = 0; p < d.length; p += 4 * 37) {
+    const v = 0.299 * d[p] + 0.587 * d[p + 1] + 0.114 * d[p + 2];
+    tong++;
+    if (v < 12) den++;
+    if (v > 243) sang++;
+  }
+  return { den: den / tong, sang: sang / tong, W, H };
+}
+
+let soHong = 0;
+const hong = (t) => { soHong++; ghi('  ✗ HỎNG  ' + t); };
+
+try {
+
+/* ==========================================================================
+   ① SUY BIẾN — DUỖI PHẲNG VỚI TỨ GIÁC BỆNH HOẠN
+   ========================================================================== */
+ghi('─── ① DUỖI PHẲNG VỚI TỨ GIÁC SUY BIẾN (kiểm bằng toán, không bằng mắt) ───');
+const canh = dungCanh('ban-go');
+const tepGoc12 = await canvasThanhFile(canh.canvas, 'chup.jpg');
+const nenDau = await nenAnhChung(tepGoc12, ANH_TRANG);
+const anhNen = await taiAnh(nenDau);
+ghi(`  Ảnh nguồn cho mọi ca dưới đây: ${anhNen.naturalWidth}×${anhNen.naturalHeight} (${kb(coByteCuaDataUrl(nenDau))})`);
+
+const CA_BENH = [
+  ['4 góc CHỤM về một điểm',        [[0.5, 0.5], [0.5, 0.5], [0.5, 0.5], [0.5, 0.5]]],
+  ['2 góc TRÙNG nhau',              [[0.1, 0.1], [0.1, 0.1], [0.9, 0.9], [0.1, 0.9]]],
+  ['3 góc THẲNG HÀNG',              [[0, 0], [0.5, 0], [1, 0], [0, 1]]],
+  ['4 góc THẲNG HÀNG (một đường)',  [[0, 0], [0.33, 0.33], [0.66, 0.66], [1, 1]]],
+  ['NƠ BƯỚM (bowtie, tự cắt)',      [[0, 0], [1, 1], [1, 0], [0, 1]]],
+  ['LẬT NGƯỢC chiều (gương)',       [[1, 0], [0, 0], [0, 1], [1, 1]]],
+  ['LÁT MỎNG cao 0,1% ảnh',         [[0, 0], [1, 0], [1, 0.001], [0, 0.001]]],
+  ['LÁT MỎNG ngang 0,1% ảnh',       [[0, 0], [0.001, 0], [0.001, 1], [0, 1]]],
+  ['TRÒN KHUNG (đúng mép ảnh)',     [[0, 0], [1, 0], [1, 1], [0, 1]]],
+  ['TỨ GIÁC LÕM (một góc thụt vào)',[[0, 0], [1, 0], [0.5, 0.5], [0, 1]]]
+];
+for (const [ten, g] of CA_BENH) {
+  const t0 = performance.now();
+  let ket = '', anhTot = true, ghiChu = '';
+  try {
+    const kq = duoiPhang(anhNen, g, { canhToiDa: ANH_TRANG.canhToiDa });
+    const s = soiAnhRa(kq.canvas);
+    ket = `RA ẢNH ${kq.rong}×${kq.cao}`;
+    ghiChu = `đen ${(s.den * 100).toFixed(0)}% · sáng ${(s.sang * 100).toFixed(0)}%`;
+    if (s.den > 0.9) { anhTot = false; ghiChu += ' ← ẢNH ĐEN'; }
+    if (!isFinite(kq.rong) || !isFinite(kq.cao) || kq.rong < 1 || kq.cao < 1) {
+      anhTot = false; ghiChu += ' ← CỠ KHÔNG HỢP LỆ';
+    }
+  } catch (e) {
+    ket = 'NÉM LỖI: ' + e.message;
+  }
+  const ms = performance.now() - t0;
+  const treo = ms > 3000;
+  if (treo) hong(`${ten}: chạy ${ms.toFixed(0)} ms — quá 3 giây, coi như TREO`);
+  if (!anhTot) hong(`${ten}: ${ket} — ${ghiChu}`);
+  ghi(`  ${tuGiacLoi(g) ? 'lồi ' : 'LÕM '} ${ten.padEnd(32)} ${ms.toFixed(0).padStart(5)} ms · ${ket}${ghiChu ? ' · ' + ghiChu : ''}`);
+}
+
+/* ==========================================================================
+   ② CỬA CHẶN Ở GIAO DIỆN — ca bệnh nào bị `catXong()` chặn trước?
+   ========================================================================== */
+ghi('\n─── ② GIAO DIỆN CÓ CHẶN CA BỆNH TRƯỚC KHI GỌI duoiPhang KHÔNG ───');
+for (const [ten, g] of CA_BENH) {
+  const loi = tuGiacLoi(g);
+  const tron = laTronKhung(g);
+  ghi(`  ${ten.padEnd(32)} tuGiacLoi=${loi ? 'TRUE (đi tiếp)' : 'false (BỊ CHẶN)'}` +
+      `${tron ? ' · laTronKhung=TRUE (bỏ qua, không cắt)' : ''}`);
+}
+
+/* ==========================================================================
+   ③ MÀN QUÉT THẬT — MẤT ẢNH, CẮT CHỒNG, BĂM BYTE
+   ========================================================================== */
+ghi('\n─── ③ MÀN QUÉT THẬT 375px: mất ảnh · cắt chồng · băm byte ───');
+let canhDangChup = canh.canvas;
+const clickGoc = HTMLInputElement.prototype.click;
+HTMLInputElement.prototype.click = function () {
+  if (this.type !== 'file') return clickGoc.call(this);
+  canhDangChup.toBlob(b => {
+    const dt = new DataTransfer();
+    dt.items.add(new File([b], 'chup.jpg', { type: 'image/jpeg' }));
+    this.files = dt.files;
+    this.dispatchEvent(new Event('change', { bubbles: true }));
+  }, 'image/jpeg', 0.95);
+};
+const nutKho = document.createElement('button');
+nutKho.className = 'btn-primary';
+document.body.appendChild(nutKho);
+let phien = null;
+nutKho.addEventListener('click', () => {
+  phien = moQuetTaiLieu({
+    cuaVao: 'kho_chung', duongMacDinh: 'may-anh',
+    nhom: [{ ma: 'attp', ten: 'An toàn thực phẩm', vi_du: 'Giấy ATTP', han_luu: '5 năm', nhay_cam: 0 }],
+    khiXong: () => {}
+  });
+});
+const ep375 = () => { const o = document.querySelector('.tlq-tam'); if (o) o.style.width = '375px'; };
+const nhap = () => JSON.parse(localStorage.getItem(KHOA) || 'null');
+
+localStorage.removeItem(KHOA);
+localStorage.removeItem('tl_lam_ro_chu_v1');
+nutKho.click();
+(await doi('[data-viec="chon-nhom"]')).click();
+await doi('#tlqCatKhung', 15000);
+ep375();
+
+/* --- ③a BĂM BYTE trước/sau "Dùng nguyên ảnh" --- */
+{
+  const truoc = nhap().trang[0].anh;
+  const h1 = await bamChuoi(truoc);
+  (await doi('[data-viec="cat-bo"]')).click();
+  await doi('.tlq-the');
+  const sau = nhap().trang[0].anh;
+  const h2 = await bamChuoi(sau);
+  dat(h1 === h2, '"Dùng nguyên ảnh": băm SHA-256 byte ảnh KHÔNG đổi',
+    `→ ${h1.slice(0, 16)}… / ${h2.slice(0, 16)}…`);
+  if (h1 !== h2) soHong++;
+  const so = nhap().trang[0];
+  ghi(`    khoá của trang sau khi bỏ qua: ${Object.keys(so).join(', ')}`);
+}
+
+/* --- ③b CẮT BA LẦN LIÊN TIẾP: có cắt chồng lên bản đã cắt không --- */
+{
+  const bang = [];
+  const goc0 = nhap().trang[0];
+  bang.push({ lan: 0, co: goc0.co_nen, anh: goc0.anh });
+  for (let lan = 1; lan <= 3; lan++) {
+    (await doi('[data-viec="cat"][data-i="0"]')).click();
+    await doi('#tlqCatKhung');
+    ep375();
+    /* Kéo góc trên-trái vào trong 12% — mô phỏng người dùng chỉnh khung
+       một chút mỗi lần, đúng thao tác "cắt lại cho gọn hơn". */
+    const oVe = document.querySelector('#tlqCatVe');
+    const r = oVe.getBoundingClientRect();
+    const b = document.querySelectorAll('.tlq-cat-goc')[0];
+    b.dispatchEvent(new PointerEvent('pointerdown', { pointerId: 1, clientX: 0, clientY: 0, bubbles: true, cancelable: true }));
+    document.dispatchEvent(new PointerEvent('pointermove', { pointerId: 1, clientX: r.left + r.width * 0.12, clientY: r.top + r.height * 0.12, bubbles: true, cancelable: true }));
+    document.dispatchEvent(new PointerEvent('pointerup', { pointerId: 1, clientX: r.left + r.width * 0.12, clientY: r.top + r.height * 0.12, bubbles: true, cancelable: true }));
+    await cho(80);
+    (await doi('[data-viec="cat-xong"]')).click();
+    await doi('.tlq-the');
+    await cho(200);
+    const tr = nhap().trang[0];
+    bang.push({ lan, co: tr.co_nen, anh: tr.anh });
+    const im = await taiAnh(tr.anh);
+    ghi(`  Cắt lần ${lan}: ${kb(tr.co_nen)} · ${im.naturalWidth}×${im.naturalHeight} · ` +
+        `co_truoc_cat=${tr.co_truoc_cat != null ? kb(tr.co_truoc_cat) : '(không có)'}`);
+  }
+  const tr = nhap().trang[0];
+  const coGocCu = Object.entries(tr).some(([k, v]) =>
+    k !== 'anh' && typeof v === 'string' && v.startsWith('data:image'));
+  dat(!coGocCu === false, 'CÓ giữ một bản ảnh GỐC để quay lại sau khi cắt', coGocCu ? '' : '→ KHÔNG có');
+  if (!coGocCu) { hong('Sau khi cắt, ảnh gốc bị ĐÈ — không có đường quay lại (chỉ còn cách bấm "Thay" để chụp lại)'); soHong--; }
+  ghi(`    khoá của trang sau 3 lần cắt: ${Object.keys(tr).join(', ')}`);
+  ghi(`    Cỡ qua từng lần: ${bang.map(x => kb(x.co)).join(' → ')}`);
+  /* ⚠️ PHÉP THỬ NÀY BỊ ĐẢO CHIỀU — Khỉ Đột thay 03/09/2026, NÓI RA chứ không
+     lặng lẽ chỉnh.
+     ------------------------------------------------------------------------
+     BẢN GỐC của Hồ Ly:
+         dat(bang[1].anh !== bang[2].anh && bang[2].anh !== bang[3].anh,
+             'Mỗi lần "Cắt lại" tạo ra ảnh KHÁC — tức là cắt CHỒNG lên bản đã cắt');
+     Nhãn mô tả một CÁI LỖI, mà `dat()` in "ĐẠT" khi điều kiện ĐÚNG. Nên nó in
+     ĐẠT đúng lúc lỗi #1 còn nguyên, và in HỎNG sau khi lỗi đã được vá. Chạy
+     thật trên bản đã vá: 220 → 172 → 172 → 172 KB, 975×1367 cả ba lần — tức
+     là hết tích luỹ — mà dòng đó vẫn đỏ.
+
+     Suy luận "ảnh khác nhau ⇒ cắt chồng" chỉ đúng với MÃ CŨ. Với mã đã vá,
+     lần cắt thứ hai mở lại ĐÚNG khung lần một (`goc_cat`) rồi cắt lại từ ẢNH
+     GỐC, nên cùng một thao tác cho ra cùng một ảnh — GIỐNG NHAU mới là đúng.
+
+     Thay bằng phép thử đúng thứ cần bảo đảm: cắt là HÀM THUẦN của (ảnh gốc,
+     khung). Ba vế, vế ③ mới là vế khó chối:
+       ① cùng khung 3 lần  → byte y hệt, cỡ không tụt
+       ② đổi khung         → ảnh KHÁC (chứng minh không phải nút chết)
+       ③ quay lại khung cũ → ĐÚNG byte của lần đầu (không tích luỹ)
+     Kèm luôn phép thử ĐƯỜNG LÙI mà bản gốc chưa có. */
+  {
+    const yHet = bang[1].anh === bang[2].anh && bang[2].anh === bang[3].anh;
+    dat(yHet, '① Cắt 3 lần CÙNG một khung → byte y hệt (cắt lại KHÔNG tích luỹ)',
+      `→ ${bang.slice(1).map(x => kb(x.co)).join(' · ')}`);
+    if (!yHet) soHong++;
+
+    const catVoi = async (ti) => {
+      (await doi('[data-viec="cat"][data-i="0"]')).click();
+      await doi('#tlqCatKhung');
+      ep375();
+      const oVe = document.querySelector('#tlqCatVe');
+      const r = oVe.getBoundingClientRect();
+      const b = document.querySelectorAll('.tlq-cat-goc')[0];
+      const x = r.left + r.width * ti, y = r.top + r.height * ti;
+      b.dispatchEvent(new PointerEvent('pointerdown', { pointerId: 1, clientX: 0, clientY: 0, bubbles: true, cancelable: true }));
+      document.dispatchEvent(new PointerEvent('pointermove', { pointerId: 1, clientX: x, clientY: y, bubbles: true, cancelable: true }));
+      document.dispatchEvent(new PointerEvent('pointerup', { pointerId: 1, clientX: x, clientY: y, bubbles: true, cancelable: true }));
+      await cho(80);
+      (await doi('[data-viec="cat-xong"]')).click();
+      await doi('.tlq-the');
+      await cho(200);
+      return nhap().trang[0];
+    };
+    const khac = await catVoi(0.25);
+    dat(khac.anh !== bang[1].anh, '② Đổi khung → ảnh KHÁC (nút cắt không phải nút chết)',
+      `→ ${kb(khac.co_nen)} so với ${kb(bang[1].co)}`);
+    if (khac.anh === bang[1].anh) soHong++;
+
+    const veCu = await catVoi(0.12);
+    dat(veCu.anh === bang[1].anh, '③ Quay lại khung cũ → ĐÚNG byte của lần cắt đầu',
+      `→ ${kb(veCu.co_nen)} / ${kb(bang[1].co)}`);
+    if (veCu.anh !== bang[1].anh) soHong++;
+
+    /* --- ĐƯỜNG LÙI: "↩ Ảnh gốc" có trả về ĐÚNG byte ảnh chưa cắt không --- */
+    const nutLui = document.querySelector('[data-viec="cat-hoan"][data-i="0"]');
+    dat(!!nutLui, 'Có nút lùi về ảnh gốc ngay trên thẻ trang',
+      nutLui ? `→ "${nutLui.textContent.trim()}"` : '→ KHÔNG có');
+    if (!nutLui) { soHong++; }
+    else {
+      const xacNhanCu = window.confirm;
+      window.confirm = () => true;
+      nutLui.click();
+      await cho(250);
+      window.confirm = xacNhanCu;
+      const sauLui = nhap().trang[0];
+      const hGoc = await bamChuoi(goc0.anh);
+      const hSau = await bamChuoi(sauLui.anh);
+      dat(hGoc === hSau, 'Bấm "↩ Ảnh gốc" → băm SHA-256 TRÙNG KHÍT ảnh chưa cắt',
+        `→ ${hGoc.slice(0, 16)}… / ${hSau.slice(0, 16)}…`);
+      if (hGoc !== hSau) soHong++;
+      const sach = !sauLui.da_cat && !sauLui.anh_goc && !sauLui.goc_cat;
+      dat(sach, 'Lùi xong, trang sạch dấu vết lượt cắt (da_cat · anh_goc · goc_cat đều rụng)');
+      if (!sach) soHong++;
+    }
+  }
+}
+
+/* --- ③c NÚT "Dùng nguyên ảnh" có LUÔN hiện không --- */
+{
+  (await doi('[data-viec="cat"][data-i="0"]')).click();
+  await doi('#tlqCatKhung');
+  ep375();
+  dat(!!document.querySelector('[data-viec="cat-bo"]'), 'Nút "Dùng nguyên ảnh" có mặt ở màn cắt mở bằng tay');
+  /* Trong lúc ĐANG XỬ: hai nút bị `disabled`. Kiểm xem có lối thoát nào khác. */
+  const nutBo = document.querySelector('#tlqCatBo');
+  ghi(`    lúc bình thường: disabled=${nutBo.disabled}`);
+  const dong_ = document.querySelector('.tlq-dong, [data-viec="dong"], .tlq-x');
+  ghi(`    có nút đóng bộ quét ở đầu màn: ${dong_ ? 'CÓ (' + (dong_.getAttribute('data-viec') || dong_.className) + ')' : 'KHÔNG THẤY'}`);
+}
+
+/* --- ③d XOAY MÁY / ĐỔI CỠ MÀN khi ĐANG Ở MÀN CẮT ---
+   ⚠️ PHẢI HỎI LẠI DOM SAU MỖI LẦN `ve()`: bấm "Đặt lại 4 góc" dựng lại toàn
+   bộ `innerHTML`, nên mọi tham chiếu giữ từ trước đó là NÚT ĐÃ RỤNG — đo trên
+   nút rụng thì `getBoundingClientRect()` toàn số 0 và phép đo nói dối 31px. */
+{
+  const lechCua = () => {
+    const oVe = document.querySelector('#tlqCatVe');
+    const chams = [...document.querySelectorAll('.tlq-cat-goc')];
+    const r = oVe.getBoundingClientRect();
+    const diem = [[0, 0], [1, 0], [1, 1], [0, 1]];
+    return chams.map((b, k) => {
+      const rb = b.getBoundingClientRect();
+      return Math.hypot(rb.left + rb.width / 2 - (r.left + diem[k][0] * r.width),
+                        rb.top + rb.height / 2 - (r.top + diem[k][1] * r.height));
+    });
+  };
+  /* Đặt lại 4 góc về mép ảnh để biết đích chính xác. */
+  (await doi('[data-viec="cat-datlai"]')).click();
+  await cho(200);
+  const truoc = lechCua();
+  ghi(`  Lệch chấm↔góc ảnh TRƯỚC khi đổi cỡ màn: ${truoc.map(x => x.toFixed(1)).join(' / ')} px`);
+  dat(Math.max(...truoc) < 2, 'Ở trạng thái tĩnh, 4 chấm nằm ĐÚNG trên 4 góc ảnh (<2px)',
+    `→ lệch tệ nhất ${Math.max(...truoc).toFixed(1)}px`);
+  if (Math.max(...truoc) >= 2) soHong++;
+  /* Đổi bề ngang khung chứa (đúng thứ xoay máy làm) rồi bắn `resize`. */
+  const tamEl = document.querySelector('.tlq-tam');
+  tamEl.style.width = '320px';
+  window.dispatchEvent(new Event('resize'));
+  window.dispatchEvent(new Event('orientationchange'));
+  await cho(500);
+  const sau = lechCua();
+  ghi(`  Lệch chấm↔góc ảnh SAU khi đổi cỡ màn 375→320 (không vẽ lại): ${sau.map(x => x.toFixed(1)).join(' / ')} px`);
+  const teNhat = Math.max(...sau);
+  dat(teNhat < 12, 'Đổi cỡ màn khi đang ở màn cắt → 4 chấm VẪN nằm trên 4 góc ảnh (<12px)',
+    `→ lệch tệ nhất ${teNhat.toFixed(1)}px`);
+  if (teNhat >= 12) soHong++;
+  /* Xoay ngang máy = khung chứa RỘNG RA nhiều. Đo xem lệch có tỉ lệ thuận
+     với mức đổi bề ngang không — nếu có thì xoay 375→812 còn tệ hơn hẳn. */
+  tamEl.style.width = '700px';
+  window.dispatchEvent(new Event('resize'));
+  await cho(400);
+  const rong = lechCua();
+  ghi(`  Lệch chấm↔góc ảnh SAU khi đổi cỡ màn 375→700: ${rong.map(x => x.toFixed(1)).join(' / ')} px` +
+      `  ← lệch tỉ lệ thuận với mức đổi bề ngang`);
+  tamEl.style.width = '320px';
+  window.dispatchEvent(new Event('resize'));
+  await cho(300);
+  const raNgoai = (() => {
+    const oVe = document.querySelector('#tlqCatVe');
+    const kh = document.querySelector('#tlqCatKhung');
+    return oVe.getBoundingClientRect().right > kh.getBoundingClientRect().right + 1;
+  })();
+  dat(!raNgoai, 'Ảnh xem trước không tràn ra ngoài khung sau khi màn hẹp lại');
+  if (raNgoai) soHong++;
+  tamEl.style.width = '375px';
+  ep375();
+}
+
+/* --- ③e ĐANG Ở MÀN CẮT MÀ TRANG BỊ NẠP LẠI (bấm nút lùi / tab chết) --- */
+{
+  const truocNap = nhap();
+  const coTrang = !!(truocNap && truocNap.trang && truocNap.trang.length);
+  dat(coTrang, 'Ảnh vừa chụp ĐÃ nằm trong bản nháp localStorage trước khi màn cắt bày ra',
+    `→ ${truocNap ? truocNap.trang.length : 0} trang`);
+  if (!coTrang) soHong++;
+  ghi('    → nạp lại trang / bấm nút lùi khi đang ở màn cắt: ảnh KHÔNG mất, ' +
+      'nhưng khung đang kéo dở thì mất (không lưu).');
+}
+
+/* ==========================================================================
+   ④ CA HAI TỜ — TỪ KHUNG ĐOÁN SAI, KÉO VỀ ĐÚNG CÓ KHẢ THI KHÔNG
+   ========================================================================== */
+ghi('\n─── ④ CA HAI TỜ: kéo từ khung sai về khung đúng có khả thi không ───');
+{
+  phien && phien.dong();
+  localStorage.removeItem(KHOA);
+  const c2 = dungCanh('hai-to');
+  canhDangChup = c2.canvas;
+  nutKho.click();
+  (await doi('[data-viec="chon-nhom"]')).click();
+  await doi('#tlqCatKhung', 15000);
+  ep375();
+  const oVe = document.querySelector('#tlqCatVe');
+  const r = oVe.getBoundingClientRect();
+  const chams = [...document.querySelectorAll('.tlq-cat-goc')];
+  ghi(`  Ảnh xem trước ở 375px: ${r.width.toFixed(0)}×${r.height.toFixed(0)} px`);
+  /* Đích: 4 góc THẬT của tờ thứ nhất, quy ra toạ độ màn. */
+  const dich = c2.goc.map(g => [r.left + g[0] * r.width, r.top + g[1] * r.height]);
+  let soGocPhaiKeo = 0, ngoaiTam = 0;
+  chams.forEach((b, k) => {
+    const rb = b.getBoundingClientRect();
+    const dx = dich[k][0] - (rb.left + 22), dy = dich[k][1] - (rb.top + 22);
+    const xa = Math.hypot(dx, dy);
+    if (xa > 22) soGocPhaiKeo++;
+    const trongMan = dich[k][0] >= 0 && dich[k][0] <= window.innerWidth &&
+                     dich[k][1] >= 0 && dich[k][1] <= window.innerHeight;
+    if (!trongMan) ngoaiTam++;
+    ghi(`    góc ${k}: phải kéo ${xa.toFixed(0)}px · đích ${trongMan ? 'TRONG' : 'NGOÀI'} vùng chạm được`);
+  });
+  ghi(`  → phải kéo ${soGocPhaiKeo}/4 góc; ${ngoaiTam} đích nằm ngoài màn.`);
+  dat(ngoaiTam === 0, 'Mọi góc đúng đều nằm trong vùng chạm được — kéo về đúng KHẢ THI');
+  if (ngoaiTam) soHong++;
+  /* Người dùng có BIẾT máy đoán sai không? Đọc đúng câu màn hình đang nói. */
+  const cauHuong = document.querySelector('.tlq-huong')?.textContent.replace(/\s+/g, ' ').trim() || '';
+  const cauDo = document.querySelector('.tlq-do')?.textContent.replace(/\s+/g, ' ').trim() || '';
+  ghi(`  Màn hình đang nói: "${cauHuong}"`);
+  ghi(`  Dòng số đo:        "${cauDo}"`);
+  /* Kéo thật 2 góc rồi cắt, xem có ra tờ thứ nhất không. */
+  const keo = (b, x, y) => {
+    b.dispatchEvent(new PointerEvent('pointerdown', { pointerId: 1, clientX: 0, clientY: 0, bubbles: true, cancelable: true }));
+    document.dispatchEvent(new PointerEvent('pointermove', { pointerId: 1, clientX: x, clientY: y, bubbles: true, cancelable: true }));
+    document.dispatchEvent(new PointerEvent('pointerup', { pointerId: 1, clientX: x, clientY: y, bubbles: true, cancelable: true }));
+  };
+  for (let k = 0; k < 4; k++) {
+    keo(document.querySelectorAll('.tlq-cat-goc')[k], dich[k][0], dich[k][1]);
+    await cho(60);
+  }
+  (await doi('[data-viec="cat-xong"]')).click();
+  await doi('.tlq-the');
+  await cho(200);
+  const tr = nhap().trang[0];
+  const im = await taiAnh(tr.anh);
+  const ti = im.naturalWidth / im.naturalHeight;
+  dat(tr.da_cat === true, 'Kéo 4 góc về tờ thứ nhất rồi cắt → cắt được');
+  if (tr.da_cat !== true) soHong++;
+  /* Tỉ lệ ĐÚNG để đối chiếu là tỉ lệ của CHÍNH TỨ GIÁC trong cảnh (cảnh thử
+     kéo tờ giấy 1500×2000 vào một tứ giác khác tỉ lệ), không phải 0,75. */
+  const tiTuGiac = ((c2.goc[1][0] - c2.goc[0][0]) * W12) / ((c2.goc[3][1] - c2.goc[0][1]) * H12);
+  dat(Math.abs(ti - tiTuGiac) < 0.05, 'Ảnh ra đúng tỉ lệ của tứ giác đã kéo',
+    `→ ${im.naturalWidth}×${im.naturalHeight} = ${ti.toFixed(3)} · tứ giác ${tiTuGiac.toFixed(3)}`);
+  if (Math.abs(ti - tiTuGiac) >= 0.05) soHong++;
+}
+
+/* ==========================================================================
+   ④b DUỖI PHẲNG CÓ TRẢ LẠI ĐÚNG TỈ LỆ A4 KHÔNG (chụp nghiêng)
+   ---------------------------------------------------------------------------
+   `duoiPhang` lấy cỡ ảnh ra từ ĐỘ DÀI CẠNH của tứ giác trong ảnh chụp. Ảnh
+   chụp nghiêng thì cạnh xa bị phối cảnh làm ngắn lại, nên tỉ lệ ra KHÔNG bằng
+   tỉ lệ tờ giấy thật. Đây là giới hạn có thật, phải nêu số chứ không nói suông.
+   ========================================================================== */
+ghi('\n─── ④b CHỤP NGHIÊNG: tỉ lệ ảnh ra so với tờ giấy thật ───');
+{
+  const nen = nenBanGo(W12, H12);
+  const giay = veToGiay(1500, 2000, { nhieu: 10 });   // tỉ lệ thật 0,750
+  const gocN = [[0.24, 0.14], [0.83, 0.20], [0.90, 0.86], [0.11, 0.78]];
+  datGiayVaoCanh(nen, giay, gocN.map(g => [g[0] * W12, g[1] * H12]));
+  const im = await taiAnh(await nenAnhChung(await canvasThanhFile(nen, 'ng.jpg'), ANH_TRANG));
+  const kq = duoiPhang(im, gocN, { canhToiDa: ANH_TRANG.canhToiDa });
+  const ti = kq.rong / kq.cao;
+  ghi(`  Tờ giấy thật 1500×2000 = 0,750 · ảnh duỗi ra ${kq.rong}×${kq.cao} = ${ti.toFixed(3)} ` +
+      `(lệch ${(Math.abs(ti / 0.75 - 1) * 100).toFixed(0)}%)`);
+}
+
+/* ==========================================================================
+   ④c NHIỀU TRANG: màn cắt còn tự bày cho trang thứ 2, thứ 3 không
+   ---------------------------------------------------------------------------
+   `moCatTuDong()` có chốt `if (manHinh !== 'trang' || cat) return`. Nếu biến
+   `cat` không được dọn ở một nhánh nào đó thì từ trang sau trở đi màn cắt
+   IM LẶNG không bày nữa — mà im lặng là dạng hỏng khó thấy nhất.
+   ========================================================================== */
+ghi('\n─── ④c NHIỀU TRANG: màn cắt có tự bày cho trang 2 và trang 3 không ───');
+{
+  phien && phien.dong();
+  localStorage.removeItem(KHOA);
+  canhDangChup = canh.canvas;
+  nutKho.click();
+  (await doi('[data-viec="chon-nhom"]')).click();
+  for (let trang = 1; trang <= 3; trang++) {
+    let bay = true;
+    try { await doi('#tlqCatKhung', 12000); } catch { bay = false; }
+    dat(bay, `Trang ${trang}: màn cắt TỰ BÀY`);
+    if (!bay) { soHong++; break; }
+    ep375();
+    (await doi('[data-viec="cat-bo"]')).click();
+    await doi('.tlq-the');
+    if (trang < 3) { (await doi('[data-viec="chup-tiep"]')).click(); await cho(400); }
+  }
+  ghi(`  Số trang trong bản nháp: ${nhap().trang.length}`);
+}
+
+/* ==========================================================================
+   ⑤ BỘ NHỚ: MẤY BẢN SAO CANVAS TRONG MỘT LƯỢT CẮT
+   ========================================================================== */
+ghi('\n─── ⑤ BỘ NHỚ: canvas cấp phát trong MỘT lượt cắt ───');
+{
+  const d0 = demCanvas, p0 = dinhDiem;
+  dinhDiem = 0;
+  const kq = duoiPhang(anhNen, [[0.1, 0.1], [0.9, 0.1], [0.9, 0.9], [0.1, 0.9]],
+    { canhToiDa: ANH_TRANG.canhToiDa });
+  lamRoChu(kq.canvas);
+  ghi(`  Một lượt duỗi+làm rõ tạo ${demCanvas - d0} canvas · canvas to nhất ${(dinhDiem / 1e6).toFixed(1)} triệu điểm ` +
+      `≈ ${(dinhDiem * 4 / 1048576).toFixed(0)} MB`);
+  ghi(`  Nguồn vào đã là ảnh ĐÃ NÉN ${anhNen.naturalWidth}×${anhNen.naturalHeight}, KHÔNG phải 12MP thô ` +
+      `→ đỉnh bộ nhớ không phụ thuộc cỡ cảm biến.`);
+  /* Ca xấu nhất mà mã cho phép: tranNguon 3200. */
+  ghi(`  Trần bản nguồn trong duoiPhang: 3200px cạnh dài → xấu nhất ` +
+      `${(3200 * 3200 * 4 / 1048576).toFixed(0)} MB một bản (chỉ chạm khi ai đó gọi với ảnh > 3200px).`);
+}
+
+ghi('\n───────────────────────────────────────────────────────────');
+ghi(`KET_LUAN so_hong=${soHong}`);
+} catch (e) {
+  ghi('✗ BÀN ĐO HỎNG: ' + e.message + '\n' + e.stack);
+}
+</script>
+</body>
+</html>

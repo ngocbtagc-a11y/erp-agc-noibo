@@ -60,7 +60,7 @@ trực tiếp gật là đủ (~60% số góp ý — ADR-0006 A1); (b) **SLA nh�
 - `src/auth.js` `docPhien()` đọc thêm `t.duyet_gopy` → **thứ tự triển khai:
   DB TRƯỚC, CODE SAU**. Deploy code trước khi nạp migration là **mất đăng
   nhập toàn hệ thống**, không riêng màn Góp ý.
-- Lùi: `migrations/lui-quyen-duyet-gopy.sql`, và phải **deploy code cũ trước**
+- Lùi: `migrations/lui/lui-quyen-duyet-gopy.sql`, và phải **deploy code cũ trước**
   rồi mới lùi DB. Lùi xong quyền quay về "admin nào cũng duyệt được".
 - **Ba cửa quản trị không được phép tắt người duyệt** (REV-0027 L3):
   `khoa-tai-khoan`, `xoa-tai-khoan`, `xoa-nhan-su` trả **409** khi đối tượng

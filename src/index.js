@@ -10,16 +10,25 @@ import {
   bamMatKhau, kiemTraMatKhau, sinhMatKhauTam, taoPhien, docPhien, xoaPhien, xoaPhienHetHan,
   dangBiKhoa, ghiNhanSai, xoaLanSai,
   cookieDangNhap, cookieDangXuat, layTokenTuCookie, layCoThieuCotDuyetGopY,
-  bangNhauAnToan
+  bangNhauAnToan,
+  layCoThieuCotViTri, coCotViTri
 } from './auth.js';
 
 import {
   quyenCua, duocXemTab, duocXemLuong, laAdmin, duocThemNhanSu, duocQuanLyChinhSachCa, duocTaoTaiKhoan, nhomVaiTro,
   quyenKho, quyenShopee, duocThaoTacKho, duocQuanLyKho, duocXemDonHoan, duocThaoTacVanHanh, TEN_VAI_TRO, VAI_TRO_HOP_LE,
-  duocDuyetGopY
+  duocDuyetGopY,
+  // Hai ô — vai trò hệ thống tách khỏi vị trí công việc (Sếp chốt 04/09/2026)
+  VAI_TRO_HE_THONG, VI_TRI_CONG_VIEC, laVaiTroHeThong, laViTriCongViec,
+  duocDatViTriCongViec, viTriCoXemLuong, moTaVaiTro, boVaiTro,
+  // Nạp file số liệu — cắt quyền GHI ở máy chủ (xem batBuocNapDuLieu)
+  duocSuaSanPham, quyenSanPham
 } from './quyen.js';
 import { kiemTraMatKhauDat, DAI_TOI_THIEU } from './mat-khau.js';
 import * as kho from './kho.js';
+/* Nạp file số liệu vào sổ sách (CSV/Excel). Tách hẳn khỏi kho tài liệu:
+   đường này ĐỌC ĐỂ TÍNH nên TUYỆT ĐỐI không gọi AI — xem đầu src/doc-bang.js. */
+import * as napdulieu from './nap-du-lieu.js';
 import * as shopee from './shopee.js';
 import * as tiktok from './tiktok.js';
 import * as nhansu from './nhansu.js';
@@ -27,10 +36,14 @@ import * as dulieunen from './dulieunen.js';
 import * as taisan from './taisan.js';
 import * as saoLuu from './sao-luu.js';
 import * as ca from './ca.js';
+import * as donHangItem from './don-hang-item.js';
 import * as hopdong from './hopdong.js';
 import * as motacv from './mota-cv.js';
 import * as kynang from './ky-nang.js';
 import { quetNhacNhanSu, thangKeTiep, gioVN } from './nhac-nhan-su.js';
+/* CTL-0026 — Kho tài liệu quản trị. Lõi dùng chung với CTL-0025 (quét giấy tờ
+   nhân sự): một kho, hai cửa vào. Đợt 1 mở cửa KHO CHUNG. */
+import * as tailieu from './tai-lieu.js';
 import { quetNhacCongViec, soNgayGiua } from './nhac-cong-viec.js';
 import { sinhMa } from './dinh-danh.js';
 /* CTL-0014 — đẩy thông báo lên điện thoại. Mọi chốt chặn chống làm phiền nằm
@@ -68,6 +81,7 @@ async function batBuocDangNhap(req, env) {
   // LẤY CỜ TRƯỚC KHI RETURN — kể cả khi phiên không hợp lệ. Lấy là xoá, nên
   // bỏ sót một nhánh là kẹt cờ sang lượt sau và cảnh báo lệch người.
   if (layCoThieuCotDuyetGopY()) await canhBaoThieuCotDuyetGopY(env);
+  if (layCoThieuCotViTri()) await canhBaoThieuCotViTri(env);
   if (!phien) return { loi: json({ loi: 'Chưa đăng nhập' }, 401) };
   return { phien };
 }
@@ -130,6 +144,18 @@ async function canhBaoThieuCotDuyetGopY(env) {
     'Cách sửa: node scripts/chay-migration.mjs them-quyen-duyet-gopy.sql --remote');
 }
 
+/* Cùng khuôn, cho ô 2 — vị trí công việc (Sếp chốt 04/09/2026). Thiếu cột là
+   hỏng theo chiều AN TOÀN (quyền đúng bằng bản cũ, không ai mất đăng nhập),
+   nhưng im lặng thì anh Duy vẫn không vào được tab Kho vận và không ai biết
+   vì sao — đúng cái bẫy BH-21 đã trả giá một lần. */
+async function canhBaoThieuCotViTri(env) {
+  return canhBaoMotLanMoiNgay(env, 'thieu-cot-vi-tri-cong-viec',
+    '🟠 [ERP] THIẾU CỘT tai_khoan.vi_tri_cong_viec trong CSDL.\n\n' +
+    'Hệ thống vẫn chạy bình thường và KHÔNG ai mất quyền — nhưng ô "Vị trí công việc" ' +
+    'chưa có tác dụng, nên ai đang là "Người dùng" thì vẫn chưa mở được tab của bộ phận mình.\n\n' +
+    'Cách sửa: node scripts/chay-migration.mjs them-vi-tri-cong-viec.sql --remote');
+}
+
 /* ---- Các đầu việc ------------------------------------------------------- */
 
 async function dangNhap(req, env) {
@@ -180,7 +206,7 @@ async function toiLaAi(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
 
-  const q = quyenCua(phien.vai_tro);
+  const q = quyenCua(phien);
   const ns = await env.DB.prepare('SELECT (anh_chan_dung IS NOT NULL) AS co_anh, phong_ban_id, loai_lao_dong FROM nhan_su WHERE id = ?')
                          .bind(phien.nhan_su_id).first();
   const trangThai = await docTrangThaiHienDien(env, phien.nhan_su_id);
@@ -205,8 +231,12 @@ async function toiLaAi(req, env) {
     id: phien.nhan_su_id,
     ten: phien.ho_ten,
     viet_tat: phien.viet_tat,
-    chuc_vu: phien.chuc_vu || TEN_VAI_TRO[phien.vai_tro] || '',
+    chuc_vu: phien.chuc_vu || moTaVaiTro(phien.vai_tro, phien.vi_tri_cong_viec) || '',
     vai_tro: phien.vai_tro,
+    // Ô 2 — vị trí công việc. null nghĩa là chưa gán (hoặc DB chưa nạp
+    // migration them-vi-tri-cong-viec.sql); giao diện chỉ hiển thị, chặn thật
+    // vẫn ở máy chủ như mọi cửa khác.
+    vi_tri_cong_viec: phien.vi_tri_cong_viec || null,
     phai_doi_mk: !!phien.phai_doi_mk,
     co_anh: !!ns?.co_anh,
     phong_ban_id: ns ? ns.phong_ban_id : null,
@@ -217,16 +247,27 @@ async function toiLaAi(req, env) {
     phong_ban_quan_ly: phongBanQuanLy,
     quyen: q.tab,
     xem_luong: q.xem_luong,
-    la_admin: laAdmin(phien.vai_tro),
-    them_nhan_su: duocThemNhanSu(phien.vai_tro),
-    quan_ly_chinh_sach_ca: duocQuanLyChinhSachCa(phien.vai_tro),
-    duoc_tao_tai_khoan: duocTaoTaiKhoan(phien.vai_tro),
+    la_admin: laAdmin(phien),
+    them_nhan_su: duocThemNhanSu(phien),
+    quan_ly_chinh_sach_ca: duocQuanLyChinhSachCa(phien),
+    duoc_tao_tai_khoan: duocTaoTaiKhoan(phien),
+    // Ai được sửa Ô 2 (vị trí công việc) — rộng hơn ô 1 một bậc: HCNS đặt vị
+    // trí cho người mới hằng ngày, không phải chờ Sếp. Luật thật ở qtSuaVaiTro.
+    duoc_dat_vi_tri: duocDatViTriCongViec(phien),
     // Cờ duyệt góp ý ERP ở cấp cuối — KHÔNG đi theo vai trò (Sếp Ngọc chốt
     // 28/08/2026). Giao diện dùng để vẽ nút; luật thật ở gopYDuyet().
     duyet_gopy: duocDuyetGopY(phien),
-    kho: quyenKho(phien.vai_tro),           // { thao_tac, quan_ly, gia_von } cho tab Kho
-    shopee: quyenShopee(phien.vai_tro),     // { xem, quan_ly } cho tab Đơn hoàn
-    thao_tac_van_hanh: duocThaoTacVanHanh(phien.vai_tro),   // được bấm nút ở bước Vận hành sàn (Cần đối soát) hay chỉ xem
+    kho: quyenKho(phien),           // { thao_tac, quan_ly, gia_von } cho tab Kho
+    /* { sua, khoa } cho Sản phẩm/SKU. TÁCH KHỎI `kho` là cố ý: chủ sở hữu
+       SKU là Kinh doanh (van_hanh_san) — họ quyết định bán gì — mà vai trò
+       đó KHÔNG có mặt trong bảng quyền Kho, nên suy quyền sản phẩm ra từ
+       `kho.quan_ly` là suy sai. Màn "Nạp từ file" từng cắt theo `kho.quan_ly`
+       nên giấu mất chức năng nạp danh mục khỏi đúng người sở hữu danh mục,
+       trong khi máy chủ vẫn cho qua (duocSuaSanPham). Gửi thẳng cờ thật
+       xuống để giao diện cắt CÙNG MỘT LUẬT với máy chủ. */
+    san_pham: quyenSanPham(phien),
+    shopee: quyenShopee(phien),     // { xem, quan_ly } cho tab Đơn hoàn
+    thao_tac_van_hanh: duocThaoTacVanHanh(phien),   // được bấm nút ở bước Vận hành sàn (Cần đối soát) hay chỉ xem
     // Để giao diện khỏi ghi cứng con số, sau này đổi một chỗ là xong
     mat_khau_dai_toi_thieu: DAI_TOI_THIEU
   });
@@ -273,13 +314,16 @@ async function layDanhBa(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
 
-  if (!duocXemTab(phien.vai_tro, 'danhba')) return loi('Không có quyền', 403);
+  if (!duocXemTab(phien, 'danhba')) return loi('Không có quyền', 403);
 
   // Chỉ chọn đúng các cột liên lạc. Cột lương không nằm trong câu lệnh này,
   // nên dữ liệu lương không có đường nào rời khỏi máy chủ qua đây.
   // Ẩn tài khoản vai trò "nv_test" (test/Shopee reviewer) khỏi danh bạ —
   // đây là tài khoản bấm thử, không phải nhân sự thật, không để lẫn vào
   // danh sách chọn người (Chat, Người nhận/Người phối hợp ở Trạm Việc...).
+  // Từ 04/09/2026 `nv_test` là một VỊ TRÍ (ô 2), nên phải soi CẢ HAI cột —
+  // soi mỗi `vai_tro` là sau migration tài khoản test lòi ra danh bạ chung.
+  const coViTri = await coCotViTri(env.DB);
   const { results } = await env.DB.prepare(`
     SELECT n.id, n.ma_nv, n.ho_ten, n.viet_tat, n.chuc_vu, n.bo_phan, n.sdt, n.email,
            (n.anh_chan_dung IS NOT NULL) AS co_anh,
@@ -290,6 +334,7 @@ async function layDanhBa(req, env) {
       LEFT JOIN tai_khoan t ON t.nhan_su_id = n.id
       LEFT JOIN nhan_su_trang_thai tt ON tt.nhan_su_id = n.id
      WHERE n.dang_lam = 1 AND (t.vai_tro IS NULL OR t.vai_tro != 'nv_test')
+       ${coViTri ? "AND (t.vi_tri_cong_viec IS NULL OR t.vi_tri_cong_viec != 'nv_test')" : ''}
      ORDER BY n.bo_phan, n.ho_ten
   `).all();
 
@@ -314,9 +359,9 @@ async function layNhanSu(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
 
-  if (!duocXemTab(phien.vai_tro, 'nhansu')) return loi('Không có quyền', 403);
+  if (!duocXemTab(phien, 'nhansu')) return loi('Không có quyền', 403);
 
-  const xemLuong = duocXemLuong(phien.vai_tro);
+  const xemLuong = duocXemLuong(phien);
 
   // ĐÂY LÀ CHỖ QUAN TRỌNG NHẤT CỦA CẢ HỆ THỐNG:
   // hai câu lệnh khác nhau tuỳ vai trò. Người không có quyền thì cột lương
@@ -346,7 +391,7 @@ async function layNhanSu(req, env) {
 async function nsLichSu(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
-  if (!duocXemTab(phien.vai_tro, 'nhansu')) return loi('Không có quyền', 403);
+  if (!duocXemTab(phien, 'nhansu')) return loi('Không có quyền', 403);
 
   const u = new URL(req.url);
   const nhanSuId = String(u.searchParams.get('id') || '').trim();
@@ -402,11 +447,27 @@ async function chatDanhSach(req, env) {
     : `nguoi_nhan_id IS NULL`;
   const thamSoPhamVi = voi ? [phien.nhan_su_id, voi, voi, phien.nhan_su_id] : [];
 
-  const cauLenh = sauId > 0
-    ? `SELECT ${cotChung} FROM tin_nhan_chat WHERE ${dieuKienPhamVi} AND id > ? ORDER BY id ASC`
-    : `SELECT ${cotChung} FROM tin_nhan_chat WHERE ${dieuKienPhamVi} ORDER BY id DESC LIMIT 50`;
+  /* CON TRỎ LÙI `truoc_id` — "Xem tin cũ hơn".
+     Trước bản này trần cứng 50 tin và KHÔNG có đường nào đi tiếp: tin thứ 51
+     trở đi coi như không tồn tại với người dùng. Cùng lỗi REV-0034 · L2 mà
+     `cvLichSu`/`hoanLichSu` đã vá bằng con trỏ `truoc` — chép đúng khuôn đó,
+     chỉ khác là chat sắp theo `id` nên con trỏ chỉ cần MỘT số, khỏi ghép cặp.
+     Lấy GH+1 dòng để biết CÒN NỮA hay không mà không phải chạy COUNT(*) thứ
+     hai (một câu lệnh, không phải hai). */
+  const GH = 50;
+  const truocId = parseInt(url.searchParams.get('truoc_id'), 10);
 
-  const thamSo = sauId > 0 ? [...thamSoPhamVi, sauId] : thamSoPhamVi;
+  let cauLenh, thamSo;
+  if (sauId > 0) {
+    cauLenh = `SELECT ${cotChung} FROM tin_nhan_chat WHERE ${dieuKienPhamVi} AND id > ? ORDER BY id ASC`;
+    thamSo = [...thamSoPhamVi, sauId];
+  } else if (truocId > 0) {
+    cauLenh = `SELECT ${cotChung} FROM tin_nhan_chat WHERE ${dieuKienPhamVi} AND id < ? ORDER BY id DESC LIMIT ${GH + 1}`;
+    thamSo = [...thamSoPhamVi, truocId];
+  } else {
+    cauLenh = `SELECT ${cotChung} FROM tin_nhan_chat WHERE ${dieuKienPhamVi} ORDER BY id DESC LIMIT ${GH + 1}`;
+    thamSo = [...thamSoPhamVi];
+  }
   const { results } = await env.DB.prepare(cauLenh).bind(...thamSo).all();
 
   /* CTL-0014 — NHỊP TIM "tôi đang mở cửa sổ chat với ai".
@@ -440,29 +501,107 @@ async function chatDanhSach(req, env) {
   }
 
   // Lấy 50 tin gần nhất theo id giảm dần thì phải đảo lại cho đúng thứ tự thời gian
-  const tinNhan = sauId > 0 ? (results || []) : (results || []).reverse();
-  return json({ tin_nhan: tinNhan, toi_id: phien.nhan_su_id });
+  if (sauId > 0) return json({ tin_nhan: results || [], con_nua: false, toi_id: phien.nhan_su_id });
+  const nguoc = results || [];
+  const conNua = nguoc.length > GH;          // hỏi GH+1, thừa 1 tức là còn tin cũ hơn
+  const tinNhan = nguoc.slice(0, GH).reverse();
+  return json({ tin_nhan: tinNhan, con_nua: conNua, toi_id: phien.nhan_su_id });
 }
 
-/* Danh sách người đã từng chat riêng gần đây (2 chiều) — để hiện bong bóng
-   truy cập nhanh cạnh nút chat nổi, khỏi phải vào Danh bạ bấm lại "Chat
-   ngay" mỗi lần (Sếp Ngọc yêu cầu 20/08/2026). Sắp theo tin mới nhất. */
+/* Danh sách hội thoại: kênh chung + những người đã từng chat riêng gần đây
+   (2 chiều), sắp theo tin mới nhất. Dựng thẳng danh sách trong cửa sổ chat,
+   khỏi phải sang Danh bạ bấm lại "Chat ngay" mỗi lần (Sếp Ngọc 20/08/2026).
+   (Cột bong bóng nổi mà bản đầu nuôi bằng chính lượt gọi này đã BỎ HẲN
+   29/08/2026 — nay chỉ còn danh sách trong cửa sổ dùng dữ liệu này.) */
 async function chatGanDay(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
-  const { results } = await env.DB.prepare(`
-    SELECT ns.id, ns.ho_ten, ns.viet_tat, MAX(x.id) AS tin_cuoi_id
-      FROM (
-        SELECT CASE WHEN nguoi_gui_id = ? THEN nguoi_nhan_id ELSE nguoi_gui_id END AS doi_tac_id, id
-          FROM tin_nhan_chat
-         WHERE nguoi_nhan_id IS NOT NULL AND (nguoi_gui_id = ? OR nguoi_nhan_id = ?)
-      ) x
+  /* Mở rộng 29/08/2026 — DANH SÁCH HỘI THOẠI, không chỉ mấy chữ viết tắt.
+     Trước bản này cửa sổ chat mở thẳng vào "Kênh chung", muốn nhắn riêng ai
+     thì phải rời cửa sổ, sang tab Danh bạ, tìm người, bấm "Chat ngay" — bốn
+     bước cho một việc mà kho vận làm hàng chục lần mỗi ca, trên điện thoại.
+     Nay trả kèm TIN CUỐI · GIỜ · SỐ CHƯA ĐỌC để dựng thẳng danh sách.
+
+     SỔ SÁCH D1 — NÓI THẲNG (REV-0038 · L4 sửa lại lời khai cũ).
+     Chú thích bản đầu ghi "vẫn ĐÚNG MỘT câu lệnh đọc, không thêm lượt D1 nào
+     so với bản cũ". SAI, và sai hai lần:
+       ① Hàm này nay chạy HAI câu lệnh đọc, không phải một — thêm câu lấy
+         Kênh chung ở dưới.
+       ② Phía giao diện, `/api/chat/gan-day` trước chỉ gọi lúc NẠP TRANG, nay
+         gọi thêm MỖI LẦN MỞ CỬA SỔ CHAT. Kho vận mở chat hàng chục lần một
+         ca → TỔNG lượt đọc TĂNG, không giảm.
+     Bù lại thì bỏ được `taiLanDau()` lúc nạp trang (bớt một lượt
+     `/api/chat/tin-nhan` mỗi lần mở ERP) — đổi ngang, không phải lãi.
+     GỘP được tới đâu thì gộp: hai câu lệnh dưới đây đi CHUNG một `DB.batch()`
+     nên chỉ còn MỘT vòng gọi D1 (batch chạy tuần tự trong một giao dịch, hai
+     câu đều là SELECT nên không có rủi ro ghi). Không gộp được thành một câu
+     SQL: một câu trả nhiều dòng theo người, câu kia trả đúng một dòng tổng.
+     Tất cả đều là ĐỌC — không đụng hạn mức GHI vừa vá hôm nay.
+
+     `chua_doc` đếm theo mốc `chat_xem_id` của TÀI KHOẢN — cùng mốc mà huy
+     hiệu tổng đang dùng, nên hai con số không bao giờ đá nhau.
+     ⚠️ VÁ REV-0040 (lượt gộp) — TRẦN NÀY LÀ CẮT IM LẶNG, `do-cat-im-lang` bắt
+     được ngay sau khi gộp. Lời khai cũ *"LIMIT nới 6 → 20 = đúng số nhân sự
+     công ty"* tự nó là câu chứng minh vết cắt CÓ THẬT: công ty đang 23 nhân sự
+     (10 fulltime + parttime/thời vụ), tức trần 20 cắt được NGAY HÔM NAY, không
+     phải "một ngày nào đó". Mà đây là DANH SÁCH HỘI THOẠI: cắt im lặng ở đây
+     nghĩa là một người từng nhắn cho Sếp **biến mất khỏi cửa sổ chat**, và Sếp
+     không có cách nào biết mình đang thiếu ai.
+     Nay hỏi GH+1 rồi dùng chung `src/cat-danh-sach.js` như mọi màn khác — câu
+     đếm CHỈ chạy khi thật sự chạm trần, nên ca thường ngày tốn thêm 0 câu lệnh
+     và 1 dòng đọc. Vẫn một trang, không phân trang, không đẻ thêm lượt ghi. */
+  const GH_HOI_THOAI = 20;
+  const cauRieng = env.DB.prepare(`
+    WITH moc AS (SELECT COALESCE(chat_xem_id, 0) AS xem_id FROM tai_khoan WHERE id = ?),
+    rieng AS (
+      SELECT CASE WHEN nguoi_gui_id = ? THEN nguoi_nhan_id ELSE nguoi_gui_id END AS doi_tac_id,
+             id, noi_dung, tep_ten, tao_luc, nguoi_gui_id
+        FROM tin_nhan_chat
+       WHERE nguoi_nhan_id IS NOT NULL AND (nguoi_gui_id = ? OR nguoi_nhan_id = ?)
+    )
+    SELECT ns.id, ns.ho_ten, ns.viet_tat,
+           MAX(x.id) AS tin_cuoi_id,
+           (SELECT y.noi_dung FROM rieng y WHERE y.doi_tac_id = ns.id ORDER BY y.id DESC LIMIT 1) AS tin_cuoi,
+           (SELECT y.tep_ten  FROM rieng y WHERE y.doi_tac_id = ns.id ORDER BY y.id DESC LIMIT 1) AS tep_cuoi,
+           (SELECT y.tao_luc  FROM rieng y WHERE y.doi_tac_id = ns.id ORDER BY y.id DESC LIMIT 1) AS luc_cuoi,
+           (SELECT y.nguoi_gui_id FROM rieng y WHERE y.doi_tac_id = ns.id ORDER BY y.id DESC LIMIT 1) AS gui_cuoi,
+           SUM(CASE WHEN x.nguoi_gui_id != ? AND x.id > (SELECT xem_id FROM moc) THEN 1 ELSE 0 END) AS chua_doc
+      FROM rieng x
       JOIN nhan_su ns ON ns.id = x.doi_tac_id
      GROUP BY ns.id
      ORDER BY tin_cuoi_id DESC
-     LIMIT 6
-  `).bind(phien.nhan_su_id, phien.nhan_su_id, phien.nhan_su_id).all();
-  return json({ gan_day: results || [] });
+     LIMIT ${GH_HOI_THOAI + 1}
+  `).bind(phien.tai_khoan_id, phien.nhan_su_id, phien.nhan_su_id, phien.nhan_su_id,
+          phien.nhan_su_id);
+
+  // Kênh chung là một "hội thoại" như mọi hội thoại khác — người dùng không
+  // phải học hai chỗ khác nhau. Một câu lệnh nữa, vẫn chỉ ĐỌC.
+  const cauKenhChung = env.DB.prepare(`
+    SELECT (SELECT noi_dung FROM tin_nhan_chat WHERE nguoi_nhan_id IS NULL ORDER BY id DESC LIMIT 1) AS tin_cuoi,
+           (SELECT tep_ten  FROM tin_nhan_chat WHERE nguoi_nhan_id IS NULL ORDER BY id DESC LIMIT 1) AS tep_cuoi,
+           (SELECT tao_luc  FROM tin_nhan_chat WHERE nguoi_nhan_id IS NULL ORDER BY id DESC LIMIT 1) AS luc_cuoi,
+           (SELECT nguoi_gui_ten FROM tin_nhan_chat WHERE nguoi_nhan_id IS NULL ORDER BY id DESC LIMIT 1) AS ten_cuoi,
+           (SELECT COUNT(*) FROM tin_nhan_chat
+             WHERE nguoi_nhan_id IS NULL AND nguoi_gui_id != ?
+               AND id > (SELECT COALESCE(chat_xem_id, 0) FROM tai_khoan WHERE id = ?)) AS chua_doc
+  `).bind(phien.nhan_su_id, phien.tai_khoan_id);
+
+  // MỘT vòng gọi D1 cho cả hai câu (xem sổ sách ở chú thích trên).
+  const [rieng, chung] = await env.DB.batch([cauRieng, cauKenhChung]);
+
+  /* Nói ra vết cắt. Câu đếm là số ĐỐI TÁC chat riêng khác nhau — đúng thứ
+     `LIMIT` đang cắt, không phải số tin nhắn. Chỉ chạy khi chạm trần. */
+  const { ds: ganDay, biCat } = catBot(rieng?.results || [], GH_HOI_THOAI);
+  const cat = await nhanCat(env, biCat, GH_HOI_THOAI, `
+    SELECT COUNT(*) AS n FROM (
+      SELECT DISTINCT CASE WHEN nguoi_gui_id = ? THEN nguoi_nhan_id ELSE nguoi_gui_id END AS doi_tac_id
+        FROM tin_nhan_chat
+       WHERE nguoi_nhan_id IS NOT NULL AND (nguoi_gui_id = ? OR nguoi_nhan_id = ?))`,
+    [phien.nhan_su_id, phien.nhan_su_id, phien.nhan_su_id],
+    'Tìm người đó trong Danh bạ rồi bấm "Chat ngay".');
+
+  return json({ gan_day: ganDay, cat,
+                kenh_chung: (chung?.results && chung.results[0]) || null });
 }
 
 /* Đếm tin CHƯA XEM trên TOÀN BỘ các luồng (kênh chung + mọi cuộc chat riêng
@@ -680,7 +819,7 @@ async function chatTepDinhKem(req, env) {
 async function batBuocAdmin(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return { loi: l };
-  if (!laAdmin(phien.vai_tro)) return { loi: loi('Chỉ Admin mới được cấp/khoá tài khoản', 403) };
+  if (!laAdmin(phien)) return { loi: loi('Chỉ Admin mới được cấp/khoá tài khoản', 403) };
   return { phien };
 }
 
@@ -690,7 +829,7 @@ async function batBuocAdmin(req, env) {
 async function batBuocTaoTaiKhoan(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return { loi: l };
-  if (!duocTaoTaiKhoan(phien.vai_tro)) return { loi: loi('Bạn không có quyền tạo tài khoản', 403) };
+  if (!duocTaoTaiKhoan(phien)) return { loi: loi('Bạn không có quyền tạo tài khoản', 403) };
   return { phien };
 }
 
@@ -698,7 +837,7 @@ async function batBuocTaoTaiKhoan(req, env) {
 async function batBuocThemNhanSu(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return { loi: l };
-  if (!duocThemNhanSu(phien.vai_tro)) return { loi: loi('Bạn không có quyền quản lý nhân sự', 403) };
+  if (!duocThemNhanSu(phien)) return { loi: loi('Bạn không có quyền quản lý nhân sự', 403) };
   return { phien };
 }
 
@@ -716,12 +855,18 @@ async function qtDanhSach(req, env) {
   const { phien, loi: l } = await batBuocThemNhanSu(req, env);
   if (l) return l;
 
+  // Ô 2 (vị trí công việc) chỉ có sau migration them-vi-tri-cong-viec.sql.
+  // Chưa nạp thì trả NULL — bảng vẫn vẽ, cột "Vị trí" để trống, KHÔNG chết
+  // cả màn Quản trị vì một cột hiển thị (cùng lý do với khối hợp đồng bên
+  // dưới). +0 lượt đọc D1 khi đã có cột: coCotViTri nhớ vĩnh viễn.
+  const coViTri = await coCotViTri(env.DB);
   const { results } = await env.DB.prepare(`
     SELECT n.id, n.ma_nv, n.ho_ten, n.viet_tat, n.chuc_vu, n.bo_phan, n.phong_ban_id, n.chuc_danh_id,
            n.sdt, n.email, n.quan_ly_id, n.trang_thai_dl, n.loai_lao_dong,
            n.phap_nhan, n.trang_thai, n.dang_lam, (n.anh_chan_dung IS NOT NULL) AS co_anh,
            t.id AS tai_khoan_id, t.ten_dang_nhap, t.vai_tro, t.kich_hoat, t.phai_doi_mk,
-           t.duyet_gopy
+           t.duyet_gopy,
+           ${coViTri ? 't.vi_tri_cong_viec' : 'NULL AS vi_tri_cong_viec'}
       FROM nhan_su n
       LEFT JOIN tai_khoan t ON t.nhan_su_id = n.id
      ORDER BY n.dang_lam DESC, n.bo_phan, n.ho_ten
@@ -766,7 +911,15 @@ async function qtDanhSach(req, env) {
 
   return json({
     nhan_su: results,
-    vai_tro: VAI_TRO_HOP_LE.map(v => ({ ma: v, ten: TEN_VAI_TRO[v], nhom: nhomVaiTro(v) }))
+    // `vai_tro` giữ nguyên (cả 10 mã, kèm nhóm) để màn hình cũ và bộ lọc còn
+    // chạy. Hai danh sách mới bên dưới là thứ hai ô trên form đọc — giao diện
+    // KHÔNG tự đoán mã nào thuộc ô nào, luật ở src/quyen.js.
+    vai_tro: VAI_TRO_HOP_LE.map(v => ({ ma: v, ten: TEN_VAI_TRO[v], nhom: nhomVaiTro(v) })),
+    vai_tro_he_thong: VAI_TRO_HE_THONG.map(v => ({ ma: v, ten: TEN_VAI_TRO[v] })),
+    vi_tri_cong_viec: VI_TRI_CONG_VIEC.map(v => ({ ma: v, ten: TEN_VAI_TRO[v] })),
+    // Chưa nạp migration thì nói thẳng ra, để màn hình bảo "cần nạp CSDL"
+    // thay vì im lặng hiện một ô không lưu được gì.
+    co_cot_vi_tri: coViTri
   });
 }
 
@@ -814,7 +967,7 @@ async function qtThemNhanSu(req, env) {
 
   // RANH GIỚI LƯƠNG: chỉ admin mới được đặt lương. HCNS gửi lương lên cũng
   // bị bỏ qua ở đây — máy chủ ép NULL, không tin giao diện.
-  const luong = laAdmin(phien.vai_tro)
+  const luong = laAdmin(phien)
     ? ((b.luong === '' || b.luong == null) ? null : parseInt(String(b.luong).replace(/\D/g, ''), 10) || null)
     : null;
 
@@ -867,7 +1020,7 @@ async function qtSuaNhanSu(req, env) {
   if (!hienCo) return loi('Không tìm thấy nhân sự', 404);
 
   // Đã khoá thì chỉ Admin sửa được (Data Lock — xem migration them-khoa-danhmuc-nen.sql)
-  if (hienCo.trang_thai_dl === 'da_khoa' && !laAdmin(phien.vai_tro)) {
+  if (hienCo.trang_thai_dl === 'da_khoa' && !laAdmin(phien)) {
     return loi('Hồ sơ này đã khoá — cần Admin sửa hoặc mở khoá lại', 403);
   }
 
@@ -879,7 +1032,7 @@ async function qtSuaNhanSu(req, env) {
   const chucVuMoi = cd ? cd.ten : String(b.chuc_vu || '').trim();
   const boPhanMoi = pb ? pb.ten : String(b.bo_phan || '').trim();
 
-  const coCapNhatLuong = laAdmin(phien.vai_tro) && b.luong !== undefined;
+  const coCapNhatLuong = laAdmin(phien) && b.luong !== undefined;
   const luong = coCapNhatLuong
     ? ((b.luong === '' || b.luong == null) ? null : parseInt(String(b.luong).replace(/\D/g, ''), 10) || null)
     : null;
@@ -888,7 +1041,7 @@ async function qtSuaNhanSu(req, env) {
   // Admin mới sửa lại được, dùng cho trường hợp cấp nhầm (VD chọn nhầm Loại
   // lao động lúc tạo nên sai tiền tố). Luôn ghi lịch sử vì đây là hành động
   // hiếm, nhạy cảm — không chờ hồ sơ đã khoá mới ghi như các trường khác.
-  const coCapNhatMaNv = laAdmin(phien.vai_tro) && b.ma_nv !== undefined && String(b.ma_nv).trim() && String(b.ma_nv).trim() !== hienCo.ma_nv;
+  const coCapNhatMaNv = laAdmin(phien) && b.ma_nv !== undefined && String(b.ma_nv).trim() && String(b.ma_nv).trim() !== hienCo.ma_nv;
   const maNvMoi = coCapNhatMaNv ? String(b.ma_nv).trim() : null;
 
   try {
@@ -1046,7 +1199,7 @@ async function qtKhoaNhanSu(req, env) {
   const id = String(b.id || '').trim();
   if (!id) return loi('Thiếu id nhân sự');
   const muon = b.trang_thai_dl === 'da_khoa' ? 'da_khoa' : 'nhap';
-  if (muon === 'nhap' && !laAdmin(phien.vai_tro)) {
+  if (muon === 'nhap' && !laAdmin(phien)) {
     return loi('Chỉ Admin mới mở khoá lại được', 403);
   }
 
@@ -1068,14 +1221,27 @@ async function qtTaoTaiKhoan(req, env) {
   // Bỏ khoảng trắng — tên đăng nhập thường là số điện thoại
   const ten = String(b.ten_dang_nhap || '').replace(/\s+/g, '').toLowerCase();
   const vaiTro = String(b.vai_tro || '').trim();
+  const viTri  = String(b.vi_tri_cong_viec || '').trim();   // ô 2, để trống được
 
   if (!nhanSuId) return loi('Thiếu nhân sự');
   if (!/^[a-z0-9._-]{3,20}$/.test(ten)) {
     return loi('Tên đăng nhập (số điện thoại) 3–20 ký tự, chỉ gồm số, chữ thường không dấu, dấu . _ -');
   }
-  if (!VAI_TRO_HOP_LE.includes(vaiTro)) return loi('Vai trò không hợp lệ');
-  if (!laAdmin(phien.vai_tro) && (vaiTro === 'admin' || vaiTro === 'admin_backup')) {
+  /* Ô 1 CHỈ nhận vai trò hệ thống. Trước 04/09/2026 chỗ này nhận cả 10 mã
+     (VAI_TRO_HOP_LE) vì hai khái niệm còn chung một cột — nay nhận "Kế toán
+     trưởng" vào ô 1 là dựng lại đúng cái lỗi vừa sửa. */
+  if (!laVaiTroHeThong(vaiTro)) return loi('Vai trò hệ thống không hợp lệ');
+  if (!laAdmin(phien) && (vaiTro === 'admin' || vaiTro === 'admin_backup')) {
     return loi('Bạn không có quyền tạo tài khoản Admin/Admin backup — cần Admin thật', 403);
+  }
+  /* Ô 2 CHỈ nhận vị trí công việc — chốt chặn tự nâng quyền: nếu ô này nhận
+     được 'admin' thì bất kỳ ai đặt được vị trí cũng tự phong Admin. */
+  if (viTri && !laViTriCongViec(viTri)) return loi('Vị trí công việc không hợp lệ');
+  /* Lương là ranh giới cứng — chỉ Admin thật trao. Admin backup cấp được tài
+     khoản nhưng KHÔNG bổ nhiệm được Kế toán trưởng (vị trí duy nhất kéo theo
+     quyền xem lương). Việc đó hiếm và nặng, để Sếp bấm. */
+  if (viTri && !laAdmin(phien) && viTriCoXemLuong(viTri)) {
+    return loi(`Chỉ Admin mới đặt được vị trí "${TEN_VAI_TRO[viTri]}" — vị trí này xem được lương`, 403);
   }
 
   const ns = await env.DB.prepare('SELECT id FROM nhan_su WHERE id = ?').bind(nhanSuId).first();
@@ -1087,15 +1253,63 @@ async function qtTaoTaiKhoan(req, env) {
   const trungTen = await env.DB.prepare('SELECT id FROM tai_khoan WHERE ten_dang_nhap = ?').bind(ten).first();
   if (trungTen) return loi('Tên đăng nhập này đã có người dùng');
 
+  /* Cột `vi_tri_cong_viec` có thể CHƯA nạp (deploy.yml không tự chạy
+     migration). Chưa có thì tạo tài khoản đúng như bản cũ — chỉ ô 1 — chứ
+     KHÔNG chặn việc cấp tài khoản cho nhân viên mới vì lý do kỹ thuật. */
+  const coViTri = await coCotViTri(env.DB);
   const matKhauTam = sinhMatKhauTam(10);
-  await env.DB.prepare(`
-    INSERT INTO tai_khoan (nhan_su_id, ten_dang_nhap, mat_khau_hash, vai_tro, phai_doi_mk)
-    VALUES (?, ?, ?, ?, 1)
-  `).bind(nhanSuId, ten, await bamMatKhau(matKhauTam), vaiTro).run();
+  if (coViTri) {
+    await env.DB.prepare(`
+      INSERT INTO tai_khoan (nhan_su_id, ten_dang_nhap, mat_khau_hash, vai_tro, vi_tri_cong_viec, phai_doi_mk)
+      VALUES (?, ?, ?, ?, ?, 1)
+    `).bind(nhanSuId, ten, await bamMatKhau(matKhauTam), vaiTro, viTri || null).run();
+  } else {
+    await env.DB.prepare(`
+      INSERT INTO tai_khoan (nhan_su_id, ten_dang_nhap, mat_khau_hash, vai_tro, phai_doi_mk)
+      VALUES (?, ?, ?, ?, 1)
+    `).bind(nhanSuId, ten, await bamMatKhau(matKhauTam), vaiTro).run();
+  }
+
+  await ghiVetVaiTro(env, phien, nhanSuId, 'cap_tai_khoan', null,
+    moTaVaiTro(vaiTro, coViTri ? viTri : '') || vaiTro,
+    coViTri ? null : 'CSDL chưa có cột vị trí công việc — chỉ lưu được vai trò hệ thống');
 
   // Trả mật khẩu tạm về ĐÚNG MỘT LẦN để admin chép cho nhân viên.
   // Máy chủ chỉ lưu hash, sau này không ai xem lại được mật khẩu này.
   return json({ ok: true, ten_dang_nhap: ten, mat_khau_tam: matKhauTam });
+}
+
+/* ---- GHI VẾT ĐỔI VAI TRÒ / VỊ TRÍ (ràng buộc ④) -------------------------
+   Cũ → mới → ai đổi → lúc nào, vào `nhan_su_lich_su` — SỔ SỰ KIỆN ĐÃ CÓ
+   (migrations/them-nhansu-lichsu.sql), không đẻ bảng mới. Cùng sổ với
+   đổi phòng ban / đổi chức danh / nghỉ việc, nên mở hồ sơ một người là thấy
+   cả dòng đời làm việc ở một chỗ.
+
+   KHÔNG ĐƯỢC LÀM HỎNG VIỆC CHÍNH: bảng có thể chưa nạp trên một CSDL cũ.
+   Ghi hỏng thì kêu lên console (Workers Logs đọc được) rồi đi tiếp — mất một
+   dòng nhật ký còn hơn Sếp bấm "Lưu" mà báo lỗi đỏ trong khi vai trò đã đổi
+   xong. Đây là ghi thêm, không phải nguồn sự thật của quyền.
+
+   `datetime('now','+7 hours')` = GIỜ VIỆT NAM — KHÔNG được bỏ đuôi +7 (REV-0058 ②).
+   Chín chỗ ghi khác vào CÙNG CUỐN SỔ này đều +7 (vao_lam · hop_dong · ky_nang ·
+   doi_ngay_sinh · don_ca_khoan_viec · khoi_phuc_dang_nhap · mota-cv …). Sổ này
+   là BẰNG CHỨNG ai trao quyền xem lương cho ai; một dòng lệch 7 tiếng so với
+   mọi dòng khác trong cùng sổ thì tra ngược không khớp, và người tra sẽ tin
+   con số chứ không tin là công cụ ghi sai. */
+async function ghiVetVaiTro(env, phien, nhanSuId, loaiSuKien, cu, moi, ghiChu) {
+  if (!nhanSuId) return false;
+  try {
+    await env.DB.prepare(`
+      INSERT INTO nhan_su_lich_su (nhan_su_id, loai_su_kien, gia_tri_cu, gia_tri_moi,
+                                   nguoi_thuc_hien_id, ghi_chu, luc)
+      VALUES (?, ?, ?, ?, ?, ?, datetime('now','+7 hours'))
+    `).bind(nhanSuId, loaiSuKien, cu || null, moi || null,
+            phien.nhan_su_id, ghiChu || null).run();
+    return true;
+  } catch (e) {
+    console.error('[ERP] Không ghi được vết đổi vai trò/vị trí:', e && e.message);
+    return false;
+  }
 }
 
 /* ==========================================================================
@@ -1448,36 +1662,100 @@ async function qtKhoaTaiKhoan(req, env) {
    được LÚC tạo tài khoản, không sửa lại được sau. Chặn hạ vai trò Admin
    cuối cùng còn hoạt động xuống vai trò thường (giữ nguyên logic chặn ở
    qtXoaTaiKhoan — tránh hệ thống mất hết người quản trị). */
+/* HAI Ô (Sếp chốt 04/09/2026) — thân gửi lên có thể mang `vai_tro` (ô 1),
+   `vi_tri_cong_viec` (ô 2), hoặc cả hai. Ô nào KHÔNG gửi thì giữ nguyên,
+   nên màn cũ chỉ gửi `vai_tro` vẫn chạy y như trước.
+
+   AI SỬA ĐƯỢC Ô NÀO — kiểm ở đây, không phải ẩn nút:
+     · Ô 1: Admin + Admin backup (duocTaoTaiKhoan). Admin backup không gán
+       được Admin/Admin backup cho ai, kể cả mình (luật cũ, giữ nguyên).
+     · Ô 2: thêm HCNS (duocDatViTriCongViec) — đặt vị trí cho người mới là
+       việc hành chính hằng ngày.
+     · KHÔNG AI SỬA Ô CỦA CHÍNH MÌNH, trừ Admin thật. Thiếu chốt này thì HCNS
+       tự đặt mình thành "Kế toán trưởng" và XEM ĐƯỢC LƯƠNG — phá thẳng ranh
+       giới cứng "HCNS không xem lương" ghi ở đầu src/quyen.js. Đo bằng cách
+       gọi API trực tiếp, không qua giao diện (do-tach-vai-tro.mjs, DC-B). */
 async function qtSuaVaiTro(req, env) {
-  const { phien, loi: l } = await batBuocTaoTaiKhoan(req, env);
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
+  if (!duocDatViTriCongViec(phien)) {
+    return loi('Bạn không có quyền đổi vai trò hay vị trí công việc', 403);
+  }
 
   let b;
   try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
 
   const tkId = parseInt(b.tai_khoan_id, 10);
-  const vaiTroMoi = String(b.vai_tro || '').trim();
   if (!tkId) return loi('Thiếu tài khoản');
-  if (!VAI_TRO_HOP_LE.includes(vaiTroMoi)) return loi('Vai trò không hợp lệ');
 
-  // Admin backup KHÔNG được tự gán vai trò Admin/Admin backup cho ai (kể cả
-  // chính mình) — tránh tự nâng quyền. Chỉ Admin thật mới gán được vai trò
-  // hệ thống cấp cao.
-  if (!laAdmin(phien.vai_tro) && (vaiTroMoi === 'admin' || vaiTroMoi === 'admin_backup')) {
-    return loi('Bạn không có quyền gán vai trò Admin/Admin backup — cần Admin thật', 403);
+  const suaO1 = b.vai_tro !== undefined;
+  const suaO2 = b.vi_tri_cong_viec !== undefined;
+  if (!suaO1 && !suaO2) return loi('Chưa chọn vai trò hệ thống hay vị trí công việc');
+
+  const vaiTroMoi = String(b.vai_tro || '').trim();
+  const viTriMoi  = String(b.vi_tri_cong_viec || '').trim();   // '' = bỏ vị trí
+
+  if (suaO1) {
+    if (!duocTaoTaiKhoan(phien)) {
+      return loi('Bạn chỉ đổi được vị trí công việc — vai trò hệ thống cần Admin', 403);
+    }
+    if (!laVaiTroHeThong(vaiTroMoi)) return loi('Vai trò hệ thống không hợp lệ');
+    // Admin backup KHÔNG được tự gán vai trò Admin/Admin backup cho ai (kể cả
+    // chính mình) — tránh tự nâng quyền. Chỉ Admin thật mới gán được vai trò
+    // hệ thống cấp cao.
+    if (!laAdmin(phien) && (vaiTroMoi === 'admin' || vaiTroMoi === 'admin_backup')) {
+      return loi('Bạn không có quyền gán vai trò Admin/Admin backup — cần Admin thật', 403);
+    }
+  }
+  if (suaO2) {
+    if (viTriMoi && !laViTriCongViec(viTriMoi)) return loi('Vị trí công việc không hợp lệ');
+    if (viTriMoi && !laAdmin(phien) && viTriCoXemLuong(viTriMoi)) {
+      return loi(`Chỉ Admin mới đặt được vị trí "${TEN_VAI_TRO[viTriMoi]}" — vị trí này xem được lương`, 403);
+    }
   }
 
-  const tk = await env.DB.prepare('SELECT id, vai_tro FROM tai_khoan WHERE id = ?').bind(tkId).first();
+  const coViTri = await coCotViTri(env.DB);
+  if (suaO2 && !coViTri) {
+    return loi('CSDL chưa có ô Vị trí công việc — cần nạp migration them-vi-tri-cong-viec.sql trước', 409);
+  }
+
+  const tk = await env.DB.prepare(
+    `SELECT id, nhan_su_id, vai_tro, ${coViTri ? 'vi_tri_cong_viec' : 'NULL AS vi_tri_cong_viec'}
+       FROM tai_khoan WHERE id = ?`).bind(tkId).first();
   if (!tk) return loi('Không tìm thấy tài khoản', 404);
 
-  if (laAdmin(tk.vai_tro) && !laAdmin(vaiTroMoi)) {
+  /* TỰ SỬA CHÍNH MÌNH — chặn cho mọi người trừ Admin thật. */
+  if (tk.nhan_su_id === phien.nhan_su_id && !laAdmin(phien)) {
+    return loi('Bạn không tự đổi được vai trò hay vị trí của chính mình — nhờ Admin', 403);
+  }
+
+  const o1Cu = tk.vai_tro, o2Cu = tk.vi_tri_cong_viec || '';
+  const o1Sau = suaO1 ? vaiTroMoi : o1Cu;
+  const o2Sau = suaO2 ? viTriMoi  : o2Cu;
+
+  /* Không hạ Admin CUỐI CÙNG còn hoạt động. Xét theo Ô 1 vì cờ `admin` chỉ
+     nằm ở ô 1 — không vị trí công việc nào mang nó. */
+  if (laAdmin(o1Cu) && !laAdmin(o1Sau)) {
     const { results } = await env.DB.prepare('SELECT vai_tro FROM tai_khoan WHERE kich_hoat = 1 AND id != ?').bind(tkId).all();
     if (!results.some(x => laAdmin(x.vai_tro))) {
       return loi('Không thể đổi — đây là tài khoản Admin cuối cùng còn hoạt động', 409);
     }
   }
 
-  await env.DB.prepare('UPDATE tai_khoan SET vai_tro = ? WHERE id = ?').bind(vaiTroMoi, tkId).run();
+  if (o1Sau === o1Cu && o2Sau === o2Cu) return json({ ok: true, khong_doi: true });
+
+  if (coViTri) {
+    await env.DB.prepare('UPDATE tai_khoan SET vai_tro = ?, vi_tri_cong_viec = ? WHERE id = ?')
+                .bind(o1Sau, o2Sau || null, tkId).run();
+  } else {
+    await env.DB.prepare('UPDATE tai_khoan SET vai_tro = ? WHERE id = ?').bind(o1Sau, tkId).run();
+  }
+
+  /* MỘT dòng ghi vết cho MỘT cú bấm — không tách đôi, để đọc lại là thấy
+     nguyên trạng thái trước và sau, đúng như Sếp nhìn trên màn hình. */
+  await ghiVetVaiTro(env, phien, tk.nhan_su_id, 'doi_vai_tro',
+    moTaVaiTro(o1Cu, o2Cu) || o1Cu, moTaVaiTro(o1Sau, o2Sau) || o1Sau, null);
+
   return json({ ok: true });
 }
 
@@ -1577,7 +1855,7 @@ async function qtXoaTaiKhoan(req, env) {
 async function batBuocXemKho(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return { loi: l };
-  if (!duocXemTab(phien.vai_tro, 'khovan')) return { loi: loi('Bạn không có quyền xem Kho vận', 403) };
+  if (!duocXemTab(phien, 'khovan')) return { loi: loi('Bạn không có quyền xem Kho vận', 403) };
   return { phien };
 }
 
@@ -1590,7 +1868,7 @@ async function batBuocXemKho(req, env) {
 async function batBuocXemSanPham(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return { loi: l };
-  if (!duocXemTab(phien.vai_tro, 'khovan') && !duocXemTab(phien.vai_tro, 'kinhdoanh')) {
+  if (!duocXemTab(phien, 'khovan') && !duocXemTab(phien, 'kinhdoanh')) {
     return { loi: loi('Bạn không có quyền xem Sản phẩm/SKU', 403) };
   }
   return { phien };
@@ -1623,11 +1901,24 @@ async function khoXuat(req, env) {
   return kho.xuatKho(env, phien, b);
 }
 
+/* Phiếu điều chỉnh tồn — ĐƯỜNG RA cho ca "nạp nhầm rồi bán mất" (REV-0060
+   vòng 3 · CHẶN-ⓑ). Cửa ngoài chỉ kiểm "có tab Kho vận"; ai được LẬP thì
+   `kho.js` tự kiểm `duocQuanLyKho` bên trong — chặn kép như mọi cửa kho. */
+async function khoDieuChinh(req, env) {
+  const { phien, loi: l } = await batBuocXemKho(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return kho.dieuChinhKho(env, phien, b);
+}
+
 async function khoLo(req, env) {
   const { phien, loi: l } = await batBuocXemKho(req, env);
   if (l) return l;
   const u = new URL(req.url);
-  return kho.loTheoSanPham(env, phien, u.searchParams.get('san_pham_id'));
+  /* `tat_ca=1` — lấy CẢ lô đang âm, cho màn điều chỉnh nhìn thấy đúng cái
+     phải sửa. Màn xuất kho vẫn dùng lưới cũ (chỉ lô còn hàng). */
+  return kho.loTheoSanPham(env, phien, u.searchParams.get('san_pham_id'),
+                           u.searchParams.get('tat_ca') === '1');
 }
 
 async function khoBaoCao(req, env) {
@@ -1666,6 +1957,214 @@ async function khoKhoaSP(req, env) {
 }
 
 /* ==========================================================================
+   NẠP FILE SỐ LIỆU  (danh mục sản phẩm · tồn kho đầu kỳ)
+   ---------------------------------------------------------------------------
+   Ba bước, ba đường riêng — CỐ Ý tách ra để không bao giờ có chuyện "lỡ tay
+   ghi": chỉ MỘT trong ba đường dưới đây động vào CSDL, hai đường kia đọc rồi
+   thôi.
+
+     ① nap-mo   — đọc file, trả TÊN CỘT + gợi ý ghép.        KHÔNG ghi.
+     ② nap-xem  — đối chiếu CSDL, trả thêm/sửa/bỏ qua/lỗi.   KHÔNG ghi.
+     ③ nap-ghi  — ghi thật, SAU KHI Sếp đã bấm xác nhận.
+
+   Cả ba nhận cùng một khuôn byte như `tlLuuTep`:
+       [4 byte độ dài mô tả][JSON mô tả][byte file]
+   Vì sao không nhét file vào JSON dạng base64: file 8 MB thành ~11 MB chữ,
+   rồi nhân thêm mấy bản trong bộ nhớ — mà Worker chỉ có 128 MB cho CẢ
+   isolate dùng chung. Đường byte thẳng đã được chọn ở kho tài liệu đúng vì
+   lý do đó (xem chú thích ở `tlLuu`).
+
+   ⚠️ File gửi lên KHÔNG được lưu lại ở đâu cả. Đọc xong, lấy số, rồi bỏ.
+      Ghi vết (ai nạp, file gì, bao nhiêu dòng) nằm ở `lich_su_thay_doi_nen`.
+   ========================================================================== */
+
+/* Bóc khuôn byte -> { moTa, byte }. Dùng chung cho cả ba bước. */
+function bocKhungNap(khung) {
+  if (khung.length < 5) return { loi: 'Dữ liệu gửi lên không hợp lệ' };
+  const dai = ((khung[0] << 24) | (khung[1] << 16) | (khung[2] << 8) | khung[3]) >>> 0;
+  if (dai < 2 || dai > 1048576 || 4 + dai > khung.length) {
+    return { loi: 'Dữ liệu gửi lên không hợp lệ' };
+  }
+  let b;
+  try { b = JSON.parse(new TextDecoder().decode(khung.subarray(4, 4 + dai))); }
+  catch { return { loi: 'Dữ liệu gửi lên không hợp lệ' }; }
+  if (!b || typeof b !== 'object' || Array.isArray(b)) {
+    return { loi: 'Dữ liệu gửi lên không hợp lệ' };
+  }
+  return { moTa: b, byte: khung.subarray(4 + dai) };
+}
+
+/* Cửa vào chung: đăng nhập + đúng tab + đúng quyền GHI.
+   Cắt ở MÁY CHỦ, không cắt ở trình duyệt — gọi thẳng API phải 403. Nạp danh
+   mục sản phẩm là việc nặng (đổi định nghĩa hàng hoá của cả công ty), nên
+   xem được tab thôi CHƯA ĐỦ: phải có quyền sửa mã hàng / thao tác kho. */
+async function batBuocNapDuLieu(req, env, maDich) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return { loi: l };
+  if (!duocXemTab(phien, 'khovan') && !duocXemTab(phien, 'kinhdoanh')) {
+    return { loi: loi('Bạn không có quyền nạp dữ liệu kho', 403) };
+  }
+  if (maDich === 'san_pham' && !duocSuaSanPham(phien)) {
+    return { loi: loi('Bạn không có quyền nạp danh mục sản phẩm — việc này cần quyền sửa mã hàng', 403) };
+  }
+  if (maDich === 'ton_kho' && !duocThaoTacKho(phien)) {
+    return { loi: loi('Bạn không có quyền nạp tồn kho — việc này cần quyền thao tác kho', 403) };
+  }
+  return { phien };
+}
+
+/* Đọc khung byte + kiểm quyền. Trả { phien, moTa, byte, maDich } hoặc { loi }. */
+async function nhanFileNap(req, env) {
+  /* ⚠️ CHẶN THEO Content-Length TRƯỚC KHI ĐỌC THÂN.
+     `req.arrayBuffer()` kéo TOÀN BỘ file vào bộ nhớ, mà Worker chỉ có 128 MB
+     cho CẢ isolate dùng chung. Đọc xong 50 MB rồi mới bảo "file to quá" là
+     đã trả cái giá đắt nhất trước khi từ chối — và hai người cùng làm vậy
+     một lúc thì chết isolate, kéo theo yêu cầu của người khác.
+     Trần ở đây rộng hơn trần của bộ đọc bảng một chút, vì khung byte còn
+     đèo thêm phần mô tả; `docBang` vẫn chặn lần nữa theo số byte thật. */
+  const TRAN_KHUNG = 9 * 1024 * 1024;
+  const dai = parseInt(req.headers.get('Content-Length') || '0', 10);
+  if (Number.isFinite(dai) && dai > TRAN_KHUNG) {
+    return { loi: loi(
+      `File nặng ${(dai / 1048576).toFixed(1)} MB, vượt mức 8 MB cho một lần nạp số liệu. ` +
+      `Xin chia nhỏ file (mỗi lần một tháng, hoặc một nhóm hàng) rồi nạp làm nhiều lần.`, 413) };
+  }
+
+  let khung;
+  try { khung = new Uint8Array(await req.arrayBuffer()); }
+  catch { return { loi: loi('Không nhận được file gửi lên. Chọn lại file rồi gửi lần nữa.') }; }
+  if (khung.length > TRAN_KHUNG) {
+    return { loi: loi(
+      `File nặng ${(khung.length / 1048576).toFixed(1)} MB, vượt mức 8 MB cho một lần nạp số liệu. ` +
+      `Xin chia nhỏ file rồi nạp làm nhiều lần.`, 413) };
+  }
+
+  const k = bocKhungNap(khung);
+  if (k.loi) return { loi: loi(k.loi) };
+
+  const maDich = String(k.moTa.dich || '');
+  if (!(maDich in napdulieu.DICH)) return { loi: loi('Chưa chọn nạp vào đâu — chọn lại loại dữ liệu.') };
+
+  const { phien, loi: l } = await batBuocNapDuLieu(req, env, maDich);
+  if (l) return { loi: l };
+
+  return { phien, moTa: k.moTa, byte: k.byte, maDich };
+}
+
+/* Câu lỗi của bộ đọc file đã là tiếng người rồi (xem src/doc-bang.js) nên
+   trả nguyên văn. Lỗi lạ mới giấu đi — không rò chi tiết kỹ thuật ra ngoài,
+   đúng lối index.js vẫn làm. */
+function loiNap(e) {
+  if (e && e.name === 'LoiDocBang') return loi(e.message);
+  /* `LoiGhiNua` = ngã GIỮA LÚC GHI. Câu này BẮT BUỘC tới tay Sếp nguyên văn:
+     nó nói đã ghi được bao nhiêu dòng, đã gỡ sạch hay còn sót, và có được nạp
+     lại hay không. Nuốt nó thành "Không nạp được, thử lại nhé" là đúng cái đã
+     đẩy tồn lên 45.000 cho một file 30.000 (REV-0060 CHẶN-②). */
+  if (e && e.name === 'LoiGhiNua') return loi(e.message, e.da_don_sach ? 503 : 409);
+  console.error('Nạp file:', e && e.message);
+  return loi('Không đọc được file này. Xin kiểm tra lại file rồi thử lần nữa.');
+}
+
+/* .xlsx nhiều bảng: Sếp chọn bảng ở bước 1, hai bước sau phải đọc ĐÚNG bảng
+   đó — không thì xem trước một bảng, ghi vào sổ một bảng khác. */
+const bangChonCua = moTa => {
+  /* `null` = CHƯA AI CHỌN — khác hẳn "chọn bảng số 0". Máy chưa được chọn thì
+     `doc-bang.js` mới được quyền bỏ qua bảng đang ẩn và bảng rỗng
+     (REV-0060 vòng 2 · CAO-⑦). Trả 0 ở đây là biến mọi lần mở file thành
+     "người đã chọn bảng đầu tiên", tức khoá luôn cái quyền đó. */
+  const v = moTa && moTa.bang_chon;
+  if (v === null || v === undefined || v === '') return null;
+  const n = Number(v);
+  return Number.isInteger(n) && n >= 0 ? n : null;
+};
+
+async function khoNapMo(req, env) {
+  const r = await nhanFileNap(req, env);
+  if (r.loi) return r.loi;
+  try {
+    return json(await napdulieu.moFile(env, r.phien, r.byte, String(r.moTa.ten_tep || 'file'),
+                                       r.maDich, bangChonCua(r.moTa)));
+  } catch (e) { return loiNap(e); }
+}
+
+async function khoNapXem(req, env) {
+  const r = await nhanFileNap(req, env);
+  if (r.loi) return r.loi;
+  try {
+    const bang = await napdulieu.docBangTuByte(r.byte, String(r.moTa.ten_tep || 'file'),
+                                               { bangChon: bangChonCua(r.moTa) });
+    return json(await napdulieu.xemTruoc(env, r.phien, {
+      bang, ghep: r.moTa.ghep || {}, maDich: r.maDich,
+      vanTay: await napdulieu.vanTayCot(bang.cot)
+    }));
+  } catch (e) { return loiNap(e); }
+}
+
+async function khoNapGhi(req, env) {
+  const r = await nhanFileNap(req, env);
+  if (r.loi) return r.loi;
+  try {
+    const tenTep = String(r.moTa.ten_tep || 'file');
+    const bang = await napdulieu.docBangTuByte(r.byte, tenTep, { bangChon: bangChonCua(r.moTa) });
+    const ghep = r.moTa.ghep || {};
+
+    /* Vân tay cột phải khớp với lúc xem trước. Nếu Sếp mở màn xem trước rồi
+       lỡ chọn nhầm file khác lúc bấm xác nhận, những con số vừa duyệt sẽ
+       không còn đúng với file đang ghi — chặn ngay ở đây. */
+    const vanTay = await napdulieu.vanTayCot(bang.cot);
+    if (r.moTa.van_tay && r.moTa.van_tay !== vanTay) {
+      return loi('File đã đổi so với lúc xem trước. Xin xem lại một lần nữa rồi mới nạp.');
+    }
+
+    /* Xác nhận nạp trùng — HAI LỚP, HAI CỬA (REV-0060 vòng 2 · CAO-⑤):
+       · lớp (b) "có N mã trong file đã nạp tồn từ file trước" → cái tick;
+       · lớp (a) "ĐÚNG file này, đúng từng con số, đã nạp rồi" → Sếp phải GÕ
+         LẠI TÊN FILE. Một cái tick không mở được lớp (a) nữa, vì lớp (b) kêu
+         ở mọi lần nhập lại cùng mã nên cái tick đã thành phản xạ.
+       Máy chủ chặn lần nữa ở `ghiThat` (409) — giao diện chỉ là lớp ngoài. */
+    const kq = await napdulieu.ghiThat(env, r.phien, {
+      bang, ghep, maDich: r.maDich, tenTep,
+      xacNhanTrung: r.moTa.xac_nhan_trung === true || r.moTa.xac_nhan_trung === 1,
+      xacNhanTenTep: String(r.moTa.xac_nhan_ten_tep || '')
+    });
+    if (kq.loi) return loi(kq.loi, kq.ma || 400);
+
+    /* Nhớ bảng ghép cột cho lần sau — CHỈ nhớ sau khi đã ghi thật, tức là
+       cách ghép này đã được Sếp nhìn tận mắt và duyệt. */
+    await napdulieu.nhoGhep(env, r.maDich, vanTay, ghep, r.phien);
+    return json(kq);
+  } catch (e) { return loiNap(e); }
+}
+
+/* ---- ĐƯỜNG LÙI: gỡ một lượt nạp tồn kho ra khỏi sổ cái -------------------
+   Chống nạp lại mà không có đường lùi thì chưa xong việc: chặn nhầm cũng có,
+   mà nạp nhầm file cũng có. Hai cửa này chỉ mở cho người có quyền THAO TÁC
+   KHO — `nap-du-lieu.js` kiểm lần nữa bên trong, không tin mỗi cửa này. */
+async function khoNapLuot(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  if (!duocXemTab(phien, 'khovan') && !duocXemTab(phien, 'kinhdoanh')) {
+    return loi('Bạn không có quyền xem lượt nạp tồn kho', 403);
+  }
+  const n = Number(new URL(req.url).searchParams.get('so') || 10);
+  const kq = await napdulieu.dsLuotNap(env, phien, n);
+  if (kq.loi) return loi(kq.loi, kq.ma || 400);
+  return json(kq);
+}
+
+async function khoNapHuy(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  if (!duocXemTab(phien, 'khovan') && !duocXemTab(phien, 'kinhdoanh')) {
+    return loi('Bạn không có quyền gỡ lượt nạp tồn kho', 403);
+  }
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  const kq = await napdulieu.huyLuotNap(env, phien, b && b.phieu_id);
+  if (kq.loi) return loi(kq.loi, kq.ma || 400);
+  return json(kq);
+}
+
+/* ==========================================================================
    DỮ LIỆU NỀN — Phòng ban / Chức danh / Đơn vị tính + tình trạng sẵn sàng.
    Nghiệp vụ nằm trong src/dulieunen.js. Ai có tab 'dulieunen' đều XEM được
    (danh sách + tình trạng); THÊM/SỬA thì dulieunen.js tự kiểm quyền chi
@@ -1676,7 +2175,7 @@ async function khoKhoaSP(req, env) {
 async function batBuocXemDuLieuNen(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return { loi: l };
-  if (!duocXemTab(phien.vai_tro, 'dulieunen')) return { loi: loi('Bạn không có quyền xem Dữ liệu nền', 403) };
+  if (!duocXemTab(phien, 'dulieunen')) return { loi: loi('Bạn không có quyền xem Dữ liệu nền', 403) };
   return { phien };
 }
 
@@ -1865,7 +2364,7 @@ async function dlnSuaKho(req, env) {
 async function batBuocXemTaiSan(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return { loi: l };
-  if (!duocXemTab(phien.vai_tro, 'taisan')) return { loi: loi('Bạn không có quyền xem Tài sản', 403) };
+  if (!duocXemTab(phien, 'taisan')) return { loi: loi('Bạn không có quyền xem Tài sản', 403) };
   return { phien };
 }
 
@@ -1946,7 +2445,7 @@ async function tsThanhLy(req, env) {
 async function batBuocXemXepCa(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return { loi: l };
-  if (!duocXemTab(phien.vai_tro, 'xepca')) return { loi: loi('Bạn không có quyền xem Xếp ca', 403) };
+  if (!duocXemTab(phien, 'xepca')) return { loi: loi('Bạn không có quyền xem Xếp ca', 403) };
   return { phien };
 }
 
@@ -2116,7 +2615,7 @@ async function hoanDanhSach(req, env) {
 async function hoanLichSu(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
-  if (!duocXemDonHoan(phien.vai_tro)) return loi('Bạn không có quyền', 403);
+  if (!duocXemDonHoan(phien)) return loi('Bạn không có quyền', 403);
   const coTT = await shopee.coCotTinhTrangHang(env);
   // 523 dòng / trần 500 — màn này ĐANG cắt mất 23 đơn hoàn và ô đếm `#ls-dem`
   // lại in "500/500", tức KHẲNG ĐỊNH SAI là đã hiện hết. Giữ trần (bảng còn
@@ -2169,7 +2668,7 @@ const TINH_TRANG_HOP_LE = ['con_tot', 'hu_hong', 'thieu_hang', 'sai_hang'];
 async function hoanDaNhan(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
-  if (!duocThaoTacKho(phien.vai_tro)) return loi('Bạn không có quyền xác nhận nhận hàng', 403);
+  if (!duocThaoTacKho(phien)) return loi('Bạn không có quyền xác nhận nhận hàng', 403);
   let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
   const rsn = (b.return_sn || '').trim();
   const tinhTrang = (b.tinh_trang || '').trim();
@@ -2215,7 +2714,7 @@ async function hoanDaNhan(req, env) {
 async function hoanPhanLoai(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
-  if (!duocThaoTacKho(phien.vai_tro)) return loi('Bạn không có quyền', 403);
+  if (!duocThaoTacKho(phien)) return loi('Bạn không có quyền', 403);
   let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
   const rsn = (b.return_sn || '').trim();
   const phanLoai = String(b.phan_loai || '').trim();
@@ -2243,13 +2742,21 @@ async function hoanPhanLoai(req, env) {
 }
 
 /* ---- Thông báo trong ERP (chuông 🔔) ------------------------------------
-   Nhóm nhận: kho roles -> 'kho'; vận hành sàn -> 'van_hanh'; ban giám đốc -> cả hai. */
-function nhomCua(vaiTro) {
-  if (vaiTro === 'nhan_vien_kho' || vaiTro === 'quan_ly_kho') return ['kho'];
-  if (vaiTro === 'van_hanh_san') return ['van_hanh'];
-  if (vaiTro === 'ke_toan_truong') return ['ke_toan'];
-  if (laAdmin(vaiTro)) return ['kho', 'van_hanh', 'ke_toan'];
-  return [];
+   Nhóm nhận: kho roles -> 'kho'; vận hành sàn -> 'van_hanh'; ban giám đốc -> cả hai.
+
+   HAI Ô (04/09/2026): nhận cả phiên lẫn chuỗi vai trò, và HỢP hai ô — nếu
+   chỉ soi ô 1 thì sau migration anh Duy là `nguoi_dung` + `quan_ly_kho` và
+   sẽ KHÔNG nhận được thông báo nào của nhóm kho nữa. Một người có thể thuộc
+   nhiều nhóm (vd Admin backup + Kế toán trưởng), nên gộp chứ không chọn một. */
+function nhomCua(chuThe) {
+  const ra = new Set();
+  for (const v of boVaiTro(chuThe)) {
+    if (v === 'nhan_vien_kho' || v === 'quan_ly_kho') ra.add('kho');
+    else if (v === 'van_hanh_san') ra.add('van_hanh');
+    else if (v === 'ke_toan_truong') ra.add('ke_toan');
+    else if (laAdmin(v)) { ra.add('kho'); ra.add('van_hanh'); ra.add('ke_toan'); }
+  }
+  return [...ra];
 }
 
 /* nguoiNhanId (tuỳ chọn): báo cho ĐÚNG 1 người thay vì cả nhóm phòng ban —
@@ -2355,7 +2862,7 @@ const GIOI_HAN_ANH_BYTE_KN = 1_500_000;   // ~1.1MB gốc sau khi mã hoá base6
 async function hoanKhieuNai(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
-  if (!duocThaoTacKho(phien.vai_tro)) return loi('Bạn không có quyền', 403);
+  if (!duocThaoTacKho(phien)) return loi('Bạn không có quyền', 403);
   let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
   const rsn = (b.return_sn || '').trim();
   const ghiChu = (b.ghi_chu || '').trim().slice(0, 300);
@@ -2388,7 +2895,7 @@ async function hoanKhieuNai(req, env) {
 async function hoanKhieuNaiVideo(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
-  if (!duocThaoTacKho(phien.vai_tro)) return loi('Bạn không có quyền', 403);
+  if (!duocThaoTacKho(phien)) return loi('Bạn không có quyền', 403);
   if (!env.MINH_CHUNG) {
     return loi('Máy chủ chưa cấu hình lưu trữ video (R2) — báo Sếp Ngọc tạo bucket. Lý do + ảnh vẫn lưu được bình thường.', 409);
   }
@@ -2424,7 +2931,7 @@ async function hoanKhieuNaiVideo(req, env) {
 async function hoanKhieuNaiVideoXem(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
-  if (!duocXemDonHoan(phien.vai_tro) && !duocThaoTacKho(phien.vai_tro)) return loi('Bạn không có quyền', 403);
+  if (!duocXemDonHoan(phien) && !duocThaoTacKho(phien)) return loi('Bạn không có quyền', 403);
   if (!env.MINH_CHUNG) return loi('Chưa cấu hình lưu trữ video trên máy chủ', 409);
 
   const id = new URL(req.url).searchParams.get('id');
@@ -2467,7 +2974,7 @@ async function hoanKhieuNaiVideoXem(req, env) {
 async function hoanKhieuNaiMinhChung(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
-  if (!duocXemDonHoan(phien.vai_tro) && !duocThaoTacKho(phien.vai_tro)) return loi('Bạn không có quyền', 403);
+  if (!duocXemDonHoan(phien) && !duocThaoTacKho(phien)) return loi('Bạn không có quyền', 403);
   const rsn = new URL(req.url).searchParams.get('return_sn');
   if (!rsn) return loi('Thiếu mã đơn hoàn');
   const { results } = await env.DB.prepare(
@@ -2483,7 +2990,7 @@ async function hoanKhieuNaiMinhChung(req, env) {
 async function hoanChuaNhan(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
-  if (!duocThaoTacKho(phien.vai_tro)) return loi('Bạn không có quyền', 403);
+  if (!duocThaoTacKho(phien)) return loi('Bạn không có quyền', 403);
   let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
   const rsn = (b.return_sn || '').trim();
   if (!rsn) return loi('Thiếu mã đơn hoàn');
@@ -2496,7 +3003,7 @@ async function hoanChuaNhan(req, env) {
 async function layThongBao(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
-  const nhom = nhomCua(phien.vai_tro);
+  const nhom = nhomCua(phien);
   // Gộp 2 nguồn: thông báo theo NHÓM phòng ban (như cũ) + thông báo nhắm
   // ĐÚNG cá nhân (vd Tác vụ giao việc) — ai cũng có thể nhận loại sau dù
   // vai trò không thuộc nhóm phòng ban nào (vd hcns không có trong nhomCua).
@@ -2629,8 +3136,8 @@ async function cvHomNay(req, env) {
      phải tin rằng cả 10 vai đều đang có nó (BH-43: hỏi ràng buộc áp cho
      NHÁNH NÀO, không chỉ hỏi nó có mặt chưa). Ngày nào Sếp gỡ `lichsuviec`
      của một vai, chỗ này tự khoá theo. */
-  if (!duocXemTab(phien.vai_tro, 'congviec')) return loi('Bạn không có quyền', 403);
-  const xemToanCty = duocXemTab(phien.vai_tro, 'lichsuviec');
+  if (!duocXemTab(phien, 'congviec')) return loi('Bạn không có quyền', 403);
+  const xemToanCty = duocXemTab(phien, 'lichsuviec');
   const toiId = phien.nhan_su_id;
 
   // `nhan_viec_luc` chỉ có sau `va-nhacviec-rev0019.sql`; chưa nạp thì chạy ở
@@ -2691,7 +3198,7 @@ async function cvHomNay(req, env) {
      Anh Duy dùng CÙNG màn này, chỉ khác phạm vi — đúng kênh Kho → anh Duy →
      Sếp, không đẻ định nghĩa "quản lý" thứ hai. */
   const duoiQuyen = new Set((nsDs.results || []).filter(n => n.quan_ly_id === toiId && n.id !== toiId).map(n => n.id));
-  const laOwner = laAdmin(phien.vai_tro);
+  const laOwner = laAdmin(phien);
   let quanLy = null;
   // `xemToanCty` = có tab `lichsuviec`. Đây là NGUỒN quyền của khối này, xem
   // ghi chú ở đầu hàm (REV-0019 L8).
@@ -2780,7 +3287,7 @@ async function cvHomNay(req, env) {
 async function cvNhacTat(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
-  if (!duocXemTab(phien.vai_tro, 'congviec')) return loi('Bạn không có quyền', 403);  // REV-0019 L8
+  if (!duocXemTab(phien, 'congviec')) return loi('Bạn không có quyền', 403);  // REV-0019 L8
   let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
   const tat = b.tat ? 1 : 0;
   // Chỉ đổi được cờ CỦA CHÍNH MÌNH — không có tham số nhận id người khác.
@@ -2868,7 +3375,7 @@ async function cvCapNhat(req, env) {
   // phối hợp làm" (đã thử cho phối hợp thao tác, Sếp yêu cầu hoàn tác lại,
   // giữ đúng 1 đầu mối chịu trách nhiệm báo cáo cho mỗi việc — tinh thần MBOs).
   const laNguoiNhan = cv.nguoi_nhan_id === phien.nhan_su_id;
-  const laNguoiGiao = cv.nguoi_giao_id === phien.nhan_su_id || laAdmin(phien.vai_tro);
+  const laNguoiGiao = cv.nguoi_giao_id === phien.nhan_su_id || laAdmin(phien);
   const laTodoCaNhan = cv.nguoi_nhan_id === cv.nguoi_giao_id;
 
   // TODO CÁ NHÂN: tự giao cho mình thì được đánh dấu XONG thẳng từ bất kỳ đâu
@@ -2927,6 +3434,688 @@ async function cvCapNhat(req, env) {
   return json({ ok: true });
 }
 
+/* ==========================================================================
+   CTL-0017 — SỬA THỨ ĐÃ TẠO RA
+   --------------------------------------------------------------------------
+   Sếp Ngọc nêu HAI lần: "việc giao xong không sửa được", rồi "mục tiêu đã
+   giao không sửa được nữa kìa". Lớp vấn đề KHÔNG phải thiếu một cái nút —
+   mà là TẠO XONG LÀ ĐÓNG BĂNG: gõ nhầm một chữ cũng phải xoá đi làm lại.
+
+   BA NHÓM TRƯỜNG, ba mức khác hẳn nhau. Xếp sai nhóm là hỏng cả lòng tin
+   lẫn số liệu, nên chỗ này ghi rõ VÌ SAO:
+
+   ① SỬA THOẢI MÁI — `tieu_de`, `mo_ta`, `phoi_hop`.
+      Không cái nào là thước đo. Tên việc gõ nhầm chính tả, mô tả viết rõ
+      hơn, thêm một người hỗ trợ — sửa xong không ai bị thiệt, không con số
+      nào lệch. Bắt ghi lý do cho mấy thứ này là hành người dùng, và hành
+      đủ lâu thì họ quay lại thói cũ: huỷ đi giao lại.
+      (`phoi_hop` ở nhóm này vì người phối hợp CHỈ hỗ trợ, không chịu đầu
+      ra và không báo cáo thay — luật đã chốt 20/08/2026 ở `cvCapNhat`.)
+
+   ② SỬA NHƯNG PHẢI GHI VẾT — `dau_ra`, `muc_tieu_id`.
+      `dau_ra` là CAM KẾT ĐẦU RA của MBOs, tức cái thước dùng để nghiệm
+      thu. Đổi thước giữa chừng mà không để lại vết thì sau này không ai
+      dựng lại được là đã nghiệm thu theo chuẩn nào. `muc_tieu_id` đổi thì
+      số đếm "bao nhiêu việc thuộc mục tiêu này" nhảy — mục tiêu bên kia
+      tự dưng hụt một việc mà không ai biết vì sao.
+
+   ③ SỬA, GHI VẾT, VÀ BẮT BUỘC CÓ LÝ DO — `han_chot`, `nguoi_nhan_id`.
+      ⚠️ ĐÂY LÀ CHỖ NGUY HIỂM NHẤT CỦA CẢ ĐỢT NÀY. ERP vừa lên tính năng
+      nhắc việc quá hạn (SPEC-0004). Cho dời hạn thoải mái thì ai cũng dời
+      hạn để KHỎI BỊ NHẮC — và mọi con số "đúng hạn" thành vô nghĩa trong
+      đúng một tuần. Sếp Ngọc quản theo MBOs; hạn chót sửa lén là phá gốc
+      của cách quản đó, không phải phiền một chút.
+      Nên: hạn cũ · hạn mới · ai đổi · LÝ DO — thiếu lý do thì TỪ CHỐI.
+      Và NGƯỜI GIAO PHẢI THẤY: quản lý dời hạn cho nhân viên mình thì người
+      giao việc được báo, không để hai người tự thoả thuận với nhau sau lưng.
+      `nguoi_nhan_id` cùng nhóm vì đổi người nhận là ĐỔI NGƯỜI CHỊU TRÁCH
+      NHIỆM — nặng hơn sửa nội dung.
+
+   ④ KHÔNG ĐƯỢC SỬA — xem `CV_MO_THEO_TRANG_THAI` ngay dưới.
+
+   `trang_thai` và `ket_qua` KHÔNG đi đường này: đã có `cvCapNhat` với luật
+   chuyển trạng thái đang chạy tốt. Hai đường cùng ghi một cột là mời lỗi.
+
+   SỔ GHI: dùng lại `lich_su_thay_doi_nen` — bảng ĐÃ CÓ, đã đúng khuôn
+   (bang/ban_ghi_id/truong/gia_tri_cu/gia_tri_moi/nguoi_id/nguoi_ten/luc).
+   Chỉ nới thêm cột `ly_do` (migrations/them-ly-do-sua.sql). KHÔNG đẻ bảng.
+   ========================================================================== */
+
+/* Mỗi bước cho sửa tới đâu. Đây là bảng LUẬT, không phải danh sách tiện tay.
+
+   `moi`        — người nhận chưa đụng vào, sửa gì cũng chưa ảnh hưởng ai.
+   `dang_lam`   — vẫn sửa được, NHƯNG người nhận đang làm dở theo bản cũ nên
+                  đổi cam kết là phải BÁO HỌ (dưới có). Không cho sửa ở bước
+                  này là cắt quá tay: việc chạy 3 tuần mà phát hiện sai một
+                  chữ trong đầu ra thì chẳng lẽ huỷ cả việc.
+   `cho_duyet`  — người ta ĐÃ NỘP kết quả theo đầu ra cũ. Sửa `dau_ra` /
+                  `han_chot` lúc này là ĐỔI THƯỚC ĐO SAU KHI ĐÃ ĐO XONG —
+                  khoá. Nhưng vẫn cho sửa chính tả tiêu đề/mô tả: mấy cái đó
+                  không phải bằng chứng, khoá luôn mới là cắt quá tay.
+   `hoan_thanh` — đã nghiệm thu. Cả bản ghi là BẰNG CHỨNG. Khoá hẳn.
+   `huy`        — đã đóng sổ. Khoá hẳn. */
+const CV_MO_THEO_TRANG_THAI = {
+  moi:        ['tieu_de', 'mo_ta', 'phoi_hop', 'dau_ra', 'muc_tieu_id', 'han_chot', 'nguoi_nhan_id'],
+  dang_lam:   ['tieu_de', 'mo_ta', 'phoi_hop', 'dau_ra', 'muc_tieu_id', 'han_chot', 'nguoi_nhan_id'],
+  cho_duyet:  ['tieu_de', 'mo_ta', 'phoi_hop'],
+  hoan_thanh: [],
+  huy:        []
+};
+
+/* Trường nào bắt buộc kèm lý do. Chốt LẦN HAI ở CSDL bằng trigger
+   `trg_doi_cam_ket_phai_co_ly_do` — một đường ghi viết sau này sẽ không tự
+   nhớ luật, CSDL thì nhớ. Hai lớp cho đúng một luật, có chủ ý. */
+const CV_CAN_LY_DO = new Set(['han_chot', 'nguoi_nhan_id']);
+/* Trường đổi thì phải BÁO người nhận (và báo người giao nếu quản lý đổi). */
+const CV_BAO_NGUOI_NHAN = new Set(['dau_ra', 'han_chot', 'nguoi_nhan_id', 'muc_tieu_id']);
+
+const NHAN_TRUONG = {
+  tieu_de: 'tên việc', dau_ra: 'đầu ra', mo_ta: 'mô tả', han_chot: 'hạn chót',
+  nguoi_nhan_id: 'người nhận', muc_tieu_id: 'mục tiêu', phoi_hop: 'người phối hợp',
+  /* Nạp file số liệu — không có nhãn thì sổ in ra tên cột trần trụi
+     ("đổi ton_toi_thieu 20 → 30"), mà sổ đọc không hiểu thì bằng không ghi. */
+  ten: 'tên sản phẩm', danh_muc: 'nhóm hàng', don_vi: 'đơn vị tính',
+  ton_toi_thieu: 'tồn tối thiểu', theo_doi_hsd: 'theo dõi hạn dùng'
+};
+
+/* ==========================================================================
+   MỤC TIÊU — CÙNG BỘ LUẬT, RIÊNG BỘ CHỮ (Sếp Ngọc nhắc LẦN THỨ BA:
+   "còn việc sửa mục tiêu sau khi đã giao nữa").
+   --------------------------------------------------------------------------
+   `mtCapNhat` bản trước chỉ nhận `tieu_de` · `mo_ta` · `trang_thai`. Bốn
+   trường còn lại — `cap` · `bo_phan` · `nam` · `quy` — TẠO XONG LÀ ĐÓNG BĂNG,
+   đúng lớp vấn đề Sếp đã nêu ba lần. Đặt sai quý một mục tiêu thì chỉ còn
+   nước xoá đi tạo lại: mất sạch lịch sử, và mọi việc con đang treo vào đó
+   rơi ra ngoài.
+
+   BỐN NHÓM, xếp theo mức nặng dần — cùng thang với `CV_MO_THEO_TRANG_THAI`:
+     ① sửa thoải mái, có vết, KHÔNG hỏi lý do — `tieu_de`, `mo_ta`
+        (gõ nhầm một chữ mà bắt viết lý do thì người ta quay lại thói xoá đi
+         tạo lại, và lúc đó mất sạch lịch sử — CẮT QUÁ TAY CŨNG LÀ HỎNG)
+     ② có vết, KHÔNG hỏi lý do — `bo_phan` (đổi phòng phụ trách)
+     ③ có vết + BẮT BUỘC lý do — `cap`, `nam`, `quy` (xem ba chỗ nguy hiểm dưới)
+     ④ KHOÁ — mục tiêu đã `hoan_thanh`/`huy` khoá phần NỘI DUNG; mục tiêu công
+        ty ĐÃ CHỐT thì khoá hẳn, không mở lại được (đã dùng làm bằng chứng cả
+        quý). Nhóm ④ để đúng MỘT lối ra: `trang_thai` -> `dang_thuc_hien`
+        ("Mở lại"), bắt buộc lý do. Khoá cứng không lối ra thì một cú bấm nhầm
+        nút "Xong" (nút này không có bước xác nhận nào) đóng băng vĩnh viễn cả
+        mục tiêu của quý — lại đúng cái bẫy cắt quá tay ở trên.
+
+   BA CHỖ NGUY HIỂM, mỗi chỗ một cái chốt riêng:
+   ① ĐỔI `nam`/`quy` LÀ ĐỔI KỲ BÁO CÁO. Mục tiêu quý 3 sang quý 4 thì SỐ LIỆU
+      HAI QUÝ ĐỀU ĐỔI — quý 3 hụt đi một mục tiêu, quý 4 tự nhiên mọc thêm
+      một cái không ai bàn. `mtDanhSach` lọc cứng theo `nam`/`quy`, nên với
+      người đang mở Trạm Mục Tiêu quý 3 thì mục tiêu đó BIẾN MẤT. Vết phải đủ
+      để dựng lại (cũ · mới · ai · lý do) và NGƯỜI ĐẶT MỤC TIÊU phải được báo.
+   ② ĐỔI `cap` LÀ ĐỔI AI NHÌN THẤY NÓ. `mtDanhSach` chỉ trả mục tiêu cấp
+      `ca_nhan` cho CHÍNH người tạo. Hạ một mục tiêu công ty xuống cá nhân là
+      GIẤU NÓ KHỎI TOÀN CÔNG TY mà không xoá dòng nào — nhìn từ CSDL chẳng mất
+      gì, nhìn từ màn hình đồng nghiệp thì nó bốc hơi. Vì thế: bắt lý do, và
+      chỉ CHỦ mục tiêu (hoặc Admin) mới đổi được cấp — quản lý cấp trên KHÔNG,
+      cùng lẽ với `dau_ra` ở `cvSua` (không tự đổi phạm vi công khai cam kết
+      của người khác). Nâng lên `cong_ty` vẫn chỉ Admin, y hệt `mtTao` — nếu
+      không thì cửa sửa này là đường vòng để lách đúng cái chốt đó.
+   ③ VIỆC ĐANG GẮN VÀO. `cong_viec.muc_tieu_id` trỏ THẲNG vào id mục tiêu,
+      KHÔNG đi qua `cap`/`bo_phan`/`nam`/`quy` — nên đổi mấy trường này KHÔNG
+      làm việc con mồ côi, dây nối vẫn nguyên (ĐÃ ĐO, không đoán —
+      `do-sua-muc-tieu-day-du.mjs` mục ⑤). Cái mất là TẦM NHÌN: thẻ mục tiêu
+      rời khỏi màn hình người khác trong khi N việc vẫn đang chạy dưới nó. Nên
+      trả `so_viec` về cho giao diện cảnh báo TRƯỚC khi bấm Lưu, không im lặng.
+   ========================================================================== */
+const MT_NHAN = {
+  tieu_de: 'tên mục tiêu', mo_ta: 'mô tả', cap: 'cấp mục tiêu',
+  bo_phan: 'phòng ban phụ trách', nam: 'năm', quy: 'quý', trang_thai: 'trạng thái'
+};
+const MT_CAP_DOC = { cong_ty: 'Công ty', phong_ban: 'Phòng ban', ca_nhan: 'Cá nhân' };
+const MT_TT_DOC = { dang_thuc_hien: 'Đang thực hiện', hoan_thanh: 'Hoàn thành', huy: 'Đã huỷ' };
+/* Nhóm ③ — đổi cam kết của cả kỳ thì phải nói vì sao. `bo_phan` CỐ Ý KHÔNG
+   nằm đây: đổi phòng phụ trách là điều phối bình thường, bắt lý do là cắt quá
+   tay. `trang_thai` cũng không nằm đây — trừ đúng một nước MỞ LẠI mục tiêu đã
+   đóng sổ, chốt riêng trong `mtCapNhat`. */
+const MT_CAN_LY_DO = new Set(['cap', 'nam', 'quy']);
+/* Đổi thì NGƯỜI ĐẶT MỤC TIÊU phải biết — MỘT tin GỘP, không phải một tin mỗi
+   trường (bốn tin cho một lần sửa thì lần sau họ tắt chuông, và mất luôn cảnh
+   báo quá hạn đang chạy tốt — đúng lẽ đã dùng ở `cvSua`). */
+const MT_BAO_NGUOI_TAO = new Set(['cap', 'bo_phan', 'nam', 'quy', 'trang_thai']);
+
+/* 'YYYY-MM-DD' -> 'DD/MM/YYYY'. Lịch sử để NGƯỜI đọc, không phải máy đọc. */
+function ngayDoc(s) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s || '').trim());
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : (s == null || s === '' ? '(trống)' : String(s));
+}
+
+/* Một dòng lịch sử -> MỘT CÂU TIẾNG VIỆT ĐỌC ĐƯỢC. Sếp mở ra phải hiểu ngay,
+   không phải đoán mã máy:
+     "Vũ Lan Hương đổi hạn chót 30/08/2026 → 05/09/2026 — lý do: chờ NCC gửi
+      báo giá"
+   Dựng ở MÁY CHỦ chứ không ở trình duyệt: cùng một câu cho web, cho thông
+   báo, cho bản tin — một chỗ sửa, không ba chỗ lệch nhau. */
+function cauSuaDoc(d, bang) {
+  /* Hai vết KHÔNG phải "đổi A thành B" nên có câu riêng — ép chúng vào khuôn
+     chung ra những câu vô nghĩa kiểu *"Sếp đổi go 'lời khen' → (trống)"*, mà
+     một dòng sổ đọc không hiểu thì đúng bằng không ghi (REV-0037 · L5, L9). */
+  if (d.truong === 'viec_gan') {
+    return d.gia_tri_moi
+      ? `${d.nguoi_ten} gắn việc "${d.gia_tri_moi}" vào mục tiêu này`
+      : `${d.nguoi_ten} gỡ việc "${d.gia_tri_cu}" khỏi mục tiêu này`;
+  }
+  if (d.truong === 'go') return `${d.nguoi_ten} đã gỡ lời khen: "${d.gia_tri_cu}"`;
+  /* NHẬN XÉT (GY-0005) — cũng KHÔNG phải "đổi A thành B". Ép vào khuôn chung
+     ra câu *"đổi nhan_xet (trống) → làm tốt phần đóng gói"*, đọc không hiểu,
+     mà một dòng sổ đọc không hiểu thì đúng bằng không ghi. */
+  if (d.truong === 'nhan_xet') return `${d.nguoi_ten} nhận xét: "${d.gia_tri_moi}"`;
+
+  /* Vết NẠP TỪ FILE cũng không phải "đổi A thành B": đây là dòng được TẠO
+     RA từ một file. Ép vào khuôn chung ra câu "đổi nap_file (trống) → SP-001",
+     đọc không ra nghĩa gì. */
+  if (d.truong === 'nap_file') {
+    /* Vết của lượt nạp TỒN KHO còn mang trạng thái ở `gia_tri_moi`, vì nó là
+       cái mốc để gỡ lại cả lượt (xem `huyLuotNap`). Ba trạng thái, ba câu —
+       ép cả ba vào một khuôn ra câu 'nạp "đã gỡ" vào ERP', đọc không ra
+       nghĩa. */
+    if (d.gia_tri_moi === 'đã gỡ') {
+      return `${d.nguoi_ten} nạp một lượt tồn kho từ file, sau đó lượt này ĐÃ ĐƯỢC GỠ khỏi sổ cái` +
+             (d.ly_do ? ` — ${d.ly_do}` : '');
+    }
+    if (d.gia_tri_moi === 'đang ghi') {
+      return `${d.nguoi_ten} bắt đầu nạp một lượt tồn kho từ file — lượt này CHƯA GHI XONG` +
+             (d.ly_do ? ` — ${d.ly_do}` : '');
+    }
+    return `${d.nguoi_ten} nạp "${d.gia_tri_moi}" vào ERP từ file` +
+           (d.ly_do ? ` — ${d.ly_do}` : '');
+  }
+
+  /* CÙNG MỘT TÊN CỘT, HAI NGHĨA KHÁC NHAU. `tieu_de` ở `cong_viec` là "tên
+     việc", ở `muc_tieu` là "tên mục tiêu" — in nhầm thì Sếp mở sổ mục tiêu
+     ra đọc thấy "đổi tên việc", tưởng đang xem nhầm bản ghi. Nên nhãn tra
+     theo BẢNG trước, rơi về nhãn chung sau. */
+  const laMt = bang === 'muc_tieu';
+  const nhan = (laMt && MT_NHAN[d.truong]) || NHAN_TRUONG[d.truong] || d.truong;
+  /* Mã máy (`cong_ty`, `dang_thuc_hien`) không phải thứ để Sếp đọc — dịch
+     ngay tại chỗ dựng câu, một chỗ cho cả web lẫn thông báo. */
+  const doc = (bang_, v) => (bang_ && bang_[v]) || (v == null || v === '' ? '(trống)' : String(v));
+  const la = d.truong === 'han_chot' ? ngayDoc
+    : d.truong === 'cap' ? (v) => doc(MT_CAP_DOC, v)
+    : d.truong === 'trang_thai' ? (v) => doc(MT_TT_DOC, v)
+    : (v) => doc(null, v);
+  const than = `${d.nguoi_ten} đổi ${nhan} ${la(d.gia_tri_cu)} → ${la(d.gia_tri_moi)}`;
+  return d.ly_do ? `${than} — lý do: ${d.ly_do}` : than;
+}
+
+/* Người này có phải CẤP TRÊN của người kia không — đi ngược chuỗi
+   `nhan_su.quan_ly_id`. Đúng kênh báo cáo Sếp Ngọc đã chốt cho kho:
+   nhân sự kho -> anh Duy -> Sếp. Anh Duy phải dời được hạn cho team mình
+   mà không phải chạy lên Sếp; nhưng anh KHÔNG sửa được `dau_ra` (xem dưới).
+   Chặn vòng lặp bằng trần 6 bước — công ty 20 người, sâu quá 6 cấp là dữ
+   liệu hỏng chứ không phải sơ đồ thật; đi vô hạn ở đây là treo cả request. */
+async function laCapTrenCua(env, nguoiId, nhanVienId) {
+  if (!nguoiId || !nhanVienId || nguoiId === nhanVienId) return false;
+  let hienTai = nhanVienId;
+  for (let i = 0; i < 6; i++) {
+    const r = await env.DB.prepare('SELECT quan_ly_id FROM nhan_su WHERE id = ?').bind(hienTai).first();
+    const ql = r?.quan_ly_id || null;
+    if (!ql) return false;
+    if (ql === nguoiId) return true;
+    hienTai = ql;
+  }
+  return false;
+}
+
+/* Đọc lịch sử sửa của MỘT bản ghi — dùng chung cho MỌI thực thể
+   (bang = 'cong_viec' | 'muc_tieu' | ...). MỘT cửa cho cả lớp, không đẻ mỗi
+   module một cửa. Trả kèm `cau` đã dựng sẵn để giao diện chỉ việc in ra. */
+/* Thêm 'san_pham' + 'giao_dich_kho': nạp file ghi vết vào `lich_su_thay_doi_nen`
+   như mọi thay đổi khác, nên phải mở đường ĐỌC lại — nếu không thì ghi vết có
+   mà không ai tra được, tức là không có ghi vết. */
+const SUA_BANG_HOP_LE = new Set(['cong_viec', 'muc_tieu', 'san_pham', 'giao_dich_kho']);
+/* Lọc theo LOẠI VẾT — `?truong=nhan_xet`.
+   ---------------------------------------------------------------------------
+   VÌ SAO PHẢI CÓ (REV-0061 · CHẶN-1). Sổ sửa và sổ nhận xét dùng CHUNG một
+   bảng, mà trần 100 dòng cũng dùng chung. Một việc chạy dài có 110 lần sửa
+   bình thường thì 3 câu nhận xét viết từ tháng 6 — LUÔN là dòng CŨ NHẤT —
+   rơi ra ngoài trần trước tiên, và hộp Nhận xét in ra "Chưa có nhận xét nào
+   cho việc này". Không phải để trống: KHẲNG ĐỊNH SAI.
+
+   Vá bằng dải cắt thôi thì chưa đủ — dải cắt chỉ nói "còn N dòng nữa", trong
+   khi thứ rơi mất là TOÀN BỘ nhận xét. Nên chữa ở tầng bệnh: hỏi RIÊNG loại
+   vết mình cần, để lời nhận xét về một con người không bao giờ bị đẩy ra khỏi
+   màn hình vì ai đó sửa việc nhiều lần. Trần 100 khi ấy là 100 NHẬN XÉT của
+   một việc — con số không đời nào chạm tới; mà chạm thì `cat` nói đúng số
+   nhận xét, không phải số dòng sổ.
+
+   Danh sách trắng chứ không nhận chuỗi tự do: `truong` đi thẳng vào WHERE
+   (đã tham số hoá, nhưng cửa nào cũng nên đóng cả hai lớp), và một tên trường
+   gõ sai mà trả về rỗng thì lại đúng cái "màn hình khẳng định sai" đang chữa. */
+/* CHỐT THEO CẶP `bang × truong`, KHÔNG hai danh sách trắng rời (REV-0061
+   vòng 2 · THẤP-1). Hai danh sách rời thì `?bang=muc_tieu&truong=nhan_xet`
+   qua được cả hai cửa rồi trả rỗng kèm HTTP 200 — hôm nay vô hại vì mục tiêu
+   chưa có nhận xét, nhưng ngày ai thêm nhận xét cho mục tiêu mà quên nối vào
+   đây thì màn hình in "chưa có nhận xét nào" ĐÚNG KIỂU CHẶN-1: rỗng vì hỏi
+   sai cửa, mà nói như thể đã hỏi đúng. Thêm loại vết cho một bảng thì thêm
+   vào ĐÚNG dòng của bảng ấy. */
+const SUA_TRUONG_LOC = new Map([
+  ['cong_viec', new Set(['nhan_xet'])],
+  ['muc_tieu', new Set()],
+  /* Hai bảng của nhánh nạp file. Chưa có loại vết nào lọc riêng, nhưng phải
+     CÓ DÒNG của mình ở đây — thiếu dòng thì `SUA_TRUONG_LOC.get(bang)` là
+     `undefined`, và cái `|| new Set()` bên dưới lại biến một bảng chưa khai
+     báo thành "hợp lệ nhưng rỗng", đúng kiểu khẳng định sai mà chốt này dựng
+     lên để cấm. Có dòng rỗng thì `?truong=` bất kỳ bị từ chối rõ ràng. */
+  ['san_pham', new Set()],
+  ['giao_dich_kho', new Set()]
+]);
+async function suaLichSu(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  const u = new URL(req.url);
+  const bang = String(u.searchParams.get('bang') || '').trim();
+  const truong = String(u.searchParams.get('truong') || '').trim();
+  if (!SUA_BANG_HOP_LE.has(bang)) return loi('Bảng không hợp lệ');
+
+  /* Mã bản ghi: `cong_viec`/`muc_tieu` dùng số, còn `san_pham`/`giao_dich_kho`
+     dùng chữ (`sp_ab12…`, `pn_ab12…`). Bản cũ `parseInt()` cho mọi bảng, nên
+     mã chữ thành NaN và cửa này trả "Thiếu id bản ghi" — ghi vết có mà không
+     tra được, tức là KHÔNG có ghi vết. Cột `ban_ghi_id` vốn là TEXT và câu
+     đọc bên dưới đã `String(id)` sẵn, nên chỉ chỗ KIỂM này cần nới. */
+  const BANG_MA_SO = new Set(['cong_viec', 'muc_tieu']);
+  const idTho = String(u.searchParams.get('id') || '').trim();
+  const id = BANG_MA_SO.has(bang) ? parseInt(idTho, 10) : idTho;
+  if (!id) return loi('Thiếu id bản ghi');
+  if (truong && !(SUA_TRUONG_LOC.get(bang) || new Set()).has(truong)) {
+    return loi(`Bảng "${bang}" không có loại vết "${truong}"`);
+  }
+  /* Quyền XEM đi theo quyền xem của chính thực thể đó. Trạm Mục Tiêu vốn đã
+     minh bạch toàn công ty (tinh thần MBOs) — ai xem được việc thì xem được
+     lịch sử sửa của việc đó. Cái phải siết là quyền SỬA, không phải quyền
+     BIẾT ai đã sửa; giấu vết sửa đi thì đúng bằng không ghi vết.
+     Cùng lẽ đó: vết của `san_pham`/`giao_dich_kho` đi theo quyền xem KHO VẬN
+     (hoặc Kinh doanh — hai chủ của danh mục mã hàng), không đi theo Công việc. */
+  const TAB_CUA_BANG = {
+    cong_viec: ['congviec'], muc_tieu: ['congviec'],
+    san_pham: ['khovan', 'kinhdoanh'], giao_dich_kho: ['khovan']
+  };
+  if (!(TAB_CUA_BANG[bang] || ['congviec']).some(t => duocXemTab(phien, t))) {
+    return loi('Bạn không có quyền', 403);
+  }
+
+  /* CẮT THÌ PHẢI NÓI LÀ ĐÃ CẮT — và ở ĐÂY thì gắt hơn mọi màn khác.
+     Đây là SỔ BẰNG CHỨNG: cả nhánh CTL-0017 đứng trên lời hứa "sửa được
+     nhưng để lại vết". Một sổ bằng chứng cắt im lặng thì lời hứa đó thành
+     lời nói dối theo đúng cách nguy hiểm nhất — dời hạn thêm 100 lần là lần
+     dời ĐẦU TIÊN (chỗ ai cũng muốn giấu) rơi khỏi màn hình, mà màn hình vẫn
+     nói "đây là tất cả". VÌ THẾ KHÔNG XIN MIỄN TRỪ: miễn trừ ở chỗ này là
+     tự tay đục lỗ vào thứ mình vừa dựng lên. Dùng đúng khuôn `catBot`/
+     `nhanCat` đã có — hỏi thừa 1 dòng, chỉ đếm khi thật sự chạm trần. */
+  const GH = 100;
+  /* `ly_do` là cột migration `them-ly-do-sua.sql` mới thêm. Deploy có thể
+     chạy TRƯỚC migration (REV-0037 · L2) — đọc phòng thủ để cửa này hỏng
+     theo chiều an toàn: mất cột lý do chứ không mất cả sổ. */
+  /* Lọc nằm TRONG câu SQL, không lọc sau khi đã cắt — lọc sau trần là đúng
+     cái lỗi CHẶN-1 chép lại một tầng thấp hơn. */
+  const locTruong = truong ? ' AND truong = ?' : '';
+  const thamSo = truong ? [bang, String(id), truong] : [bang, String(id)];
+  const cauDoc = (coLyDo) => `
+    SELECT truong, gia_tri_cu, gia_tri_moi, nguoi_id, nguoi_ten,
+           ${coLyDo ? 'ly_do' : 'NULL AS ly_do'}, luc
+      FROM lich_su_thay_doi_nen WHERE bang = ? AND ban_ghi_id = ?${locTruong}
+     ORDER BY luc DESC, id DESC LIMIT ${GH + 1}`;
+  let kq;
+  try {
+    kq = await env.DB.prepare(cauDoc(true)).bind(...thamSo).all();
+  } catch (e) {
+    if (!/no such column/i.test(String(e && e.message || e))) throw e;
+    kq = await env.DB.prepare(cauDoc(false)).bind(...thamSo).all();
+  }
+  const { ds, biCat } = catBot(kq, GH);
+  const cat = await nhanCat(env, biCat, GH,
+    `SELECT COUNT(*) AS n FROM lich_su_thay_doi_nen WHERE bang = ? AND ban_ghi_id = ?${locTruong}`,
+    thamSo, null);
+  return json({ ds: ds.map(d => ({ ...d, cau: cauSuaDoc(d, bang) })), cat });
+}
+
+/* SỬA NỘI DUNG VIỆC ĐÃ GIAO.
+   CẮT Ở MÁY CHỦ, KHÔNG ẨN NÚT: mọi luật dưới đây đều chạy trên đường API,
+   nên gọi thẳng bằng curl cũng bị chặn y hệt bấm trên màn hình. Ẩn nút mà
+   không chốt cửa là mời người ta gọi API tay. */
+async function cvSua(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  if (!duocXemTab(phien, 'congviec')) return loi('Bạn không có quyền', 403);
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  const id = parseInt(b.id, 10);
+  if (!id) return loi('Thiếu id công việc');
+
+  const cv = await env.DB.prepare('SELECT * FROM cong_viec WHERE id = ?').bind(id).first();
+  if (!cv) return loi('Không tìm thấy công việc', 404);
+
+  const moTrongBuoc = CV_MO_THEO_TRANG_THAI[cv.trang_thai] || [];
+  if (!moTrongBuoc.length) {
+    return loi(cv.trang_thai === 'hoan_thanh'
+      ? 'Việc đã nghiệm thu xong — bản ghi này là bằng chứng, không sửa được nữa'
+      : 'Việc đã huỷ, không sửa được nữa', 409);
+  }
+
+  /* --- AI ĐƯỢC SỬA ---
+     · người giao (và Admin) — chủ của cam kết, sửa được mọi thứ bước cho.
+     · quản lý cấp trên của người NHẬN — sửa được mọi thứ TRỪ `dau_ra`.
+       Vì sao trừ: `dau_ra` là cam kết giữa NGƯỜI GIAO và người nhận. Quản
+       lý hạ chuẩn nghiệm thu cho nhân viên mình là đúng cái xung đột lợi
+       ích mà MBOs sinh ra để chặn. Nhưng dời hạn / đổi người thì anh phải
+       làm được — đó là việc điều phối hằng ngày của anh, và đã có lý do
+       bắt buộc + người giao được báo nên không giấu được ai.
+     · NGƯỜI NHẬN việc của người khác — KHÔNG sửa được gì. Cho họ sửa
+       `dau_ra` là cho tự hạ chuẩn; cho sửa `han_chot` là cho tự gia hạn để
+       thoát nhắc quá hạn. Cả hai đều làm số "đúng hạn" thành vô nghĩa.
+     · TODO CÁ NHÂN (tự giao cho mình) rơi vào nhánh "người giao" ở trên —
+       tự sửa todo của mình thoải mái, không phiền ai. */
+  const laNguoiGiao = cv.nguoi_giao_id === phien.nhan_su_id || laAdmin(phien);
+  const laQuanLy = !laNguoiGiao && await laCapTrenCua(env, phien.nhan_su_id, cv.nguoi_nhan_id);
+  if (!laNguoiGiao && !laQuanLy) {
+    return loi(cv.nguoi_nhan_id === phien.nhan_su_id
+      ? 'Bạn là người nhận việc — muốn đổi đầu ra hay hạn chót thì báo người giao việc, không tự sửa được'
+      : 'Chỉ người giao việc hoặc quản lý cấp trên của người nhận mới sửa được', 403);
+  }
+
+  const lyDo = String(b.ly_do || '').trim().slice(0, 500);
+  const doi = [];       // [{ truong, cu, moi }]  — để ghi lịch sử
+  const cot = {};       // { cột: giá trị }        — để UPDATE
+
+  /* Chỉ nhận trường CÓ GỬI LÊN. Không gửi = không đụng tới — nên sửa mỗi
+     tiêu đề sẽ KHÔNG vô tình xoá trắng mô tả. */
+  const xin = (t) => b[t] !== undefined && b[t] !== null;
+  /* ⚠️ `chan()` PHẢI GỌI SAU KHI ĐÃ BIẾT TRƯỜNG ĐÓ CÓ THẬT SỰ ĐỔI KHÔNG
+     (REV-0037 · L10). Gọi trước thì gửi lại `han_chot` Y HỆT giá trị cũ ở
+     bước `cho_duyet` cũng ăn 409 — người dùng bị từ chối vì một thứ họ không
+     hề đổi. Giao diện hiện đang giấu ô đó nên chưa ai gặp, nhưng đây là loại
+     lỗi chỉ chờ mở thêm một ô là lòi ra, và lúc đó câu lỗi sẽ vô nghĩa hoàn
+     toàn với người đọc. Cùng lẽ với cửa lý do: chốt SAU khi đã biết đổi gì. */
+  const chan = (t) => {
+    if (!moTrongBuoc.includes(t)) {
+      return loi(`Việc đang ở bước "${cv.trang_thai}" — không sửa được ${NHAN_TRUONG[t]} nữa`, 409);
+    }
+    if (t === 'dau_ra' && !laNguoiGiao) {
+      return loi('Chỉ người giao việc mới sửa được đầu ra — quản lý không hạ chuẩn nghiệm thu thay người giao', 403);
+    }
+    return null;
+  };
+
+  if (xin('tieu_de')) {
+    const v = String(b.tieu_de).trim().slice(0, 200);
+    if (!v) return loi('Tên việc không được để trống');
+    if (v !== cv.tieu_de) {
+      const c = chan('tieu_de'); if (c) return c;
+      doi.push({ truong: 'tieu_de', cu: cv.tieu_de, moi: v }); cot.tieu_de = v;
+    }
+  }
+  if (xin('dau_ra')) {
+    const v = String(b.dau_ra).trim().slice(0, 1000);
+    // Đầu ra rỗng chỉ chấp nhận với todo cá nhân — đúng luật `cvTao`.
+    if (!v && cv.nguoi_nhan_id !== cv.nguoi_giao_id) {
+      return loi('Thiếu đầu ra cụ thể cần đạt — đừng chỉ ghi "làm gì", ghi rõ xong thì kết quả ra sao');
+    }
+    if (v !== (cv.dau_ra || '')) {
+      const c = chan('dau_ra'); if (c) return c;
+      doi.push({ truong: 'dau_ra', cu: cv.dau_ra, moi: v }); cot.dau_ra = v;
+    }
+  }
+  if (xin('mo_ta')) {
+    const v = String(b.mo_ta).trim().slice(0, 2000) || null;
+    if (v !== (cv.mo_ta || null)) {
+      const c = chan('mo_ta'); if (c) return c;
+      doi.push({ truong: 'mo_ta', cu: cv.mo_ta, moi: v }); cot.mo_ta = v;
+    }
+  }
+  if (xin('han_chot')) {
+    const v = String(b.han_chot).trim() || null;
+    if (v && !/^\d{4}-\d{2}-\d{2}$/.test(v)) return loi('Hạn chót phải dạng YYYY-MM-DD');
+    if (v !== (cv.han_chot || null)) {
+      const c = chan('han_chot'); if (c) return c;
+      doi.push({ truong: 'han_chot', cu: cv.han_chot, moi: v }); cot.han_chot = v;
+    }
+  }
+  if (xin('muc_tieu_id')) {
+    const n = b.muc_tieu_id === '' ? null : (parseInt(b.muc_tieu_id, 10) || null);
+    if (n !== (cv.muc_tieu_id || null)) {
+      const c = chan('muc_tieu_id'); if (c) return c;
+      let ten = null;
+      if (n) {
+        const mt = await env.DB.prepare('SELECT tieu_de FROM muc_tieu WHERE id = ?').bind(n).first();
+        if (!mt) return loi('Không tìm thấy mục tiêu này', 404);
+        ten = mt.tieu_de;
+      }
+      let tenCu = null;
+      if (cv.muc_tieu_id) {
+        const o = await env.DB.prepare('SELECT tieu_de FROM muc_tieu WHERE id = ?').bind(cv.muc_tieu_id).first();
+        tenCu = o?.tieu_de || `#${cv.muc_tieu_id}`;
+      }
+      // Lưu TÊN chứ không lưu id: lịch sử phải đọc được mà không cần tra bảng.
+      doi.push({ truong: 'muc_tieu_id', cu: tenCu, moi: ten });
+      cot.muc_tieu_id = n;
+    }
+  }
+  let nguoiNhanCu = null;
+  if (xin('nguoi_nhan_id')) {
+    const v = String(b.nguoi_nhan_id).trim();
+    if (!v) return loi('Chưa chọn người nhận việc');
+    if (v !== cv.nguoi_nhan_id) {
+      const c = chan('nguoi_nhan_id'); if (c) return c;
+      const ns = await env.DB.prepare('SELECT ho_ten FROM nhan_su WHERE id = ?').bind(v).first();
+      if (!ns) return loi('Không tìm thấy người nhận việc', 404);
+      nguoiNhanCu = cv.nguoi_nhan_id;
+      doi.push({ truong: 'nguoi_nhan_id', cu: cv.nguoi_nhan_ten, moi: ns.ho_ten });
+      cot.nguoi_nhan_id = v;
+      cot.nguoi_nhan_ten = ns.ho_ten;   // cột đọng — đổi id mà quên tên là sổ ghi sai tên
+    }
+  }
+  if (xin('phoi_hop') && Array.isArray(b.phoi_hop)) {
+    const nguoiNhanMoi = cot.nguoi_nhan_id || cv.nguoi_nhan_id;
+    const ids = [...new Set(b.phoi_hop.map(x => String(x).trim()).filter(Boolean))];
+    const list = [];
+    for (const pid of ids) {
+      if (pid === nguoiNhanMoi || pid === cv.nguoi_giao_id) continue;
+      const p = await env.DB.prepare('SELECT ho_ten FROM nhan_su WHERE id = ?').bind(pid).first();
+      if (p) list.push({ id: pid, ten: p.ho_ten });
+    }
+    const idsMoi = list.length ? ',' + list.map(p => p.id).join(',') + ',' : null;
+    const tenMoi = list.length ? list.map(p => p.ten).join(', ') : null;
+    if (idsMoi !== (cv.phoi_hop_ids || null)) {
+      const c = chan('phoi_hop'); if (c) return c;
+      doi.push({ truong: 'phoi_hop', cu: cv.phoi_hop_ten, moi: tenMoi });
+      cot.phoi_hop_ids = idsMoi;
+      cot.phoi_hop_ten = tenMoi;
+    }
+  }
+
+  if (!doi.length) return loi('Không có gì thay đổi');
+
+  /* ⚠️ CỬA LÝ DO — chốt CUỐI CÙNG, sau khi đã biết đổi những gì.
+     Chốt sớm hơn thì "gửi han_chot y hệt giá trị cũ" cũng bị đòi lý do, và
+     người dùng học được cách gõ lý do vu vơ cho xong — luật thành hình thức. */
+  const canLyDo = doi.filter(d => CV_CAN_LY_DO.has(d.truong));
+  if (canLyDo.length && lyDo.length < 5) {
+    return loi(`Đổi ${canLyDo.map(d => NHAN_TRUONG[d.truong]).join(' và ')} thì phải ghi lý do — đây là đổi cam kết, cả công ty nhìn vào con số "đúng hạn" này`, 400);
+  }
+
+  /* --- GHI: MỘT LƯỢT `batch`, KHÔNG PHẢI N LƯỢT ---
+     Hạn mức ghi D1 vừa vá xong hôm nay (REV-0031) — đẻ đường ghi dày ở đây
+     là tự bắn vào chân. Số dòng ghi = 1 (UPDATE cong_viec) + số TRƯỜNG THẬT
+     SỰ đổi. Sửa một lỗi chính tả = ĐÚNG 2 dòng, không thông báo. */
+  const nguoiSuaTen = phien.ho_ten || phien.ten_dang_nhap;
+  const lenh = [];
+  const setCot = Object.keys(cot).map(k => `${k} = ?`).join(', ');
+  lenh.push(env.DB.prepare(
+    `UPDATE cong_viec SET ${setCot}, cap_nhat_luc = datetime('now','+7 hours') WHERE id = ?`
+  ).bind(...Object.values(cot), id));
+  const ghiVet = env.DB.prepare(
+    `INSERT INTO lich_su_thay_doi_nen (bang, ban_ghi_id, truong, gia_tri_cu, gia_tri_moi,
+                                       nguoi_id, nguoi_ten, ly_do, luc)
+     VALUES ('cong_viec', ?, ?, ?, ?, ?, ?, ?, datetime('now','+7 hours'))`
+  );
+  for (const d of doi) {
+    /* `String(id)` KHÔNG phải thừa: `lich_su_thay_doi_nen.ban_ghi_id` là cột
+       TEXT (nó vốn đựng id chuỗi kiểu 'ns_...'), mà `id` ở đây là số. Bàn đo
+       bắt được: nhét số vào cột TEXT ra chuỗi "2.0", nên câu đọc lịch sử
+       `WHERE ban_ghi_id = '2'` KHÔNG khớp dòng nào — ghi vết đủ mà đọc ra
+       rỗng, tức là coi như không ghi. Ép kiểu ngay tại chỗ ghi.
+       Lý do chỉ đính vào ĐÚNG dòng cần nó — dán lý do "dời hạn" lên cả dòng
+       sửa chính tả là làm bẩn sổ, đọc lại tưởng sửa tiêu đề cũng có lý do. */
+    lenh.push(ghiVet.bind(String(id), d.truong, d.cu, d.moi, phien.nhan_su_id, nguoiSuaTen,
+                          CV_CAN_LY_DO.has(d.truong) ? lyDo : null));
+  }
+
+  /* ĐỔI MỤC TIÊU THÌ SỔ CỦA MỤC TIÊU CŨNG PHẢI BIẾT (REV-0037 · L9).
+     Vết ở trên ghi vào `bang='cong_viec'` — đúng chỗ cho người mở THẺ VIỆC,
+     nhưng SAI chỗ cho người mở THẺ MỤC TIÊU. Mà người đi tìm câu hỏi "sao
+     mục tiêu quý này tự nhiên hụt một việc?" thì mở mục tiêu, không mở việc.
+     Trước bản này cả hai mục tiêu (bên mất việc và bên nhận việc) đều có sổ
+     sửa RỖNG — đúng cái rủi ro tôi tự nêu ra để biện minh cho việc ghi vết.
+     Ghi thêm ĐÚNG 1 dòng cho mỗi mục tiêu bị ảnh hưởng, và chỉ khi thật sự
+     đổi — không đụng tới hạn mức ghi của đường sửa thường ngày. */
+  const dMt = doi.find(d => d.truong === 'muc_tieu_id');
+  if (dMt) {
+    const ghiVetMt = env.DB.prepare(
+      `INSERT INTO lich_su_thay_doi_nen (bang, ban_ghi_id, truong, gia_tri_cu, gia_tri_moi,
+                                         nguoi_id, nguoi_ten, luc)
+       VALUES ('muc_tieu', ?, 'viec_gan', ?, ?, ?, ?, datetime('now','+7 hours'))`);
+    const tenViec = cot.tieu_de || cv.tieu_de;
+    if (cv.muc_tieu_id) {   // mục tiêu VỪA MẤT một việc
+      lenh.push(ghiVetMt.bind(String(cv.muc_tieu_id), tenViec, null, phien.nhan_su_id, nguoiSuaTen));
+    }
+    if (cot.muc_tieu_id) {  // mục tiêu VỪA NHẬN một việc
+      lenh.push(ghiVetMt.bind(String(cot.muc_tieu_id), null, tenViec, phien.nhan_su_id, nguoiSuaTen));
+    }
+  }
+  await env.DB.batch(lenh);
+
+  /* --- BÁO AI ---
+     MỘT tin gộp cho mỗi người, không phải một tin mỗi trường: người nhận sửa
+     4 trường mà ăn 4 thông báo thì lần sau họ tắt chuông, và lúc đó mất luôn
+     cảnh báo quá hạn đang chạy tốt. Dùng lại `guiThongBao()` sẵn có, đi vào
+     đúng bộ chống làm phiền của SPEC-0004, KHÔNG dựng cơ chế thứ hai. */
+  const dangKe = doi.filter(d => CV_BAO_NGUOI_NHAN.has(d.truong));
+  if (dangKe.length) {
+    const tomTat = dangKe.map(d => cauSuaDoc({
+      truong: d.truong, gia_tri_cu: d.cu, gia_tri_moi: d.moi,
+      nguoi_ten: nguoiSuaTen, ly_do: CV_CAN_LY_DO.has(d.truong) ? lyDo : null
+    })).join('; ');
+    const tenViec = cot.tieu_de || cv.tieu_de;
+    const nguoiNhanMoi = cot.nguoi_nhan_id || cv.nguoi_nhan_id;
+    await guiThongBao(env, null, `Việc "${tenViec}" vừa đổi: ${tomTat}`,
+                      'cong_viec_sua', String(id), nguoiNhanMoi);
+    // Người nhận CŨ cũng phải biết mình không còn giữ việc này — không thì
+    // họ vẫn ngồi làm một việc đã sang tay người khác.
+    if (nguoiNhanCu) {
+      await guiThongBao(env, null,
+        `${nguoiSuaTen} đã chuyển việc "${tenViec}" sang cho ${cot.nguoi_nhan_ten}. Lý do: ${lyDo}`,
+        'cong_viec_sua', String(id), nguoiNhanCu);
+    }
+    /* NGƯỜI GIAO PHẢI THẤY — đây là cửa chống thoả thuận sau lưng. Quản lý
+       dời hạn cho nhân viên mình thì người giao việc được báo NGAY, không
+       phải đi soi lịch sử mới biết cam kết đã đổi. */
+    if (!laNguoiGiao) {
+      await guiThongBao(env, null,
+        `${nguoiSuaTen} (quản lý) vừa đổi việc bạn giao — "${tenViec}": ${tomTat}`,
+        'cong_viec_sua', String(id), cv.nguoi_giao_id);
+    }
+  }
+
+  return json({ ok: true, da_doi: doi.map(d => d.truong), so_dong_ghi: lenh.length });
+}
+
+/* ==========================================================================
+   NHẬN XÉT MỘT VIỆC ĐÃ GIAO — GY-0005
+   ---------------------------------------------------------------------------
+   Sếp Ngọc: *"Cần thêm nút hoặc mục nhận xét để nhận xét công việc của người
+   được giao."*
+
+   HAI CHỐT THIẾT KẾ, cả hai đều là chốt QUẢN TRỊ chứ không phải chốt kỹ thuật:
+
+   ① NHẬN XÉT GẮN VÀO MỘT VIỆC, KHÔNG GẮN VÀO MỘT NGƯỜI. Công ty quản theo
+      MBOs — chấm ĐẦU RA, không chấm con người. Một ô chữ tự do treo trên hồ
+      sơ nhân sự là lời phán về tính cách; cùng câu chữ ấy gắn vào một việc
+      có `dau_ra` viết sẵn thì thành lời chấm một kết quả, cãi lại được bằng
+      bằng chứng. Nên `ban_ghi_id` ở đây LUÔN là id một việc.
+
+   ② NGƯỜI BỊ NHẬN XÉT PHẢI ĐỌC ĐƯỢC. Nhận xét mà người ta không thấy thì là
+      ghi chép nội bộ, không phải quản lý — và tệ hơn: nó thành hồ sơ ngầm.
+      Nên mỗi lần nhận xét là một thông báo tới đúng người đó, và câu nhận
+      xét nằm ngay trong sổ việc mà họ mở được.
+
+   KHÔNG ĐẺ BẢNG MỚI. `lich_su_thay_doi_nen` đã được `them-ly-do-sua.sql`
+   tuyên bố là SỔ SỬA CHUNG của cả ERP, và đã có sẵn tiền lệ cho những vết
+   KHÔNG phải "đổi A thành B" (`viec_gan`, `go` — xem `cauSuaDoc`). Một nhận
+   xét là đúng khuôn đó: (bang, ban_ghi_id, truong, gia_tri_moi, ai, lúc).
+   Nhờ vậy nhận xét hiện luôn trong "Đã sửa những gì" của thẻ việc mà không
+   phải viết thêm một cửa đọc thứ hai.
+
+   AI ĐƯỢC VIẾT: người giao · quản lý cấp trên của người nhận · Admin ·
+   và CHÍNH người nhận (để nói lại). Nhận xét một chiều không cãi được thì
+   người ta không đọc nữa — và mất luôn cái kênh này.
+
+   ⚠️ AI ĐƯỢC ĐỌC THÌ RỘNG HƠN HẲN — VÀ PHẢI NÓI RA (REV-0061 · VỪA-4).
+   Cửa ĐỌC là `suaLichSu`, mà nó chỉ hỏi `duocXemTab(phien, 'congviec')`:
+   người khác phòng, không dính dây gì tới việc này, vẫn `GET /api/sua/lich-su`
+   ra nguyên văn câu nhận xét. Đo được: chị Hằng (kế toán trưởng) đọc được
+   nhận xét trong một việc của kho.
+
+   Bản mô tả cũ ở đây và trên hộp Nhận xét viết *"chỉ hai người trong cuộc"* —
+   ĐÓ LÀ SAI SỰ THẬT, và sai theo chiều nguy hiểm nhất: người viết tưởng mình
+   đang viết riêng cho một người, trong khi cả công ty đọc được. Nay sửa LỜI
+   MÔ TẢ cho khớp sự thật, KHÔNG tự sửa quyền: "ai được đọc nhận xét" là
+   chính sách nhân sự, đã ghi thành câu chờ Sếp Ngọc chốt (CHANGELOG).
+   ========================================================================== */
+async function cvNhanXet(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  if (!duocXemTab(phien, 'congviec')) return loi('Bạn không có quyền', 403);
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+
+  const id = parseInt(b.id, 10);
+  if (!id) return loi('Thiếu id công việc');
+  /* TỪ CHỐI CHỨ KHÔNG CẮT (REV-0061 · VỪA-3). Bản trước `.slice(0, 1000)` rồi
+     trả HTTP 200 — gọi thẳng API 1500 ký tự thì mất 500 ký tự cuối mà không
+     một chữ nào nói là đã cắt. `maxlength="1000"` chỉ che được đường trình
+     duyệt; một tích hợp sau này (hay chính bản ERP trên điện thoại) thì không.
+     Cùng một lẽ với `suaLichSu`: sổ này cắt im lặng là nói dối. */
+  const noiDung = String(b.noi_dung || '').trim();
+  if (noiDung.length < 5) return loi('Nhận xét quá ngắn — viết rõ chỗ làm tốt hoặc chỗ cần sửa giúp tôi');
+  if (noiDung.length > 1000) {
+    return loi(`Nhận xét dài ${noiDung.length} ký tự — tối đa 1000. Cắt bớt giúp tôi, đừng để tôi tự cắt mất phần cuối.`);
+  }
+
+  const cv = await env.DB.prepare(
+    'SELECT id, tieu_de, nguoi_giao_id, nguoi_giao_ten, nguoi_nhan_id, nguoi_nhan_ten FROM cong_viec WHERE id = ?'
+  ).bind(id).first();
+  if (!cv) return loi('Không tìm thấy công việc', 404);
+
+  /* KHÁC `cvSua` MỘT CHỖ QUAN TRỌNG: việc đã `hoan_thanh` hay `huy` vẫn nhận
+     xét được. Sửa nội dung việc đã nghiệm thu là sửa bằng chứng; còn nhận
+     xét một việc đã xong mới đúng là lúc nhận xét có ích nhất. */
+  const laNguoiGiao = cv.nguoi_giao_id === phien.nhan_su_id || laAdmin(phien);
+  const laNguoiNhan = cv.nguoi_nhan_id === phien.nhan_su_id;
+  const laQuanLy = !laNguoiGiao && await laCapTrenCua(env, phien.nhan_su_id, cv.nguoi_nhan_id);
+  if (!laNguoiGiao && !laQuanLy && !laNguoiNhan) {
+    return loi('Chỉ người giao việc, quản lý cấp trên hoặc chính người nhận mới nhận xét được việc này', 403);
+  }
+
+  const ten = phien.ho_ten || phien.ten_dang_nhap;
+  const r = await env.DB.prepare(
+    `INSERT INTO lich_su_thay_doi_nen (bang, ban_ghi_id, truong, gia_tri_cu, gia_tri_moi,
+                                       nguoi_id, nguoi_ten, luc)
+     VALUES ('cong_viec', ?, 'nhan_xet', NULL, ?, ?, ?, datetime('now','+7 hours'))`
+  ).bind(String(id), noiDung, phien.nhan_su_id, ten).run();
+
+  /* BÁO CHO NGƯỜI CÒN LẠI — không báo cho chính mình (tự nhận xét việc mình
+     tự giao là TODO cá nhân, ăn thông báo của chính mình là làm phiền). */
+  const nhan = laNguoiNhan ? cv.nguoi_giao_id : cv.nguoi_nhan_id;
+  if (nhan && nhan !== phien.nhan_su_id) {
+    await guiThongBao(env, null,
+      `${ten} nhận xét việc "${cv.tieu_de}": ${noiDung.slice(0, 160)}${noiDung.length > 160 ? '…' : ''}`,
+      'cong_viec_nhan_xet', String(id), nhan);
+  }
+  return json({ ok: true, id: r.meta.last_row_id, nguoi_ten: ten });
+}
+
 /* Lịch sử làm việc — kho lưu trữ TOÀN CỤC mọi việc trong Trạm Mục Tiêu,
    không chỉ việc của riêng người xem (Sếp Ngọc yêu cầu 21/08/2026: "lưu trữ
    lại quá trình làm việc của nhân sự, ai làm gì, xong task gì như nào").
@@ -2937,7 +4126,7 @@ async function cvCapNhat(req, env) {
 async function cvLichSu(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
-  if (!duocXemTab(phien.vai_tro, 'lichsuviec')) return loi('Bạn không có quyền', 403);
+  if (!duocXemTab(phien, 'lichsuviec')) return loi('Bạn không có quyền', 403);
   // Đây là màn ta CHỈ NGƯỜI KHÁC sang để "xem việc toàn công ty" — nó mà cắt
   // im lặng thì lời chỉ đường thành lời hứa suông. Hỏi 501 để biết có cắt.
   //
@@ -2978,7 +4167,7 @@ async function cvLichSu(req, env) {
 async function cvTongQuanCongTy(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
-  if (!laAdmin(phien.vai_tro)) return loi('Bạn không có quyền', 403);
+  if (!laAdmin(phien)) return loi('Bạn không có quyền', 403);
 
   const homNay = new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
 
@@ -3145,7 +4334,7 @@ async function mtTao(req, env) {
 
   const cap = String(b.cap || '').trim();
   if (!['cong_ty', 'phong_ban', 'ca_nhan'].includes(cap)) return loi('Cấp mục tiêu không hợp lệ');
-  if (cap === 'cong_ty' && !laAdmin(phien.vai_tro)) {
+  if (cap === 'cong_ty' && !laAdmin(phien)) {
     return loi('Chỉ Admin mới được đặt mục tiêu cấp công ty', 403);
   }
 
@@ -3174,7 +4363,7 @@ async function mtTao(req, env) {
 async function mtChot(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
-  if (!laAdmin(phien.vai_tro)) return loi('Chỉ Admin mới được chốt mục tiêu công ty', 403);
+  if (!laAdmin(phien)) return loi('Chỉ Admin mới được chốt mục tiêu công ty', 403);
 
   let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
   const id = parseInt(b.id, 10);
@@ -3189,8 +4378,9 @@ async function mtChot(req, env) {
   return json({ ok: true, nguoi });
 }
 
-/* Người tạo hoặc admin đổi trạng thái (hoàn thành/huỷ) hoặc sửa tiêu đề/mô tả.
-   Mục tiêu công ty ĐÃ CHỐT thì khoá — không sửa/huỷ được nữa (phải chốt cẩn thận). */
+/* SỬA MỤC TIÊU ĐÃ GIAO — cả BẢY trường, không còn trường nào đóng băng.
+   Bảng luật + ba chỗ nguy hiểm: xem khối chú thích ở `MT_NHAN` phía trên.
+   Đo bằng JSON thật: `node scripts/do-sua-muc-tieu-day-du.mjs`. */
 async function mtCapNhat(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
@@ -3202,23 +4392,221 @@ async function mtCapNhat(req, env) {
   if (!mt) return loi('Không tìm thấy mục tiêu', 404);
   if (mt.da_chot) return loi('Mục tiêu công ty đã chốt, không sửa được nữa', 409);
 
-  const laChu = mt.nguoi_tao_id === phien.nhan_su_id || laAdmin(phien.vai_tro);
-  if (!laChu) return loi('Chỉ người tạo (hoặc Admin) mới sửa được mục tiêu này', 403);
+  /* --- AI ĐƯỢC SỬA — cắt ở MÁY CHỦ, đúng luật CTL-0017 ---
+     · người đặt mục tiêu (và Admin) — chủ của cam kết.
+     · QUẢN LÝ CẤP TRÊN của người đặt — sửa được mọi thứ TRỪ `cap`. Anh Duy
+       phải nắn được mục tiêu của team kho mà không phải chạy lên Sếp; nhưng
+       đổi `cap` là đổi AI NHÌN THẤY nó, đó là quyền của chủ, không phải
+       quyền điều phối (cùng lẽ với `dau_ra` ở `cvSua`).
+     · người ngoài — không gì cả. */
+  const laChu = mt.nguoi_tao_id === phien.nhan_su_id || laAdmin(phien);
+  const laQuanLy = !laChu && await laCapTrenCua(env, phien.nhan_su_id, mt.nguoi_tao_id);
+  if (!laChu && !laQuanLy) {
+    return loi('Chỉ người đặt mục tiêu, quản lý cấp trên của họ, hoặc Admin mới sửa được mục tiêu này', 403);
+  }
 
-  const truong = {};
-  if (b.trang_thai != null) {
+  const lyDo = String(b.ly_do || '').trim().slice(0, 500);
+  const doi = [];   // [{ truong, cu, moi }] — để ghi lịch sử
+  const cot = {};   // { cột: giá trị }      — để UPDATE
+  /* Chỉ nhận trường CÓ GỬI LÊN. Không gửi = không đụng tới — nên sửa mỗi
+     tiêu đề sẽ KHÔNG vô tình xoá trắng mô tả hay kéo mục tiêu về quý hiện
+     tại. (Bản trước dùng `!= null` cho `mo_ta` nên gửi `mo_ta: ''` là xoá
+     trắng — giữ nguyên hành vi đó, chỉ chặt hơn ở chỗ `undefined`.) */
+  const xin = (t) => b[t] !== undefined && b[t] !== null;
+
+  /* --- ④ KHOÁ: đã hoàn thành / đã huỷ ---
+     Bản ghi là KẾT QUẢ CỦA KỲ, sửa nội dung lúc này là sửa bằng chứng sau khi
+     đã báo cáo. Nhưng khoá cứng KHÔNG LỐI RA thì một cú bấm nhầm nút "Xong"
+     (nút đó không có bước xác nhận) đóng băng vĩnh viễn cả mục tiêu quý —
+     đúng cái bẫy "cắt quá tay" Sếp đã cảnh báo. Nên để ĐÚNG MỘT lối ra:
+     mở lại về `dang_thuc_hien`, có vết, BẮT BUỘC lý do, và người đặt mục
+     tiêu được báo. Mở lại rồi mới sửa tiếp — hai nước, hai vết, không lẫn. */
+  const daDong = mt.trang_thai === 'hoan_thanh' || mt.trang_thai === 'huy';
+  let moLai = false;
+  if (xin('trang_thai')) {
     const tt = String(b.trang_thai).trim();
     if (!['dang_thuc_hien', 'hoan_thanh', 'huy'].includes(tt)) return loi('Trạng thái không hợp lệ');
-    truong.trang_thai = tt;
+    if (tt !== mt.trang_thai) {
+      if (daDong && tt !== 'dang_thuc_hien') {
+        return loi(`Mục tiêu đã ${MT_TT_DOC[mt.trang_thai].toLowerCase()} — muốn đổi thì bấm "Mở lại" trước đã`, 409);
+      }
+      moLai = daDong;
+      doi.push({ truong: 'trang_thai', cu: mt.trang_thai, moi: tt });
+      cot.trang_thai = tt;
+    }
   }
-  if (b.tieu_de != null) truong.tieu_de = String(b.tieu_de).trim().slice(0, 200) || mt.tieu_de;
-  if (b.mo_ta != null) truong.mo_ta = String(b.mo_ta).trim().slice(0, 2000) || null;
-  if (!Object.keys(truong).length) return loi('Không có gì để sửa');
+  /* Gọi SAU khi đã biết trường đó có THẬT SỰ đổi hay không — gọi trước thì
+     gửi lại đúng giá trị cũ cũng ăn 409 oan (REV-0037 · L10, đã cắn một lần
+     ở `cvSua`). */
+  const chan = (t) => daDong
+    ? loi(`Mục tiêu đã ${MT_TT_DOC[mt.trang_thai].toLowerCase()} — bản ghi này là kết quả của kỳ. Muốn sửa ${MT_NHAN[t]} thì bấm "Mở lại" trước (có ghi vết + lý do).`, 409)
+    : null;
 
-  const cotSet = Object.keys(truong).map(k => `${k} = ?`).join(', ');
-  await env.DB.prepare(`UPDATE muc_tieu SET ${cotSet}, cap_nhat_luc = datetime('now','+7 hours') WHERE id = ?`)
-              .bind(...Object.values(truong), id).run();
-  return json({ ok: true });
+  /* --- ① SỬA THOẢI MÁI: tên + mô tả. KHÔNG hỏi lý do. --- */
+  if (xin('tieu_de')) {
+    const v = String(b.tieu_de).trim().slice(0, 200);
+    if (!v) return loi('Tên mục tiêu không được để trống');
+    if (v !== mt.tieu_de) {
+      const c = chan('tieu_de'); if (c) return c;
+      doi.push({ truong: 'tieu_de', cu: mt.tieu_de, moi: v }); cot.tieu_de = v;
+    }
+  }
+  if (xin('mo_ta')) {
+    const v = String(b.mo_ta).trim().slice(0, 2000) || null;
+    if (v !== (mt.mo_ta || null)) {
+      const c = chan('mo_ta'); if (c) return c;
+      doi.push({ truong: 'mo_ta', cu: mt.mo_ta, moi: v }); cot.mo_ta = v;
+    }
+  }
+
+  /* --- ② + ③ CẤP và PHÒNG BAN ĐI THÀNH CẶP ---
+     Tính giá trị đích CHO CẢ HAI trước, chuẩn hoá, rồi mới so với giá trị cũ.
+     Làm rời từng trường thì hạ `cong_ty` xuống `phong_ban` mà quên gửi
+     `bo_phan` sẽ đẻ ra mục tiêu phòng ban KHÔNG CÓ PHÒNG NÀO — thẻ hiện chip
+     rỗng, không ai biết ai phụ trách. Chiều ngược cũng vậy: nâng phòng ban
+     lên công ty mà để nguyên nhãn phòng cũ là nhãn treo lơ lửng, sai hẳn. */
+  let capMoi = mt.cap;
+  let boPhanMoi = mt.bo_phan || null;
+  if (xin('cap')) {
+    const v = String(b.cap).trim();
+    if (!['cong_ty', 'phong_ban', 'ca_nhan'].includes(v)) return loi('Cấp mục tiêu không hợp lệ');
+    capMoi = v;
+  }
+  if (xin('bo_phan')) boPhanMoi = String(b.bo_phan).trim().slice(0, 80) || null;
+  if (capMoi !== 'phong_ban') boPhanMoi = null;
+  if (capMoi === 'phong_ban' && !boPhanMoi) return loi('Cấp phòng ban thì phải ghi rõ phòng ban/bộ phận nào phụ trách');
+
+  if (capMoi !== mt.cap) {
+    const c = chan('cap'); if (c) return c;
+    /* ⚠️ NGUY HIỂM ②. Đổi cấp là đổi ai nhìn thấy — quyền của chủ, không phải
+       của người điều phối. Và nâng lên `cong_ty` vẫn chỉ Admin, y hệt
+       `mtTao`: nếu không thì cửa sửa này là đường vòng lách đúng chốt đó. */
+    if (!laChu) {
+      return loi('Chỉ người đặt mục tiêu hoặc Admin mới đổi được CẤP — đổi cấp là đổi ai nhìn thấy mục tiêu này', 403);
+    }
+    if (capMoi === 'cong_ty' && !laAdmin(phien)) {
+      return loi('Chỉ Admin mới được đặt mục tiêu cấp công ty', 403);
+    }
+    doi.push({ truong: 'cap', cu: mt.cap, moi: capMoi }); cot.cap = capMoi;
+  }
+  if (boPhanMoi !== (mt.bo_phan || null)) {
+    const c = chan('bo_phan'); if (c) return c;
+    doi.push({ truong: 'bo_phan', cu: mt.bo_phan, moi: boPhanMoi }); cot.bo_phan = boPhanMoi;
+  }
+
+  /* --- ③ KỲ BÁO CÁO: năm + quý. NGUY HIỂM ①. --- */
+  if (xin('nam')) {
+    const v = parseInt(b.nam, 10);
+    if (!v || v < 2020 || v > 2100) return loi('Năm không hợp lệ');
+    if (v !== mt.nam) {
+      const c = chan('nam'); if (c) return c;
+      doi.push({ truong: 'nam', cu: mt.nam, moi: v }); cot.nam = v;
+    }
+  }
+  if (xin('quy')) {
+    const v = parseInt(b.quy, 10);
+    if (!(v >= 1 && v <= 4)) return loi('Quý không hợp lệ (1-4)');
+    if (v !== mt.quy) {
+      const c = chan('quy'); if (c) return c;
+      doi.push({ truong: 'quy', cu: mt.quy, moi: v }); cot.quy = v;
+    }
+  }
+
+  if (!doi.length) return loi('Không có gì để sửa');
+
+  /* ⚠️ CỬA LÝ DO — chốt CUỐI CÙNG, sau khi đã biết đổi những gì.
+     Chốt sớm hơn thì gửi lại `quy` y hệt giá trị cũ cũng bị đòi lý do, và
+     người dùng học được cách gõ lý do vu vơ cho xong — luật thành hình thức.
+     Và chiều ngược quan trọng không kém: sửa MỖI chính tả tên/mô tả thì
+     KHÔNG được hỏi lý do câu nào (ca đối chứng DC-B'). */
+  const canLyDo = doi.filter(d => MT_CAN_LY_DO.has(d.truong));
+  if (canLyDo.length || moLai) {
+    if (lyDo.length < 5) {
+      return loi(moLai
+        ? 'Mở lại một mục tiêu đã đóng sổ thì phải ghi lý do — cả quý đã nhìn vào con số của nó'
+        : `Đổi ${[...new Set(canLyDo.map(d => MT_NHAN[d.truong]))].join(' và ')} thì phải ghi lý do — đây là đổi cam kết của cả kỳ, số liệu quý sẽ đổi theo`,
+        400);
+    }
+  }
+  const canCotLyDo = canLyDo.length > 0 || moLai;
+  const dinhLyDo = (t) => MT_CAN_LY_DO.has(t) || (t === 'trang_thai' && moLai);
+
+  /* --- GHI: MỘT LƯỢT `batch` --- số dòng ghi = 1 (UPDATE) + số trường THẬT
+     SỰ đổi. Sửa một lỗi chính tả = ĐÚNG 2 dòng (hạn mức ghi D1 — REV-0031). */
+  const nguoiSuaTen = phien.ho_ten || phien.ten_dang_nhap;
+  const lenh = [];
+  const cotSet = Object.keys(cot).map(k => `${k} = ?`).join(', ');
+  lenh.push(env.DB.prepare(
+    `UPDATE muc_tieu SET ${cotSet}, cap_nhat_luc = datetime('now','+7 hours') WHERE id = ?`
+  ).bind(...Object.values(cot), id));
+
+  /* ⚠️ HAI KHUÔN INSERT, CÓ CHỦ Ý (REV-0037 · L2). `deploy.yml` tự deploy khi
+     đẩy `main` nhưng KHÔNG chạy migration, nên luôn có một khoảng mã MỚI chạy
+     trên CSDL CŨ chưa có cột `ly_do`. Luật phân biệt:
+       · sửa tên/mô tả/phòng ban — TÍNH NĂNG ĐANG CHẠY từ 28976b6. KHÔNG nhắc
+         tên cột `ly_do` (ở nhánh này nó luôn NULL) nên câu chạy được trên CẢ
+         hai đời CSDL. Phải sống, không được nổ 500.
+       · đổi cấp/kỳ/mở lại — TÍNH NĂNG MỚI, và lý do là PHẦN KHÔNG THỂ BỎ của
+         nó. Ghi mà mất lý do là "sửa mà mất vết" — hỏng theo chiều nguy hiểm.
+         Nên ở nhánh này thà TỪ CHỐI cả lượt (batch lùi luôn UPDATE) và nói rõ
+         phải nạp migration, còn hơn ghi nửa vời. */
+  const ghiVetCoLyDo = env.DB.prepare(
+    `INSERT INTO lich_su_thay_doi_nen (bang, ban_ghi_id, truong, gia_tri_cu, gia_tri_moi,
+                                       nguoi_id, nguoi_ten, ly_do, luc)
+     VALUES ('muc_tieu', ?, ?, ?, ?, ?, ?, ?, datetime('now','+7 hours'))`);
+  const ghiVetTron = env.DB.prepare(
+    `INSERT INTO lich_su_thay_doi_nen (bang, ban_ghi_id, truong, gia_tri_cu, gia_tri_moi,
+                                       nguoi_id, nguoi_ten, luc)
+     VALUES ('muc_tieu', ?, ?, ?, ?, ?, ?, datetime('now','+7 hours'))`);
+  /* `String(...)` KHÔNG thừa: `ban_ghi_id`, `gia_tri_cu`, `gia_tri_moi` là cột
+     TEXT, mà `nam`/`quy` là SỐ. Nhét số vào cột TEXT có nơi ra chuỗi "2026.0"
+     — đọc lại thành câu vô nghĩa. Ép kiểu ngay tại chỗ ghi. */
+  const chu = (v) => (v == null ? null : String(v));
+  for (const d of doi) {
+    lenh.push(canCotLyDo
+      ? ghiVetCoLyDo.bind(String(id), d.truong, chu(d.cu), chu(d.moi),
+                          phien.nhan_su_id, nguoiSuaTen, dinhLyDo(d.truong) ? lyDo : null)
+      : ghiVetTron.bind(String(id), d.truong, chu(d.cu), chu(d.moi),
+                        phien.nhan_su_id, nguoiSuaTen));
+  }
+  try {
+    await env.DB.batch(lenh);
+  } catch (e) {
+    /* HAI CÁCH SQLite NÓI "THIẾU CỘT", tuỳ câu là SELECT hay INSERT:
+         SELECT → "no such column: ly_do"
+         INSERT → "table lich_su_thay_doi_nen has no column named ly_do"
+       Bàn đo bắt được: bắt mỗi chuỗi đầu thì nhánh này KHÔNG BAO GIỜ chạy, và
+       người dùng ăn "Máy chủ gặp sự cố" 500 thay vì câu chỉ đúng việc phải
+       làm. Một cái lưới an toàn không bao giờ bung thì bằng không có lưới. */
+    if (canCotLyDo && /no such column|has no column named/i.test(String((e && e.message) || e))) {
+      return loi('Máy chủ chưa nạp bản vá "lý do sửa" (migrations/them-ly-do-sua.sql) — chưa đổi được cấp/kỳ mục tiêu. Sửa tên và mô tả thì vẫn dùng bình thường.', 503);
+    }
+    throw e;
+  }
+
+  /* --- BÁO AI --- MỘT tin GỘP cho NGƯỜI ĐẶT MỤC TIÊU, và chỉ khi người sửa
+     KHÔNG phải chính họ (tự sửa mục tiêu của mình thì tự biết rồi, bắn tin
+     cho chính mình là dạy người ta tắt chuông). */
+  const dangKe = doi.filter(d => MT_BAO_NGUOI_TAO.has(d.truong));
+  if (dangKe.length && mt.nguoi_tao_id && mt.nguoi_tao_id !== phien.nhan_su_id) {
+    const tomTat = dangKe.map(d => cauSuaDoc({
+      truong: d.truong, gia_tri_cu: d.cu, gia_tri_moi: d.moi,
+      nguoi_ten: nguoiSuaTen, ly_do: dinhLyDo(d.truong) ? lyDo : null
+    }, 'muc_tieu')).join('; ');
+    await guiThongBao(env, null, `Mục tiêu "${cot.tieu_de || mt.tieu_de}" vừa đổi: ${tomTat}`,
+                      'muc_tieu_sua', String(id), mt.nguoi_tao_id);
+  }
+
+  /* ⚠️ NGUY HIỂM ③ — trả về số việc đang gắn vào. Dây nối `cong_viec.
+     muc_tieu_id` KHÔNG đứt khi đổi `cap`/`bo_phan`/`nam`/`quy` (đã đo), nhưng
+     đổi kỳ/cấp thì THẺ mục tiêu rời khỏi Trạm Mục Tiêu của người khác trong
+     khi N việc vẫn đang chạy dưới nó. Giao diện dùng số này để cảnh báo. */
+  let soViec = null;
+  if (doi.some(d => ['cap', 'nam', 'quy'].includes(d.truong))) {
+    const r = await env.DB.prepare('SELECT COUNT(*) AS n FROM cong_viec WHERE muc_tieu_id = ?').bind(id).first();
+    soViec = r?.n || 0;
+  }
+  return json({ ok: true, so_dong_ghi: lenh.length, so_viec: soViec, mo_lai: moLai });
 }
 
 /* Bấm vào 1 thẻ mục tiêu ở Trạm Mục Tiêu (MBOs) → xem chi tiết TOÀN BỘ việc
@@ -3258,7 +4646,12 @@ async function vdDanhSach(req, env) {
   // vẫn giữ vĩnh viễn trong bảng, chỉ ẩn khỏi danh sách hiển thị sau 48h để
   // khu Vinh danh luôn "tươi", không tồn đọng lời khen cũ.
   const { results } = await env.DB.prepare(`
-    SELECT v.id, v.nhan_su_id, v.nhan_su_ten, v.noi_dung, v.nguoi_gui_ten, v.tao_luc, v.so_sao,
+    SELECT v.id, v.nhan_su_id, v.nhan_su_ten, v.noi_dung, v.nguoi_gui_id, v.nguoi_gui_ten,
+           v.tao_luc, v.so_sao,
+           /* Còn sửa/gỡ được không — TÍNH Ở MÁY CHỦ, không để trình duyệt tự
+              trừ ngày giờ (múi giờ máy khách lệch là nút hiện sai). Cửa thật
+              vẫn chốt lại ở vdSua; đây chỉ là để khỏi vẽ nút đã chết. */
+           ((julianday(datetime('now','+7 hours')) - julianday(v.tao_luc)) * 24 <= 24) AS con_sua_duoc,
            (n.anh_chan_dung IS NOT NULL) AS co_anh, n.sao
       FROM vinh_danh v
       LEFT JOIN nhan_su n ON n.id = v.nhan_su_id
@@ -3292,7 +4685,8 @@ async function vdDanhSach(req, env) {
     `).bind(phien.nhan_su_id).first();   // không gợi ý người xem tự khen mình
   } catch { /* chưa nạp them-congviec-nhacviec.sql → không gợi ý, không vỡ */ }
 
-  return json({ vinh_danh: results || [], goi_y: goiY || null });
+  // `toi` để giao diện chỉ vẽ nút Sửa/Gỡ trên lời khen của CHÍNH mình.
+  return json({ vinh_danh: results || [], goi_y: goiY || null, toi: phien.nhan_su_id });
 }
 
 async function vdGui(req, env) {
@@ -3323,6 +4717,111 @@ async function vdGui(req, env) {
     await guiThongBao(env, null, `${nguoiGui} vừa vinh danh bạn: "${noiDung}" (+${soSao} ⭐)`, 'vinh_danh', String(r.meta.last_row_id), nhanSuId);
   }
   return json({ ok: true, id: r.meta.last_row_id });
+}
+
+/* ==========================================================================
+   SỬA / GỠ LỜI KHEN — REV-0037 · L5, nâng từ hàng đợi lên P1.
+   --------------------------------------------------------------------------
+   VÌ SAO ĐÂY LÀ P1 CHỨ KHÔNG PHẢI "VIỆC VẶT ĐỢT SAU". Sếp Ngọc đang TẬP THÓI
+   QUEN ghi nhận nhân viên — đó là điểm Sếp tự nhận là yếu và đang sửa. Cửa
+   `vdGui` trước bản này KHÔNG có đường sửa, KHÔNG có đường gỡ, `sao = sao + ?`
+   KHÔNG lùi được, và tin đã bắn thẳng cho người được khen ngay lúc gửi. Nghĩa
+   là chọn nhầm tên trong danh sách một lần là: người KHÔNG làm gì được khen
+   trước mặt cả công ty, cộng sai sao vào hồ sơ, VĨNH VIỄN — còn người làm
+   thật thì không. Một lời khen sai địa chỉ không phải "thiếu tính năng", nó
+   là lời khen QUAY RA PHẢN TÁC DỤNG, đúng thứ làm người ta thôi tin vào cả
+   khu Vinh danh.
+
+   BA LUẬT, mỗi luật là một cái giá đã cân:
+
+   ① 24 GIỜ. Sau đó khoá. Lời khen là ghi nhận CÔNG KHAI — cả phòng đã đọc,
+     đã bàn. Cho sửa mãi mãi thì hôm nay khen, tháng sau gỡ lặng lẽ, và ghi
+     nhận thành thứ rút lại được: tệ hơn không có. 24h đủ để chữa cái gõ
+     nhầm, không đủ để đổi ý.
+
+   ② KHÔNG ĐỔI ĐƯỢC NGƯỜI NHẬN. Chọn nhầm người thì phải GỠ (người bị khen
+     nhầm nhận tin đính chính) rồi khen lại đúng người. Sửa lặng lẽ tên người
+     nhận là chuyển một lời khen đã đọc từ người này sang người kia — cả hai
+     đều đã thấy bản cũ, cả hai đều bị nói dối.
+
+   ③ KHÔNG XOÁ LẶNG. Người ta ĐÃ ĐỌC rồi. Gỡ hay sửa đều bắn tin ĐÍNH CHÍNH
+     cho người được khen, và ghi vết vào ĐÚNG sổ chung `lich_su_thay_doi_nen`
+     (`bang='vinh_danh'`) vừa dựng cho CTL-0017 — không đẻ bảng thứ hai.
+
+   SAO PHẢI LÙI ĐÚNG SỐ ĐÃ CỘNG, không phải "trừ 1". `MAX(0, …)` chặn sao âm
+   khi hồ sơ đã bị chỉnh tay ở chỗ khác.
+   ========================================================================== */
+async function vdSua(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  const id = parseInt(b.id, 10);
+  if (!id) return loi('Thiếu id lời khen');
+
+  const v = await env.DB.prepare('SELECT * FROM vinh_danh WHERE id = ?').bind(id).first();
+  if (!v) return loi('Không tìm thấy lời khen này', 404);
+
+  const laNguoiGui = v.nguoi_gui_id === phien.nhan_su_id || laAdmin(phien);
+  if (!laNguoiGui) return loi('Chỉ người gửi lời khen (hoặc Admin) mới sửa/gỡ được', 403);
+
+  const qua24h = await env.DB.prepare(
+    "SELECT (julianday(datetime('now','+7 hours')) - julianday(?)) * 24 AS gio").bind(v.tao_luc).first();
+  if ((qua24h?.gio ?? 0) > 24) {
+    return loi('Lời khen đã gửi quá 24 giờ — cả phòng đã đọc rồi, không sửa/gỡ được nữa. '
+             + 'Muốn nói lại thì gửi một lời khen mới.', 409);
+  }
+
+  const nguoiSua = phien.ho_ten || phien.ten_dang_nhap;
+  const saoCu = Number(v.so_sao) || 0;
+  /* Sổ chung — CỐ Ý không nhắc cột `ly_do` (REV-0037 · L2): cửa này phải chạy
+     được cả khi `them-ly-do-sua.sql` chưa nạp, và `truong` ở đây không thuộc
+     nhóm cam kết nên trigger cũng không đòi lý do. */
+  const ghiVet = env.DB.prepare(
+    `INSERT INTO lich_su_thay_doi_nen (bang, ban_ghi_id, truong, gia_tri_cu, gia_tri_moi,
+                                       nguoi_id, nguoi_ten, luc)
+     VALUES ('vinh_danh', ?, ?, ?, ?, ?, ?, datetime('now','+7 hours'))`);
+
+  /* ---- GỠ HẲN ---------------------------------------------------------- */
+  if (b.go === true) {
+    await env.DB.batch([
+      ghiVet.bind(String(id), 'go', v.noi_dung, null, phien.nhan_su_id, nguoiSua),
+      env.DB.prepare('DELETE FROM vinh_danh WHERE id = ?').bind(id),
+      env.DB.prepare('UPDATE nhan_su SET sao = MAX(0, sao - ?) WHERE id = ?').bind(saoCu, v.nhan_su_id)
+    ]);
+    if (v.nhan_su_id !== phien.nhan_su_id) {
+      await guiThongBao(env, null,
+        `${nguoiSua} đã GỠ lời khen gửi nhầm: "${v.noi_dung}" (đã trừ lại ${saoCu} ⭐). Xin lỗi bạn vì nhầm lẫn.`,
+        'vinh_danh', String(id), v.nhan_su_id);
+    }
+    return json({ ok: true, da_go: true, sao_lui: saoCu });
+  }
+
+  /* ---- SỬA NỘI DUNG / SỐ SAO ------------------------------------------- */
+  const noiDung = b.noi_dung != null ? String(b.noi_dung).trim().slice(0, 500) : v.noi_dung;
+  const soSao = b.so_sao != null ? parseInt(b.so_sao, 10) : saoCu;
+  if (!noiDung) return loi('Lời khen không được để trống — muốn bỏ hẳn thì bấm Gỡ');
+  if (!Number.isInteger(soSao) || soSao < 1 || soSao > 50) return loi('Số sao gửi tặng phải từ 1 đến 50');
+  if (noiDung === v.noi_dung && soSao === saoCu) return loi('Không có gì thay đổi');
+
+  const lenh = [env.DB.prepare('UPDATE vinh_danh SET noi_dung = ?, so_sao = ? WHERE id = ?')
+    .bind(noiDung, soSao, id)];
+  if (noiDung !== v.noi_dung) {
+    lenh.push(ghiVet.bind(String(id), 'noi_dung', v.noi_dung, noiDung, phien.nhan_su_id, nguoiSua));
+  }
+  if (soSao !== saoCu) {
+    lenh.push(ghiVet.bind(String(id), 'so_sao', String(saoCu), String(soSao), phien.nhan_su_id, nguoiSua));
+    // Lùi ĐÚNG số đã cộng rồi cộng lại số mới — không phải "+1/-1".
+    lenh.push(env.DB.prepare('UPDATE nhan_su SET sao = MAX(0, sao - ? + ?) WHERE id = ?')
+      .bind(saoCu, soSao, v.nhan_su_id));
+  }
+  await env.DB.batch(lenh);
+
+  if (v.nhan_su_id !== phien.nhan_su_id) {
+    await guiThongBao(env, null,
+      `${nguoiSua} đã sửa lại lời khen gửi bạn: "${noiDung}" (${soSao} ⭐)`,
+      'vinh_danh', String(id), v.nhan_su_id);
+  }
+  return json({ ok: true, so_dong_ghi: lenh.length });
 }
 
 /* Gửi cảnh báo qua Telegram. Chưa cấu hình token/chat thì bỏ qua êm (trả false).
@@ -3457,7 +4956,7 @@ async function kiemTraLyDoNghiemTrong(env) {
 async function kdCanDoiSoat(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
-  if (!duocXemDonHoan(phien.vai_tro)) return loi('Bạn không có quyền', 403);
+  if (!duocXemDonHoan(phien)) return loi('Bạn không có quyền', 403);
 
   // Luồng (Sếp Ngọc chốt): MỌI đơn hoàn, bất kể trạng thái trên sàn, hễ KHO
   // CHƯA XÁC NHẬN "Đã nhận" (kho_nhan_luc IS NULL) đều vào danh sách tra soát —
@@ -3511,7 +5010,7 @@ async function kdCanDoiSoat(req, env) {
 async function kdDonHuy(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
-  if (!duocXemDonHoan(phien.vai_tro)) return loi('Bạn không có quyền', 403);
+  if (!duocXemDonHoan(phien)) return loi('Bạn không có quyền', 403);
 
   const { results } = await env.DB.prepare(`
     SELECT d.return_sn, d.order_sn, d.ma_van_don, d.san_pham, d.san_pham_ten,
@@ -3534,7 +5033,7 @@ async function kdDonHuy(req, env) {
 async function kdKhachHoanNhieu(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
-  if (!duocXemDonHoan(phien.vai_tro)) return loi('Bạn không có quyền', 403);
+  if (!duocXemDonHoan(phien)) return loi('Bạn không có quyền', 403);
 
   const gioNay = new Date();
   const vn = new Date(gioNay.getTime() + 7 * 3600 * 1000);
@@ -3569,7 +5068,7 @@ async function kdKhachHoanNhieu(req, env) {
 async function kdDaDoiSoat(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
-  if (!duocThaoTacVanHanh(phien.vai_tro)) return loi('Bạn không có quyền — thao tác này chỉ dành cho Vận hành sàn', 403);
+  if (!duocThaoTacVanHanh(phien)) return loi('Bạn không có quyền — thao tác này chỉ dành cho Vận hành sàn', 403);
 
   let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
   const rsn = (b.return_sn || '').trim();
@@ -3596,7 +5095,7 @@ async function kdDaDoiSoat(req, env) {
 async function kdDayKho(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
-  if (!duocThaoTacVanHanh(phien.vai_tro)) return loi('Bạn không có quyền — thao tác này chỉ dành cho Vận hành sàn', 403);
+  if (!duocThaoTacVanHanh(phien)) return loi('Bạn không có quyền — thao tác này chỉ dành cho Vận hành sàn', 403);
 
   let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
   const dsRsn = Array.isArray(b.return_sn) ? b.return_sn.map(s => String(s).trim()).filter(Boolean) : [];
@@ -3628,7 +5127,7 @@ async function kdDayKho(req, env) {
 async function kdDayKeToan(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
-  if (!duocThaoTacVanHanh(phien.vai_tro)) return loi('Bạn không có quyền — thao tác này chỉ dành cho Vận hành sàn', 403);
+  if (!duocThaoTacVanHanh(phien)) return loi('Bạn không có quyền — thao tác này chỉ dành cho Vận hành sàn', 403);
   let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
   const dsRsn = Array.isArray(b.return_sn) ? b.return_sn.map(s => String(s).trim()).filter(Boolean)
               : (b.return_sn ? [String(b.return_sn).trim()] : []);
@@ -3653,7 +5152,7 @@ async function kdDayKeToan(req, env) {
 async function ktCanTraSoat(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
-  if (!duocXemTab(phien.vai_tro, 'ketoan')) return loi('Bạn không có quyền', 403);
+  if (!duocXemTab(phien, 'ketoan')) return loi('Bạn không có quyền', 403);
   const { results } = await env.DB.prepare(`
     SELECT d.return_sn, d.order_sn, d.ma_van_don, d.san_pham_ten,
            COALESCE(d.san_pham_sku, m.ma_sku) AS san_pham_sku, d.so_luong,
@@ -3674,7 +5173,7 @@ async function ktCanTraSoat(req, env) {
 async function ktDaTraSoat(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
-  if (!duocXemTab(phien.vai_tro, 'ketoan')) return loi('Bạn không có quyền', 403);
+  if (!duocXemTab(phien, 'ketoan')) return loi('Bạn không có quyền', 403);
   let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
   const dsRsn = Array.isArray(b.return_sn) ? b.return_sn.map(s => String(s).trim()).filter(Boolean)
               : (b.return_sn ? [String(b.return_sn).trim()] : []);
@@ -3702,7 +5201,7 @@ async function ktDaTraSoat(req, env) {
 async function kdDongBoDonHang(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
-  if (!duocXemTab(phien.vai_tro, 'kinhdoanh')) return loi('Bạn không có quyền', 403);
+  if (!duocXemTab(phien, 'kinhdoanh')) return loi('Bạn không có quyền', 403);
 
   const ket = { shopee: null, tiktok: null, loi: [] };
   try { ket.shopee = await shopee.dongBoDonHangNen(env); }
@@ -3717,33 +5216,275 @@ async function kdDongBoDonHang(req, env) {
   return json({ ok: ket.loi.length === 0, so_don: soDon, loi: ket.loi });
 }
 
-/* Tổng quan doanh thu/số đơn cho thẻ + biểu đồ tab Kinh doanh */
-async function kdTongQuanDoanhThu(req, env) {
-  const { phien, loi: l } = await batBuocDangNhap(req, env);
-  if (l) return l;
-  if (!duocXemTab(phien.vai_tro, 'kinhdoanh')) return loi('Bạn không có quyền', 403);
+/* ==========================================================================
+   TỔNG QUAN 2 SÀN — Dashboard Marketplace (Home/Dashboard Phase 3)
+   Audit: docs/audit/AUDIT-DASHBOARD-MARKETPLACE.md
+   Định nghĩa metric: docs/METRIC-DEFINITIONS.md (doanh_thu_tam_tinh)
 
-  const _vn = new Date(Date.now() + 7 * 3600 * 1000);
-  const dauThangSec = Math.floor(Date.UTC(_vn.getUTCFullYear(), _vn.getUTCMonth(), 1) / 1000) - 7 * 3600;
-  const dauNgaySec  = Math.floor(Date.UTC(_vn.getUTCFullYear(), _vn.getUTCMonth(), _vn.getUTCDate()) / 1000) - 7 * 3600;
+   ⚠️ KHÁC QUY ƯỚC CHUNG VỀ TIỀN: các API cũ trả `tong_tien`/`so_tien` ở dạng
+   số nguyên ×100000 rồi để giao diện tự chia lại. Quy ước đó vừa gây đúng 1
+   sự cố thật: thẻ "Doanh thu hôm nay" trên Home CEO quên chia nên hiện sai
+   gấp 100.000 lần (audit mục D). Các API MỚI trong khối này trả thẳng số
+   tiền VNĐ đã chia sẵn — giao diện KHÔNG chia lại lần nữa.
+   ========================================================================== */
 
-  let coBang = true, homNay = { so_don: 0, tong_tien: 0 }, thangNay = [];
-  try {
-    homNay = await env.DB.prepare(`
-      SELECT COUNT(*) AS so_don, COALESCE(SUM(tong_tien),0) AS tong_tien
-        FROM don_hang WHERE CAST(tao_luc_san AS INTEGER) >= ?
-    `).bind(dauNgaySec).first();
+const HE_SO_TIEN = 100000;              // xem migrations/them-donhang.sql
+const tienVnd = n => Math.round((Number(n) || 0) / HE_SO_TIEN);
 
-    const kq = await env.DB.prepare(`
-      SELECT nguon, COUNT(*) AS so_don, COALESCE(SUM(tong_tien),0) AS tong_tien
-        FROM don_hang WHERE CAST(tao_luc_san AS INTEGER) >= ? GROUP BY nguon
-    `).bind(dauThangSec).all();
-    thangNay = kq.results || [];
-  } catch {
-    coBang = false;   // chưa nạp migration them-donhang.sql trên máy chủ này
+/* Trạng thái đơn hoàn (don_hoan.trang_thai — giá trị do SÀN trả về) được coi
+   là ĐÃ HOÀN THẬT, tức đã trừ tiền của mình. ERP Owner chốt: chỉ trừ khi
+   "phát sinh hoàn hủy THỰC", nên đơn khách mới bấm yêu cầu / sàn đang xử lý
+   thì CHƯA trừ.
+
+   ⚠️ Hai tập dưới đây CHƯA đối chiếu được với dữ liệu production (token
+   Cloudflare bị từ chối lúc viết — audit mục E). Vì vậy trạng thái nào KHÔNG
+   nằm trong cả hai tập sẽ được báo lên giao diện dưới dạng cảnh báo "trạng
+   thái lạ" thay vì âm thầm bỏ qua. Gặp cảnh báo đó -> bổ sung vào đúng tập ở
+   ĐÂY (một chỗ duy nhất, Rule D4) rồi cập nhật METRIC-DEFINITIONS.md. */
+const HOAN_THAT = new Set([
+  'ACCEPTED', 'COMPLETED', 'REFUND_COMPLETE', 'REFUNDED', 'SUCCESS',
+  'RETURN_OR_REFUND_REQUEST_COMPLETE'
+]);
+const HOAN_CHUA_TINH = new Set([
+  'REQUESTED', 'PROCESSING', 'JUDGING', 'SELLER_DISPUTE', 'PENDING',
+  'CANCELLED', 'CLOSED', 'REJECTED', 'RETURN_OR_REFUND_REQUEST_PENDING',
+  // TikTok: khách đã gửi hàng trả về nhưng chưa hoàn tất hoàn tiền — CHƯA
+  // phải "hoàn thực". Thấy thật trên production 06/09/2026 (4 đơn).
+  'BUYER_SHIPPED_ITEM'
+]);
+
+/* Mốc thời gian theo giờ VN (UTC+7), trả về giây unix để so với tao_luc_san.
+
+   Kỳ trước = DỊCH LÙI đúng 1 bước tự nhiên của kỳ (lùi 1 ngày / 7 ngày /
+   30 ngày / 1 tháng), GIỮ NGUYÊN độ dài đã trôi qua. Nghĩa là "hôm nay tới
+   giờ này" được so với "hôm qua tới đúng giờ này".
+
+   ⚠️ KHÔNG dùng cách "cửa sổ liền trước cùng độ dài" (tu − độ_dài). Cách đó
+   nghe thì hợp lý nhưng cho kết quả vô nghĩa: lúc 9h sáng, "kỳ trước" của
+   hôm nay sẽ thành 9 tiếng CUỐI ngày hôm qua (từ 15h đến nửa đêm) — khung
+   giờ mua hàng hoàn toàn khác, so sánh ra số sai lệch. Đã phát hiện khi
+   chạy thử với dữ liệu mẫu, đừng "đơn giản hoá" lại về cách cũ. */
+function mocKy(ma) {
+  const nay = Math.floor(Date.now() / 1000);
+  const vn = new Date(Date.now() + 7 * 3600 * 1000);
+  const dauNgay = Math.floor(Date.UTC(vn.getUTCFullYear(), vn.getUTCMonth(), vn.getUTCDate()) / 1000) - 7 * 3600;
+  const dauThang = Math.floor(Date.UTC(vn.getUTCFullYear(), vn.getUTCMonth(), 1) / 1000) - 7 * 3600;
+  const dauThangTruoc = Math.floor(Date.UTC(vn.getUTCFullYear(), vn.getUTCMonth() - 1, 1) / 1000) - 7 * 3600;
+
+  let tu, buoc, nhan, truocNhan;
+  if (ma === '7ngay') {
+    tu = dauNgay - 6 * 86400;  buoc = 7 * 86400;
+    nhan = '7 ngày gần nhất';  truocNhan = '7 ngày liền trước';
+  } else if (ma === '30ngay') {
+    tu = dauNgay - 29 * 86400; buoc = 30 * 86400;
+    nhan = '30 ngày gần nhất'; truocNhan = '30 ngày liền trước';
+  } else if (ma === 'thang_nay') {
+    // Tháng dài ngắn khác nhau nên bước lùi = đúng độ dài THÁNG TRƯỚC, để
+    // ngày 5 tháng này soi đúng ngày 5 tháng trước.
+    tu = dauThang;             buoc = dauThang - dauThangTruoc;
+    nhan = 'Tháng này';        truocNhan = 'cùng kỳ tháng trước';
+  } else {
+    ma = 'hom_nay';
+    tu = dauNgay;              buoc = 86400;
+    nhan = 'Hôm nay';          truocNhan = 'hôm qua cùng giờ này';
   }
 
-  return json({ co_bang: coBang, hom_nay: homNay, thang_nay: thangNay });
+  return { ma, nhan, tu, den: nay, truoc: { tu: tu - buoc, den: nay - buoc, nhan: truocNhan } };
+}
+
+/* Số liệu 1 cửa sổ thời gian, tách theo sàn. Dùng lại cho cả kỳ này lẫn kỳ
+   trước — KHÔNG chép công thức ra 2 chỗ (Rule D4). */
+async function soLieuKy(env, tu, den) {
+  const dsHoanThat = [...HOAN_THAT];
+  const oHoan = dsHoanThat.map(() => '?').join(',');
+
+  const [don, hoan] = await Promise.all([
+    env.DB.prepare(`
+      SELECT nguon,
+             COUNT(*)                                                                AS so_don,
+             COALESCE(SUM(tong_tien), 0)                                             AS gmv,
+             COALESCE(SUM(CASE WHEN trang_thai = 'CANCELLED' THEN tong_tien END), 0) AS tien_huy,
+             COALESCE(SUM(CASE WHEN trang_thai = 'CANCELLED' THEN 1 END), 0)         AS so_don_huy
+        FROM don_hang
+       WHERE CAST(tao_luc_san AS INTEGER) >= ? AND CAST(tao_luc_san AS INTEGER) < ?
+       GROUP BY nguon
+    `).bind(tu, den).all(),
+    env.DB.prepare(`
+      SELECT h.nguon                     AS nguon,
+             COUNT(*)                    AS so_don_hoan,
+             COALESCE(SUM(r.so_tien), 0) AS tien_hoan
+        FROM don_hoan r
+        JOIN don_hang h ON h.order_sn = r.order_sn
+       WHERE CAST(h.tao_luc_san AS INTEGER) >= ? AND CAST(h.tao_luc_san AS INTEGER) < ?
+         AND UPPER(COALESCE(r.trang_thai, '')) IN (${oHoan})
+       GROUP BY h.nguon
+    `).bind(tu, den, ...dsHoanThat).all()
+  ]);
+
+  const theoSan = new Map();
+  const lay = ng => {
+    const k = ng || 'khac';
+    if (!theoSan.has(k)) theoSan.set(k, { nguon: k, so_don: 0, gmv: 0, tien_huy: 0, so_don_huy: 0, tien_hoan: 0, so_don_hoan: 0 });
+    return theoSan.get(k);
+  };
+  for (const r of don.results || []) {
+    const o = lay(r.nguon);
+    o.so_don = r.so_don;  o.gmv = tienVnd(r.gmv);
+    o.tien_huy = tienVnd(r.tien_huy);  o.so_don_huy = r.so_don_huy;
+  }
+  for (const r of hoan.results || []) {
+    const o = lay(r.nguon);
+    o.tien_hoan = tienVnd(r.tien_hoan);  o.so_don_hoan = r.so_don_hoan;
+  }
+  // doanh_thu_tam_tinh = GMV đơn đặt − tiền hủy − tiền hoàn thật (METRIC-DEFINITIONS.md)
+  for (const o of theoSan.values()) o.doanh_thu = o.gmv - o.tien_huy - o.tien_hoan;
+  return [...theoSan.values()];
+}
+
+/* Chẩn đoán: liệt kê ĐÚNG các giá trị trạng thái mà sàn thật sự trả về, để
+   phát hiện trạng thái chưa phân loại thay vì tính sai âm thầm. */
+async function chanDoanKy(env, tu, den) {
+  const [donTt, hoanTt] = await Promise.all([
+    env.DB.prepare(`
+      SELECT nguon, COALESCE(trang_thai, '(trống)') AS trang_thai, COUNT(*) AS n
+        FROM don_hang
+       WHERE CAST(tao_luc_san AS INTEGER) >= ? AND CAST(tao_luc_san AS INTEGER) < ?
+       GROUP BY nguon, trang_thai ORDER BY n DESC
+    `).bind(tu, den).all(),
+    env.DB.prepare(`
+      SELECT COALESCE(r.trang_thai, '(trống)') AS trang_thai, COUNT(*) AS n,
+             COALESCE(SUM(r.so_tien), 0) AS tien
+        FROM don_hoan r
+        JOIN don_hang h ON h.order_sn = r.order_sn
+       WHERE CAST(h.tao_luc_san AS INTEGER) >= ? AND CAST(h.tao_luc_san AS INTEGER) < ?
+       GROUP BY r.trang_thai ORDER BY n DESC
+    `).bind(tu, den).all()
+  ]);
+
+  const hoan = (hoanTt.results || []).map(r => {
+    const tt = String(r.trang_thai).toUpperCase();
+    return {
+      trang_thai: r.trang_thai, n: r.n, tien: tienVnd(r.tien),
+      xep: HOAN_THAT.has(tt) ? 'da_tru' : (HOAN_CHUA_TINH.has(tt) ? 'chua_tru' : 'chua_phan_loai')
+    };
+  });
+  return { trang_thai_don: donTt.results || [], hoan };
+}
+
+/* GET /api/kinh-doanh/tong-quan-kenh?ky=hom_nay|7ngay|30ngay|thang_nay */
+async function kdTongQuanKenh(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  if (!duocXemTab(phien, 'kinhdoanh')) return loi('Bạn không có quyền', 403);
+
+  const ky = mocKy(new URL(req.url).searchParams.get('ky') || 'hom_nay');
+  try {
+    const [nay, truoc, chanDoan, mocDau] = await Promise.all([
+      soLieuKy(env, ky.tu, ky.den),
+      soLieuKy(env, ky.truoc.tu, ky.truoc.den),
+      chanDoanKy(env, ky.tu, ky.den),
+      env.DB.prepare(
+        'SELECT nguon, MIN(CAST(tao_luc_san AS INTEGER)) AS som_nhat FROM don_hang GROUP BY nguon'
+      ).all()
+    ]);
+
+    /* ⚠️ Chặn so sánh với kỳ mà ERP CHƯA đồng bộ dữ liệu về.
+       Đồng bộ Shopee mới bắt đầu 03/08/2026, TikTok từ 12/02/2026 — nên xem
+       "Tháng này" thì cùng kỳ tháng trước của Shopee gần như trống, chia ra
+       sẽ thành "+335.000%". Một con số như thế xuất hiện 1 lần là Sếp mất
+       niềm tin vào cả cái bảng. Kỳ trước nào bắt đầu TRƯỚC mốc dữ liệu đầu
+       tiên thì đánh dấu không đủ dữ liệu, giao diện hiện "—" thay vì bịa %. */
+    const somNhat = new Map((mocDau.results || []).map(r => [r.nguon, Number(r.som_nhat) || 0]));
+    const duDuLieu = ng => {
+      const s = somNhat.get(ng);
+      return !!s && ky.truoc.tu >= s;
+    };
+
+    const mapTruoc = new Map(truoc.map(o => [o.nguon, o]));
+    const kenh = nay.map(o => {
+      const t = mapTruoc.get(o.nguon);
+      return { ...o, truoc_doanh_thu: t ? t.doanh_thu : 0, truoc_so_don: t ? t.so_don : 0,
+               truoc_du_du_lieu: duDuLieu(o.nguon) };
+    });
+    // Sàn có bán ở kỳ trước nhưng kỳ này im lặng hẳn -> vẫn phải hiện (0 đơn
+    // là tín hiệu xấu nhất, giấu đi thì đúng kiểu dashboard nói dối).
+    for (const t of truoc) {
+      if (!kenh.some(o => o.nguon === t.nguon)) {
+        kenh.push({ nguon: t.nguon, so_don: 0, gmv: 0, tien_huy: 0, so_don_huy: 0, tien_hoan: 0,
+                    so_don_hoan: 0, doanh_thu: 0, truoc_doanh_thu: t.doanh_thu, truoc_so_don: t.so_don,
+                    truoc_du_du_lieu: duDuLieu(t.nguon) });
+      }
+    }
+    kenh.sort((a, b) => b.doanh_thu - a.doanh_thu);
+
+    const cong = (ds, f) => ds.reduce((s, o) => s + f(o), 0);
+    return json({
+      co_bang: true,
+      ky: { ma: ky.ma, nhan: ky.nhan, tu: ky.tu, den: ky.den, truoc_nhan: ky.truoc.nhan },
+      kenh,
+      tong: {
+        so_don: cong(kenh, o => o.so_don), gmv: cong(kenh, o => o.gmv),
+        tien_huy: cong(kenh, o => o.tien_huy), so_don_huy: cong(kenh, o => o.so_don_huy),
+        tien_hoan: cong(kenh, o => o.tien_hoan), so_don_hoan: cong(kenh, o => o.so_don_hoan),
+        doanh_thu: cong(kenh, o => o.doanh_thu),
+        truoc_doanh_thu: cong(kenh, o => o.truoc_doanh_thu), truoc_so_don: cong(kenh, o => o.truoc_so_don),
+        // Chỉ 1 sàn thiếu dữ liệu kỳ trước là con số TỔNG đã không so được
+        truoc_du_du_lieu: kenh.length > 0 && kenh.every(o => o.truoc_du_du_lieu)
+      },
+      chan_doan: chanDoan
+    });
+  } catch {
+    return json({ co_bang: false });   // chưa nạp migration đơn hàng ở môi trường này
+  }
+}
+
+/* GET /api/kinh-doanh/xep-hang-sku?ky=...  — 10 SKU bán chạy nhất và 10 SKU
+   bán kém nhất toàn công ty trong kỳ. Dùng chung mốc thời gian `mocKy()` với
+   Tổng quan 2 sàn để 2 khối trên cùng màn hình không bao giờ lệch kỳ nhau. */
+async function kdXepHangSku(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  if (!duocXemTab(phien, 'kinhdoanh')) return loi('Bạn không có quyền', 403);
+
+  if (!(await donHangItem.coBangDong(env))) {
+    return json({ co_bang: false, ly_do: 'Chưa nạp migration them-donhang-dong.sql trên máy chủ' });
+  }
+  const ky = mocKy(new URL(req.url).searchParams.get('ky') || 'thang_nay');
+  try {
+    const kq = await donHangItem.xepHangSku(env, ky.tu, ky.den, 10);
+    // Còn đơn chưa bóc dòng thì bảng xếp hạng đang THIẾU dữ liệu — phải nói ra,
+    // không được để Sếp tưởng đã đủ rồi ra quyết định cắt/đẩy hàng.
+    const chuaTach = await env.DB.prepare(
+      'SELECT COUNT(*) AS n FROM don_hang WHERE da_tach_dong = 0'
+    ).first();
+    return json({
+      co_bang: true,
+      ky: { ma: ky.ma, nhan: ky.nhan, tu: ky.tu, den: ky.den },
+      ...kq,
+      chua_tach: (chuaTach && chuaTach.n) || 0
+    });
+  } catch (e) {
+    return json({ co_bang: false, ly_do: e.message });
+  }
+}
+
+/* POST /api/kinh-doanh/tach-dong-hang — bóc dòng hàng từ `du_lieu_json` của
+   các đơn cũ, theo lô. Giao diện gọi lại tới khi `con_lai = 0`.
+   Chỉ ĐỌC `du_lieu_json` rồi GHI sang bảng mới — không sửa/xoá dữ liệu đơn. */
+async function kdTachDongHang(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  if (!laAdmin(phien)) return loi('Chỉ Admin mới chạy được việc bóc dữ liệu này', 403);
+  if (!(await donHangItem.coBangDong(env))) {
+    return loi('Chưa nạp migration them-donhang-dong.sql trên máy chủ', 409);
+  }
+  try {
+    // 100 đơn/lượt: mỗi đơn sinh 1 câu lệnh/dòng hàng + 1 câu đánh dấu, để
+    // 1 lô D1 không phình quá to. Giao diện tự gọi lại tới khi con_lai = 0.
+    return json(await donHangItem.tachBu(env, 100));
+  } catch (e) {
+    return loi(e.message, 500);
+  }
 }
 
 /* ==========================================================================
@@ -3756,7 +5497,7 @@ async function kdTongQuanDoanhThu(req, env) {
 async function donHangHuy(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
-  if (!duocXemTab(phien.vai_tro, 'kinhdoanh')) return loi('Bạn không có quyền', 403);
+  if (!duocXemTab(phien, 'kinhdoanh')) return loi('Bạn không có quyền', 403);
 
   const _vn = new Date(Date.now() + 7 * 3600 * 1000);
   const dauThangSec = Math.floor(Date.UTC(_vn.getUTCFullYear(), _vn.getUTCMonth(), 1) / 1000) - 7 * 3600;
@@ -3792,7 +5533,7 @@ async function donHangHuy(req, env) {
 async function ktHangHong(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
-  if (!duocXemTab(phien.vai_tro, 'ketoan')) return loi('Bạn không có quyền', 403);
+  if (!duocXemTab(phien, 'ketoan')) return loi('Bạn không có quyền', 403);
   const { results } = await env.DB.prepare(`
     SELECT d.return_sn, d.order_sn, d.ma_van_don, d.san_pham_ten,
            COALESCE(d.san_pham_sku, m.ma_sku) AS san_pham_sku, d.so_luong,
@@ -3809,7 +5550,7 @@ async function ktHangHong(req, env) {
 async function ktLapBienBan(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
-  if (!duocXemTab(phien.vai_tro, 'ketoan')) return loi('Bạn không có quyền', 403);
+  if (!duocXemTab(phien, 'ketoan')) return loi('Bạn không có quyền', 403);
   let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
   const dsRsn = Array.isArray(b.return_sn) ? b.return_sn.map(s => String(s).trim()).filter(Boolean) : [];
   if (!dsRsn.length) return loi('Chưa chọn đơn nào');
@@ -3836,7 +5577,7 @@ async function ktLapBienBan(req, env) {
 async function hoanSkuMapDanhSach(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
-  if (!duocXemDonHoan(phien.vai_tro)) return loi('Bạn không có quyền', 403);
+  if (!duocXemDonHoan(phien)) return loi('Bạn không có quyền', 403);
 
   // Tên còn thiếu SKU: sàn không trả SKU (san_pham_sku NULL) và chưa ghép
   // trong sku_map — kèm số đơn đang bị ảnh hưởng để biết nên ưu tiên ghép gì.
@@ -3858,14 +5599,14 @@ async function hoanSkuMapDanhSach(req, env) {
 
   return json({
     thieu: thieu.results, da_gan: daGan.results, san_pham: sanPham.results,
-    quyen: { gan: duocQuanLyKho(phien.vai_tro) }
+    quyen: { gan: duocQuanLyKho(phien) }
   });
 }
 
 async function hoanSkuMapGan(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
-  if (!duocQuanLyKho(phien.vai_tro)) return loi('Bạn không có quyền gán SKU', 403);
+  if (!duocQuanLyKho(phien)) return loi('Bạn không có quyền gán SKU', 403);
 
   let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
   const ten = String(b.ten_san_pham || '').trim();
@@ -4429,7 +6170,7 @@ async function gopYDanhSach(req, env) {
      `|| duocDuyetGopY(phien)`: người được Sếp tạm uỷ quyền duyệt mà KHÔNG
      phải admin thì cũng phải nhìn thấy thứ mình sắp duyệt — nếu không, cờ
      uỷ quyền bật lên mà màn hình trống. */
-  const laAd = laAdmin(phien.vai_tro) || duocDuyetGopY(phien);
+  const laAd = laAdmin(phien) || duocDuyetGopY(phien);
   const dieuKien = laAd ? '' : `WHERE g.nguoi_gui_id = ?1 OR ${GOPY_SQL_QL1} = ?1`;
 
   /* CỘT CỦA BẢN VÁ "ĐÃ LÊN THẬT" — tách riêng để CHẠY ĐƯỢC CẢ KHI CHƯA NẠP
@@ -4861,7 +6602,7 @@ async function gopYDoiTrangThai(req, env) {
      vẫn phân loại, giao người phụ trách, gỡ chặn, mở lại bản ghi sai, đẩy
      việc qua các bước làm–kiểm–nghiệm thu như trước. Cắt rộng hơn thế là
      cắt quá tay. */
-  const laOwner = laAdmin(phien.vai_tro);
+  const laOwner = laAdmin(phien);
 
   /* NHƯNG hàm này có HAI ĐƯỜNG VÒNG ra đúng cái cổng vừa khoá — phải bịt,
      nếu không thì khoá cửa trước mà bỏ ngỏ cửa sau (REV-0018):
@@ -5543,7 +7284,7 @@ async function gopYDongKhongCode(req, env) {
 /* Ai được xem chi tiết 1 góp ý: người gửi · QUẢN LÝ CẤP 1 của người gửi
    (quyền mới của SPEC-0002) · Admin. Một chỗ duy nhất cho cả lịch sử lẫn ảnh. */
 async function gopYDuocXem(env, phien, id) {
-  if (laAdmin(phien.vai_tro)) return true;
+  if (laAdmin(phien)) return true;
   const r = await env.DB.prepare(`
     SELECT g.nguoi_gui_id, ${GOPY_SQL_QL1} AS ql_id
       FROM gop_y g JOIN nhan_su n ON n.id = g.nguoi_gui_id WHERE g.id = ?`).bind(id).first();
@@ -5573,7 +7314,7 @@ async function gopYLichSu(req, env) {
      "góp ý của tôi đi tới đâu rồi" vẫn trả lời được. Còn lý do từ chối
      CÔNG KHAI nằm ở `gop_y.ly_do_tu_choi`, trả riêng ở danh sách, không
      dính bản cắt này. */
-  const xemGhiChu = laAdmin(phien.vai_tro)
+  const xemGhiChu = laAdmin(phien)
     || (await nguoiDuyetCap1(env, g.nguoi_gui_id)).id === phien.nhan_su_id;
 
   const { results } = await env.DB.prepare(`
@@ -5646,7 +7387,7 @@ async function nsSinhNhatDoc(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
   const dich = String(new URL(req.url).searchParams.get('id') || '').trim() || phien.nhan_su_id;
-  if (dich !== phien.nhan_su_id && !duocThemNhanSu(phien.vai_tro)) {
+  if (dich !== phien.nhan_su_id && !duocThemNhanSu(phien)) {
     return loi('Không đủ quyền xem ngày sinh của người khác', 403);
   }
   try {
@@ -5718,7 +7459,7 @@ async function nsSinhNhatCongKhai(req, env) {
   let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
 
   const dich = String(b.id || '').trim() || phien.nhan_su_id;
-  if (dich !== phien.nhan_su_id && !duocThemNhanSu(phien.vai_tro)) {
+  if (dich !== phien.nhan_su_id && !duocThemNhanSu(phien)) {
     return loi('Bạn chỉ đổi được công tắc sinh nhật của chính mình', 403);
   }
   const bat = b.bat ? 1 : 0;
@@ -5832,13 +7573,13 @@ async function knCham(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
   let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
-  return kynang.cham(env, phien, b, duocThemNhanSu(phien.vai_tro));
+  return kynang.cham(env, phien, b, duocThemNhanSu(phien));
 }
 async function knGo(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
   let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
-  return kynang.go(env, phien, b, duocThemNhanSu(phien.vai_tro));
+  return kynang.go(env, phien, b, duocThemNhanSu(phien));
 }
 async function knAiLamDuoc(req, env) {
   const { loi: l } = await batBuocDangNhap(req, env);
@@ -5858,7 +7599,7 @@ async function knQuyenCham(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
   const q = await kynang.duocChamCho(env, phien,
-    new URL(req.url).searchParams.get('id'), duocThemNhanSu(phien.vai_tro));
+    new URL(req.url).searchParams.get('id'), duocThemNhanSu(phien));
   return json(q);
 }
 
@@ -5873,6 +7614,101 @@ async function nsAnhXem(req, env) {
   if (!ns || !ns.anh_chan_dung) return loi('Không có ảnh', 404);
   const bin = Uint8Array.from(atob(ns.anh_chan_dung), c => c.charCodeAt(0));
   return new Response(bin, { headers: { 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, max-age=3600' } });
+}
+
+/* ---- Kho tài liệu quản trị (CTL-0026 Đợt 1) -----------------------------
+   Tab `khotailieu` mở cho MỌI vai trò — ai cũng phải tra được quy trình, quy
+   định nội bộ đã ban hành. Cái được chặn là NHÓM GIẤY TỜ bên trong, và chặn
+   đó nằm ở `src/tai-lieu.js` + `src/quyen.js`, KHÔNG ở đây. Ở đây chỉ hỏi
+   "đã đăng nhập chưa" — đúng khuôn `knDanhMuc`/`mtcvDanhSach` phía trên. */
+async function tlDanhSach(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  return tailieu.danhSachTaiLieu(env, phien, new URL(req.url).searchParams);
+}
+/* ⚠️ HAI KHUÔN THÂN GỬI LÊN — VÁ REV-0054 · LỖI #2 (trần 25 MB chỉ đủ MỘT lượt)
+   ---------------------------------------------------------------------------
+   Bộ nhớ 128 MB của Workers là của cả ISOLATE, không phải của một yêu cầu. Gửi
+   file dưới dạng base64 trong JSON thì mỗi file tồn tại ~3,7 bản cùng lúc
+   trong Worker, nên HAI người cùng tải 25 MB = 185 MB ⇒ chết isolate, kéo theo
+   mọi yêu cầu đang bay của người khác.
+
+   Khuôn BYTE THẲNG bỏ hẳn ba bản trung gian đó. Khung cố ý làm đơn giản —
+   `multipart/form-data` phải dò chuỗi biên và quét lại cả thân, tức là lại
+   thêm một bản chép nữa:
+
+       [4 byte, big-endian: độ dài phần mô tả] [JSON mô tả, UTF-8] [byte file]
+
+   `arrayBuffer()` cho ĐÚNG MỘT bản; `subarray` là cửa sổ nhìn vào chính vùng
+   nhớ đó, không chép. Hai lượt 25 MB trùng giờ ≈ 50 MB — còn rộng, và KHÔNG
+   phải hạ trần xuống 15 MB, tức không phải bắt Sếp tách đôi bản scan.
+
+   Đường JSON GIỮ NGUYÊN: đường ảnh (trần 6 MB) không có vấn đề gì, và trình
+   duyệt còn nhớ bản cũ vẫn phải chạy được. Máy chủ KHÔNG có đường xử lý thứ
+   hai — cả hai khuôn cùng đổ vào `tailieu.luuTaiLieu`. */
+async function tlLuu(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  const kieu = String(req.headers.get('Content-Type') || '').toLowerCase();
+  if (kieu.includes('application/octet-stream')) {
+    let khung;
+    try { khung = new Uint8Array(await req.arrayBuffer()); }
+    catch { return loi('Không nhận được file gửi lên. Chọn lại file rồi gửi lần nữa.'); }
+    if (khung.length < 5) return loi('Dữ liệu gửi lên không hợp lệ');
+    const dai = ((khung[0] << 24) | (khung[1] << 16) | (khung[2] << 8) | khung[3]) >>> 0;
+    /* Trần 1 MB cho phần mô tả: nó chỉ đựng tên, nhóm, ngày. Một con số dài
+       bất thường ở đây là khung hỏng hoặc ai đó đang dò, không phải dữ liệu. */
+    if (dai < 2 || dai > 1048576 || 4 + dai > khung.length) {
+      return loi('Dữ liệu gửi lên không hợp lệ');
+    }
+    let b;
+    try { b = JSON.parse(new TextDecoder().decode(khung.subarray(4, 4 + dai))); }
+    catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+    /* `typeof [] === 'object'` nên một MẢNG JSON lọt qua chốt cũ rồi mới chết
+       ở chốt nghiệp vụ. Vô hại (400, 0 lượt ghi) nhưng chốt phải nói đúng ý nó
+       muốn nói — REV-0055 · THẤP-1. */
+    if (!b || typeof b !== 'object' || Array.isArray(b)) {
+      return loi('Dữ liệu gửi lên không hợp lệ');
+    }
+    b.tep_byte = khung.subarray(4 + dai);
+    return tailieu.luuTaiLieu(env, phien, b);
+  }
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return tailieu.luuTaiLieu(env, phien, b);
+}
+/* Sửa SỐ HIỆU + TÊN tài liệu — Sếp Ngọc 03/09/2026. Quyền cắt ở
+   `tailieu.suaTaiLieu` theo NHÓM giấy tờ, không cắt ở đây. */
+async function tlSua(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return tailieu.suaTaiLieu(env, phien, b);
+}
+async function tlLichSu(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  return tailieu.lichSuTaiLieu(env, phien, new URL(req.url).searchParams.get('id'));
+}
+async function tlMo(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  return tailieu.moTaiLieu(env, phien, new URL(req.url).searchParams.get('id'));
+}
+async function tlTep(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  return tailieu.tepTaiLieu(env, phien, new URL(req.url).searchParams.get('id'));
+}
+async function tlNhatKy(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  return tailieu.nhatKyTaiLieu(env, phien, new URL(req.url).searchParams.get('id'));
+}
+async function tlAn(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return tailieu.anTaiLieu(env, phien, b);
 }
 
 /* ---- Bộ định tuyến ------------------------------------------------------ */
@@ -5944,8 +7780,15 @@ const DUONG_DAN = {
   'POST /api/kho/sua-san-pham':  khoSuaSP,
   'POST /api/kho/an-hien-san-pham': khoAnHienSP,
   'POST /api/kho/khoa-san-pham':    khoKhoaSP,
+  /* Nạp file số liệu — ba bước tách riêng, chỉ `nap-ghi` động vào CSDL. */
+  'POST /api/kho/nap-mo':           khoNapMo,
+  'POST /api/kho/nap-xem':          khoNapXem,
+  'POST /api/kho/nap-ghi':          khoNapGhi,
+  'GET /api/kho/nap-luot':          khoNapLuot,
+  'POST /api/kho/nap-huy':          khoNapHuy,
   'POST /api/kho/nhap':          khoNhap,
   'POST /api/kho/xuat':          khoXuat,
+  'POST /api/kho/dieu-chinh':    khoDieuChinh,
   'GET  /api/kho/lo':            khoLo,
   'GET  /api/kho/bao-cao':       khoBaoCao,
   'GET  /api/kho/lich-su':       khoLichSu,
@@ -6024,11 +7867,20 @@ const DUONG_DAN = {
   'POST /api/hoan/phan-loai':    hoanPhanLoai,
   'GET  /api/vinh-danh': vdDanhSach,
   'POST /api/vinh-danh': vdGui,
+  /* Sửa/gỡ lời khen trong 24h + lùi đúng số sao + bắn tin đính chính
+     (REV-0037 · L5 — khen nhầm tên là lời khen phản tác dụng vĩnh viễn). */
+  'POST /api/vinh-danh/sua': vdSua,
   'GET  /api/cong-viec/danh-sach': cvDanhSach,
   'GET  /api/cong-viec/hom-nay':   cvHomNay,
   'POST /api/cong-viec/nhac-tat':  cvNhacTat,
   'POST /api/cong-viec/tao':       cvTao,
   'POST /api/cong-viec/cap-nhat':  cvCapNhat,
+  /* CTL-0017 — sửa NỘI DUNG việc đã giao. Tách hẳn khỏi `cap-nhat` (đổi
+     trạng thái + kết quả): hai luật khác hẳn nhau, gộp một cửa là mời lỗi. */
+  'POST /api/cong-viec/sua':       cvSua,
+  'POST /api/cong-viec/nhan-xet':  cvNhanXet,
+  /* Sổ sửa dùng chung cho cả lớp — ?bang=cong_viec|muc_tieu&id=… */
+  'GET  /api/sua/lich-su':         suaLichSu,
   'GET  /api/cong-viec/lich-su':   cvLichSu,
   'GET  /api/cong-viec/tong-quan-congty': cvTongQuanCongTy,
   'GET  /api/cong-viec/tong-quan-phongban': cvTongQuanPhongBan,
@@ -6044,7 +7896,9 @@ const DUONG_DAN = {
   'POST /api/kinh-doanh/da-doi-soat':  kdDaDoiSoat,
   'POST /api/kinh-doanh/day-kho':      kdDayKho,
   'POST /api/kinh-doanh/day-ke-toan':  kdDayKeToan,
-  'GET  /api/kinh-doanh/tong-quan-doanh-thu': kdTongQuanDoanhThu,
+  'GET  /api/kinh-doanh/tong-quan-kenh':      kdTongQuanKenh,
+  'GET  /api/kinh-doanh/xep-hang-sku':        kdXepHangSku,
+  'POST /api/kinh-doanh/tach-dong-hang':      kdTachDongHang,
   'POST /api/kinh-doanh/dong-bo-don-hang':    kdDongBoDonHang,
   'GET  /api/kinh-doanh/don-hang-huy':        donHangHuy,
   'GET  /api/ke-toan/can-tra-soat':    ktCanTraSoat,
@@ -6056,7 +7910,15 @@ const DUONG_DAN = {
   'GET  /api/tiktok/callback':   tiktokCallback,
   'POST /api/tiktok/dong-bo':    tiktokDongBo,
   'POST /api/nhan-su/doc-cccd':  nsDocCCCD,
-  'POST /api/nhan-su/don-moi':   nsDonMoi
+  'POST /api/nhan-su/don-moi':   nsDonMoi,
+  'GET  /api/tai-lieu':          tlDanhSach,
+  'POST /api/tai-lieu/luu':      tlLuu,
+  'GET  /api/tai-lieu/mo':       tlMo,
+  'GET  /api/tai-lieu/tep':      tlTep,
+  'GET  /api/tai-lieu/nhat-ky':  tlNhatKy,
+  'GET  /api/tai-lieu/lich-su':  tlLichSu,
+  'POST /api/tai-lieu/sua':      tlSua,
+  'POST /api/tai-lieu/an':       tlAn
 };
 
 export default {
@@ -6088,6 +7950,13 @@ export default {
          TẮT KHẨN CẤP: đặt biến môi trường NHAC_VIEC_TAT=1 → câm ngay, không
          cần deploy. Bật PILOT riêng một phòng: NHAC_VIEC_BO_PHAN="Kho vận". */
       try { await quetNhacCongViec(env, guiThongBao, guiTelegram); } catch (e) { console.error('Cron nhắc việc:', e.message); }
+      /* CTL-0026 — nhắc GIẤY TỜ SẮP HẾT HẠN. ĐÚNG MỘT DÒNG thêm vào cron đã
+         có; `wrangler.toml` KHÔNG đổi, KHÔNG có lịch thứ hai (ràng buộc
+         CTL-0026 Mục 6). Hàm tự đóng cửa ngoài 8h–18h và Chủ nhật (ADR-0013),
+         tự gộp một người MỘT tin/ngày, tự chống trùng bằng bảng `thong_bao`.
+         Chưa nạp migration thì nó về ngay, không làm hỏng việc nền nào khác.
+         Vì sao đáng nhắc: giấy hết hạn = khoá gian hàng = mất doanh thu thật. */
+      try { await tailieu.quetNhacHetHanTaiLieu(env, guiThongBao); } catch (e) { console.error('Cron nhắc hạn tài liệu:', e.message); }
       /* CTL-0014 — dọn nhật ký đẩy quá 3 ngày. Nhật ký chỉ để tính gộp 60 giây
          và trần theo ngày, giữ lâu hơn là phình bảng vô ích. Một dòng, chung
          cron sẵn có, KHÔNG thêm lịch thứ hai vào `wrangler.toml`. */
@@ -6156,8 +8025,13 @@ export default {
     try {
       return await xuLy(req, env, ctx);
     } catch (e) {
-      // Không trả chi tiết lỗi ra ngoài — lộ cấu trúc hệ thống cho kẻ dò.
-      console.error('Lỗi máy chủ:', e.stack || e.message);
+      /* Không trả chi tiết lỗi ra ngoài — lộ cấu trúc hệ thống cho kẻ dò.
+         ⚠️ `e` KHÔNG chắc là một Error: ném một chuỗi, một object, hay
+         `undefined` thì `e.stack`/`e.message` đều là `undefined` và dòng log
+         này thành "Lỗi máy chủ: undefined" — mất sạch manh mối đúng lúc cần
+         nó nhất (REV-0055 · CAO-3 gặp đúng ca đó). Câu RA NGOÀI vẫn là câu
+         cố định, không bao giờ là "undefined". */
+      console.error('Lỗi máy chủ:', (e && (e.stack || e.message)) || String(e));
       return loi('Máy chủ gặp sự cố', 500);
     }
   }

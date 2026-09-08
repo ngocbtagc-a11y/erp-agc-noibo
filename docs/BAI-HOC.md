@@ -811,6 +811,228 @@ người khác nhìn thấy**, không nuốt bằng một dòng `console.error`.
 → So định danh của hệ thống ngoài thì so theo kiểu dữ liệu **của hệ thống đó**, không theo
 kiểu mình đang cầm: `BigInt` cho chat id Telegram, và chỉ lùi về so chuỗi khi không phải số.
 
+**BH-57 · Chỗ Sếp chỉ tay hiếm khi là chỗ hỏng duy nhất — và `break-word` KHÔNG cứu được ô
+flex.**
+Sếp Ngọc gửi ảnh thanh cuộn ngang **trong chat**. Đo ra bong bóng chat vốn đã đúng: nó có sẵn
+`word-break: break-word`, chuỗi 100 ký tự dính liền vẫn xuống dòng gọn. Thủ phạm thật là hai
+thứ Sếp **không** chỉ vào: ① *thanh chat* là `<input type="text">` — thẻ một dòng thì không
+CSS nào bắt nó xuống dòng được, gõ 133 ký tự ra `scrollWidth` 1034px trong ô rộng 232px; và
+cả ERP có **111** ô cùng kiểu *(vòng 1 khai 12 — sai, xem BH-58)*. ② không có chốt chặn
+từ-dài toàn cục: bơm một link Shopee vào bất kỳ khung chữ nào thì **cả 6 tab** phình từ 375px
+ra 654–991px.
+→ Sửa đúng chỗ được chỉ là sửa 1/112. **Đo cả lớp trước khi vá**: liệt kê mọi chỗ cùng cơ chế,
+rồi mới quyết vá ở đâu.
+→ `overflow-wrap: break-word` cho chữ xuống dòng nhưng **không hạ min-content**, mà bề rộng
+tối thiểu của một ô flex/grid lấy đúng min-content — nên từ dài vẫn banh rộng cả hàng flex,
+chữ bên trong xuống dòng cũng vô ích. Đã đo: đặt `break-word` toàn cục xong hai tab **vẫn**
+tràn 1071px và 971px. Phải `anywhere`, rồi trả riêng `table, table *` về `break-word` để cột
+bảng không vỡ — **kèm ca đối chứng "bảng nhiều cột vẫn cuộn ngang được"**, nếu không lần sau
+có người "sửa cho triệt để" và làm vỡ hết bảng mà không ai biết.
+→ Phép đo phải **nhìn thấy thứ nó khai**: gần hết số ô nằm trong hộp thoại đang đóng, mà
+phần tử ẩn thì cao 0px — đo thẳng là bàn đo XANH vì nó chẳng nhìn thấy gì. Phải gỡ tạm
+`hidden`, đo, rồi trả lại nguyên trạng, và **đếm đủ mới cho xanh**.
+
+**BH-58 · PHÉP LỌC ĐỂ ĐẾM CŨNG LÀ MỘT CHỖ CÓ THỂ MÙ — và chỗ "không khai gì" là chỗ nguy
+hiểm nhất, không phải chỗ vô hại.**
+BH-57 ở trên rút ra đúng bài "đo cả lớp trước khi vá" — rồi **hụt ở đúng bước đếm**. Bàn đo
+lọc ô bệnh bằng `i.maxLength >= 100`. Nhưng một `<input>` **không khai `maxlength`** thì
+`maxLength === -1` → **bị loại sạch khỏi phép đếm**. Kết quả: bàn đo khai "12 ô, đã vá 12,
+còn 0" và XANH — trong khi bơm 200 ký tự vào mọi ô thì **99/99 ô một dòng còn lại vẫn kéo
+ngang, và 99/99 không có `maxlength`**, tức nhận chữ **vô hạn**, nặng hơn hẳn ô 120 ký tự đã
+vá. Con số thật của cả lớp là **111**, không phải 12. Bàn đo đó sẽ báo xanh mãi mãi.
+→ **Vá phép đếm trước, rồi mới vá.** Vá 15 ô rồi đếm bằng cái lọc cũ thì lứa sau lại sót.
+→ Tiêu chí đếm phải hỏi **"ô này có NHẬN chữ dài không"**, không phải *"ô này có KHAI trần
+lớn không"*. Giá trị **vắng mặt** (`-1`, `null`, `undefined`, `''`) hay bị đọc thành "không
+có vấn đề" trong khi nó nghĩa là "không có giới hạn" — ngược hẳn.
+→ Dấu hiệu nhận ra sớm: **một phép đếm mà mẫu số nhỏ bất thường**. "12 ô trong cả một ERP
+3.100 dòng HTML" đáng phải làm người viết dừng lại hỏi *mẫu số kia lấy ở đâu ra*.
+→ Ca đối chứng phải bắn vào **đúng lỗ mù đó**, không chỉ vào ca dễ: `--tu-kiem` giờ chèn
+**ba** vết thương, trong đó có một ô **cố ý không khai `maxlength`**. Phép lọc cũ trượt ô đó
+100%; bắt được nó mới là bằng chứng phép đếm đã sáng mắt.
+
 *(BH-45 · BH-46 — số đã dùng ở nhánh `feature/ctl-0023-dot2-cam` cho hai bài học khác
 ["Phép đo CHỌN TAY…", "Một token gánh HAI VAI…"]. Cố ý bỏ trống ở đây để hai nhánh gộp vào
 không đè nhau — xem REV-0030. Đây không phải chỗ trống để điền.)*
+
+**BH-57 · MÔ HÌNH ĐỌC ẢNH KHÔNG HỎNG GỌN: có một DẢI GIỮA nó giữ đúng danh tính tờ giấy mà
+thay lặng lẽ vài CON SỐ.** (REV-0040 — Hồ Ly đo, Gạo chốt hướng xử)
+Vòng 1 chỉ thấy hai đầu của cái thang: ảnh đúng thông số sản phẩm → 8/8 đúng; ảnh thảm hoạ →
+bịa cả tờ, chốt mỏ neo bắt gọn. Giữa hai đầu ấy có một dải (ảnh 500–620px) mà mô hình vẫn
+đọc **đúng tên tờ giấy, đúng số hiệu**, nhưng MST `0110938472` ra `0110934872`, bên mua bịa
+tên khác, năm 2026 thành 2020 — **không cảnh báo, không `[không rõ]`**. Đường đọc CCCD ra ca
+nguy nhất: **họ tên ĐÚNG đứng cạnh số CCCD SAI 11 chữ số**; cái tên đúng làm người ta tin
+luôn con số.
+→ **Mỏ neo không cứu được dải này.** Mỏ neo (số hiệu · tên công ty · tên loại giấy tờ) chỉ
+bắt ca bịa TOÀN TRANG, vì nó kiểm DANH TÍNH. Dải giữa danh tính đúng, chỉ số sai.
+→ Chốt đúng cho dải này là **thể chế, không phải thuật toán**: mọi CON SỐ do AI bóc ra đeo
+nhãn *"AI đọc — CHƯA KIỂM"*, hiện khác hẳn về thị giác, và **không được tự điền vào ô dữ
+liệu chính thức** cho tới khi có người xác nhận. Chữ MÔ TẢ thì thoải mái; con số thì không.
+→ Vì sao khắt khe đúng với con số: trong kho pháp lý và hồ sơ lao động, một con số sai
+**không phải lỗi phần mềm — là giấy tờ sai sự thật**. Thà bắt người gõ tay 12 chữ số.
+→ Bài học về PHÉP ĐO: đo ở **đúng thông số sản phẩm** là phép đo kịch trần, tức phép đo mù.
+Muốn biết một chốt AI đáng tin tới đâu thì phải **dựng thang tụt cho tới lúc nó GÃY**, rồi
+soi kỹ **khúc ngay trước chỗ gãy** — chỗ đó mới là chỗ nó nói dối trôi chảy nhất.
+
+**BH-58 · "Bàn đo X sạch y hệt nền" là một LỜI KHAI, phải chạy mới được nói.** (REV-0040)
+Vòng 1 tôi khai `npm run do-cat-im-lang` "y hệt nền" — **SAI, và đây là đính chính**. Chạy
+thật ra **3 chỗ hỏng, cả 3 nằm trong file của chính đợt này**, trong đó `nhatKyTaiLieu()`
+`LIMIT 200` là cắt im lặng THẬT, cắt đúng **màn nhật ký truy cập** — chỗ ít được phép cắt
+lặng nhất trong cả ERP, vì nó tồn tại để trả lời *"ai đã tiếp cận dữ liệu cá nhân này"*.
+→ "Y hệt nền" chỉ đúng khi nền và bản mới **có cùng tập tệp**. Đợt này đẻ ra 4 tệp mới không
+tồn tại ở nền `a9dc0f1`, nên mọi vi phạm trong đó là **nợ MỚI**, không phải nợ cũ. So với nền
+mà quên rằng tập tệp đã đổi thì phép so đó tự sinh ra một chỗ mù.
+→ Cùng lớp, chiều ngược lại: **báo oan nguy ngang để lọt.** `quet-tai-lieu.js:144` bị tố oan
+(`.slice(0, 40)` trên một UUID) chỉ vì lưới `String\([^)]*\)` không nuốt nổi một tầng ngoặc
+lồng. Người ta không sửa một máy quét hay báo oan — người ta **tắt nó đi**. Nên mỗi lần nới
+lưới phải kèm **một mẫu sạch (chống oan) VÀ một mẫu bẩn cùng hình dạng (chống cửa sau)**.
+→ Bẫy môi trường đã ăn một lần trong đợt này: máy Windows để `core.autocrlf=true`, tệp trong
+cây làm việc là CRLF hay LF **tuỳ tệp đó vừa đi qua công cụ nào**, mà `git diff` thì chuẩn
+hoá nên nhìn không thấy. Ca đối chứng khớp chuỗi có `\n` vì thế **trượt im lặng**. Mọi bàn đo
+đọc tệp nguồn phải `.replace(/\r\n/g, '\n')` trước khi khớp — số đo đổi theo cấu hình git là
+số đo không dùng được.
+
+**BH-59 · Đổi thẻ của một ô nhập thì phải sửa cả cái thước đo nó.** 29/08/2026, gộp
+REV-0047 từ `main`: 5 ô chữ dài của màn quét đổi `<input>` → `<textarea>`. Ngón tay vẫn
+chạm đúng 7 lần, nhưng bộ đếm chạm trong `ban-quet-tai-lieu.html` lọc bằng
+`closest('button, a, label, input, [data-viec]')` — **không có `textarea`** — nên nó khai
+**5 chạm**. Nếu con số ấy không có một câu khẳng định cứng (`chamErpHoSo === 7`) canh bên
+cạnh thì lượt gộp này đã **đẻ ra một chỉ số đẹp hơn sự thật** và không ai biết. Bài học
+không phải "nhớ thêm `textarea`", mà là: **mọi bộ lọc liệt kê tên thẻ đều là một danh sách
+sẽ lỗi thời**, và thứ cứu nó là con số kỳ vọng viết cứng ngay cạnh — sai lệch phải làm
+bàn đo ĐỎ, không được làm nó im.
+
+**BH-60 · Token CSS không tồn tại là lỗi mà máy dò MÀU không bao giờ thấy.**
+`.jd-mau-nut` và `.kn-nguoi` cùng viết `background: var(--panel)` — `--panel` chưa từng
+được khai, và cả hai chỗ đều không có giá trị dự phòng, nên CSS coi thuộc tính đó là
+`unset`: **nền hoá trong suốt**, cái nút trông như không có nút. `do-ba-mau` mù hoàn toàn
+với ca này suốt nhiều vòng, vì cả 5 mục của nó đều đi **tìm mã màu** — mà ở đây *không có
+mã màu nào cả*; lỗi chính là **chỗ đáng lẽ có màu thì trống rỗng**. Một phép đo đi tìm
+"thứ sai" luôn mù với "thứ thiếu". Muốn bắt phải hỏi một câu **khác hẳn về loại**: *"mọi
+`var(--x)` có trỏ tới một khai báo có thật không?"* → mục ⑥, kèm cả **đối chứng ngược**
+(token có thật thì phải IM) vì phép kiểm báo bừa cũng vô dụng y như phép kiểm mù.
+
+**BH-61 · Thứ tự chạy migration nằm ở TÊN FILE, mà `.sort()` trần thì so cả cái đuôi.**
+`them-kho-tai-lieu-cot-ocr-neo.sql` xếp **trước** `them-kho-tai-lieu.sql` vì dấu `-`
+(0x2D) đứng trước dấu `.` (0x2E) trong bảng mã — tức là bảng liệt kê "cần chạy" bảo người
+ta chạy `ALTER TABLE` trước khi có bảng. Cắt đuôi `.sql` rồi mới so thì tên ngắn luôn là
+tiền tố của tên dài và luôn đứng trước — đúng nếp "file gốc trước, file vá cột sau". Sửa
+xong mới thấy nó **không phải lỗi của riêng cặp file mới**: 6 cặp trong repo đang xếp
+ngược (`them-chat`, `them-congviec`, `them-donhang`, `them-gopy`, `them-kho`,
+`them-vinhdanh`). Một dòng `.sort()` mặc định, sai âm thầm suốt 6 lần.
+
+**BH-62 · Một `catch` viết tử tế là chỗ nấp tốt nhất cho một tính năng đã chết.**
+07/09/2026, GY-0007 ("không xem được kho tài liệu trên app điện thoại, không kéo xuống
+được"). **Mỗi lần mở ERP**, ở **mọi bề ngang** và **mọi vai trò có quyền `khotailieu`**,
+tab Kho tài liệu ở **lần vẽ đầu tiên** hiện **0 tài liệu + một câu lỗi máy** trên màn:
+`let TL_NHOM_LUU_DUOC` khai ở dòng ~10334 trong khi `await khoiDongKhoTaiLieu()` chạy ở
+dòng ~7462 — chạm biến trong vùng chết TDZ, đúng con bệnh `TBDay` đã giết chat nhiều tuần
+và đã đẻ ra `cong-khoi.mjs`. Nhưng lần này cổng khói **XANH**: lỗi rơi vào một `catch` có
+`try` đàng hoàng, in ra một câu tiếng Việt đúng chuẩn nhà ("Không tải được kho tài
+liệu: …") rồi thôi. Không `console.error`, không ngoại lệ chưa bắt, nút cửa ngõ vẫn bấm ăn.
+Sếp thì thấy một tab trống trơn, không có gì để kéo — nên góp ý về được viết thành "không
+kéo xuống được", và đọc nguyên văn góp ý mà đi sửa CSS cuộn thì sửa cả tuần không trúng.
+
+→ **SỬA LỜI KHAI 07/09/2026 (REV-0062 ⓪ + CAO-1) — bản đầu của bài học này viết "chết
+hoàn toàn", và đó là NÓI QUÁ.** Hồ Ly dựng lại `origin/main` với đúng ba tài liệu như ảnh
+Sếp chụp và đo được **đường hồi phục**:
+
+| Thời điểm | Số thẻ | Dải đếm |
+|---|---|---|
+| ngay sau khi nạp trang | **0** + câu lỗi TDZ | ẩn |
+| sau khi **bấm một nút lọc bất kỳ** (kể cả "Tất cả") | **3** | hiện |
+| nạp lại → **gõ một phát** vào ô tìm | **3** | hiện |
+
+**Vì sao hồi phục**: `napKhoTaiLieu()` gọi `veLoc()` — vẽ và **nối dây** 8 nút lọc —
+**TRƯỚC** dòng `TL_NHOM_LUU_DUOC = nhomLuuDuoc;` là chỗ nổ. Nên lúc tab chết, nút lọc và
+ô tìm vẫn nằm đó và vẫn gọi `nap()` được; đến lúc người dùng chạm vào thì mô-đun đã chạy
+hết tệp, dòng khai đã thi hành, `nap()` chạy trọn vẹn. **Một cú bấm là tab sống lại cho
+tới hết phiên.** Ảnh "đang chạy" của Sếp được giải thích trọn vẹn bằng đúng chuyện đó.
+→ **Mức nghiêm trọng KHÔNG đổi**: người mở ERP ra nhìn thấy màn trống + một câu lỗi máy,
+và **không ai bảo họ "bấm một nút là hiện"**. Với người không biết bấm thử, tab coi như
+hỏng. Vẫn đáng vá, đã vá đúng.
+→ **Bài học của chính chỗ này**: nói quá theo hướng an toàn **vẫn là khai sai số đo**, và
+câu sai đã kịp nằm vĩnh viễn trong `CHANGELOG.md` + bài học này trước khi ai kiểm lại.
+Viết mức nghiêm trọng thì viết **đúng thứ đo được**, đừng viết thứ nghe cho đủ nặng.
+
+→ Đây là **cách hỏng thứ SÁU**, nối tiếp năm cách đã ghi ở đầu `cong-khoi.mjs`:
+**lỗi được bắt tử tế rồi in ra màn hình — mà không bàn đo nào ĐỌC màn hình.**
+→ Lưới chống tái phát không phải "nhớ khai biến cho đúng chỗ" (không ai nhớ nổi qua 11.000
+dòng), mà là hai thứ cùng lúc: ① một **khối khai biến dùng lúc khởi động** đặt TRƯỚC dãy
+`await khoiDong…()` trong `app.js`, ② bàn đo `scripts/do-man-mo-ra-xem-duoc.mjs` đi qua
+từng tab của từng vai trò ở từng bề ngang.
+
+→ **VÒNG 2 — ĐỌC CHỮ THÔI THÌ CHƯA ĐÓNG ĐƯỢC CÁCH HỎNG (REV-0062 CHẶN-1).** Bản đầu của
+bàn đo đó canh bằng một **danh sách sáu câu tiếng Việt chép tay** ("Không tải được",
+"Không mở được"…). Hồ Ly gài bốn kiểu hỏng khác và **bàn đo mù đúng hai kiểu khó nhất**:
+· **A** — chết y hệt, nhưng `catch` in câu KHÁC ("Kho tài liệu đang bảo trì…") → 0 thẻ, **XANH**
+· **B** — nạp xong, không lỗi, chỉ **không vẽ gì** → 0 thẻ, im lặng tuyệt đối, **XANH**
+Cả hai đi qua được vì danh sách chép tay thì **câu thứ bảy luôn lọt**, và vì màn rỗng thì
+phép chấm "cuộn xuống được" cũng xanh nốt ("vừa một màn" — rỗng thì lấy gì mà cuộn).
+Nguyên văn Hồ Ly: ***"cách hỏng thứ SÁU mới đóng được một CÂU, chưa đóng được một CÁCH HỎNG."***
+→ **Chữa bằng cách ĐẢO CÂU HỎI**, không phải bằng cách liệt kê thêm câu lỗi. Câu hỏi đúng
+không phải *"màn có câu xấu nào không"* mà là ***"tab này CÓ NỘI DUNG không"***: mỗi tab
+**tự khai một mỏ neo** — một thứ cụ thể chỉ tồn tại nếu bộ vẽ đã chạy xong (một thẻ, một
+dòng, một con số). Không có mỏ neo → **ĐỎ**, bất kể màn im lặng hay in ra câu gì. Tab nào
+ra rỗng mà **có lý do chính đáng** (ổ giả cố ý trả mảng rỗng) thì chỉ đòi **khung**, không
+đòi dữ liệu — bàn đo không bao giờ đòi thứ nó không tự gieo.
+→ **Mỏ neo phải do JS vẽ ra, không được nằm sẵn trong `app.html`** — mỏ neo tĩnh là mỏ neo
+mù, tab chết thì nó vẫn nằm đó. Cả bảng mỏ neo được chọn bằng cách ĐO: dựng `app.html`
+bằng `DOMParser` (không chạy script) rồi trừ khỏi DOM sống, giữ đúng thứ JS thêm vào.
+→ **Và phải tự gài BỐN kiểu hỏng KHÁC NHAU, không phải gài lại lỗi cũ của chính mình.**
+Gài lại đúng lỗi mình vừa vá là tự chấm bài mình: bàn đo bắt được thứ nó sinh ra để bắt.
+Bốn ca A·B·C·D nay nằm trong bàn đo, chạy lại được (`npm run do-mo-ra-xem-duoc-ca-A`…),
+và **mỗi ca khai sẵn phép chấm nào PHẢI đỏ** — đỏ vì lý do khác cũng bị tính là trượt.
+→ Hệ quả rộng cho cả repo: **`catch` nào nuốt lỗi vào một dòng chữ trên màn thì màn đó
+phải có một bàn đo khẳng định NÓ CÓ NỘI DUNG** — chứ không phải một bàn đo đi dò câu chữ.
+Dò chữ đóng được một câu; hỏi "có nội dung không" mới đóng được cách hỏng.
+
+**BH-63 · Phép đo không tái hiện được cái bẫy thì đừng giả vờ đã đo — chuyển sang canh bằng LUẬT.**
+Cùng đợt GY-0007, đi quét cả lớp "mở ra mà không xem được" thì gặp bốn chỗ đặt trần chiều
+cao bằng `vh` cho thứ NỔI ĐÈ màn hình (`.modal` · `.tlq-tam` · `.tb-panel` · `.cnb-popup`).
+Trên điện thoại thật `100vh` cao hơn vùng nhìn thấy ~60-90px, nên tấm nổi thòi ra ngoài
+khung `position:fixed` và phần thòi ra thì `overflow:auto` của chính nó **không kéo tới
+được** — mất nút ✕, mất hàng nút Lưu/Huỷ. ERP đã trả giá đúng chuyện này ở `.cnb-popup`
+(29/08) và ghi hẳn chú thích, nhưng bốn chỗ khác vẫn nguyên. Vấn đề: **Chrome không đầu
+KHÔNG có thanh địa chỉ co giãn**, ở đó `100vh === innerHeight`, nên mọi phép đo hình học
+trên máy này đều XANH và cái bẫy tàng hình.
+→ Cách xử đúng là **nói thẳng ra là không đo được**, rồi canh bằng một luật đọc trên chính
+tệp CSS (mục Ⓓ của bàn đo mới): thứ nào nổi đè màn hình mà đặt trần chiều cao bằng `vh`
+thì ĐỎ. Không phải phép đo, là lưới — và phải gọi nó đúng tên.
+→ Cái bẫy trong chính cái lưới: bản đầu viết `\bvh\b`, và **bỏ lọt sạch cả bốn chỗ** — vì
+trong `100vh` thì trước `vh` là chữ số, mà chữ số cũng là ký tự từ nên **không có ranh
+giới `\b` ở đó**. Phải `(?<![a-z])vh\b`. Đã chứng minh bằng cách chạy đúng lưới đó lên
+CSS của `origin/main`: ra đủ 4 chỗ. **Lưới mới nào cũng phải chạy thử trên bản CHƯA VÁ —
+xanh trên bản đã vá không chứng minh được gì cả.**
+
+**BH-64 · `dvh` không có đường lui: đơn vị trình duyệt không hiểu thì mất CẢ DÒNG luật, không "lùi về `vh`".**
+07/09/2026, REV-0062 CHẶN-2 — bắt được ngay trên bản vá của BH-63. Đổi bốn chỗ `vh` → `dvh`
+và viết **một dòng duy nhất** là đã dựng lại đúng cái hỏng mình vừa đi vá, cho máy cũ.
+Luật CSS: khai báo mang **đơn vị lạ là khai báo không hợp lệ và bị vứt cả dòng** — không
+phải lùi về giá trị cũ, mà là **không còn trần nào cả**. Đo thật bằng `getComputedStyle`
+trong Chrome, dùng một đơn vị bịa (`qvh`) đóng vai trình duyệt cũ:
+
+| viết thế nào | `getComputedStyle` trả về |
+|---|---|
+| `max-height: calc(100qvh - 40px)` **một mình** | **`none`** — mất sạch trần |
+| `max-height: 92qvh` **một mình** | **`none`** |
+| CẶP `calc(100vh - 40px)` rồi `calc(100qvh - 40px)` | `772px` — **giữ được** |
+| CẶP `92vh` rồi `92qvh` | `747.04px` — **giữ được** |
+| CẶP `100vh` rồi `50dvh` (Chrome MỚI) | `406px` = **nửa màn** → dòng SAU vẫn thắng |
+
+`dvh` chỉ có từ **Chrome 108 / Safari 15.4 / Firefox 101** (cuối 2022). Dưới mốc đó:
+`.modal` mất trần → hộp thoại dài tràn khỏi `.modal-nen` (`fixed` + căn giữa nên phần dư
+bị đẩy đều hai đầu) → **mất hàng nút "Lưu / Huỷ"**; `.tlq-tam` mất trần → màn quét giấy tờ
+**mất nút ✕**. Trước bản vá họ hỏng vì `vh` cao hơn vùng nhìn ~60-90px; sau bản vá họ hỏng
+vì **không còn trần nào** — **nặng hơn**. Nhân sự kho quét giấy tờ bằng điện thoại cũ là
+nhóm dính đầu tiên.
+→ **Luật nhà: `dvh` không bao giờ đứng một mình.** Viết CẶP — `vh` trước làm nền, `dvh`
+sau đè lên. Tốn 0đ, không thêm gói. Áp cho cả 5 chỗ (`.modal` · `.tlq-tam` · `.tb-panel` ·
+`.cnb-popup` × 2 khối).
+→ **Lưới Ⓓ phải chấm BA trạng thái, không phải hai**: `vh` một mình ĐỎ (bẫy cũ) · `dvh`
+một mình ĐỎ (bẫy mới) · CẶP đúng thứ tự ĐẠT. Lưới cũ chỉ cấm `vh` nên nó **chấm XANH cho
+chính cái bẫy mới** — một lưới chỉ biết cấm cái sai hôm qua thì hôm nay nó gật đầu cho cái
+sai mới.
+→ Bẫy phụ, bắt được lúc tự thử: lưới đọc CSS phải **gỡ chú thích trước khi soi**. Chú
+thích mới viết có nhắc lại `max-height: calc(100qvh - 40px)` làm ví dụ, và lưới **đọc luôn
+chữ trong chú thích như khai báo thật**. Lưới đọc chữ thì phải đọc đúng phần chữ **có hiệu
+lực**.

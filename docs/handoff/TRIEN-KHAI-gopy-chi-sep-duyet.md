@@ -131,8 +131,8 @@ lại: `cho_duyet_tu_luc` phải **về đúng giá trị cũ**.
 ## Đường lui
 
 ```bash
-npx wrangler d1 execute crm-agc --remote --file=migrations/lui-gopy-cho-duyet-tu-luc.sql
-npx wrangler d1 execute crm-agc --remote --file=migrations/lui-quyen-duyet-gopy.sql
+npx wrangler d1 execute crm-agc --remote --file=migrations/lui/lui-gopy-cho-duyet-tu-luc.sql
+npx wrangler d1 execute crm-agc --remote --file=migrations/lui/lui-quyen-duyet-gopy.sql
 ```
 
 Giá trị cũ của đồng hồ cất ở bảng `gopy_cho_duyet_luu_lui`. **Lùi là mở lại cửa

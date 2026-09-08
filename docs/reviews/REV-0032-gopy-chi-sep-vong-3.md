@@ -106,5 +106,5 @@ ghi file, không ghi log — ai đứng sau lưng thì đọc được, đó là
 | 5 | Thử đường khôi phục **trên bản thật, một lần** | Anh Phong bấm "Đặt lại mật khẩu" ở tài khoản Sếp → **200**, hộp thoại nói *"không hiện mật khẩu ở đây"*; Sếp nhận mật khẩu ở **chat riêng**; nhóm chung có dòng `[Bảo mật]`; Sếp đăng nhập được và bị bắt đổi mật khẩu |
 | 6 | Thử đồng hồ SLA | Một góp ý cũ đang chờ cổng 1: bấm "giao người phụ trách" → `SELECT cho_duyet_tu_luc` **không đổi** |
 
-Lùi: `npx wrangler d1 execute crm-agc --remote --file=migrations/lui-gopy-cho-duyet-tu-luc.sql`
+Lùi: `npx wrangler d1 execute crm-agc --remote --file=migrations/lui/lui-gopy-cho-duyet-tu-luc.sql`
 (giá trị cũ nằm ở `gopy_cho_duyet_luu_lui`) — lùi là **mở lại cửa 14**, biết rồi hãy lùi.

@@ -56,7 +56,7 @@
               <label class="thd-panel-nhan">Trạng thái</label>
               <select id="thdMa"></select>
               <label class="thd-panel-nhan">Ghi chú</label>
-              <input type="text" id="thdGhiChu" maxlength="120" placeholder="VD: Đang xử lý đối soát...">
+              <textarea id="thdGhiChu" class="o-nhieu-dong" rows="1" maxlength="120" placeholder="VD: Đang xử lý đối soát..."></textarea>
               <label class="thd-panel-nhan">Thời hạn</label>
               <select id="thdThoiHan">
                 <option value="30p">30 phút</option>
@@ -118,6 +118,19 @@
       </div>
       <div class="date" id="ngayHomNay"></div>
     </header>
+
+    <!-- ---------- Dải nhắc cài ERP lên máy (29/08/2026) ----------
+         Số đỏ trên biểu tượng thanh tác vụ CHỈ chạy khi ERP đã được cài như
+         ứng dụng. Dải này hiện ĐÚNG MỘT LẦN, chỉ trên máy tính, chỉ khi trình
+         duyệt báo cài được; bấm "Bỏ qua" là không hỏi lại nữa. Luật quyết định
+         nằm ở `nenNhacCai()` trong assets/js/so-do-bieu-tuong.js. -->
+    <div class="dai-cai-may" id="daiCaiMay" hidden>
+      <span class="dai-cai-may-chu" id="daiCaiMayChu"></span>
+      <span class="dai-cai-may-nut">
+        <button type="button" class="tbd-nut tbd-nut-chinh" id="daiCaiMayBat">Cài lên máy</button>
+        <button type="button" class="tbd-nut" id="daiCaiMayBoQua">Bỏ qua</button>
+      </span>
+    </div>
 
     <!-- ---------- Tổng quan ---------- -->
     <section class="view" id="v-tongquan">
@@ -183,6 +196,14 @@
         </div>
         <div class="panel-body" id="vd-form-body" hidden>
           <form id="vd-form" class="form-luoi" autocomplete="off">
+            <!-- Chế độ SỬA lời khen đã gửi (REV-0037 · L5). Nói rõ VÌ SAO
+                 không đổi được người: sửa lặng lẽ tên người nhận là chuyển
+                 một lời khen ĐÃ ĐỌC từ người này sang người kia. -->
+            <div class="field field-rong vd-dang-sua" id="vd-dang-sua" hidden>
+              ✏️ Đang sửa lời khen gửi <b id="vd-dang-sua-ten"></b>.
+              Sửa được lời khen và số ⭐. <b>Chọn nhầm người thì phải bấm Gỡ</b>
+              rồi khen lại — bạn ấy đã đọc lời khen này rồi nên sẽ nhận tin đính chính.
+            </div>
             <div class="field field-rong">
               <label>Khen ai *</label>
               <div class="combo1" id="vd-nguoicombo">
@@ -191,7 +212,7 @@
                   <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
                 </button>
                 <div class="combo1-panel" id="vd-nguoipanel" hidden>
-                  <input type="search" id="vd-nguoitim" placeholder="Tìm theo mã hoặc tên...">
+                  <input maxlength="80" type="search" id="vd-nguoitim" placeholder="Tìm theo mã hoặc tên...">
                   <div class="ql-goiy" id="vd-nguoigoiy"></div>
                 </div>
               </div>
@@ -263,9 +284,11 @@
         </div>
       </div>
 
-      <!-- Tổng quan việc TOÀN CÔNG TY — chỉ Admin thấy (Sếp Ngọc/Sếp Phong xem
-           full công ty, khác bảng "Việc cần làm/tôi giao" bên dưới vốn chỉ
-           lọc theo đúng người đang xem). -->
+      <!-- Tổng quan việc TOÀN CÔNG TY — CON SỐ TỔNG HỢP, chỉ Admin thấy
+           (`cvTongQuanCongTy` cắt bằng `laAdmin` ở máy chủ). Ở LẠI ĐÂY sau khi
+           gộp ba tab: đây là thứ Sếp Ngọc/Sếp Phong nhìn để RA QUYẾT ĐỊNH,
+           không phải danh sách để làm việc — danh sách nằm ở tab Lịch sử làm
+           việc. Quyền của khối này KHÔNG đổi một dòng nào trong lần gộp. -->
       <div class="panel" id="cv-tqct-panel" hidden>
         <div class="panel-head">
           <h4>📊 Tổng quan công việc toàn công ty</h4>
@@ -279,100 +302,30 @@
         </div>
       </div>
 
-      <!-- PHẠM VI — góp ý chị Vũ Lan Hương (HCNS, 28/08/2026): "không hiển thị
-           hết công việc public ở mục Việc cần làm". Ba bảng dưới đây CHỈ lọc
-           theo đúng người đang xem (`WHERE nguoi_nhan_id = ?` — src/index.js
-           cvDanhSach); việc của người khác chưa bao giờ vào đây. Trước đây
-           màn hình KHÔNG NÓI điều đó ra, nên nhìn như hệ thống thiếu việc.
-           Nói rõ phạm vi + chỉ đúng đường sang chỗ xem việc toàn công ty.
-           KHÔNG mở thêm quyền: tab "Lịch sử làm việc" vốn đã mở cho MỌI vai
-           trò (src/quyen.js), đây chỉ là chỉ đường tới chỗ họ vẫn vào được.
+      <!-- ĐÃ GỘP ĐI — Sếp Ngọc nhắc HAI LẦN (29/08/2026): "đoạn này bị thừa,
+           tích hợp chung vào chỗ lịch sử làm việc là được" · "cái này, thấy
+           thừa, gộp vào lịch sử làm việc đi".
 
-           GỌN LẠI 29/08/2026 (REV-0034 · L4). Bản đầu là một dải 4 dòng chữ +
-           một nút riêng: đo được 137px ở 375px và 157px ở 320px — ăn mất ~2
-           dòng bảng MỖI LẦN vào màn, kể cả khi không có gì bị cắt, trên đúng
-           màn hình nhân viên kho dùng bằng một tay. Trái đúng nguyên tắc viết
-           trong app.js: *"một dải luôn hiện là một dải mắt người học được cách
-           bỏ qua trong đúng một tuần"*. Nay: MỘT dòng, và cả dải LÀ cái nút
-           (vẫn ≥44px cho ngón tay — đo bằng npm run do-nut-dai-cat). Dải BÁO
-           CẮT thì giữ nguyên vì nó chỉ hiện khi thật sự có cắt. -->
-      <button type="button" class="cv-pham-vi dai-cat-nut" data-dai-cat-tab="lichsuviec"
-              title="Ba bảng dưới đây chỉ hiện việc bạn nhận · bạn được mời phối hợp · bạn giao. Việc của người khác không nằm ở đây.">
-        <span class="cv-pham-vi-chu">Đây chỉ là việc của bạn</span>
-        <span class="cv-pham-vi-di">Xem việc toàn công ty →</span>
-      </button>
+           GỠ KHỎI ĐÂY: dải "Đây chỉ là việc của bạn" + nút "Xem việc toàn công
+           ty →" + ba tab "Việc cần làm / Việc phối hợp / Việc tôi giao" + ba
+           bảng của chúng. Tất cả đã chuyển sang tab "Lịch sử làm việc" thành
+           MỘT màn duy nhất có bộ lọc: Việc của tôi · Tôi phối hợp · Tôi giao ·
+           Toàn công ty.
 
-      <div class="seg" id="cvSeg">
-        <button class="seg-nut active" data-cv="nhan">Việc cần làm</button>
-        <button class="seg-nut" data-cv="phoihop">Việc phối hợp</button>
-        <button class="seg-nut" data-cv="giao">Việc tôi giao</button>
-      </div>
+           VÌ SAO. Ba chỗ cùng hiện một loại dữ liệu không phải ba tính năng —
+           là MỘT tính năng bị chép ra ba lần. Mỗi lần thêm cột hay đổi luật
+           hiển thị phải sửa ba nơi; sót một nơi là ba màn hình nói ba con số
+           khác nhau về cùng một việc. Sau bản này còn HAI chỗ: khối "Việc của
+           tôi hôm nay" ở trên (chỗ LÀM VIỆC hằng ngày, giữ nguyên) và tab Lịch
+           sử làm việc (chỗ TRA CỨU + thao tác đầy đủ).
 
-      <div class="kv-pane" id="cv-pane-nhan">
-        <div class="panel">
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Việc</th>
-                  <th>Đầu ra cần đạt</th>
-                  <th>Người giao</th>
-                  <th>Hạn chót</th>
-                  <th>Trạng thái</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody id="cv-bang-nhan"></tbody>
-            </table>
-          </div>
-          <div class="empty" id="cv-trong-nhan" hidden>Chưa ai giao việc gì cho Sếp/bạn cả.</div>
-          <div class="dai-cat" id="cv-cat-nhan" hidden></div>
-        </div>
-      </div>
-
-      <div class="kv-pane" id="cv-pane-phoihop" hidden>
-        <div class="panel">
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Việc</th>
-                  <th>Đầu ra cần đạt</th>
-                  <th>Người chính</th>
-                  <th>Người giao</th>
-                  <th>Hạn chót</th>
-                  <th>Trạng thái</th>
-                </tr>
-              </thead>
-              <tbody id="cv-bang-phoihop"></tbody>
-            </table>
-          </div>
-          <div class="empty" id="cv-trong-phoihop" hidden>Chưa được mời phối hợp việc nào.</div>
-          <div class="dai-cat" id="cv-cat-phoihop" hidden></div>
-        </div>
-      </div>
-
-      <div class="kv-pane" id="cv-pane-giao" hidden>
-        <div class="panel">
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Việc</th>
-                  <th>Đầu ra cần đạt</th>
-                  <th>Giao cho</th>
-                  <th>Hạn chót</th>
-                  <th>Trạng thái</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody id="cv-bang-giao"></tbody>
-            </table>
-          </div>
-          <div class="empty" id="cv-trong-giao" hidden>Sếp/bạn chưa giao việc nào.</div>
-          <div class="dai-cat" id="cv-cat-giao" hidden></div>
-        </div>
-      </div>
+           KHÔNG mất chức năng nào: mọi nút (Bắt đầu làm · Nộp kết quả · Duyệt
+           xong · Trả lại · Sửa · Huỷ · ✓ Xong cho todo cá nhân), dải cắt danh
+           sách, và đường drill-down `MO_DEN_VIEC_CUA_TOI` đều còn — xem
+           `khoiDongLichSuViec` trong app.js và bảng đối chiếu trong
+           docs/reviews/. Quyền KHÔNG đổi một dòng: máy chủ vẫn cắt như cũ
+           (`cvDanhSach` lọc theo người gọi, `cvLichSu` đòi tab `lichsuviec`,
+           `cvTongQuanCongTy` đòi Admin). -->
 
     </section>
 
@@ -382,7 +335,20 @@
     <section class="view" id="v-lichsuviec" hidden>
       <div class="view-head">
         <h3>Lịch sử làm việc</h3>
-        <p>Toàn bộ việc trong Trạm Mục Tiêu — của tất cả mọi người, không riêng của bạn. Ai làm gì, xong khi nào, kết quả ra sao đều lưu lại ở đây.</p>
+        <p>Một chỗ duy nhất cho mọi việc trong Trạm Mục Tiêu: việc của bạn, việc bạn phối hợp, việc bạn giao, và việc của toàn công ty. Đổi phạm vi bằng bộ lọc ngay dưới.</p>
+      </div>
+
+      <!-- BỘ LỌC PHẠM VI — thay cho ba tab cũ bên Trạm Mục Tiêu + dải "Đây chỉ
+           là việc của bạn" + nút "Xem việc toàn công ty →" (Sếp Ngọc nhắc hai
+           lần 29/08/2026). Bốn phạm vi, MỘT bảng, một bộ ô tìm/lọc trạng thái
+           dùng chung — đổi luật hiển thị từ nay chỉ sửa một chỗ.
+           `.seg-loc` chỉ thêm chiều cao 44px cho ngón tay, KHÔNG đổi màu:
+           dùng nguyên `.seg`/`.seg-nut.active` đã có (docs/BANG-MAU.md). -->
+      <div class="seg seg-loc" id="lsv-loc">
+        <button class="seg-nut active" data-lsv="toi">Việc của tôi</button>
+        <button class="seg-nut" data-lsv="phoihop">Tôi phối hợp</button>
+        <button class="seg-nut" data-lsv="giao">Tôi giao</button>
+        <button class="seg-nut" data-lsv="congty">Toàn công ty</button>
       </div>
 
       <div class="panel">
@@ -392,7 +358,7 @@
               <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
                 <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
               </svg>
-              <input type="search" id="ls-cv-tim" placeholder="Tìm: tên việc · người nhận · người giao · mục tiêu">
+              <input maxlength="80" type="search" id="ls-cv-tim" placeholder="Tìm: tên việc · người nhận · người giao · mục tiêu">
             </div>
             <select id="ls-cv-loctt" class="chon-nho" title="Lọc theo trạng thái">
               <option value="">Tất cả trạng thái</option>
@@ -407,14 +373,29 @@
         <div class="table-wrap">
           <table id="ls-cv-tbl">
             <thead>
+              <!-- CHỌN CỘT — Sếp Ngọc nhắc LẦN HAI 04/09/2026 "ưu tiên hiển
+                   thị trên 1 màn hình, hạn chế thanh kéo sang". Câu hỏi kỷ
+                   luật: *nhìn một dòng ở đây, người dùng đang cần quyết định
+                   điều gì?* → "việc nào đang trễ, ai đang giữ, có phải việc
+                   của tôi không".
+                     Ở LẠI   : Việc · Đầu ra · Người nhận · Hạn chót · Trạng thái
+                     DÒNG PHỤ: mô tả · phối hợp · kết quả (trong ô "Việc")
+                     CHI TIẾT: Người giao · Mục tiêu · Cập nhật — không cột nào
+                       trong ba cái đó đổi được câu trả lời trong một cái liếc.
+                   "Đầu ra cần đạt" GIỮ CỘT RIÊNG (quyết định 29/08/2026): công
+                   ty chạy MBOs, Sếp phải rà được cả cột bằng mắt. Nó chỉ thêm
+                   `.cot-chu` để có TRẦN bề ngang — một đầu ra 200 ký tự trước
+                   đây kéo bảng rộng thêm ~1.400px vì ô để `nowrap`. -->
               <tr>
-                <th>Việc</th>
-                <th>Người nhận</th>
-                <th>Người giao</th>
-                <th>Mục tiêu</th>
+                <th class="cot-chu">Việc</th>
+                <th class="cot-daura cot-chu">Đầu ra cần đạt</th>
+                <th class="cot-chu">Người nhận</th>
+                <th class="cot-phu">Người giao</th>
+                <th class="cot-phu">Mục tiêu</th>
                 <th>Hạn chót</th>
                 <th>Trạng thái</th>
-                <th>Cập nhật</th>
+                <th class="cot-phu">Cập nhật</th>
+                <th></th>
               </tr>
             </thead>
             <tbody id="ls-cv-bang"></tbody>
@@ -442,19 +423,19 @@
             <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
               <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
             </svg>
-            <input type="search" id="db-tim" placeholder="Gõ tên, bộ phận hoặc chức vụ — ví dụ: kho, kế toán, Duy">
+            <input maxlength="80" type="search" id="db-tim" placeholder="Gõ tên, bộ phận hoặc chức vụ — ví dụ: kho, kế toán, Duy">
           </div>
         </div>
         <div class="table-wrap">
           <table>
             <thead>
               <tr>
-                <th>Nhân sự</th>
+                <th class="cot-chu">Nhân sự</th>
                 <th>Trạng thái</th>
                 <th>Bộ phận</th>
                 <th>Điện thoại</th>
-                <th>Email</th>
-                <th>Quản lý trực tiếp</th>
+                <th class="cot-phu">Email</th>
+                <th class="cot-phu">Quản lý trực tiếp</th>
                 <th></th>
               </tr>
             </thead>
@@ -481,7 +462,7 @@
           <form id="gy-form" class="form-luoi" autocomplete="off">
             <div class="field field-rong">
               <label>Tiêu đề *</label>
-              <input type="text" id="gy-tieude" required maxlength="150" placeholder="Ví dụ: Không lọc được đơn hoàn theo ngày">
+              <textarea id="gy-tieude" class="o-nhieu-dong" rows="1" required maxlength="150" placeholder="Ví dụ: Không lọc được đơn hoàn theo ngày"></textarea>
             </div>
             <div class="field field-rong">
               <label>Đang làm việc gì? *</label>
@@ -590,13 +571,21 @@
 
       <div class="panel">
         <div class="panel-head"><h4 id="gy-danhsach-tieude">Yêu cầu của tôi</h4></div>
-        <!-- Desktop: bảng 7 cột. Mobile (<720px): CSS ẩn bảng, hiện thẻ —
-             7 cột không vừa 430px, bảng sẽ tràn ngang. -->
+        <!-- Mobile (<720px): CSS ẩn bảng, hiện thẻ — bảng không vừa 430px.
+             THỨ TỰ CỘT KHÔNG ĐƯỢC ĐẢO LẠI (bản vá 29/08/2026, xem chú thích
+             veDongGopY trong app.js): "Trạng thái" và "Đang chờ ai" phải đứng
+             NGAY SAU "Tiêu đề". Khung bảng chỉ rộng ~594px trên máy 900px, mà
+             bảng rộng 932px — cột nào đứng sau mốc đó là cột người gửi KHÔNG
+             NHÌN THẤY nếu không kéo ngang. Đúng thứ Sếp Ngọc báo 29/08/2026:
+             "sao của nhân viên mày không cho người ta nhìn thấy trạng thái".
+             "Người gửi" và "Rủi ro" là cột PHỤ, chỉ hiện khi thật sự có dữ
+             liệu, và luôn đứng sau. -->
         <div class="table-wrap gy-chi-may">
           <table>
             <thead><tr>
-              <th>Mã</th><th>Tiêu đề</th><th id="gy-cot-nguoigui" hidden>Người gửi</th>
-              <th>Ngày gửi</th><th>Rủi ro</th><th>Trạng thái</th><th>Đang chờ ai</th><th></th>
+              <th>Mã</th><th class="cot-chu">Tiêu đề</th><th>Trạng thái</th><th>Đang chờ ai</th>
+              <th id="gy-cot-nguoigui" class="cot-phu" hidden>Người gửi</th><th class="cot-phu">Ngày gửi</th>
+              <th id="gy-cot-ruiro" hidden>Rủi ro</th><th></th>
             </tr></thead>
             <tbody id="gy-bang"></tbody>
           </table>
@@ -667,7 +656,7 @@
             </div>
             <div class="field field-rong">
               <label id="gyCtGhiChuDuyetNhan">Ghi chú / lời nhắn cho người gửi</label>
-              <input type="text" id="gyCtGhiChuDuyet" maxlength="500" placeholder="Tuỳ chọn — cảm ơn hoặc dặn thêm">
+              <textarea id="gyCtGhiChuDuyet" class="o-nhieu-dong" rows="1" maxlength="500" placeholder="Tuỳ chọn — cảm ơn hoặc dặn thêm"></textarea>
             </div>
             <div class="field field-nut">
               <button type="button" class="btn-primary" id="gyCtNutDuyet" style="width:auto">Duyệt</button>
@@ -686,7 +675,7 @@
             </div>
             <div class="field field-rong" id="gyCtBangChungO" hidden>
               <label>Link bằng chứng (Pull Request hoặc commit đã merge)</label>
-              <input type="text" id="gyCtBangChung" maxlength="500" placeholder="https://github.com/.../pull/12">
+              <textarea id="gyCtBangChung" class="o-nhieu-dong" rows="1" maxlength="500" placeholder="https://github.com/.../pull/12"></textarea>
               <div class="sm">Bắt buộc khi đánh dấu Hoàn thành. Không có link thì không bấm được — đây là chỗ trạng thái từng nói dối.</div>
             </div>
             <div class="field">
@@ -704,7 +693,7 @@
             </div>
             <div class="field field-rong">
               <label>Ghi chú (lưu vào lịch sử)</label>
-              <input type="text" id="gyCtGhiChu" maxlength="500" placeholder="Tuỳ chọn — vì sao đổi trạng thái này">
+              <textarea id="gyCtGhiChu" class="o-nhieu-dong" rows="1" maxlength="500" placeholder="Tuỳ chọn — vì sao đổi trạng thái này"></textarea>
             </div>
             <div class="field field-nut">
               <button type="submit" class="btn-primary" id="gyCtNutLuu" style="width:auto">Lưu</button>
@@ -790,7 +779,16 @@
           <button type="button" class="tbd-nut" id="tbdTatMay" hidden>Tắt đẩy trên máy này</button>
         </div>
 
-        <div class="chat-khung" id="chat-khung">
+        <!-- DANH SÁCH HỘI THOẠI — màn đầu tiên khi mở chat. Trước bản này cửa
+             sổ mở thẳng vào Kênh chung, muốn nhắn riêng ai phải đóng cửa sổ,
+             sang tab Danh bạ, tìm người, bấm "Chat ngay": bốn bước cho việc
+             mà kho vận làm hàng chục lần mỗi ca, trên điện thoại, một tay. -->
+        <div class="cnb-ds" id="cnbDs" hidden></div>
+
+        <div class="chat-khung" id="chat-khung" hidden>
+          <!-- "Xem tin cũ hơn": trước bản này trần cứng 50 tin và KHÔNG có
+               đường đi tiếp — tin thứ 51 trở đi coi như không tồn tại. -->
+          <button type="button" class="chat-cu-hon" id="chat-cu-hon" hidden>Xem tin cũ hơn</button>
           <div class="empty" id="chat-trong" hidden>Chưa có tin nhắn nào — gõ dòng đầu tiên nhé.</div>
         </div>
         <!-- Xem trước tệp sắp gửi. Ảnh thì hiện luôn hình thu nhỏ — dán
@@ -801,20 +799,31 @@
           <span id="chat-file-ten"></span>
           <button type="button" id="chat-file-bo" title="Bỏ file này">✕</button>
         </div>
-        <form id="chat-form" class="chat-nhap" autocomplete="off">
+        <!-- `hidden` lúc đầu: cửa sổ mở ra là DANH SÁCH hội thoại, chưa vào
+             luồng nào thì không có gì để gõ. `veManHinh()` bật/tắt. -->
+        <form id="chat-form" class="chat-nhap" autocomplete="off" hidden>
           <button type="button" class="btn-phu chat-nut-tep" id="chat-nut-tep" title="Đính kèm file">
             <svg class="ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/>
             </svg>
           </button>
           <input type="file" id="chat-tep" hidden>
-          <input type="text" id="chat-noidung" placeholder="Nhắn gì đó…" maxlength="2000">
+          <!-- THANH CHAT — `textarea` chứ KHÔNG phải `input`. Sếp Ngọc báo
+               29/08/2026: "tin nhắn dài quá thì xuống dòng, đừng để phải kéo
+               ngang". `<input>` MỘT DÒNG thì không có cách nào xuống dòng —
+               đo ở 375px: gõ 133 ký tự tiếng Việt là scrollWidth 1034px trên
+               ô rộng 232px, muốn đọc lại câu mình vừa gõ phải kéo ngang trong
+               chính cái ô. Ô này cho tới 2000 ký tự nên chuyện đó chắc chắn
+               xảy ra. `.o-nhieu-dong` lo phần tự cao dần + Enter vẫn gửi. -->
+          <textarea id="chat-noidung" class="o-nhieu-dong" rows="1"
+                    placeholder="Nhắn gì đó…" maxlength="2000"></textarea>
           <button type="submit" class="btn-primary" id="chat-nut-gui" style="width:auto">Gửi</button>
         </form>
         <div class="form-loi" id="chat-loi"></div>
       </div>
-      <!-- Bong bóng truy cập nhanh các cuộc chat riêng gần đây — xếp dọc cạnh nút chính -->
-      <div class="cnb-ganday" id="cnbGanDay"></div>
+      <!-- Cột bong bóng "chat gần đây" đã BỎ HẲN 29/08/2026 (xem style.css
+           quanh `.cnb-ganday`): nó đè lên nút bấm của trang lúc cửa sổ đóng,
+           mà danh sách hội thoại trong cửa sổ đã thay thế hơn hẳn. -->
       <button class="cnb-nut" id="cnbNut" aria-label="Chat nội bộ">
         <svg class="ico" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/>
@@ -845,7 +854,7 @@
           <form id="qtFormThem" class="form-luoi" autocomplete="off">
             <div class="field">
               <label>Họ tên *</label>
-              <input type="text" id="qtHoTen" required placeholder="Ví dụ: Trần Văn Nam">
+              <input maxlength="80" type="text" id="qtHoTen" required placeholder="Ví dụ: Trần Văn Nam">
             </div>
             <div class="field">
               <label>Chức danh <span class="hint">· <a href="#" data-mo-tab="quantri">quản lý ở Quản trị</a></span></label>
@@ -855,7 +864,7 @@
                   <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
                 </button>
                 <div class="combo1-panel" id="qtChucDanhPanel" hidden>
-                  <input type="search" id="qtChucDanhTim" placeholder="Tìm chức danh...">
+                  <input maxlength="80" type="search" id="qtChucDanhTim" placeholder="Tìm chức danh...">
                   <div class="ql-goiy" id="qtChucDanhGoiY"></div>
                 </div>
               </div>
@@ -869,7 +878,7 @@
                   <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
                 </button>
                 <div class="combo1-panel" id="qtPhongBanPanel" hidden>
-                  <input type="search" id="qtPhongBanTim" placeholder="Tìm phòng ban...">
+                  <input maxlength="80" type="search" id="qtPhongBanTim" placeholder="Tìm phòng ban...">
                   <div class="ql-goiy" id="qtPhongBanGoiY"></div>
                 </div>
               </div>
@@ -877,11 +886,11 @@
             </div>
             <div class="field">
               <label>Số điện thoại</label>
-              <input type="text" id="qtSdt" placeholder="09xx xxx xxx">
+              <input maxlength="20" type="text" id="qtSdt" placeholder="09xx xxx xxx">
             </div>
             <div class="field">
               <label>Email</label>
-              <input type="text" id="qtEmail" placeholder="ten@alphagreen.vn">
+              <input maxlength="80" type="text" id="qtEmail" placeholder="ten@alphagreen.vn">
             </div>
             <div class="field">
               <label>Quản lý trực tiếp</label>
@@ -891,7 +900,7 @@
                   <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
                 </button>
                 <div class="combo1-panel" id="qtQuanLyPanel" hidden>
-                  <input type="search" id="qtQuanLyTim" placeholder="Tìm theo mã hoặc tên...">
+                  <input maxlength="80" type="search" id="qtQuanLyTim" placeholder="Tìm theo mã hoặc tên...">
                   <div class="ql-goiy" id="qtQuanLyGoiY"></div>
                 </div>
               </div>
@@ -918,7 +927,7 @@
             </div>
             <div class="field" id="qtFieldLuong">
               <label>Lương (đồng/tháng)</label>
-              <input type="text" id="qtLuong" inputmode="numeric" placeholder="Để trống nếu chưa có">
+              <input maxlength="20" type="text" id="qtLuong" inputmode="numeric" placeholder="Để trống nếu chưa có">
             </div>
             <div class="field field-nut">
               <button type="submit" class="btn-primary" id="qtNutThem">Thêm nhân sự</button>
@@ -939,7 +948,7 @@
               <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
                 <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
               </svg>
-              <input type="search" id="ns-tim" placeholder="Tìm theo mã, họ tên, SĐT hoặc email...">
+              <input maxlength="80" type="search" id="ns-tim" placeholder="Tìm theo mã, họ tên, SĐT hoặc email...">
             </div>
             <select id="ns-locbophan" class="chon-nho" title="Lọc theo bộ phận">
               <option value="">Tất cả bộ phận</option>
@@ -1043,7 +1052,7 @@
             <div class="jd-nhac-vitri" id="knChamNhac"></div>
             <div class="table-wrap">
               <table>
-                <thead><tr><th>Kỹ năng</th><th>Mức</th><th>Ai xác nhận</th><th></th></tr></thead>
+                <thead><tr><th class="cot-chu">Kỹ năng</th><th>Mức</th><th>Ai xác nhận</th><th></th></tr></thead>
                 <tbody id="knChamBang"></tbody>
               </table>
             </div>
@@ -1065,7 +1074,7 @@
               </div>
               <div class="field field-rong">
                 <label>Ghi chú <span class="goi-y">· để trống cũng được</span></label>
-                <input type="text" id="knChamGhiChu" maxlength="200" placeholder="VD: có chứng chỉ xe nâng, cấp 6/2026">
+                <textarea id="knChamGhiChu" class="o-nhieu-dong" rows="1" maxlength="200" placeholder="VD: có chứng chỉ xe nâng, cấp 6/2026"></textarea>
               </div>
               <div class="field field-rong kn-tieuchuan" id="knChamTieuChuan" hidden></div>
               <div class="field field-nut">
@@ -1080,14 +1089,14 @@
           <table>
             <thead>
               <tr>
-                <th>Nhân sự</th>
+                <th class="cot-chu">Nhân sự</th>
                 <th>Bộ phận</th>
                 <th>Trạng thái</th>
                 <!-- Một cột "Hợp đồng" gộp loại + ngày hết hạn thay vì hai cột
                      rời: ERP chạy trên điện thoại, mỗi cột thêm là một lần
                      phải kéo ngang. Ngày vào làm đã có sẵn cột bên cạnh. -->
                 <th id="ns-thHopDong" hidden>Hợp đồng</th>
-                <th>Vào làm</th>
+                <th class="cot-phu">Vào làm</th>
                 <th class="num" id="ns-thLuong">Lương</th>
                 <th id="ns-thThaoTac" hidden></th>
               </tr>
@@ -1104,6 +1113,126 @@
       <div class="view-head">
         <h3>Kinh doanh</h3>
         <p>Doanh thu theo kênh bán, hiệu quả từng sản phẩm và động thái của đối thủ.</p>
+      </div>
+
+      <!-- ---------- Tổng quan 2 sàn (Dashboard Marketplace) ----------
+           Đặt NGOÀI thanh chuyển màn bên dưới: đây là bức tranh toàn công ty,
+           không thuộc riêng Vận hành sàn hay R&D. Định nghĩa từng con số:
+           docs/METRIC-DEFINITIONS.md — audit: docs/audit/AUDIT-DASHBOARD-MARKETPLACE.md -->
+      <div class="panel" id="kd-tq-panel" hidden>
+        <div class="panel-head">
+          <h4>Tổng quan 2 sàn</h4>
+          <span class="hint" id="kd-tq-kynhan"></span>
+        </div>
+        <div class="panel-body">
+          <div class="seg" id="kd-tq-ky">
+            <button type="button" class="seg-nut active" data-ky="hom_nay">Hôm nay</button>
+            <button type="button" class="seg-nut" data-ky="7ngay">7 ngày</button>
+            <button type="button" class="seg-nut" data-ky="30ngay">30 ngày</button>
+            <button type="button" class="seg-nut" data-ky="thang_nay">Tháng này</button>
+          </div>
+
+          <div class="stats" id="kd-tq-the"></div>
+
+          <!-- Cảnh báo (Exception First): sụt bất thường, trạng thái hoàn lạ,
+               SKU chưa khớp mã kho. Rỗng thì ẩn hẳn, không hiện khối trống. -->
+          <div class="list" id="kd-tq-canhbao" hidden></div>
+
+          <div class="table-wrap-cuon" id="kd-tq-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <!-- BẢY CỘT TIỀN CHỈ CHẬT Ở MÁY TÍNH BẢNG NẰM NGANG, NÊN
+                       CHỈ Ở ĐÓ MỚI ĐƯỢC BỚT CỘT.
+                       Trong khung 678px (@1024px) bảy số VND — mỗi số ăn
+                       ~100–120px — tràn +26px, và cột rơi khỏi mép phải đúng
+                       là "So kỳ trước". Nhưng @1440px và @1280px bảng này
+                       KHÔNG hề tràn (đo được: khung 1094 · bảng 1094 · vừa),
+                       nên bỏ cột ở đó là trả giá ở màn rộng để chữa một chỗ
+                       chật ở màn hẹp.
+
+                       "Hủy" và "Hoàn" TÁCH THEO TỪNG SÀN là thông tin cấp
+                       một, không phải chú thích: câu Sếp hỏi ở bảng này là
+                       "sàn nào mang về bao nhiêu VÀ mất bao nhiêu vào rò rỉ" —
+                       Shopee rò rỉ hay TikTok rò rỉ quyết định có đẩy ngân
+                       sách sang TikTok hay không. Thẻ số phía trên KHÔNG thay
+                       được hai cột này: nó đọc `dt.tong`, tức TỔNG TOÀN CÔNG
+                       TY, không tách sàn. (Vòng REV-0063 VỪA-3: lý do bỏ cột
+                       viết ở đây trước kia SAI về mặt dữ liệu — sửa lại cho
+                       đúng.) Bảng lại chỉ có 2–3 dòng (Shopee · TikTok), giấu
+                       2/7 cột là đổi một cái liếc mắt lấy hai cú bấm.
+
+                       Nên: `.cot-phu` GIỮ NGUYÊN ở đây — đó là thứ bảo
+                       `luoiBang()` luôn cấp nút "Chi tiết", tức đường tới dữ
+                       liệu có ở MỌI bề ngang, không phụ thuộc JS đo màn hình
+                       (và không hỏng khi người ta kéo co cửa sổ). Việc hai cột
+                       CÓ NẰM TRÊN BẢNG HAY KHÔNG thì để CSS quyết theo bề
+                       ngang: `#kd-tq-wrap` trong style.css cho chúng trở lại
+                       bảng từ 1101px lên, và ẩn luôn nút "Chi tiết" thừa ở
+                       đó. -->
+                  <th>Sàn</th>
+                  <th class="num">Đơn đặt</th>
+                  <th class="num">GMV đơn đặt</th>
+                  <th class="num cot-phu">Hủy</th>
+                  <th class="num cot-phu">Hoàn</th>
+                  <th class="num">Doanh thu tạm tính</th>
+                  <th class="num">So kỳ trước</th>
+                </tr>
+              </thead>
+              <tbody id="kd-tq-bang"></tbody>
+            </table>
+          </div>
+
+          <p class="hint" id="kd-tq-ghichu" style="margin-top:12px"></p>
+        </div>
+      </div>
+
+      <!-- ---------- 10 SKU bán chạy / 10 SKU bán kém nhất toàn công ty ---------- -->
+      <div class="panel" id="kd-sku-panel" hidden>
+        <div class="panel-head">
+          <h4>Sản phẩm bán chạy &amp; bán kém</h4>
+          <span class="hint" id="kd-sku-kynhan"></span>
+        </div>
+        <div class="panel-body">
+          <div class="list" id="kd-sku-canhbao" hidden></div>
+          <!-- BA CỘT, KHÔNG PHẢI BỐN — câu hỏi khi nhìn một dòng ở đây là
+               "MÃ NÀO bán được / nằm im, và DOANH THU bao nhiêu". Bốn cột cũ
+               trả lời câu đó bằng hai cột danh tính (Mã SKU + Tên hàng) cho
+               CÙNG một thứ hàng, và cái cột thừa ấy đẩy "Doanh thu" — chính
+               là câu trả lời — rơi khỏi mép phải trong khung nửa bảng 537px.
+               Nay danh tính gộp vào MỘT cột `.cot-chu`: mã SKU đứng dòng trên
+               (`.nm`, đúng chỗ nhấn cũ), tên hàng làm dòng phụ ngay dưới
+               (`.sm`, kẹp 2 dòng). KHÔNG trường nào bị giấu sau nút "Chi
+               tiết" — cả ba cột đều nằm trên bảng. Đúng lối `ns-bang` đã dùng
+               từ trước, không đẻ cách thứ hai.
+
+               TÊN HÀNG DÀI HƠN 2 DÒNG thì có nút "Xem thêm" ngay tại chỗ, do
+               `luoiBang()` gắn sau khi ĐO ô (REV-0063 CAO-1). Vòng trước
+               không có nút đó, và ở đúng màn 1440px của Sếp tên hàng 92 ký tự
+               bị cắt cụt ở dòng 2 mà không một dấu hiệu nào — `title` chỉ
+               hiện khi rê chuột, tức không tồn tại trên điện thoại. -->
+          <div class="kd-sku-cot">
+            <div>
+              <h5 style="margin:0 0 8px">🔥 10 SKU bán chạy nhất</h5>
+              <div class="table-wrap-cuon">
+                <table>
+                  <thead><tr><th class="cot-chu">Mã SKU · Tên hàng</th><th class="num">SL bán</th><th class="num">Doanh thu</th></tr></thead>
+                  <tbody id="kd-sku-chay"></tbody>
+                </table>
+              </div>
+            </div>
+            <div>
+              <h5 style="margin:0 0 8px">🧊 10 SKU bán kém nhất</h5>
+              <div class="table-wrap-cuon">
+                <table>
+                  <thead><tr><th class="cot-chu">Mã SKU · Tên hàng</th><th class="num">SL bán</th><th class="num">Doanh thu</th></tr></thead>
+                  <tbody id="kd-sku-kem"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+          <p class="hint" id="kd-sku-ghichu" style="margin-top:12px"></p>
+        </div>
       </div>
 
       <!-- Chuyển màn: Vận hành sàn / R&D -->
@@ -1130,7 +1259,7 @@
               <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
                 <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
               </svg>
-              <input type="search" id="kd-ds-tim" placeholder="Tìm: mã đơn hoàn · đơn gốc · mã vận đơn · sản phẩm · SKU">
+              <input maxlength="80" type="search" id="kd-ds-tim" placeholder="Tìm: mã đơn hoàn · đơn gốc · mã vận đơn · sản phẩm · SKU">
             </div>
             <select id="kd-ds-locnguon" class="chon-nho" title="Lọc theo nguồn">
               <option value="">Tất cả nguồn</option>
@@ -1157,9 +1286,9 @@
                 <th class="dinh-cot2">Mã đơn hoàn</th>
                 <th class="dinh-cot3">Đơn gốc</th>
                 <th class="dinh-cot4">Mã vận đơn</th>
-                <th>Sản phẩm hoàn về</th>
+                <th class="cot-chu">Sản phẩm hoàn về</th>
                 <th class="num">Số lượng</th>
-                <th>Lý do</th>
+                <th class="cot-chu">Lý do</th>
                 <th>Trạng thái trên sàn</th>
                 <th class="num">Số tiền</th>
                 <th>Đã tra soát</th>
@@ -1187,15 +1316,15 @@
           <table>
             <thead>
               <tr>
-                <th>Nguồn</th>
+                <th class="cot-phu">Nguồn</th>
                 <th>Ngày</th>
                 <th>Mã đơn hàng</th>
                 <th id="kd-dhh-th-mavandon" hidden>Mã vận đơn</th>
-                <th>Người mua</th>
-                <th>Sản phẩm</th>
+                <th class="cot-phu">Người mua</th>
+                <th class="cot-chu">Sản phẩm</th>
                 <th class="num">Giá trị đơn</th>
-                <th>Ai hủy</th>
-                <th>Lý do hủy</th>
+                <th class="cot-chu">Ai hủy</th>
+                <th class="cot-phu cot-chu">Lý do hủy</th>
               </tr>
             </thead>
             <tbody id="kd-dhh-bang"></tbody>
@@ -1223,7 +1352,7 @@
               <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
                 <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
               </svg>
-              <input type="search" id="kdsp-tim" placeholder="Tìm theo tên, mã hàng hoặc nhóm hàng">
+              <input maxlength="80" type="search" id="kdsp-tim" placeholder="Tìm theo tên, mã hàng hoặc nhóm hàng">
             </div>
           </div>
           <div class="panel-body" id="kdsp-panel-them" hidden>
@@ -1231,15 +1360,15 @@
               <input type="hidden" id="kdsp-id">
               <div class="field">
                 <label>Mã hàng (SKU) *</label>
-                <input type="text" id="kdsp-sku" required placeholder="VD: HN-MY-1000">
+                <input maxlength="50" type="text" id="kdsp-sku" required placeholder="VD: HN-MY-1000">
               </div>
               <div class="field">
                 <label>Tên sản phẩm *</label>
-                <input type="text" id="kdsp-ten" required placeholder="VD: Hạnh nhân Mỹ tách vỏ 1kg">
+                <textarea class="o-nhieu-dong" rows="1" maxlength="200" id="kdsp-ten" required placeholder="VD: Hạnh nhân Mỹ tách vỏ 1kg"></textarea>
               </div>
               <div class="field">
                 <label>Nhóm hàng</label>
-                <input type="text" id="kdsp-danhmuc" placeholder="Hạt dinh dưỡng">
+                <input maxlength="80" type="text" id="kdsp-danhmuc" placeholder="Hạt dinh dưỡng">
               </div>
               <div class="field">
                 <label>Đơn vị tính <span class="hint">· <a href="#" data-mo-tab="khovan">quản lý ở Kho vận</a></span></label>
@@ -1247,7 +1376,7 @@
               </div>
               <div class="field">
                 <label>Mức tồn tối thiểu</label>
-                <input type="text" id="kdsp-tonmin" inputmode="numeric" placeholder="Cảnh báo khi tồn xuống dưới mức này">
+                <input maxlength="15" type="text" id="kdsp-tonmin" inputmode="numeric" placeholder="Cảnh báo khi tồn xuống dưới mức này">
               </div>
               <div class="field">
                 <label class="ck"><input type="checkbox" id="kdsp-theodoihsd" checked> Theo dõi hạn sử dụng</label>
@@ -1263,7 +1392,7 @@
             <table>
               <thead>
                 <tr>
-                  <th>Sản phẩm</th>
+                  <th class="cot-chu">Sản phẩm</th>
                   <th>Mã hàng</th>
                   <th>Đơn vị</th>
                   <th>Trạng thái</th>
@@ -1300,8 +1429,8 @@
             <table>
               <thead>
                 <tr>
-                  <th style="width:40px">#</th>
-                  <th>Khách hàng</th>
+                  <th class="cot-phu" style="width:40px">#</th>
+                  <th class="cot-chu">Khách hàng</th>
                   <th>Nguồn</th>
                   <th class="num">Tổng đơn hoàn/hủy</th>
                   <th class="num">Trong đó hủy</th>
@@ -1314,6 +1443,18 @@
           <div class="empty" id="cskh-trong" hidden>Chưa có đơn hoàn nào trong 6 tháng gần đây.</div>
         </div>
       </div>
+
+      <!-- ===== Chỗ đặt màn "Nạp từ file" cho người KHÔNG có tab Kho vận =====
+           Kinh doanh (van_hanh_san) là CHỦ SỞ HỮU danh mục SKU và máy chủ vẫn
+           cho họ nạp danh mục — nhưng màn nạp lại nằm trong tab Kho vận, mà
+           họ không có tab đó. Nút hiện đúng người, nằm trong căn phòng người
+           đó không mở được cửa (REV-0060 CAO-⑥).
+           Ô này để TRỐNG trong HTML; `khoiDongNapFile` dời NGUYÊN khối màn
+           nạp sang đây khi người dùng không có tab Kho vận — dời chứ không
+           chép, để không đẻ ra hai khối trùng id.
+           ⚠️ ĐÂY LÀ CHỖ ĐẶT TẠM VỀ MẶT KỸ THUẬT. Màn này thuộc tab nào là
+           QUYẾT ĐỊNH CỦA SẾP — xem câu chờ Sếp trong CHANGELOG. -->
+      <div class="kv-pane" id="kd-pane-napfile" hidden></div>
     </section>
 
     <!-- ---------- Kho — Xuất / Nhập / Tồn ---------- -->
@@ -1325,15 +1466,160 @@
 
       <div class="stats" id="kv-the"></div>
 
-      <!-- Chuyển màn: Tồn / Nhập / Xuất / Báo cáo -->
+      <!-- Chuyển màn: Tồn / Nhập / Xuất / Điều chỉnh / Báo cáo -->
       <div class="seg" id="kvSeg">
         <button class="seg-nut active" data-kv="ton">Tồn kho</button>
         <button class="seg-nut" data-kv="nhap">Nhập kho</button>
         <button class="seg-nut" data-kv="xuat">Xuất kho</button>
+        <button class="seg-nut" data-kv="dieuchinh">Điều chỉnh</button>
         <button class="seg-nut" data-kv="baocao">Báo cáo</button>
         <button class="seg-nut" data-kv="donhoan">Đơn hoàn</button>
         <button class="seg-nut" data-kv="lichsu">Lịch sử đơn hoàn</button>
         <button class="seg-nut" data-kv="danhmuc">Danh mục</button>
+        <button class="seg-nut" data-kv="napfile">Nạp từ file</button>
+      </div>
+
+      <!-- ===== Màn Nạp từ file =====
+           Bốn bước, hiện lần lượt, mỗi lúc chỉ MỘT bước trên màn — để vừa một
+           màn điện thoại 375px và để người dùng không phải cuộn đi cuộn lại.
+           ⚠️ CỐ Ý KHÔNG dùng <table> ở màn này: danh sách lỗi và bảng xem
+           trước dài bất định, nhét vào bảng là đẻ ra thanh kéo ngang thứ 23
+           (bàn đo do-bang-that sẽ bắt). Dùng thẻ .stats + danh sách dọc. -->
+      <div class="kv-pane" id="kv-pane-napfile" hidden>
+
+        <!-- Bước 1: chọn nạp vào đâu + chọn file -->
+        <div class="panel" id="nap-b1">
+          <div class="panel-head">
+            <h4>Nạp số liệu từ file</h4>
+            <span class="hint">Nhận file CSV và Excel (.xlsx)</span>
+          </div>
+          <div class="panel-body">
+            <div class="form-luoi">
+              <div class="field field-rong">
+                <label for="napDich">Nạp vào đâu</label>
+                <select id="napDich">
+                  <option value="san_pham">Danh mục sản phẩm — mã hàng, tên, đơn vị tính</option>
+                  <option value="ton_kho">Tồn kho đầu kỳ — số lượng đang có trong kho</option>
+                </select>
+              </div>
+            </div>
+            <p class="hint" id="napDichMoTa"></p>
+            <div class="nap-tha" id="napVungTha">
+              <input type="file" id="napChonTep" hidden
+                     accept=".csv,.xlsx,.txt,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+              <button type="button" class="btn-primary" id="napNutChon">📄 Chọn file để nạp</button>
+              <p class="hint">hoặc kéo thả file vào đây</p>
+            </div>
+            <div class="form-loi" id="nap-loi"></div>
+          </div>
+        </div>
+
+        <!-- Bước 2: ghép cột — MÁY KHÔNG TỰ QUYẾT, người chọn -->
+        <div class="panel" id="nap-b2" hidden>
+          <div class="panel-head">
+            <h4>Cột nào là cột nào?</h4>
+            <span class="hint" id="napB2Hint"></span>
+          </div>
+          <div class="panel-body">
+            <p class="hint" id="napB2Nho" hidden></p>
+            <!-- File .xlsx nhiều bảng: MÁY KHÔNG ĐOÁN HỘ bảng nào là bảng số
+                 liệu (luật ① của nap-du-lieu.js). File thật của Sếp
+                 `Nhap_khau_hang_hoa.xlsx` có 7 bảng, bảng đầu tiên là trang
+                 chữ "Hướng dẫn nhập khẩu" — lấy bảng đầu rồi im lặng là đưa
+                 trang hướng dẫn cho Sếp như thể đó là số liệu. -->
+            <div class="form-luoi" id="napChonBangO" hidden>
+              <div class="field field-rong">
+                <label for="napChonBang">File có nhiều bảng — chọn bảng chứa số liệu cần nạp</label>
+                <select id="napChonBang"></select>
+                <span class="nap-mau" id="napChonBangHint"></span>
+              </div>
+            </div>
+            <div class="form-luoi" id="napGhepO"></div>
+            <div class="form-loi" id="nap-loi2"></div>
+            <div class="nap-nut">
+              <button type="button" class="btn-phu" id="napB2Huy">← Chọn file khác</button>
+              <button type="button" class="btn-primary" id="napB2Tiep">Xem trước →</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Bước 3: xem trước rồi mới ghi -->
+        <div class="panel" id="nap-b3" hidden>
+          <div class="panel-head">
+            <h4>Xem trước — chưa ghi gì cả</h4>
+            <span class="hint" id="napB3Hint"></span>
+          </div>
+          <div class="panel-body">
+            <div class="stats" id="napTomTat"></div>
+            <div id="napCanhBao"></div>
+
+            <!-- CỬA CHẶN NẠP TRÙNG. Nạp tồn kho hai lần là CỘNG THÊM, không
+                 phải ghi đè — tồn gấp đôi, mà tồn ảo thì bán ra không có hàng
+                 giao. Nên chỗ này BẮT XÁC NHẬN RIÊNG: nút nạp tắt hẳn cho tới
+                 khi Sếp tick. Máy chủ chặn lần nữa (409), không tin mỗi tick. -->
+            <div class="nap-trung" id="napTrungO" hidden>
+              <p class="nap-trung-cau" id="napTrungCau"></p>
+              <div id="napTrungDs"></div>
+              <!-- LỚP (b): có mã trong file đã từng nạp tồn bằng file. Câu này
+                   kêu ở MỌI lần kho nhập lại cùng mã, nên nó chỉ là cái tick. -->
+              <label class="nap-tick" for="napTrungTick" id="napTrungTickO">
+                <input type="checkbox" id="napTrungTick">
+                <span>Tôi đã kiểm rồi. Vẫn nạp, và hiểu rằng số trong file sẽ CỘNG THÊM vào tồn đang có.</span>
+              </label>
+              <!-- LỚP (a): trùng NGUYÊN FILE — đúng từng dòng từng con số. Đây
+                   là tín hiệu mạnh nhất, không được để chung ô tick với lớp (b)
+                   (REV-0060 vòng 2 · CAO-⑤): lớp (b) kêu hằng tuần nên cái tick
+                   thành phản xạ, mà phản xạ thì gạt luôn cả lớp (a). Muốn qua
+                   cửa này phải GÕ LẠI TÊN FILE — việc không làm được bằng phản xạ. -->
+              <div class="field field-rong nap-trung-go" id="napTrungGoO" hidden>
+                <!-- Tên phải gõ là tên file của LƯỢT NẠP TRƯỚC, máy chủ lấy từ
+                     sổ vết chứ không lấy từ gói vừa gửi lên (REV-0060 vòng 3 ·
+                     CAO-③) — nếu không thì cả hai vế đều do khách khai, và gọi
+                     thẳng API với cả hai là 'x' là qua. -->
+                <label for="napTrungGo">Gõ lại đúng tên file của lượt nạp TRƯỚC để xác nhận vẫn muốn cộng thêm lần nữa</label>
+                <!-- `maxlength` 90: tên file Windows dài nhất ~80 ký tự đã là
+                     nhiều; ô một dòng không khai trần là ô nhận chữ vô hạn,
+                     gõ vào là tràn ngang màn 375px (luật `do-chu-dai`). -->
+                <input type="text" id="napTrungGo" maxlength="90" autocomplete="off" spellcheck="false" placeholder="tên file…">
+                <span class="nap-mau" id="napTrungGoHint"></span>
+              </div>
+            </div>
+
+            <div id="napBangLoi"></div>
+            <div class="form-loi" id="nap-loi3"></div>
+            <div class="nap-nut">
+              <button type="button" class="btn-phu" id="napB3Lui">← Sửa lại cột</button>
+              <button type="button" class="btn-primary" id="napB3Ghi">Xác nhận nạp vào ERP</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Bước 4: xong -->
+        <div class="panel" id="nap-b4" hidden>
+          <div class="panel-head"><h4>Đã nạp xong</h4></div>
+          <div class="panel-body">
+            <div class="stats" id="napKetQua"></div>
+            <p class="hint" id="napB4Go"></p>
+            <div class="nap-nut">
+              <button type="button" class="btn-phu" id="napB4GoNut" hidden>Gỡ lượt nạp vừa rồi</button>
+              <button type="button" class="btn-primary" id="napB4Moi">Nạp thêm file khác</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ĐƯỜNG LÙI — các lượt nạp tồn kho gần đây, gỡ được từng lượt.
+             Trước REV-0060 không có đường nào: nạp nhầm là mở CSDL sửa tay.
+             Cố ý KHÔNG dùng thẻ bảng ở đây (giữ luật vừa màn 375px). -->
+        <div class="panel" id="nap-luot" hidden>
+          <div class="panel-head">
+            <h4>Lượt nạp tồn kho gần đây</h4>
+            <span class="hint">Nạp nhầm thì gỡ ở đây — sổ cái bỏ hết dòng của lượt đó, tồn tính lại ngay.</span>
+          </div>
+          <div class="panel-body">
+            <div id="napLuotDs"></div>
+            <div class="form-loi" id="nap-loi5"></div>
+          </div>
+        </div>
       </div>
 
       <!-- ===== Màn Tồn kho ===== -->
@@ -1348,14 +1634,14 @@
               <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
                 <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
               </svg>
-              <input type="search" id="kv-tim" placeholder="Tìm theo tên, mã hàng hoặc nhóm hàng">
+              <input maxlength="80" type="search" id="kv-tim" placeholder="Tìm theo tên, mã hàng hoặc nhóm hàng">
             </div>
           </div>
           <div class="table-wrap kv-ton-table">
             <table>
               <thead>
                 <tr>
-                  <th>Sản phẩm</th>
+                  <th class="cot-chu">Sản phẩm</th>
                   <th>Mã hàng</th>
                   <th class="num">Tồn</th>
                   <th>HSD gần nhất</th>
@@ -1379,15 +1665,15 @@
             <form id="kvFormThemSP" class="form-luoi" autocomplete="off">
               <div class="field">
                 <label>Mã hàng (SKU) *</label>
-                <input type="text" id="kvSku" required placeholder="VD: HN-MY-1000">
+                <input maxlength="50" type="text" id="kvSku" required placeholder="VD: HN-MY-1000">
               </div>
               <div class="field">
                 <label>Tên sản phẩm *</label>
-                <input type="text" id="kvTenSP" required placeholder="VD: Hạnh nhân Mỹ tách vỏ 1kg">
+                <textarea class="o-nhieu-dong" rows="1" maxlength="200" id="kvTenSP" required placeholder="VD: Hạnh nhân Mỹ tách vỏ 1kg"></textarea>
               </div>
               <div class="field">
                 <label>Nhóm hàng</label>
-                <input type="text" id="kvDanhMuc" placeholder="Hạt dinh dưỡng">
+                <input maxlength="80" type="text" id="kvDanhMuc" placeholder="Hạt dinh dưỡng">
               </div>
               <div class="field">
                 <label>Đơn vị tính <span class="hint">· <a href="#" data-mo-tab="khovan">quản lý ở Kho vận</a></span></label>
@@ -1395,7 +1681,7 @@
               </div>
               <div class="field">
                 <label>Mức tồn tối thiểu</label>
-                <input type="text" id="kvTonMin" inputmode="numeric" placeholder="Cảnh báo khi tồn xuống dưới mức này">
+                <input maxlength="15" type="text" id="kvTonMin" inputmode="numeric" placeholder="Cảnh báo khi tồn xuống dưới mức này">
               </div>
               <div class="field">
                 <label class="ck"><input type="checkbox" id="kvTheoDoiHsd" checked> Theo dõi hạn sử dụng (quản theo lô, xuất FEFO)</label>
@@ -1423,7 +1709,7 @@
                     <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
                   </button>
                   <div class="combo1-panel" id="kvNhapSPPanel" hidden>
-                    <input type="search" id="kvNhapSPTim" placeholder="Tìm theo tên hoặc mã SKU...">
+                    <input maxlength="80" type="search" id="kvNhapSPTim" placeholder="Tìm theo tên hoặc mã SKU...">
                     <div class="ql-goiy" id="kvNhapSPGoiY"></div>
                   </div>
                 </div>
@@ -1431,15 +1717,15 @@
               </div>
               <div class="field">
                 <label>Số lượng nhập *</label>
-                <input type="text" id="kvNhapSL" inputmode="numeric" required placeholder="VD: 200">
+                <input maxlength="15" type="text" id="kvNhapSL" inputmode="numeric" required placeholder="VD: 200">
               </div>
               <div class="field" id="kvNhapFieldGia" hidden>
                 <label>Đơn giá nhập (đ/đơn vị)</label>
-                <input type="text" id="kvNhapGia" inputmode="numeric" placeholder="Giá vốn — để trống nếu chưa có">
+                <input maxlength="15" type="text" id="kvNhapGia" inputmode="numeric" placeholder="Giá vốn — để trống nếu chưa có">
               </div>
               <div class="field kv-field-hsd">
                 <label>Số lô</label>
-                <input type="text" id="kvNhapLo" placeholder="Mã lô của NCC (nếu có)">
+                <input maxlength="50" type="text" id="kvNhapLo" placeholder="Mã lô của NCC (nếu có)">
               </div>
               <div class="field kv-field-hsd">
                 <label>Hạn sử dụng</label>
@@ -1447,7 +1733,7 @@
               </div>
               <div class="field">
                 <label>Nhà cung cấp</label>
-                <input type="text" id="kvNhapNCC" placeholder="VD: California Nuts Co.">
+                <textarea class="o-nhieu-dong" rows="1" maxlength="200" id="kvNhapNCC" placeholder="VD: California Nuts Co."></textarea>
               </div>
               <div class="field field-rong">
                 <label>Ghi chú</label>
@@ -1477,7 +1763,7 @@
                     <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
                   </button>
                   <div class="combo1-panel" id="kvXuatSPPanel" hidden>
-                    <input type="search" id="kvXuatSPTim" placeholder="Tìm theo tên hoặc mã SKU...">
+                    <input maxlength="80" type="search" id="kvXuatSPTim" placeholder="Tìm theo tên hoặc mã SKU...">
                     <div class="ql-goiy" id="kvXuatSPGoiY"></div>
                   </div>
                 </div>
@@ -1488,11 +1774,11 @@
               </div>
               <div class="field">
                 <label>Số lượng xuất *</label>
-                <input type="text" id="kvXuatSL" inputmode="numeric" required placeholder="VD: 50">
+                <input maxlength="15" type="text" id="kvXuatSL" inputmode="numeric" required placeholder="VD: 50">
               </div>
               <div class="field">
                 <label>Kênh / Đơn</label>
-                <input type="text" id="kvXuatKenh" placeholder="VD: Shopee, TikTok, đơn nội bộ">
+                <input maxlength="80" type="text" id="kvXuatKenh" placeholder="VD: Shopee, TikTok, đơn nội bộ">
               </div>
               <div class="field field-rong">
                 <label>Ghi chú</label>
@@ -1508,12 +1794,87 @@
         </div>
       </div>
 
+      <!-- ===== Màn Điều chỉnh tồn (REV-0060 vòng 3 · CHẶN-ⓑ) =====
+           Đường ra thật cho ca "nạp nhầm rồi bán mất": trước đây câu từ chối
+           của nút Gỡ lượt nạp chỉ sang "màn Kho vận lập phiếu điều chỉnh" —
+           một cái màn KHÔNG TỒN TẠI. Nay nó có, và chỉ quản lý kho mở được. -->
+      <div class="kv-pane" id="kv-pane-dieuchinh" hidden>
+        <div class="panel">
+          <div class="panel-head"><h4>Phiếu điều chỉnh tồn</h4></div>
+          <div class="panel-body">
+            <!-- Gọn còn MỘT dòng (REV-0060 vòng 4 · THẤP-①). Sếp dặn hai lần
+                 "vừa một màn ở 375px", mà đoạn giới thiệu ba dòng là chỗ tốn
+                 chiều cao nhất của màn này. Phần dài xuống <details> — ai cần
+                 thì mở, không chiếm chỗ của ô nhập. Dùng thẻ sẵn có của trình
+                 duyệt, không thêm JS, không thêm CSS. -->
+            <details class="kv-ton-nhac" id="kvDcGioiThieu">
+              <summary>Kéo sổ về đúng số <b>đếm được ngoài kho</b>. Khi nào dùng?</summary>
+              Hàng vỡ, hàng huỷ vì hết hạn, kiểm kê lệch, hoặc tồn đầu kỳ nạp nhầm mà đã bán mất một
+              phần nên không gỡ lượt nạp được nữa. Phiếu vào sổ cái có dấu vết (ai lập, lúc nào, lý do
+              gì) — không xoá ngược lịch sử.
+            </details>
+            <form id="kvFormDieuChinh" class="form-luoi" autocomplete="off">
+              <div class="field field-rong">
+                <label>Sản phẩm *</label>
+                <div class="combo1" id="kvDcSPCombo">
+                  <button type="button" class="combo1-hienthi rong" id="kvDcSPHienThi">
+                    <span>Chọn sản phẩm...</span>
+                    <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+                  </button>
+                  <div class="combo1-panel" id="kvDcSPPanel" hidden>
+                    <input maxlength="80" type="search" id="kvDcSPTim" placeholder="Tìm theo tên hoặc mã SKU...">
+                    <div class="ql-goiy" id="kvDcSPGoiY"></div>
+                  </div>
+                </div>
+                <input type="hidden" id="kvDcSP">
+              </div>
+              <!-- Ô lô xếp CẠNH ô "số tồn thật" (`field` thay cho `field-rong`)
+                   để hai ô ăn chung một hàng ở màn rộng — THẤP-① của vòng 4.
+                   `required` do app.js bật/tắt theo mã: một ô bắt buộc nằm
+                   trong khối `hidden` làm trình duyệt chặn cả biểu mẫu mà
+                   không hiện nổi lời nhắc. Cửa chặn thật ở máy chủ. -->
+              <div class="field" id="kvDcLoO" hidden>
+                <label for="kvDcLo">Lô hàng *</label>
+                <select id="kvDcLo"><option value="">— Đang tải lô... —</option></select>
+                <span class="hint">Hàng theo dõi HSD thì tồn nằm ở từng lô — bắt buộc chọn lô.</span>
+              </div>
+              <div class="field">
+                <label for="kvDcTonThuc">Số tồn THẬT đếm được *</label>
+                <input maxlength="15" type="text" id="kvDcTonThuc" inputmode="numeric" required
+                       placeholder="Số nguyên, VD: 0">
+              </div>
+              <div class="field field-rong" id="kvDcTonBox" hidden>
+                <div class="kv-ton-nhac" id="kvDcTonNhac"></div>
+              </div>
+              <div class="field field-rong">
+                <label for="kvDcLyDo">Lý do điều chỉnh *</label>
+                <textarea id="kvDcLyDo" class="o-thap" rows="2" maxlength="400" placeholder="VD: kiểm kê 07/09, hàng vỡ 12 túi · gỡ lượt nạp tồn nhầm phiếu pn_xxx" required></textarea>
+              </div>
+              <div class="field field-nut">
+                <button type="submit" class="btn-primary" id="kvNutDieuChinh">Lập phiếu điều chỉnh</button>
+              </div>
+            </form>
+            <div class="form-loi" id="kvLoiDieuChinh"></div>
+            <div class="form-ok" id="kvOkDieuChinh" hidden></div>
+          </div>
+        </div>
+      </div>
+
       <!-- ===== Màn Báo cáo Xuất-Nhập-Tồn ===== -->
       <div class="kv-pane" id="kv-pane-baocao" hidden>
         <div class="panel">
           <div class="panel-head"><h4>Báo cáo Xuất – Nhập – Tồn theo kỳ</h4></div>
           <div class="panel-body" style="padding-bottom:0">
             <form id="kvFormBaoCao" class="kv-loc" autocomplete="off">
+              <!-- KHÔNG gắn `data-ngay-kieu="qua-khu"` cho hai ô này (REV-0061 · CAO-1).
+                   Đây là KHOẢNG ĐỌC của một báo cáo, không phải một ngày đã xảy ra.
+                   Gắn `qua-khu` là đặt `max = hôm nay`: chị kho gõ "đến ngày
+                   31/12/2026" cho chắc là ô đỏ, mà ô lại `required` trong form có
+                   submit ⇒ TRÌNH DUYỆT CHẶN CẢ FORM bằng bong bóng tiếng Anh của
+                   Chrome, không phải câu tiếng Việt của ERP. Đo được: 2026-09-08 và
+                   2026-12-31 đều `checkValidity() = false`. Luật "không xem báo cáo
+                   tới ngày trong tương lai" chưa ai chốt — không tự áp. Khoảng mặc
+                   định 1900–2100 vẫn chặn `0001-01-01`, đúng việc nó phải làm. -->
               <div class="field">
                 <label>Từ ngày</label>
                 <input type="date" id="kvBcTu" required>
@@ -1529,7 +1890,7 @@
             <table>
               <thead>
                 <tr>
-                  <th>Sản phẩm</th>
+                  <th class="cot-chu">Sản phẩm</th>
                   <th>Mã hàng</th>
                   <th class="num">Tồn đầu kỳ</th>
                   <th class="num">Nhập</th>
@@ -1558,7 +1919,7 @@
                 <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
                   <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
                 </svg>
-                <input type="search" id="dh-tim" placeholder="Tìm: mã đơn hoàn · đơn gốc · mã vận đơn · sản phẩm · SKU · người mua">
+                <input maxlength="80" type="search" id="dh-tim" placeholder="Tìm: mã đơn hoàn · đơn gốc · mã vận đơn · sản phẩm · SKU · người mua">
               </div>
               <label class="dh-tick-nguon"><input type="checkbox" id="dh-nguon-shopee" checked> Shopee</label>
               <label class="dh-tick-nguon"><input type="checkbox" id="dh-nguon-tiktok" checked> TikTok</label>
@@ -1573,17 +1934,22 @@
             <table>
               <thead>
                 <tr>
-                  <th>Nguồn</th>
-                  <th>Ngày</th>
+                  <th class="cot-phu">Nguồn</th>
+                  <th class="cot-phu">Ngày</th>
                   <th>Mã đơn hoàn</th>
-                  <th>Đơn gốc</th>
-                  <th>Mã vận đơn</th>
-                  <th>Sản phẩm hoàn về</th>
+                  <th class="cot-phu">Đơn gốc</th>
+                  <th class="cot-phu">Mã vận đơn</th>
+                  <th class="cot-chu">Sản phẩm hoàn về</th>
                   <th class="num">Số lượng</th>
                   <th>Trạng thái trên sàn</th>
-                  <th class="num">Số tiền</th>
-                  <th>Người mua</th>
-                  <th>Kho nhận</th>
+                  <th class="num cot-phu">Số tiền</th>
+                  <th class="cot-phu">Người mua</th>
+                  <!-- "Kho nhận" KHÔNG phải cột trạng thái ngắn: dòng phụ của
+                       nó chở TÊN NGƯỜI nhận (tới 80 ký tự) kèm giờ phút, nên
+                       ở `nowrap` nó rộng 365px và kéo bảng tràn +102px @1024px
+                       — cột rơi mất chính là nó. Đánh dấu `.cot-chu` để nó có
+                       TRẦN và được xuống dòng, đúng lớp đã có sẵn. -->
+                  <th class="cot-chu">Kho nhận</th>
                 </tr>
               </thead>
               <tbody id="dh-bang"></tbody>
@@ -1608,7 +1974,7 @@
                 <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
                   <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
                 </svg>
-                <input type="search" id="ls-tim" placeholder="Tìm: mã đơn hoàn · đơn gốc · mã vận đơn · sản phẩm · SKU · người mua">
+                <input maxlength="80" type="search" id="ls-tim" placeholder="Tìm: mã đơn hoàn · đơn gốc · mã vận đơn · sản phẩm · SKU · người mua">
               </div>
               <label class="dh-tick-nguon"><input type="checkbox" id="ls-nguon-shopee" checked> Shopee</label>
               <label class="dh-tick-nguon"><input type="checkbox" id="ls-nguon-tiktok" checked> TikTok</label>
@@ -1618,18 +1984,18 @@
             <table>
               <thead>
                 <tr>
-                  <th>Nguồn</th>
-                  <th>Ngày</th>
+                  <th class="cot-phu">Nguồn</th>
+                  <th class="cot-phu">Ngày</th>
                   <th>Mã đơn hoàn</th>
-                  <th>Đơn gốc</th>
-                  <th>Mã vận đơn</th>
-                  <th>Sản phẩm hoàn về</th>
+                  <th class="cot-phu">Đơn gốc</th>
+                  <th class="cot-phu">Mã vận đơn</th>
+                  <th class="cot-chu">Sản phẩm hoàn về</th>
                   <th class="num">Số lượng</th>
-                  <th>Trạng thái trên sàn</th>
-                  <th class="num">Số tiền</th>
-                  <th>Người mua</th>
+                  <th class="cot-phu">Trạng thái trên sàn</th>
+                  <th class="num cot-phu">Số tiền</th>
+                  <th class="cot-phu">Người mua</th>
                   <th>Trạng thái xử lý</th>
-                  <th>Người thực hiện</th>
+                  <th class="cot-chu">Người thực hiện</th>
                 </tr>
               </thead>
               <tbody id="ls-bang"></tbody>
@@ -1654,7 +2020,7 @@
             <div class="panel-head"><h4>Đơn vị tính</h4><span class="hint" id="dln-dv-dem"></span></div>
             <div class="panel-body">
               <form id="dln-dv-form" style="display:flex; gap:8px" autocomplete="off">
-                <input type="text" id="dln-dv-ten" placeholder="Tên đơn vị mới, VD: kg" required style="flex:1">
+                <input maxlength="30" type="text" id="dln-dv-ten" placeholder="Tên đơn vị mới, VD: kg" required style="flex:1">
                 <button type="submit" class="btn-nho btn-primary" style="width:auto">+ Thêm</button>
               </form>
               <div class="form-loi" id="dln-dv-loi"></div>
@@ -1675,19 +2041,19 @@
                 <input type="hidden" id="dln-ncc-id">
                 <div class="field field-rong">
                   <label>Tên nhà cung cấp *</label>
-                  <input type="text" id="dln-ncc-ten" required>
+                  <textarea class="o-nhieu-dong" rows="1" maxlength="200" id="dln-ncc-ten" required></textarea>
                 </div>
                 <div class="field">
                   <label>Mã số thuế</label>
-                  <input type="text" id="dln-ncc-mst">
+                  <input maxlength="20" type="text" id="dln-ncc-mst">
                 </div>
                 <div class="field">
                   <label>Điện thoại</label>
-                  <input type="text" id="dln-ncc-dt">
+                  <input maxlength="20" type="text" id="dln-ncc-dt">
                 </div>
                 <div class="field field-rong">
                   <label>Địa chỉ</label>
-                  <input type="text" id="dln-ncc-diachi">
+                  <textarea class="o-nhieu-dong" rows="1" maxlength="300" id="dln-ncc-diachi"></textarea>
                 </div>
                 <div class="field field-nut" style="display:flex; gap:10px">
                   <button type="submit" class="btn-primary" id="dln-ncc-nutluu" style="width:auto">+ Thêm</button>
@@ -1710,11 +2076,11 @@
                 <input type="hidden" id="dln-kho-id">
                 <div class="field field-rong">
                   <label>Tên kho *</label>
-                  <input type="text" id="dln-kho-ten" required placeholder="VD: Kho chính Hoài Đức">
+                  <input maxlength="80" type="text" id="dln-kho-ten" required placeholder="VD: Kho chính Hoài Đức">
                 </div>
                 <div class="field field-rong">
                   <label>Địa chỉ</label>
-                  <input type="text" id="dln-kho-diachi">
+                  <textarea class="o-nhieu-dong" rows="1" maxlength="300" id="dln-kho-diachi"></textarea>
                 </div>
                 <div class="field field-nut" style="display:flex; gap:10px">
                   <button type="submit" class="btn-primary" id="dln-kho-nutluu" style="width:auto">+ Thêm</button>
@@ -1757,13 +2123,13 @@
             <thead>
               <tr>
                 <th style="width:40px"><input type="checkbox" id="kt-ts-chontatca" title="Chọn tất cả"></th>
-                <th>Nguồn</th>
+                <th class="cot-phu">Nguồn</th>
                 <th>Mã đơn hoàn</th>
-                <th>Đơn gốc</th>
-                <th>Về từ đâu</th>
-                <th>Sản phẩm hoàn về</th>
+                <th class="cot-phu">Đơn gốc</th>
+                <th class="cot-phu">Về từ đâu</th>
+                <th class="cot-chu">Sản phẩm hoàn về</th>
                 <th class="num">Số lượng</th>
-                <th>Lý do</th>
+                <th class="cot-phu cot-chu">Lý do</th>
                 <th class="num">Số tiền hoàn</th>
                 <th></th>
               </tr>
@@ -1797,8 +2163,8 @@
                 <th style="width:40px"><input type="checkbox" id="kt-hh-chontatca" title="Chọn tất cả"></th>
                 <th>Nguồn</th>
                 <th>Mã đơn hoàn</th>
-                <th>Đơn gốc</th>
-                <th>Sản phẩm</th>
+                <th class="cot-phu">Đơn gốc</th>
+                <th class="cot-chu">Sản phẩm</th>
                 <th class="num">Số lượng</th>
                 <th>Kho phân loại</th>
               </tr>
@@ -1828,7 +2194,7 @@
           <form id="tsThemForm" class="form-luoi" autocomplete="off">
             <div class="field field-rong">
               <label>Tên tài sản *</label>
-              <input type="text" id="tsThemTen" required placeholder="VD: Laptop Dell Latitude 5420">
+              <textarea class="o-nhieu-dong" rows="1" maxlength="200" id="tsThemTen" required placeholder="VD: Laptop Dell Latitude 5420"></textarea>
             </div>
             <div class="field">
               <label>Danh mục *</label>
@@ -1838,7 +2204,7 @@
                   <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
                 </button>
                 <div class="combo1-panel" id="tsThemDanhMucPanel" hidden>
-                  <input type="search" id="tsThemDanhMucTim" placeholder="Tìm danh mục...">
+                  <input maxlength="80" type="search" id="tsThemDanhMucTim" placeholder="Tìm danh mục...">
                   <div class="ql-goiy" id="tsThemDanhMucGoiY"></div>
                 </div>
               </div>
@@ -1852,7 +2218,7 @@
                   <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
                 </button>
                 <div class="combo1-panel" id="tsThemViTriPanel" hidden>
-                  <input type="search" id="tsThemViTriTim" placeholder="Tìm vị trí...">
+                  <input maxlength="80" type="search" id="tsThemViTriTim" placeholder="Tìm vị trí...">
                   <div class="ql-goiy" id="tsThemViTriGoiY"></div>
                 </div>
               </div>
@@ -1863,11 +2229,11 @@
               <button type="button" class="btn-nho" id="tsThemNutChiTiet">+ Thêm chi tiết (hãng SX, serial, giá mua, ảnh...)</button>
             </div>
             <div class="field-rong" id="tsThemChiTiet" hidden>
-              <div class="field"><label>Hãng sản xuất</label><input type="text" id="tsThemHangSx" placeholder="Dell, HP, Canon..."></div>
-              <div class="field"><label>Model</label><input type="text" id="tsThemModel"></div>
-              <div class="field"><label>Số serial</label><input type="text" id="tsThemSerial" placeholder="Mã serial của nhà sản xuất"></div>
-              <div class="field"><label>Ngày mua</label><input type="date" id="tsThemNgayMua"></div>
-              <div class="field"><label>Nhà cung cấp</label><input type="text" id="tsThemNCC"></div>
+              <div class="field"><label>Hãng sản xuất</label><input maxlength="60" type="text" id="tsThemHangSx" placeholder="Dell, HP, Canon..."></div>
+              <div class="field"><label>Model</label><input maxlength="60" type="text" id="tsThemModel"></div>
+              <div class="field"><label>Số serial</label><input maxlength="60" type="text" id="tsThemSerial" placeholder="Mã serial của nhà sản xuất"></div>
+              <div class="field"><label>Ngày mua</label><input type="date" id="tsThemNgayMua" data-ngay-kieu="qua-khu"></div>
+              <div class="field"><label>Nhà cung cấp</label><textarea class="o-nhieu-dong" rows="1" maxlength="200" id="tsThemNCC"></textarea></div>
               <div class="field"><label>Giá mua (đ) <span class="hint">— chỉ để tham chiếu, không phải sổ kế toán</span></label><input type="number" id="tsThemGiaMua" min="0" step="1000"></div>
               <div class="field"><label>Hết bảo hành</label><input type="date" id="tsThemHetBaoHanh"></div>
               <div class="field">
@@ -1904,7 +2270,7 @@
             <div>
               <p class="hint" style="margin:0 0 8px">Danh mục</p>
               <form id="ts-dm-form" style="display:flex; gap:8px" autocomplete="off">
-                <input type="text" id="ts-dm-ten" placeholder="Danh mục mới, VD: Máy chấm công" required style="flex:1">
+                <input maxlength="60" type="text" id="ts-dm-ten" placeholder="Danh mục mới, VD: Máy chấm công" required style="flex:1">
                 <button type="submit" class="btn-nho btn-primary" style="width:auto">+ Thêm</button>
               </form>
               <div class="form-loi" id="ts-dm-loi"></div>
@@ -1913,7 +2279,7 @@
             <div>
               <p class="hint" style="margin:0 0 8px">Vị trí</p>
               <form id="ts-vt-form" style="display:flex; gap:8px" autocomplete="off">
-                <input type="text" id="ts-vt-ten" placeholder="Vị trí mới, VD: Kho tầng 3" required style="flex:1">
+                <input maxlength="60" type="text" id="ts-vt-ten" placeholder="Vị trí mới, VD: Kho tầng 3" required style="flex:1">
                 <button type="submit" class="btn-nho btn-primary" style="width:auto">+ Thêm</button>
               </form>
               <div class="form-loi" id="ts-vt-loi"></div>
@@ -1934,7 +2300,7 @@
               <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
                 <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
               </svg>
-              <input type="search" id="ts-tim" placeholder="Tìm theo mã, tên, danh mục hoặc serial...">
+              <input maxlength="80" type="search" id="ts-tim" placeholder="Tìm theo mã, tên, danh mục hoặc serial...">
             </div>
             <select id="ts-loctrangthai" class="chon-nho" title="Lọc theo trạng thái">
               <option value="">Tất cả trạng thái</option>
@@ -1958,11 +2324,11 @@
               <tr>
                 <th style="width:28px"><input type="checkbox" id="ts-chontatca"></th>
                 <th>Mã TS</th>
-                <th>Tên</th>
-                <th>Danh mục</th>
+                <th class="cot-chu">Tên</th>
+                <th class="cot-phu">Danh mục</th>
                 <th>Trạng thái</th>
-                <th>Đang giữ</th>
-                <th>Vị trí</th>
+                <th class="cot-chu">Đang giữ</th>
+                <th class="cot-phu">Vị trí</th>
                 <th>Thao tác</th>
               </tr>
             </thead>
@@ -2013,7 +2379,7 @@
         <h4>Sửa tài sản</h4>
         <form id="tsSuaForm" class="form-luoi" autocomplete="off">
           <input type="hidden" id="tsSuaId">
-          <div class="field field-rong"><label>Tên tài sản *</label><input type="text" id="tsSuaTen" required></div>
+          <div class="field field-rong"><label>Tên tài sản *</label><textarea class="o-nhieu-dong" rows="1" maxlength="200" id="tsSuaTen" required></textarea></div>
           <div class="field">
             <label>Danh mục</label>
             <div class="combo1" id="tsSuaDanhMucCombo">
@@ -2022,7 +2388,7 @@
                 <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
               </button>
               <div class="combo1-panel" id="tsSuaDanhMucPanel" hidden>
-                <input type="search" id="tsSuaDanhMucTim" placeholder="Tìm danh mục...">
+                <input maxlength="80" type="search" id="tsSuaDanhMucTim" placeholder="Tìm danh mục...">
                 <div class="ql-goiy" id="tsSuaDanhMucGoiY"></div>
               </div>
             </div>
@@ -2036,7 +2402,7 @@
                 <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
               </button>
               <div class="combo1-panel" id="tsSuaViTriPanel" hidden>
-                <input type="search" id="tsSuaViTriTim" placeholder="Tìm vị trí...">
+                <input maxlength="80" type="search" id="tsSuaViTriTim" placeholder="Tìm vị trí...">
                 <div class="ql-goiy" id="tsSuaViTriGoiY"></div>
               </div>
             </div>
@@ -2051,11 +2417,11 @@
               <option value="hong">Hỏng</option>
             </select>
           </div>
-          <div class="field"><label>Hãng sản xuất</label><input type="text" id="tsSuaHangSx"></div>
-          <div class="field"><label>Model</label><input type="text" id="tsSuaModel"></div>
-          <div class="field"><label>Số serial</label><input type="text" id="tsSuaSerial"></div>
-          <div class="field"><label>Ngày mua</label><input type="date" id="tsSuaNgayMua"></div>
-          <div class="field"><label>Nhà cung cấp</label><input type="text" id="tsSuaNCC"></div>
+          <div class="field"><label>Hãng sản xuất</label><input maxlength="60" type="text" id="tsSuaHangSx"></div>
+          <div class="field"><label>Model</label><input maxlength="60" type="text" id="tsSuaModel"></div>
+          <div class="field"><label>Số serial</label><input maxlength="60" type="text" id="tsSuaSerial"></div>
+          <div class="field"><label>Ngày mua</label><input type="date" id="tsSuaNgayMua" data-ngay-kieu="qua-khu"></div>
+          <div class="field"><label>Nhà cung cấp</label><textarea class="o-nhieu-dong" rows="1" maxlength="200" id="tsSuaNCC"></textarea></div>
           <div class="field"><label>Giá mua (đ)</label><input type="number" id="tsSuaGiaMua" min="0" step="1000"></div>
           <div class="field"><label>Hết bảo hành</label><input type="date" id="tsSuaHetBaoHanh"></div>
           <div class="field"><label>Phòng ban sở hữu</label><select id="tsSuaPhongBan"><option value="">— Chưa gán —</option></select></div>
@@ -2083,7 +2449,7 @@
         <div class="form-loi" id="tsQuetLoi"></div>
         <div class="field field-rong" style="margin-top:14px">
           <label>Hoặc nhập mã tài sản trực tiếp</label>
-          <input type="text" id="tsQuetNhapTay" placeholder="VD: TS0001" autocapitalize="characters">
+          <input maxlength="40" type="text" id="tsQuetNhapTay" placeholder="VD: TS0001" autocapitalize="characters">
         </div>
         <div class="field field-nut" style="display:flex; gap:10px">
           <button type="button" class="btn-primary" id="tsQuetTraCuu" style="width:auto">Mở tài sản</button>
@@ -2230,11 +2596,11 @@
               <input type="hidden" id="xcMcId">
               <div class="field">
                 <label>Ký hiệu ngắn *</label>
-                <input type="text" id="xcMcMa" required placeholder="VD: S">
+                <input maxlength="10" type="text" id="xcMcMa" required placeholder="VD: S">
               </div>
               <div class="field">
                 <label>Tên ca *</label>
-                <input type="text" id="xcMcTen" required placeholder="VD: Ca sáng">
+                <input maxlength="40" type="text" id="xcMcTen" required placeholder="VD: Ca sáng">
               </div>
               <div class="field">
                 <label>Giờ bắt đầu *</label>
@@ -2304,6 +2670,61 @@
       </div>
     </section>
 
+    <!-- ---------- Kho tài liệu quản trị (CTL-0026) ----------
+         Tab mở cho MỌI vai trò, nhưng NHÓM GIẤY TỜ bên trong thì cắt ở máy
+         chủ (src/quyen.js + src/tai-lieu.js). Kế toán không thấy hồ sơ nhân
+         sự, quản lý kho không thấy CCCD — kể cả khi gọi thẳng API. -->
+    <section class="view" id="v-khotailieu" hidden>
+      <div class="view-head">
+        <h3>Kho tài liệu</h3>
+        <p>Giấy tờ quản trị bản cứng quét bằng điện thoại, gộp nhiều trang thành một tài liệu, bóc chữ để tra cứu, lưu trên Google Drive. Có nhắc trước khi giấy hết hạn.</p>
+      </div>
+
+      <!-- ⚠️ CÂU BẮT BUỘC — CTL-0026 Mục 2. Không có nó là có ngày ai đó dọn
+           kho giấy. Đặt NGAY ĐẦU TAB, trước cả nút quét. -->
+      <div class="tl-luat" id="tl-luat">
+        <b>⚠️ Đây là bản dự phòng để tra cứu. KHÔNG thay bản giấy — đừng huỷ giấy gốc.</b>
+        <p>Luật Giao dịch điện tử 2023 (hiệu lực 01/7/2024) chỉ công nhận bản số hoá khi
+           có ký số và bảo đảm toàn vẹn; quét bằng điện thoại không đạt. Luật Kế toán vẫn
+           bắt giữ bản gốc có chữ ký và dấu đỏ, lưu 5 năm / 10 năm / vĩnh viễn tuỳ loại.</p>
+      </div>
+
+      <div class="tl-thanh">
+        <!-- Ẩn SẴN: chỉ hiện lại khi máy chủ xác nhận người này lưu được ít
+             nhất một nhóm (`nhom_luu_duoc`). Bày nút rồi mới ẩn là một cú nháy
+             hứa suông. Vá REV-0040 #8. -->
+        <!-- Nhãn KHÔNG nói "quét" trần nữa: từ CTL-0026 vòng 6 nút này mở HAI
+             đường — chụp bằng máy ảnh, hoặc chọn file có sẵn trên máy. Máy bàn
+             thường không có camera, gọi nó là nút "quét" thì Sếp ngồi máy tính
+             không nhận ra đây chính là chỗ tải file lên (đúng câu Sếp hỏi
+             29/08: "upload file từ máy tính lên thì không có chỗ thêm tài liệu
+             à"). Biểu tượng đôi 📷📁 nói thẳng là có hai đường. -->
+        <button type="button" class="btn-primary tl-nut-quet" id="tl-nut-quet" hidden>📷📁 Thêm tài liệu — chụp hoặc tải file</button>
+        <!-- `maxlength` BẮT BUỘC — REV-0047/L1: ô một dòng không khai trần thì
+             `maxLength === -1`, nhận chữ VÔ HẠN rồi kéo ngang ở 375px. 80 là
+             trần chung của mọi ô tìm trong ERP (main `905791f` vá 80 ô cùng
+             luật). Ô này sinh ra ở nhánh CTL-0026 nên KHÔNG nằm trong 111 ô
+             đã vá — vá tay cho đồng bộ, không để lệch một ô. -->
+        <input type="search" id="tl-tim" class="tl-tim" maxlength="80" placeholder="Tìm: gõ có dấu hay không dấu đều được">
+        <label class="tl-loc-han"><input type="checkbox" id="tl-sap-het"> Chỉ giấy sắp hết hạn</label>
+      </div>
+
+      <div class="tl-nhom-loc" id="tl-nhom-loc"></div>
+
+      <!-- HAI LOẠI TÀI LIỆU TRONG KHO — CTL-0026 vòng 7. Máy scan ra hai loại
+           PDF trông y hệt nhau khi mở lên: loại đã nhận dạng chữ (tìm được
+           theo nội dung) và loại chỉ có ảnh (chỉ xem được). Nhìn từng thẻ một
+           thì không bao giờ thấy ra TỈ LỆ, mà tỉ lệ mới là thứ quyết định có
+           phải đi chỉnh máy scan hay không. Con số do máy chủ đếm trên đúng
+           bộ lọc đang hiện, nên đổi bộ lọc là số đổi theo. -->
+      <p class="tl-dem-chu" id="tl-dem-chu" hidden></p>
+
+      <div id="tl-danh-sach"></div>
+      <p class="tl-trong" id="tl-trong" hidden>Chưa có tài liệu nào trong kho.</p>
+      <!-- Danh sách bị cắt thì phải NÓI RA (LUAT-GOP-Y-LA-TRIEU-CHUNG Mục 2) -->
+      <div class="dai-cat" id="tl-cat" hidden></div>
+    </section>
+
     <!-- ---------- Quản trị (chỉ admin) ---------- -->
     <section class="view" id="v-quantri" hidden>
       <div class="view-head">
@@ -2334,7 +2755,7 @@
             <div class="panel-head"><h4>Phòng ban</h4><span class="hint" id="dln-pb-dem"></span></div>
             <div class="panel-body">
               <form id="dln-pb-form" style="display:flex; gap:8px" autocomplete="off">
-                <input type="text" id="dln-pb-ten" placeholder="Tên phòng ban mới, VD: Kho vận" required style="flex:1">
+                <input maxlength="60" type="text" id="dln-pb-ten" placeholder="Tên phòng ban mới, VD: Kho vận" required style="flex:1">
                 <button type="submit" class="btn-nho btn-primary" style="width:auto">+ Thêm</button>
               </form>
               <div class="form-loi" id="dln-pb-loi"></div>
@@ -2347,7 +2768,7 @@
             <div class="panel-head"><h4>Chức danh</h4><span class="hint" id="dln-cd-dem"></span></div>
             <div class="panel-body">
               <form id="dln-cd-form" style="display:flex; gap:8px" autocomplete="off">
-                <input type="text" id="dln-cd-ten" placeholder="Tên chức danh mới, VD: Nhân viên kho" required style="flex:1">
+                <input maxlength="60" type="text" id="dln-cd-ten" placeholder="Tên chức danh mới, VD: Nhân viên kho" required style="flex:1">
                 <button type="submit" class="btn-nho btn-primary" style="width:auto">+ Thêm</button>
               </form>
               <div class="form-loi" id="dln-cd-loi"></div>
@@ -2385,11 +2806,11 @@
           <form id="dmForm" class="form-luoi" autocomplete="off" style="margin-top:18px">
             <div class="field">
               <label>Họ tên *</label>
-              <input type="text" id="dmHoTen" required placeholder="Nguyễn Văn A">
+              <input maxlength="80" type="text" id="dmHoTen" required placeholder="Nguyễn Văn A">
             </div>
             <div class="field">
               <label>Ngày sinh</label>
-              <input type="date" id="dmNgaySinh">
+              <input type="date" id="dmNgaySinh" data-ngay-kieu="ngay-sinh">
             </div>
             <div class="field">
               <label>Giới tính</label>
@@ -2399,36 +2820,36 @@
             </div>
             <div class="field">
               <label>Số CCCD <span class="goi-y">· nhạy cảm</span></label>
-              <input type="text" id="dmSoCccd" inputmode="numeric" placeholder="12 số">
+              <input maxlength="20" type="text" id="dmSoCccd" inputmode="numeric" placeholder="12 số">
             </div>
             <div class="field field-rong">
               <label>Quê quán</label>
-              <input type="text" id="dmQueQuan">
+              <textarea class="o-nhieu-dong" rows="1" maxlength="300" id="dmQueQuan"></textarea>
             </div>
             <div class="field field-rong">
               <label>Nơi thường trú</label>
-              <input type="text" id="dmThuongTru">
+              <textarea class="o-nhieu-dong" rows="1" maxlength="300" id="dmThuongTru"></textarea>
             </div>
 
             <div class="field">
               <label>Số điện thoại</label>
-              <input type="text" id="dmSdt" inputmode="tel" placeholder="09xx xxx xxx">
+              <input maxlength="20" type="text" id="dmSdt" inputmode="tel" placeholder="09xx xxx xxx">
             </div>
             <div class="field">
               <label>Email</label>
-              <input type="text" id="dmEmail" placeholder="ten@alphagreen.vn">
+              <input maxlength="80" type="text" id="dmEmail" placeholder="ten@alphagreen.vn">
             </div>
             <div class="field">
               <label>Số sổ BHXH <span class="goi-y">· nhạy cảm</span></label>
-              <input type="text" id="dmSoBhxh" inputmode="numeric">
+              <input maxlength="20" type="text" id="dmSoBhxh" inputmode="numeric">
             </div>
             <div class="field">
               <label>Chức vụ</label>
-              <input type="text" id="dmChucVu" placeholder="Nhân viên kho">
+              <input maxlength="60" type="text" id="dmChucVu" placeholder="Nhân viên kho">
             </div>
             <div class="field">
               <label>Bộ phận</label>
-              <input type="text" id="dmBoPhan" placeholder="Kho vận">
+              <input maxlength="60" type="text" id="dmBoPhan" placeholder="Kho vận">
             </div>
             <div class="field">
               <label>Quản lý trực tiếp</label>
@@ -2436,6 +2857,9 @@
             </div>
             <div class="field">
               <label>Ngày vào làm</label>
+              <!-- KHÔNG `qua-khu` (REV-0061 · THẤP-2): ngày vào làm thường là
+                   TƯƠNG LAI — offer đã ký, thứ Hai tới bắt đầu. `max = hôm nay`
+                   sẽ chặn đúng ca hay gặp nhất. -->
               <input type="date" id="dmNgayVao">
             </div>
             <div class="field">
@@ -2449,7 +2873,7 @@
             </div>
             <div class="field" id="dmFieldLuong">
               <label>Lương (đồng/tháng)</label>
-              <input type="text" id="dmLuong" inputmode="numeric" placeholder="Để trống nếu chưa có">
+              <input maxlength="20" type="text" id="dmLuong" inputmode="numeric" placeholder="Để trống nếu chưa có">
             </div>
 
             <div class="field field-nut">
@@ -2473,7 +2897,7 @@
               <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
                 <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
               </svg>
-              <input type="search" id="qt-tim" placeholder="Tìm theo mã, họ tên hoặc tên đăng nhập...">
+              <input maxlength="80" type="search" id="qt-tim" placeholder="Tìm theo mã, họ tên hoặc tên đăng nhập...">
             </div>
             <select id="qt-locvaitro" class="chon-nho" title="Lọc theo vai trò">
               <option value="">Tất cả vai trò</option>
@@ -2485,10 +2909,13 @@
           <table>
             <thead>
               <tr>
-                <th>Nhân sự</th>
+                <th class="cot-chu">Nhân sự</th>
                 <th>Bộ phận</th>
                 <th>Tài khoản</th>
-                <th>Vai trò</th>
+                <!-- Hai ô gộp lại một cột: "Admin backup · Kế toán trưởng".
+                     Tách thành hai cột thì bảng Quản trị vượt bề ngang điện
+                     thoại — cùng cột, ngăn bằng "·", đọc vẫn rõ. -->
+                <th>Vai trò · Vị trí</th>
                 <th>Thao tác</th>
               </tr>
             </thead>
@@ -2512,14 +2939,14 @@
     <form id="hopNhapForm" class="form-luoi" autocomplete="off">
       <div class="field field-rong">
         <label id="hopNhap-nhan"></label>
-        <input type="text" id="hopNhap-input" hidden>
+        <textarea class="o-nhieu-dong" rows="1" maxlength="500" id="hopNhap-input" hidden></textarea>
         <div class="combo1" id="hopNhap-selectcombo" hidden>
           <button type="button" class="combo1-hienthi rong" id="hopNhap-selecthienthi">
             <span>Chọn...</span>
             <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
           </button>
           <div class="combo1-panel" id="hopNhap-selectpanel" hidden>
-            <input type="search" id="hopNhap-selecttim" placeholder="Tìm theo mã hoặc tên...">
+            <input maxlength="80" type="search" id="hopNhap-selecttim" placeholder="Tìm theo mã hoặc tên...">
             <div class="ql-goiy" id="hopNhap-selectgoiy"></div>
           </div>
         </div>
@@ -2552,11 +2979,11 @@
       <input type="hidden" id="nsSua-id">
       <div class="field field-rong">
         <label>Họ tên *</label>
-        <input type="text" id="nsSua-hoten" required>
+        <input maxlength="80" type="text" id="nsSua-hoten" required>
       </div>
       <div class="field" id="nsSua-fieldmanv" hidden>
         <label>Mã nhân sự <span class="goi-y">· chỉ Admin sửa được, hiếm khi cần đổi</span></label>
-        <input type="text" id="nsSua-manv" placeholder="VD: 01-0001">
+        <input maxlength="20" type="text" id="nsSua-manv" placeholder="VD: 01-0001">
       </div>
       <div class="field">
         <label>Chức danh <span class="hint">· <a href="#" data-mo-tab="quantri">quản lý ở Quản trị</a></span></label>
@@ -2566,7 +2993,7 @@
             <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
           </button>
           <div class="combo1-panel" id="nsSua-chucdanhpanel" hidden>
-            <input type="search" id="nsSua-chucdanhtim" placeholder="Tìm chức danh...">
+            <input maxlength="80" type="search" id="nsSua-chucdanhtim" placeholder="Tìm chức danh...">
             <div class="ql-goiy" id="nsSua-chucdanhgoiy"></div>
           </div>
         </div>
@@ -2580,7 +3007,7 @@
             <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
           </button>
           <div class="combo1-panel" id="nsSua-phongbanpanel" hidden>
-            <input type="search" id="nsSua-phongbantim" placeholder="Tìm phòng ban...">
+            <input maxlength="80" type="search" id="nsSua-phongbantim" placeholder="Tìm phòng ban...">
             <div class="ql-goiy" id="nsSua-phongbangoiy"></div>
           </div>
         </div>
@@ -2588,11 +3015,11 @@
       </div>
       <div class="field">
         <label>Số điện thoại</label>
-        <input type="text" id="nsSua-sdt">
+        <input maxlength="20" type="text" id="nsSua-sdt">
       </div>
       <div class="field">
         <label>Email</label>
-        <input type="text" id="nsSua-email">
+        <input maxlength="80" type="text" id="nsSua-email">
       </div>
       <div class="field">
         <label>Quản lý trực tiếp</label>
@@ -2602,7 +3029,7 @@
             <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
           </button>
           <div class="combo1-panel" id="nsSua-quanlypanel" hidden>
-            <input type="search" id="nsSua-quanlytim" placeholder="Tìm theo mã hoặc tên...">
+            <input maxlength="80" type="search" id="nsSua-quanlytim" placeholder="Tìm theo mã hoặc tên...">
             <div class="ql-goiy" id="nsSua-quanlygoiy"></div>
           </div>
         </div>
@@ -2629,7 +3056,7 @@
       </div>
       <div class="field" id="nsSua-fieldluong">
         <label>Đổi lương (đồng/tháng) <span class="goi-y">· để trống = giữ nguyên</span></label>
-        <input type="text" id="nsSua-luong" inputmode="numeric" placeholder="Chỉ gõ nếu muốn đổi">
+        <input maxlength="20" type="text" id="nsSua-luong" inputmode="numeric" placeholder="Chỉ gõ nếu muốn đổi">
       </div>
       <div class="field field-nut" style="display:flex; gap:10px">
         <button type="submit" class="btn-primary" id="nsSua-nutluu" style="width:auto">Lưu thay đổi</button>
@@ -2651,7 +3078,7 @@
 
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Đầu ra (bàn giao được)</th><th>Đo bằng</th><th>Nhịp</th><th></th></tr></thead>
+          <thead><tr><th class="cot-chu">Đầu ra (bàn giao được)</th><th class="cot-chu">Đo bằng</th><th>Nhịp</th><th></th></tr></thead>
           <tbody id="nsSua-jdBang"></tbody>
         </table>
       </div>
@@ -2664,14 +3091,14 @@
         <input type="hidden" id="jd-id">
         <div class="field field-rong">
           <label>Đầu ra * <span class="goi-y">· DANH TỪ — thứ bàn giao được, không phải việc phải làm</span></label>
-          <input type="text" id="jd-daura" required maxlength="200"
-                 placeholder="VD: Bảng công tháng đã chốt">
+          <textarea id="jd-daura" class="o-nhieu-dong" rows="1" required maxlength="200"
+                    placeholder="VD: Bảng công tháng đã chốt"></textarea>
           <div class="hd-nhac" id="jd-nhac" hidden></div>
         </div>
         <div class="field field-rong">
           <label>Đo bằng gì * <span class="goi-y">· một con số, một mốc thời gian, hoặc một điều kiện đúng/sai</span></label>
-          <input type="text" id="jd-dobang" required maxlength="300"
-                 placeholder="VD: Gửi kế toán trước ngày 3, không phải sửa lại sau khi đã gửi">
+          <textarea id="jd-dobang" class="o-nhieu-dong" rows="1" required maxlength="300"
+                    placeholder="VD: Gửi kế toán trước ngày 3, không phải sửa lại sau khi đã gửi"></textarea>
         </div>
         <div class="field">
           <label>Nhịp</label>
@@ -2727,7 +3154,7 @@
 
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Kỹ năng</th><th>Mức</th><th>Ai xác nhận</th><th></th></tr></thead>
+          <thead><tr><th class="cot-chu">Kỹ năng</th><th>Mức</th><th class="cot-phu">Ai xác nhận</th><th></th></tr></thead>
           <tbody id="nsSua-knBang"></tbody>
         </table>
       </div>
@@ -2751,7 +3178,7 @@
         </div>
         <div class="field field-rong">
           <label>Ghi chú <span class="goi-y">· để trống cũng được</span></label>
-          <input type="text" id="kn-ghichu" maxlength="200" placeholder="VD: có chứng chỉ xe nâng, cấp 6/2026">
+          <textarea id="kn-ghichu" class="o-nhieu-dong" rows="1" maxlength="200" placeholder="VD: có chứng chỉ xe nâng, cấp 6/2026"></textarea>
         </div>
         <div class="field field-rong kn-tieuchuan" id="kn-tieuchuan" hidden></div>
         <div class="field field-nut">
@@ -2774,7 +3201,7 @@
          Lưu NGAY khi đổi, cùng lý do với ô tick bên dưới. -->
     <div class="field" style="max-width:220px">
       <label>Ngày sinh <span class="goi-y">· để trống = chưa có thông tin</span></label>
-      <input type="date" id="nsSua-ngaysinh">
+      <input type="date" id="nsSua-ngaysinh" data-ngay-kieu="ngay-sinh">
     </div>
     <label class="sn-congkhai">
       <input type="checkbox" id="nsSua-sinhnhat">
@@ -2791,7 +3218,12 @@
     <div class="kv-md-muc">Hợp đồng lao động</div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Loại</th><th>Từ ngày</th><th>Hết hạn</th><th>Lần</th><th>Số HĐ</th><th></th></tr></thead>
+        <!-- 6 cột → 4: "Lần" và "Số HĐ" gộp xuống DÒNG PHỤ dưới "Loại"
+             (Sếp Ngọc 29/08/2026, cách chữa số 3). Hai cột đó mỗi ô chỉ chứa
+             một con số hoặc một dấu gạch nhưng vẫn tiêu trọn phần đệm của một
+             cột — trong cửa sổ rộng 588px, đó đúng là chỗ đẩy cột nút ra
+             ngoài. Không mất dữ liệu nào, chỉ đổi chỗ đặt. -->
+        <thead><tr><th>Loại</th><th>Từ ngày</th><th>Hết hạn</th><th></th></tr></thead>
         <tbody id="nsSua-hopdong"></tbody>
       </table>
     </div>
@@ -2829,15 +3261,15 @@
       </div>
       <div class="field">
         <label>Số hợp đồng <span class="goi-y">· để trống cũng được</span></label>
-        <input type="text" id="nsHd-sohd" placeholder="VD: 12/2026/HĐLĐ">
+        <input maxlength="50" type="text" id="nsHd-sohd" placeholder="VD: 12/2026/HĐLĐ">
       </div>
       <div class="field">
         <label>Lần ký thứ <span class="goi-y">· máy tự tính, không sửa được</span></label>
-        <input type="text" id="nsHd-lanthu" value="—" readonly>
+        <input maxlength="5" type="text" id="nsHd-lanthu" value="—" readonly>
       </div>
       <div class="field field-rong" id="nsHd-fieldlydo" hidden>
         <label>Lý do vẫn ký như vậy *</label>
-        <input type="text" id="nsHd-lydo" placeholder="Ghi ngắn gọn — lý do này được lưu vào lịch sử hồ sơ">
+        <textarea class="o-nhieu-dong" rows="1" maxlength="500" id="nsHd-lydo" placeholder="Ghi ngắn gọn — lý do này được lưu vào lịch sử hồ sơ"></textarea>
       </div>
       <div class="field field-nut" style="display:flex; gap:10px">
         <button type="submit" class="btn-primary" id="nsHd-nutluu" style="width:auto">Lưu hợp đồng</button>
@@ -2846,10 +3278,45 @@
     </form>
     <div class="form-loi" id="nsHd-loi"></div>
 
+    <!-- ==================================================================
+         GIẤY TỜ CỦA NGƯỜI NÀY  ·  CTL-0025 Đợt 2
+         ------------------------------------------------------------------
+         Sếp Ngọc 29/08/2026: "khi có các giấy tờ kiểu như quyết định, uỷ
+         quyền liên quan đến nhân sự đó tao sẽ lưu vào đây luôn THÀNH 1 BỘ
+         là đẹp". Mở hồ sơ là thấy TRỌN bộ giấy của người đó — không phải
+         sang tab Kho tài liệu mò.
+
+         Nhưng đây là một CỬA NHÌN, không phải kho thứ hai: cùng những tờ
+         giấy ấy vẫn nằm trong kho chung. Một kho, hai cửa nhìn.
+
+         Quyền cắt ở MÁY CHỦ (`src/quyen.js` — quản lý kho KHÔNG có nhóm
+         `nhan_su`). Khối này chỉ vẽ những gì máy chủ chịu trả. -->
+    <div class="kv-md-muc">Giấy tờ của người này</div>
+    <div class="tl-luat">
+      <b>⚠️ Đây là bản dự phòng để tra cứu. KHÔNG thay bản giấy — đừng huỷ giấy gốc.</b>
+      <p>
+        Chỉ lưu <b>BẢN SAO</b>. Quét xong <b>trả giấy lại cho nhân viên ngay</b> —
+        doanh nghiệp không được giữ giấy tờ gốc của người lao động (BLLĐ 2019 Đ.17).
+        Mỗi lượt mở giấy tờ ở đây đều <b>ghi nhật ký</b> theo Luật Bảo vệ dữ liệu
+        cá nhân 91/2025/QH15.
+      </p>
+    </div>
+    <div class="tl-thanh">
+      <!-- Cùng lý do với `#tl-nut-quet` ở tab Kho tài liệu: hai đường vào,
+           nhãn phải nói ra cả hai. -->
+      <button type="button" class="btn-primary tl-nut-quet" id="nsGt-quet" hidden>
+        📷📁 Thêm giấy tờ — chụp hoặc tải file
+      </button>
+      <span class="sm" id="nsGt-dem"></span>
+    </div>
+    <div id="nsGt-ds"></div>
+    <div class="empty tl-trong" id="nsGt-trong" hidden></div>
+    <div id="nsGt-cat"></div>
+
     <div class="kv-md-muc">Lịch sử thay đổi</div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Thời gian</th><th>Thay đổi</th><th>Người thực hiện</th></tr></thead>
+        <thead><tr><th>Thời gian</th><th class="cot-chu">Thay đổi</th><th>Người thực hiện</th></tr></thead>
         <tbody id="nsSua-lichsu"></tbody>
       </table>
     </div>
@@ -2886,27 +3353,230 @@
      mới nữa (Sếp Ngọc chốt 21/08/2026: "thêm mục tiêu và giao mục tiêu bản
      chất như nhau, giao mục tiêu vẫn có mục giao cho tôi, đang trùng lặp
      thừa thãi — gộp chung đi"). Tạo mục tiêu MỚI giờ nằm trong hộp "+ Giao
-     Mục Tiêu" bên dưới, phần "Thuộc mục tiêu" → "+ Tạo mục tiêu mới…". Cấp/
-     Phòng ban không sửa được sau khi tạo (mtCapNhat không nhận 2 trường
-     này) nên hộp này chỉ còn Tên + Mô tả. -->
+     Mục Tiêu" bên dưới, phần "Thuộc mục tiêu" → "+ Tạo mục tiêu mới…".
+
+     MỞ HẾT BẢY Ô (Sếp Ngọc nhắc LẦN THỨ BA: "còn việc sửa mục tiêu sau khi
+     đã giao nữa"). Trước bản này hộp chỉ có Tên + Mô tả, còn Cấp · Phòng ban
+     · Năm · Quý thì tạo xong là đóng băng — đặt sai quý là phải xoá đi tạo
+     lại, mất sạch lịch sử. Bốn ô đó nay mở, xếp theo mức nặng dần để người
+     sửa NHÌN LÀ BIẾT mình đang đụng vào cái gì:
+       ① sửa thoải mái   — Tên, Mô tả (không hỏi lý do câu nào)
+       ② có ghi vết      — Phòng ban phụ trách
+       ③ phải có lý do   — Cấp, Năm, Quý (đổi cam kết của cả kỳ)
+       ④ khoá / mở lại   — mục tiêu đã Hoàn thành / Đã huỷ
+     Mọi luật chốt thật ở MÁY CHỦ (`mtCapNhat`); ở đây chỉ hỏi đúng lúc và in
+     nguyên văn lỗi máy chủ trả về.
+     Điện thoại là đường chính: Sếp sửa mục tiêu trên điện thoại. -->
 <div class="modal-nen" id="mtFormModalNen" hidden>
   <div class="modal">
-    <h4>Sửa mục tiêu</h4>
+    <h4 id="mt-form-tieude">Sửa mục tiêu</h4>
+    <p class="hint" id="mt-form-nhac" style="margin:0 0 14px"></p>
     <form id="mt-form" class="form-luoi" autocomplete="off">
-      <div class="field field-rong">
-        <label>Tên mục tiêu *</label>
-        <input type="text" id="mt-tieu-de" required placeholder="VD: Doanh thu Shopee đạt 30 tỷ trong quý">
+      <div class="field field-rong mt-o-noidung">
+        <label for="mt-tieu-de">Tên mục tiêu *</label>
+        <textarea class="o-nhieu-dong" rows="1" maxlength="200" id="mt-tieu-de" placeholder="VD: Doanh thu Shopee đạt 30 tỷ trong quý"></textarea>
       </div>
-      <div class="field field-rong">
-        <label>Mô tả (tuỳ chọn)</label>
-        <textarea id="mt-mo-ta" rows="2" placeholder="Bối cảnh, con số cụ thể, cách đo..."></textarea>
+      <div class="field field-rong mt-o-noidung">
+        <label for="mt-mo-ta">Mô tả (tuỳ chọn)</label>
+        <textarea id="mt-mo-ta" rows="2" maxlength="2000" placeholder="Bối cảnh, con số cụ thể, cách đo..."></textarea>
       </div>
-      <div class="field field-nut" style="display:flex; gap:10px">
-        <button type="submit" class="btn-primary" id="mt-nut-luu" style="width:auto">Lưu thay đổi</button>
-        <button type="button" class="btn-phu" id="mt-nut-huy" style="width:auto">Hủy</button>
+
+      <div class="field mt-o-noidung">
+        <label for="mt-cap">Cấp mục tiêu</label>
+        <select id="mt-cap">
+          <option value="ca_nhan">Cá nhân (chỉ mình tôi thấy)</option>
+          <option value="phong_ban">Phòng ban</option>
+          <option value="cong_ty" id="mt-cap-opt-congty" hidden>Công ty</option>
+        </select>
+      </div>
+      <div class="field mt-o-noidung" id="mt-field-bophan">
+        <label for="mt-bo-phan">Phòng ban / bộ phận phụ trách *</label>
+        <input maxlength="80" type="text" id="mt-bo-phan" placeholder="VD: Kho vận, Kế toán, Vận hành sàn...">
+      </div>
+      <div class="field mt-o-noidung">
+        <label for="mt-nam">Năm</label>
+        <input type="number" id="mt-nam" min="2020" max="2100" step="1">
+      </div>
+      <div class="field mt-o-noidung">
+        <label for="mt-quy">Quý</label>
+        <select id="mt-quy">
+          <option value="1">Quý 1</option>
+          <option value="2">Quý 2</option>
+          <option value="3">Quý 3</option>
+          <option value="4">Quý 4</option>
+        </select>
+      </div>
+      <div class="field mt-o-noidung" id="mt-field-trangthai">
+        <label for="mt-trang-thai">Trạng thái</label>
+        <select id="mt-trang-thai">
+          <option value="dang_thuc_hien">Đang thực hiện</option>
+          <option value="hoan_thanh">Hoàn thành</option>
+          <option value="huy">Đã huỷ</option>
+        </select>
+      </div>
+
+      <!-- ⚠️ NGUY HIỂM ② + ③ — cảnh báo TRƯỚC khi bấm Lưu, không phải sau.
+           Đổi cấp/kỳ là làm thẻ mục tiêu RỜI KHỎI màn hình người khác trong
+           khi việc con vẫn đang chạy dưới nó. Nói ra bằng số việc thật. -->
+      <div class="field-rong mt-canh-bao" id="mt-canh-bao" hidden></div>
+
+      <!-- Hộp lý do CHỈ hiện khi cấp/năm/quý THẬT SỰ đổi (hoặc mở lại mục
+           tiêu đã đóng sổ). Hiện sẵn từ đầu thì người ta gõ cho có mỗi lần
+           sửa chính tả, và luật thành hình thức. -->
+      <div class="field field-rong cv-sua-canhbao" id="mt-khoi-lydo" hidden>
+        <label for="mt-ly-do" id="mt-ly-do-nhan">Vì sao đổi? *</label>
+        <p class="hint" style="margin:0 0 8px">Đây là <b>đổi cam kết của cả kỳ</b>. Giá trị cũ, giá trị mới, tên bạn và lý do này đều được ghi lại, và <b>người đặt mục tiêu sẽ nhận được thông báo</b>.</p>
+        <textarea id="mt-ly-do" class="o-nhieu-dong" rows="1" maxlength="500" placeholder="VD: quý 3 không kịp triển khai, chuyển cam kết sang quý 4"></textarea>
+      </div>
+
+      <div class="field field-nut" style="display:flex; gap:10px; flex-wrap:wrap">
+        <button type="submit" class="btn-primary cv-sua-nut" id="mt-nut-luu" style="width:auto">Lưu thay đổi</button>
+        <button type="button" class="btn-phu cv-sua-nut" id="mt-nut-huy" style="width:auto">Hủy</button>
       </div>
     </form>
     <div class="form-loi" id="mt-loi"></div>
+
+    <!-- Sổ sửa của CHÍNH mục tiêu này — cùng khuôn với hộp sửa việc. Câu
+         tiếng Việt dựng sẵn ở máy chủ (`cauSuaDoc`) nên web và thông báo
+         không lệch nhau. -->
+    <div class="cv-sua-lichsu" id="mt-lichsu-khoi" hidden>
+      <h5>Đã sửa những gì</h5>
+      <ul id="mt-lichsu"></ul>
+      <div class="dai-cat" id="mt-lichsu-cat" hidden></div>
+    </div>
+  </div>
+</div>
+
+<!-- CTL-0017 — SỬA VIỆC ĐÃ GIAO.
+     Trước bản này: giao xong là đóng băng, gõ nhầm một chữ cũng phải huỷ đi
+     giao lại (mất lịch sử, người nhận ăn hai thông báo).
+     Ba nhóm trường xếp theo mức nặng dần, để người sửa nhìn là biết mình
+     đang đụng vào cái gì:
+       ① sửa thoải mái  — tên việc, ghi chú
+       ② phải ghi vết   — đầu ra (thước nghiệm thu MBOs)
+       ③ phải có lý do  — hạn chót (đổi cam kết)
+     Điện thoại là đường chính: Sếp và nhân viên kho sửa trên điện thoại. -->
+<div class="modal-nen" id="cvSuaModalNen" hidden>
+  <div class="modal">
+    <h4>Sửa việc đã giao</h4>
+    <p class="hint" id="cv-sua-buoc" style="margin:0 0 14px"></p>
+    <form id="cv-sua-form" class="form-luoi" autocomplete="off">
+      <div class="field field-rong">
+        <label>Tên việc *</label>
+        <textarea id="cv-sua-tieu-de" class="o-nhieu-dong" rows="1" required maxlength="200"></textarea>
+      </div>
+      <div class="field field-rong" id="cv-sua-khoi-daura">
+        <label>Đầu ra cụ thể cần đạt *</label>
+        <textarea id="cv-sua-dau-ra" rows="3" maxlength="1000"></textarea>
+        <p class="hint">Đây là thước nghiệm thu. Sửa được, nhưng có ghi vết và người nhận được báo.</p>
+      </div>
+      <div class="field field-rong">
+        <label>Ghi chú thêm (tuỳ chọn)</label>
+        <textarea id="cv-sua-mo-ta" rows="2" maxlength="2000"></textarea>
+      </div>
+      <div class="field field-rong" id="cv-sua-khoi-han">
+        <label>Hạn chót</label>
+        <input type="date" id="cv-sua-han-chot">
+      </div>
+
+      <!-- Hộp lý do CHỈ hiện khi hạn chót thật sự đổi. Hiện sẵn từ đầu thì
+           người ta gõ cho có mỗi lần sửa chính tả, và luật thành hình thức. -->
+      <div class="field field-rong cv-sua-canhbao" id="cv-sua-khoi-lydo" hidden>
+        <label for="cv-sua-ly-do">Vì sao dời hạn chót? *</label>
+        <p class="hint" style="margin:0 0 8px">Dời hạn là đổi cam kết. Hạn cũ, hạn mới, tên bạn và lý do này đều được ghi lại, và <b>người giao việc sẽ nhận được thông báo</b>.</p>
+        <textarea id="cv-sua-ly-do" class="o-nhieu-dong" rows="1" maxlength="500" placeholder="VD: chờ NCC gửi báo giá"></textarea>
+      </div>
+
+      <div class="field field-nut" style="display:flex; gap:10px; flex-wrap:wrap">
+        <button type="submit" class="btn-primary cv-sua-nut" id="cv-sua-nut-luu" style="width:auto">Lưu thay đổi</button>
+        <button type="button" class="btn-phu cv-sua-nut" id="cv-sua-nut-huy" style="width:auto">Hủy</button>
+      </div>
+    </form>
+    <div class="form-loi" id="cv-sua-loi"></div>
+
+    <!-- Lịch sử sửa — ĐỌC HIỂU ĐƯỢC, không phải mã máy. Câu tiếng Việt dựng
+         sẵn ở máy chủ (`cauSuaDoc`) nên web và thông báo không lệch nhau. -->
+    <div class="cv-sua-lichsu" id="cv-sua-lichsu-khoi" hidden>
+      <h5>Đã sửa những gì</h5>
+      <ul id="cv-sua-lichsu"></ul>
+      <!-- Sổ bằng chứng cắt bớt thì PHẢI nói ra (REV-0037 · L1) — im lặng ở
+           đây là giấu đúng dòng người ta muốn giấu. -->
+      <div class="dai-cat" id="cv-sua-lichsu-cat" hidden></div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== NHẬN XÉT MỘT VIỆC (GY-0005) ====================
+     Sếp Ngọc: "Cần thêm nút hoặc mục nhận xét để nhận xét công việc của
+     người được giao."
+
+     VÌ SAO LÀ MỘT HỘP RIÊNG, KHÔNG NHÉT VÀO HỘP "Sửa việc đã giao":
+       · Hộp Sửa CHỈ mở cho người giao, và CHỈ khi việc chưa nghiệm thu.
+         Nhét nhận xét vào đó thì (a) người NHẬN việc — đúng người cần đọc
+         nhận xét về mình — không có đường nào mở ra xem, và (b) việc đã
+         xong, đúng lúc nhận xét có ích nhất, lại là lúc hộp đó đóng.
+       · Sửa và nhận xét là hai hành động khác hẳn nhau: một cái đổi cam
+         kết, một cái chấm kết quả. Gộp vào một nút là mời bấm nhầm.
+
+     VÌ SAO KHÔNG GỘP VÀO "Vinh danh": Vinh danh là lời khen CÔNG KHAI về
+     một CON NGƯỜI, và tự trôi đi cho bảng luôn tươi. Nhận xét ở đây gắn vào
+     MỘT VIỆC có `dau_ra` viết sẵn và ở lại vĩnh viễn trong sổ việc — hai
+     vòng đời khác nhau, gộp là hỏng cả hai.
+     (Bản mô tả cũ ở đây viết nhận xét là "chỉ hai người trong cuộc" — SAI.
+     Cửa đọc `suaLichSu` chỉ hỏi `duocXemTab(phien,'congviec')`, nên ai xem
+     được tab Công việc đều đọc được nguyên văn. REV-0061 · VỪA-4.) NHƯNG có bắc cầu: viết xong một nhận xét khen thì bấm
+     thẳng "Vinh danh luôn" ngay tại đây, không phải sang tab khác gõ lại.
+     (Sếp Ngọc tự nhận điểm cần cải thiện là ghi nhận và khen ngợi — nên
+     đường đi tới lời khen phải NGẮN HƠN đường đi tới lời chê, không phải
+     ngược lại.) -->
+<div class="modal-nen" id="cvNxModalNen" hidden>
+  <div class="modal">
+    <h4>Nhận xét công việc</h4>
+    <p class="hint" id="cv-nx-viec" style="margin:0 0 14px"></p>
+
+    <!-- Sổ nhận xét — người NHẬN việc mở ra là đọc được nhận xét về mình.
+         Nhận xét mà người bị nhận xét không thấy thì là hồ sơ ngầm, không
+         phải quản lý. -->
+    <div class="cv-nx-so" id="cv-nx-so-khoi" hidden>
+      <h5>Đã nhận xét</h5>
+      <ul id="cv-nx-so"></ul>
+    </div>
+    <div class="empty" id="cv-nx-trong" hidden>Chưa có nhận xét nào cho việc này.</div>
+    <!-- Sổ nhận xét CẮT THÌ PHẢI NÓI (REV-0061 · CHẶN-1). Đúng khuôn
+         `#cv-sua-lichsu-cat` của hộp Sửa việc ngay cạnh — hộp này trước
+         không có ô nào, nên nhận xét cũ rơi mất mà màn hình vẫn nói
+         "Chưa có nhận xét nào". -->
+    <div class="dai-cat" id="cv-nx-cat" hidden></div>
+
+    <form id="cv-nx-form" class="form-luoi" autocomplete="off" style="margin-top:14px">
+      <div class="field field-rong">
+        <!-- NÓI ĐÚNG SỰ THẬT VỀ NGƯỜI ĐỌC (REV-0061 · VỪA-4). Câu cũ chỉ nói
+             "người được nhận xét sẽ đọc được" — đúng nhưng thiếu một nửa:
+             cửa đọc là `suaLichSu`, ai xem được tab Công việc đều đọc được
+             nguyên văn. Người viết phải biết mình đang viết cho ai TRƯỚC khi
+             gõ, không phải biết sau. -->
+        <label for="cv-nx-noi-dung">Nhận xét <span class="goi-y">· người được nhận xét đọc được, và ai xem được tab Công việc cũng đọc được — viết như nói trước mặt</span></label>
+        <!-- GỢI Ý HAI CHIỀU, KHÔNG PHẢI MẪU CỨNG. Ô nhận xét mà chỉ mời chê
+             thì thành ô để chê; hai nút dưới đây chỉ CHÈN một chữ mở đầu rồi
+             nhường lại cho người viết, không ép điền theo khuôn. -->
+        <!-- `rows="1"` + `.o-nhieu-dong`: ô tự cao dần theo chữ (`noiDayONhieuDong`).
+             Để `rows="3"` là chiếm 91px lúc còn RỖNG — trên màn 375px đó là ăn
+             mất hai dòng của sổ nhận xét ngay phía trên. `do-chu-dai` bắt được. -->
+        <textarea id="cv-nx-noi-dung" class="o-nhieu-dong" rows="1" maxlength="1000"
+          placeholder="Chấm theo ĐẦU RA đã giao. Ví dụ: Đối chiếu tồn khớp 100% và gửi trước 17h — đúng cam kết. Lần sau ghi rõ số lô ở cột ghi chú giúp tôi."></textarea>
+        <div class="cv-nx-chip">
+          <button type="button" class="btn-nho" data-nx-them="Chỗ làm tốt: ">+ Chỗ làm tốt</button>
+          <button type="button" class="btn-nho" data-nx-them="Chỗ cần sửa: ">+ Chỗ cần sửa</button>
+        </div>
+      </div>
+      <div class="field field-nut" style="display:flex; gap:10px; flex-wrap:wrap">
+        <button type="submit" class="btn-primary" id="cv-nx-nut-gui" style="width:auto">Gửi nhận xét</button>
+        <button type="button" class="btn-phu" id="cv-nx-nut-khen" style="width:auto" hidden>⭐ Vinh danh luôn</button>
+        <button type="button" class="btn-phu" id="cv-nx-nut-dong" style="width:auto">Đóng</button>
+      </div>
+    </form>
+    <div class="form-loi" id="cv-nx-loi"></div>
+    <div class="cv-nx-xong" id="cv-nx-xong" hidden></div>
   </div>
 </div>
 
@@ -2928,7 +3598,7 @@
             <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
           </button>
           <div class="combo1-panel" id="cv-nguoi-nhanpanel" hidden>
-            <input type="search" id="cv-nguoi-nhantim" placeholder="Tìm theo mã hoặc tên...">
+            <input maxlength="80" type="search" id="cv-nguoi-nhantim" placeholder="Tìm theo mã hoặc tên...">
             <div class="ql-goiy" id="cv-nguoi-nhangoiy"></div>
           </div>
         </div>
@@ -2940,7 +3610,7 @@
       </div>
       <div class="field field-rong">
         <label>Tên việc *</label>
-        <input type="text" id="cv-tieu-de" required placeholder="Ví dụ: Rà soát tồn kho lô hàng chè chưng yến">
+        <textarea class="o-nhieu-dong" rows="1" maxlength="200" id="cv-tieu-de" required placeholder="Ví dụ: Rà soát tồn kho lô hàng chè chưng yến"></textarea>
       </div>
       <div class="field field-rong">
         <label>Đầu ra cụ thể cần đạt *</label>
@@ -2965,11 +3635,11 @@
         </div>
         <div class="field" id="cv-mtm-field-bophan">
           <label>Phòng ban / bộ phận *</label>
-          <input type="text" id="cv-mtm-bophan" placeholder="VD: Kho vận, Kế toán, Vận hành sàn...">
+          <input maxlength="80" type="text" id="cv-mtm-bophan" placeholder="VD: Kho vận, Kế toán, Vận hành sàn...">
         </div>
         <div class="field field-rong">
           <label>Tên mục tiêu mới *</label>
-          <input type="text" id="cv-mtm-tieude" placeholder="VD: Doanh thu Shopee đạt 30 tỷ trong quý">
+          <textarea class="o-nhieu-dong" rows="1" maxlength="200" id="cv-mtm-tieude" placeholder="VD: Doanh thu Shopee đạt 30 tỷ trong quý"></textarea>
         </div>
       </div>
 
@@ -2983,7 +3653,7 @@
             <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
               <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
             </svg>
-            <input type="text" id="cv-phoi-hop-tim" placeholder="Gõ tên để lọc…">
+            <input maxlength="80" type="text" id="cv-phoi-hop-tim" placeholder="Gõ tên để lọc…">
           </div>
           <div id="cv-phoi-hop" class="cv-phoihop"></div>
         </div>
@@ -3020,9 +3690,9 @@
       <table>
         <thead>
           <tr>
-            <th>Việc</th>
-            <th>Người nhận</th>
-            <th>Người giao</th>
+            <th class="cot-chu">Việc</th>
+            <th class="cot-chu">Người nhận</th>
+            <th class="cot-phu">Người giao</th>
             <th>Hạn chót</th>
             <th>Trạng thái</th>
           </tr>
@@ -3057,7 +3727,7 @@
     <div class="kv-md-muc">Lịch sử gần đây</div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Thời gian</th><th>Loại</th><th class="num">SL</th><th>Đối tác</th><th>Người</th></tr></thead>
+        <thead><tr><th>Thời gian</th><th>Loại</th><th class="num">SL</th><th class="cot-chu">Đối tác</th><th class="cot-phu">Người</th></tr></thead>
         <tbody id="kvModalLichSu"></tbody>
       </table>
     </div>
@@ -3067,11 +3737,11 @@
       <input type="hidden" id="kvSua-id">
       <div class="field field-rong">
         <label>Tên sản phẩm *</label>
-        <input type="text" id="kvSua-ten" required>
+        <textarea class="o-nhieu-dong" rows="1" maxlength="200" id="kvSua-ten" required></textarea>
       </div>
       <div class="field">
         <label>Nhóm hàng</label>
-        <input type="text" id="kvSua-danhmuc">
+        <input maxlength="80" type="text" id="kvSua-danhmuc">
       </div>
       <div class="field">
         <label>Đơn vị tính</label>
@@ -3079,7 +3749,7 @@
       </div>
       <div class="field">
         <label>Mức tồn tối thiểu</label>
-        <input type="text" id="kvSua-tonmin" inputmode="numeric">
+        <input maxlength="15" type="text" id="kvSua-tonmin" inputmode="numeric">
       </div>
       <div class="field">
         <label class="ck"><input type="checkbox" id="kvSua-theodoihsd"> Theo dõi hạn sử dụng</label>
@@ -3176,7 +3846,7 @@
             <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
           </button>
           <div class="combo1-panel" id="tsCapPhatNguoiPanel" hidden>
-            <input type="search" id="tsCapPhatNguoiTim" placeholder="Tìm theo mã hoặc tên...">
+            <input maxlength="80" type="search" id="tsCapPhatNguoiTim" placeholder="Tìm theo mã hoặc tên...">
             <div class="ql-goiy" id="tsCapPhatNguoiGoiY"></div>
           </div>
         </div>
@@ -3184,7 +3854,7 @@
       </div>
       <div class="field field-rong">
         <label>Vị trí</label>
-        <input type="text" id="tsCapPhatViTri" placeholder="VD: Văn phòng, Kho chính...">
+        <textarea class="o-nhieu-dong" rows="1" maxlength="200" id="tsCapPhatViTri" placeholder="VD: Văn phòng, Kho chính..."></textarea>
       </div>
       <div class="field field-rong">
         <label>Ghi chú</label>
@@ -3241,21 +3911,40 @@
     <form id="taoTkForm" class="form-luoi" autocomplete="off">
       <div class="field field-rong">
         <label>Tên đăng nhập (số điện thoại) *</label>
-        <input type="text" id="taoTkTen" required placeholder="09xx xxx xxx">
+        <input maxlength="80" type="text" id="taoTkTen" required placeholder="09xx xxx xxx">
       </div>
-      <div class="field field-rong">
-        <label>Vai trò *</label>
+      <!-- HAI Ô, KHÔNG PHẢI MỘT (Sếp Ngọc chốt 04/09/2026: "gộp 2 vai trò như
+           này ko biết phân quyền kiểu gì nhé, tách ra 2 vai trò đi").
+           Cố ý dùng `.field` chứ KHÔNG `.field-rong`: hai ô nằm CẠNH nhau
+           trên lưới .form-luoi khi màn còn chỗ, nên form KHÔNG cao thêm một
+           hàng so với bản một ô. -->
+      <div class="field">
+        <label>Vai trò hệ thống *</label>
         <div class="combo1" id="taoTkVaiTroCombo">
           <button type="button" class="combo1-hienthi rong" id="taoTkVaiTroHienThi">
             <span>Chọn vai trò...</span>
             <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
           </button>
           <div class="combo1-panel" id="taoTkVaiTroPanel" hidden>
-            <input type="search" id="taoTkVaiTroTim" placeholder="Tìm vai trò...">
+            <input maxlength="80" type="search" id="taoTkVaiTroTim" placeholder="Tìm vai trò...">
             <div class="ql-goiy" id="taoTkVaiTroGoiY"></div>
           </div>
         </div>
         <input type="hidden" id="taoTkVaiTro">
+      </div>
+      <div class="field">
+        <label>Vị trí công việc</label>
+        <div class="combo1" id="taoTkViTriCombo">
+          <button type="button" class="combo1-hienthi rong" id="taoTkViTriHienThi">
+            <span>Chưa gán vị trí</span>
+            <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+          <div class="combo1-panel" id="taoTkViTriPanel" hidden>
+            <input maxlength="80" type="search" id="taoTkViTriTim" placeholder="Tìm vị trí...">
+            <div class="ql-goiy" id="taoTkViTriGoiY"></div>
+          </div>
+        </div>
+        <input type="hidden" id="taoTkViTri">
       </div>
       <div class="field field-nut" style="display:flex; gap:10px">
         <button type="submit" class="btn-primary" id="taoTkNutLuu" style="width:auto">Tạo tài khoản</button>
@@ -3272,19 +3961,35 @@
     <h4>Đổi vai trò</h4>
     <p class="modal-nhac">Cho <b id="doiVaiTroHoTen">—</b> — đang là <b id="doiVaiTroHienTai">—</b></p>
     <form id="doiVaiTroForm" class="form-luoi" autocomplete="off">
-      <div class="field field-rong">
-        <label>Vai trò mới *</label>
+      <!-- Hai ô — xem chú thích ở hộp Tạo tài khoản phía trên. Ô 1 chỉ hiện
+           với người cấp được tài khoản; HCNS chỉ thấy ô 2 (app.js ẩn ô 1). -->
+      <div class="field" id="doiVaiTroO1">
+        <label>Vai trò hệ thống *</label>
         <div class="combo1" id="doiVaiTroMoiCombo">
           <button type="button" class="combo1-hienthi rong" id="doiVaiTroMoiHienThi">
             <span>Chọn vai trò...</span>
             <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
           </button>
           <div class="combo1-panel" id="doiVaiTroMoiPanel" hidden>
-            <input type="search" id="doiVaiTroMoiTim" placeholder="Tìm vai trò...">
+            <input maxlength="80" type="search" id="doiVaiTroMoiTim" placeholder="Tìm vai trò...">
             <div class="ql-goiy" id="doiVaiTroMoiGoiY"></div>
           </div>
         </div>
         <input type="hidden" id="doiVaiTroMoi">
+      </div>
+      <div class="field" id="doiVaiTroO2">
+        <label>Vị trí công việc</label>
+        <div class="combo1" id="doiViTriCombo">
+          <button type="button" class="combo1-hienthi rong" id="doiViTriHienThi">
+            <span>Chưa gán vị trí</span>
+            <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+          <div class="combo1-panel" id="doiViTriPanel" hidden>
+            <input maxlength="80" type="search" id="doiViTriTim" placeholder="Tìm vị trí...">
+            <div class="ql-goiy" id="doiViTriGoiY"></div>
+          </div>
+        </div>
+        <input type="hidden" id="doiViTri">
       </div>
       <div class="field field-nut" style="display:flex; gap:10px">
         <button type="submit" class="btn-primary" id="doiVaiTroNutLuu" style="width:auto">Lưu</button>

@@ -12,7 +12,17 @@ import { readdirSync } from 'node:fs';
 
 const moiTruong = process.argv.includes('--local') ? '--local' : '--remote';
 
-const treenOdia = readdirSync('migrations').filter(f => f.endsWith('.sql')).sort();
+/* THỨ TỰ IN RA CHÍNH LÀ THỨ TỰ NGƯỜI TA SẼ CHẠY (dòng in ở cuối tệp), nên
+   xếp sai = bảo Sếp chạy ALTER TABLE trước CREATE TABLE.
+   `.sort()` trần so cả phần đuôi `.sql`, mà dấu `-` (0x2D) đứng TRƯỚC dấu `.`
+   (0x2E) trong bảng mã. Ca thật đang có trong repo:
+     them-kho-tai-lieu-cot-ocr-neo.sql   ← `.sort()` xếp lên trước
+     them-kho-tai-lieu.sql               ← nhưng đây mới là file TẠO BẢNG
+   Cắt đuôi rồi mới so: tên ngắn là tiền tố của tên dài thì luôn đứng trước,
+   nên file gốc lên trước file vá cột — đúng thứ tự phải nạp. */
+const tenTran = (f) => f.slice(0, -4);        /* bỏ đúng 4 ký tự '.sql' */
+const treenOdia = readdirSync('migrations').filter(f => f.endsWith('.sql'))
+  .sort((a, b) => tenTran(a) < tenTran(b) ? -1 : tenTran(a) > tenTran(b) ? 1 : 0);
 
 let daGhiNhan = [];
 try {

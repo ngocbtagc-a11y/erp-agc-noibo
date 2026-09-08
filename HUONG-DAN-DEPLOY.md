@@ -67,6 +67,41 @@ Dùng khi Cách 1 chưa thiết lập, hoặc cần deploy gấp từ máy đã 
 
 ---
 
+## ⛔ BƯỚC BẮT BUỘC TRƯỚC MỌI LẦN ĐẨY — CỔNG KHÓI
+
+```
+npm run cong-khoi              # phải in ✅ XANH, mã thoát 0
+npm run cong-khoi-dienthoai    # lặp lại ở bề ngang 375px
+```
+
+**ĐỎ là KHÔNG ĐẨY.** Không có ngoại lệ "chỉ sửa CSS", không có ngoại lệ "đang
+cứu hoả" — đẩy một bản vá hỏng lên trên bản đang hỏng là hỏng hai lần.
+
+Cổng khói nạp `app.html` **thật** trong Chrome headless và **TRƯỢT nếu**:
+- có **bất kỳ** dòng `console.error` hay ngoại lệ chưa bắt nào, **hoặc**
+- một **nút cửa ngõ** (mỗi tab một nút chính) bấm vào **không có phản ứng**.
+
+Vì sao phải có: ngày 29/08/2026 Sếp Ngọc báo *"ấn Chat ngay không được"* — chat
+đã **chết hoàn toàn** trên bản thật nhiều tuần, qua **hai vòng soi** mà không
+vòng nào thấy: không vòng nào nạp `app.js` trong trình duyệt, không ai bấm
+thử, và `console.error` chưa từng bị tính là trượt. Chạy cổng khói lên đúng
+bản `main` hôm đó: **1 dòng `console.error` · 4/10 nút cửa ngõ chết**.
+
+Đừng tin cổng khói suông — bắt nó tự chứng minh:
+```
+npm run cong-khoi-tu-kiem      # chèn một lỗi console giả -> cổng khói PHẢI đỏ
+```
+Lệnh này chèn `console.error` vào **bản tạm** của `app.js` (không đụng repo).
+Nó mà vẫn xanh thì cổng khói là **đồ trang trí**, phải sửa cổng trước đã.
+
+Thêm tab mới thì thêm **một dòng** vào `CUA_NGO` trong `scripts/cong-khoi.mjs`.
+⚠️ Cổng khói chạy trên **API giả**: thiếu một khoá trong ổ trả lời chung là
+**đỏ oan**. Đỏ thì đọc dòng lỗi trước đã — sửa bàn đo hay sửa mã, đọc là biết.
+`lint no-use-before-define` **không** thay được cổng này (nó không bắt được ca
+`TBDay` vì chỗ dùng nằm trong hàm).
+
+---
+
 ## Lưu ý quan trọng (cả 2 cách)
 
 - **Khóa bí mật đang chạy** (partner_key Shopee, App Secret TikTok, token Telegram…) nằm sẵn trên Cloudflare, **deploy không đụng tới** — không cần khai lại mỗi lần deploy.

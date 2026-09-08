@@ -68,7 +68,7 @@ export async function danhSachTaiSan(env, phien) {
      WHERE t.hoat_dong = 1
      ORDER BY t.trang_thai = 'da_thanh_ly' ASC, t.ten
   `).all();
-  return json({ ds: results, quyen: { quan_ly: duocQuanLyTaiSan(phien.vai_tro) }, toi_id: phien.nhan_su_id });
+  return json({ ds: results, quyen: { quan_ly: duocQuanLyTaiSan(phien) }, toi_id: phien.nhan_su_id });
 }
 
 /* Chi tiết 1 tài sản — dùng cho Asset Detail VÀ tra cứu sau khi quét QR
@@ -134,7 +134,7 @@ function truongNhapDuoc(body) {
    TẠO MỚI — chỉ Data Owner (P. Support/Hành chính)
    ========================================================================== */
 export async function themTaiSan(env, phien, body) {
-  if (!duocQuanLyTaiSan(phien.vai_tro)) return loi('Bạn không có quyền quản lý Tài sản', 403);
+  if (!duocQuanLyTaiSan(phien)) return loi('Bạn không có quyền quản lý Tài sản', 403);
 
   const ten = chuoi(body.ten);
   if (!ten) return loi('Vui lòng nhập tên tài sản');
@@ -166,7 +166,7 @@ export async function themTaiSan(env, phien, body) {
    giữ ở đây (đi qua capPhatTaiSan/thuHoiTaiSan/baoHongTaiSan để giữ lịch sử).
    ========================================================================== */
 export async function suaTaiSan(env, phien, body) {
-  if (!duocQuanLyTaiSan(phien.vai_tro)) return loi('Bạn không có quyền quản lý Tài sản', 403);
+  if (!duocQuanLyTaiSan(phien)) return loi('Bạn không có quyền quản lý Tài sản', 403);
 
   const id = chuoi(body.id);
   if (!id) return loi('Thiếu id tài sản');
@@ -205,7 +205,7 @@ export async function suaTaiSan(env, phien, body) {
    giữ trực tiếp từ da_cap_phat, coi là điều chuyển). Chỉ Data Owner.
    ========================================================================== */
 export async function capPhatTaiSan(env, phien, body) {
-  if (!duocQuanLyTaiSan(phien.vai_tro)) return loi('Bạn không có quyền quản lý Tài sản', 403);
+  if (!duocQuanLyTaiSan(phien)) return loi('Bạn không có quyền quản lý Tài sản', 403);
 
   const id = chuoi(body.id);
   const nguoiGiuMoi = chuoi(body.nguoi_giu_id);
@@ -238,7 +238,7 @@ export async function capPhatTaiSan(env, phien, body) {
    THU HỒI — về kho, hết người giữ. Chỉ Data Owner.
    ========================================================================== */
 export async function thuHoiTaiSan(env, phien, body) {
-  if (!duocQuanLyTaiSan(phien.vai_tro)) return loi('Bạn không có quyền quản lý Tài sản', 403);
+  if (!duocQuanLyTaiSan(phien)) return loi('Bạn không có quyền quản lý Tài sản', 403);
 
   const id = chuoi(body.id);
   if (!id) return loi('Thiếu id tài sản');
@@ -270,7 +270,7 @@ export async function baoHongTaiSan(env, phien, body) {
   if (!ts) return loi('Không tìm thấy tài sản', 404);
 
   const laNguoiDangGiu = ts.nguoi_giu_id && ts.nguoi_giu_id === phien.nhan_su_id;
-  if (!duocQuanLyTaiSan(phien.vai_tro) && !laNguoiDangGiu) {
+  if (!duocQuanLyTaiSan(phien) && !laNguoiDangGiu) {
     return loi('Chỉ người đang giữ tài sản này hoặc Hành chính/Admin mới báo được', 403);
   }
   if (!['san_sang', 'da_cap_phat'].includes(ts.trang_thai)) {
@@ -293,7 +293,7 @@ export async function baoHongTaiSan(env, phien, body) {
    "về lại sẵn sàng", ghi_chu phân biệt rõ trường hợp nào.
    ========================================================================== */
 export async function baoTriXongTaiSan(env, phien, body) {
-  if (!duocQuanLyTaiSan(phien.vai_tro)) return loi('Bạn không có quyền quản lý Tài sản', 403);
+  if (!duocQuanLyTaiSan(phien)) return loi('Bạn không có quyền quản lý Tài sản', 403);
 
   const id = chuoi(body.id);
   if (!id) return loi('Thiếu id tài sản');
@@ -316,7 +316,7 @@ export async function baoTriXongTaiSan(env, phien, body) {
    THANH LÝ — kết thúc vòng đời, không cấp phát lại được nữa. Chỉ Data Owner.
    ========================================================================== */
 export async function thanhLyTaiSan(env, phien, body) {
-  if (!duocQuanLyTaiSan(phien.vai_tro)) return loi('Bạn không có quyền quản lý Tài sản', 403);
+  if (!duocQuanLyTaiSan(phien)) return loi('Bạn không có quyền quản lý Tài sản', 403);
 
   const id = chuoi(body.id);
   if (!id) return loi('Thiếu id tài sản');

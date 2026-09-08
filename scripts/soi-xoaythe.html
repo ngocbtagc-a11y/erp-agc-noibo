@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="vi">
+<head><meta charset="utf-8"><title>Soi xoay máy + thẻ trang</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+<style>body{font:14px/1.6 system-ui;margin:0;padding:12px;background:#f5ecdf;color:#2c2117}
+pre{background:#fffcf4;border:1px solid #e2d0ba;border-radius:8px;padding:10px;white-space:pre-wrap}</style>
+</head>
+<body><pre id="kq">sẵn sàng</pre>
+<script type="module">
+/* ==========================================================================
+   Trang này KHÔNG tự chạy. Nó chỉ bày sẵn mấy hàm ra `window` để bên Node
+   lái, vì phép đo XOAY MÁY phải đổi KHUNG NHÌN THẬT bằng CDP.
+
+   ⚠️ BÀI HỌC, ghi lại vì suýt báo sai lần thứ hai: bản đầu tôi "giả lập xoay
+   máy" bằng cách nới `.tlq-tam` lên 700px trong khi khung nhìn vẫn 375px, rồi
+   ép `window.innerHeight`. Đó KHÔNG phải xoay máy — đó là một trạng thái
+   không tồn tại (hộp rộng hơn màn), và nó đẻ ra con số "nút rơi xuống 1352px"
+   hoàn toàn vô nghĩa. Xoay máy thật thì CSS tự co `.tlq-tam` theo.
+   ========================================================================== */
+import { nenAnhChung } from '/assets/js/anh-chung.js';
+import { moQuetTaiLieu } from '/assets/js/quet-tai-lieu.js';
+import { veToGiay, datGiayVaoCanh, nenBanGo, themNhieu } from '/lib/trang-giay-thu.js';
+
+const cho = (ms) => new Promise(r => setTimeout(r, ms));
+const doi = async (c, h = 12000) => { const t = Date.now();
+  while (Date.now() - t < h) { const e = document.querySelector(c); if (e) return e; await cho(40); }
+  throw new Error('Không thấy ' + c); };
+const W12 = 3024, H12 = 4032;
+const KHOA = 'tl_nhap_v1_kho_chung_chung';
+
+function dungCanh(goc) {
+  const nen = nenBanGo(W12, H12);
+  datGiayVaoCanh(nen, veToGiay(1500, 2000, { nhieu: 10 }), goc.map(p => [p[0] * W12, p[1] * H12]));
+  themNhieu(nen.getContext('2d'), W12, H12, 10);
+  return nen;
+}
+/* GẦN: máy chắc → màn cắt IM LẶNG (đúng ca cổng `do-cat-khung` đo).
+   XA:  máy thấy "nhiều tờ" → màn cắt có THÊM đoạn lời khuyên — cấu hình CAO
+        NHẤT của màn, và là cấu hình cổng KHÔNG đo. */
+let canhDangChup = dungCanh([[0.15, 0.12], [0.86, 0.10], [0.88, 0.90], [0.13, 0.88]]);
+const CANH_XA = [[0.31, 0.27], [0.72, 0.24], [0.75, 0.75], [0.28, 0.71]];
+const clickGoc = HTMLInputElement.prototype.click;
+HTMLInputElement.prototype.click = function () {
+  if (this.type !== 'file') return clickGoc.call(this);
+  canhDangChup.toBlob(b => { const dt = new DataTransfer();
+    dt.items.add(new File([b], 'chup.jpg', { type: 'image/jpeg' }));
+    this.files = dt.files; this.dispatchEvent(new Event('change', { bubbles: true })); }, 'image/jpeg', 0.95);
+};
+const nut = document.createElement('button'); document.body.appendChild(nut);
+nut.addEventListener('click', () => moQuetTaiLieu({ cuaVao: 'kho_chung', duongMacDinh: 'may-anh',
+  nhom: [{ ma: 'attp', ten: 'An toàn thực phẩm', vi_du: 'Giấy ATTP', han_luu: '5 năm', nhay_cam: 0 }],
+  khiXong: () => {} }));
+
+window.__moCat = async () => {
+  localStorage.removeItem(KHOA); localStorage.removeItem('tl_lam_ro_chu_v1');
+  nut.click();
+  (await doi('[data-viec="chon-nhom"]')).click();
+  await doi('#tlqCatKhung', 15000);
+  (await doi('[data-viec="cat-datlai"]')).click();   // 4 góc về mép ảnh → đích biết chắc
+  await cho(250);
+  return 'ok';
+};
+/** Lệch giữa tâm mỗi chấm và góc ảnh tương ứng. HỎI LẠI DOM mỗi lần. */
+window.__lech = () => {
+  const oVe = document.querySelector('#tlqCatVe');
+  if (!oVe) return null;
+  const chams = [...document.querySelectorAll('.tlq-cat-goc')];
+  const r = oVe.getBoundingClientRect();
+  const g = [[0, 0], [1, 0], [1, 1], [0, 1]];        // sau "Đặt lại 4 góc"
+  return chams.map((b, k) => { const rb = b.getBoundingClientRect();
+    return +Math.hypot(rb.left + rb.width / 2 - (r.left + g[k][0] * r.width),
+                       rb.top + rb.height / 2 - (r.top + g[k][1] * r.height)).toFixed(1); });
+};
+window.__nutDay = () => {
+  const h = document.querySelector('.tlq-hai-duong');
+  return h ? +h.getBoundingClientRect().bottom.toFixed(0) : null;
+};
+window.__khungNhin = () => [window.innerWidth, window.innerHeight];
+/** Mở màn cắt trên cảnh CHỤP XA — ca máy kêu "nhiều tờ", tức là màn có thêm
+ *  đoạn lời khuyên. Đo chiều cao ở ĐÚNG cấu hình cao nhất. */
+window.__moCatXa = async () => {
+  /* ⚠️ `.tlq-x` → `hoiThoat()` → `confirm()`. Headless Chrome KHÔNG có ai bấm
+     hộp thoại đó, nên trang đứng im VÔ HẠN. Bàn đo treo 5 phút vì đúng chỗ
+     này. Chặn `confirm` trước khi đóng. */
+  const xnCu = window.confirm;
+  window.confirm = () => true;
+  document.querySelector('.tlq-x')?.click();
+  await cho(300);
+  window.confirm = xnCu;
+  localStorage.removeItem(KHOA); localStorage.removeItem('tl_lam_ro_chu_v1');
+  canhDangChup = dungCanh(CANH_XA);
+  nut.click();
+  (await doi('[data-viec="chon-nhom"]')).click();
+  await doi('#tlqCatKhung', 15000);
+  await cho(300);
+  const c = document.querySelector('.tlq-canh');
+  const hang = document.querySelector('.tlq-hai-duong');
+  return {
+    coLoiKhuyen: !!c,
+    caoLoiKhuyen: c ? +c.getBoundingClientRect().height.toFixed(0) : 0,
+    cauNoi: c ? c.textContent.replace(/\s+/g, ' ').trim().slice(0, 60) : '',
+    nutDay: hang ? +hang.getBoundingClientRect().bottom.toFixed(0) : null,
+    man: window.innerHeight
+  };
+};
+window.__anhXemTruoc = () => {
+  const o = document.querySelector('#tlqCatVe');
+  return o ? [o.getBoundingClientRect().width | 0, o.getBoundingClientRect().height | 0] : null;
+};
+
+/** Cắt THẬT: kéo góc trên-trái vào trong 12% rồi bấm Cắt.
+ *  (Bấm Cắt khi 4 góc còn ở mép ảnh thì `catXong` coi là "không có gì để cắt"
+ *   và lặng lẽ bỏ qua — thẻ vẫn 5 nút, đó là chỗ tôi đo hụt lần đầu.) */
+window.__catThat = async () => {
+  const oVe = document.querySelector('#tlqCatVe');
+  const r = oVe.getBoundingClientRect();
+  const b = document.querySelectorAll('.tlq-cat-goc')[0];
+  const x = r.left + r.width * 0.12, y = r.top + r.height * 0.12;
+  b.dispatchEvent(new PointerEvent('pointerdown', { pointerId: 1, clientX: 0, clientY: 0, bubbles: true, cancelable: true }));
+  document.dispatchEvent(new PointerEvent('pointermove', { pointerId: 1, clientX: x, clientY: y, bubbles: true, cancelable: true }));
+  document.dispatchEvent(new PointerEvent('pointerup', { pointerId: 1, clientX: x, clientY: y, bubbles: true, cancelable: true }));
+  await cho(120);
+  (await doi('[data-viec="cat-xong"]')).click();
+  await doi('.tlq-the'); await cho(350);
+  return JSON.parse(localStorage.getItem(KHOA)).trang[0].da_cat === true;
+};
+window.__doThe = () => {
+  const the = document.querySelector('.tlq-the');
+  if (!the) return null;
+  const r = the.getBoundingClientRect();
+  const nuts = [...the.querySelectorAll('.tlq-nut-phu')];
+  return {
+    cao: +r.height.toFixed(0),
+    soNut: nuts.length,
+    ten: nuts.map(b => b.textContent.trim()),
+    thapNhat: +Math.min(...nuts.map(b => b.getBoundingClientRect().height)).toFixed(0),
+    tran: nuts.filter(b => b.getBoundingClientRect().right > r.right + 1).length,
+    thanhNgang: document.documentElement.scrollWidth > document.documentElement.clientWidth
+  };
+};
+document.getElementById('kq').textContent = 'SAN_SANG';
+</script>
+</body>
+</html>

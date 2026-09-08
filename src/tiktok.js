@@ -24,6 +24,7 @@
    ========================================================================== */
 
 import { duocXemDonHoan, duocQuanLyShopee, duocXemTab } from './quyen.js';
+import * as donHangItem from './don-hang-item.js';
 import { locDoi, COT_DON_HOAN, COT_DON_HANG } from './chi-ghi-khi-doi.js';
 import { demGhi } from './canh-bao-ghi.js';
 
@@ -154,7 +155,7 @@ async function ketNoiConHan(env) {
    ========================================================================== */
 
 export async function apiTrangThai(env, phien) {
-  if (!duocXemDonHoan(phien.vai_tro)) return loi('Bạn không có quyền', 403);
+  if (!duocXemDonHoan(phien)) return loi('Bạn không có quyền', 403);
   const cauHinh = daCauHinh(env);
   const kn = cauHinh ? await env.DB.prepare('SELECT shop_id, shop_name, cap_nhat_luc FROM tiktok_ket_noi LIMIT 1').first() : null;
   return json({
@@ -162,12 +163,12 @@ export async function apiTrangThai(env, phien) {
     da_ket_noi: !!kn,
     shop_id: kn ? (kn.shop_name || kn.shop_id) : null,
     cap_nhat_luc: kn ? kn.cap_nhat_luc : null,
-    quyen: { quan_ly: duocQuanLyShopee(phien.vai_tro) }   // dùng chung quyền "kết nối sàn"
+    quyen: { quan_ly: duocQuanLyShopee(phien) }   // dùng chung quyền "kết nối sàn"
   });
 }
 
 export async function apiConnect(env, phien) {
-  if (!duocQuanLyShopee(phien.vai_tro)) return loi('Chỉ Admin mới được kết nối TikTok', 403);
+  if (!duocQuanLyShopee(phien)) return loi('Chỉ Admin mới được kết nối TikTok', 403);
   if (!daCauHinh(env)) return loi('Chưa nạp khóa TikTok (app_key/app_secret) trên máy chủ', 409);
   return new Response(null, { status: 302, headers: { Location: linkUyQuyen(env) } });
 }
@@ -285,7 +286,7 @@ export async function dongBoNen(env) {
 }
 
 export async function apiDongBo(env, phien) {
-  if (!duocXemDonHoan(phien.vai_tro)) return loi('Bạn không có quyền', 403);
+  if (!duocXemDonHoan(phien)) return loi('Bạn không có quyền', 403);
   if (!daCauHinh(env)) return loi('Chưa nạp khóa TikTok trên máy chủ', 409);
   const co = await env.DB.prepare('SELECT shop_id FROM tiktok_ket_noi LIMIT 1').first();
   if (!co) return loi('Chưa kết nối shop TikTok. Hãy bấm “Kết nối TikTok” trước.', 409);
@@ -349,6 +350,8 @@ export async function dongBoDonHangNen(env) {
 
   const tuGoc = moGocDongBoDonHang(kn);
   const denGoc = nowSec();
+  // Bảng dòng hàng nạp sau — chưa có thì bỏ qua êm (migrations/them-donhang-dong.sql).
+  const coDong = await donHangItem.coBangDong(env);
   const path = '/order/202309/orders/search';
   let pageToken = '', con = true, trang = 0, them = 0, subReq = 0, mocMoi = null;
 
@@ -400,6 +403,13 @@ export async function dongBoDonHangNen(env) {
         o.update_time ? String(o.update_time) : null,
         JSON.stringify(o)
       ));
+      // Bóc dòng hàng ngay trong cùng lô ghi. Lưu ý TikTok: mỗi phần tử
+      // line_items là 1 ĐƠN VỊ hàng, bộ tách tự gộp theo SKU rồi mới đếm.
+      if (coDong) {
+        cauLenh.push(...donHangItem.cauLenhGhiDong(env, orderId, 'tiktok', o.create_time,
+                                                   donHangItem.tachDong('tiktok', o)));
+        cauLenh.push(donHangItem.cauLenhDanhDauDaTach(env, orderId));
+      }
       const ut = Number(o.update_time) || 0;
       if (ut && (mocMoi === null || ut > mocMoi)) mocMoi = ut;
       them++;
@@ -424,7 +434,7 @@ export async function dongBoDonHangNen(env) {
 
 /* Nút "Đồng bộ đơn hàng" ở tab Kinh doanh — ai xem được Kinh doanh đều bấm được */
 export async function apiDongBoDonHang(env, phien) {
-  if (!duocXemTab(phien.vai_tro, 'kinhdoanh')) return loi('Bạn không có quyền', 403);
+  if (!duocXemTab(phien, 'kinhdoanh')) return loi('Bạn không có quyền', 403);
   if (!daCauHinh(env)) return loi('Chưa nạp khóa TikTok trên máy chủ', 409);
   if (!(await coBangDonHang(env))) return loi('Chưa nạp migration them-donhang.sql trên máy chủ', 409);
   const co = await env.DB.prepare('SELECT shop_id FROM tiktok_ket_noi LIMIT 1').first();

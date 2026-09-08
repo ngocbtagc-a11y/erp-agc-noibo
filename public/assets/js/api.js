@@ -4,7 +4,23 @@
    Phiên đăng nhập nằm trong cookie HttpOnly — JavaScript ở đây KHÔNG đọc
    được nó, và đó là chủ ý: trang có dính mã độc cũng không lấy được phiên.
    Trình duyệt tự đính cookie vào mỗi lệnh gọi nhờ credentials: 'same-origin'.
+
+   Cuối file có một đoạn BỌC: mọi hàm GHI, khi thành công, tự bắn tín hiệu
+   "nhóm dữ liệu này vừa đổi" để các màn đang mở tự nạp lại phần của mình.
+   Xem `lam-moi.js` — đó là chỗ DUY NHẤT khai nhóm dữ liệu cho từng hàm.
    ========================================================================== */
+
+import { NHOM_DU_LIEU, MIEN_TRU, baoDuLieuDoi } from './lam-moi.js';
+
+/* ---- MÃ 200 MÀ CHƯA GHI GÌ (REV-0057 · L10) -----------------------------
+   `nsHopDongLuu` trả 200 kèm `can_ly_do: true` nghĩa là máy chủ ĐANG CHẶN
+   MỀM — chưa lưu, đang đợi người nhập gõ một dòng lý do rồi bấm lại. Bắn tín
+   hiệu ở nước đó là bắt bảng Nhân sự và dải "việc cần làm" nạp lại đúng dữ
+   liệu CŨ, tốn lượt đọc D1 mà không đổi được chữ nào trên màn.
+   Hàm nào trả `true` ở đây = "lần này chưa ghi, đừng bắn". */
+const CHUA_LUU_DU = {
+  nsHopDongLuu: (kq) => !!(kq && kq.can_ly_do)
+};
 
 /* tuChoiTuDong: true = gặp 401 thì tự đá về màn đăng nhập.
    Phải tắt cờ này ở chính màn đăng nhập, không thì trang tự đá về chính nó
@@ -31,6 +47,26 @@ async function goi(duongDan, tuyChon = {}, tuDongVeDangNhap = true) {
   if (!res.ok) throw new Error((duLieu && duLieu.loi) || 'Máy chủ gặp sự cố');
   return duLieu;
 }
+
+/* Gói mô tả + byte file thành MỘT khung byte thẳng.
+   Khung: [4 byte độ dài phần mô tả, big-endian][JSON mô tả][byte file].
+   KHÔNG dùng base64 trong JSON: file 8 MB thành ~11 MB chữ rồi nhân thêm mấy
+   bản trong 128 MB bộ nhớ dùng chung của cả isolate (bài học REV-0054 #2).
+
+   ⚠️ Hàm này CHỈ dựng khung, KHÔNG tự gọi mạng. Lời gọi `goi(..., { method:
+   'POST' ... })` phải nằm nguyên trong từng mục của API — bàn đo
+   `do-tu-lam-moi` nhận diện "hàm ghi" bằng cách tìm đúng chữ `method: 'POST'`
+   trong thân mục đó. Giấu lời gọi vào hàm dùng chung là làm cái lưới ấy mù,
+   rồi một hàm ghi thật lọt lưới mà không ai biết. */
+function khungNapFile(moTa, byte) {
+  const md = new TextEncoder().encode(JSON.stringify(moTa));
+  const khung = new Uint8Array(4 + md.length + byte.length);
+  new DataView(khung.buffer).setUint32(0, md.length, false);   // big-endian
+  khung.set(md, 4);
+  khung.set(byte, 4 + md.length);
+  return khung;
+}
+const KIEU_BYTE = { 'Content-Type': 'application/octet-stream' };
 
 export const API = {
   dangNhap: (ten, mk) => goi('/api/dang-nhap', {
@@ -139,6 +175,11 @@ export const API = {
   vdGui: (nhanSuId, noiDung, soSao) => goi('/api/vinh-danh', {
     method: 'POST', body: JSON.stringify({ nhan_su_id: nhanSuId, noi_dung: noiDung, so_sao: soSao })
   }),
+  // Sửa / gỡ lời khen trong 24h (REV-0037 · L5). `than` = { noi_dung, so_sao }
+  // hoặc { go: true }. Máy chủ lùi lại đúng số sao đã cộng và bắn tin đính chính.
+  vdSua: (id, than) => goi('/api/vinh-danh/sua', {
+    method: 'POST', body: JSON.stringify({ id, ...than })
+  }),
 
   /* ---- Trạm Việc: giao việc cho nhân viên ---- */
   cvDanhSach: () => goi('/api/cong-viec/danh-sach'),
@@ -150,6 +191,27 @@ export const API = {
   cvCapNhat: (id, trangThai, ketQua) => goi('/api/cong-viec/cap-nhat', {
     method: 'POST', body: JSON.stringify({ id, trang_thai: trangThai, ket_qua: ketQua })
   }),
+  /* CTL-0017 — sửa NỘI DUNG việc đã giao. Cửa RIÊNG, không dùng chung với
+     `cvCapNhat` (đổi trạng thái): hai luật khác hẳn nhau.
+     `truong` chỉ chứa những trường THẬT SỰ muốn đổi — trường không gửi thì
+     máy chủ không đụng tới, nên sửa mỗi tiêu đề sẽ không xoá trắng mô tả. */
+  cvSua: (id, truong) => goi('/api/cong-viec/sua', {
+    method: 'POST', body: JSON.stringify({ id, ...truong })
+  }),
+  /* Nhận xét một việc đã giao (GY-0005). Ghi vào ĐÚNG sổ sửa chung dưới
+     `truong='nhan_xet'`, nên đọc lại bằng `suaLichSu('cong_viec', id)` —
+     không có cửa đọc thứ hai để hai màn nói hai chuyện khác nhau. */
+  cvNhanXet: (id, noiDung) => goi('/api/cong-viec/nhan-xet', {
+    method: 'POST', body: JSON.stringify({ id, noi_dung: noiDung })
+  }),
+  /* Sổ sửa dùng chung cho cả lớp — bang = 'cong_viec' | 'muc_tieu'. Mỗi dòng
+     đã kèm `cau` tiếng Việt dựng sẵn ở máy chủ, giao diện chỉ việc in ra.
+     `truong` (tuỳ chọn, hiện chỉ nhận 'nhan_xet') = hỏi RIÊNG một loại vết.
+     BẮT BUỘC dùng cho hộp Nhận xét: đọc chung một rổ 100 dòng rồi lọc ở
+     trình duyệt thì 110 lần sửa việc đẩy hết nhận xét cũ ra ngoài trần, và
+     màn hình khẳng định sai "Chưa có nhận xét nào" (REV-0061 · CHẶN-1). */
+  suaLichSu: (bang, id, truong) => goi(
+    `/api/sua/lich-su?bang=${bang}&id=${id}` + (truong ? `&truong=${encodeURIComponent(truong)}` : '')),
   /* `truoc` = con trỏ `cap_nhat_luc|id` của dòng cuối đã tải → máy chủ trả tiếp
      500 việc CŨ HƠN. Đây là ĐƯỜNG ĐI TIẾP CÓ THẬT của dải cắt (REV-0034 · L2):
      ô tìm kiếm ở màn đó lọc phía trình duyệt nên không với tới phần bị cắt. */
@@ -172,11 +234,16 @@ export const API = {
      đó để KHÔNG đẩy thông báo lên điện thoại khi người dùng đang ngồi nhìn
      thẳng vào đúng đoạn chat này (CTL-0014). Ghép vào lệnh gọi 6 giây/lần vốn
      đã chạy — KHÔNG thêm lệnh gọi thứ hai, không tốn thêm lượt Worker. */
-  chatDanhSach: (sauId, voiId, dangMo) => {
+  /* `truocId` = con trỏ LÙI — xin 50 tin CŨ HƠN tin mang id đó ("Xem tin cũ
+     hơn"). Cùng khuôn con trỏ `truoc` của `cvLichSu`/`hoanLichSu`, chỉ gọn hơn
+     vì chat sắp theo `id` nên con trỏ chỉ là MỘT số. Máy chủ trả kèm `con_nua`
+     để giao diện biết có còn phải hiện nút nữa hay không. */
+  chatDanhSach: (sauId, voiId, dangMo, truocId) => {
     const q = new URLSearchParams();
     if (sauId) q.set('sau_id', sauId);
     if (voiId) q.set('voi', voiId);
     if (dangMo) q.set('dang_mo', '1');
+    if (truocId) q.set('truoc_id', truocId);
     const qs = q.toString();
     return goi('/api/chat/tin-nhan' + (qs ? '?' + qs : ''));
   },
@@ -206,9 +273,15 @@ export const API = {
     method: 'POST', body: JSON.stringify(ns)
   }),
 
-  qtTaoTaiKhoan: (nhanSuId, tenDangNhap, vaiTro) => goi('/api/quan-tri/tao-tai-khoan', {
+  // HAI Ô (Sếp chốt 04/09/2026): `vaiTro` = ô 1 (vai trò hệ thống),
+  // `viTri` = ô 2 (vị trí công việc, để trống được). Quyền cuối cùng là HỢP
+  // của hai ô — luật ở src/quyen.js, chặn thật ở src/index.js.
+  qtTaoTaiKhoan: (nhanSuId, tenDangNhap, vaiTro, viTri) => goi('/api/quan-tri/tao-tai-khoan', {
     method: 'POST',
-    body: JSON.stringify({ nhan_su_id: nhanSuId, ten_dang_nhap: tenDangNhap, vai_tro: vaiTro })
+    body: JSON.stringify({
+      nhan_su_id: nhanSuId, ten_dang_nhap: tenDangNhap,
+      vai_tro: vaiTro, vi_tri_cong_viec: viTri || ''
+    })
   }),
 
   qtDatLaiMatKhau: (taiKhoanId) => goi('/api/quan-tri/dat-lai-mat-khau', {
@@ -223,9 +296,15 @@ export const API = {
     method: 'POST', body: JSON.stringify({ tai_khoan_id: taiKhoanId })
   }),
 
-  qtSuaVaiTro: (taiKhoanId, vaiTro) => goi('/api/quan-tri/sua-vai-tro', {
-    method: 'POST', body: JSON.stringify({ tai_khoan_id: taiKhoanId, vai_tro: vaiTro })
-  }),
+  /* Ô nào KHÔNG gửi lên thì máy chủ GIỮ NGUYÊN ô đó — cố ý, để người chỉ
+     được sửa vị trí (HCNS) không vô tình ghi đè vai trò hệ thống bằng một
+     giá trị cũ đọc từ màn hình. Truyền `undefined` là "không đụng tới". */
+  qtSuaVaiTro: (taiKhoanId, vaiTro, viTri) => {
+    const than = { tai_khoan_id: taiKhoanId };
+    if (vaiTro !== undefined) than.vai_tro = vaiTro;
+    if (viTri !== undefined) than.vi_tri_cong_viec = viTri;
+    return goi('/api/quan-tri/sua-vai-tro', { method: 'POST', body: JSON.stringify(than) });
+  },
 
   // Cờ "được duyệt góp ý ERP ở cấp cuối" — chỉ người ĐANG GIỮ quyền mới
   // cấp/thu được (máy chủ kiểm, xem qtQuyenDuyetGopY trong src/index.js).
@@ -243,6 +322,29 @@ export const API = {
 
   qtXoaNhanSu: (id) => goi('/api/quan-tri/xoa-nhan-su', {
     method: 'POST', body: JSON.stringify({ id })
+  }),
+
+  /* ---- Nạp file số liệu (CSV / Excel) vào sổ sách ----
+     BA BƯỚC, BA ĐƯỜNG RIÊNG. `napMo` và `napXem` KHÔNG ghi gì vào CSDL; chỉ
+     `napGhi` mới ghi, và chỉ được gọi SAU KHI Sếp bấm xác nhận trên màn xem
+     trước. Tách hẳn ra để không bao giờ có chuyện lỡ tay ghi. */
+  napMo:  (moTa, byte) => goi('/api/kho/nap-mo', {
+    method: 'POST', headers: KIEU_BYTE, body: khungNapFile(moTa, byte)
+  }),
+  napXem: (moTa, byte) => goi('/api/kho/nap-xem', {
+    method: 'POST', headers: KIEU_BYTE, body: khungNapFile(moTa, byte)
+  }),
+  napGhi: (moTa, byte) => goi('/api/kho/nap-ghi', {
+    method: 'POST', headers: KIEU_BYTE, body: khungNapFile(moTa, byte)
+  }),
+
+  /* ---- Đường lùi: xem và GỠ một lượt nạp tồn kho ----
+     Nạp tồn kho ghi thẳng vào sổ cái và KHÔNG khớp theo khoá tự nhiên được,
+     nên nạp nhầm là phải gỡ được — không có đường lùi thì chống nạp lại vẫn
+     chưa đủ (REV-0060 CHẶN-①). */
+  napLuot: (so = 10) => goi('/api/kho/nap-luot?so=' + encodeURIComponent(so)),
+  napHuy:  (phieuId) => goi('/api/kho/nap-huy', {
+    method: 'POST', body: JSON.stringify({ phieu_id: phieuId })
   }),
 
   /* ---- Kho: Xuất / Nhập / Tồn ---- */
@@ -268,8 +370,12 @@ export const API = {
 
   khoXuat: (d) => goi('/api/kho/xuat', { method: 'POST', body: JSON.stringify(d) }),
 
-  khoLo: (sanPhamId) =>
-    goi('/api/kho/lo?san_pham_id=' + encodeURIComponent(sanPhamId)),
+  khoDieuChinh: (d) => goi('/api/kho/dieu-chinh', { method: 'POST', body: JSON.stringify(d) }),
+
+  /* `tatCa` — lấy cả lô đang ÂM, cho màn Điều chỉnh nhìn thấy đúng cái phải
+     sửa. Màn Xuất kho vẫn dùng lưới cũ (chỉ lô còn hàng). */
+  khoLo: (sanPhamId, tatCa = false) =>
+    goi('/api/kho/lo?san_pham_id=' + encodeURIComponent(sanPhamId) + (tatCa ? '&tat_ca=1' : '')),
 
   khoBaoCao: (tu, den) =>
     goi('/api/kho/bao-cao?tu=' + encodeURIComponent(tu) + '&den=' + encodeURIComponent(den)),
@@ -405,6 +511,11 @@ export const API = {
   }),
   kdDonHangHuy: () => goi('/api/kinh-doanh/don-hang-huy'),
   kdDongBoDonHang: () => goi('/api/kinh-doanh/dong-bo-don-hang', { method: 'POST' }),
+  /* Tổng quan 2 sàn — trả tiền ở dạng VNĐ đã chia sẵn, KHÔNG chia lại 100000
+     (xem khối TỔNG QUAN 2 SÀN trong src/index.js). ky = hom_nay|7ngay|30ngay|thang_nay */
+  kdTongQuanKenh: (ky) => goi('/api/kinh-doanh/tong-quan-kenh?ky=' + encodeURIComponent(ky || 'hom_nay')),
+  kdXepHangSku: (ky) => goi('/api/kinh-doanh/xep-hang-sku?ky=' + encodeURIComponent(ky || 'thang_nay')),
+  kdTachDongHang: () => goi('/api/kinh-doanh/tach-dong-hang', { method: 'POST' }),
 
   /* ---- Kế toán: đơn hoàn cần tra soát tiền ---- */
   ktCanTraSoat: () => goi('/api/ke-toan/can-tra-soat'),
@@ -422,7 +533,88 @@ export const API = {
   hoanSkuMapDanhSach: () => goi('/api/hoan/sku-map'),
   hoanSkuMapGan: (tenSanPham, maSku) => goi('/api/hoan/sku-map', {
     method: 'POST', body: JSON.stringify({ ten_san_pham: tenSanPham, ma_sku: maSku })
-  })
+  }),
+
+  /* ---- Kho tài liệu quản trị (CTL-0026) ------------------------------
+     MỘT kho, HAI cửa vào: `tlLuu` nhận cả `cua_vao: 'kho_chung'` (Đợt 1) lẫn
+     `cua_vao: 'nhan_su' + gan_id` (Đợt 2, CTL-0025) — Đợt 2 KHÔNG phải thêm
+     hàm mới ở đây. `tep` là chuỗi base64 của file PDF đã gộp ở máy. */
+  tlDanhSach: (tuyChon = {}) => {
+    const u = new URLSearchParams();
+    if (tuyChon.q) u.set('q', tuyChon.q);
+    if (tuyChon.nhom) u.set('nhom', tuyChon.nhom);
+    if (tuyChon.sapHetHan) u.set('sap_het_han', '1');
+    /* `ganId` = nhìn qua cửa HỒ SƠ MỘT NGƯỜI (CTL-0025 Đợt 2). Không truyền =
+       nhìn qua cửa kho chung, và kho chung thấy CẢ giấy đã quét vào hồ sơ —
+       một kho, hai cửa nhìn, không phải hai kho. */
+    if (tuyChon.ganId) u.set('gan_id', tuyChon.ganId);
+    return goi('/api/tai-lieu' + (u.toString() ? '?' + u : ''));
+  },
+  tlLuu: (than) => goi('/api/tai-lieu/luu', { method: 'POST', body: JSON.stringify(than) }),
+
+  /* ⚠️ ĐƯỜNG BYTE THẲNG CHO FILE PDF CÓ SẴN — vá REV-0054 lỗi #2.
+     Gửi base64 trong JSON thì trong máy chủ file tồn tại ~3,7 bản cùng lúc, mà
+     bộ nhớ 128 MB là của cả isolate chứ không của riêng một yêu cầu: HAI người
+     cùng tải 25 MB là chết isolate, kéo theo yêu cầu của người khác.
+     Khung: [4 byte độ dài phần mô tả] [JSON mô tả] [byte file] — máy chủ đọc
+     đúng MỘT lần `arrayBuffer()` rồi cắt cửa sổ, không chép lại lần nào.
+     Đường ảnh (`tlLuu`) GIỮ NGUYÊN base64: trần 6 MB, không có vấn đề gì, và
+     đổi cả hai cùng lúc là đổi luôn thứ đang chạy tốt. */
+  tlLuuTep: (moTa, byte) => {
+    const md = new TextEncoder().encode(JSON.stringify(moTa));
+    const khung = new Uint8Array(4 + md.length + byte.length);
+    new DataView(khung.buffer).setUint32(0, md.length, false);   // big-endian
+    khung.set(md, 4);
+    khung.set(byte, 4 + md.length);
+    return goi('/api/tai-lieu/luu', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/octet-stream' },
+      body: khung
+    });
+  },
+  tlMo: (id) => goi('/api/tai-lieu/mo?id=' + encodeURIComponent(id)),
+  tlNhatKy: (id) => goi('/api/tai-lieu/nhat-ky?id=' + encodeURIComponent(id)),
+  /* Sửa SỐ HIỆU + TÊN sau khi đã lưu — Sếp Ngọc 03/09/2026. KHÔNG đòi lý do:
+     đây là sửa chính tả, bắt ghi lý do thì người ta quay về thói xoá đi quét
+     lại, mà quét lại nghĩa là đi tìm lại tờ giấy thật. */
+  tlSua: (du) => goi('/api/tai-lieu/sua', { method: 'POST', body: JSON.stringify(du) }),
+  tlLichSu: (id) => goi('/api/tai-lieu/lich-su?id=' + encodeURIComponent(id)),
+  tlAn: (id) => goi('/api/tai-lieu/an', { method: 'POST', body: JSON.stringify({ id }) })
+  // Bản PDF mở thẳng bằng /api/tai-lieu/tep?id=... (máy chủ trả file kèm kiểm
+  // quyền + ghi nhật ký), không qua lớp fetch này.
   // Lưu ý: kết nối Shopee đi thẳng bằng chuyển trang tới /api/shopee/connect
   // (server trả 302 sang trang ủy quyền Shopee), không qua lớp fetch này.
 };
+
+/* ==========================================================================
+   BỌC MỘT LẦN CHO CẢ LỚP — "ghi xong thì màn hình tự làm mới"
+   ---------------------------------------------------------------------------
+   Sếp Ngọc 03/09/2026: *"đã duyệt hoàn thành mà nó vẫn hiện ở đây"*. Cách cũ
+   là mỗi nút tự nhớ gọi thêm hàm nạp lại — 123 chỗ bấm là 123 lần phải nhớ,
+   và chỗ thứ 124 luôn quên. Ở đây bọc ĐÚNG MỘT LẦN: hàm ghi nào thành công
+   thì tự bắn tên nhóm dữ liệu, màn nào đang hiện nhóm đó thì tự vẽ lại.
+
+   THẤT BẠI thì KHÔNG bắn: máy chủ chưa ghi gì mà bắt cả loạt màn nạp lại là
+   đốt lượt đọc D1 vô ích (ERP này từng vượt hạn mức miễn phí).
+
+   Danh sách nhóm nằm ở `lam-moi.js`, không nằm ở đây — để `npm run
+   do-tu-lam-moi` soi được một chỗ duy nhất và bắt được hàm ghi mới bị quên.
+   ========================================================================== */
+for (const ten of Object.keys(API)) {
+  const nhom = NHOM_DU_LIEU[ten];
+  if (!nhom || MIEN_TRU[ten]) continue;
+  const goc = API[ten];
+  if (typeof goc !== 'function') continue;
+  const canKiem = CHUA_LUU_DU[ten];
+  API[ten] = function (...thamSo) {
+    const kq = goc.apply(this, thamSo);
+    // Hàm ghi nào cũng trả Promise; kiểm tra để phòng người sau đổi kiểu trả về.
+    if (!kq || typeof kq.then !== 'function') return kq;
+    return kq.then((v) => {
+      /* Vài cửa trả mã 200 mà THỰC RA CHƯA GHI GÌ (xem `CHUA_LUU_DU`) — bắn
+         tín hiệu lúc đó là bắt cả loạt màn nạp lại đúng dữ liệu cũ. */
+      if (!canKiem || !canKiem(v)) baoDuLieuDoi(nhom);
+      return v;
+    });
+  };
+}
