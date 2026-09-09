@@ -143,6 +143,25 @@ Thêm tab mới thì thêm **một dòng** vào `CUA_NGO` trong `scripts/cong-kh
   ```
   npx wrangler d1 execute crm-agc --remote --file migrations/<tên-file>.sql
   ```
+- 🔴 **MIGRATION CHẠY TRƯỚC DEPLOY, KHÔNG PHẢI SAU.** Đây là bài học đã trả giá
+  (REV-0055 CAO-3): deploy mã mới trước rồi mới nạp CSDL thì câu `INSERT` liệt kê
+  cột chưa có sẽ nổ **SAU KHI file đã nằm trên Google Drive** — mỗi lần người dùng
+  bấm "Gửi lại" là thêm một file mồ côi không ai dọn được. Thứ tự đúng, mỗi lần:
+  ```
+  npm run migration-kiemtra        # xem còn file nào chưa chạy trên bản thật
+  npm run <lệnh nạp của file đó>   # nạp CSDL — CHẠY TRƯỚC
+  npm run dua-len                  # rồi mới deploy mã
+  ```
+  Ví dụ vòng hồ sơ (bộ) — PHASE 2, 09/09/2026:
+  ```
+  1) npm run migration-kiemtra     # phải thấy them-kho-tai-lieu-ho-so-bo.sql chưa chạy
+  2) npm run nap-hosobo            # tạo bảng ho_so + 2 cột trên tai_lieu (bản thật)
+  3) npm run migration-kiemtra     # phải báo "không còn migration nào chưa chạy"
+  4) npm run dua-len               # bây giờ mới deploy
+  ```
+  Nạp lại lần hai báo `duplicate column name: ho_so_id` nghĩa là **đã chạy rồi**,
+  không phải hỏng. Migration này **không chạy một câu `UPDATE` nào trên dữ liệu
+  cũ** — mọi tài liệu đã có chạy tiếp bình thường với hai cột mới = `NULL`.
 - **Nếu deploy xong mà bị lỗi / muốn quay lại bản cũ (rollback):**
   - Nhanh nhất: Cloudflare → Workers & Pages → **erp-agc** → tab **Deployments** → chọn bản chạy tốt trước đó → **Rollback**.
   - Hoặc: `git revert` commit gây lỗi rồi `git push origin main` (Cách 1 sẽ tự deploy lại bản đã sửa).

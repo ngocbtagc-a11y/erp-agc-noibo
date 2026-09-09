@@ -1933,14 +1933,30 @@ export async function goiYThayThe(env, phien, id) {
   if (!duocXem.length) return json({ ds: [] });
 
   /* Chỉ soi trong CÙNG NHÓM: một tờ giấy pháp lý không bao giờ bị một tờ hoá
-     đơn thay thế, và giới hạn này giữ câu SQL bám đúng `idx_tai_lieu_nhom`. */
-  const r = await env.DB.prepare(`
+     đơn thay thế, và giới hạn này giữ câu SQL bám đúng `idx_tai_lieu_nhom`.
+
+     ⚠️ HAI CHỖ CẮT, CẢ HAI PHẢI NÓI RA (luật `LUAT-GOP-Y-LA-TRIEU-CHUNG` Mục 2,
+     máy canh `npm run do-cat-im-lang`):
+       ① `LIMIT 200` — máy chỉ soi 200 tờ gần nhất của nhóm. Nhóm đông hơn thế
+          thì bản thay thế NẰM NGOÀI TẦM MÁY NHÌN, và im lặng ở đây nghĩa là
+          Sếp tin "máy không thấy tờ nào" trong khi máy chưa hề nhìn tới.
+       ② `slice(0, 10)` — bày quá 10 dòng nghi ngờ thì người ta bấm bừa.
+     Dùng CHUNG `catBot`/`nhanCat` như mọi màn khác, không tự viết lần thứ hai. */
+  const GH = 200;
+  const dieuKienSoi = 'an = 0 AND id <> ? AND nhom = ? AND nhom IN (' +
+                      duocXem.map(() => '?').join(',') + ')';
+  const bienSoi = [tl.id, tl.nhom, ...duocXem];
+  const rTho = await env.DB.prepare(`
     SELECT id, nhom, loai, tieu_de, so_hieu, ngay_ban_hanh, tao_luc
       FROM tai_lieu
-     WHERE an = 0 AND id <> ? AND nhom = ?
-       AND nhom IN (${duocXem.map(() => '?').join(',')})
+     WHERE ${dieuKienSoi}
      ORDER BY tao_luc DESC
-     LIMIT 200`).bind(tl.id, tl.nhom, ...duocXem).all();
+     LIMIT ${GH + 1}`).bind(...bienSoi).all();
+  const { ds: hang, biCat } = catBot(rTho, GH);
+  const cat = await nhanCat(env, biCat, GH,
+    `SELECT COUNT(*) AS n FROM tai_lieu WHERE ${dieuKienSoi}`, bienSoi,
+    'Nhóm này đông hơn tầm máy soi — chọn tay tờ thay thế thay vì chờ máy gợi ý.');
+  const r = { results: hang };
 
   /* Dấu hiệu SỬA ĐỔI nằm ở tên tờ MỚI, không phải tờ cũ. Bỏ dấu để "Sửa đổi"
      và "sua doi" cùng trúng — dùng lại `boDau()`, không viết bảng chữ thứ hai. */
@@ -1970,8 +1986,18 @@ export async function goiYThayThe(env, phien, id) {
   }
   ds.sort((a, b) => b.vi_sao.length - a.vi_sao.length);
 
+  const TRAN_GOI_Y = 10;
+  const { ds: raGoiY, biCat: catGoiY } = catBot(ds, TRAN_GOI_Y);
+
   return json({
-    ds: ds.slice(0, 10),
+    ds: raGoiY,
+    /* ⚠️ HAI VẾT CẮT, NÓI RA CẢ HAI. `bi_cat` gộp cho giao diện khỏi phải hiểu
+       hai khái niệm; `cat` mang con số thật của vết cắt ①; `so_nghi_ngo` là số
+       dòng nghi ngờ TÌM RA (trước khi cắt còn 10). */
+    bi_cat: biCat || catGoiY,
+    cat,
+    so_nghi_ngo: ds.length,
+    tran_goi_y: TRAN_GOI_Y,
     /* Nói thẳng máy đang đoán bằng gì, và nó KHÔNG đọc được ruột giấy — trên
        kho thật 0/3 tờ bóc được chữ, nên đây thuần tuý là suy từ tên và số hiệu. */
     dua_vao: 'Máy chỉ suy từ TÊN, SỐ HIỆU và LOẠI GIẤY — không đọc nội dung bên ' +

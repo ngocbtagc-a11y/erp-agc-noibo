@@ -12548,6 +12548,20 @@ async function khoiDongKhoTaiLieu() {
                   goi.map(x => `<li><b>${esc(x.tieu_de)}</b>${x.so_hieu ? ' · ' + esc(x.so_hieu) : ''} — ` +
                     `${esc(x.vi_sao.join(' · '))}</li>`).join('') + '</ul>'
                 : '<p>Máy không thấy tờ nào đủ dấu hiệu. Chọn tay bên dưới.</p>') +
+              /* ⚠️ MÁY SOI CÓ TẦM — VÀ TẦM ĐÓ PHẢI NÓI RA. Máy chỉ nhìn 200 tờ
+                 gần nhất của nhóm; nhóm đông hơn thì bản thay thế nằm ngoài
+                 tầm nhìn, mà im lặng ở đây là để Sếp tin "không có tờ nào"
+                 trong khi máy chưa hề nhìn tới (LUAT-GOP-Y-LA-TRIEU-CHUNG Mục 2). */
+              (g.bi_cat
+                ? '<p class="tl-nk-cat">✂️ Máy chỉ soi ' +
+                  `${g.cat ? g.cat.gioi_han : g.tran_goi_y} tờ gần nhất của nhóm này` +
+                  (g.cat && Number.isFinite(g.cat.tong) ? ` trên tổng ${g.cat.tong}` : '') +
+                  (g.so_nghi_ngo > (g.tran_goi_y || 10)
+                    ? ` và chỉ bày ${g.tran_goi_y} trong ${g.so_nghi_ngo} tờ nghi ngờ`
+                    : '') +
+                  ' — <b>danh sách này đã bị cắt bớt</b>. Không thấy tờ cần chọn thì ' +
+                  'gõ tên nó vào ô tìm ở trên rồi chọn tay bên dưới.</p>'
+                : '') +
               `<label class="tl-sua-o">Tài liệu nào thay thế tờ này?
                  <select id="tl-tt-chon-${esc(id)}">
                    <option value="">— Chọn —</option>` +
