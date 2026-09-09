@@ -7227,9 +7227,18 @@ async function gopYDaLenThat(req, env) {
 
     await env.DB.prepare(`UPDATE gop_y SET ${gan.join(', ')} WHERE id = ?`).bind(...gia).run();
 
-    /* ⏱ CỬA THỨ 14 ÁP CHO ĐƯỜNG DEPLOY (vá lúc gộp 102 commit của main).
-       Cột `cho_duyet_tu_luc` ra đời SAU nhánh này, nên bản cũ đổi `trang_thai`
-       mà bỏ quên đồng hồ. Đo được: 4 góp ý nằm ở `cho_phan_tich` từ 28/08,
+    /* ⏱ CỬA THỨ 14 ÁP CHO ĐƯỜNG DEPLOY.
+
+       ✖ CHẨN ĐOÁN CŨ SAI, ĐÃ SỬA LỜI (REV-0064). Bản trước ghi ở đây là cột
+       `cho_duyet_tu_luc` "ra đời SAU nhánh này", tức đổ cho trôi dạt vì gộp
+       main. Đo lại: cột thêm ở `53c77ef` ngày 28/08, nhánh cắt ra từ `a9dc0f1`
+       ngày 29/08 — cột ĐÃ CÓ SẴN TỪ HÔM TRƯỚC khi nhánh được cắt. Nên đây
+       KHÔNG phải trôi dạt: đây là MỘT LUẬT ĐÃ GHI TRÊN SỔ (cửa 14, REV-0030)
+       mà đường ghi mới không áp. Bản vá vẫn đúng, chỉ chẩn đoán là sai — và
+       chẩn đoán sai làm hỏng câu hỏi tiếp theo ("còn cột nào nữa không?"),
+       nên chữa lời ở đây.
+
+       Đo được: 4 góp ý nằm ở `cho_phan_tich` từ 28/08,
        máy đẩy sang `cho_nghiem_thu` hôm nay thì đồng hồ vẫn ở 28/08 → nhánh 3
        của gopYNhacSla() thấy ngay >= 7 ngày và nhắn người gửi "chờ bạn xác
        nhận" NGAY LƯỢT CRON ĐẦU, cùng ngày bản vá vừa lên. Sai và ồn.

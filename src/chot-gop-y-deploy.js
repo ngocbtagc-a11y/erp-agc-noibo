@@ -12,7 +12,9 @@
    là không đáng tin (28/08 có 3 lần "sổ ghi một đằng, thực tế một nẻo").
 
    ---------------------------------------------------------------------------
-   SỢI DÂY CHỌN: MÃ GÓP Ý TRONG THÔNG ĐIỆP COMMIT (`GY-12`)
+   SỢI DÂY CHỌN: TUYÊN BỐ VÁ TRONG THÔNG ĐIỆP COMMIT (`Vá GY-12`)
+   (REV-0064 C1 đổi từ "có nhắc mã" sang "có TUYÊN BỐ vá" — xem khối
+    TỪ KHOÁ ĐÓNG ở dưới; đó là chốt quan trọng nhất của file này)
 
    Đã đo và loại ba cách khác:
 
@@ -42,6 +44,10 @@
    và đó là mất mát lớn nhất. Nên máy chỉ được làm ĐÚNG PHẦN VIỆC CƠ HỌC của
    nó: *"code này giờ đã nằm trên hệ thống thật"*. Máy **không bao giờ** làm
    thay phần cần người phán đoán.
+
+   ⚠️ BẢNG DƯỚI CHỈ ÁP DỤNG KHI COMMIT CÓ `Vá GY-<id>` (REV-0064 C1). Commit
+   chỉ NHẮC TÊN mã thì mọi dòng đều thành: KHÔNG đổi trạng thái, KHÔNG nhắn
+   người gửi — chỉ đính bằng chứng (`deploy_sha`) và dựng cờ cho Sếp.
 
    | Góp ý đang ở | Máy làm gì | Vì sao |
    |---|---|---|

@@ -297,22 +297,68 @@ Mỗi lượt deploy đều gõ cửa ERP một tiếng, **kể cả khi không 
 góp ý** — nên khoá lệch lộ ra ngay hôm nó lệch, không đợi tới hôm có góp ý
 thật bị bỏ rơi (REV-0042 mục 3).
 
-### Từ đó về sau: viết mã góp ý vào thông điệp commit
+### Từ đó về sau: viết `Vá GY-…` vào thông điệp commit
 
 ```
-git commit -m "GY-12: gộp thông báo tin nhắn, không rung 5 lần nữa"
+git commit -m "Vá GY-12: gộp thông báo tin nhắn, không rung 5 lần nữa"
 ```
 
-Chấp nhận `GY-12`, `gy 12`, `GY_12`. **Không** chấp nhận `GY12` (dính liền) —
-cố ý chặt tay để không bắt nhầm một con số nào trong câu tiếng Anh.
+**Từ khoá đóng là đúng một chữ: `Vá`** (có dấu sắc), đặt **ở ĐẦU một dòng** —
+dòng tiêu đề, hoặc một dòng bất kỳ trong thân commit. Không phân biệt hoa
+thường. Không có cách viết thứ hai: `Fix`, `Close`, `Đóng`, `Sửa`, `Va` (không
+dấu) đều **không** tính.
 
-**Mã thôi thì chưa đủ.** Máy còn đọc **commit đó đổi những file nào**, và chỉ
+Một `Vá` phủ được **một dãy mã liền nhau**:
+
+```
+Vá GY-12 GY-13: bỏ LIMIT làm cắt mất việc public
+```
+
+Dãy **dừng ngay** khi gặp chữ khác, nên câu dưới đây chỉ đóng GY-7:
+
+```
+Vá GY-7, và GY-6 thì đo lại thấy hết lỗi
+```
+
+#### Vì sao phải có từ khoá — chuyện đã xảy ra thật
+
+Bản trước chỉ đọc *"commit này có NHẮC TÊN mã nào không"* rồi coi đó là *"commit
+này VÁ mã nào"*. Repo này có sẵn một commit chứng minh hai thứ đó khác nhau —
+`f1ab6c9`, đang nằm trên `main`:
+
+> tiêu đề: `GY-0007: Kho tài liệu chết vì TDZ — dời khai báo lên trước khối khởi động`
+> thân: *"GY-0006 (chat máy tính): **ĐO LẠI THẤY ĐÃ HẾT LỖI, không vá gì.**"*
+
+Bản trước **đóng GY-6** và nhắn người báo *"đã được sửa xong"* — trong khi
+chính commit đó nói thẳng bằng tiếng Việt là **không ai đụng vào**. Đo trên 15
+trạng thái mở: **7/15 bị đổi trạng thái, 12/15 bị nhắn**, chỉ vì mã bị nhắc
+tên. Và trong 284 commit gần nhất của `main`, **29% commit nhắc mã là nhắc từ
+2 mã trở lên** — đây là cách repo này viết commit, không phải ca hiếm.
+
+**Nhắc tên mà không có `Vá` thì máy vẫn ghi nhận, chỉ là không đóng:** nó đính
+commit đó làm bằng chứng và dựng cờ cho Sếp trên panel *"Đã lên hệ thống — chờ
+xác nhận"*, nhưng **không đổi trạng thái và không nhắn người gửi**. Quên viết
+`Vá` thì cùng lắm phiếu chậm được đóng vài hôm; đóng nhầm thì mất lòng tin của
+người báo, và họ thôi báo.
+
+Về khuôn mã: chấp nhận `GY-12`, `gy 12`, `GY_12`. **Không** chấp nhận `GY12`
+(dính liền) — cố ý chặt tay để không bắt nhầm một con số trong câu tiếng Anh.
+
+**Có `Vá` cũng chưa đủ.** Máy còn đọc **commit đó đổi những file nào**, và chỉ
 tin khi có file trong `src/` · `public/` · `migrations/`. Một commit chỉ sửa
-tài liệu (`docs/`, `*.md`) mà nhắc mã góp ý thì **không đóng gì cả** — vì
-thông điệp commit là lời khai, danh sách file mới là bằng chứng. Commit
-`Revert "…"` cũng bị loại: bản vá vừa bị **gỡ** thì không có gì "đã xong".
+tài liệu (`docs/`, `*.md`) thì **không đóng gì cả** — thông điệp commit là lời
+khai, danh sách file mới là bằng chứng.
+
+**Commit gỡ (`Revert`) PHỦ QUYẾT.** Cùng một lượt đẩy mà vừa có bản vá vừa có
+bản gỡ trên cùng một phiếu thì **bản gỡ thắng**: máy không đổi trạng thái,
+không nhắn người báo, chỉ kêu cho Sếp — vì code trên hệ thống thật lúc đó
+**không có** bản vá. Nguyên tắc: *nghi ngờ thì không đóng*.
 
 ### Máy làm gì với góp ý đó
+
+Bảng dưới đây chỉ áp dụng khi commit có **`Vá GY-…`**. Nhắc tên không có `Vá`
+thì mọi dòng đều thành: *không đổi trạng thái, không nhắn người gửi, chỉ đính
+bằng chứng + dựng cờ cho Sếp*.
 
 | Góp ý đang ở | Máy làm | Ai nhận tin |
 |---|---|---|
@@ -344,8 +390,8 @@ họ đọc đúng câu đó). Trước bản này những góp ý loại này *
 
 ### Đóng lùi những góp ý đã sửa xong TỪ TRƯỚC
 
-Bản vá lên trước hôm nay thì commit không có mã nào, máy không đọc ra được.
-Dùng dụng cụ chạy tay — nó **in rõ sẽ đổi những gì rồi mới hỏi**:
+Bản vá lên trước hôm nay thì commit không có `Vá GY-…` nào, máy không đọc ra
+được. Dùng dụng cụ chạy tay — nó **in rõ sẽ đổi những gì rồi mới hỏi**:
 
 ```bash
 node scripts/dong-lui-gop-y.mjs --remote --tim "thông báo khi có tin nhắn"
@@ -357,4 +403,13 @@ Không có cờ `--ghi` thì nó **không ghi một chữ nào**. Có `--ghi` th
 gõ đúng hai chữ `ĐỒNG Ý`. Chạy xong nó in ra bằng chứng: đã đổi mấy dòng, có
 dòng nào ngoài danh sách không (phải là 0).
 
-**Kiểm lại bất cứ lúc nào:** `npm run do-chot-gopy` (59 phép đo, có ca đối chứng).
+> **REV-0064:** dụng cụ này trước đó **chưa từng chạy được một lần nào trên
+> Windows** — `shell: true` cắt vụn câu SQL, chết ngay lệnh đầu ở cả ba chế độ
+> (BH-55). Đã vá. Chạy thật lần đầu còn lộ tiếp một lỗi thứ hai: nó tin
+> `meta.changes` mà `wrangler --local --json` không trả trường đó, nên nó bỏ
+> qua dòng lịch sử và **tin báo cho người gửi** — đóng phiếu trong im lặng.
+> Cũng đã vá. Cổng `npm run do-chot-gopy` nay **spawn thật** file này trên một
+> D1 tạm, đủ bốn đường (tìm · xem trước · huỷ · ghi).
+
+**Kiểm lại bất cứ lúc nào:** `npm run do-chot-gopy` — mỗi phép đo đều có ca đối
+chứng, và bộ này chạy thật cả cửa HTTP của Worker lẫn script đóng lùi.

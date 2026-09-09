@@ -1036,3 +1036,80 @@ sai mới.
 thích mới viết có nhắc lại `max-height: calc(100qvh - 40px)` làm ví dụ, và lưới **đọc luôn
 chữ trong chú thích như khai báo thật**. Lưới đọc chữ thì phải đọc đúng phần chữ **có hiệu
 lực**.
+
+
+**BH-65 · "Có nhắc tên X" KHÔNG PHẢI là "có làm X". Máy đọc câu chữ thì phải đòi một
+TUYÊN BỐ, không nhận một lần nhắc tới.**
+Đường tự chốt góp ý đọc mọi mã `GY-…` trong thông điệp commit rồi coi đó là "commit này
+vá phiếu đó". Bằng chứng nó sai nằm sẵn trên `main`: `f1ab6c9` có tiêu đề `GY-0007: …`
+và thân ghi thẳng *"GY-0006: ĐO LẠI THẤY ĐÃ HẾT LỖI, **không vá gì**"* — máy đóng GY-6 và
+nhắn người báo "đã được sửa xong". Đo trên 15 trạng thái mở: **7/15 bị đổi trạng thái,
+12/15 bị nhắn**, chỉ vì mã bị nhắc tên. Và **29% commit nhắc mã của repo này nhắc từ 2 mã
+trở lên** (284 commit gần nhất) — không phải ca hiếm, mà là cách repo này viết commit.
+→ Chốt bằng chứng "commit có đụng file thật không" **không cứu được** chỗ này: nó hỏi
+commit có vá GÌ ĐÓ không, chứ không hỏi commit có vá ĐÚNG PHIẾU ĐANG XÉT không. Một thay
+đổi `src/` cấp phép cho mọi mã xuất hiện ở bất kỳ đâu trong thông điệp.
+→ Cách chữa: đòi **một TỪ KHOÁ DUY NHẤT, đặt ngay trước mã, ở đầu dòng** (`Vá GY-12`).
+Một cách viết thôi — nhiều cách viết là nhiều chỗ đoán, mà đoán chính là lỗi gốc. Đặt ở
+ĐẦU DÒNG vì giữa câu thì "chưa vá GY-12" và "không vá gì cho GY-12" cũng thành tuyên bố.
+→ Mọi cách nhắc khác **vẫn được ghi nhận, chỉ là không đóng**: đính bằng chứng + dựng cờ,
+không đổi trạng thái, không nhắn người báo. Lệch về phía bỏ sót thì phiếu chậm vài hôm;
+lệch về phía bắt nhầm thì mất lòng tin của người báo, và họ thôi báo.
+
+**BH-66 · Chốt an toàn mà đi qua BẢNG XẾP HẠNG thì nó không còn là chốt — chốt phải là
+PHỦ QUYẾT.**
+Có sẵn hai bản vá đúng, cùng file, mà vẫn thủng: ① "commit gỡ (revert) thì không đóng gì",
+② "một phiếu bị nhiều commit nhắc thì giữ bằng chứng MẠNH NHẤT". Bảng hạng của ② cho
+`dong = 5` và `canh_bao_lui = 3`, nên trong cùng một lượt đẩy **bản vá luôn thắng bản
+gỡ** — vá xong rồi gỡ ngay, người báo vẫn nhận tin "đã sửa xong" trong khi code trên hệ
+thống thật không có bản vá. Chốt ① bị chính ② mở lại.
+→ Hai bản vá đúng riêng lẻ không cộng lại thành đúng. Phải **đo chúng CÙNG NHAU**, trong
+cùng một lượt.
+→ Cái gì canh một chuyện nguy hiểm thì cho nó quyền **phủ quyết chạy sau cùng**, đừng cho
+nó một số điểm rồi để nó đi thi với các thứ khác. Nguyên tắc: **nghi ngờ thì không đóng.**
+
+**BH-67 · Lớp "thứ mới sinh ra sau khi nhánh được cắt" TỰ ĐẦY LẠI MỖI NGÀY NHÁNH NẰM IM.
+Đo một lần rồi ghi "0" là sai phương pháp.**
+Quét cột `gop_y` mà đường ghi mới có thể bỏ quên: hôm 08/09 ra **0**, hôm 09/09 ra **2**
+(`ke_hoach_thi_cong`, `ke_hoach_luc` — Sếp chốt 06/09). Cùng một câu hỏi, hai câu trả
+lời khác nhau, chỉ vì nhánh nằm im thêm một ngày. Cùng lúc đó nhánh từ "gộp main sạch"
+thành "đụng nhau thật ở `src/index.js`".
+→ Câu trả lời cho lớp này **có hạn dùng**. Phải đo **NGAY TRƯỚC KHI ĐẨY**, sau khi gộp
+`main` lần cuối — không phải đo lúc bắt đầu soi.
+→ Và đừng đo bằng tay: cổng phải **quét thẳng `schema.sql` + `migrations/*.sql`**, đối
+chiếu với một danh sách "đã cân nhắc, kèm lý do một dòng". Cột mới về mà chưa ai trả lời
+thì cổng ĐỎ. Quét từ DB mà bàn đo tự dựng thì **không thấy** — vì danh sách migration của
+bàn đo cũng là thứ người ta quên cập nhật.
+
+**BH-68 · Bàn đo `import` một hàm thì không bao giờ thấy script đã chết — và chạy thật
+lần đầu thường lộ ra lỗi THỨ HAI.**
+Nối tiếp BH-55, lần này là `scripts/dong-lui-gop-y.mjs`: cổng 146/0 xanh trong khi script
+**chết ngay lệnh đầu tiên** trên Windows, vì cổng `import` hàm sinh SQL rồi chạy thẳng
+trên SQLite — không bao giờ đi qua `d1()`. Đúng lỗi `shell: true` mà BH-55 **đã ghi sổ
+kèm cách chữa**, chép lại nguyên si vào một file đẻ sau.
+→ Vá xong, cho cổng **spawn thật** trong tiến trình riêng thì lộ tiếp lỗi thứ hai, nặng
+hơn: script tin `meta.changes` để biết câu `UPDATE` có ghi được không — mà
+`wrangler d1 execute --local --json` **không trả trường đó** (`meta` chỉ có
+`{ duration }`). Nên nó luôn thấy 0, luôn in "⚠️ 0 dòng… BỎ QUA" rồi `break`: phiếu
+sang `hoan_thanh` thật, nhưng **dòng lịch sử và tin báo người gửi không bao giờ chạy**.
+Dụng cụ đóng phiếu trong im lặng — đúng nỗi đau gốc mà cả tính năng sinh ra để chữa.
+→ **Đừng tin một trường meta của công cụ ngoài để biết mình đã ghi được chưa. ĐỌC LẠI
+DÒNG ĐÓ.** Đọc lại đúng ở cả `--local` lẫn `--remote`, không phụ thuộc phiên bản.
+→ Chạy thật cần một D1 riêng: thêm cờ `--luu-tai DIR` (`wrangler --persist-to`) cho
+script, rồi cổng dựng D1 tạm từ đúng file của repo và vứt cả thư mục trong `finally`.
+Cùng cách đó chữa luôn cổng đòi tài khoản `ttb` có sẵn — **cổng phải tự dựng lấy fixture
+của nó**, không được đòi người chạy chuẩn bị dữ liệu (183/9 → 192/0).
+
+**BH-69 · Cắt dữ liệu ở đâu thì phải kêu ở đó — chuông đặt ở lớp trong không cứu được
+lớp ngoài.**
+Máy chủ dựng trần 200 commit **kèm chuông Telegram khi cắt** — bản vá tốt. Nhưng
+`fetch-depth: 50` ở workflow cắt **trước đó, ở ngưỡng thấp hơn bốn lần**, và cắt IM
+LẶNG: `git cat-file -e` hỏng, `phamVi()` lùi về đúng một commit cuối, in một dòng
+`console.log` thường. Trần 200 không bao giờ chạm tới, nên chuông của nó không bao giờ
+kêu. Hỏng theo chiều an toàn (bỏ sót, không đóng nhầm) — nhưng **im lặng**.
+→ Mỗi chỗ có thể cắt phải có chuông của riêng nó. Ở đây là hai lớp: `fetch-depth: 0`,
+**và** một cờ đi cùng bản tin để máy chủ gõ Telegram — vì nhật ký Actions không ai đọc mỗi
+ngày, `::warning::` một mình chưa đủ.
+→ Phân biệt cho đúng: "không có mốc commit trước" (lượt đẩy đầu, chạy tay) là **bình
+thường**; "có mốc mà đọc không ra" mới là **bị cắt**. Kêu nhầm cả hai thì chuông thành
+tiếng ồn, và tiếng ồn thì người ta tắt.

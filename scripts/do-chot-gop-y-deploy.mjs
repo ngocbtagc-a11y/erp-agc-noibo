@@ -907,8 +907,14 @@ async function main() {
   /* ══════════════════════════════════════════════════════════════════════
      ⑭ ĐỒNG HỒ CHỜ (`cho_duyet_tu_luc`) — CỬA THỨ 14 ÁP CHO ĐƯỜNG DEPLOY
      ----------------------------------------------------------------------
-     Cột này ra đời SAU nhánh này (nằm trong 102 commit của main). Bản cũ đổi
-     `trang_thai` mà bỏ quên đồng hồ, nên góp ý nằm ở `cho_phan_tich` từ lâu
+     ✖ SỬA LỜI KHAI (REV-0064): cột này KHÔNG "ra đời sau nhánh này". Nó thêm
+     ở `53c77ef` — 28/08; nhánh cắt ra từ `a9dc0f1` — 29/08. Cột đã có sẵn từ
+     hôm trước. Đây không phải trôi dạt do gộp main, mà là một LUẬT ĐÃ GHI
+     TRÊN SỔ (cửa 14, REV-0030) mà đường ghi mới không áp. Bản vá đúng, chẩn
+     đoán sai — và chẩn đoán sai thì câu hỏi tiếp theo cũng sai. Lớp phải quét
+     là "luật đã có sẵn mà đường ghi mới không áp", quét ở §⑱.
+
+     Bản cũ đổi `trang_thai` mà bỏ quên đồng hồ, nên góp ý nằm ở `cho_phan_tich` từ lâu
      bị máy đẩy sang `cho_nghiem_thu` là đồng hồ VẪN Ở NGÀY CŨ → nhánh 3 của
      gopYNhacSla() thấy ngay >= 7 ngày và nhắn người gửi "chờ bạn dùng thử"
      NGAY LƯỢT CRON ĐẦU, cùng ngày bản vá vừa lên. Sai và ồn.
