@@ -30,6 +30,10 @@
                      (mặc định ns_001 — Sếp Ngọc). Ghi vào cột uy_quyen_boi_id.
      --tom-tat "…"   một câu "đã sửa gì" gửi cho người gửi; không có thì lấy
                      tiêu đề commit từ git.
+     --luu-tai DIR   chạy trên D1 ở một thư mục khác (`wrangler --persist-to`),
+                     chỉ đi cùng --local. Đây là cách bàn đo
+                     `do-chot-gop-y-deploy.mjs` SPAWN THẬT file này trên một DB
+                     tạm — không đụng D1 của người đang ngồi máy.
 
    ---------------------------------------------------------------------------
    CHỈ ĐỔI ĐÚNG NHỮNG DÒNG ĐÃ IN RA — chứng minh bằng ba lớp:
@@ -39,11 +43,15 @@
      ② chụp ảnh TOÀN BẢNG gop_y trước và sau, rồi so từng dòng. Có một dòng
         nào ngoài danh sách bị đổi → in ĐỎ và trả mã lỗi.
      ③ `lenhDongLui()` là hàm THUẦN, được bàn thử do-chot-gop-y-deploy.mjs
-        chạy thẳng trên SQLite thật (không chép lại một dòng SQL nào).
+        chạy thẳng trên SQLite thật (không chép lại một dòng SQL nào), VÀ bàn
+        đo đó còn `spawn` chính file này ở tiến trình riêng, trên D1 thật
+        (§⑦-b). Vì ba lớp trên chứng minh LUẬT đúng, chỉ chạy thật mới chứng
+        minh SCRIPT còn sống — xem khối "GỌI WRANGLER" ngay dưới.
    ========================================================================== */
 
 import { execFileSync } from 'node:child_process';
 import { createInterface } from 'node:readline';
+import { timWrangler } from './dat-lai-mat-khau.mjs';
 
 /* ---- Sinh các câu lệnh cho MỘT góp ý — HÀM THUẦN, bàn thử soi thẳng ------
    `trangThaiDaIn` là chốt an toàn: đúng cái trạng thái vừa in ra màn hình.
@@ -103,13 +111,54 @@ const lay = (c, md = null) => { const i = ARG.indexOf(c); return i >= 0 ? ARG[i 
 const XA = co('--remote');
 const GHI = co('--ghi');
 const UY_QUYEN = lay('--uy-quyen', 'ns_001');
+const LUU_TAI = lay('--luu-tai', null);
 
+/* GỌI WRANGLER — KHÔNG ĐI QUA VỎ LỆNH. REV-0064 C3 · BH-55.
+
+   BẢN CŨ CHƯA TỪNG CHẠY ĐƯỢC MỘT LẦN NÀO TRÊN WINDOWS:
+     execFileSync('npx', [...], { shell: process.platform === 'win32' })
+   Bật `shell` thì Node KHÔNG bọc nháy từng đối số nữa — nó nối tất cả bằng
+   dấu cách rồi ném cả chuỗi cho cmd.exe. Câu SQL có khoảng trắng nên bị cắt
+   vụn, và MỌI chế độ chết ngay lệnh đầu tiên:
+     X [ERROR] Unknown arguments: g.id,, g.trang_thai,, g.tieu_de,, n.ho_ten,…
+
+   Nặng vì đây là ĐƯỜNG LÙI DUY NHẤT cho phiếu có bản vá lên trước hôm nay, và
+   nó là cách chữa được nêu tên trong 3 tin cảnh báo Telegram của chính tính
+   năng này ("Đẩy thêm một lượt nữa hoặc chạy scripts/dong-lui-gop-y.mjs").
+
+   ĐÃ GHI SỔ MÀ KHÔNG AI ÁP: `docs/BAI-HOC.md` BH-55 ghi đúng lỗi này, đúng câu
+   lỗi, đo trên đúng máy này, kèm cách chữa — và `dat-lai-mat-khau.mjs` đã chữa
+   xong từ trước. File này đẻ ra sau mà chép lại đúng cái lỗi đã có trên sổ.
+
+   VÌ SAO KHÔNG PHẢI CHỈ "BỎ shell": trên Windows `npx` là `npx.cmd`, mà Node
+   từ 18.20.2 cấm chạy thẳng .cmd/.bat khi `shell` tắt (`npx.cmd` → EINVAL,
+   `npx` → ENOENT). Cách đúng: chạy thẳng file JS của wrangler bằng chính
+   `node` đang chạy — `process.execPath` là .exe thật nên `shell` tắt được, đối
+   số đi nguyên vẹn qua CreateProcess/execvp, không có vỏ lệnh nào ở giữa.
+
+   RULE 1: `timWrangler()` dùng lại của `dat-lai-mat-khau.mjs`, KHÔNG viết bản
+   thứ hai — hai bản thì một bản sẽ hỏng lại. */
 function d1(sql) {
-  const out = execFileSync('npx', ['wrangler', 'd1', 'execute', 'crm-agc',
-    XA ? '--remote' : '--local', '--json', '--command', sql],
-    { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024, shell: process.platform === 'win32' });
-  const j = out.slice(out.indexOf('['));
-  const kq = JSON.parse(j);
+  const args = [timWrangler(), 'd1', 'execute', 'crm-agc',
+                XA ? '--remote' : '--local', '--json', '--command', sql];
+  if (LUU_TAI && !XA) args.push('--persist-to', LUU_TAI);
+  let out;
+  try {
+    // shell: KHÔNG. Đặt lại là hỏng lại — xem khối chú thích ngay trên.
+    out = execFileSync(process.execPath, args,
+      { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 });
+  } catch (e) {
+    /* Đây là đường cứu cuối. Hỏng thì phải NÓI RA HỎNG VÌ SAO — bản trước
+       nuốt cả stdout lẫn stderr của wrangler, để lại đúng một dòng
+       "Command failed" kèm câu SQL, không ai biết vì sao. */
+    const chiTiet = [e.stdout, e.stderr].map(x => String(x || '').trim()).filter(Boolean).join('\n');
+    throw new Error('wrangler d1 execute không chạy được.\n' +
+      (chiTiet || '(wrangler không nói gì)') +
+      '\n\nCâu lệnh: ' + sql.trim().split('\n')[0].slice(0, 120) + '…');
+  }
+  const i = out.indexOf('[');
+  if (i < 0) throw new Error('wrangler trả về thứ không phải JSON mảng:\n' + out.slice(0, 500));
+  const kq = JSON.parse(out.slice(i));
   return { dong: kq[0]?.results || [], ghi: kq[0]?.meta?.changes ?? kq[0]?.meta?.rows_written ?? 0 };
 }
 
@@ -202,19 +251,38 @@ async function main() {
   const tl = await hoi('\nGõ đúng hai chữ  ĐỒNG Ý  để ghi thật (bất kỳ chữ nào khác = huỷ): ');
   if (tl.toUpperCase() !== 'ĐỒNG Ý') { console.log('Đã huỷ. Không ghi một chữ nào.\n'); return; }
 
-  /* ---- Ghi, kèm chứng minh chỉ đổi đúng những dòng đã in ---------------- */
+  /* ---- Ghi, kèm chứng minh chỉ đổi đúng những dòng đã in ----------------
+     ⚠️ KHÔNG TIN `meta.changes` (REV-0064, lộ ra lúc CHẠY THẬT lần đầu).
+     `wrangler d1 execute --local --json` KHÔNG trả `changes` cũng KHÔNG trả
+     `rows_written` — đo được 09/09, `meta` chỉ có `{ duration }`. Nên bản
+     trước LUÔN thấy `ghi === 0`, luôn in "⚠️ 0 dòng … BỎ QUA" rồi `break`:
+     câu ① ghi được thật (phiếu sang `hoan_thanh`), nhưng dòng LỊCH SỬ và
+     THÔNG BÁO cho người báo KHÔNG BAO GIỜ chạy. Đóng phiếu trong im lặng —
+     đúng nỗi đau gốc mà cả tính năng này sinh ra để chữa.
+
+     Chốt đúng là ĐỌC LẠI DÒNG ĐÓ: bằng chứng chắc chắn, đúng ở cả --local
+     lẫn --remote, không phụ thuộc trường meta nào của wrangler. */
+  const daDong = (id, sha) => (d1(
+    `SELECT COUNT(*) n FROM gop_y WHERE id = ${Number(id)}
+        AND trang_thai = 'hoan_thanh' AND deploy_sha = '${String(sha).replace(/'/g, "''")}'`
+  ).dong[0] || {}).n > 0;
+
   const truoc = anhChup();
   for (const k of keHoach) {
     console.log(`\n→ GY-${k.id}`);
-    for (const sql of lenhDongLui({ id: k.id, sha: k.sha, tomTat: k.tomTat,
-                                    trangThaiDaIn: k.trangThaiDaIn, uyQuyenBoiId: UY_QUYEN,
-                                    daBaoRoi: !!k.g.bao_da_len_luc })) {
-      const r = d1(sql);
-      console.log(`   ${r.ghi} dòng ghi · ${sql.trim().split('\n')[0].slice(0, 60)}…`);
-      if (r.ghi === 0 && /^UPDATE gop_y/.test(sql.trim())) {
-        console.log(`   ⚠️  0 dòng — góp ý này đã đổi trạng thái kể từ lúc in bảng. BỎ QUA, không ép.`);
-        break;
-      }
+    const lenh = lenhDongLui({ id: k.id, sha: k.sha, tomTat: k.tomTat,
+                               trangThaiDaIn: k.trangThaiDaIn, uyQuyenBoiId: UY_QUYEN,
+                               daBaoRoi: !!k.g.bao_da_len_luc });
+    d1(lenh[0]);                                   // ① bản ghi góp ý
+    if (!daDong(k.id, k.sha)) {
+      console.log('   ⚠️  KHÔNG ghi được — góp ý này đã đổi trạng thái kể từ lúc in bảng. ' +
+                  'BỎ QUA, không ép, và không ghi lịch sử / thông báo.');
+      continue;
+    }
+    console.log(`   ✅ đã sang "hoan_thanh", dấu deploy ${k.sha}`);
+    for (const sql of lenh.slice(1)) {             // ② lịch sử · ③ báo người gửi
+      d1(sql);
+      console.log(`   ✅ ${sql.trim().split('\n')[0].slice(0, 58)}…`);
     }
   }
 

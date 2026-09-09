@@ -80,6 +80,68 @@ export function docMaGopY(chu) {
   return [...ra].sort((a, b) => a - b);
 }
 
+/* ============================================================================
+   ⚠️ TỪ KHOÁ ĐÓNG — CHỐT QUAN TRỌNG NHẤT SAU REV-0064 C1
+   ---------------------------------------------------------------------------
+   NHẮC TÊN MỘT PHIẾU KHÔNG PHẢI LÀ SỬA PHIẾU ĐÓ. Bản trước đọc *"lượt sửa này
+   có NHẮC TÊN phiếu nào không"* và coi đó là *"lượt sửa này VÁ phiếu nào"*.
+   Hai thứ đó khác nhau, và repo này có sẵn **một commit thật** chứng minh:
+
+     f1ab6c9 (đang nằm trên origin/main)
+       tiêu đề: "GY-0007: Kho tài liệu chết vì TDZ — dời khai báo lên trước
+                 khối khởi động"
+       thân   : "GY-0006 (chat máy tính): ĐO LẠI THẤY ĐÃ HẾT LỖI, không vá gì."
+
+   Bản cũ đọc commit đó ra hai mã, thấy có file `public/assets/js/app.js` bị
+   đổi, rồi ĐÓNG GY-6 và nhắn người báo *"đã được sửa xong"* — trong khi chính
+   commit nói thẳng bằng tiếng Việt là KHÔNG VÁ GÌ. Đo trên 15 trạng thái mở:
+   7/15 bị đổi trạng thái, 12/15 bị nhắn người gửi, chỉ vì mã bị nhắc tên. Và
+   trên 284 commit gần nhất của main, 29% commit nhắc mã là nhắc từ 2 mã trở
+   lên — đây là cách repo này viết commit, không phải ca hiếm.
+
+   ---------------------------------------------------------------------------
+   LUẬT MỚI — MỘT CÁCH DUY NHẤT, KHÔNG CÓ CÁCH THỨ HAI:
+
+       Vá GY-12
+
+   • Từ khoá là đúng một chữ: **Vá** (có dấu sắc). Không nhận `Va`, `Fix`,
+     `Close`, `Đóng`, `Sửa` — nhiều cách viết là nhiều chỗ đoán, mà đoán chính
+     là lỗi C1. Không phân biệt hoa/thường (`vá`, `Vá`, `VÁ` đều được).
+   • Từ khoá phải đứng **ở ĐẦU MỘT DÒNG** — dòng tiêu đề, hoặc một dòng bất kỳ
+     trong thân commit. Cho phép rác đầu dòng (`- `, `* `, `> `, `#`, `[`).
+     VÌ SAO ĐẦU DÒNG: giữa câu thì `"chưa vá GY-12"` và `"không vá gì cho
+     GY-12"` cũng thành tuyên bố vá — đúng kiểu ngược nghĩa mà f1ab6c9 viết.
+   • Một `Vá` phủ được **một DÃY mã liền nhau**: `Vá GY-12 GY-13` hoặc
+     `Vá GY-12, GY-13`. Dãy dừng NGAY khi gặp bất kỳ chữ nào khác, nên
+     `Vá GY-7, và GY-6 thì đo lại thấy hết lỗi` chỉ đóng GY-7.
+   • **Mọi cách nhắc khác chỉ được ĐÍNH BẰNG CHỨNG** (đóng dấu `deploy_sha`,
+     dựng cờ cho Sếp) — KHÔNG đổi trạng thái, KHÔNG nhắn người gửi.
+
+   Lệch về phía BỎ SÓT: quên viết `Vá` thì cùng lắm phiếu chậm được đóng, và
+   Sếp vẫn thấy cờ. Lệch về phía BẮT NHẦM thì người báo nhận tin sai — mất
+   lòng tin, và họ thôi báo. Đó là mất mát lớn nhất (xem khối đầu file).
+
+   Tài liệu cho người viết commit: `HUONG-DAN-DEPLOY.md` §"Vá GY-…".
+   ========================================================================== */
+export const TU_KHOA_DONG = 'Vá';
+
+/* `^` với cờ `m` khớp ngay sau `\n`; `\r` không nằm trong lớp ký tự nào bên
+   dưới nên dãy mã KHÔNG BAO GIỜ vắt qua hai dòng (CRLF cũng vậy). */
+const MAU_TUYEN_BO_VA = /^[ \t>*+\-–—•#[\]()|]*vá[ \t]+((?:GY[-_ ]\d{1,7}[ \t,+]*)+)/gim;
+
+/** Đọc những mã góp ý được TUYÊN BỐ VÁ trong một đoạn chữ.
+ *  Trả mảng số nguyên đã khử trùng, đã sắp — luôn là TẬP CON của docMaGopY().
+ *
+ *  Chuẩn hoá NFC trước khi khớp: `á` gõ rời (`a` + U+0301) và `á` dựng sẵn
+ *  (U+00E1) là hai chuỗi khác nhau với regex nhưng cùng một chữ với người. */
+export function docMaTuyenBoVa(chu) {
+  if (!chu) return [];
+  const ra = new Set();
+  for (const m of String(chu).normalize('NFC').matchAll(MAU_TUYEN_BO_VA))
+    for (const n of docMaGopY(m[1])) ra.add(n);
+  return [...ra].sort((a, b) => a - b);
+}
+
 /** Mọi chuỗi trông như SHA git (>= 7 ký tự hex) nằm trong một đường link.
  *  Dùng để đối chiếu `gop_y.bang_chung_url` với danh sách commit vừa lên.
  *  Chặn số thuần (`/pull/1234567`) — SHA phải có ít nhất một chữ cái a-f,
@@ -207,11 +269,14 @@ export function tomTatTuCommit(tieuDe) {
               (null/undefined = không tìm thấy góp ý mang mã đó)
    `commit` : { sha, tieu_de }
    `nguon`  : 'commit' (mã GY trong thông điệp) | 'bang_chung' (link đã dán sẵn)
+   `tuyenBoVa`: commit này có viết `Vá GY-<id>` ở đầu dòng không (C1). KHÔNG có
+              thì mã chỉ được ĐÍNH BẰNG CHỨNG — không đổi trạng thái, không
+              nhắn người gửi. Mặc định `false`: quên truyền là ngả về an toàn.
 
    Trả về { hanh_dong, trang_thai_moi, bao_nguoi_gui, bao_sep, ly_do }
      hanh_dong ∈ 'dong' | 'day_sang_nghiem_thu' | 'dong_dau' | 'cho_xac_nhan' | 'bo_qua'
    ========================================================================== */
-export function quyetDinhChot(gopY, commit, nguon = 'commit') {
+export function quyetDinhChot(gopY, commit, nguon = 'commit', tuyenBoVa = false) {
   const sha = commit && commit.sha ? String(commit.sha).toLowerCase() : '';
   const tomTat = tomTatTuCommit(commit && commit.tieu_de);
 
@@ -265,8 +330,11 @@ export function quyetDinhChot(gopY, commit, nguon = 'commit') {
        - `tep === 'khong_biet'`  : có commit thật nhưng không đọc được danh sách
                                   file → KHÔNG đẩy, KHÔNG nhắn người gửi, dựng cờ.
        - `nguon === 'bang_chung'`: link do người dán, tự nó KHÔNG đủ (C5) —
-                                  chỉ dựng cờ, không bao giờ đổi trạng thái. */
-  const duDeDay = tep === 'co_code' && nguon === 'commit';
+                                  chỉ dựng cờ, không bao giờ đổi trạng thái.
+       - `!tuyenBoVa`            : commit CHỈ NHẮC TÊN mã, không tuyên bố vá
+                                  (REV-0064 C1, ca f1ab6c9) → chỉ đính bằng
+                                  chứng, không đổi trạng thái, không nhắn ai. */
+  const duDeDay = tep === 'co_code' && nguon === 'commit' && tuyenBoVa;
 
   /* 🔒 ĐÚNG MỘT TIN — THEO (GÓP Ý, COMMIT), không phải theo góp ý (C4).
      Bản trước đóng dấu vĩnh viễn: một lần nhắn nhầm là người gửi KHÔNG BAO GIỜ
@@ -302,9 +370,11 @@ export function quyetDinhChot(gopY, commit, nguon = 'commit') {
      báo đúng sự thật: *đã có bản sửa, đang chờ Sếp xác nhận*, không phải
      "đã xong". Đường phụ `bang_chung` và ca `khong_biet` thì KHÔNG nhắn: bằng
      chứng yếu hơn, thà im còn hơn báo sai. */
-  const baoNguoiGui = tep === 'co_code' && nguon === 'commit' && chuaBao;
+  const chiNhacTen = tep === 'co_code' && nguon === 'commit' && !tuyenBoVa;
+  const baoNguoiGui = tep === 'co_code' && nguon === 'commit' && tuyenBoVa && chuaBao;
   const lyDo = tep === 'khong_biet' ? 'khong_doc_duoc_danh_sach_tep'
              : nguon === 'bang_chung' ? 'chi_co_link_bang_chung'
+             : chiNhacTen ? 'chi_nhac_ten_khong_tuyen_bo_va'
              : ro === 'chua_xep' ? 'trang_thai_la' : 'chua_qua_cong_duyet';
   return { hanh_dong: 'cho_xac_nhan', trang_thai_moi: null, sha, tom_tat: tomTat,
            bao_nguoi_gui: baoNguoiGui, kieu_tin: 'cho_sep_xac_nhan', bao_sep: true, nguon, ly_do: lyDo,
@@ -312,6 +382,11 @@ export function quyetDinhChot(gopY, commit, nguon = 'commit') {
              ? 'Không đọc được commit này đổi những file nào — không đủ bằng chứng để đẩy, dựng cờ cho Sếp.'
              : nguon === 'bang_chung'
              ? 'Nhận ra qua link bằng chứng người dán sẵn. Một mình nó KHÔNG đủ để đổi trạng thái — dựng cờ cho Sếp.'
+             : chiNhacTen
+             ? `Commit này chỉ NHẮC TÊN GY-${gopY.id}, không viết "${TU_KHOA_DONG} GY-${gopY.id}" ở đầu dòng. ` +
+               'Nhắc tên không phải là vá (REV-0064 C1) — máy chỉ đính bằng chứng, KHÔNG đổi trạng thái ' +
+               'và KHÔNG nhắn người gửi. Đúng là đã vá thì Sếp bấm xác nhận, hoặc đẩy lại với "' +
+               TU_KHOA_DONG + ' GY-' + gopY.id + '".'
              : ro === 'chua_xep'
              ? `Trạng thái "${gopY.trang_thai}" chưa được xếp rổ trong chot-gop-y-deploy.js — xử theo chiều an toàn.`
              : `Góp ý đang ở "${gopY.trang_thai}", chưa qua cổng duyệt (hoặc đang bị chặn). ` +
@@ -333,6 +408,46 @@ export function quyetDinhChot(gopY, commit, nguon = 'commit') {
 const HANG_HANH_DONG = { dong: 5, day_sang_nghiem_thu: 5, dong_dau: 5,
                          cho_xac_nhan: 4, canh_bao_lui: 3, bo_qua: 1 };
 
+/** Hành động có ĐỘNG VÀO một cột nào của `gop_y` không. `canh_bao_lui` và
+ *  `bo_qua` thì KHÔNG — chúng chỉ ghi lịch sử và kêu cho Sếp (REV-0064 H3). */
+export const HANH_DONG_CO_GHI = new Set(['dong', 'day_sang_nghiem_thu',
+                                         'dong_dau', 'cho_xac_nhan']);
+
+/* ⚠️ AI BỊ GỠ TRONG CHÍNH LƯỢT ĐẨY NÀY — REV-0064 C2.
+   Bản trước để bảng xếp hạng quyết: `dong` = 5 > `canh_bao_lui` = 3, nên
+   lượt đẩy có CẢ bản vá LẪN bản gỡ thì bản vá luôn thắng, và người báo nhận
+   tin "đã sửa xong" trong khi code trên hệ thống thật KHÔNG CÓ bản vá. Đúng
+   thứ chốt lùi C2 sinh ra để chặn, bị chính bảng xếp hạng C6 mở lại.
+
+   Từ nay GỠ là PHỦ QUYẾT, không phải xếp hạng. Nguyên tắc: NGHI NGỜ THÌ
+   KHÔNG ĐÓNG.
+
+   Bắt hai đường, vì commit gỡ không phải lúc nào cũng nhắc lại mã:
+     ① mã nhắc trong chính thông điệp commit gỡ (git revert giữ nguyên tiêu
+        đề cũ nên đường này bắt được ca thường gặp);
+     ② `This reverts commit <sha>` trỏ tới một commit KHÁC TRONG CÙNG LƯỢT —
+        thì mọi mã của commit bị gỡ đó cũng bị phủ quyết, kể cả khi người viết
+        commit gỡ bằng câu chữ của riêng mình. */
+function machGoTrongLuot(cacCommit) {
+  const ds = cacCommit || [];
+  const luiTheoId = new Map();          // gop_y_id → commit gỡ
+  const dinhKem = (id, c) => { if (!luiTheoId.has(id)) luiTheoId.set(id, c); };
+
+  for (const c of ds) {
+    if (!laCommitLui(c)) continue;
+    for (const id of docMaGopY(`${c.tieu_de || ''}\n${c.than || ''}`)) dinhKem(id, c);
+
+    for (const m of String((c && c.than) || '')
+                      .matchAll(/this\s+reverts\s+commit\s+([0-9a-f]{7,40})/gi)) {
+      for (const bi of ds) {
+        if (!shaKhop(bi.sha, m[1])) continue;
+        for (const id of docMaGopY(`${bi.tieu_de || ''}\n${bi.than || ''}`)) dinhKem(id, c);
+      }
+    }
+  }
+  return luiTheoId;
+}
+
 export function chotCaLuot(cacCommit, tra, traTheoSha = () => []) {
   const raTheoId = new Map();
 
@@ -344,7 +459,9 @@ export function chotCaLuot(cacCommit, tra, traTheoSha = () => []) {
 
   for (const c of cacCommit || []) {
     const chu = `${c.tieu_de || ''}\n${c.than || ''}`;
-    for (const id of docMaGopY(chu)) ghi(id, quyetDinhChot(tra(id), c, 'commit'));
+    const daTuyenBo = new Set(docMaTuyenBoVa(chu));
+    for (const id of docMaGopY(chu))
+      ghi(id, quyetDinhChot(tra(id), c, 'commit', daTuyenBo.has(id)));
   }
 
   /* Đường phụ: góp ý đã có sẵn link bằng chứng trỏ đúng một commit vừa lên.
@@ -355,8 +472,35 @@ export function chotCaLuot(cacCommit, tra, traTheoSha = () => []) {
     for (const g of traTheoSha(c.sha) || []) {
       if (!g) continue;
       const khop = docShaTrongLink(g.bang_chung_url).some(s => shaKhop(s, c.sha));
-      if (khop) ghi(g.id, quyetDinhChot(g, c, 'bang_chung'));
+      if (khop) ghi(g.id, quyetDinhChot(g, c, 'bang_chung', false));
     }
+  }
+
+  /* ---- PHỦ QUYẾT (C2) — chạy SAU CÙNG nên không xếp hạng nào lật được ---- */
+  for (const [id, cLui] of machGoTrongLuot(cacCommit)) {
+    const cu = raTheoId.get(id);
+    const g = tra(id);
+    if (!g) continue;                       // không có phiếu thì không có gì để phủ quyết
+
+    /* Lượt đẩy vừa VÁ vừa GỠ cùng một phiếu: đây là ca dễ nhầm nhất, phải KÊU
+       chứ không được im — nhưng tuyệt đối không đổi cột nào, không nhắn người
+       báo. Code trên hệ thống thật không có bản vá. */
+    if (cu && HANH_DONG_CO_GHI.has(cu.hanh_dong)) {
+      raTheoId.set(id, {
+        gop_y_id: id, hanh_dong: 'canh_bao_lui', trang_thai_moi: null,
+        sha: String(cLui.sha || '').toLowerCase(), tom_tat: cu.tom_tat,
+        bao_nguoi_gui: false, bao_sep: true, nguon: 'commit', ly_do: 'va_roi_go_cung_luot',
+        mo_ta: `Lượt đẩy này VỪA VÁ VỪA GỠ góp ý — commit ${String(cLui.sha).slice(0, 7)} ` +
+               `gỡ lại bản vá. Code trên hệ thống thật KHÔNG CÓ bản vá, nên máy không đổi ` +
+               `trạng thái (đang là "${g.trang_thai}") và không nhắn người báo. Sếp xem giúp.`
+      });
+      continue;
+    }
+
+    /* Còn lại: để chính quyetDinhChot xử commit gỡ đó — ra `canh_bao_lui` nếu
+       phiếu đang mang nhãn đã đóng (nhãn nói dối), `bo_qua` nếu chưa. */
+    if (!cu || (HANG_HANH_DONG[cu.hanh_dong] || 0) <= 3)
+      raTheoId.set(id, { gop_y_id: id, ...quyetDinhChot(g, cLui, 'commit', false) });
   }
 
   return [...raTheoId.values()];

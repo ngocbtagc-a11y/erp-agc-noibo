@@ -55,7 +55,7 @@ import { dayTinNhanChat, donNhatKyCu, kiemTraCaiDatDay, dayToiNguoi, TRAN_NGAY }
 import * as khoFile from './kho-file.js';
 /* Luật "bản vá đã lên thật thì góp ý nào được đóng" — HÀM THUẦN, tách hẳn ra
    để bàn thử (scripts/do-chot-gop-y-deploy.mjs) soi được mà không cần D1. */
-import { docMaGopY, chotCaLuot } from './chot-gop-y-deploy.js';
+import { docMaGopY, chotCaLuot, HANH_DONG_CO_GHI } from './chot-gop-y-deploy.js';
 import { khoaVAPID } from './webpush.js';
 import { chotVaCanhBao, demGhi } from './canh-bao-ghi.js';
 import { catBot, nhanCat } from './cat-danh-sach.js';
@@ -7166,10 +7166,13 @@ async function gopYDaLenThat(req, env) {
         tacNhan: 'DEPLOY', loai: 'he_thong', jobId: q.sha.slice(0, 12),
         ghiChu: `Commit ${q.sha.slice(0, 7)} GỠ bản vá (revert) của góp ý này. ${q.mo_ta}`
       });
-      guiTelegram(env, `[Góp ý ERP] ⚠️ Commit ${q.sha.slice(0, 7)} vừa GỠ bản vá của ` +
-        `GY-${q.gop_y_id} ("${g.tieu_de}"), nhưng góp ý vẫn đang mang nhãn ` +
-        `"${GOPY_TRANG_THAI_NHAN[g.trang_thai] || g.trang_thai}". Nhãn đang nói dối — ` +
-        'máy không tự mở lại, Sếp xem giúp.').catch(() => {});
+      /* Câu kêu lấy thẳng `q.mo_ta` — có HAI ca gọi vào đây và chúng KHÁC
+         NHAU: ① commit gỡ trên phiếu đang mang nhãn đã đóng (nhãn nói dối);
+         ② lượt đẩy VỪA VÁ VỪA GỠ cùng phiếu (REV-0064 C2). Viết cứng một câu
+         là một trong hai ca bị mô tả sai. */
+      guiTelegram(env, `[Góp ý ERP] ⚠️ GY-${q.gop_y_id} ("${g.tieu_de}") — đang mang nhãn ` +
+        `"${GOPY_TRANG_THAI_NHAN[g.trang_thai] || g.trang_thai}". ${q.mo_ta} ` +
+        'Máy KHÔNG đổi một cột nào và KHÔNG nhắn người báo.').catch(() => {});
       chiTiet.push(q);
       continue;
     }
@@ -7239,7 +7242,9 @@ async function gopYDaLenThat(req, env) {
     if (q.bao_nguoi_gui)
       await gopYBaoDaXong(env, g, q.tom_tat, q.trang_thai_moi !== 'hoan_thanh', q.kieu_tin);
     if (q.bao_sep)
-      guiTelegram(env, `[Góp ý ERP] Commit ${q.sha.slice(0, 7)} khai đã sửa GY-${q.gop_y_id} ` +
+      guiTelegram(env, `[Góp ý ERP] Commit ${q.sha.slice(0, 7)} ` +
+        (q.ly_do === 'chi_nhac_ten_khong_tuyen_bo_va'
+          ? `NHẮC TÊN GY-${q.gop_y_id}` : `khai đã sửa GY-${q.gop_y_id}`) + ' ' +
         `("${g.tieu_de}"), góp ý đang ở "${GOPY_TRANG_THAI_NHAN[g.trang_thai] || g.trang_thai}" — ` +
         (q.trang_thai_moi
           ? `máy đẩy sang "${GOPY_TRANG_THAI_NHAN[q.trang_thai_moi] || q.trang_thai_moi}" chờ Sếp nghiệm thu. ` +
@@ -7249,7 +7254,16 @@ async function gopYDaLenThat(req, env) {
     chiTiet.push(q);
   }
 
-  return json({ ok: true, da_doi: chiTiet.filter(q => q.hanh_dong !== 'bo_qua').length,
+  /* ⚠️ `da_doi` PHẢI LÀ SỐ DÒNG THẬT SỰ BỊ GHI (REV-0064 H3).
+     Bản trước đếm `hanh_dong !== 'bo_qua'`, tức đếm luôn `canh_bao_lui` — ca
+     đó CỐ Ý không đụng một cột nào của gop_y (chỉ ghi lịch sử + kêu Telegram).
+     Đo được trên 4 phiếu đã đóng tay: 0 cột đổi mà `da_doi = 1`. Con số này in
+     vào nhật ký Actions và là thứ người đọc tin, nên nó không được nói dối.
+     Tách hẳn `canh_bao` ra thành số riêng thay vì nuốt vào `da_doi`. */
+  const daDoi = chiTiet.filter(q => HANH_DONG_CO_GHI.has(q.hanh_dong)).length;
+  const canhBao = chiTiet.filter(q => q.hanh_dong === 'canh_bao_lui').length;
+
+  return json({ ok: true, da_doi: daDoi, canh_bao: canhBao,
                 bi_cat: biCat, cat_commit: catCommit, cat_ma: catMa,
                 tong_nhac_toi: tatCa.length, chi_tiet: chiTiet });
 }
