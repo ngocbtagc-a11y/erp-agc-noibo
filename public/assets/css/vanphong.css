@@ -193,7 +193,7 @@
   width: min(72%, 540px);
   min-height: 48px;
   border-radius: var(--r-md);
-  background: rgba(255,255,255,.62);
+  background: color-mix(in srgb, var(--white) 62%, transparent);
   border: 1px dashed var(--sage-pale);
   display: grid;
   place-items: center;
@@ -613,9 +613,9 @@
    không sặc sỡ tới mức lấn mất nhân vật.
    --------------------------------------------------------------------------- */
 .vp-san {
-  --k-dieuhanh:  #8c7ba0;
+  --k-dieuhanh:  #5c6b45;
   --k-kinhdoanh: #c07a5a;
-  --k-vanhanh:   #6b7f9e;
+  --k-vanhanh:   #8a6a4a;
   --k-hotro:     #7d8f68;
   --k-letan:     #b8863b;
 }
@@ -630,7 +630,7 @@
   border-color: color-mix(in srgb, var(--k) 38%, transparent);
   background: color-mix(in srgb, var(--k) 8%, transparent);
 }
-.vp-khu-ten { color: color-mix(in srgb, var(--k) 72%, #3f4d33); }
+.vp-khu-ten { color: color-mix(in srgb, var(--k) 72%, var(--ink)); }
 
 /* Thẻ nhân sự: viền trái dày theo màu khối + chân thẻ cùng tông. Chỉ tô viền
    chứ không tô nền — tô nền thì bốn màu đánh nhau, mặt bằng thành cái cầu vồng
@@ -1002,9 +1002,9 @@
   background: var(--k, var(--sage));
   min-width: 2px;
 }
-.vp-ns-dong[data-khoi="dieuhanh"]  { --k: var(--k-dieuhanh, #8c7ba0); }
+.vp-ns-dong[data-khoi="dieuhanh"]  { --k: var(--k-dieuhanh, #5c6b45); }
 .vp-ns-dong[data-khoi="kinhdoanh"] { --k: var(--k-kinhdoanh, #c07a5a); }
-.vp-ns-dong[data-khoi="vanhanh"]   { --k: var(--k-vanhanh, #6b7f9e); }
+.vp-ns-dong[data-khoi="vanhanh"]   { --k: var(--k-vanhanh, #8a6a4a); }
 .vp-ns-dong[data-khoi="hotro"]     { --k: var(--k-hotro, #7d8f68); }
 .vp-ns-dong[data-khoi="letan"]     { --k: var(--k-letan, #b8863b); }
 

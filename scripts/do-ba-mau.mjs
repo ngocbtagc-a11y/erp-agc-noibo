@@ -25,8 +25,8 @@
    của một họ màu thứ tư. Tỉ trọng diện tích thì nhìn ảnh chụp mà xét.
    ========================================================================== */
 
-import { readFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join, resolve, relative } from 'node:path';
 
 const duongDan = process.argv[2] || new URL('../public/assets/css/style.css', import.meta.url);
 const rawGoc = readFileSync(duongDan, 'utf8');
@@ -254,7 +254,108 @@ function chay(raw, im = true) {
   return { kq, trangDen, ds };
 }
 
+/* ⚠️ TRƯỚC 09/09/2026 DANH SÁCH NÀY CHÉP TAY — VÀ NÓ ĐÃ MÙ CẢ MỘT MODULE.
+   Văn phòng ảo lên hệ thống 06/09 với `vanphong.css`, `chibi.js` và năm mã
+   màu do MÁY CHỦ phát xuống trong `src/agents-vp.js`. Không tệp nào trong
+   số đó có tên ở đây, nên thước in ĐẠT suốt ba ngày trong khi 15 mã ngoài
+   ba họ — tím 267°, lơ 216°, xám xanh 220° — đang vẽ ra màn hình thật.
+
+   Đối chứng ④ vẫn 12/12: thước KHOẺ, chỉ là bị chĩa sai chỗ. Đó đúng là
+   ca nguy nhất của nhà — THƯỚC BÁO SẠCH TRONG KHI THỨ NÓ ĐO ĐANG HỎNG —
+   vì màn xanh làm người ta thôi nhìn.
+
+   Gốc của lỗi KHÔNG phải thiếu một dòng, mà là cách viết bắt người ta PHẢI
+   NHỚ thêm tên tệp mỗi lần đẻ module. Luật phải-nhớ là luật sẽ quên. Nên
+   giờ thước TỰ ĐI TÌM: có tệp mới là tự nằm trong tầm đo, không ai phải
+   nhớ gì cả. Muốn một tệp đứng ngoài thì phải khai vào BO_QUA kèm LÝ DO —
+   đổi chiều mặc định từ 'quên thì lọt' thành 'quên thì bị soi'.        */
+const THU_MUC_SOI = ['public', 'src'];
+const DUOI_SOI    = ['.html', '.js', '.css', '.webmanifest'];
+/* Bỏ qua PHẢI có lý do. Thư viện của người khác thì ta không sửa màu được;
+   style.css là BẢNG MÀU GỐC nên nó là thước, không phải thứ bị đo. */
+const BO_QUA = [
+  ['public/assets/css/style.css',        'bảng màu gốc — là thước, không phải thứ bị đo'],
+  ['public/assets/js/html5-qrcode.min.js', 'thư viện ngoài, không sửa được'],
+  ['public/assets/js/qrcode-lib.js',       'thư viện ngoài, không sửa được'],
+];
+function timTep(goc) {
+  const ra = [];
+  const di = thuMuc => {
+    let muc; try { muc = readdirSync(join(goc, thuMuc), { withFileTypes: true }); } catch { return; }
+    for (const m of muc) {
+      const duong = thuMuc + '/' + m.name;
+      if (m.isDirectory()) { if (m.name !== 'node_modules') di(duong); continue; }
+      if (!DUOI_SOI.some(d => m.name.endsWith(d))) continue;
+      if (BO_QUA.some(([f]) => f === duong)) continue;
+      ra.push(duong);
+    }
+  };
+  for (const t of THU_MUC_SOI) di(t);
+  return ra.sort();
+}
+
 const chinh = chay(rawGoc);
+
+/* ── ⑤a HỌ MÀU TRONG TỆP CSS VÀ JS KHÁC ───────────────────────────────────
+   style.css không còn là tệp kiểu duy nhất: `vanphong.css` ra đời 06/09/2026
+   cùng Văn phòng ảo. Một tệp kiểu ĐƯỢC PHÉP khai bảng màu riêng — nên hỏi nó
+   câu ⑤ ("mã này có trong style.css không") là hỏi sai, sẽ kêu 175 lần trong
+   khi phần lớn là xanh lá và cam đúng họ. Kêu sai nhiều thì người ta tắt
+   thước, và tắt thước còn tệ hơn không có thước.
+
+   Câu ĐÚNG cho một tệp kiểu là câu ①: mã có rơi đúng ba họ Sếp chốt không.
+   Nên mục này chạy lại đúng phép đo ① trên từng tệp CSS khác.            */
+/* MIỄN LUẬT ② ("không đen, không trắng") — CÓ LÝ DO, và CHỈ luật ②.
+   Luật ① (ba họ màu) vẫn soi đủ mọi tệp, không tệp nào được miễn — đó mới
+   là luật Sếp chốt, và đó chính là chỗ vừa bắt được 15 mã lạc.
+
+   Vì sao luật ② không áp cho mấy tệp này: nó cấm trắng/đen tuyền trên BỀ
+   MẶT GIAO DIỆN — nền thẻ, chữ, viền — nơi trắng tuyền làm màn hình chói
+   và mất chất ấm của bảng màu. Còn `chibi.js` không vẽ giao diện, nó vẽ
+   NGƯỜI: lòng trắng mắt, đốm sáng trên tóc, bóng đổ dưới chân. Bắt một
+   hình vẽ bỏ trắng và đen thì cũng như bắt tấm ảnh chụp bỏ trắng và đen.
+
+   ⚠️ Đây là miễn theo PHẠM VI ÁP DỤNG của luật, KHÔNG phải giấy phép cho
+   mã màu. Dán #fff vào `vanphong.css` hay `app.js` vẫn bị bắt như thường.
+   Bài học MOC_TRAN: giấy phép theo từng con số là cách thước chết dần. */
+const MIEN_VE = [
+  [/^public\/assets\/js\/chibi\.js$/, null,
+   'hình vẽ nhân vật — lòng trắng mắt, đốm sáng, bóng đổ'],
+  [null, /ctx\.fillStyle/,
+   'nền lót canvas trước khi nén JPEG — JPEG không có kênh trong suốt'],
+];
+
+console.log('\n─── ⑤a HỌ MÀU TRONG TỆP CSS VÀ JS KHÁC ───');
+{
+  const goc = resolve(decodeURIComponent(new URL('..', import.meta.url).pathname).replace(/^\/([A-Za-z]:)/, '$1'));
+  const dsCss = timTep(goc).filter(f => f.endsWith('.css') || f.endsWith('.js'));
+  if (!dsCss.length) {
+    console.log('  (không có tệp CSS nào khác)');
+  } else for (const f of dsCss) {
+    let raw; try { raw = readFileSync(join(goc, f), 'utf8'); } catch { continue; }
+    const r = chay(raw, false);
+    const dongRaw = raw.split(/\r?\n/);
+    const mienCua = x => MIEN_VE.find(([tep, dong]) =>
+      (tep ? tep.test(f) : true) && (dong ? dong.test(dongRaw[x.dong - 1] || String()) : true));
+    const miens = r.trangDen.filter(x => mienCua(x));
+    r.trangDen = r.trangDen.filter(x => !mienCua(x));
+    for (const x of miens) console.log(`  MIỄN  ${f} d.${x.dong}  ${x.ma.padEnd(10)} ${mienCua(x)[2]}`);
+    const nLac = r.kq.lac.length, nTd = r.trangDen.length;
+    if (!nLac && !nTd) { console.log(`  ĐẠT  ${f} — ${r.ds.length} mã, đều trong ba họ.`); continue; }
+    if (nLac) {
+      console.log(`  ✗ ${f} — ${nLac} mã NGOÀI ba họ:`);
+      for (const x of r.kq.lac) console.log(`      d.${String(x.dong).padStart(4)}  ${x.ma.padEnd(22)} góc sắc ${x.goc.toFixed(1)}°`);
+      chinh.kq.lac.push(...r.kq.lac);
+    }
+    if (nTd) {
+      console.log(`  ✗ ${f} — ${nTd} mã trắng/đen tuyền:`);
+      const gom = {};
+      for (const x of r.trangDen) (gom[x.ma.toLowerCase()] ||= []).push(x.dong);
+      for (const [m, ds2] of Object.entries(gom)) console.log(`      ${m.padEnd(10)} ×${ds2.length}  d.${ds2.slice(0, 12).join(', ')}`);
+      chinh.trangDen.push(...r.trangDen);
+    }
+  }
+}
 
 /* ── ⑤ MÀU NẰM NGOÀI style.css ───────────────────────────────────────────
    REV-0026/H1: `app.html` đổi `theme-color` sang bảng màu mới, còn
@@ -266,14 +367,24 @@ const chinh = chay(rawGoc);
    trong ba họ. Thứ bắt được nó là câu hỏi khác: "mã này có phải MỘT GIÁ TRỊ
    ĐANG DÙNG trong style.css không?" — bảng màu cũ thì không.
    ⚠️ Cứ thêm màu vào HTML/JS là phải chạy lại file này.                   */
-const NGOAI = ['public/index.html', 'public/app.html', 'public/reset.html',
-               'public/manifest.webmanifest', 'public/assets/js/app.js'];
+/* Gom NỘI DUNG MỌI TỆP CSS làm kho mã "đang dùng". Trước 09/09/2026 chỗ này
+   chỉ đọc style.css, nên mọi mã của `vanphong.css` đều bị coi là lạc — mà
+   thật ra chúng là bảng màu hợp lệ của một tệp kiểu thứ hai.              */
+const KHO_CSS = (() => {
+  const goc = resolve(decodeURIComponent(new URL('..', import.meta.url).pathname).replace(/^\/([A-Za-z]:)/, '$1'));
+  let gom = rawGoc;
+  for (const f of timTep(goc).filter(f => f.endsWith('.css'))) {
+    try { gom += '\n' + readFileSync(join(goc, f), 'utf8'); } catch {}
+  }
+  return gom;
+})();
+
 function soiNgoai(raw, duong) {
   /* Gom mã ĐANG DÙNG — phải BỎ CHÚ THÍCH trước. Không bỏ thì mọi mã cũ nhắc
      trong chú thích ("Đợt 1 hạ --ink #3f4d33 → #1e2417") đều bị coi là còn
      dùng, ca đối chứng của chính mục này lọt, và phép kiểm tự vô hiệu hoá
      mình mà không báo gì. */
-  const sach = rawGoc.replace(/\/\*[\s\S]*?\*\//g, ' ');
+  const sach = KHO_CSS.replace(/\/\*[\s\S]*?\*\//g, ' ');
   const kho = new Set([...sach.matchAll(/#[0-9a-fA-F]{3,8}\b/g)].map(m => m[0].toLowerCase()));
   /* Miễn theo DÒNG, có lý do vật lý — không phải miễn theo mã màu. */
   const MIEN_DONG = [[/ctx\.fillStyle/, 'nền lót canvas trước khi nén JPEG — JPEG không có kênh trong suốt']];
@@ -291,11 +402,31 @@ function soiNgoai(raw, duong) {
   }
   return ra;
 }
-console.log('\n─── ⑤ MÃ MÀU NGOÀI style.css (HTML · manifest · JS) ───');
+  /* ĐỐI CHỨNG CHO CHÍNH PHÉP MIỄN. Miễn mà không ai kiểm thì đúng một hôm nào
+     đó nó nuốt luôn thứ đáng bắt — và không ai biết, vì màn hình vẫn xanh.
+     Hai ca chạy ngược nhau: cùng một mã #fff, ở tệp vẽ người thì PHẢI im, ở
+     tệp giao diện thì PHẢI kêu. Ca nào sai thì thước hỏng, không phải màu. */
+  {
+    const raw = 'x { color: #fff; }';
+    const dongRaw = raw.split(/\r?\n/);
+    const thu = (f) => {
+      const r = chay(raw, false);
+      const co = MIEN_VE.find(([tep, dong]) =>
+        (tep ? tep.test(f) : true) && (dong ? dong.test(dongRaw[0] || String()) : true));
+      return r.trangDen.length > 0 && !co;
+    };
+    const a = thu('public/assets/js/chibi.js');
+    const b = thu('public/assets/css/vanphong.css');
+    console.log('  ' + (!a ? 'IM ĐÚNG CHỖ   ' : 'KÊU NHẦM ←HỎNG') + ' đối chứng miễn: #fff trong chibi.js (hình vẽ người)');
+    console.log('  ' + (b ? 'BẮT ĐƯỢC      ' : 'KHÔNG BẮT ←HỎNG') + ' đối chứng ngược: cùng #fff trong vanphong.css (giao diện)');
+    if (a || !b) process.exit(2);
+  }
+console.log('\n─── ⑤ MÃ MÀU NGOÀI style.css (HTML · manifest) ───');
 {
   const goc = resolve(decodeURIComponent(new URL('..', import.meta.url).pathname).replace(/^\/([A-Za-z]:)/, '$1'));
   let lac = [];
-  for (const f of NGOAI) {
+  const dsTep = timTep(goc).filter(f => f.endsWith('.html') || f.endsWith('.webmanifest'));
+  for (const f of dsTep) {
     let raw; try { raw = readFileSync(join(goc, f), 'utf8'); } catch { continue; }
     lac.push(...soiNgoai(raw, f));
   }

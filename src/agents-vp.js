@@ -281,7 +281,7 @@ Lưu ý khi nói về tiền: doanh số ở đây là giá trị đơn hàng tr
     phong: 'Phòng Marketing',
     mo_ta: 'Nội dung, quảng cáo, nhãn hàng, hiệu quả từng mã.',
     phong_ban_id: 3, vi_tri: { x: 37, y: 41 },
-    chibi: { gioi_tinh: 'nu', kieu_toc: 1, net_rieng: 'kep_toc', da: '#f6d5b8', toc: '#5a4232', ao: '#8c7ba0', phu_kien: null },
+    chibi: { gioi_tinh: 'nu', kieu_toc: 1, net_rieng: 'kep_toc', da: '#f6d5b8', toc: '#5a4232', ao: '#5c6b45', phu_kien: null },
     vao_duoc: ['admin', 'admin_backup', 'van_hanh_san', 'cskh', 'nv_test'],
     cong_cu: ['top_san_pham', 'doanh_so', 'so_sanh_doanh_so', 'tra_ton_kho',
               'danh_sach_nhan_su', 'giao_viec', 'viec_dang_mo'],
@@ -325,7 +325,7 @@ Thấy hàng cận hạn hay thiếu hàng thì đừng chỉ liệt kê: nói r
     phong: 'Phòng Kế toán',
     mo_ta: 'Giá vốn, giá trị tồn kho, tiền treo ở đơn hoàn.',
     phong_ban_id: 2, vi_tri: { x: 88, y: 41 },
-    chibi: { gioi_tinh: 'nam', kieu_toc: 5, net_rieng: 'but_sau_tai', da: '#eec5a2', toc: '#241d19', ao: '#6b7f9e', phu_kien: 'may_tinh' },
+    chibi: { gioi_tinh: 'nam', kieu_toc: 5, net_rieng: 'but_sau_tai', da: '#eec5a2', toc: '#241d19', ao: '#8a6a4a', phu_kien: 'may_tinh' },
     vao_duoc: ['admin', 'admin_backup', 'ke_toan_truong'],
     cong_cu: ['gia_tri_ton_kho', 'tra_ton_kho', 'hang_can_han', 'doanh_so',
               'don_hoan_ton_dong', 'danh_sach_nhan_su', 'giao_viec', 'viec_dang_mo'],
@@ -349,7 +349,7 @@ Khi nói về doanh số, luôn nhắc rằng đó là giá trị đơn hàng ch
     phong: 'Phòng Pháp chế',
     mo_ta: 'Hợp đồng, công bố sản phẩm, nhãn mác, quảng cáo, luật lao động.',
     phong_ban_id: 2, vi_tri: { x: 12, y: 65 },
-    chibi: { gioi_tinh: 'nam', kieu_toc: 0, net_rieng: 'ca_vat', da: '#f0c9a8', toc: '#2f2a26', ao: '#5b6b8c', phu_kien: 'kinh' },
+    chibi: { gioi_tinh: 'nam', kieu_toc: 0, net_rieng: 'ca_vat', da: '#f0c9a8', toc: '#2f2a26', ao: '#6b5138', phu_kien: 'kinh' },
     vao_duoc: CA_CONG_TY,
     cong_cu: ['danh_sach_nhan_su', 'ho_so_nhan_su_thieu', 'giao_viec', 'viec_dang_mo'],
     prompt: `Bạn là Luật, trưởng phòng Pháp chế của Alpha Green Commerce. Cả công ty hỏi bạn mỗi khi có chuyện dính tới luật và giấy tờ.
@@ -392,7 +392,7 @@ Chuyện luật lao động chi tiết (mức phạt, điều khoản) thì đ�
     phong: 'Phòng IT',
     mo_ta: 'Hệ thống ERP, tài khoản, dữ liệu, sự cố kỹ thuật.',
     phong_ban_id: 2, vi_tri: { x: 63, y: 65 },
-    chibi: { gioi_tinh: 'nam', kieu_toc: 6, net_rieng: 'ao_hoodie', da: '#e8b98d', toc: '#2f2a26', ao: '#5f9ea0', phu_kien: 'kinh' },
+    chibi: { gioi_tinh: 'nam', kieu_toc: 6, net_rieng: 'ao_hoodie', da: '#e8b98d', toc: '#2f2a26', ao: '#5f9e6a', phu_kien: 'kinh' },
     vao_duoc: CA_CONG_TY,
     cong_cu: ['danh_sach_nhan_su', 'giao_viec', 'viec_dang_mo'],
     prompt: `Bạn là Tuấn, trưởng phòng IT của Alpha Green Commerce. Bạn lo hệ thống ERP nội bộ này và mọi thứ kỹ thuật quanh nó.
@@ -417,7 +417,7 @@ Một giới hạn phải nói thật: bạn KHÔNG nhìn được nhật ký m�
     phong: 'Phòng Giám đốc',
     mo_ta: 'Phản biện kế hoạch, soi giả định, đòi con số.',
     phong_ban_id: 1, vi_tri: { x: 35, y: 15 },
-    chibi: { gioi_tinh: 'nu', kieu_toc: 3, net_rieng: 'khan_quang', da: '#f0c9a8', toc: '#241d19', ao: '#3f4d33', phu_kien: 'kinh' },
+    chibi: { gioi_tinh: 'nu', kieu_toc: 3, net_rieng: 'khan_quang', da: '#f0c9a8', toc: '#241d19', ao: '#46583a', phu_kien: 'kinh' },
     vao_duoc: BAN_GIAM_DOC,
     cong_cu: ['doanh_so', 'so_sanh_doanh_so', 'top_san_pham', 'gia_tri_ton_kho',
               'hang_can_han', 'hang_duoi_muc', 'don_hoan_ton_dong',
@@ -915,7 +915,7 @@ export const DOI_IT = [
     truc_thuoc: 'it',
     mo_ta: 'Viết code, đổi cấu trúc dữ liệu, chạy kiểm thử, bàn giao.',
     chibi: { gioi_tinh: 'nam', kieu_toc: 6, net_rieng: 'ao_hoodie',
-             da: '#e8b98d', toc: '#241d19', ao: '#5b6b8c', phu_kien: 'may_tinh' },
+             da: '#e8b98d', toc: '#241d19', ao: '#6b5138', phu_kien: 'may_tinh' },
     nang_luc: {
       lam_duoc: [
         'Viết code tính năng theo đúng đặc tả Hồ Ly đã chốt',

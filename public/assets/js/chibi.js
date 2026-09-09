@@ -13,8 +13,8 @@
 
 /* Bảng màu lấy từ tông Sage của ERP, đủ khác nhau để nhận ra người này với
    người kia từ xa. */
-const MAU_AO = ['#9aab86', '#7d8f68', '#8a9a6b', '#6b7f9e', '#5b6b8c',
-                '#c07a5a', '#b8863b', '#a8b892', '#8c7ba0', '#5f9ea0'];
+const MAU_AO = ['#9aab86', '#7d8f68', '#8a9a6b', '#8a6a4a', '#6b5138',
+                '#c07a5a', '#b8863b', '#a8b892', '#5c6b45', '#5f9e6a'];
 const MAU_TOC = ['#2f2a26', '#1f1a17', '#3b2a1e', '#4a3226', '#241d19', '#5a4232'];
 const MAU_DA  = ['#f6d5b8', '#f0c9a8', '#eec5a2', '#e8b98d', '#f2d0b0'];
 
@@ -201,7 +201,7 @@ function phuKien(loai) {
   switch (loai) {
     case 'kinh':
       return `
-        <g stroke="#3f4d33" stroke-width="2" fill="rgba(255,255,255,.28)">
+        <g stroke="#46583a" stroke-width="2" fill="rgba(255,255,255,.28)">
           <circle cx="38" cy="49" r="9.5"/><circle cx="62" cy="49" r="9.5"/>
           <path d="M47.5 49 L52.5 49" stroke-linecap="round"/>
         </g>`;
@@ -212,25 +212,25 @@ function phuKien(loai) {
         <path d="M50 8 L50 34" stroke="#c98c1f" stroke-width="2.5"/>`;
     case 'tai_nghe':
       return `
-        <path d="M20 46 Q20 14 50 14 Q80 14 80 46" stroke="#3f4d33"
+        <path d="M20 46 Q20 14 50 14 Q80 14 80 46" stroke="#46583a"
               stroke-width="4.5" fill="none" stroke-linecap="round"/>
-        <rect x="12" y="42" width="12" height="19" rx="6" fill="#3f4d33"/>
-        <rect x="76" y="42" width="12" height="19" rx="6" fill="#3f4d33"/>
-        <path d="M24 56 Q34 64 40 66" stroke="#3f4d33" stroke-width="2.5"
+        <rect x="12" y="42" width="12" height="19" rx="6" fill="#46583a"/>
+        <rect x="76" y="42" width="12" height="19" rx="6" fill="#46583a"/>
+        <path d="M24 56 Q34 64 40 66" stroke="#46583a" stroke-width="2.5"
               fill="none" stroke-linecap="round"/>
-        <circle cx="41" cy="66" r="3" fill="#3f4d33"/>`;
+        <circle cx="41" cy="66" r="3" fill="#46583a"/>`;
     case 'kep_ho_so':
       return `
         <g transform="rotate(-8 74 100)">
           <rect x="64" y="86" width="22" height="28" rx="2.5" fill="#f2f1ee" stroke="#b9b5ab" stroke-width="1.5"/>
-          <rect x="71" y="83" width="8" height="5" rx="1.5" fill="#8a8a81"/>
+          <rect x="71" y="83" width="8" height="5" rx="1.5" fill="#8a8172"/>
           <path d="M69 96 H81 M69 101 H81 M69 106 H77" stroke="#b9b5ab"
                 stroke-width="1.6" stroke-linecap="round"/>
         </g>`;
     case 'may_tinh':
       return `
         <g transform="rotate(6 72 102)">
-          <rect x="63" y="92" width="19" height="24" rx="2.5" fill="#3f4d33"/>
+          <rect x="63" y="92" width="19" height="24" rx="2.5" fill="#46583a"/>
           <rect x="66" y="95" width="13" height="6" rx="1.2" fill="#c9d3ba"/>
           <g fill="#8a9a6b">
             <rect x="66" y="103" width="3.4" height="3.4" rx="1"/>
@@ -345,7 +345,7 @@ const NOI_THAT = {
 
   cay_nuoc: `
     <svg viewBox="0 0 44 96" xmlns="http://www.w3.org/2000/svg">
-      <path d="M12 8 Q22 2 32 8 L30 34 L14 34 Z" fill="#a8cfe0" opacity=".85"/>
+      <path d="M12 8 Q22 2 32 8 L30 34 L14 34 Z" fill="#cfe0a8" opacity=".85"/>
       <rect x="10" y="34" width="24" height="52" rx="3" fill="#e4e1d8"/>
       <rect x="10" y="34" width="24" height="52" rx="3" fill="none" stroke="#c8c4b8" stroke-width="1.2"/>
       <rect x="15" y="48" width="14" height="9" rx="2" fill="#9aab86"/>
@@ -363,9 +363,9 @@ const NOI_THAT = {
   dong_ho: `
     <svg viewBox="0 0 56 56" xmlns="http://www.w3.org/2000/svg">
       <circle cx="28" cy="28" r="24" fill="#fbfaf7" stroke="#b0a897" stroke-width="3"/>
-      <circle cx="28" cy="28" r="2.4" fill="#3f4d33"/>
-      <path d="M28 28 L28 14" stroke="#3f4d33" stroke-width="3" stroke-linecap="round"/>
-      <path d="M28 28 L38 33" stroke="#3f4d33" stroke-width="2.4" stroke-linecap="round"/>
+      <circle cx="28" cy="28" r="2.4" fill="#46583a"/>
+      <path d="M28 28 L28 14" stroke="#46583a" stroke-width="3" stroke-linecap="round"/>
+      <path d="M28 28 L38 33" stroke="#46583a" stroke-width="2.4" stroke-linecap="round"/>
     </svg>`,
 
   ke_hang: `
