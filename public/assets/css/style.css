@@ -4253,8 +4253,36 @@ details.kv-ton-nhac[open] > summary { margin-bottom: 2px; }
   padding: 12px 14px;
   margin-bottom: 16px;
 }
-.tl-luat b { color: var(--warn-dark); display: block; margin-bottom: 4px; }
-.tl-luat p { margin: 0; font-size: 13px; color: var(--text-mute); line-height: 1.5; }
+/* ⚠️ CÂU BẮT BUỘC LÀ CHÍNH CÁI SUMMARY — nên nó LUÔN ĐỌC ĐƯỢC mà không phải
+   bấm. Cái gập lại chỉ là đoạn TRÍCH LUẬT giải thích vì sao, và đoạn đó chiếm
+   217px ở 375px (26% cả màn) mỗi lần mở tab. Ô chạm ≥44px như mọi thứ bấm được. */
+.tl-luat > summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; }
+.tl-luat b { color: var(--warn-dark); }
+.tl-luat p { margin: 8px 0 0; font-size: 13px; color: var(--text-mute); line-height: 1.5; }
+
+/* ---- KHỐI GẬP DÙNG CHUNG (bộ lọc, dải đếm) — PHASE 2 -------------------
+   Gập lại thì PHẢI nói ra đang gập cái gì và trạng thái hiện tại: một bộ lọc
+   gập kín làm người ta nhìn danh sách đã lọc mà tưởng kho chỉ có bấy nhiêu. */
+.tl-gap {
+  border: 1px solid var(--line); border-radius: var(--r-md);
+  background: var(--surface); margin-bottom: 8px;
+}
+.tl-gap-dau {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  min-height: 44px; padding: 0 14px; cursor: pointer;
+  font-size: 14px; font-weight: 600; color: var(--text);
+}
+.tl-gap-tom { font-weight: 400; color: var(--text-mute); font-size: 13px; }
+/* Đang có bộ lọc bật thì dòng tóm tắt phải NHÌN RA NGAY — gập kín mà trạng
+   thái nhìn y như "Tất cả" là đúng cái bẫy đang tránh. */
+.tl-gap-tom.dang-loc {
+  font-weight: 600; color: var(--cam-text);
+  background: var(--cam-wash); border-radius: var(--r-pill); padding: 2px 10px;
+}
+.tl-gap[open] > .tl-gap-dau { border-bottom: 1px solid var(--line); }
+.tl-gap > .tl-nhom-loc,
+.tl-gap > .tl-gap-hang { padding: 10px 14px; margin-bottom: 0; }
+.tl-gap-hang { display: flex; gap: 10px; flex-wrap: wrap; }
 
 /* ---- Thanh công cụ ---- */
 .tl-thanh { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
@@ -4328,8 +4356,86 @@ details.kv-ton-nhac[open] > summary { margin-bottom: 2px; }
    đây là thông tin NỀN, không phải cảnh báo, nên không mượn họ nâu–cam (đã
    dành cho "chưa kiểm") và tuyệt đối không dùng đỏ. */
 .tl-dem-chu {
-  margin: 0 0 10px; padding: 8px 10px; font-size: 13px; line-height: 1.5;
+  margin: 0 0 10px; padding: 0 10px; font-size: 13px; line-height: 1.5;
   color: var(--text-mute); background: var(--surface-2); border-radius: var(--r-sm);
+}
+/* ⚠️ BA CON SỐ CHÍNH LÀ CÁI SUMMARY — chúng LUÔN ĐỌC ĐƯỢC, không phải bấm.
+   Chỉ đoạn GIẢI THÍCH gập vào (172px ở 375px). Giấu con số đi thì Sếp không
+   bao giờ biết kho đang 0 tài liệu tra được theo nội dung — đúng kiểu "thước
+   đo báo sạch trong khi thứ nó đo đang hỏng". */
+.tl-dem-chu > summary {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 4px;
+  min-height: 44px; cursor: pointer;
+}
+.tl-dem-chu p { margin: 0 0 8px; }
+.tl-dem-chu p:first-of-type { margin-top: 2px; }
+
+/* ==========================================================================
+   BỘ HỒ SƠ  ·  PHASE 2 — Sếp Ngọc chốt 09/09/2026
+   ---------------------------------------------------------------------------
+   Một dòng bộ thay cho cả một xấp thẻ tài liệu. Không màu mới: bộ đang dùng
+   mượn xanh lá (trạng thái tốt / nhận diện), bộ đã đóng mượn xám nền, cảnh báo
+   thiếu giấy mượn vàng nâu. Đỏ vẫn CHỈ dành cho giấy đã quá hạn.
+   ========================================================================== */
+/* Khối bộ dùng CHUNG khuôn `.tl-gap` (gập lại còn 44px) — không dựng kiểu khối
+   gập thứ hai. Mở tab ra mà bày sẵn cả danh sách bộ là lại đẩy thẻ tài liệu
+   xuống dưới mép màn, đúng cái đang phải chữa. */
+.tl-bo-khoi > .tl-bo-dau,
+.tl-bo-khoi > #tl-bo-ds { padding: 0 14px; }
+.tl-bo-khoi > #tl-bo-ds { padding-bottom: 10px; }
+.tl-bo-dau { display: flex; gap: 10px; flex-wrap: wrap; padding-top: 10px; }
+/* Dòng bộ: CAO 44px, một hàng, không kéo ngang — `min-width: 0` trên phần chữ
+   là thứ giữ cho tên bộ dài tự cắt bằng ba chấm thay vì đẩy hàng tràn mép. */
+.tl-bo-dong {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  min-height: 44px; padding: 6px 12px; margin-bottom: 6px; cursor: pointer;
+  border: 1px solid var(--line); border-radius: var(--r-md);
+  background: var(--card); color: var(--text); font: inherit; text-align: left;
+}
+.tl-bo-dong.chon { border-color: var(--sage); background: var(--sage-wash); }
+.tl-bo-ten {
+  flex: 1 1 auto; min-width: 0; font-weight: 600; color: var(--ink); font-size: 14px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.tl-bo-so { flex: none; font-size: 12px; color: var(--text-mute); }
+.tl-bo-mo-dau {
+  border: 1px solid var(--sage); border-left: 4px solid var(--sage-dark);
+  border-radius: var(--r-md); background: var(--sage-wash);
+  padding: 12px 14px; margin-bottom: 12px;
+}
+.tl-bo-mo-dau > b { display: block; color: var(--ink); font-size: 15px; }
+.tl-bo-mo-dau p { margin: 6px 0 0; font-size: 13px; line-height: 1.5; color: var(--text); }
+/* Bảng kiểm "bộ này còn thiếu gì" — dấu tick/gạch đi kèm chữ, KHÔNG chỉ màu:
+   màu không bao giờ là tín hiệu duy nhất. */
+.tl-bo-kiem { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+.tl-bo-kiem span {
+  display: inline-block; padding: 2px 10px; border-radius: var(--r-pill);
+  font-size: 12px; font-weight: 600;
+  background: var(--surface-2); color: var(--text-mute);
+}
+.tl-bo-kiem span.co { background: var(--sage-wash); color: var(--sage-dark); }
+.tl-bo-kiem span.thieu { background: var(--warn-wash); color: var(--warn-dark); }
+/* "Bộ này có N giấy tờ bạn không được xem" — PHẢI nói ra, không giấu im. */
+.tl-bo-chan {
+  margin-top: 10px; padding: 8px 10px; border-radius: var(--r-sm);
+  background: var(--warn-wash); color: var(--warn-dark);
+  font-size: 13px; line-height: 1.5; font-weight: 600;
+}
+
+/* ---- HẾT HIỆU LỰC — tờ giấy đã bị tờ khác thay thế --------------------
+   VÀNG NÂU, KHÔNG ĐỎ. Đỏ là ngoại lệ duy nhất và chỉ cho thứ ĐÃ hỏng (giấy
+   quá hạn); một tờ bị sửa đổi thì KHÔNG hỏng — nó vẫn cần để chứng minh lịch
+   sử pháp nhân, chỉ là đừng đem đi nộp. Có chữ "Hết hiệu lực" hẳn hoi nên
+   người mù màu vẫn đọc được. */
+.tl-het-hl {
+  margin: 8px 0 0; padding: 8px 10px; border-radius: var(--r-sm);
+  background: var(--warn-wash); border-left: 4px solid var(--warn-dark);
+  color: var(--warn-dark); font-size: 13px; line-height: 1.5; font-weight: 600;
+}
+.tl-het-hl a { color: var(--warn-dark); }
+.tl-thay-cho {
+  margin: 8px 0 0; padding: 6px 10px; border-radius: var(--r-sm);
+  background: var(--surface-2); color: var(--text-mute); font-size: 12px; line-height: 1.5;
 }
 
 /* ---- SỬA SỐ HIỆU + TÊN (Sếp Ngọc 03/09/2026) ---------------------------
@@ -4343,8 +4449,20 @@ details.kv-ton-nhac[open] > summary { margin-bottom: 2px; }
   border: 1px solid var(--line); border-radius: var(--r-sm);
   background: var(--surface); color: var(--text); font: inherit; font-weight: 400;
 }
-.tl-sua-o input:focus { outline: 2px solid var(--sage); outline-offset: 1px; }
+/* Ô chọn của hộp lập/sửa bộ hồ sơ đi CHUNG kiểu với ô nhập — hai kiểu ô cạnh
+   nhau trong cùng một hộp là hai chiều cao khác nhau ở 375px. */
+.tl-sua-o select {
+  display: block; width: 100%; margin-top: 4px; min-height: 44px;
+  padding: 0 12px; box-sizing: border-box;
+  border: 1px solid var(--line); border-radius: var(--r-sm);
+  background: var(--surface); color: var(--text); font: inherit; font-weight: 400;
+}
+.tl-sua-o input:focus,
+.tl-sua-o select:focus { outline: 2px solid var(--sage); outline-offset: 1px; }
 
+/* Vạch ngăn giữa ba việc trong cùng một hộp (sửa · xếp bộ · hiệu lực). Mỏng,
+   màu đường kẻ có sẵn — không thêm mã màu nào. */
+.tl-hop-ngan { border: 0; border-top: 1px solid var(--line); margin: 14px 0; }
 .tl-nk-ds { margin: 0; padding-left: 20px; }
 .tl-nk-ds li { margin-bottom: 4px; }
 /* Sổ sửa tài liệu bị cắt thì nói ra ngay dưới danh sách (REV-0061). Chữ mờ,

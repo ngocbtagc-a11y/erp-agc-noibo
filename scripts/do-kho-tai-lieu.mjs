@@ -515,7 +515,11 @@ const { DatabaseSync } = await import('node:sqlite');
 const MIGRATION_KHO = [
   'them-kho-tai-lieu.sql',
   'them-kho-tai-lieu-cot-chu-nguon.sql',
-  'them-kho-tai-lieu-cot-ocr-neo.sql'
+  'them-kho-tai-lieu-cot-ocr-neo.sql',
+  /* PHASE 2 — bảng `ho_so` + hai cột `ho_so_id`, `thay_the_boi_id` trên
+     `tai_lieu`. Đứng CUỐI đúng như thứ tự tên file (`…-ho-so-bo` sau
+     `…-cot-ocr-neo`), vì nó `ALTER TABLE tai_lieu`. */
+  'them-kho-tai-lieu-ho-so-bo.sql'
 ];
 
 function d1SQLite() {

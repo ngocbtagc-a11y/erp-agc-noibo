@@ -7860,6 +7860,45 @@ async function tlAn(req, env) {
   return tailieu.anTaiLieu(env, phien, b);
 }
 
+/* ---- HỒ SƠ (BỘ) — PHASE 2 -----------------------------------------------
+   ⚠️ Ở ĐÂY CHỈ HỎI "ĐÃ ĐĂNG NHẬP CHƯA", y hệt `tlDanhSach`. Cái được chặn vẫn
+   là NHÓM GIẤY TỜ bên trong, và chặn đó nằm ở `src/tai-lieu.js` +
+   `src/quyen.js`. BỘ KHÔNG CÓ QUYỀN RIÊNG (Sếp Ngọc chốt 09/09/2026) — thêm
+   một chốt "được xem bộ nào" ở đây chính là cấp quyền cho bộ. Đừng thêm. */
+async function hsDanhSach(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  return tailieu.danhSachHoSo(env, phien);
+}
+async function hsLuu(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return tailieu.luuHoSo(env, phien, b);
+}
+/* Đưa MỘT tờ vào bộ / rút ra — quyền cắt theo NHÓM của chính tờ giấy đó
+   (`duocLuuNhomTaiLieu`), đúng chốt của `tlSua`. */
+async function tlVaoBo(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return tailieu.taiLieuVaoBo(env, phien, b);
+}
+/* 🔴 Đánh dấu tờ cũ đã bị tờ mới thay thế. Đây là đường vá cho rủi ro THẬT
+   đang nằm trên hệ thống: GCN 02/2026/PLDN và bản Sửa đổi 03/2026/PLDN nằm rời
+   nhau, không gì cản người mở tờ 02 đi nộp hồ sơ. */
+async function tlThayThe(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return tailieu.danhDauThayThe(env, phien, b);
+}
+async function tlGoiYThayThe(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  return tailieu.goiYThayThe(env, phien, new URL(req.url).searchParams.get('id'));
+}
+
 /* ---- Văn phòng ảo -------------------------------------------------------
    Tab mở cho mọi vai trò, nhưng CỬA TỪNG PHÒNG kiểm riêng theo vai trò —
    việc đó nằm trong src/vanphong.js + src/agents-vp.js, không lặp lại ở đây. */
@@ -8269,6 +8308,13 @@ const DUONG_DAN = {
   'GET  /api/tai-lieu/lich-su':  tlLichSu,
   'POST /api/tai-lieu/sua':      tlSua,
   'POST /api/tai-lieu/an':       tlAn,
+  /* Hồ sơ (bộ) — PHASE 2. Bộ KHÔNG có quyền riêng: quyền vẫn cắt bằng NHÓM
+     giấy tờ ở trong `src/tai-lieu.js`. */
+  'GET  /api/ho-so':                    hsDanhSach,
+  'POST /api/ho-so/luu':                hsLuu,
+  'POST /api/tai-lieu/vao-bo':          tlVaoBo,
+  'POST /api/tai-lieu/thay-the':        tlThayThe,
+  'GET  /api/tai-lieu/goi-y-thay-the':  tlGoiYThayThe,
   /* ---- Văn phòng ảo: 9 trợ lý AI ---- */
   'GET  /api/van-phong/tong-quan': vpTongQuan,
   'GET  /api/van-phong/nang-suat': vpNangSuat,
