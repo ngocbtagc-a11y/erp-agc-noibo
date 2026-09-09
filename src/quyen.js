@@ -553,6 +553,42 @@ export function duocXemTab(chuThe, tab) {
   return quyenCua(chuThe).tab.includes(tab);
 }
 
+/* ==========================================================================
+   VÀO VĂN PHÒNG ≠ SỬA LUẬT CỦA CHÍN TRỢ LÝ  ·  Sếp Ngọc chốt 09/09/2026 (D3)
+   ---------------------------------------------------------------------------
+   Trước bản này MỘT cửa gác BỐN việc khác hẳn nhau (bản soát §3.2, đo được ở
+   src/vanphong.js:423 và :434 — cùng một câu `duocXemTab(phien,'vanphong')`):
+
+     · xem kỹ năng của MỌI trợ lý          → duocXemTab('vanphong')
+     · TẮT bài học của BẤT KỲ trợ lý nào   → duocXemTab('vanphong')   ← cùng cửa
+     · BẬT LẠI bài đã tắt                  → duocXemTab('vanphong')   ← cùng cửa
+     · DẠY bài mới                         → chỉ cần vào được phòng đó
+
+   Hôm nay không ai bị hại vì đúng MỘT vai trò có 'vanphong' (admin — golive
+   dần, ghi ở chú thích tab 'vanphong' bên trên). Nhưng lộ trình mở rộng đã
+   nằm sẵn ở đó. NGÀY mở 'vanphong' cho vai trò thứ hai — hcns hay nhan_vien_kho
+   — người đó lập tức có đủ bốn quyền trên, cho cả CHÍN trợ lý: bạn kho tắt được
+   bài học của Kế toán trưởng ảo, và không ai biết ai tắt.
+
+   Nên TÁCH TRƯỚC KHI MỞ, không phải mở rồi vá. Chi phí đúng một mảng chuỗi +
+   một hàm: không migration, không đổi dữ liệu, không đụng vai trò nào đang chạy.
+
+   ⚠️ CỐ Ý KHÔNG NHÉT VÀO MẢNG `TAB`. `TAB` là danh sách MẢNG DỮ LIỆU có màn
+   hình riêng, và `quyenCua()` trả `tab` thẳng ra trình duyệt để dựng menu.
+   Thêm 'vanphong_day' vào đó là đẻ ra một mục menu không có màn hình nào phía
+   sau. Đây là một QUYỀN, không phải một TAB — nên nó có bảng riêng và hàm
+   riêng.
+
+   MỞ RỘNG THẾ NÀO: thêm mã vai trò vào mảng dưới đây. Ai được vào văn phòng
+   thì đọc được luật; ai có tên trong mảng này mới sửa được luật.
+   ========================================================================== */
+const VAI_TRO_DAY_TRO_LY = ['admin'];
+
+/** Được DẠY / TẮT / BẬT LẠI luật của trợ lý ảo. Hẹp hơn hẳn `vanphong`. */
+export function duocDayTroLy(chuThe) {
+  return boVaiTro(chuThe).some(v => VAI_TRO_DAY_TRO_LY.includes(v));
+}
+
 export function duocXemLuong(chuThe) {
   return quyenCua(chuThe).xem_luong === true;
 }

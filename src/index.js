@@ -8088,6 +8088,29 @@ async function vpKyNangDoi(req, env) {
   return vanphong.kyNangDoiTrangThai(env, phien, b);
 }
 
+/* Thứ bậc luật — màn QUY TẮC. Tầng SYSTEM SAFETY đọc thẳng từ mã nguồn và
+   KHÔNG có cửa ghi tương ứng: đó là toàn bộ điểm của mục D1. */
+async function vpLuat(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  return vanphong.luatThuBac(env, phien);
+}
+
+/* Hướng dẫn riêng — Sếp gõ thẳng. Ba lớp chặn ở src/vanphong.js:huongDanGhi. */
+async function vpHuongDan(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return vanphong.huongDanGhi(env, phien, b);
+}
+
+/* Ai đụng vào luật, lúc nào, vì sao — cộng bảng đếm lượt gọi AI mỗi ngày. */
+async function vpLuatLichSu(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  return vanphong.luatLichSu(env, phien);
+}
+
 /* Năng suất đội trợ lý ảo — tab phụ trong Văn phòng ảo */
 async function vpNangSuat(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
@@ -8346,6 +8369,9 @@ const DUONG_DAN = {
   'GET  /api/van-phong/thu-google':   vpThuGoogle,
   'GET  /api/van-phong/ky-nang':   vpKyNangDs,
   'POST /api/van-phong/ky-nang':   vpKyNangDoi,
+  'GET  /api/van-phong/luat':      vpLuat,
+  'GET  /api/van-phong/luat-lich-su': vpLuatLichSu,
+  'POST /api/van-phong/huong-dan': vpHuongDan,
   'POST /api/van-phong/co-mat':    vpCoMat,
   'GET  /api/van-phong/hoi-thoai': vpHoiThoai,
   'POST /api/van-phong/hoi':       vpHoi

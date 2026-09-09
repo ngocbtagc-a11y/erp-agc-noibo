@@ -30,8 +30,12 @@ import { congCuCuaAgent, chayCongCu } from './vp-cong-cu.js';
 import { MAY } from './agents-vp.js';
 import { hoiMay } from './vp-may.js';
 import { xepChoTheoCoCau } from './vp-mat-bang.js';
-import { duocXemTab } from './quyen.js';
+import { duocXemTab, duocDayTroLy, boVaiTro } from './quyen.js';
 import { catBot, nhanCat } from './cat-danh-sach.js';
+import {
+  THU_TU_TANG, TANG, tangHopLe, TRAN_KY_TU_LUAT, kiemTruocKhiGhi, luatAnToan
+} from './vp-luat.js';
+import { bangDemAI } from './vp-dem-ai.js';
 
 /* ---- Trả lời JSON (bản riêng, để file tự đứng được) --------------------- */
 
@@ -429,34 +433,234 @@ export async function nangSuat(env, phien) {
    Tắt chứ không xoá: giữ lại để còn đối chiếu "hôm đó Sếp dạy gì mà ra kết
    luận này". Xoá trắng là mất luôn manh mối.
    ========================================================================== */
+/** Trợ lý mà người này được XEM luật — đẩy thẳng vào `WHERE agent_id IN (…)`.
+ *
+ *  Đúng khuôn `nhomTaiLieuXemDuoc()` → `WHERE nhom IN (?,…)` ở
+ *  src/tai-lieu.js:1282: lọc NGAY TỪ ĐẦU chứ không lấy hết rồi lọc sau. Lấy hết
+ *  rồi lọc ở JS nghĩa là dữ liệu đã rời máy chủ rồi mới bị vứt đi — và với màn
+ *  này thì "dữ liệu" chính là toàn bộ luật riêng của chín trợ lý.
+ *
+ *  Trước bản này `kyNangDs` KHÔNG có mệnh đề WHERE nào cả: không lọc agent_id,
+ *  không lọc `vao_duoc`. Ai vào được văn phòng là đọc được luật của cả chín. */
+function agentXemDuoc(phien) {
+  const ds = new Set();
+  for (const v of boVaiTro(phien)) for (const a of agentChoVaiTro(v)) ds.add(a.id);
+  return [...ds];
+}
+
 export async function kyNangDs(env, phien) {
   if (!duocXemTab(phien, 'vanphong')) return loi('Bạn chưa được vào văn phòng ảo.', 403);
+
+  const agentDuoc = agentXemDuoc(phien);
+  if (!agentDuoc.length) {
+    return json({ ky_nang: [], cat: null, duoc_day: false, agent_xem_duoc: [] });
+  }
+
   /* Trần 200 bài. Kỹ năng bị cắt im lặng là kiểu hỏng tệ nhất ở đây: Sếp
      mở ra thấy đủ, tưởng đã dạy hết, trong khi bài thứ 201 không bao giờ
      hiện ra để mà tắt đi. */
   const GH_KN = 200;
+  const oDau = agentDuoc.map(() => '?').join(',');
   const kqKn = await env.DB.prepare(
     'SELECT k.id, k.agent_id, k.tieu_de, k.noi_dung, k.yeu_cau_goc, k.dang_dung, k.tao_luc, ' +
-    '       ns.ho_ten AS nguoi_day ' +
-    '  FROM vp_ky_nang k LEFT JOIN nhan_su ns ON ns.id = k.nguoi_day_id ' +
+    '       k.tang, k.pham_vi_id, k.het_han_luc, k.cap_nhat_luc, ' +
+    '       k.nguoi_thuc_hien_loai, k.tac_nhan, ' +
+    '       ns.ho_ten AS nguoi_day, uq.ho_ten AS uy_quyen_boi ' +
+    '  FROM vp_ky_nang k ' +
+    '  LEFT JOIN nhan_su ns ON ns.id = k.nguoi_day_id ' +
+    '  LEFT JOIN nhan_su uq ON uq.id = k.uy_quyen_boi_id ' +
+    /* Tầng chung (company/department/role) KHÔNG gắn với một trợ lý nào, nên
+       không lọc theo agent_id được — chúng áp cho mọi trợ lý người này gặp. */
+    " WHERE k.tang IN ('company','department','role') OR k.agent_id IN (" + oDau + ') ' +
     ' ORDER BY k.tao_luc DESC LIMIT ' + (GH_KN + 1)
-  ).all();
+  ).bind(...agentDuoc).all();
+
   const { ds: kyNang, biCat } = catBot(kqKn, GH_KN);
   const cat = await nhanCat(env, biCat, GH_KN, 'SELECT COUNT(*) FROM vp_ky_nang');
-  return json({ ky_nang: kyNang, cat });
+
+  return json({
+    ky_nang: kyNang,
+    cat,
+    /* Giao diện dùng cờ này để ẩn nút Tắt/Bật. ĐÂY KHÔNG PHẢI CHỖ CHẶN —
+       chặn thật ở `kyNangDoiTrangThai` bên dưới, trả 403. Ẩn nút chỉ để người
+       không có quyền khỏi bấm vào một thứ chắc chắn hỏng. */
+    duoc_day: duocDayTroLy(phien),
+    agent_xem_duoc: agentDuoc
+  });
 }
 
+/* Bật/tắt một bài học — HAI thay đổi so với bản trước:
+     ① cửa hẹp `duocDayTroLy` thay cho `duocXemTab('vanphong')` (D3)
+     ② GHI NHẬT KÝ. Trước đây `UPDATE ... SET dang_dung=?` rồi
+        `return json({ok:true})`, hết — sau vài vòng bật tắt thì không cách nào
+        biết ai đã tắt, lúc nào, vì sao. Đúng kiểu hỏng mà chú thích ngay trên
+        đầu mục này đã tự cảnh báo, chỉ là hỏng ngược chiều: bài BỊ TẮT OAN
+        cũng không lần ra. */
 export async function kyNangDoiTrangThai(env, phien, body) {
   if (!duocXemTab(phien, 'vanphong')) return loi('Bạn chưa được vào văn phòng ảo.', 403);
+  if (!duocDayTroLy(phien))
+    return loi('Bạn vào xem được văn phòng ảo, nhưng bật/tắt bài học của trợ lý là quyền riêng — nhờ Quản trị.', 403);
+
   const id = String(body?.id || '').trim();
   const bat = body?.dang_dung ? 1 : 0;
+  const lyDo = String(body?.ly_do || '').trim().slice(0, 300);
   if (!id) return loi('Thiếu mã kỹ năng');
 
-  const co = await env.DB.prepare('SELECT id FROM vp_ky_nang WHERE id = ?').bind(id).first();
+  const co = await env.DB.prepare(
+    'SELECT id, agent_id, tieu_de, dang_dung FROM vp_ky_nang WHERE id = ?'
+  ).bind(id).first();
   if (!co) return loi('Không có kỹ năng này', 404);
 
-  await env.DB.prepare('UPDATE vp_ky_nang SET dang_dung = ? WHERE id = ?').bind(bat, id).run();
+  /* Trợ lý ngoài tầm nhìn của người này thì cũng ngoài tầm tay. Không lọc ở
+     đây thì `duoc_day` biến thành "được đụng vào cả chín trợ lý". */
+  const agentDuoc = agentXemDuoc(phien);
+  if (co.agent_id && !agentDuoc.includes(co.agent_id))
+    return loi('Bài học này thuộc trợ lý bạn chưa được vào phòng.', 403);
+
+  if (Number(co.dang_dung) === bat) return json({ ok: true, dang_dung: bat, khong_doi: true });
+
+  await env.DB.batch([
+    env.DB.prepare(
+      "UPDATE vp_ky_nang SET dang_dung = ?, cap_nhat_luc = datetime('now','+7 hours') WHERE id = ?"
+    ).bind(bat, id),
+    /* Sổ chung `lich_su_thay_doi_nen`, đúng khuôn src/index.js:4026 — không đẻ
+       bảng nhật ký thứ hai. `ban_ghi_id` là cột TEXT và `vp_ky_nang.id` vốn đã
+       là chuỗi 'kn_…', nên KHÔNG dính cái bẫy "nhét số vào cột TEXT ra chuỗi
+       2.0" mà index.js:4031 đã ghi lại. */
+    env.DB.prepare(
+      'INSERT INTO lich_su_thay_doi_nen (bang, ban_ghi_id, truong, gia_tri_cu, gia_tri_moi, ' +
+      "                                  nguoi_id, nguoi_ten, ly_do, luc) " +
+      "VALUES ('vp_ky_nang', ?, 'dang_dung', ?, ?, ?, ?, ?, datetime('now','+7 hours'))"
+    ).bind(id, String(co.dang_dung), String(bat),
+           phien.nhan_su_id || null, phien.ho_ten || phien.ten_dang_nhap || '',
+           lyDo || null)
+  ]);
+
   return json({ ok: true, dang_dung: bat });
+}
+
+/* ==========================================================================
+   THỨ BẬC LUẬT — màn QUY TẮC
+   --------------------------------------------------------------------------
+   Trả về tầng SYSTEM SAFETY (đọc thẳng từ mã nguồn, KHÔNG sửa được ở đây) cùng
+   thứ tự ưu tiên, để màn hình bày ra chứ không tự chế lại.
+   ========================================================================== */
+export async function luatThuBac(env, phien) {
+  if (!duocXemTab(phien, 'vanphong')) return loi('Bạn chưa được vào văn phòng ảo.', 403);
+  return json({
+    thu_tu: ['system_safety', ...THU_TU_TANG],
+    tang: TANG,
+    an_toan: luatAnToan(),
+    tran_ky_tu: TRAN_KY_TU_LUAT,
+    duoc_day: duocDayTroLy(phien)
+  });
+}
+
+/* ==========================================================================
+   HƯỚNG DẪN RIÊNG — Sếp gõ THẲNG, không qua mô hình
+   --------------------------------------------------------------------------
+   ⚠️ ĐÂY LÀ ĐƯỜNG NGUY NHẤT TRONG CẢ KHU NÀY, và nói ra để người sau đừng nới.
+   Mọi bài học cũ đều phải đi qua `promptHocNghe` — tức là còn một cái đệm mô
+   hình ở giữa. Đường này thì chuỗi Sếp gõ đi THẲNG vào prompt của mọi lượt hỏi
+   sau đó. Không cần ai cố ý: dán một đoạn quy trình copy từ file Word có dòng
+   gạch ngang '=====' là đủ làm vỡ cấu trúc prompt.
+
+   BA LỚP, KHÔNG LỚP NÀO LÀ LỜI DẶN TRONG PROMPT:
+     ① `kiemTruocKhiGhi` thoát ký tự phân cách NGAY LÚC GHI (vp-luat.js)
+     ② `bocTrichDan` đẩy mọi dòng khỏi cột 0 lúc ghép prompt (agents-vp.js)
+     ③ `soNghiepVu` chặn cứng khi có số liệu nghiệp vụ (so-ai.js)
+   Cả ba đều đo được bằng `scripts/do-tiem-lenh-ky-nang.mjs`.
+   ========================================================================== */
+export async function huongDanGhi(env, phien, body) {
+  if (!duocXemTab(phien, 'vanphong')) return loi('Bạn chưa được vào văn phòng ảo.', 403);
+  if (!duocDayTroLy(phien))
+    return loi('Đặt hướng dẫn riêng cho trợ lý là quyền riêng — nhờ Quản trị.', 403);
+  if (!phien.nhan_su_id)
+    return loi('Tài khoản chưa nối với hồ sơ nhân sự nên không ghi được ai chịu trách nhiệm. Nhờ Quản trị nối hồ sơ giúp.');
+
+  const agentId = String(body?.agent_id || '').trim();
+  const tang = String(body?.tang || 'agent').trim();
+  const soNgay = Number(body?.so_ngay) || 0;
+
+  if (!tangHopLe(tang)) return loi('Tầng luật không hợp lệ.');
+  /* Tầng gắn với một trợ lý thì bắt buộc phải nói rõ trợ lý nào, và phải là
+     trợ lý người này vào được phòng. */
+  if (tang === 'agent' || tang === 'user_tmp') {
+    if (!agentTheoId(agentId)) return loi('Chưa chọn trợ lý.');
+    if (!agentXemDuoc(phien).includes(agentId))
+      return loi('Bạn chưa được vào phòng trợ lý này.', 403);
+  }
+
+  const kiem = kiemTruocKhiGhi(body?.tieu_de, body?.noi_dung);
+  if (!kiem.ok) return json({ loi: kiem.ly_do, chi_tiet: kiem.chi_tiet || null }, 400);
+
+  /* USER TEMPORARY phải hết hạn THẬT. Không đặt hạn thì nó không còn là "tạm
+     thời" — nó chỉ là một bài học tầng thấp sống mãi và tính tiền token mãi.
+     Mặc định 7 ngày, trần 90: xa hơn thế thì đặt ở tầng `agent` cho đúng tên. */
+  const hetHan = tang === 'user_tmp'
+    ? "datetime('now','+7 hours','+" + Math.min(Math.max(soNgay || 7, 1), 90) + " days')"
+    : 'NULL';
+
+  const id = 'kn_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  try {
+    await env.DB.prepare(
+      'INSERT INTO vp_ky_nang (id, agent_id, tieu_de, noi_dung, yeu_cau_goc, nguoi_day_id, ' +
+      '                        tang, pham_vi_id, het_han_luc, nguoi_thuc_hien_loai, ' +
+      '                        tac_nhan, uy_quyen_boi_id) ' +
+      "VALUES (?, ?, ?, ?, NULL, ?, ?, ?, " + hetHan + ", 'nguoi', NULL, ?)"
+    ).bind(
+      id,
+      /* Tầng chung không thuộc trợ lý nào. `agent_id` là NOT NULL nên dùng
+         chuỗi rỗng làm "không thuộc ai" — cột này không có FK, và câu đọc luật
+         chỉ so `agent_id` cho hai tầng agent/user_tmp. */
+      (tang === 'agent' || tang === 'user_tmp') ? agentId : '',
+      kiem.tieu_de, kiem.noi_dung,
+      phien.nhan_su_id, tang,
+      String(body?.pham_vi_id || '').trim() || null,
+      phien.nhan_su_id
+    ).run();
+  } catch (e) {
+    console.error('Ghi hướng dẫn riêng lỗi:', e.message);
+    return loi('Chưa lưu được. Nếu vừa deploy thì có thể migration them-vp-kynang-tang.sql chưa chạy.', 500);
+  }
+
+  await env.DB.prepare(
+    'INSERT INTO lich_su_thay_doi_nen (bang, ban_ghi_id, truong, gia_tri_cu, gia_tri_moi, ' +
+    "                                  nguoi_id, nguoi_ten, ly_do, luc) " +
+    "VALUES ('vp_ky_nang', ?, 'them', NULL, ?, ?, ?, ?, datetime('now','+7 hours'))"
+  ).bind(id, kiem.tieu_de, phien.nhan_su_id,
+         phien.ho_ten || phien.ten_dang_nhap || '',
+         'Thêm hướng dẫn tầng ' + tang).run();
+
+  return json({ ok: true, id, tang, tieu_de: kiem.tieu_de, noi_dung: kiem.noi_dung });
+}
+
+/* ==========================================================================
+   LỊCH SỬ — ai đụng vào luật, lúc nào, vì sao
+   --------------------------------------------------------------------------
+   Đọc `lich_su_thay_doi_nen` với `bang='vp_ky_nang'` — sổ chung 9 module đang
+   dùng, có sẵn chỉ mục `idx_lstdn_doc (bang, ban_ghi_id, luc DESC)`. Không đẻ
+   bảng nhật ký thứ hai.
+   Kèm bảng đếm lượt gọi AI mỗi ngày (src/vp-dem-ai.js) — hôm nay là con số
+   THẬT đầu tiên về chi phí AI của hệ thống này.
+   ========================================================================== */
+export async function luatLichSu(env, phien) {
+  if (!duocXemTab(phien, 'vanphong')) return loi('Bạn chưa được vào văn phòng ảo.', 403);
+
+  const GH = 100;
+  const kq = await env.DB.prepare(
+    'SELECT l.id, l.ban_ghi_id, l.truong, l.gia_tri_cu, l.gia_tri_moi, ' +
+    '       l.nguoi_ten, l.ly_do, l.luc, k.tieu_de, k.agent_id, k.tang ' +
+    '  FROM lich_su_thay_doi_nen l ' +
+    '  LEFT JOIN vp_ky_nang k ON k.id = l.ban_ghi_id ' +
+    " WHERE l.bang = 'vp_ky_nang' " +
+    ' ORDER BY l.luc DESC LIMIT ' + (GH + 1)
+  ).all();
+  const { ds, biCat } = catBot(kq, GH);
+  const cat = await nhanCat(env, biCat, GH,
+    "SELECT COUNT(*) FROM lich_su_thay_doi_nen WHERE bang = 'vp_ky_nang'");
+
+  return json({ lich_su: ds, cat, dem_ai: await bangDemAI(env, 14) });
 }
 
 /* ==========================================================================

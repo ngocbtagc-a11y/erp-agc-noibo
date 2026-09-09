@@ -28,8 +28,13 @@ const NGUOI = { ho_ten: 'Bùi Thị Ngọc', chuc_vu: 'Chủ doanh nghiệp' };
 const HOM_NAY = '09/09/2026';
 
 /* Mốc nhận dạng: lấy câu MỞ ĐẦU của từng khối, không lấy chữ giữa thân — chữ
-   giữa thân đổi theo nội dung, câu mở đầu là cấu trúc. */
-const MOC_KY_NANG   = 'KỸ NĂNG ĐÃ ĐƯỢC DẠY THÊM';
+   giữa thân đổi theo nội dung, câu mở đầu là cấu trúc.
+
+   09/09/2026: khối này đổi tên từ 'KỸ NĂNG ĐÃ ĐƯỢC DẠY THÊM' sang 'LUẬT MỀM —
+   SẾP ĐẶT THÊM' vì nó nay chứa cả năm tầng, không riêng kỹ năng của một trợ
+   lý. Đổi mốc theo là ĐỔI CÁI NEO, không phải nới thước: các phép đo bên dưới
+   không bỏ đi mục nào, và mục ⑥–⑦ mới thêm còn siết chặt hơn. */
+const MOC_KY_NANG   = 'LUẬT MỀM — SẾP ĐẶT THÊM';
 const MOC_LAM_VIEC  = 'Cách bạn làm việc:';
 const MOC_HIEN_PHAP = 'BẠN LÀ MỘT NHÂN SỰ ẢO';
 
@@ -115,6 +120,71 @@ console.log('\n⑤ Chưa dạy bài nào thì không có khối kỹ năng rỗn
 {
   const p = ghepPrompt(tatCa[0], NGUOI, HOM_NAY, []);
   bao(!p.includes(MOC_KY_NANG), 'không có tiêu đề khối kỹ năng khi danh sách rỗng');
+}
+
+/* ── ⑥ NĂM TẦNG: tầng CAO phải đứng TRƯỚC tầng THẤP trong khối luật mềm ───
+   Sếp Ngọc ban hành 09/09/2026:
+     SYSTEM SAFETY > COMPANY > DEPARTMENT > ROLE > AGENT-SPECIFIC > USER TEMPORARY
+   SYSTEM SAFETY là hiến pháp, đã đo ở mục ②. Năm tầng còn lại đi qua tham số
+   thứ tư và phải xếp đúng thứ tự đó — tầng thấp đứng sau nghĩa là tầng thấp
+   được đọc sau, chứ KHÔNG phải được đè lên tầng cao: cả khối vẫn nằm trước
+   luật cứng (mục ①). */
+console.log('\n⑥ Năm tầng luật mềm xếp từ CAO xuống THẤP');
+{
+  const bai = t => ({ tieu_de: 'Bài tầng ' + t, noi_dung: 'Nội dung của tầng ' + t + ', đủ dài để không bị cửa độ dài chặn.' });
+  const p = ghepPrompt(tatCa[0], NGUOI, HOM_NAY, {
+    company:    [bai('company')],
+    department: [bai('department')],
+    role:       [bai('role')],
+    agent:      [bai('agent')],
+    user_tmp:   [bai('user_tmp')]
+  });
+  const viTri = ['company', 'department', 'role', 'agent', 'user_tmp'].map(t => [t, p.indexOf('Bài tầng ' + t)]);
+  const thieu = viTri.filter(([, i]) => i < 0).map(([t]) => t);
+  bao(thieu.length === 0, `cả 5 tầng đều có mặt trong prompt${thieu.length ? ' — thiếu: ' + thieu.join(', ') : ''}`);
+  const tang = viTri.every(([, i], k) => k === 0 || i > viTri[k - 1][1]);
+  bao(tang, 'thứ tự trong prompt đúng: company → department → role → agent → user_tmp');
+
+  const iLv = p.lastIndexOf(MOC_LAM_VIEC);
+  bao(viTri.every(([, i]) => i < iLv), 'cả 5 tầng đều đứng TRƯỚC luật cứng');
+
+  /* Đối chứng: đảo tầng user_tmp lên trước company thì phép đo phải kêu. */
+  const iA = p.indexOf('Bài tầng company'), iB = p.indexOf('Bài tầng user_tmp');
+  const dao = p.slice(0, iA) + 'Bài tầng user_tmp' + p.slice(iA + 'Bài tầng company'.length, iB) +
+              'Bài tầng company' + p.slice(iB + 'Bài tầng user_tmp'.length);
+  bao(dao.indexOf('Bài tầng user_tmp') < dao.indexOf('Bài tầng company'),
+    'bản đảo tầng bị bắt là SAI THỨ TỰ');
+}
+
+/* ── ⑦ CHUỖI HIỂM KHÔNG CÒN ĐỨNG Ở CỘT 0 ─────────────────────────────────
+   Mục ③ đo "chuỗi hiểm có lọt xuống SAU luật cứng không". Nhưng nó vẫn nằm
+   TRONG prompt, và bản soát đo được rằng đứng ở cột 0 với đúng khuôn tiêu đề
+   mục là đủ để giả một mục hiến pháp thật. Mục này đo chỗ đó. */
+console.log('\n⑦ Chuỗi hiểm bị đẩy khỏi cột 0 — không còn giả được mục hiến pháp');
+{
+  const p = ghepPrompt(tatCa[0], NGUOI, HOM_NAY, { agent: [BAI_HOC_HIEM] });
+  const dong = p.split('\n');
+  const giaMuc  = dong.filter(d => /^\s*XI\.\s/.test(d));
+  bao(giaMuc.length === 0,
+    `không dòng nào mở đầu bằng "XI." ở cột 0${giaMuc.length ? ' — còn: ' + JSON.stringify(giaMuc[0]) : ''}`);
+
+  const iKn = p.indexOf(MOC_KY_NANG);
+  const iLv = p.lastIndexOf(MOC_LAM_VIEC);
+  const khoi = p.slice(iKn, iLv);
+  const keNgang = khoi.split('\n').filter(d => /^={3,}\s*$/.test(d));
+  /* `iKn` trỏ vào chữ tiêu đề, nên dòng kẻ MỞ khung nằm ngoài lát cắt — trong
+     lát này chỉ còn đúng 1 dòng kẻ hợp lệ là dòng ĐÓNG khung. Bài học chứa
+     một dòng '=====' nữa; nếu nó lọt qua nguyên vẹn thì con số này thành 2. */
+  bao(keNgang.length === 1,
+    `trong khối luật mềm chỉ còn 1 dòng kẻ của chính khung tiêu đề (đếm được ${keNgang.length})`);
+
+  bao(p.includes('| =================================================='),
+    'dòng kẻ của bài học đã bị đẩy sang cột 2 bằng dấu trích dẫn "|"');
+
+  /* Đối chứng: bỏ lớp bọc thì phép đo phải kêu. */
+  const khongBoc = p.replace(/^\| /gm, '');
+  bao(khongBoc.split('\n').some(d => /^\s*XI\.\s/.test(d)),
+    'bản bỏ lớp bọc cho chuỗi hiểm đứng lại cột 0 — đúng thứ phép đo phải ngăn');
 }
 
 console.log('\n───────────────────────────────────────────────────────────');

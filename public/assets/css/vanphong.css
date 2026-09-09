@@ -969,6 +969,188 @@
   border-bottom-color: var(--sage);
 }
 
+/* ---------------------------------------------------------------------------
+   THANH TAB TRONG KHU ĐÀO TẠO — năm màn
+   ---------------------------------------------------------------------------
+   ĐO THẬT trước khi viết dòng CSS này (Chrome headless,
+   Emulation.setDeviceMetricsOverride — không dùng --window-size vì Chrome ép
+   tối thiểu ~500px và phép đo sẽ nói dối):
+
+     · 1440×900 — 5 nút vừa một hàng, thanh cao 35px, tràn ngang 0.
+     · 375×812  — 5 nút KHÔNG vừa một hàng. Hai đường đi:
+         (a) để nhãn tự vỡ dòng   → thanh cao vọt 35 → 83px (+137%)
+         (b) đặt `white-space: nowrap` → trang TRÀN NGANG 216px
+       (b) là đường cấm: luật nhà "hạn chế kéo ngang", và bản soát đo được
+       `body.scrollWidth` = 591 so với viewport 375.
+
+   NÊN CHỌN ĐƯỜNG THỨ BA: `flex-wrap: wrap`. Nút giữ nguyên chiều cao, hàng
+   thứ hai gánh phần thừa — cao hơn một hàng nút chứ không phải cao gấp 2,4 lần
+   như đường (a), và tuyệt đối không tràn ngang như đường (b).
+
+   `overflow-x: auto` là LƯỚI AN TOÀN, không phải giải pháp. `.vp-tabphu` ở
+   trên không có nó, nên bất cứ thứ gì tràn là tràn thẳng ra trang. Ở đây một
+   nút thứ sáu dài bất thường sẽ cuộn trong chính thanh này, không kéo cả trang.
+   --------------------------------------------------------------------------- */
+.vp-tab2 {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  margin-bottom: 14px;
+  padding-bottom: 2px;
+  border-bottom: 1px solid var(--line);
+  overflow-x: auto;
+}
+.vp-tab2-nut {
+  flex: none;
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  padding: 5px 13px;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--text-mute);
+  cursor: pointer;
+  font-family: inherit;
+}
+/* NGƯỠNG NGÓN TAY 44px trên điện thoại — chuẩn chung của ERP này (xem chú
+   thích thanh phân trang ở app.html: "nhân viên kho bấm bằng ngón cái khi đang
+   bê hàng"). Trên desktop giữ 33px cho gọn: ở đó người ta bấm bằng chuột.
+   Cái giá đã ĐO: thanh tab ở 375px cao 66px → 94px. Chấp nhận, vì phần thân
+   khu vẫn vừa trọn màn (bàn đo do-khu-dao-tao-giaodien.mjs in con số). */
+@media (max-width: 640px) {
+  .vp-tab2-nut { min-height: 44px; padding: 5px 14px; }
+}
+.vp-tab2-nut:hover { border-color: var(--sage); color: var(--ink); }
+.vp-tab2-nut.dang-mo {
+  background: var(--sage-wash);
+  border-color: var(--sage);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* ---- Khu đào tạo: phần thân chung ---------------------------------------
+   `max-height` + cuộn RIÊNG trong khu: danh sách bài học dài ra theo tháng,
+   để nó đẩy cả trang dài mãi là quay lại đúng lỗi vừa sửa ở hộp hồ sơ. */
+.vp-man2 { max-height: 62vh; overflow-y: auto; }
+
+.vp-dt-loc { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.vp-dt-loc label { font-size: 12px; color: var(--text-mute); }
+.vp-dt-loc select {
+  font-family: inherit; font-size: 12.5px; color: var(--ink);
+  padding: 5px 9px; border: 1px solid var(--line);
+  border-radius: var(--r-sm); background: var(--card);
+}
+
+.vp-dt-nhomtang { margin-bottom: 18px; }
+.vp-dt-nhomtang > h6 {
+  margin: 0 0 3px;
+  font-family: var(--serif);
+  font-size: 13.5px;
+  color: var(--ink);
+}
+.vp-dt-nhomtang > p { margin: 0 0 9px; font-size: 11.5px; color: var(--text-mute); }
+
+/* Tầng an toàn hệ thống: KHÔNG SỬA ĐƯỢC, và phải NHÌN RA là không sửa được.
+   Viền trái đậm + nền ấm, không có nút nào bên trong — thiếu nút là thông điệp
+   rõ hơn mọi dòng chữ. */
+.vp-qt-antoan {
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--warn);
+  border-radius: var(--r-md);
+  background: var(--warn-wash);
+  padding: 12px 14px;
+  margin-bottom: 18px;
+}
+.vp-qt-khoa {
+  display: inline-block;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--warn-dark);
+  border: 1px solid var(--warn);
+  border-radius: var(--r-pill);
+  padding: 1px 9px;
+  margin-bottom: 7px;
+}
+.vp-qt-antoan > p { margin: 0 0 10px; font-size: 12px; line-height: 1.6; color: var(--text-mute); }
+.vp-qt-muc { border-top: 1px solid var(--line); padding-top: 8px; margin-top: 8px; }
+.vp-qt-muc > b { display: block; font-size: 12.5px; color: var(--ink); margin-bottom: 3px; }
+.vp-qt-muc > div {
+  font-size: 12px; line-height: 1.6; color: var(--text);
+  white-space: pre-wrap;
+  max-height: 150px; overflow-y: auto;
+}
+
+/* Thứ tự ưu tiên: một hàng chip, cuộn ngang trong chính nó ở màn hẹp. */
+.vp-qt-thutu {
+  display: flex; flex-wrap: wrap; gap: 5px;
+  margin-bottom: 16px;
+}
+.vp-qt-thutu span {
+  font-size: 11px; color: var(--text-mute);
+  border: 1px solid var(--line); border-radius: var(--r-pill);
+  padding: 2px 9px; background: var(--surface);
+}
+.vp-qt-thutu span.tang-khoa { border-color: var(--warn); color: var(--warn-dark); }
+
+/* ---- Ô nhập hướng dẫn riêng --------------------------------------------- */
+.vp-hd-form { display: block; }
+.vp-hd-hang { display: flex; align-items: center; gap: 8px; margin-bottom: 9px; flex-wrap: wrap; }
+.vp-hd-hang label { font-size: 12px; color: var(--text-mute); min-width: 78px; }
+.vp-hd-hang select,
+.vp-hd-hang input[type="text"] {
+  flex: 1 1 180px; min-width: 0;
+  font-family: inherit; font-size: 12.5px; color: var(--ink);
+  padding: 6px 9px; border: 1px solid var(--line);
+  border-radius: var(--r-sm); background: var(--card);
+}
+.vp-hd-form > label { display: block; font-size: 12px; color: var(--text-mute); margin: 12px 0 5px; }
+.vp-hd-form textarea {
+  width: 100%; box-sizing: border-box;
+  font-family: inherit; font-size: 12.5px; line-height: 1.6; color: var(--ink);
+  padding: 9px 11px; border: 1px solid var(--line);
+  border-radius: var(--r-md); background: var(--card);
+  resize: vertical;
+}
+.vp-hd-nhac {
+  margin: 10px 0 0; padding: 9px 11px;
+  font-size: 11.5px; line-height: 1.6; color: var(--text-mute);
+  background: var(--sage-wash); border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+/* Lý do bị chặn phải hiện CHÍNH CÂU đã làm họ bị chặn — báo "không lưu được"
+   suông thì người ta gõ lại y hệt. */
+.vp-hd-loi {
+  margin: 10px 0 0; padding: 9px 11px;
+  font-size: 12px; line-height: 1.6; color: var(--danger-dark);
+  background: var(--danger-wash); border: 1px solid var(--danger);
+  border-radius: var(--r-md);
+}
+.vp-hd-loi b { display: block; margin-top: 5px; font-weight: 600; }
+#vp-hd-luu { margin-top: 12px; }
+
+/* ---- Lịch sử ------------------------------------------------------------ */
+.vp-ls-dong {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px;
+  padding: 8px 2px; border-bottom: 1px solid var(--line);
+  font-size: 12px; color: var(--text);
+}
+.vp-ls-dong:last-child { border-bottom: none; }
+.vp-ls-dong b { font-size: 12.5px; color: var(--ink); }
+.vp-ls-dong .vp-ls-luc { font-size: 11px; color: var(--text-mute); }
+.vp-ls-dong .vp-ls-lydo { flex-basis: 100%; font-size: 11.5px; color: var(--text-mute); }
+.vp-ls-viec-tat { color: var(--danger-dark); }
+.vp-ls-viec-bat { color: var(--ok-dark); }
+
+.vp-dem-ai { margin-top: 18px; }
+.vp-dem-ai h6 { margin: 0 0 4px; font-family: var(--serif); font-size: 13.5px; color: var(--ink); }
+.vp-dem-ai p { margin: 0 0 9px; font-size: 11.5px; line-height: 1.6; color: var(--text-mute); }
+.vp-dem-ai-dong {
+  display: flex; justify-content: space-between; gap: 12px;
+  padding: 6px 2px; border-bottom: 1px solid var(--line); font-size: 12px;
+}
+.vp-dem-ai-dong span { color: var(--text-mute); }
+.vp-dem-ai-dong b { color: var(--ink); font-variant-numeric: tabular-nums; }
+
 /* ---- Bảng năng suất ----------------------------------------------------- */
 .vp-ns-dong {
   display: grid;

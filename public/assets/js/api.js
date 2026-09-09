@@ -44,7 +44,19 @@ async function goi(duongDan, tuyChon = {}, tuDongVeDangNhap = true) {
   let duLieu = null;
   try { duLieu = await res.json(); } catch { /* không phải JSON */ }
 
-  if (!res.ok) throw new Error((duLieu && duLieu.loi) || 'Máy chủ gặp sự cố');
+  if (!res.ok) {
+    const e = new Error((duLieu && duLieu.loi) || 'Máy chủ gặp sự cố');
+    /* Mang theo NGUYÊN thân lỗi. Nhiều cửa từ chối cần nói rõ HƠN một câu —
+       ví dụ cửa chặn số liệu nghiệp vụ trong bài học phải chỉ đúng con số và
+       đúng đoạn chữ đã làm người ta bị chặn; báo "không lưu được" suông thì họ
+       gõ lại y hệt rồi đổ lỗi cho phần mềm. Chỉ THÊM trường, không đổi
+       `e.message`, nên mọi chỗ bắt lỗi cũ không phải sửa. */
+    if (duLieu && typeof duLieu === 'object') {
+      e.than = duLieu;
+      if (duLieu.chi_tiet) e.chi_tiet = duLieu.chi_tiet;
+    }
+    throw e;
+  }
   return duLieu;
 }
 
@@ -619,8 +631,18 @@ export const API = {
   vpNangSuat: () => goi('/api/van-phong/nang-suat'),
   vpThuThongBao: () => goi('/api/van-phong/thu-thong-bao', { method: 'POST' }),
   vpKyNang: () => goi('/api/van-phong/ky-nang'),
-  vpKyNangDoi: (id, dangDung) => goi('/api/van-phong/ky-nang', {
-    method: 'POST', body: JSON.stringify({ id, dang_dung: dangDung })
+  /* `lyDo` KHÔNG phải tuỳ chọn cho vui: tắt một bài học mà không nói vì sao thì
+     tháng sau không ai lần ra được bài ĐÚNG bị tắt oan. Máy chủ vẫn nhận rỗng
+     (không chặn cứng), nhưng ô nhập ở màn hình thì luôn hỏi. */
+  vpKyNangDoi: (id, dangDung, lyDo) => goi('/api/van-phong/ky-nang', {
+    method: 'POST', body: JSON.stringify({ id, dang_dung: dangDung, ly_do: lyDo || '' })
+  }),
+  /* Thứ bậc luật. Tầng SYSTEM SAFETY về từ đây để BÀY RA — không có hàm nào
+     gửi nó đi ngược lại, và đó là chủ ý (mục D1 của Sếp Ngọc 09/09/2026). */
+  vpLuat: () => goi('/api/van-phong/luat'),
+  vpLuatLichSu: () => goi('/api/van-phong/luat-lich-su'),
+  vpHuongDan: (o) => goi('/api/van-phong/huong-dan', {
+    method: 'POST', body: JSON.stringify(o)
   }),
 
   /* Báo "tôi còn ở đây" mỗi 20 giây, để người khác thấy mình trong văn phòng */
