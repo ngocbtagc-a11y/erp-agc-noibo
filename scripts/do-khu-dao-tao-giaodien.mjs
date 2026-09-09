@@ -21,7 +21,20 @@
 import { dungMayGia, moChrome, TOI_ID } from './lib/ban-do-chrome.mjs';
 import { execFileSync } from 'node:child_process';
 
-const COMMIT_NEN = execFileSync('git', ['rev-parse', 'integration/2026-09-09'],
+/* MỐC "TRƯỚC" PHẢI LÀ MỘT SỐ HIỆU CHẾT, KHÔNG ĐƯỢC LÀ TÊN NHÁNH.
+   Bản đầu viết `rev-parse integration/2026-09-09` — một cái tên DI CHUYỂN. Gộp
+   tính năng vào đúng nhánh đó xong thì "bản trước" hoá thành "bản sau", hai
+   phép so ra `227px → 227px (giảm 0%)`, và bàn đo ĐỎ ĐÚNG LÚC VIỆC THÀNH CÔNG.
+   Nó không đo tính năng nữa, nó đo xem đã gộp hay chưa.
+
+   Cùng lớp với mã #3f4d33 còn sót trong vanphong.css hôm 09/09/2026: thước tự
+   vô hiệu hoá mình mà vẫn in ra một con số trông như kết luận.
+
+   ed6da81 = đỉnh integration/2026-09-09 NGAY TRƯỚC khi gộp khu Đào tạo — tức
+   trạng thái thật của màn hình khi chưa có tính năng này. Số hiệu chết thì
+   mười lần chạy ra một kết quả, ở máy nào cũng vậy. Đổi nó chỉ khi cố ý muốn
+   so với một mốc khác, và phải sửa cả dòng chú thích này.                   */
+const COMMIT_NEN = execFileSync('git', ['rev-parse', 'ed6da81^{commit}'],
   { encoding: 'utf8' }).trim();
 
 /* ⚠️ Khoá là `agent`, KHÔNG phải `doi` — hình dạng lấy từ src/vanphong.js:299.
