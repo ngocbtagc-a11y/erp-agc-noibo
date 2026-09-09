@@ -892,7 +892,7 @@ export const DOI_IT = [
     truc_thuoc: 'it',
     mo_ta: 'Viết đặc tả tính năng, soi lỗi trước khi code, chặn cửa nghiệm thu.',
     chibi: { gioi_tinh: 'nu', kieu_toc: 1, net_rieng: 'kep_toc',
-             da: '#f6d5b8', toc: '#b8863b', ao: '#c07a5a', phu_kien: 'kep_ho_so' },
+             da: '#f6d5b8', toc: '#b8863b', ao: '#a8763f', phu_kien: 'kep_ho_so' },
     nang_luc: {
       lam_duoc: [
         'Viết đặc tả tính năng (SPEC) trước khi ai code một dòng nào',
@@ -915,7 +915,7 @@ export const DOI_IT = [
     truc_thuoc: 'it',
     mo_ta: 'Viết code, đổi cấu trúc dữ liệu, chạy kiểm thử, bàn giao.',
     chibi: { gioi_tinh: 'nam', kieu_toc: 6, net_rieng: 'ao_hoodie',
-             da: '#e8b98d', toc: '#241d19', ao: '#6b5138', phu_kien: 'may_tinh' },
+             da: '#e8b98d', toc: '#241d19', ao: '#6b7a4a', phu_kien: 'may_tinh' },
     nang_luc: {
       lam_duoc: [
         'Viết code tính năng theo đúng đặc tả Hồ Ly đã chốt',
