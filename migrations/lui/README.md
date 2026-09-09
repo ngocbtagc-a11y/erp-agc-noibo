@@ -1,6 +1,6 @@
 # File LÙI — không bao giờ chạy tự động
 
-Bốn file trong thư mục này là **nút hoàn tác**. Chúng `DROP TABLE`,
+Sáu file trong thư mục này là **nút hoàn tác**. Chúng `DROP TABLE`,
 `DROP COLUMN`, và `DELETE FROM schema_migrations`. Chạy nhầm một file ở đây
 là **mất dữ liệu thật**, không phải lỗi cấu hình.
 
