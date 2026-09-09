@@ -145,7 +145,8 @@
     "do-mo-ra-xem-duoc-ca-C": "node scripts/do-man-mo-ra-xem-duoc.mjs --ca C",
     "do-mo-ra-xem-duoc-ca-D": "node scripts/do-man-mo-ra-xem-duoc.mjs --ca D",
     "do-o-ngay": "node scripts/do-o-ngay-nhanxet.mjs",
-    "do-o-ngay-may": "node scripts/do-o-ngay-nhanxet.mjs --rong 1440"
+    "do-o-ngay-may": "node scripts/do-o-ngay-nhanxet.mjs --rong 1440",
+    "do-thu-tu-luat": "node scripts/do-thu-tu-luat-prompt.mjs"
   },
   "devDependencies": {
     "wrangler": "^4.0.0"
