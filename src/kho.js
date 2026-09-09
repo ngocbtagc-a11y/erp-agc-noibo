@@ -11,7 +11,7 @@
       vốn thì đơn giá KHÔNG được chọn ra khỏi database (giống cách giấu lương).
    ========================================================================== */
 
-import { duocThaoTacKho, duocQuanLyKho, duocXemGiaVon, duocSuaSanPham, duocKhoaSanPham, laAdmin } from './quyen.js';
+import { duocThaoTacKho, duocQuanLyKho, duocDieuChinhKho, duocXemGiaVon, duocSuaSanPham, duocKhoaSanPham, laAdmin } from './quyen.js';
 import { ghiLichSuThayDoi } from './dulieunen.js';
 /* Kê danh sách lô trong câu từ chối của `dieuChinhKho` cũng là một lần CẮT —
    dùng đúng khuôn chung, không tự viết `LIMIT 20` rồi im (`do-cat-im-lang`). */
@@ -412,10 +412,18 @@ export async function xuatKho(env, phien, body) {
    2. Sau điều chỉnh, tồn của MÃ và tồn của LÔ đều phải ≥ 0. Phiếu điều chỉnh
       là cửa sửa sai, không phải cửa lách bất biến TỒN ≥ 0 của module kho.
 
-   AI ĐƯỢC LẬP: `duocQuanLyKho` (anh Duy + Admin), KHÔNG phải cả 17 bạn
-   part-time có `thao_tac_kho`. Chọn chặt vì đây là cửa duy nhất trong ERP ghi
-   thẳng một con số vào sổ cái mà không có chứng từ mua/bán đứng sau. Nới ra
-   là quyết định của Sếp, không phải của người viết mã.
+   AI ĐƯỢC LẬP: `duocDieuChinhKho` — Quản lý kho (anh Duy) · Kế toán trưởng
+   (chị Hằng) · Admin. KHÔNG phải cả 17 bạn part-time có `thao_tac_kho`. Chọn
+   chặt vì đây là cửa duy nhất trong ERP ghi thẳng một con số vào sổ cái mà
+   không có chứng từ mua/bán đứng sau.
+
+   ⚠️ VÌ SAO KHÔNG DÙNG LẠI `duocQuanLyKho` (Sếp Ngọc chốt 09/09/2026 · C2):
+   Sếp mở thêm cho Kế toán trưởng — chị Hằng là người đối chiếu sổ với số kiểm
+   kê, kéo sổ về đúng số đếm được là việc của chị. Nhưng `duocQuanLyKho` còn
+   đèo theo quyền THÊM/SỬA MÃ HÀNG và quyền GỠ LƯỢT NẠP CỦA NGƯỜI KHÁC — mở
+   bằng cách đó là trao nhầm hai thứ không ai xin. Nên tách một cờ riêng
+   (`QUYEN_KHO.dieu_chinh` trong src/quyen.js). Nới thêm nữa là quyết định của
+   Sếp, không phải của người viết mã.
    ========================================================================== */
 
 /* Trần trên của một con số tồn (REV-0060 vòng 4 · CAO-①). Cột `so_luong` khai
@@ -478,8 +486,14 @@ function docTonThat(tho) {
 }
 
 export async function dieuChinhKho(env, phien, body) {
-  if (!duocQuanLyKho(phien)) {
-    return loi('Chỉ quản lý kho hoặc Admin mới lập được phiếu điều chỉnh tồn', 403);
+  /* 403 NÓI THẲNG LÝ DO + chỉ đúng người lập giúp, không trả về im lặng
+     (khuôn `danhSachTaiLieu` trong src/tai-lieu.js). Cắt ở MÁY CHỦ: gọi thẳng
+     `POST /api/kho/dieu-chinh` vẫn ăn 403, ẩn nút ngoài giao diện chỉ là thêm. */
+  if (!duocDieuChinhKho(phien)) {
+    return loi('Bạn không có quyền lập phiếu điều chỉnh tồn kho. Sếp Ngọc chốt 09/09/2026: ' +
+               'phiếu điều chỉnh ghi thẳng một con số vào sổ cái mà không có chứng từ mua – bán ' +
+               'đứng sau, nên chỉ Quản lý kho, Kế toán trưởng và Admin lập được. ' +
+               'Đếm ra lệch thì báo anh Phạm Khương Duy (Quản lý kho) kèm mã hàng và số đếm được.', 403);
   }
 
   const spId = String(body.san_pham_id || '').trim();

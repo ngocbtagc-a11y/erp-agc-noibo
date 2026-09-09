@@ -8,6 +8,13 @@ Format: `Date | Feature | Domain | Decision | Migration | Breaking impact | Stat
 
 ---
 
+## 2026-09-09
+
+| Feature | Domain | Decision | Migration | Breaking impact | Status |
+|---|---|---|---|---|---|
+| **C1 · C2 — Siết quyền NẠP TỒN KHO HÀNG LOẠT và PHIẾU ĐIỀU CHỈNH KHO** (`src/quyen.js` · `src/index.js` · `src/nap-du-lieu.js` · `src/kho.js` · `app.js` · `scripts/do-quyen-nap-va-dieuchinh.mjs` MỚI · `docs/DATA_OWNERSHIP_MATRIX.md`) | Kho vận · Kế toán · Phân quyền | Sếp Bùi Thị Ngọc trả lời **câu chờ ①** đã treo từ 07/09 (xem khối ✅ ngay dưới bảng 2026-09-07). **HIỆN TRẠNG ĐO ĐƯỢC TRÊN `origin/main`, không phải phỏng đoán** (`npm run do-quyen-kho-truoc` dựng lại `src/` của commit đó rồi gọi API thật): vai `nhan_vien_kho` mang cờ `thao_tac: true`, mà đường nạp tồn cắt theo đúng cờ đó ⇒ **cả 17 bạn part-time ở kho `nap-ghi` trả 200 và ghi thẳng 2 dòng vào `giao_dich_kho`**. **C1 — chốt: chỉ Quản lý kho + Kế toán trưởng + Admin nạp được.** **C2 — chốt: phiếu điều chỉnh mở thêm cho Kế toán trưởng** (trước chỉ `duocQuanLyKho`). **Cách làm — TÁCH CỜ, KHÔNG DÙNG LẠI CỜ CŨ:** nhập/xuất một phiếu và nạp một file hàng nghìn dòng khác nhau về CHẤT, nên `QUYEN_KHO` có thêm hai cờ riêng `nap_luot` và `dieu_chinh`. Dùng lại `quan_ly` cho C2 sẽ lặng lẽ trao cho Kế toán trưởng cả quyền **sửa mã hàng** lẫn quyền **gỡ lượt nạp của người khác** — trao nhầm hai thứ không ai xin. **Chặn ở MÁY CHỦ, hai lớp:** cửa ngoài `batBuocNapDuLieu` (`src/index.js`) và cửa trong `ghiThat` (`src/nap-du-lieu.js`); bàn đo có phép riêng "gỡ cửa ngoài thì cửa trong VẪN 403". Ẩn ô chọn "Tồn kho" và tab "Điều chỉnh" ngoài giao diện là **thêm**, không phải thay. **403 nói thẳng lý do** và chỉ đúng người nạp/lập giúp (anh Duy, chị Hằng) — không trả danh sách rỗng. **Xem/gỡ lượt nạp đi cùng cờ `nap_luot`**: nạp được thì phải có đường lùi, không nạp được thì không có gì để gỡ (lớp "chỉ người đã nạp hoặc `duocQuanLyKho`" của vòng 2 giữ nguyên) | Không — không thêm bảng, không thêm cột, **không migration nào phải chạy tay** | **CÓ, có chủ ý.** MẤT quyền: `nhan_vien_kho` và `nv_test` không còn nạp tồn hàng loạt, không còn xem/gỡ lượt nạp. ĐƯỢC thêm: `ke_toan_truong` nạp được tồn hàng loạt và lập được phiếu điều chỉnh. KHÔNG đổi: nhập/xuất từng phiếu, giá vốn, sửa mã hàng, quyền của `admin`/`quan_ly_kho` | ✅ Xong — `do-quyen-kho` **32/0** (7 vai trò, API thật qua router, **6 ca đối chứng đều bắt được** + phép "chặn kép"). Ca đỏ duy nhất của `ho-ly-rev0060` (dòng 601 — "nhan_vien_kho KHÔNG nạp hàng loạt được") từ nay XANH |
+| **C6 — Lịch sử làm việc: phân trang 10 dòng/trang + lọc theo tháng** (`app.html` · `app.js` · `style.css` · `scripts/do-lichsu-mot-man.mjs` MỚI) | Core (Lịch sử làm việc) | Nợ đỏ treo từ `f699272` (04/09). Sếp chốt **10 dòng một trang**, **lọc theo tháng**. Cắt trang **ở trình duyệt trên phần ĐÃ TẢI** — đúng chỗ ô tìm và ô lọc trạng thái vẫn đang cắt; không đổi API, không đổi luật quyền. Ô lọc tháng chỉ bày những tháng **CÓ THẬT** trong phần đã tải (bày sẵn 12 tháng là hứa suông), và **giữ nguyên lựa chọn của người dùng** kể cả khi tháng đó hết dòng — tự bỏ chọn là lặng lẽ đổi bộ lọc của họ. Đổi bộ lọc hoặc đổi phạm vi thì về trang 1 (đứng nguyên trang 6 sau khi lọc còn 12 dòng là nhìn thấy bảng trống). `MO_MAN_VIEC` nay nhảy tới **đúng trang** chứa dòng cần xem. Dải cắt nói thật thêm một vế: phân trang và lọc tháng cũng chỉ làm việc trên phần đã tải. Không thêm mã màu mới — nút dùng `--cam`/`--cam-text`, chữ dùng `--text-mute` | Không | Không — chỉ đổi cách hiển thị | ⚠️ **XONG PHẦN LÀM, CÒN MỘT SỐ ĐO CHỜ SẾP.** `do-lichsu-mot-man` **16/0** (2 ca đối chứng đều bắt được), không kéo ngang ở cả hai bề ngang, không lỗi console. **NHƯNG 10 dòng KHÔNG lọt một màn hình:** 1440×900 cần **1201px / khả dụng 900px → thiếu 301px**; 375×812 cần **1851px / khả dụng 812px → thiếu 1039px**. **Không tự hạ xuống 8 hay 9** — 10 là con số Sếp chốt, và bàn đo không được phép tự chỉnh cái nó đang đo. Bóc tách chỗ chiếm: @1440 đầu màn 83px (lời giới thiệu 42px) · bộ lọc phạm vi 54px · hàng tìm+lọc 44px · một dòng bảng ~69px · thanh phân trang 44px. **Đề nghị lấy lại chỗ mà KHÔNG giảm dòng** (chưa làm — đổi giao diện ngoài phạm vi Sếp duyệt): gập lời giới thiệu ~42px + gộp bộ lọc phạm vi vào cùng hàng ô tìm ~54px = ~96px/301px. Muốn lọt hẳn @1440 thì phải hạ chiều cao MỘT DÒNG từ 69px xuống ~40px (bỏ dòng phụ mô tả/phối hợp trong ô "Việc") — đó là bỏ thông tin, Sếp quyết |
+
 ## 2026-09-07
 
 | Feature | Domain | Decision | Migration | Breaking impact | Status |
@@ -25,6 +32,35 @@ Format: `Date | Feature | Domain | Decision | Migration | Breaking impact | Stat
 Hai câu dưới đây là **chính sách kinh doanh**, không phải quyết định kỹ thuật.
 Khỉ Đột cố ý **không** đụng vào, để Sếp chốt. Bàn đo của Hồ Ly đang ĐỎ đúng
 một ca vì câu ①, và nó sẽ còn đỏ cho tới khi Sếp trả lời.
+
+> #### ✅ CÂU ① — SẾP ĐÃ CHỐT NGÀY 09/09/2026. CÒN LẠI CÂU ②.
+>
+> **Chốt: KHÔNG.** Chỉ **Quản lý kho** và **Kế toán trưởng** (cùng Admin) được
+> nạp tồn kho hàng loạt. `nhan_vien_kho` và `nv_test` mất quyền này; hai vai đó
+> **vẫn nhập/xuất từng phiếu như cũ** — không siết lan.
+>
+> Sếp chốt RỘNG HƠN khuyến nghị của Khỉ Đột một bậc: khuyến nghị cũ là siết về
+> `duocQuanLyKho` (anh Duy + Admin), Sếp mở thêm cho **chị Phan Thị Hằng (Kế
+> toán trưởng)** — chị là người đối chiếu sổ với số đếm thật.
+>
+> **KHÔNG làm theo câu "Sếp gật thì sửa đúng một dòng" ở dưới** — sửa một dòng
+> nghĩa là dùng lại `duocQuanLyKho`, mà cờ đó còn đèo theo quyền **thêm/sửa mã
+> hàng** và quyền **gỡ lượt nạp của người khác**; mở bằng đường ấy là trao nhầm
+> hai thứ không ai xin, và với Kế toán trưởng thì càng sai. Đã tách cờ riêng
+> `QUYEN_KHO.nap_luot` trong `src/quyen.js`, chặn ở **cả hai** cửa
+> `batBuocNapDuLieu` (`src/index.js`) và `ghiThat` (`src/nap-du-lieu.js`).
+> Xem/gỡ lượt nạp đi cùng cờ này — nạp được thì phải có đường lùi.
+>
+> Cùng đợt Sếp chốt thêm **C2** (câu MỚI, không nằm trong hai câu này): **phiếu
+> điều chỉnh kho** mở thêm cho Kế toán trưởng — cờ riêng `QUYEN_KHO.dieu_chinh`
+> trong `src/kho.js`, cũng KHÔNG dùng lại `duocQuanLyKho` vì cùng lý do trên.
+>
+> Bàn đo mới `npm run do-quyen-kho` gọi API thật qua router với 7 vai trò;
+> `npm run do-quyen-kho-truoc` dựng lại `src/` của `origin/main` và chứng minh
+> vai `nhan_vien_kho` khi đó **nạp được thật** (`nap-ghi` 200, 2 dòng vào
+> `giao_dich_kho`). Ca đỏ duy nhất của `ho-ly-rev0060` (dòng 601) từ nay xanh.
+>
+> **Phần chữ bên dưới GIỮ NGUYÊN** làm hồ sơ câu hỏi lúc chưa có trả lời.
 
 **① `nhan_vien_kho` có được NẠP HÀNG LOẠT tồn kho không?**
 

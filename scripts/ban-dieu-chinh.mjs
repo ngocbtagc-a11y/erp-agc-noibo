@@ -30,6 +30,15 @@ import path from 'node:path';
 import { dungMayGia, moChrome, GOC, TOI_ID } from './lib/ban-do-chrome.mjs';
 
 const kho = await import(new URL('file:///' + path.join(GOC, 'src', 'kho.js').replace(/\\/g, '/')));
+/* ⚠️ BỘ CỜ QUYỀN LẤY TỪ CHÍNH `src/quyen.js`, KHÔNG GÕ TAY.
+   Bản trước ổ giả `/api/toi-la-ai` gõ tay `{ thao_tac, quan_ly, gia_von }`.
+   Ngày 09/09/2026 máy chủ thêm hai cờ `nap_luot` · `dieu_chinh` (Sếp chốt
+   C1·C2) — ổ giả thiếu chúng nên giao diện gỡ luôn tab "Điều chỉnh", và bàn đo
+   chết ở `document.querySelector(...).click()` với "reading 'click' of null".
+   Đỏ vì Ổ GIẢ LỆCH HỢP ĐỒNG MÁY CHỦ, không vì sản phẩm — đúng lớp lỗi Ⓔ mà
+   `do-man-mo-ra-xem-duoc` sinh ra để canh. Hỏi thẳng `quyenKho()` thì không
+   bao giờ lệch được nữa. */
+const quyen = await import(new URL('file:///' + path.join(GOC, 'src', 'quyen.js').replace(/\\/g, '/')));
 
 let dat = 0, truot = 0; const hong = [];
 /* Mốc chia luồng "đi đúng đường" và luồng "cố tình bấm sai" cho chốt console. */
@@ -106,8 +115,7 @@ const apiRieng = (duong, u, traJson, req) => {
       phong_ban: 'Ban Giám đốc', vai_tro: 'admin', phai_doi_mk: 0, anh_dai_dien: null,
       trang_thai: 'dang_lam', nhan_su_id: TOI_ID, id: TOI_ID,
       quyen: ['tongquan', 'lichsuviec', 'danhba', 'chat', 'gopy', 'khovan'],
-      kho: KHONG_QL ? { thao_tac: true, quan_ly: false, gia_von: false }
-                    : { thao_tac: true, quan_ly: true, gia_von: true },
+      kho: quyen.quyenKho({ vai_tro: KHONG_QL ? 'nhan_vien_kho' : 'quan_ly_kho' }),
       san_pham: { sua: !KHONG_QL, khoa: !KHONG_QL }
     });
     return true;

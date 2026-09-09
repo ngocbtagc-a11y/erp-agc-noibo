@@ -30,7 +30,19 @@
 
 import { docBang, LoiDocBang } from './doc-bang.js';
 import { datChoGhi, traLaiCho, chinhLaiCho, HAN_MUC_NGAY } from './canh-bao-ghi.js';
-import { duocSuaSanPham, duocThaoTacKho, duocQuanLyKho } from './quyen.js';
+import { duocSuaSanPham, duocNapTonHangLoat, duocQuanLyKho } from './quyen.js';
+
+/* ---- CÂU TỪ CHỐI DÙNG CHUNG CHO CẢ BA CỬA NẠP TỒN HÀNG LOẠT -------------
+   (ghi thật · xem danh sách lượt nạp · gỡ một lượt nạp)
+   Một chỗ duy nhất để ba cửa không nói ba kiểu, và để ngày Sếp đổi luật thì
+   chỉ phải sửa một câu. Nói THẲNG lý do + chỉ đúng người nạp giúp — trả rỗng
+   hay nói chung chung là bắt người ta đi tìm cả buổi (cùng khuôn với
+   `danhSachTaiLieu` trong src/tai-lieu.js). */
+const KHONG_DUOC_NAP_LUOT =
+  'Bạn không có quyền nạp tồn kho hàng loạt. Sếp Ngọc chốt 09/09/2026: chỉ Quản lý kho, ' +
+  'Kế toán trưởng và Admin mới nạp / xem / gỡ được lượt nạp file tồn kho. ' +
+  'Bạn vẫn nhập – xuất kho từng phiếu như thường ngày. Cần nạp cả file thì gửi file cho ' +
+  'anh Phạm Khương Duy (Quản lý kho) hoặc chị Phan Thị Hằng (Kế toán trưởng).';
 
 /* Lỗi có câu chữ tiếng người phát sinh TRONG LÚC GHI (khác `LoiDocBang` là
    lỗi lúc đọc file). Tách lớp riêng để index.js biết đường trả nguyên văn ra
@@ -286,7 +298,10 @@ export const DICH = {
     ten: 'Tồn kho đầu kỳ',
     moTa: 'Số lượng đang có trong kho của từng mã hàng. Ghi vào sổ cái thành một phiếu nhập, nên tồn vẫn truy được nguồn gốc.',
     khoa: 'ma_sku',
-    quyen: 'thao_tac_kho',
+    /* Nhãn ghi nhớ thôi, KHÔNG phải chỗ cắt — cắt thật ở `batBuocNapDuLieu`
+       (src/index.js) và `ghiThat` bên dưới, cả hai gọi `duocNapTonHangLoat`.
+       Sửa cho khớp 09/09/2026 (C1) để đọc chỗ này không hiểu nhầm luật. */
+    quyen: 'nap_ton_hang_loat',
     canSanPham: true,
     truong: [
       { ma: 'ma_sku',      nhan: 'Mã hàng (SKU)',   kieu: 'chu',    batBuoc: true,
@@ -987,8 +1002,8 @@ export async function ghiThat(env, phien, { bang, ghep, maDich, tenTep,
   if (maDich === 'san_pham' && !duocSuaSanPham(phien)) {
     return { loi: 'Bạn không có quyền nạp danh mục sản phẩm', ma: 403 };
   }
-  if (maDich === 'ton_kho' && !duocThaoTacKho(phien)) {
-    return { loi: 'Bạn không có quyền nạp tồn kho', ma: 403 };
+  if (maDich === 'ton_kho' && !duocNapTonHangLoat(phien)) {
+    return { loi: KHONG_DUOC_NAP_LUOT, ma: 403 };
   }
 
   const { banGhi, loi } = kiemBang(bang, ghep, maDich);
@@ -1327,8 +1342,8 @@ const RUOT_TON_G = CONG_DON_TON
    được hứa. */
 const DUONG_RA_DIEU_CHINH =
   'ĐƯỜNG ĐI TIẾP: vào Kho vận → Điều chỉnh, lập phiếu điều chỉnh kéo sổ về đúng số ĐẾM ĐƯỢC ' +
-  'ngoài kho (ghi rõ lý do, phiếu vào sổ cái có dấu vết). Chỉ quản lý kho hoặc Admin lập được — ' +
-  'không phải người của bạn thì báo anh Duy kèm mã phiếu này. ' +
+  'ngoài kho (ghi rõ lý do, phiếu vào sổ cái có dấu vết). Chỉ Quản lý kho, Kế toán trưởng ' +
+  'hoặc Admin lập được — không phải việc của bạn thì báo anh Duy kèm mã phiếu này. ' +
   'ERP KHÔNG gỡ được một phiếu XUẤT đã ghi, nên đừng đi tìm nút đó.';
 
 /* Số mã kê đích danh trong câu từ chối. Kê hết 2.000 mã thì không ai đọc;
@@ -1336,7 +1351,10 @@ const DUONG_RA_DIEU_CHINH =
 const KE_MA_TOI_DA = 5;
 
 export async function huyLuotNap(env, phien, phieuId) {
-  if (!duocThaoTacKho(phien)) return { loi: 'Bạn không có quyền gỡ lượt nạp tồn kho', ma: 403 };
+  /* Gỡ là ĐƯỜNG LÙI của chính việc nạp — ai không nạp được thì cũng không có
+     gì để gỡ, nên cùng một cửa quyền (C1). Lớp thứ hai "chỉ người đã nạp hoặc
+     quản lý kho" vẫn nguyên ở dưới. */
+  if (!duocNapTonHangLoat(phien)) return { loi: KHONG_DUOC_NAP_LUOT, ma: 403 };
   const ma = String(phieuId || '').trim();
   if (!ma) return { loi: 'Chưa rõ gỡ lượt nạp nào.', ma: 400 };
 
@@ -1700,7 +1718,7 @@ export async function huyLuotNap(env, phien, phieuId) {
 
 /** Danh sách các lượt nạp tồn kho gần đây — để Sếp biết cái nào cần gỡ. */
 export async function dsLuotNap(env, phien, gioiHan = 10) {
-  if (!duocThaoTacKho(phien)) return { loi: 'Bạn không có quyền xem lượt nạp tồn kho', ma: 403 };
+  if (!duocNapTonHangLoat(phien)) return { loi: KHONG_DUOC_NAP_LUOT, ma: 403 };
   const n = Math.max(1, Math.min(50, Number(gioiHan) || 10));
   const { results } = await env.DB.prepare(
     `SELECT v.ban_ghi_id AS phieu_id, v.gia_tri_moi AS trang_thai, v.nguoi_id, v.nguoi_ten, v.luc, v.ly_do,

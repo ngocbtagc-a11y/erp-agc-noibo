@@ -18,6 +18,10 @@ import path from 'node:path';
 import { dungMayGia, moChrome, GOC, TOI_ID } from './lib/ban-do-chrome.mjs';
 
 const kho = await import(new URL('file:///' + path.join(GOC, 'src', 'kho.js').replace(/\\/g, '/')));
+/* Bộ cờ quyền lấy từ chính `src/quyen.js`, không gõ tay — xem ghi chú ở đầu
+   `scripts/ban-dieu-chinh.mjs`. Gõ tay là ngày máy chủ thêm cờ mới thì ổ giả
+   lệch hợp đồng và bàn đo đỏ vì chính nó, không vì sản phẩm. */
+const quyen = await import(new URL('file:///' + path.join(GOC, 'src', 'quyen.js').replace(/\\/g, '/')));
 
 function tachCau(sql) {
   const sach = sql.replace(/\r\n?/g, '\n').split('\n').map(d => d.replace(/--.*$/, '')).join('\n');
@@ -73,7 +77,7 @@ const apiRieng = (duong, u, traJson, req) => {
       phong_ban: 'Ban Giám đốc', vai_tro: 'admin', phai_doi_mk: 0, anh_dai_dien: null,
       trang_thai: 'dang_lam', nhan_su_id: TOI_ID, id: TOI_ID,
       quyen: ['tongquan', 'lichsuviec', 'danhba', 'chat', 'gopy', 'khovan'],
-      kho: { thao_tac: true, quan_ly: true, gia_von: true }, san_pham: { sua: true, khoa: true } });
+      kho: quyen.quyenKho({ vai_tro: 'quan_ly_kho' }), san_pham: { sua: true, khoa: true } });
     return true;
   }
   if (duong === '/api/kho/san-pham') { (async () => traJson(await (await kho.danhSachSanPham(env, PHIEN)).json()))(); return true; }
