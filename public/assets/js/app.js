@@ -2226,6 +2226,20 @@ function veBang(dich, ds, hang) {
    tiếp. Không cắt thì dải biến mất hẳn — một dải luôn hiện là một dải mắt
    người học được cách bỏ qua trong đúng một tuần.
    ========================================================================== */
+/* Bản trả về CHUỖI của veDaiCat. Dùng cho những danh sách dựng bằng
+   `innerHTML` một phát, không có sẵn một ô trống chờ trong HTML — Văn phòng
+   ảo vẽ kiểu đó. Cùng một câu chữ, cùng một luật: không cắt thì không nói. */
+function veDaiCatChuoi(cat, donVi = 'mục') {
+  if (!cat) return '';
+  const gh = cat.gioi_han;
+  const tong = Number.isFinite(cat.tong) ? cat.tong : null;
+  const chu = tong != null
+    ? 'Đã tải <b>' + gh + '</b> trong tổng <b>' + tong + '</b> ' + esc(donVi) +
+      ' — còn <b>' + Math.max(0, tong - gh) + '</b> ' + esc(donVi) + ' chưa tải về máy.'
+    : 'Đã tải <b>' + gh + '</b> ' + esc(donVi) + ' đầu danh sách — danh sách này <b>đã bị cắt bớt</b>, còn nữa.';
+  return '<div class="dai-cat"><span class="dai-cat-chu">✂️ ' + chu + '</span></div>';
+}
+
 function veDaiCat(dich, cat, dat = {}) {
   const box = $(dich);
   if (!box) return;
@@ -6582,6 +6596,17 @@ async function khoiDongTongQuan() {
       thu(coQ('khovan', 'kinhdoanh'), () => API.khoSanPham())
     ]);
     const the = [], cb = [], loiTat = [];
+
+    /* Bảng Tổng quan công ty gộp SỐ từ danh sách mục tiêu. Danh sách bị cắt
+       thì con số gộp cũng cụt theo — mà nó lại là con số Sếp nhìn để ra
+       quyết định. Nói ra chỗ này quan trọng hơn nói ra ở bảng chi tiết. */
+    if (mt && mt.cat) {
+      const c = mt.cat;
+      cb.push({ m: 'warn', t: 'Mục tiêu',
+        n: Number.isFinite(c.tong)
+          ? 'Chỉ tải ' + c.gioi_han + '/' + c.tong + ' mục tiêu — các con số gộp bên dưới CHƯA tính đủ.'
+          : 'Danh sách mục tiêu đã bị cắt bớt — các con số gộp bên dưới CHƯA tính đủ.' });
+    }
 
     if (kenh && kenh.co_bang) {
       const t = kenh.tong;
@@ -13280,11 +13305,16 @@ async function khoiDongVanPhong() {
      Dạy được thì phải GỠ được. Một bài học sai mà không tắt đi thì nó lặng lẽ
      làm lệch mọi câu trả lời về sau, và càng để lâu càng khó lần ra vì sao. */
   let dsKyNang = null;
+  let catKyNang = null;
 
   async function veKyNangTrongHoSo(agentId, oCho) {
     if (!oCho) return;
     try {
-      if (!dsKyNang) dsKyNang = (await API.vpKyNang()).ky_nang || [];
+      if (!dsKyNang) {
+        const kq = await API.vpKyNang();
+        dsKyNang = kq.ky_nang || [];
+        catKyNang = kq.cat || null;
+      }
     } catch (e) { return; }
 
     const cua = dsKyNang.filter(k => k.agent_id === agentId);
@@ -13292,6 +13322,7 @@ async function khoiDongVanPhong() {
 
     oCho.insertAdjacentHTML('beforeend',
       '<div class="vp-hoso-muc vp-kn-muc"><h5>Kỹ năng Sếp dạy thêm</h5>' +
+      (catKyNang ? veDaiCatChuoi(catKyNang, 'bài học') : '') +
       cua.map(k =>
         '<div class="vp-kn" data-id="' + esc(k.id) + '"' +
         (k.dang_dung ? '' : ' data-tat="1"') + '>' +
@@ -13617,9 +13648,18 @@ async function khoiDongVanPhong() {
 
   /* ---- Cột phải --------------------------------------------------------- */
 
-  function veCotBen() {
+  function veCotBen(catViecTuTaiLai) {
     const ds = duLieu.viec_cua_toi || [];
-    $('#vp-viec-dem').textContent = ds.length ? ds.length + ' việc đang mở' : '';
+    const catViec = catViecTuTaiLai || duLieu.cat_viec || null;
+    /* Con số này từng là một câu nói dối cùng lớp với `#ls-dem` in "500/500":
+       `ds.length` là số việc ĐÃ TẢI VỀ, không phải số việc đang mở. Ai ôm 47
+       việc mà đọc được "30 việc đang mở" thì yên tâm nhầm — đúng người đang
+       ngộp lại là người bị giấu. */
+    const tongThat = catViec && Number.isFinite(catViec.tong) ? catViec.tong : null;
+    $('#vp-viec-dem').textContent = !ds.length ? ''
+      : tongThat != null ? tongThat + ' việc đang mở'
+      : catViec ? ds.length + '+ việc đang mở'
+      : ds.length + ' việc đang mở';
     $('#vp-viec-trong').hidden = ds.length > 0;
     $('#vp-viec-ds').innerHTML = ds.map(v => {
       const tuTroLy = String(v.nguoi_giao_id || '').startsWith('vp:');
@@ -13632,7 +13672,7 @@ async function khoiDongVanPhong() {
                 <div class="vp-viec-ten">${esc(v.tieu_de)}</div>
                 ${v.dau_ra ? `<div class="vp-viec-mo-ta">Xong là có: ${esc(v.dau_ra)}</div>` : ''}
               </div>`;
-    }).join('');
+    }).join('') + (catViec ? veDaiCatChuoi(catViec, 'việc') : '');
 
     const coMat = duLieu.nguoi_co_mat || [];
     $('#vp-comat-dem').textContent = coMat.length ? coMat.length + ' người' : 'chỉ có bạn';
@@ -13648,7 +13688,7 @@ async function khoiDongVanPhong() {
   async function taiLai() {
     duLieu = await API.vpTongQuan();
     veMatBang();
-    veCotBen();
+    veCotBen(duLieu.cat_viec);
 
     const nhac = $('#vp-nhac');
     if (!duLieu.hoi_dap_bat_chua) {

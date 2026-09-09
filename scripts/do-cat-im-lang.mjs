@@ -97,6 +97,14 @@ const MIEN_TRU = [
     lyDo: 'HÀNG ĐỢI: đơn huỷ trong THÁNG hiện tại, trần 300 — cần dải cắt ở vòng sau, chưa chạm trần theo số liệu 28/08/2026.' },
   { tep: 'src/index.js', ham: 'vdDanhSach',
     lyDo: 'CÓ CHỦ Ý: 20 lời khen trong 48h gần nhất — bảng tin theo thời gian, không phải sổ tra cứu.' },
+  /* Hai dòng dưới đây là của Văn phòng ảo. Cả hai đều đọc TIN NHẮN, và tin
+     nhắn thì cắt từ đầu chứ không cắt từ cuối — người ta đọc từ tin mới về
+     tin cũ. Cùng lớp với chatDanhSach ở trên, cùng chờ một thiết kế cuộn
+     ngược, và cùng phải xoá khỏi bảng này ngay khi thiết kế đó có. */
+  { tep: 'src/vanphong.js', ham: 'hoiThoai',
+    lyDo: 'HÀNG ĐỢI: 60 tin gần nhất của một mạch trò chuyện với Mây, chưa có nút "xem tin cũ hơn" — cùng lớp chatDanhSach, cần cuộn ngược chứ không vá bằng một dải chữ.' },
+  { tep: 'src/vanphong.js', ham: 'hoi',
+    lyDo: 'KHÔNG PHẢI DANH SÁCH CHO NGƯỜI ĐỌC: đây là CỬA SỔ NGỮ CẢNH nạp cho mô hình — trần bao nhiêu tin gần nhất thì nhét vào prompt. Nới trần ở đây là nở prompt ở MỌI lượt hỏi, tốn Neuron thật; và người dùng không hề nhìn danh sách này.' },
   { tep: 'src/hopdong.js', ham: 'danhSach',
     lyDo: 'HÀNG ĐỢI: hợp đồng của MỘT người, trần 100 — một người ký 100 hợp đồng là chuyện chưa từng có.' },
   { tep: 'src/mota-cv.js', ham: 'danhSach',

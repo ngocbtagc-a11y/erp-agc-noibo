@@ -31,6 +31,7 @@ import { MAY } from './agents-vp.js';
 import { hoiMay } from './vp-may.js';
 import { xepChoTheoCoCau } from './vp-mat-bang.js';
 import { duocXemTab } from './quyen.js';
+import { catBot, nhanCat } from './cat-danh-sach.js';
 
 /* ---- Trả lời JSON (bản riêng, để file tự đứng được) --------------------- */
 
@@ -266,14 +267,22 @@ export async function tongQuan(env, phien) {
 
   // Việc của chính người đang xem — kể cả việc do người khác giao, để họ nhìn
   // một chỗ là thấy hết, không phải mở hai nơi.
-  const { results: viecCuaToi } = await env.DB.prepare(`
+  /* Trần 30 việc. Ai đang ôm hơn 30 việc mở thì đó CHÍNH LÀ người cần biết
+     mình đang ôm bao nhiêu — im lặng cắt ở đây là giấu đúng người đang
+     ngộp. Hỏi thừa một dòng để biết "còn nữa" mà không phải đếm. */
+  const GH_VIEC = 30;
+  const kqViec = await env.DB.prepare(`
     SELECT id, tieu_de, dau_ra, mo_ta, nguoi_giao_id, nguoi_giao_ten,
            han_chot, trang_thai, tao_luc
       FROM cong_viec
      WHERE nguoi_nhan_id = ? AND trang_thai IN ('moi', 'dang_lam')
      ORDER BY COALESCE(han_chot, '9999-12-31'), tao_luc DESC
-     LIMIT 30
+     LIMIT ${GH_VIEC + 1}
   `).bind(phien.nhan_su_id).all();
+  const { ds: viecCuaToi, biCat: viecBiCat } = catBot(kqViec, GH_VIEC);
+  const catViec = await nhanCat(env, viecBiCat, GH_VIEC,
+    "SELECT COUNT(*) FROM cong_viec WHERE nguoi_nhan_id = ? AND trang_thai IN ('moi', 'dang_lam')",
+    [phien.nhan_su_id]);
 
   return json({
     toi: {
@@ -290,6 +299,7 @@ export async function tongQuan(env, phien) {
       vi_tri: matBang.vi_tri[a.id] || a.vi_tri
     })),
     nguoi_co_mat: coMat,
+    cat_viec: catViec,
     viec_cua_toi: viecCuaToi,
     hoi_dap_bat_chua: !!env.AI,
     may: { ...MAY, vi_tri: matBang.vi_tri[MAY.id] || MAY.vi_tri },
@@ -421,13 +431,19 @@ export async function nangSuat(env, phien) {
    ========================================================================== */
 export async function kyNangDs(env, phien) {
   if (!duocXemTab(phien, 'vanphong')) return loi('Bạn chưa được vào văn phòng ảo.', 403);
-  const { results } = await env.DB.prepare(
+  /* Trần 200 bài. Kỹ năng bị cắt im lặng là kiểu hỏng tệ nhất ở đây: Sếp
+     mở ra thấy đủ, tưởng đã dạy hết, trong khi bài thứ 201 không bao giờ
+     hiện ra để mà tắt đi. */
+  const GH_KN = 200;
+  const kqKn = await env.DB.prepare(
     'SELECT k.id, k.agent_id, k.tieu_de, k.noi_dung, k.yeu_cau_goc, k.dang_dung, k.tao_luc, ' +
     '       ns.ho_ten AS nguoi_day ' +
     '  FROM vp_ky_nang k LEFT JOIN nhan_su ns ON ns.id = k.nguoi_day_id ' +
-    ' ORDER BY k.tao_luc DESC LIMIT 200'
+    ' ORDER BY k.tao_luc DESC LIMIT ' + (GH_KN + 1)
   ).all();
-  return json({ ky_nang: results || [] });
+  const { ds: kyNang, biCat } = catBot(kqKn, GH_KN);
+  const cat = await nhanCat(env, biCat, GH_KN, 'SELECT COUNT(*) FROM vp_ky_nang');
+  return json({ ky_nang: kyNang, cat });
 }
 
 export async function kyNangDoiTrangThai(env, phien, body) {
