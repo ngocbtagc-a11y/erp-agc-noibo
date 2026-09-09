@@ -506,9 +506,18 @@
                vào nên mỗi lần bước vào văn phòng là thấy. -->
           <div class="vp-treo" id="vp-treo" hidden></div>
 
+          <!-- BA NÚT Ở THANH NGOÀI, KHÔNG PHẢI BẢY — đo thật, không phải cảm tính.
+               Đặc tả của Sếp có 5 màn mới. Nhét cả 5 lên thanh này thành 7 nút:
+               ở 375px mỗi nhãn vỡ 2–3 dòng và thanh cao vọt từ 35px lên hơn
+               100px, lấy thẳng chỗ của phần vốn đã thiếu chỗ. Đặt `nowrap` cho
+               đỡ vỡ dòng thì trang tràn ngang — và `.vp-tabphu` không có
+               `overflow-x` nên không có lưới an toàn.
+               Nên 5 màn ấy là MỘT khu, vào bằng một nút, và có thanh tab riêng
+               bên trong. Thanh ngoài giữ đúng 1 hàng ở cả hai bề ngang. -->
           <div class="vp-tabphu" role="tablist">
             <button type="button" class="vp-tabphu-nut dang-mo" data-man="matbang">Mặt bằng</button>
             <button type="button" class="vp-tabphu-nut" data-man="nangsuat">Năng suất</button>
+            <button type="button" class="vp-tabphu-nut" data-man="daotao">Đào tạo &amp; Luật</button>
           </div>
 
           <div class="vp-man" id="vp-man-matbang">
@@ -543,6 +552,99 @@
               <div class="panel-body">
                 <div class="vp-ns-bang" id="vp-ns-bang"></div>
                 <p class="vp-ns-ghichu" id="vp-ns-ghichu"></p>
+              </div>
+            </div>
+          </div>
+
+          <!-- ================= KHU ĐÀO TẠO & LUẬT — năm màn ==================
+               Trước bản này "Kỹ năng Sếp dạy thêm" KHÔNG phải một màn: nó là
+               một khối <div> chèn vào đuôi hộp hồ sơ trợ lý, không tab, không
+               menu, không đường đi tới. Đo thật ở 1440×900: chỉ với 6 bài học
+               nó đã chiếm 79,5% chiều cao hộp hồ sơ (2.411px = 81,7% ở 375px),
+               tức luật nhà "ưu tiên hiển thị trọn 1 màn" đang bị vi phạm ngay
+               hôm nay. Nay nó có chỗ đứng riêng, và hộp hồ sơ trả về đúng việc
+               của hộp hồ sơ: giới thiệu trợ lý.
+               ================================================================= -->
+          <div class="vp-man" id="vp-man-daotao" hidden>
+            <div class="panel">
+              <div class="panel-head">
+                <h4>Đào tạo &amp; Luật của trợ lý ảo</h4>
+                <span class="hint" id="vp-dt-nhac"></span>
+              </div>
+              <div class="panel-body">
+                <!-- Thanh tab TRONG khu. `flex-wrap` cho phép xuống hàng ở màn
+                     hẹp thay vì bóp nhãn vỡ dòng, và `overflow-x` là lưới an
+                     toàn nếu sau này ai đó thêm nút thứ sáu. -->
+                <div class="vp-tab2" role="tablist">
+                  <button type="button" class="vp-tab2-nut dang-mo" data-man2="kynang">Kỹ năng</button>
+                  <button type="button" class="vp-tab2-nut" data-man2="quytac">Quy tắc</button>
+                  <button type="button" class="vp-tab2-nut" data-man2="huongdan">Hướng dẫn riêng</button>
+                  <button type="button" class="vp-tab2-nut" data-man2="chat">Chat</button>
+                  <button type="button" class="vp-tab2-nut" data-man2="lichsu">Lịch sử</button>
+                </div>
+
+                <!-- ---- ① KỸ NĂNG ---- -->
+                <div class="vp-man2" id="vp-man2-kynang">
+                  <div class="vp-dt-loc">
+                    <label for="vp-kn-loc">Trợ lý</label>
+                    <select id="vp-kn-loc"><option value="">Tất cả</option></select>
+                  </div>
+                  <div id="vp-kn-ds"></div>
+                </div>
+
+                <!-- ---- ② QUY TẮC ---- -->
+                <div class="vp-man2" id="vp-man2-quytac" hidden>
+                  <div id="vp-qt-ds"></div>
+                </div>
+
+                <!-- ---- ③ HƯỚNG DẪN RIÊNG ---- -->
+                <div class="vp-man2" id="vp-man2-huongdan" hidden>
+                  <form class="vp-hd-form" id="vp-hd-form">
+                    <div class="vp-hd-hang">
+                      <label for="vp-hd-tang">Tầng luật</label>
+                      <select id="vp-hd-tang"></select>
+                    </div>
+                    <div class="vp-hd-hang" id="vp-hd-hang-agent">
+                      <label for="vp-hd-agent">Trợ lý</label>
+                      <select id="vp-hd-agent"></select>
+                    </div>
+                    <div class="vp-hd-hang" id="vp-hd-hang-han" hidden>
+                      <label for="vp-hd-han">Hết hạn sau</label>
+                      <select id="vp-hd-han">
+                        <option value="7">7 ngày</option>
+                        <option value="14">14 ngày</option>
+                        <option value="30">30 ngày</option>
+                        <option value="90">90 ngày</option>
+                      </select>
+                    </div>
+                    <div class="vp-hd-hang">
+                      <label for="vp-hd-tieude">Tiêu đề</label>
+                      <input type="text" id="vp-hd-tieude" maxlength="60"
+                             placeholder="Ví dụ: Cách kiểm phiếu nhập trước khi ký">
+                    </div>
+                    <label for="vp-hd-noidung">Nội dung — viết CÁCH LÀM theo bước</label>
+                    <textarea id="vp-hd-noidung" rows="7" maxlength="2400"
+                              placeholder="Ví dụ: Trước khi ký phiếu nhập, đối chiếu ba chỗ theo thứ tự: tên hàng trên phiếu với tên trên hợp đồng, hạn sử dụng với quy định lưu kho, rồi mới tới số lượng."></textarea>
+                    <p class="vp-hd-nhac">
+                      Ở đây dạy <b>cách làm</b>, không dạy <b>số</b>. Con số nghiệp vụ
+                      (tồn kho, doanh số, giá vốn…) sẽ bị chặn không lưu — số thì trợ lý
+                      phải tra thẳng ERP mới đúng, chép vào đây là hôm sau đã sai mà trợ
+                      lý vẫn nói chắc nịch.
+                    </p>
+                    <div class="vp-hd-loi" id="vp-hd-loi" hidden></div>
+                    <button type="submit" class="btn-primary btn-nho" id="vp-hd-luu">Lưu hướng dẫn</button>
+                  </form>
+                </div>
+
+                <!-- ---- ④ CHAT VỚI NHÂN SỰ ẢO ---- -->
+                <div class="vp-man2" id="vp-man2-chat" hidden>
+                  <div id="vp-dt-chat"></div>
+                </div>
+
+                <!-- ---- ⑤ LỊCH SỬ ---- -->
+                <div class="vp-man2" id="vp-man2-lichsu" hidden>
+                  <div id="vp-ls-ds"></div>
+                </div>
               </div>
             </div>
           </div>

@@ -73,6 +73,106 @@ export function coSoAI(chu) {
 }
 
 /* ==========================================================================
+   SỐ LIỆU NGHIỆP VỤ TRONG MỘT BÀI HỌC — cửa chặn ghi
+   ---------------------------------------------------------------------------
+   Sếp Ngọc chốt 09/09/2026 (D2 mục 3): bài học dạy CÁCH LÀM, không dạy SỐ.
+   Số thì phải tra ERP mới đúng; dạy suông thì hôm sau đã sai mà trợ lý vẫn nói
+   chắc nịch. Lời hứa này đã nằm trong chú thích migrations/them-vp-kynang.sql:14
+   từ 06/09 và trong prompt dạy nghề (vp-may.js) — nhưng chú thích không phải
+   ràng buộc, và lời dặn trong prompt thì dỗ được. Đây là chỗ biến nó thành mã.
+
+   VÌ SAO KHÔNG DÙNG THẲNG `coSoAI()` LÀM CỬA CHẶN — đo được, không phải ý kiến:
+   `coSoAI` bắt MỌI cụm chữ số. Chính prompt dạy nghề của repo này (vp-may.js:597)
+   nêu bài học mẫu đúng chuẩn là *"công văn gồm 9 phần theo thứ tự…"*, và chính
+   nó dặn *"khoảng 150 đến 400 chữ"*. Lấy `coSoAI` làm cửa chặn thì hai câu ấy
+   bị đá ra — cùng với mọi mốc luật ("Điều 24 Bộ luật Lao động"), mọi ngày tháng
+   quy trình, mọi bước đánh số. Một cái cửa chặn gần như mọi thứ đi qua là cái
+   cửa sẽ bị gỡ trong tuần. Thước kêu sai vài lần là người ta thôi tin nó.
+
+   NÊN CHIA HAI NHỊP:
+     ① `coSoAI(chu)` — sàng RẺ. Không có chữ số nào thì thôi, khỏi quét tiếp.
+     ② `soNghiepVu(chu)` — con số ĐỨNG CẠNH một dấu hiệu nghiệp vụ.
+   Dấu hiệu nghiệp vụ = đơn vị tiền/lượng, hoặc tên một đại lượng chỉ ERP mới
+   biết (tồn kho, doanh số, giá vốn, công nợ…). Đó đúng là loại số "hôm sau đã
+   sai": tồn kho đổi mỗi giờ, doanh số đổi mỗi ngày, giá vốn đổi mỗi lô nhập.
+   Còn "9 phần của công văn" thì sang năm vẫn 9 phần.
+
+   CỬA SỔ 40 KÝ TỰ mỗi bên: đủ ôm "tồn kho hiện tại 412 thùng" và "412 thùng
+   hàng đang nằm trong kho", không đủ để một con số ở đầu đoạn dính vào một chữ
+   "doanh số" ở cuối đoạn.
+
+   Trả về `{ dinh, tu, doan }` — KHÔNG trả true/false trống. Người bị chặn phải
+   nhìn thấy CHÍNH CÂU đã làm họ bị chặn, nếu không họ chỉ biết là "không lưu
+   được" rồi gõ lại y hệt.
+   ========================================================================== */
+
+/* HAI LOẠI DẤU HIỆU, HAI CÁCH DÒ — và sự khác nhau này là kết quả của một ca
+   ĐỎ THẬT trên bàn đo, không phải thiết kế trên giấy.
+
+   Bản đầu gộp làm một danh sách và dò "có xuất hiện trong cửa sổ quanh con số".
+   Bàn đo `do-khu-dao-tao.mjs` lập tức bắt được câu
+
+       "Hợp đồng thử việc tối đa 60 ngày theo Điều 25 Bộ luật Lao động 2019."
+
+   bị chặn oan — vì chữ **"đồng"** (đơn vị tiền) nằm ngay trong **"hợp đồng"**.
+   Đó là một bài học pháp chế hoàn toàn đúng chuẩn, và nếu cửa chặn đá nó ra thì
+   trong tuần sẽ có người gỡ cửa. Nên tách: */
+
+/** ① ĐƠN VỊ — chỉ tính khi đứng NGAY SAU con số. "185.000 đồng" là tiền;
+ *  "hợp đồng … 60 ngày" thì chữ đồng đứng TRƯỚC, không phải đơn vị. */
+const DON_VI_SAU_SO = [
+  'đồng', 'vnđ', 'vnd', 'triệu', 'tỷ', 'usd', '₫',
+  'thùng', 'kiện', 'hộp', 'gói', 'kg', 'tấn'
+];
+
+/** ② ĐẠI LƯỢNG — tính ở bất kỳ đâu trong cửa sổ, vì chúng chỉ có một nghĩa.
+ *
+ *  CỐ Ý KHÔNG CÓ Ở ĐÂY: 'lương', 'số lượng', 'chi phí', 'đơn hàng', 'lô hàng'.
+ *  Chúng xuất hiện liên tục trong bài học về QUY TRÌNH ("kiểm 3 đơn hàng đầu
+ *  ca", "đối chiếu số lượng ở 2 chỗ") và sẽ chặn oan hàng loạt. Mà bỏ chúng ra
+ *  KHÔNG mở lỗ hổng nào: con số thật đi kèm chúng bao giờ cũng có đơn vị ở
+ *  ngay sau — "lương 8 triệu", "số lượng 412 thùng" — nên danh sách ① bắt được.
+ *  Nếu Sếp thấy vẫn lọt ca nào thì thêm vào đây, một chỗ duy nhất. */
+const DAI_LUONG_ERP = [
+  'tồn kho', 'tồn cuối', 'doanh số', 'doanh thu', 'giá vốn', 'giá bán',
+  'giá nhập', 'đơn giá', 'chiết khấu', 'công nợ', 'lợi nhuận', 'sản lượng',
+  'tỷ lệ hoàn', 'mã số thuế', 'mst', 'cccd', 'số tài khoản', 'stk'
+];
+
+/** Con số nghiệp vụ đầu tiên tìm thấy, hoặc `null`.
+ *  @returns {{dinh: string, tu: string, doan: string} | null}
+ *    dinh — chính con số bị bắt
+ *    tu   — dấu hiệu nghiệp vụ đứng cạnh nó
+ *    doan — đoạn chữ quanh đó, để hiện lại cho người gõ nhìn thấy */
+export function soNghiepVu(chu) {
+  const s = String(chu || '');
+  if (!s) return null;
+  const viTri = viTriSoAI(s);
+  if (!viTri.length) return null;          // ① sàng rẻ: không chữ số thì thôi
+
+  const thuong = s.toLowerCase();
+  const CUA_SO = 40;
+  for (const [batDau, dai] of viTri) {
+    const sauSo = thuong.slice(batDau + dai, batDau + dai + 12).replace(/^[\s.,:]+/, '');
+    for (const tu of DON_VI_SAU_SO) {
+      if (sauSo.startsWith(tu)) {
+        return { dinh: s.slice(batDau, batDau + dai), tu,
+                 doan: s.slice(Math.max(0, batDau - CUA_SO), batDau + dai + CUA_SO).trim() };
+      }
+    }
+    const traiI = Math.max(0, batDau - CUA_SO);
+    const phaiI = Math.min(s.length, batDau + dai + CUA_SO);
+    const quanh = thuong.slice(traiI, phaiI);
+    for (const tu of DAI_LUONG_ERP) {
+      if (quanh.includes(tu)) {
+        return { dinh: s.slice(batDau, batDau + dai), tu, doan: s.slice(traiI, phaiI).trim() };
+      }
+    }
+  }
+  return null;
+}
+
+/* ==========================================================================
    Ô DỮ LIỆU CHÍNH THỨC — CON SỐ KHÔNG ĐƯỢC TỰ ĐIỀN VÀO
    ---------------------------------------------------------------------------
    `docCCCD` (src/nhansu.js) trả các trường để ĐIỀN SẴN form hồ sơ lao động.

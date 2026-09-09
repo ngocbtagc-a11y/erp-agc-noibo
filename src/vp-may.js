@@ -36,6 +36,8 @@
 import { AGENTS, agentTheoId, agentChoVaiTro, ghepPrompt, ghepPromptNgan } from './agents-vp.js';
 import { congCuCuaAgent, chayCongCu, CONG_CU } from './vp-cong-cu.js';
 import { taoPhieuGopY } from './vp-gopy.js';
+import { docLuat, kiemTruocKhiGhi } from './vp-luat.js';
+import { demLuotAI } from './vp-dem-ai.js';
 
 /* Cùng model Hồ Ly đang dùng thật trong production. Đổi model là đổi một chỗ. */
 export const MAY_MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
@@ -77,7 +79,14 @@ function bocJson(tho) {
   try { return JSON.parse(s.slice(dau, cuoi + 1)); } catch { return null; }
 }
 
+/* MỘT CỬA DUY NHẤT GỌI AI TRONG FILE NÀY — nên cũng là chỗ duy nhất đếm.
+   Đếm ở từng chỗ gọi (8 chỗ trong file) thì chỗ thứ 9 người sau thêm vào sẽ
+   không đếm, và bảng số lặng lẽ nói dối là đang dùng ít hơn thực tế. */
 async function goiAI(env, prompt, maxTokens = 900) {
+  /* Đếm TRƯỚC khi gọi, không phải sau. Lượt gọi hỏng giữa chừng vẫn tiêu
+     Neuron của Cloudflare; chỉ đếm lượt thành công là đếm thiếu đúng những
+     lượt đáng lo nhất. */
+  await demLuotAI(env, 'may');
   const kq = await env.AI.run(MAY_MODEL, {
     messages: [{ role: 'user', content: prompt }],
     max_tokens: maxTokens
@@ -605,20 +614,25 @@ QUY TẮC VIẾT noi_dung — bỏ qua là bài học vô dụng:
   của bạn sau này, viết dài là mỗi câu hỏi về sau đều phải trả giá.`;
 }
 
-/* Kỹ năng đã dạy cho một trợ lý — đọc ở MỌI câu hỏi gửi tới trợ lý đó, nên có
-   chỉ mục một phần riêng (xem migrations/them-vp-kynang.sql) và có trần 12 bài.
-   Trần không phải để tiết kiệm chỗ lưu mà để tiết kiệm token: mỗi bài học đều
-   được nạp vào prompt ở mọi lượt hỏi về sau, dạy vô tội vạ là mỗi câu hỏi từ
-   đó trở đi đều đắt thêm. */
+/* Bài học của RIÊNG một trợ lý (tầng `agent`) — dùng cho chặng DẠY NGHỀ, nơi
+   mô hình cần thấy nó đã có bài nào để không viết trùng.
+   KHÔNG dùng để ghép prompt: chỗ đó gọi `docLuat()` (src/vp-luat.js), vốn đọc
+   đủ năm tầng, lọc hạn ở SQL và có trần theo tổng ký tự.
+
+   Trần 12 bài giữ nguyên ở đây vì đây là con số cho MẮT MÔ HÌNH lúc nó tự soi
+   trùng lặp, không phải con số chi phí. Trần chi phí là TRAN_KY_TU_LUAT. */
 async function docKyNang(env, agentId) {
   try {
     const { results } = await env.DB.prepare(
       'SELECT id, tieu_de, noi_dung FROM vp_ky_nang ' +
-      'WHERE agent_id = ? AND dang_dung = 1 ORDER BY tao_luc DESC LIMIT 12'
+      "WHERE agent_id = ? AND dang_dung = 1 AND tang = 'agent' " +
+      'ORDER BY tao_luc DESC LIMIT 12'
     ).bind(agentId).all();
     return results || [];
   } catch (e) {
-    console.error('Đọc kỹ năng lỗi:', e.message);
+    /* Thiếu cột `tang` = migration them-vp-kynang-tang.sql chưa chạy. Trợ lý
+       vẫn phải dạy được, chỉ là chưa soi được trùng lặp. */
+    console.error('Đọc kỹ năng lỗi (migration them-vp-kynang-tang.sql đã chạy chưa?):', e.message);
     return [];
   }
 }
@@ -645,20 +659,53 @@ async function dayNghe(env, agent, nguoi, homNay, yeuCau) {
     return { trung_lap: true, tieu_de: String(kq.tieu_de || "").trim() };
   }
 
-  const tieuDe = String(kq.tieu_de || "").trim().slice(0, 60);
-  const noiDung = String(kq.noi_dung || "").trim().slice(0, 2400);
-  if (!tieuDe || noiDung.length < 40) return { loi: true };
+  /* CỬA CHẶN NỘI DUNG — dùng chung với đường Sếp gõ thẳng (vanphong.js).
+     Trước bản này, toàn bộ kiểm tra trước khi ghi chỉ có ba cửa ĐỘ DÀI và hai
+     cửa do CHÍNH MÔ HÌNH tự chấm (`can_cong_cu`, `trung_lap`). Không một dòng
+     nào kiểm nội dung: không lọc số liệu, không thoát ký tự phân cách.
+     `kiemTruocKhiGhi` làm cả hai, và làm ở một chỗ cho cả hai đường ghi. */
+  const kiem = kiemTruocKhiGhi(kq.tieu_de, kq.noi_dung);
+  if (!kiem.ok) {
+    /* Mô hình vừa soạn ra một bài chứa số nghiệp vụ — dù prompt dạy nghề đã
+       dặn đừng. Đúng bằng chứng cho luật nhà "lời dặn thì dỗ được": trả lý do
+       thật ra ngoài để Sếp thấy nó vừa định dạy cái gì. */
+    return { tu_choi: true, ly_do: kiem.ly_do + (kiem.chi_tiet ? ' ' + kiem.chi_tiet : '') };
+  }
+  const tieuDe = kiem.tieu_de;
+  const noiDung = kiem.noi_dung;
 
   if (daCo.length >= 12) {
     return { day_roi: true, tieu_de: tieuDe, noi_dung: noiDung,
              qua_tai: true, dang_co: daCo.length };
   }
 
+  /* ---- SỔ GHI ĐÚNG NGƯỜI, ĐÚNG MÁY (D4) --------------------------------
+     400 chữ `noi_dung` này do Llama soạn (goiAI ở đầu hàm). Sếp chỉ nói một
+     câu "cần học soạn thảo văn bản". Bản trước ghi `nguoi_day_id` = Sếp cho cả
+     dòng chữ của máy — sổ ghi tên người cho việc của máy.
+     Nay ba cột nói ba sự thật khác nhau:
+       nguoi_thuc_hien_loai = 'may'  → AI SOẠN ra chữ này
+       tac_nhan = MAY_MODEL          → MÁY NÀO soạn
+       uy_quyen_boi_id = Sếp         → AI CHỊU TRÁCH NHIỆM
+     `nguoi_day_id` giữ nguyên nghĩa cũ "ai bấm nút dạy" để mọi câu đọc cũ và
+     6 dòng cũ trên bản thật không phải diễn giải lại (Rule 10).
+
+     ⚠️ CHECK ở tầng DB đòi `uy_quyen_boi_id IS NOT NULL` khi loại là 'may'.
+     Thiếu nhan_su_id thì THÀ TỪ CHỐI còn hơn ghi một bài học không ai bảo lãnh
+     — đó chính là 6 dòng NULL đang phải mang nhãn 'khong_ro' hôm nay. */
+  if (!nguoi.nhan_su_id) {
+    return { tu_choi: true, ly_do:
+      'Tài khoản đang dùng chưa nối với hồ sơ nhân sự, nên không ghi được ai chịu trách nhiệm ' +
+      'cho bài học này. Nhờ Quản trị nối hồ sơ giúp rồi dạy lại.' };
+  }
+
   const id = "kn_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
   await env.DB.prepare(
-    "INSERT INTO vp_ky_nang (id, agent_id, tieu_de, noi_dung, yeu_cau_goc, nguoi_day_id) " +
-    "VALUES (?, ?, ?, ?, ?, ?)"
-  ).bind(id, agent.id, tieuDe, noiDung, String(yeuCau).slice(0, 500), nguoi.nhan_su_id || null).run();
+    "INSERT INTO vp_ky_nang (id, agent_id, tieu_de, noi_dung, yeu_cau_goc, nguoi_day_id, " +
+    "                        tang, nguoi_thuc_hien_loai, tac_nhan, uy_quyen_boi_id) " +
+    "VALUES (?, ?, ?, ?, ?, ?, 'agent', 'may', ?, ?)"
+  ).bind(id, agent.id, tieuDe, noiDung, String(yeuCau).slice(0, 500),
+         nguoi.nhan_su_id, MAY_MODEL, nguoi.nhan_su_id).run();
 
   return { day_roi: true, id, tieu_de: tieuDe, noi_dung: noiDung, dang_co: daCo.length + 1 };
 }
@@ -801,9 +848,16 @@ export async function hoiMay({ env, phien, cauHoi, lichSu = [], homNay, coAnhKem
   const laDayNghe = dinh.loai === 'HUAN_LUYEN';
   const laGopY = dinh.loai === 'GOP_Y_ERP';
 
-  /* Đọc kỹ năng dạy thêm MỘT LẦN rồi dùng lại cho cả ba vòng. Đọc ở từng vòng
-     là ba lượt truy vấn cho cùng một thứ không đổi giữa chừng. */
-  const kyNangCuaAgent = (laDayNghe || laGopY) ? [] : await docKyNang(env, agent.id);
+  /* Đọc luật mềm MỘT LẦN rồi dùng lại cho cả ba vòng. Đọc ở từng vòng là ba
+     lượt truy vấn cho cùng một thứ không đổi giữa chừng.
+
+     `docLuat` trả về năm tầng đã lọc: chỉ tầng có liên quan tới TRỢ LÝ NÀY và
+     VAI TRÒ người đang hỏi, đã bỏ bài hết hạn ngay ở SQL, đã cắt theo trần
+     tổng ký tự. Trước bản này chỗ đây đọc phẳng 12 bài của một trợ lý và
+     không có trần nào tính bằng ký tự — xem src/vp-luat.js để biết con số. */
+  const kyNangCuaAgent = (laDayNghe || laGopY)
+    ? []
+    : await docLuat(env, agent.id, phien.vai_tro);
   const dangBan = !laDayNghe && !laGopY && dinh.loai !== 'CHAT' && dsPhu.length > 0;
   const bienBan = [];        // ghi lại cuộc họp, để người đọc biết đã bàn những gì
   let traLoi;

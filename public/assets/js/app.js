@@ -13840,8 +13840,12 @@ async function khoiDongVanPhong() {
          <div class="vp-goi-y">${nl.hoi_thu.map(x =>
            `<button type="button" class="vp-chip">${esc(x)}</button>`).join('')}</div>
        </div>
-       <p class="vp-hoso-nhac">Mọi câu hỏi đều gửi qua Mây — Mây sẽ tự chuyển cho ${esc(a.ten)} nếu đúng việc.</p>`;
-    veKyNangTrongHoSo(a.id, $('#vp-hoso-than'));
+       <p class="vp-hoso-nhac">Mọi câu hỏi đều gửi qua Mây — Mây sẽ tự chuyển cho ${esc(a.ten)} nếu đúng việc.
+         <br>Bài học Sếp đã dạy cho ${esc(a.ten)} nằm ở tab <b>Đào tạo &amp; Luật</b>.</p>`;
+    /* KHÔNG chèn danh sách bài học vào đây nữa. Đo thật ở 1440×900: 6 bài học
+       chiếm 1.911px = 79,5% chiều cao hộp hồ sơ (81,7% ở 375×812) — hộp giới
+       thiệu trợ lý biến thành hộp danh sách bài học. Nay bài học có khu riêng,
+       và dữ liệu chỉ hiện ở MỘT chỗ. */
     hoSoNen.hidden = false;
   }
 
@@ -13940,67 +13944,363 @@ async function khoiDongVanPhong() {
         n.classList.toggle('dang-mo', n === nut));
       $('#vp-man-matbang').hidden  = man !== 'matbang';
       $('#vp-man-nangsuat').hidden = man !== 'nangsuat';
+      $('#vp-man-daotao').hidden   = man !== 'daotao';
       if (man === 'nangsuat') veNangSuat();
+      if (man === 'daotao')   moKhuDaoTao();
     });
   });
 
 
-  /* ---- Kỹ năng đã dạy thêm, hiện trong hồ sơ từng trợ lý ------------------
-     Dạy được thì phải GỠ được. Một bài học sai mà không tắt đi thì nó lặng lẽ
-     làm lệch mọi câu trả lời về sau, và càng để lâu càng khó lần ra vì sao. */
-  let dsKyNang = null;
-  let catKyNang = null;
+  /* ========================================================================
+     KHU ĐÀO TẠO & LUẬT — năm màn
+     ------------------------------------------------------------------------
+     TRƯỚC BẢN NÀY khối "Kỹ năng Sếp dạy thêm" nằm ở đuôi hộp hồ sơ trợ lý.
+     Đo thật ở 1440×900: chỉ với 6 bài học nó đã chiếm 1.911px = 79,5% chiều
+     cao hồ sơ (2.411px = 81,7% ở 375×812), và trần hiện tại là 12 bài ĐANG BẬT
+     cộng số bài đã tắt không giới hạn. Luật nhà "ưu tiên hiển thị trọn 1 màn"
+     bị vi phạm ngay hôm nay, trước khi thêm gì.
 
-  async function veKyNangTrongHoSo(agentId, oCho) {
-    if (!oCho) return;
-    try {
-      if (!dsKyNang) {
-        const kq = await API.vpKyNang();
-        dsKyNang = kq.ky_nang || [];
-        catKyNang = kq.cat || null;
-      }
-    } catch (e) { return; }
+     Nay nó có khu riêng. Hộp hồ sơ chỉ còn một dòng dẫn đường — GIỮ MỘT NGUỒN,
+     không hiện cùng dữ liệu ở hai nơi với hai hành vi khác nhau (đúng luật
+     migrations/them-vanphong.sql:20-25: "dựng bảng việc thứ hai thì chắc chắn
+     sẽ có một chỗ không ai mở").
+     ======================================================================== */
+  let dsKyNang = null;      // { ky_nang, cat, duoc_day, agent_xem_duoc }
+  let dsLuat = null;        // { thu_tu, tang, an_toan, tran_ky_tu }
+  let daMoDaoTao = false;
 
-    const cua = dsKyNang.filter(k => k.agent_id === agentId);
-    if (!cua.length) return;
+  /* Chuyển màn trong khu */
+  document.querySelectorAll('.vp-tab2-nut').forEach(nut => {
+    nut.addEventListener('click', () => {
+      const m = nut.dataset.man2;
+      document.querySelectorAll('.vp-tab2-nut').forEach(n =>
+        n.classList.toggle('dang-mo', n === nut));
+      ['kynang', 'quytac', 'huongdan', 'chat', 'lichsu'].forEach(t => {
+        const o = $('#vp-man2-' + t);
+        if (o) o.hidden = t !== m;
+      });
+      if (m === 'quytac')   veQuyTac();
+      if (m === 'huongdan') veFormHuongDan();
+      if (m === 'chat')     veChatDaoTao();
+      if (m === 'lichsu')   veLichSuLuat();
+    });
+  });
 
-    oCho.insertAdjacentHTML('beforeend',
-      '<div class="vp-hoso-muc vp-kn-muc"><h5>Kỹ năng Sếp dạy thêm</h5>' +
-      (catKyNang ? veDaiCatChuoi(catKyNang, 'bài học') : '') +
-      cua.map(k =>
-        '<div class="vp-kn" data-id="' + esc(k.id) + '"' +
-        (k.dang_dung ? '' : ' data-tat="1"') + '>' +
-          '<div class="vp-kn-dau">' +
-            '<b>' + esc(k.tieu_de) + '</b>' +
-            '<button type="button" class="vp-kn-nut">' +
-              (k.dang_dung ? 'Tắt bài này' : 'Bật lại') +
-            '</button>' +
-          '</div>' +
-          '<div class="vp-kn-noi">' + esc(k.noi_dung).replace(/\n/g, '<br>') + '</div>' +
-          '<div class="vp-kn-chan">' + esc(k.nguoi_day || '') + ' dạy ' + esc(k.tao_luc || '') + '</div>' +
-        '</div>').join('') + '</div>');
+  async function moKhuDaoTao() {
+    if (daMoDaoTao) return;
+    daMoDaoTao = true;
+    await veKyNang();
   }
 
+  /* ---- ① KỸ NĂNG ---------------------------------------------------------
+     Dạy được thì phải GỠ được. Một bài học sai mà không tắt đi thì nó lặng lẽ
+     làm lệch mọi câu trả lời về sau, và càng để lâu càng khó lần ra vì sao. */
+  async function napKyNang(batBuoc) {
+    if (dsKyNang && !batBuoc) return dsKyNang;
+    dsKyNang = await API.vpKyNang();
+    return dsKyNang;
+  }
+
+  /* `duLieu.agent` — KHÔNG phải `duLieu.doi`. Máy chủ trả khoá `agent`
+     (src/vanphong.js:299); `doi` là khoá bàn đo đầu tiên gõ nhầm, và hậu quả
+     là danh sách trợ lý rỗng, ô lọc rỗng, tên trợ lý hiện thành mã. Bàn đo
+     giao diện bắt được vì nó dựng máy giả theo ĐÚNG hình dạng máy chủ thật. */
+  function tenTroLy(id) {
+    const a = (duLieu?.agent || []).find(x => x.id === id);
+    return a ? a.ten : (id || '— chung —');
+  }
+
+  /* Một thẻ bài học. `nguoi_thuc_hien_loai` được BÀY RA, không giấu: bài do
+     Llama soạn mà sổ chỉ ghi tên Sếp là đúng ca them-gopy-lichsu-tacnhan.sql
+     đã đi vá một lần, lần này ngược chiều (dòng của MÁY mang tên NGƯỜI). */
+  function theKyNang(k, duocDay) {
+    const soan = k.nguoi_thuc_hien_loai === 'may'
+      ? 'Máy soạn (' + esc(k.tac_nhan || 'không rõ model') + ') — ' +
+        esc(k.uy_quyen_boi || k.nguoi_day || 'không rõ ai uỷ quyền') + ' uỷ quyền'
+      : k.nguoi_thuc_hien_loai === 'nguoi'
+        ? esc(k.uy_quyen_boi || k.nguoi_day || '') + ' gõ thẳng'
+        : 'Không rõ ai soạn — bài ghi trước ngày 09/09/2026';
+
+    return '<div class="vp-kn" data-id="' + esc(k.id) + '"' +
+      (k.dang_dung ? '' : ' data-tat="1"') + '>' +
+      '<div class="vp-kn-dau">' +
+        '<b>' + esc(k.tieu_de) + '</b>' +
+        (duocDay
+          ? '<button type="button" class="vp-kn-nut">' +
+              (k.dang_dung ? 'Tắt bài này' : 'Bật lại') + '</button>'
+          : '') +
+      '</div>' +
+      '<div class="vp-kn-noi">' + esc(k.noi_dung).replace(/\n/g, '<br>') + '</div>' +
+      '<div class="vp-kn-chan">' +
+        esc(tenTroLy(k.agent_id)) + ' · ' + soan + ' · ' + esc(k.tao_luc || '') +
+        (k.het_han_luc ? ' · hết hạn ' + esc(k.het_han_luc) : '') +
+      '</div></div>';
+  }
+
+  async function veKyNang() {
+    const o = $('#vp-kn-ds');
+    if (!o) return;
+    o.innerHTML = '<div class="empty">Đang tải…</div>';
+    let kq;
+    try { kq = await napKyNang(true); }
+    catch (e) { o.innerHTML = '<div class="empty">Chưa tải được danh sách bài học.</div>'; return; }
+
+    /* Ô lọc dựng từ CHÍNH danh sách máy chủ trả về — không dựng từ danh sách
+       chín trợ lý ở trình duyệt. Máy chủ đã lọc theo quyền rồi; dựng lại ở đây
+       là hiện tên phòng người ta không vào được. */
+    const loc = $('#vp-kn-loc');
+    if (loc && loc.options.length <= 1) {
+      const co = [...new Set((kq.ky_nang || []).map(k => k.agent_id).filter(Boolean))];
+      loc.insertAdjacentHTML('beforeend',
+        co.map(id => '<option value="' + esc(id) + '">' + esc(tenTroLy(id)) + '</option>').join(''));
+    }
+
+    const chon = loc ? loc.value : '';
+    const ds = (kq.ky_nang || []).filter(k => !chon || k.agent_id === chon);
+
+    $('#vp-dt-nhac').textContent = kq.duoc_day
+      ? 'Bạn đang có quyền bật/tắt bài học.'
+      : 'Bạn xem được, nhưng bật/tắt bài học là quyền riêng.';
+
+    o.innerHTML = (kq.cat ? veDaiCatChuoi(kq.cat, 'bài học') : '') +
+      (ds.length
+        ? ds.map(k => theKyNang(k, kq.duoc_day)).join('')
+        : '<div class="empty">Chưa có bài học nào.</div>');
+  }
+
+  const oLocKn = $('#vp-kn-loc');
+  if (oLocKn) oLocKn.addEventListener('change', veKyNang);
+
   /* Bật/tắt một bài học. Tắt chứ không xoá: giữ lại để còn đối chiếu "hôm đó
-     Sếp dạy gì mà ra kết luận này". */
+     Sếp dạy gì mà ra kết luận này".
+
+     HỎI LÝ DO, không phải cho có thủ tục: bản trước `UPDATE dang_dung` rồi trả
+     `{ok:true}`, hết — sau vài vòng bật tắt không ai lần ra được bài ĐÚNG bị
+     tắt oan. Lý do đi kèm vào `lich_su_thay_doi_nen` và hiện ở màn Lịch sử. */
   document.addEventListener('click', async e => {
     const nut = e.target.closest('.vp-kn-nut');
     if (!nut) return;
     const o = nut.closest('.vp-kn');
     const id = o.dataset.id;
     const dangTat = o.dataset.tat === '1';
+
+    const lyDo = prompt(dangTat
+      ? 'Bật lại bài học này vì sao? (ghi vào sổ, để sau còn lần ra)'
+      : 'Tắt bài học này vì sao? (ghi vào sổ, để sau còn lần ra)');
+    if (lyDo === null) return;              // bấm Huỷ = không đổi gì
+
     nut.disabled = true;
     try {
-      await API.vpKyNangDoi(id, dangTat);
+      await API.vpKyNangDoi(id, dangTat, lyDo);
       if (dangTat) { delete o.dataset.tat; nut.textContent = 'Tắt bài này'; }
       else { o.dataset.tat = '1'; nut.textContent = 'Bật lại'; }
-      const k = (dsKyNang || []).find(x => x.id === id);
+      const k = (dsKyNang?.ky_nang || []).find(x => x.id === id);
       if (k) k.dang_dung = dangTat ? 1 : 0;
     } catch (err) {
-      nut.textContent = 'Không đổi được';
+      nut.textContent = err.message || 'Không đổi được';
     }
     nut.disabled = false;
   });
+
+  /* ---- ② QUY TẮC ---------------------------------------------------------
+     Bày thứ bậc luật, và bày tầng AN TOÀN HỆ THỐNG kèm đúng câu "không sửa
+     được ở đây". Màn này KHÔNG có ô ghi nào cho tầng đó, và đó là toàn bộ
+     điểm của nó: không có đường ghi thì không có đường lách. */
+  async function veQuyTac() {
+    const o = $('#vp-qt-ds');
+    if (!o) return;
+    if (!dsLuat) {
+      o.innerHTML = '<div class="empty">Đang tải…</div>';
+      try { dsLuat = await API.vpLuat(); }
+      catch (e) { o.innerHTML = '<div class="empty">Chưa tải được thứ bậc luật.</div>'; return; }
+    }
+    const at = dsLuat.an_toan;
+    const nhan = { system_safety: 'An toàn hệ thống' };
+    for (const [ma, t] of Object.entries(dsLuat.tang || {})) nhan[ma] = t.ten;
+
+    const kn = (dsKyNang?.ky_nang) || [];
+    const dem = t => kn.filter(k => k.tang === t && k.dang_dung).length;
+
+    o.innerHTML =
+      '<div class="vp-qt-thutu">' +
+        (dsLuat.thu_tu || []).map((t, i) =>
+          '<span class="' + (t === 'system_safety' ? 'tang-khoa' : '') + '">' +
+            (i + 1) + '. ' + esc(nhan[t] || t) +
+            (t === 'system_safety' ? ' (khoá)' : ' · ' + dem(t) + ' mục') +
+          '</span>').join('') +
+      '</div>' +
+      '<p class="vp-hd-nhac" style="margin-bottom:16px">Tầng thấp <b>không bao giờ đè</b> tầng cao. ' +
+        'Hướng dẫn riêng <b>không phải nguồn sự thật</b> cho dữ kiện nghiệp vụ — số thì trợ lý ' +
+        'tra thẳng ERP. Cả khối luật mềm có trần <b>' + Number(dsLuat.tran_ky_tu || 0).toLocaleString('vi-VN') +
+        ' ký tự</b>, tính chung mọi tầng, vì mỗi ký tự ở đây đều được nạp lại ở mọi lượt hỏi.</p>' +
+
+      '<div class="vp-qt-antoan">' +
+        '<span class="vp-qt-khoa">KHOÁ — không sửa được ở đây</span>' +
+        '<p>' + esc(at.ghi_chu) + ' Chỗ nó nằm: <code>' + esc(at.o_dau) + '</code></p>' +
+        (at.muc || []).map(m =>
+          '<div class="vp-qt-muc"><b>' + esc(m.ten) + '</b><div>' + esc(m.noi_dung) + '</div></div>'
+        ).join('') +
+      '</div>' +
+
+      ['company', 'department', 'role'].map(t => {
+        const ds = kn.filter(k => k.tang === t);
+        return '<div class="vp-dt-nhomtang"><h6>' + esc(dsLuat.tang[t].ten) + '</h6>' +
+          '<p>' + esc(dsLuat.tang[t].giai_thich) + '</p>' +
+          (ds.length ? ds.map(k => theKyNang(k, dsKyNang?.duoc_day)).join('')
+                     : '<div class="empty">Chưa đặt quy tắc nào ở tầng này.</div>') +
+          '</div>';
+      }).join('');
+  }
+
+  /* ---- ③ HƯỚNG DẪN RIÊNG ------------------------------------------------- */
+  function veFormHuongDan() {
+    const oTang = $('#vp-hd-tang');
+    if (!oTang || oTang.options.length) return;      // dựng một lần
+    const tang = dsLuat?.tang || {
+      company: { ten: 'Toàn công ty' }, department: { ten: 'Phòng ban' },
+      role: { ten: 'Vai trò' }, agent: { ten: 'Riêng trợ lý' },
+      user_tmp: { ten: 'Tạm thời' }
+    };
+    oTang.innerHTML = Object.entries(tang)
+      .map(([ma, t]) => '<option value="' + esc(ma) + '"' + (ma === 'agent' ? ' selected' : '') +
+                        '>' + esc(t.ten) + '</option>').join('');
+
+    const oAgent = $('#vp-hd-agent');
+    oAgent.innerHTML = (dsKyNang?.agent_xem_duoc || [])
+      .map(id => '<option value="' + esc(id) + '">' + esc(tenTroLy(id)) + '</option>').join('');
+
+    const doiHien = () => {
+      const t = oTang.value;
+      const canAgent = t === 'agent' || t === 'user_tmp';
+      $('#vp-hd-hang-agent').hidden = !canAgent;
+      $('#vp-hd-hang-han').hidden = t !== 'user_tmp';
+    };
+    oTang.addEventListener('change', doiHien);
+    doiHien();
+  }
+
+  const formHd = $('#vp-hd-form');
+  if (formHd) formHd.addEventListener('submit', async e => {
+    e.preventDefault();
+    const oLoi = $('#vp-hd-loi');
+    const nut = $('#vp-hd-luu');
+    oLoi.hidden = true;
+    nut.disabled = true;
+    try {
+      await API.vpHuongDan({
+        tang: $('#vp-hd-tang').value,
+        agent_id: $('#vp-hd-agent').value,
+        so_ngay: Number($('#vp-hd-han').value) || 7,
+        tieu_de: $('#vp-hd-tieude').value,
+        noi_dung: $('#vp-hd-noidung').value
+      });
+      $('#vp-hd-tieude').value = '';
+      $('#vp-hd-noidung').value = '';
+      dsKyNang = null;
+      await veKyNang();
+      oLoi.hidden = false;
+      oLoi.className = 'vp-hd-nhac';
+      oLoi.textContent = 'Đã lưu. Bài này sẽ được nạp vào mọi câu trả lời của trợ lý từ giờ.';
+    } catch (err) {
+      /* Hiện CHÍNH CÂU đã làm họ bị chặn. "Không lưu được" suông thì người ta
+         gõ lại y hệt rồi lại bị chặn, và đổ lỗi cho phần mềm. */
+      oLoi.hidden = false;
+      oLoi.className = 'vp-hd-loi';
+      oLoi.innerHTML = esc(err.message || 'Chưa lưu được.') +
+        (err.chi_tiet ? '<b>' + esc(err.chi_tiet) + '</b>' : '');
+    }
+    nut.disabled = false;
+  });
+
+  /* ---- ④ CHAT VỚI NHÂN SỰ ẢO --------------------------------------------
+     KHÔNG dựng hội thoại thứ hai, KHÔNG dựng đường ghi thứ hai. Đây là CÙNG
+     mạch `vp_hoi_thoai`/`vp_tin_nhan` của ô Hỏi Mây bên phải, vẽ bằng CÙNG hàm
+     `bongBong()`, và ô nhập ở đây đẩy thẳng vào chính form bên kia.
+     Hai bảng hội thoại cho một cuộc trò chuyện là cách một bảng chết âm thầm. */
+  async function veChatDaoTao() {
+    const o = $('#vp-dt-chat');
+    if (!o) return;
+    o.innerHTML = '<div class="empty">Đang tải mạch trò chuyện…</div>';
+    try {
+      const kq = await API.vpHoiThoai();
+      o.innerHTML =
+        '<p class="vp-hd-nhac" style="margin-bottom:12px">Đây là <b>cùng một mạch</b> với ô ' +
+        '“Hỏi Mây”, không phải hội thoại thứ hai. Muốn dạy nghề thì cứ nói tự nhiên — ' +
+        'ví dụ “anh Tuấn cần học cách kiểm phiếu nhập trước khi ký”.</p>' +
+        '<div class="vp-chat" id="vp-dt-chat-mach">' +
+          (kq.tin_nhan.length
+            ? kq.tin_nhan.map(t => bongBong(t.vai, t.noi_dung,
+                t.cong_cu ? JSON.parse(t.cong_cu) : null, t.anh)).join('')
+            : '<div class="vp-chao"><b>Mây</b> đang trực quầy lễ tân.</div>') +
+        '</div>' +
+        '<form class="vp-hd-form" id="vp-dt-chat-form">' +
+          '<textarea id="vp-dt-chat-nhap" rows="3" ' +
+            'placeholder="Ví dụ: anh Tuấn cần học cách kiểm phiếu nhập trước khi ký"></textarea>' +
+          '<button type="submit" class="btn-primary btn-nho" style="margin-top:10px">Gửi cho Mây</button>' +
+        '</form>';
+
+      $('#vp-dt-chat-form').addEventListener('submit', ev => {
+        ev.preventDefault();
+        const chu = $('#vp-dt-chat-nhap').value.trim();
+        if (!chu) return;
+        $('#vp-dt-chat-nhap').value = '';
+        /* Đẩy vào ĐÚNG form đang có. Viết một đường gửi thứ hai ở đây là nhân
+           đôi mọi thứ quanh nó: chống gửi trùng, đính ảnh, nhịp tim, báo lỗi. */
+        oNhap.value = chu;
+        $('#vp-nhap-form').requestSubmit();
+        /* Quay về mặt bằng để thấy Mây đang chạy — trả lời hiện ở ô bên phải. */
+        document.querySelector('.vp-tabphu-nut[data-man="matbang"]')?.click();
+      });
+    } catch (e) {
+      o.innerHTML = '<div class="empty">Chưa tải được mạch trò chuyện.</div>';
+    }
+  }
+
+  /* ---- ⑤ LỊCH SỬ --------------------------------------------------------- */
+  async function veLichSuLuat() {
+    const o = $('#vp-ls-ds');
+    if (!o) return;
+    o.innerHTML = '<div class="empty">Đang tải…</div>';
+    let kq;
+    try { kq = await API.vpLuatLichSu(); }
+    catch (e) { o.innerHTML = '<div class="empty">Chưa tải được lịch sử.</div>'; return; }
+
+    const viec = d => {
+      if (d.truong === 'them') return '<span class="vp-ls-viec-bat">thêm mới</span>';
+      if (d.truong === 'dang_dung')
+        return d.gia_tri_moi === '1'
+          ? '<span class="vp-ls-viec-bat">bật lại</span>'
+          : '<span class="vp-ls-viec-tat">tắt đi</span>';
+      return esc(d.truong);
+    };
+
+    o.innerHTML =
+      (kq.cat ? veDaiCatChuoi(kq.cat, 'dòng nhật ký') : '') +
+      ((kq.lich_su || []).length
+        ? kq.lich_su.map(d =>
+            '<div class="vp-ls-dong">' +
+              '<b>' + esc(d.tieu_de || d.ban_ghi_id) + '</b>' +
+              viec(d) +
+              '<span>' + esc(d.nguoi_ten || 'không rõ') + '</span>' +
+              '<span class="vp-ls-luc">' + esc(d.luc || '') + '</span>' +
+              (d.ly_do ? '<span class="vp-ls-lydo">Lý do: ' + esc(d.ly_do) + '</span>'
+                       : '<span class="vp-ls-lydo">Không ghi lý do.</span>') +
+            '</div>').join('')
+        : '<div class="empty">Chưa ai đụng vào bài học nào.</div>') +
+
+      /* Bảng đếm lượt gọi AI. Trước bản này KHÔNG có gì đếm cả — mọi con số về
+         chi phí AI trong repo đều là ước lượng. Đây là số THẬT đầu tiên. */
+      '<div class="vp-dem-ai"><h6>Lượt gọi AI mỗi ngày</h6>' +
+      '<p>Workers AI gói miễn phí có <b>10.000 Neuron/ngày dùng chung</b> cho cả Mây, ' +
+      'Hồ Ly soi hàng đợi (5 phút/lần) và việc soạn kế hoạch. Bảng này chỉ ĐẾM, không chặn — ' +
+      'đặt trần rồi tự cắt lượt nào là quyết định của Sếp, không phải của phần mềm.</p>' +
+      ((kq.dem_ai || []).length
+        ? kq.dem_ai.map(d =>
+            '<div class="vp-dem-ai-dong"><span>' + esc(d.ngay) + '</span><b>' + d.tong + ' lượt</b></div>'
+          ).join('')
+        : '<div class="empty">Chưa có ngày nào được đếm — bộ đếm bắt đầu chạy từ lần deploy này.</div>') +
+      '</div>';
+  }
 
 
   /* ---- Việc đang treo -----------------------------------------------------
