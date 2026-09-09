@@ -471,7 +471,13 @@ const MIEN_TRU_CAT = [
           'màn gộp ở Lịch sử làm việc mới là chỗ vẽ, và nó có gọi `veDaiCat` (`veDaiCatLsCv`).' },
   { tep: 'public/assets/js/app.js', ham: 'moChatTheoId', api: 'chatGanDay',
     lyDo: 'KHÔNG VẼ DANH SÁCH: chỉ TRA TÊN đúng một người trong `gan_day`. Không tìm thấy ' +
-          'thì mở hẳn danh sách hội thoại — một lối ra có thật, không phải một câu khẳng định sai.' }
+          'thì mở hẳn danh sách hội thoại — một lối ra có thật, không phải một câu khẳng định sai.' },
+  { tep: 'public/assets/js/app.js', ham: 'napKyNang', api: 'vpKyNang',
+    lyDo: 'TRAO TAY, KHÔNG VỨT — cùng khuôn `taiLai()` ở trên. `napKyNang` là bộ nhớ đệm: nó ' +
+          'cất NGUYÊN gói máy chủ trả về vào `dsKyNang` (kèm `cat`) rồi trả lại, không vẽ một ' +
+          'chữ nào. Chỗ vẽ là `veKyNang()`, và nó CÓ gọi `veDaiCatChuoi(kq.cat, …)` ngay dòng ' +
+          'đầu của `innerHTML`. Bắt `napKyNang` phải nhắc `cat` là ép một hàm nhớ-đệm đi vẽ ' +
+          'giao diện — đúng thứ khiến dải cắt bị vẽ hai lần khi có hai chỗ cùng đọc bộ đệm.' }
 ];
 
 /* ==========================================================================

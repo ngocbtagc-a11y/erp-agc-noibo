@@ -671,11 +671,25 @@ if (!CHI_MAY) {
     } finally { cr.dong(); may.dong(); }
   }
 
-  muc('⑩ GIAO DIỆN — đo THẬT ở 1440×900 và 375×812, bản TRƯỚC (origin/main) cạnh bản SAU');
+  /* MỐC "TRƯỚC" PHẢI LÀ SỐ HIỆU CHẾT, KHÔNG ĐƯỢC LÀ TÊN NHÁNH.
+     Bản đầu viết `origin/main`. Ngày 09/09/2026 đợt hồ sơ được đẩy lên, và
+     `origin/main` từ 4c9cf1f nhảy sang ed6da81 — tức là NÓ CHỨA LUÔN tính năng
+     này. "Bản trước" hoá thành "bản sau": `570px → 570px (bớt 0)`, và bàn đo
+     ĐỎ ĐÚNG LÚC VIỆC LÊN ĐƯỢC HỆ THỐNG. Nó thôi đo tính năng, quay ra đo xem
+     đã đẩy hay chưa.
+
+     Cùng lớp với `do-khu-dao-tao-giaodien.mjs` (ghim ed6da81) và với mã
+     #3f4d33 còn sót trong vanphong.css: thước tự vô hiệu hoá mình mà vẫn in ra
+     một con số trông như kết luận.
+
+     4c9cf1f = đỉnh main NGAY TRƯỚC đợt 09/09 — trạng thái Kho tài liệu khi
+     chưa có bộ hồ sơ. Đổi số này chỉ khi cố ý muốn so với mốc khác.        */
+  const COMMIT_NEN = '4c9cf1f';
+  muc('⑩ GIAO DIỆN — đo THẬT ở 1440×900 và 375×812, bản TRƯỚC (' + COMMIT_NEN + ') cạnh bản SAU');
   const KHUNG = [{ rong: 1440, cao: 900 }, { rong: 375, cao: 812 }];
   const kq = { truoc: {}, sau: {} };
   for (const k of KHUNG) {
-    for (const [ten, commit] of [['truoc', 'origin/main'], ['sau', null]]) {
+    for (const [ten, commit] of [['truoc', COMMIT_NEN], ['sau', null]]) {
       kq[ten][k.rong] = {
         it: await do1({ commit, rong: k.rong, cao: k.cao, soTaiLieu: 3 }),
         nhieu: await do1({ commit, rong: k.rong, cao: k.cao, soTaiLieu: 50 })
