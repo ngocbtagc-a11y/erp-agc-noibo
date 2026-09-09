@@ -11855,9 +11855,13 @@ function veChuCoSo(chu, viTri, nhan) {
    (vá GY-0007). Khai ở đây thì Kho tài liệu chết ngay lúc mở ERP — lý do đầy
    đủ nằm ở đúng chỗ khai mới. ĐỪNG khai lại ở đây. */
 
-function nutSuaTaiLieu(t) {
+/** @param {string} [nhan] nhãn nút. Cửa KHO CHUNG đổi nhãn vì từ PHASE 2 hộp
+ *  này còn giữ hai việc nữa (xếp vào bộ · đánh dấu hết hiệu lực) — xem `them`
+ *  của `noiNutSuaTaiLieu`. Nhãn nói thiếu việc thì người ta không tìm ra chỗ làm. */
+function nutSuaTaiLieu(t, nhan) {
   if (!TL_NHOM_LUU_DUOC.includes(t.nhom)) return '';
-  return `<button type="button" class="tl-nut-mo tl-nut-sua" data-sua="${esc(t.id)}">Sửa số &amp; tên</button>`;
+  return `<button type="button" class="tl-nut-mo tl-nut-sua" data-sua="${esc(t.id)}">${
+    esc(nhan || 'Sửa số & tên')}</button>`;
 }
 
 function oSuaTaiLieu(t) {
@@ -11866,8 +11870,14 @@ function oSuaTaiLieu(t) {
 }
 
 /** Nối nút "Sửa số & tên" cho mọi thẻ trong `goc`. `khiXong` để cửa gọi nạp lại
- *  danh sách — không tự gọi hàm nạp của một cửa cụ thể, vì có hai cửa. */
-function noiNutSuaTaiLieu(goc, khiXong) {
+ *  danh sách — không tự gọi hàm nạp của một cửa cụ thể, vì có hai cửa.
+ *
+ *  ⚠️ `them` = { html(id), noi(o, id) } — PHASE 2. Cửa KHO CHUNG nhét thêm hai
+ *  việc vào ĐÚNG HỘP NÀY thay vì đẻ hai nút mới trên mỗi thẻ. Lý do là một con
+ *  số đo được: mỗi nút thêm trên thẻ làm hàng nút xuống dòng ở 375px, tức
+ *  +48px MỖI THẺ — kho 50 tài liệu dài thêm ~2.400px (đo thật bằng
+ *  `do-ho-so-bo` ⑩). Việc hiếm phải đi vào hộp, không nằm sẵn trên mặt thẻ. */
+function noiNutSuaTaiLieu(goc, khiXong, them) {
   if (!goc) return;
   goc.querySelectorAll('[data-sua]').forEach(b => b.addEventListener('click', () => {
     const id = b.dataset.sua;
@@ -11895,7 +11905,10 @@ function noiNutSuaTaiLieu(goc, khiXong) {
         <button type="button" class="tl-nut-mo" data-huy="${esc(id)}">Huỷ</button>
         <button type="button" class="tl-nut-mo" data-ls="${esc(id)}">Xem lịch sử sửa</button>
       </div>
-      <div class="tl-chu" id="tl-ls-${esc(id)}" hidden></div>`;
+      <div class="tl-chu" id="tl-ls-${esc(id)}" hidden></div>
+      ${them && typeof them.html === 'function' ? them.html(id) : ''}`;
+
+    if (them && typeof them.noi === 'function') them.noi(o, id);
 
     o.querySelector('[data-huy]').addEventListener('click', () => { o.hidden = true; });
 
@@ -12023,11 +12036,22 @@ async function khoiDongKhoTaiLieu() {
   const oNhomLoc = $('#tl-nhom-loc');
   if (!oDanhSach) return;
 
+  const oChuaBo = $('#tl-chua-bo');
+  const oLocTom = $('#tl-loc-tom');
   const nutQuet = $('#tl-nut-quet');
   let dsNhom = [];            // nhóm XEM được
   let nhomLuuDuoc = [];       // nhóm LƯU được (tập con)
   let nhomDangLoc = '';
   const laAdminTL = TOI.vai_tro === 'admin';
+
+  /* ---- BỘ HỒ SƠ  ·  PHASE 2 --------------------------------------------
+     `boDangMo` = đang nhìn qua cửa XEM MỘT BỘ. Rỗng = cửa kho chung.
+     ⚠️ Không một dòng nào ở đây quyết định ai xem được gì — quyền vẫn CHỈ do
+     nhóm giấy tờ quyết định, và máy chủ cắt. Bộ chỉ là cách nhìn. */
+  let dsBo = [];
+  let boDangMo = '';
+  let boSuaDuoc = false;      // máy chủ trả lời, giao diện không tự đoán
+  let dsLoaiBo = [];
 
   /* ⚠️ VÁ REV-0040 · LỖI #8 — ĐỪNG HỨA SUÔNG.
      Ba vai trò (nhân viên kho · CSKH · người dùng) XEM được nhóm "Quản trị nội
@@ -12041,14 +12065,183 @@ async function khoiDongKhoTaiLieu() {
 
   const tenNhom = (ma) => (dsNhom.find(n => n.ma === ma) || {}).ten || ma;
 
+  /* ⚠️ GẬP MÀ GIẤU TRẠNG THÁI LÀ MỘT MÀN HÌNH NÓI DỐI. Bộ lọc gập lại thì dòng
+     tóm tắt PHẢI nói ra đang lọc gì — không thì người ta nhìn một danh sách đã
+     lọc và tưởng kho chỉ có bấy nhiêu tờ. Cùng luật với "danh sách bị cắt thì
+     phải nói là đã cắt". */
+  function veTomLoc() {
+    if (!oLocTom) return;
+    const phan = [];
+    if (nhomDangLoc) phan.push(tenNhom(nhomDangLoc));
+    if (oSapHet && oSapHet.checked) phan.push('sắp hết hạn');
+    if (oChuaBo && oChuaBo.checked) phan.push('chưa vào bộ nào');
+    oLocTom.textContent = phan.length ? 'đang lọc: ' + phan.join(' · ') : 'Tất cả';
+    oLocTom.classList.toggle('dang-loc', phan.length > 0);
+  }
+
   function veLoc() {
     if (!oNhomLoc) return;
     oNhomLoc.innerHTML =
       `<button type="button" class="tl-chip${nhomDangLoc ? '' : ' chon'}" data-nhom="">Tất cả</button>` +
       dsNhom.map(n => `<button type="button" class="tl-chip${nhomDangLoc === n.ma ? ' chon' : ''}" data-nhom="${esc(n.ma)}">${esc(n.ten)}</button>`).join('');
     oNhomLoc.querySelectorAll('[data-nhom]').forEach(b => b.addEventListener('click', () => {
-      nhomDangLoc = b.dataset.nhom; veLoc(); nap();
+      nhomDangLoc = b.dataset.nhom; veLoc(); veTomLoc(); nap();
     }));
+    veTomLoc();
+  }
+
+  /* ==========================================================================
+     BỘ HỒ SƠ — danh sách, màn xem một bộ, hộp lập/sửa bộ
+     ---------------------------------------------------------------------------
+     Vì sao khối này đáng có: đo thật ở 375px, 50 tài liệu = 14.089px trang dài
+     (≈17 màn vuốt). Sáu bộ = sáu dòng 44px. Một dòng bộ gập lại thay cho cả
+     một xấp thẻ — đây là chỗ mô hình hồ sơ ăn điểm rõ nhất.
+     ========================================================================== */
+  async function napBo() {
+    const khoi = $('#tl-bo-khoi'), oDs = $('#tl-bo-ds'), nutThem = $('#tl-bo-them');
+    if (!khoi || !oDs) return;
+    try {
+      const kq = await API.hsDanhSach();
+      dsBo = kq.ds || [];
+      dsLoaiBo = kq.loai || [];
+      boSuaDuoc = kq.sua_duoc === true;
+      if (nutThem) nutThem.hidden = !boSuaDuoc;
+      /* Kho chưa có bộ nào VÀ người này không lập được bộ ⇒ ẩn hẳn khối, đừng
+         bày một tiêu đề rỗng. Lập được thì vẫn hiện, để còn có chỗ bấm. */
+      khoi.hidden = !dsBo.length && !boSuaDuoc;
+      /* Gập lại còn ĐÚNG một hàng 44px — nhưng dòng tóm tắt phải nói ra đang có
+         mấy bộ và đang mở bộ nào. Gập mà giấu trạng thái là màn hình nói dối. */
+      const oTom = $('#tl-bo-tom');
+      if (oTom) {
+        const dangMo = dsBo.find(x => x.id === boDangMo);
+        oTom.textContent = dangMo ? 'đang mở: ' + dangMo.ten
+          : dsBo.length ? `${dsBo.length} bộ` : 'chưa có bộ nào';
+        oTom.classList.toggle('dang-loc', !!dangMo);
+      }
+      oDs.innerHTML = dsBo.map(b => {
+        /* `so_giay` = null nghĩa là CHƯA ĐẾM ĐƯỢC (máy chủ đếm hụt), khác hẳn
+           0. In "0 giấy" cho một con số chưa đếm được là bịa. */
+        const so = b.so_giay === null || b.so_giay === undefined
+          ? 'chưa đếm được'
+          : `${b.so_giay} giấy${b.so_can ? ' / ' + b.so_can + ' loại cần có' : ''}`;
+        const dong = b.trang_thai === 'da_dong'
+          ? ' <span class="tl-dai">Đã đóng</span>' : '';
+        return `<button type="button" class="tl-bo-dong${boDangMo === b.id ? ' chon' : ''}" data-bo="${esc(b.id)}">
+            <span class="tl-bo-ten">${esc(b.ten)}</span>${dong}
+            <span class="tl-bo-so">${esc(so)}</span>
+          </button>`;
+      }).join('');
+      oDs.querySelectorAll('[data-bo]').forEach(b => b.addEventListener('click', () => {
+        boDangMo = boDangMo === b.dataset.bo ? '' : b.dataset.bo;
+        napBo(); nap();
+      }));
+      veDaiCat('#tl-bo-cat', kq.cat, { don_vi: 'bộ hồ sơ' });
+    } catch (e) {
+      /* Bộ nạp hụt KHÔNG được làm hỏng cả tab kho tài liệu — nhưng cũng không
+         im lặng biến mất: nói ra để Sếp biết mình đang nhìn thiếu. */
+      dsBo = []; boSuaDuoc = false;
+      khoi.hidden = false;
+      oDs.innerHTML = `<p class="tl-trong">Chưa tải được danh sách bộ hồ sơ: ${esc(e.message)}</p>`;
+      if (nutThem) nutThem.hidden = true;
+    }
+  }
+
+  /** Đầu màn XEM MỘT BỘ: tên bộ · bảng kiểm thiếu–đủ · câu "có N giấy bạn
+   *  không được xem". `bo` do MÁY CHỦ trả về cùng danh sách tài liệu. */
+  function veBoMo(bo) {
+    const o = $('#tl-bo-mo');
+    if (!o) return;
+    if (!bo) { o.hidden = true; o.innerHTML = ''; return; }
+    const kiem = bo.bang_kiem || [];
+    const thieu = kiem.filter(k => !k.co).length;
+    const chan = Number(bo.so_bi_chan);
+    o.innerHTML = `
+      <div class="tl-bo-mo-dau">
+        <b>${esc(bo.ten)}</b>
+        <p>${esc(bo.ten_loai)}${bo.trang_thai === 'da_dong' ? ' · <b>Đã đóng</b>' : ''}${
+          bo.ghi_chu ? ' — ' + esc(bo.ghi_chu) : ''}</p>
+        ${kiem.length ? `<div class="tl-bo-kiem">${kiem.map(k =>
+          `<span class="${k.co ? 'co' : 'thieu'}">${k.co ? '✔' : '✖'} ${esc(k.ten)}</span>`).join('')}</div>` : ''}
+        ${kiem.length
+          ? `<p>${thieu ? `Bộ này còn <b>thiếu ${thieu}</b> loại giấy trên danh sách.`
+                        : 'Bộ này <b>đủ</b> các loại giấy trên danh sách.'}</p>`
+          : ''}
+        ${/* ⚠️ SẾP NGỌC CHỐT 09/09/2026 — KHÔNG GIẤU IM, KHÔNG HIỆN DANH SÁCH
+              RỖNG. Bộ không có quyền riêng, nên một bộ hoàn toàn có thể chứa
+              giấy thuộc nhóm người đang xem không mở được (CCCD người đại diện
+              trong bộ pháp lý là ca thật). Nói ra CON SỐ, và nói luôn rằng
+              bảng kiểm ở trên vì thế có thể báo thiếu thứ không thiếu. */''}
+        ${chan > 0
+          ? `<div class="tl-bo-chan">🔒 Bộ này có <b>${chan}</b> giấy tờ bạn không được xem —
+               chúng thuộc nhóm giấy tờ ngoài quyền của bạn. Bảng kiểm ở trên chỉ tính
+               phần bạn xem được, nên chỗ ghi "thiếu" có thể <b>không thiếu thật</b>.
+               Cần xem thì nhờ HCNS hoặc Admin.</div>`
+          : chan < 0
+            ? '<div class="tl-bo-chan">⚠️ Chưa đếm được có giấy nào bạn không xem được hay không — ' +
+              'đừng coi danh sách dưới đây là đầy đủ.</div>'
+            : ''}
+        ${/* Giới hạn PHẢI nói thẳng: 0/3 tờ trên kho thật bóc được chữ. */''}
+        <p class="tl-bo-nhac">Ô tìm ở trên tra được <b>tên bộ · tên tài liệu · số hiệu · loại giấy · tên nhóm</b>.
+           Chữ <i>bên trong</i> tờ giấy chỉ tra được với tài liệu đã bóc được chữ — xem dải đếm phía dưới.</p>
+        <div class="tl-the-nut">
+          <button type="button" class="tl-nut-mo" id="tl-bo-ve">← Về kho chung</button>
+          ${boSuaDuoc ? '<button type="button" class="tl-nut-mo" id="tl-bo-sua">Sửa bộ / Đóng bộ</button>' : ''}
+        </div>
+      </div>`;
+    o.hidden = false;
+    $('#tl-bo-ve')?.addEventListener('click', () => { boDangMo = ''; napBo(); nap(); });
+    $('#tl-bo-sua')?.addEventListener('click', () => moHopBo(bo));
+  }
+
+  /** Hộp lập bộ mới / sửa một bộ. Dùng lại khuôn `.tl-chu` + `.tl-sua-o` của
+   *  hộp "Sửa số & tên" — không dựng kiểu ô nhập thứ hai. */
+  function moHopBo(bo) {
+    const o = $('#tl-bo-hop');
+    if (!o) return;
+    if (!o.hidden && o.dataset.bo === (bo ? bo.id : '')) { o.hidden = true; return; }
+    o.dataset.bo = bo ? bo.id : '';
+    o.innerHTML = `
+      <p class="tl-so-ai-nhac">Bộ hồ sơ là <b>cách nhìn</b>, không phải nhóm giấy tờ:
+        nó <b>không đổi quyền xem</b> của bất kỳ tờ nào. Ai xem được một tờ giấy vẫn do
+        <b>nhóm</b> của tờ đó quyết định.</p>
+      <label class="tl-sua-o">Tên bộ
+        <input type="text" id="tl-bo-ten" maxlength="200" value="${esc(bo ? bo.ten : '')}"
+               placeholder="VD: Hồ sơ pháp lý doanh nghiệp — Công ty TNHH Alpha Green Commerce">
+      </label>
+      <label class="tl-sua-o">Loại bộ (quyết định bảng kiểm “còn thiếu giấy gì”)
+        <select id="tl-bo-loai">${dsLoaiBo.map(l =>
+          `<option value="${esc(l.ma)}"${bo && bo.loai === l.ma ? ' selected' : ''}>${esc(l.ten)}${
+            l.so_can ? ` (${l.so_can} loại giấy)` : ''}</option>`).join('')}</select>
+      </label>
+      <label class="tl-sua-o">Ghi chú
+        <input type="text" id="tl-bo-ghichu" maxlength="500" value="${esc(bo ? (bo.ghi_chu || '') : '')}">
+      </label>
+      ${bo ? `<label class="tl-sua-o">Trạng thái
+        <select id="tl-bo-tt">
+          <option value="dang_dung"${bo.trang_thai === 'dang_dung' ? ' selected' : ''}>Đang dùng</option>
+          <option value="da_dong"${bo.trang_thai === 'da_dong' ? ' selected' : ''}>Đã đóng — không nhận thêm giấy</option>
+        </select></label>` : ''}
+      <div class="tl-the-nut">
+        <button type="button" class="tl-nut-mo" id="tl-bo-luu">Lưu</button>
+        <button type="button" class="tl-nut-mo" id="tl-bo-huy">Huỷ</button>
+      </div>`;
+    o.hidden = false;
+    $('#tl-bo-huy').addEventListener('click', () => { o.hidden = true; });
+    $('#tl-bo-luu').addEventListener('click', async () => {
+      const du = {
+        id: bo ? bo.id : null,
+        ten: $('#tl-bo-ten').value.trim(),
+        loai: $('#tl-bo-loai').value,
+        ghi_chu: $('#tl-bo-ghichu').value.trim(),
+        trang_thai: bo ? $('#tl-bo-tt').value : 'dang_dung'
+      };
+      try {
+        const kq = await API.hsLuu(du);
+        o.hidden = true;
+        if (!bo && kq.id) boDangMo = kq.id;
+        await napBo(); await nap();
+      } catch (e) { alert(e.message); }
+    });
   }
 
   function ngayGon(s) { return s ? s.split('-').reverse().join('/') : ''; }
@@ -12058,6 +12251,45 @@ async function khoiDongKhoTaiLieu() {
     if (!hetHan) return null;
     const homNay = new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
     return Math.round((Date.parse(hetHan) - Date.parse(homNay)) / 86400000);
+  }
+
+  /* ==========================================================================
+     🔴 DẢI "HẾT HIỆU LỰC" — vá cho rủi ro ĐANG NẰM TRÊN HỆ THỐNG THẬT
+     ---------------------------------------------------------------------------
+     GCN đăng ký doanh nghiệp `02/2026/PLDN` và bản Sửa đổi lần 1 `03/2026/PLDN`
+     nằm hai dòng rời nhau, không chỗ nào nói tờ 02 đã bị sửa đổi. Ai mở tờ 02
+     đi kê khai, đi nộp hồ sơ — không có gì cản. Đây không phải rủi ro giao
+     diện, đây là rủi ro DÙNG NHẦM GIẤY HẾT HIỆU LỰC.
+
+     Hai chiều, và cả hai đều phải hiện NGAY TRÊN THẺ, không giấu sau một cú bấm.
+
+     ⚠️ VÀNG NÂU CHỨ KHÔNG ĐỎ. Đỏ là ngoại lệ duy nhất của luật ba màu và chỉ
+     dành cho thứ ĐÃ hỏng (giấy quá hạn). Một tờ bị sửa đổi KHÔNG hỏng — nó vẫn
+     cần để chứng minh lịch sử pháp nhân, và SPEC-0005 Mục 7.5 CẤM ẩn nó đi.
+     Có chữ "Hết hiệu lực" hẳn hoi nên người mù màu vẫn đọc được — màu không bao
+     giờ là tín hiệu duy nhất.
+
+     ⚠️ CHE THEO NHÓM: tờ thay thế có thể thuộc nhóm người này không xem được
+     (máy chủ đã che tên, `xem_duoc: false`). Vẫn phải nói là CÓ tờ thay thế —
+     đó chính là thứ họ cần để không đem nhầm giấy đi nộp. */
+  function veDaiThayThe(t) {
+    let ra = '';
+    if (t.thay_the_boi_id) {
+      const m = t.thay_the_boi;
+      ra += `<p class="tl-het-hl">⚠️ <b>Hết hiệu lực</b> — tài liệu này đã bị một bản khác thay thế. ` +
+        (m && m.xem_duoc
+          ? `Bản thay thế: <b>${esc(m.tieu_de)}</b>${m.so_hieu ? ' · ' + esc(m.so_hieu) : ''}.`
+          : 'Bản thay thế thuộc nhóm giấy tờ bạn không được xem — hỏi HCNS hoặc Admin.') +
+        ' Đừng đem tờ này đi nộp. Bản gốc vẫn giữ nguyên để đối chiếu.</p>';
+    }
+    if (t.thay_the_cho) {
+      const c = t.thay_the_cho;
+      ra += `<p class="tl-thay-cho">↩︎ Tài liệu này <b>thay thế cho</b> ` +
+        (c.xem_duoc
+          ? `<b>${esc(c.tieu_de)}</b>${c.so_hieu ? ' · ' + esc(c.so_hieu) : ''}`
+          : 'một tài liệu thuộc nhóm bạn không được xem') + '.</p>';
+    }
+    return ra;
   }
 
   function veMot(t) {
@@ -12083,6 +12315,15 @@ async function khoiDongKhoTaiLieu() {
                 không thì kho chung hiện thêm một tờ "Quyết định" trôi nổi mà
                 người tra không biết của người nào. */''}
           ${t.gan_ten ? '· <b>hồ sơ ' + esc(t.gan_ten) + '</b>' : ''}
+          ${/* ⚠️ IN TÊN BỘ RA, KHÔNG PHẢI ĐỂ CHO ĐẸP — PHASE 2.
+                Tên NHÓM đã nằm sẵn trong ô tìm từ Đợt 1, nên gõ "thực phẩm"
+                trúng một tờ vì LÝ DO KHÁC với điều người gõ nghĩ; nay tên BỘ
+                cũng tra được (so ngay lúc đọc, `danhSachTaiLieu`). Không in
+                tên bộ ra thì người tra ngồi đoán vì sao tờ này lọt vào kết
+                quả — đúng cái bẫy bản soát PHASE 1 đã cảnh báo. */''}
+          ${t.ho_so_ten
+            ? '· <b>bộ: ' + esc(t.ho_so_ten) + '</b>' + (t.ho_so_da_dong ? ' <span class="tl-dai">đã đóng</span>' : '')
+            : ''}
           · ${Number(t.so_trang)||0} trang
           ${/* Bóc được mấy trang, và mấy trang trong số đó ĐỐI CHIẾU được. Nói
                 cả hai con số: "đã bóc chữ 3 trang" trơn làm người đọc tưởng cả
@@ -12109,6 +12350,7 @@ async function khoiDongKhoTaiLieu() {
               ? '<p class="tl-trich"><i>Giấy tờ nhạy cảm — nội dung chỉ hiện khi bấm ' +
                 '"Xem chữ đã bóc", và mỗi lượt xem đều được ghi nhật ký.</i></p>'
               : '')}
+        ${veDaiThayThe(t)}
         <div class="tl-the-nut">
           <button type="button" class="tl-nut-mo" data-mo-quet="${esc(t.id)}" data-ten="${esc(tenVanBan(t))}">Mở bản quét</button>
           ${nutXemChuTaiLieu(t.id)}
@@ -12121,8 +12363,12 @@ async function khoiDongKhoTaiLieu() {
                 Chỉ hiện ở giấy tờ NHẠY CẢM vì chỉ nhóm đó mới có nhật ký. */''}
           ${laAdminTL && t.nhay_cam
             ? `<button type="button" class="tl-nut-mo tl-nut-nk" data-nk="${t.id}">Nhật ký truy cập</button>` : ''}
-          ${/* Sửa số hiệu + tên SAU khi đã lưu — Sếp Ngọc 03/09/2026. */''}
-          ${nutSuaTaiLieu(t)}
+          ${/* Sửa số hiệu + tên SAU khi đã lưu — Sếp Ngọc 03/09/2026.
+                PHASE 2: hộp này còn giữ "xếp vào bộ" và "đánh dấu hết hiệu
+                lực". KHÔNG đẻ nút mới trên thẻ — đo thật: mỗi nút thêm làm
+                hàng nút xuống dòng ở 375px, +48px MỖI THẺ, kho 50 tài liệu
+                dài thêm ~2.400px. */''}
+          ${nutSuaTaiLieu(t, 'Sửa · xếp bộ · hiệu lực')}
         </div>
         ${oChuTaiLieu(t.id)}
         ${oSuaTaiLieu(t)}
@@ -12143,7 +12389,11 @@ async function khoiDongKhoTaiLieu() {
       const kq = await API.tlDanhSach({
         q: oTim ? oTim.value.trim() : '',
         nhom: nhomDangLoc,
-        sapHetHan: oSapHet && oSapHet.checked
+        sapHetHan: oSapHet && oSapHet.checked,
+        /* Cửa XEM MỘT BỘ — cùng một hàm máy chủ, cùng một chốt quyền theo
+           NHÓM. Bộ KHÔNG có quyền riêng (PHASE 2). */
+        hoSoId: boDangMo,
+        chuaVaoBo: !boDangMo && oChuaBo && oChuaBo.checked
       });
       if (kq.nhom && kq.nhom.length !== dsNhom.length) { dsNhom = kq.nhom; veLoc(); }
       else if (!dsNhom.length) { dsNhom = kq.nhom || []; veLoc(); }
@@ -12154,6 +12404,18 @@ async function khoiDongKhoTaiLieu() {
       const ds = kq.ds || [];
       oDanhSach.innerHTML = ds.map(veMot).join('');
       oTrong.hidden = ds.length > 0;
+      /* Đầu màn XEM MỘT BỘ (bảng kiểm + câu "có N giấy bạn không được xem").
+         `kq.ho_so` chỉ có khi đang mở một bộ; kho chung thì khối này tự ẩn. */
+      veBoMo(kq.ho_so || null);
+      /* Đang mở một bộ mà bộ đó rỗng thì câu "Chưa có tài liệu nào trong kho"
+         là SAI — kho có, chỉ bộ này chưa có. Nói đúng chỗ đang đứng. */
+      if (!ds.length) {
+        oTrong.textContent = boDangMo
+          ? 'Bộ này chưa có giấy tờ nào bạn xem được. Quét thêm, hoặc bấm "Xếp vào bộ" ở một tài liệu trong kho chung.'
+          : (oChuaBo && oChuaBo.checked)
+            ? 'Mọi tài liệu bạn xem được đều đã nằm trong một bộ hồ sơ.'
+            : 'Chưa có tài liệu nào trong kho.';
+      }
 
       /* ---- TỈ LỆ TRA CỨU ĐƯỢC / CHỈ XEM ĐƯỢC  ·  CTL-0026 vòng 7 --------
          Sếp Ngọc cần con số này để biết có phải đi chỉnh máy scan hay không.
@@ -12179,19 +12441,31 @@ async function khoiDongKhoTaiLieu() {
         const tong = d ? d.tra_cuu_duoc + chua + d.chi_xem_duoc : 0;
         oDem.hidden = !d || !tong;
         if (d && tong) {
+          /* ⚠️ PHASE 2 — CON SỐ HIỆN NGUYÊN, CHỈ ĐOẠN GIẢI THÍCH GẬP VÀO.
+             Đo thật: khối này cao 172px ở 375px, tức 21% cả màn, hiện mỗi lần
+             mở tab. Nhưng con số thì KHÔNG được gập: trên kho thật hôm nay
+             `tra_cuu_duoc = 0` — giấu dòng đó đi là để Sếp mãi mãi không biết ô
+             tìm không tra được ruột tờ giấy nào, và đó đúng là kiểu "thước đo
+             báo sạch trong khi thứ nó đo đang hỏng". */
           oDem.innerHTML =
-            `<b>${d.tra_cuu_duoc}</b> tài liệu tìm được theo nội dung bên trong` +
+            '<summary>' +
+            `<b>${d.tra_cuu_duoc}</b> tìm được theo nội dung` +
+            (chua ? ` · <b>${chua}</b> có chữ mà chưa tra được` : '') +
+            ` · <b>${d.chi_xem_duoc}</b> chỉ xem được` +
+            '</summary>' +
+            `<p><b>${d.tra_cuu_duoc}</b> tài liệu <b>tìm được theo nội dung bên trong</b> — ` +
+            'gõ một cụm chữ nằm trong tờ giấy là ra.</p>' +
             (chua
-              ? ` · <b>${chua}</b> có chữ nhưng chưa tra được theo nội dung ` +
-                '(máy chưa đối chiếu được chữ với số hiệu — gõ số hiệu vào rồi ' +
-                'lưu lại là máy kiểm giúp; riêng giấy tờ nhạy cảm thì nội dung ' +
-                'cố ý không vào ô tìm)'
+              ? `<p><b>${chua}</b> <b>có chữ nhưng chưa tra được theo nội dung</b>: máy chưa đối ` +
+                'chiếu được chữ với số hiệu — gõ số hiệu vào rồi lưu lại là máy kiểm giúp; ' +
+                'riêng giấy tờ nhạy cảm thì nội dung cố ý không vào ô tìm.</p>'
               : '') +
-            ` · <b>${d.chi_xem_duoc}</b> chỉ xem được (tìm bằng tên, số hiệu, loại giấy)` +
+            `<p><b>${d.chi_xem_duoc}</b> <b>chỉ xem được</b> — tra bằng tên, số hiệu, loại giấy, ` +
+            'tên nhóm và <b>tên bộ hồ sơ</b>, không tra được chữ bên trong.' +
             (d.chi_xem_duoc
-              ? ' — muốn tìm được cả nội dung thì chỉnh máy scan sang chế độ nhận ' +
-                'dạng chữ rồi quét lại những tờ hay phải tra.'
-              : '');
+              ? ' Muốn tìm được cả nội dung thì chỉnh máy scan sang chế độ nhận dạng chữ ' +
+                'rồi quét lại những tờ hay phải tra.'
+              : '') + '</p>';
         }
       }
       /* Bị cắt thì nói ra bằng lời, kèm cách thu hẹp — không im lặng cắt. Dùng
@@ -12205,7 +12479,97 @@ async function khoiDongKhoTaiLieu() {
       /* MỘT hàm cho cả hai cửa (kho chung + hồ sơ nhân sự) — xem
          `noiNutXemChu` ở đầu mục. */
       noiNutXemChu(oDanhSach);
-      noiNutSuaTaiLieu(oDanhSach, nap);
+      /* ---- HAI VIỆC PHASE 2 ĐI NHỜ HỘP "SỬA" ĐÃ CÓ ----------------------
+         ① Xếp vào bộ / rút ra — đường "gắn sau", 1 UPDATE + 1 dòng lịch sử.
+            CỐ Ý có: ba tờ giấy đang nằm trên hệ thống không có đường nào khác
+            để vào bộ (migration không chạy một câu UPDATE nào trên dữ liệu
+            cũ). Đường chính vẫn là quét THẲNG vào bộ — 0 lượt ghi thêm.
+         ② 🔴 Đánh dấu đã bị thay thế — máy GỢI Ý, NGƯỜI bấm. Máy không bao
+            giờ tự nối: nối sai một cặp là dán nhãn "hết hiệu lực" lên một tờ
+            còn hiệu lực, nguy hơn hẳn cái nó định chữa. */
+      noiNutSuaTaiLieu(oDanhSach, () => { napBo(); nap(); }, {
+        html: (id) => {
+          const t = ds.find(x => x.id === id) || {};
+          const mo = dsBo.filter(x => x.trang_thai !== 'da_dong' || x.id === t.ho_so_id);
+          return `
+            <hr class="tl-hop-ngan">
+            <p class="tl-so-ai-nhac">Xếp một tờ vào bộ <b>không đổi quyền xem</b> của nó —
+              quyền vẫn do <b>nhóm giấy tờ</b> quyết định. Một tờ chỉ thuộc <b>một</b> bộ.</p>
+            ${mo.length
+              ? `<label class="tl-sua-o">Bộ hồ sơ
+                   <select id="tl-vaobo-chon-${esc(id)}">
+                     <option value="">— Không thuộc bộ nào —</option>` +
+                mo.map(x => `<option value="${esc(x.id)}"${t.ho_so_id === x.id ? ' selected' : ''}>${esc(x.ten)}</option>`).join('') +
+                `</select></label>
+                 <div class="tl-the-nut">
+                   <button type="button" class="tl-nut-mo" data-vaobo-luu="${esc(id)}">Lưu vào bộ</button>
+                 </div>`
+              : '<p>Chưa có bộ hồ sơ nào đang dùng. Bấm <b>“+ Lập bộ mới”</b> ở khối ' +
+                '<b>📁 Bộ hồ sơ</b> phía trên rồi quay lại.</p>'}
+            <hr class="tl-hop-ngan">
+            ${t.thay_the_boi_id
+              ? '<p class="tl-so-ai-nhac">Tài liệu này đang được đánh dấu <b>hết hiệu lực</b>. ' +
+                'Gỡ dấu thì dải cảnh báo biến mất — <b>tờ giấy không bị đụng tới</b>, ' +
+                'file vẫn nguyên trên kho.</p>' +
+                `<div class="tl-the-nut"><button type="button" class="tl-nut-mo" data-tt-go="${esc(id)}">Gỡ dấu hết hiệu lực</button></div>`
+              : `<div class="tl-the-nut"><button type="button" class="tl-nut-mo" data-tt-mo="${esc(id)}">Tài liệu này đã bị thay thế?</button></div>
+                 <div class="tl-chu" id="tl-tt-${esc(id)}" hidden></div>`}`;
+        },
+        noi: (o, id) => {
+          o.querySelector('[data-vaobo-luu]')?.addEventListener('click', async () => {
+            try {
+              await API.tlVaoBo(id, document.getElementById('tl-vaobo-chon-' + id).value || null);
+              o.hidden = true;
+              await napBo(); await nap();
+            } catch (e) { alert(e.message); }
+          });
+          o.querySelector('[data-tt-go]')?.addEventListener('click', async () => {
+            try { await API.tlThayThe(id, null); o.hidden = true; await nap(); }
+            catch (e) { alert(e.message); }
+          });
+          o.querySelector('[data-tt-mo]')?.addEventListener('click', async () => {
+            const ott = document.getElementById('tl-tt-' + id);
+            if (!ott) return;
+            if (!ott.hidden) { ott.hidden = true; return; }
+            ott.textContent = 'Đang tìm bản thay thế…'; ott.hidden = false;
+            let g;
+            try { g = await API.tlGoiYThayThe(id); }
+            catch (e) { ott.textContent = e.message; return; }
+            const goi = g.ds || [];
+            /* Ngoài gợi ý, luôn có đường CHỌN TAY: máy chỉ suy từ tên và số
+               hiệu, mà đời thật có bản thay thế đặt tên chẳng giống bản cũ. */
+            const khac = ds.filter(x => x.id !== id);
+            ott.innerHTML =
+              `<p class="tl-so-ai-nhac">${esc(g.dua_vao || '')} Đánh dấu xong: tờ này đeo dải ` +
+              '<b>“Hết hiệu lực”</b> và có đường dẫn sang tờ mới; tờ mới ghi rõ nó thay thế tờ nào. ' +
+              '<b>Tờ cũ KHÔNG bị ẩn</b> — vẫn mở được, vẫn tra được, vẫn tải file về được.</p>' +
+              (goi.length
+                ? '<p><b>Máy nghi ngờ mấy tờ này:</b></p><ul class="tl-nk-ds">' +
+                  goi.map(x => `<li><b>${esc(x.tieu_de)}</b>${x.so_hieu ? ' · ' + esc(x.so_hieu) : ''} — ` +
+                    `${esc(x.vi_sao.join(' · '))}</li>`).join('') + '</ul>'
+                : '<p>Máy không thấy tờ nào đủ dấu hiệu. Chọn tay bên dưới.</p>') +
+              `<label class="tl-sua-o">Tài liệu nào thay thế tờ này?
+                 <select id="tl-tt-chon-${esc(id)}">
+                   <option value="">— Chọn —</option>` +
+              goi.map(x => `<option value="${esc(x.id)}">⭑ ${esc(x.tieu_de)}${x.so_hieu ? ' · ' + esc(x.so_hieu) : ''}</option>`).join('') +
+              khac.filter(x => !goi.some(y => y.id === x.id))
+                  .map(x => `<option value="${esc(x.id)}">${esc(tenVanBan(x))}${x.so_hieu ? ' · ' + esc(x.so_hieu) : ''}</option>`).join('') +
+              `</select></label>
+               <p class="tl-nk-cat">Dòng có dấu ⭑ là máy gợi ý. Phần còn lại chỉ gồm
+                 <b>tài liệu đang hiện trên màn</b> — không thấy tờ cần chọn thì gõ tên nó
+                 vào ô tìm ở trên cho nó hiện ra, rồi mở lại hộp này.</p>
+               <div class="tl-the-nut">
+                 <button type="button" class="tl-nut-mo" data-tt-luu="${esc(id)}">Đánh dấu hết hiệu lực</button>
+               </div>`;
+            ott.querySelector('[data-tt-luu]').addEventListener('click', async () => {
+              const chon = document.getElementById('tl-tt-chon-' + id).value;
+              if (!chon) { alert('Chọn tài liệu thay thế đã.'); return; }
+              try { await API.tlThayThe(id, chon); o.hidden = true; await nap(); }
+              catch (e) { alert(e.message); }
+            });
+          });
+        }
+      });
 
       /* Nhật ký truy cập — chỉ Admin, chỉ giấy tờ nhạy cảm (vá REV-0040 #7). */
       oDanhSach.querySelectorAll('[data-nk]').forEach(b => b.addEventListener('click', async () => {
@@ -12246,8 +12610,20 @@ async function khoiDongKhoTaiLieu() {
   }, { goc: oTab('khotailieu') });
 
   if (nutQuet) nutQuet.addEventListener('click', () => {
+    /* Đang MỞ MỘT BỘ thì quét thẳng vào bộ đó — `ho_so_id` đi kèm đúng lượt
+       `INSERT` vốn đã có, 0 lượt ghi D1 thêm, và cả xấp PDF chọn một lượt cùng
+       vào một bộ. Bộ đã đóng thì KHÔNG quét vào (máy chủ chặn); ở đây chỉ để
+       người ta khỏi đi hết 12 chạm rồi mới bị chặn. */
+    const boHienTai = dsBo.find(b => b.id === boDangMo);
+    const quetVaoBo = boHienTai && boHienTai.trang_thai !== 'da_dong' ? boHienTai.id : null;
+    if (boDangMo && !quetVaoBo) {
+      alert('Bộ này đã đóng — không nhận thêm giấy tờ.\n\nMở lại bộ (sửa bộ → trạng thái ' +
+            '"Đang dùng") rồi quét, hoặc bỏ chọn bộ để quét vào kho chung.');
+      return;
+    }
     moQuetTaiLieu({
       cuaVao: 'kho_chung',
+      hoSoId: quetVaoBo,
       nhom: dsNhom.filter(n => nhomLuuDuoc.includes(n.ma)),
       /* REV-0046 #2 — Sếp Ngọc: "lưu vào đây luôn THÀNH 1 BỘ là đẹp".
          Chọn nhóm "Nhân sự" ở cửa kho chung thì phải chọn NGƯỜI, không thì tờ
@@ -12262,8 +12638,10 @@ async function khoiDongKhoTaiLieu() {
           .map(n => ({ id: n.id, ho_ten: n.ho_ten, chuc_danh: n.chuc_danh || n.vi_tri || '' }));
       },
       khiXong: (kq) => {
-        nap();
-        alert(cauSauKhiQuet(kq) + '\n\n⚠️ Đây là bản dự phòng. ĐỪNG huỷ bản giấy gốc.');
+        napBo(); nap();
+        alert(cauSauKhiQuet(kq) +
+          (kq.ho_so_ten ? `\n\nĐã xếp vào bộ: ${kq.ho_so_ten}` : '') +
+          '\n\n⚠️ Đây là bản dự phòng. ĐỪNG huỷ bản giấy gốc.');
       }
     });
   });
@@ -12272,8 +12650,11 @@ async function khoiDongKhoTaiLieu() {
     let hen = null;
     oTim.addEventListener('input', () => { clearTimeout(hen); hen = setTimeout(nap, 300); });
   }
-  if (oSapHet) oSapHet.addEventListener('change', nap);
+  if (oSapHet) oSapHet.addEventListener('change', () => { veTomLoc(); nap(); });
+  if (oChuaBo) oChuaBo.addEventListener('change', () => { veTomLoc(); nap(); });
+  $('#tl-bo-them')?.addEventListener('click', () => moHopBo(null));
 
+  await napBo();
   await nap();
 }
 

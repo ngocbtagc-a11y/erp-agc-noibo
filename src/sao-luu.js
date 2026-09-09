@@ -198,9 +198,35 @@ const MAU_TEN_COT_NGUY = /(access_token|refresh_token|_secret$|^secret|partner_k
    ========================================================================== */
 export const O_DA_CHE = '[đã loại khỏi bản sao lưu — dữ liệu cá nhân, Luật BVDLCN 91/2025/QH15]';
 
+/* ⚠️ PHASE 2 — TÊN BỘ HỒ SƠ CŨNG LÀ DỮ LIỆU CÁ NHÂN. Sếp Ngọc chốt 09/09/2026.
+   ---------------------------------------------------------------------------
+   Bảng `ho_so` (mới) rơi vào ĐÚNG cái bẫy REV-0040 #5 đã bắt được một lần:
+   `danhSachBang()` chọn bảng bằng DANH SÁCH LOẠI TRỪ, nên bảng mới TỰ ĐỘNG
+   được gói ra CSV đưa lên Drive hằng tháng, 0 dòng nhật ký. Mà tên bộ hoàn
+   toàn có thể là *"Hồ sơ kỷ luật Nguyễn Văn A"* hoặc *"Hồ sơ nhân sự Phạm
+   Khương Duy"* — đó là dữ liệu cá nhân đúng nghĩa Luật BVDLCN 91/2025/QH15.
+
+   CHE VÔ ĐIỀU KIỆN, KHÔNG DÒ THEO NỘI DUNG BỘ. Đã cân hai cách:
+     (a) chỉ che bộ nào CHỨA ít nhất một giấy nhóm nhạy cảm — đúng hơn về mặt
+         lý thuyết, nhưng `co()` là một vị từ ĐỒNG BỘ chỉ nhìn thấy CHÍNH DÒNG
+         đó, không truy vấn được bảng khác. Muốn làm thì phải nuôi một cột cờ
+         trên `ho_so`, cập nhật mỗi lần thêm/bớt giấy — tức là một con số có
+         thể LỆCH với sự thật, và lệch âm thầm. Đó đúng là lỗi nặng nhất của dự
+         án này: "thước đo báo sạch trong khi thứ nó đo đang hỏng".
+     (b) che hết — không lệch được, fail-closed, 0 trạng thái phải nuôi.
+   Chọn (b).
+
+   CÁI MẤT, NÓI THẲNG: mở CSV sao lưu ra, cột `ten` của mọi bộ là câu
+   `O_DA_CHE`; khôi phục từ bản sao lưu thì bộ mất tên (phải đặt lại tay).
+   Đây đúng bằng cái giá `tai_lieu.noi_dung` của nhóm nhạy cảm đang trả từ
+   REV-0040 — không phát minh cơ chế thứ hai, không thêm ngoại lệ.
+   Quan hệ bộ ↔ tài liệu KHÔNG mất: `ho_so.id` và `tai_lieu.ho_so_id` vẫn ra
+   CSV nguyên vẹn, nên khôi phục xong cấu trúc bộ còn đủ, chỉ thiếu cái tên. */
+
 /** Bảng nào có dòng nhạy cảm, nhận ra bằng đâu, và che cột nào. */
 export const CHE_DONG_NHAY_CAM = {
-  tai_lieu: { co: (r) => Number(r.nhay_cam) === 1, cot: ['noi_dung', 'tim_kiem'] }
+  tai_lieu: { co: (r) => Number(r.nhay_cam) === 1, cot: ['noi_dung', 'tim_kiem'] },
+  ho_so:    { co: () => true,                      cot: ['ten', 'ghi_chu'] }
 };
 
 /** Bản ghi ĐÃ CHE nếu dòng này nhạy cảm, còn không thì trả nguyên bản.

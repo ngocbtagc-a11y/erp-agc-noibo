@@ -98,6 +98,122 @@ export const LOAI_GIAY_NHAN_SU = [
   { ma: 'bien_ban',    ten: 'Biên bản',           goi_y_so: 'VD: 05/2026/BB' }
 ];
 
+/* ==========================================================================
+   HỒ SƠ (BỘ)  ·  PHASE 2 — Sếp Ngọc chốt 09/09/2026
+   ---------------------------------------------------------------------------
+   Sếp Ngọc: *"HỒ SƠ (bộ) chứa nhiều TÀI LIỆU"* — mở một bộ ra là thấy TRỌN
+   giấy tờ của một việc, và biết bộ đó còn THIẾU giấy gì.
+
+   ⚠️⚠️ HỒ SƠ KHÔNG CÓ QUYỀN RIÊNG. Đây là ràng buộc nặng nhất của cả tính năng.
+   Ai xem được một tờ giấy vẫn CHỈ do `nhom` của tờ đó quyết định
+   (`duocXemNhomTaiLieu`, src/quyen.js:440), y như trước khi có bộ. Không một
+   dòng nào dưới đây nới quyền theo bộ, và không được thêm.
+     · Vì sao: bộ *Hồ sơ pháp lý doanh nghiệp* chứa CCCD người đại diện, mà
+       CCCD bắt buộc ở nhóm `nhan_su` — chính cờ nhóm đó mới bật ghi-nhận-đồng-ý
+       và nhật ký truy cập theo Luật BVDLCN 91/2025/QH15. Cho bộ cấp quyền là
+       cho một tờ giấy HAI ông chủ, và cách hỏng KHÔNG kêu một tiếng: kéo một
+       tờ vào bộ rồi đột nhiên thêm (hoặc bớt) người đọc được nó.
+     · Hệ quả BẮT BUỘC làm đúng: người không đủ quyền mở một bộ thì màn hình
+       NÓI THẲNG *"bộ này có N giấy tờ bạn không được xem"* — xem `soGiayBiChan`
+       trong `danhSachTaiLieu`. Không giấu im, không trả danh sách rỗng.
+   ========================================================================== */
+
+/** Tiền tố id của một bộ — để nhìn chuỗi là biết ngay nó là bộ hay tài liệu. */
+export const TIEN_TO_HO_SO = 'hs_';
+
+/* ⚠️ BẢNG KIỂM "BỘ NÀY CẦN GIẤY GÌ" — VIẾT CỨNG VÒNG ĐẦU (Gạo chốt 09/09/2026).
+   Ba cách đã cân: (a) viết cứng — nhanh, thêm loại giấy phải deploy;
+   (b) Sếp tự tick trong ERP — mềm, phải xây thêm màn quản trị; (c) suy ra từ
+   những bộ đã có — không tin được khi kho mới có 3 tờ. Chọn (a) cho vòng đầu,
+   dùng lại ĐÚNG khuôn `LOAI_GIAY_NHAN_SU` đã có sẵn ở trên (cùng hai trường
+   `ma` + `ten`), để sau nâng lên (b) mà không phải đổi khuôn dữ liệu.
+
+   `tu` = các cụm chữ ĐÃ BỎ DẤU dùng để nhận ra một tờ giấy đã có trong bộ.
+   Soi vào `loai` TRƯỚC, rồi mới tới `tieu_de` — người ta gõ loại để PHÂN LOẠI,
+   nên nó là mẩu sự thật sát nhất. Nhận nhầm ở đây chỉ làm bảng kiểm tick sớm,
+   KHÔNG nới quyền và KHÔNG đụng vào tờ giấy nào. */
+export const LOAI_HO_SO = {
+  phap_ly_dn: {
+    ten: 'Hồ sơ pháp lý doanh nghiệp',
+    can: [
+      { ma: 'gcn_dkkd',    ten: 'GCN đăng ký doanh nghiệp', tu: ['dang ky doanh nghiep', 'dkkd', 'dkdn'] },
+      { ma: 'dieu_le',     ten: 'Điều lệ công ty',          tu: ['dieu le'] },
+      { ma: 'qd_bo_nhiem', ten: 'Quyết định bổ nhiệm',      tu: ['bo nhiem'] },
+      { ma: 'bien_ban',    ten: 'Biên bản họp',             tu: ['bien ban'] },
+      { ma: 'cccd_dai_dien', ten: 'CCCD người đại diện',    tu: ['cccd', 'cmnd', 'can cuoc'] },
+      { ma: 'uy_quyen',    ten: 'Giấy uỷ quyền',            tu: ['uy quyen'] },
+      { ma: 'mau_dau',     ten: 'Thông báo mẫu con dấu',    tu: ['mau dau', 'con dau'] },
+      { ma: 'dk_thue',     ten: 'Đăng ký thuế / MST',       tu: ['dang ky thue', 'ma so thue', 'mst'] },
+      { ma: 'giay_phep_con', ten: 'Giấy phép con (nếu có)', tu: ['giay phep'] }
+    ]
+  },
+  nhan_su: {
+    ten: 'Hồ sơ nhân sự một người',
+    /* Dùng lại NGUYÊN 9 loại của `LOAI_GIAY_NHAN_SU` — khai lại `tu` chứ không
+       khai lại danh sách, để thêm một loại giấy nhân sự chỉ phải sửa MỘT chỗ. */
+    can: null,
+    tu_theo_loai_giay: {
+      quyet_dinh: ['quyet dinh'], uy_quyen: ['uy quyen'], hdld: ['hop dong lao dong', 'hdld'],
+      phu_luc: ['phu luc'], cccd: ['cccd', 'cmnd', 'can cuoc'], bang_cap: ['bang cap', 'chung chi'],
+      suc_khoe: ['suc khoe', 'kham suc khoe'], cam_ket: ['cam ket'], bien_ban: ['bien ban']
+    }
+  },
+  ncc: {
+    ten: 'Hồ sơ nhà cung cấp',
+    can: [
+      { ma: 'hop_dong',  ten: 'Hợp đồng nguyên tắc', tu: ['hop dong'] },
+      { ma: 'phu_luc',   ten: 'Phụ lục hợp đồng',    tu: ['phu luc'] },
+      { ma: 'gcn_dkkd',  ten: 'GCN đăng ký doanh nghiệp của NCC', tu: ['dang ky doanh nghiep', 'dkkd'] },
+      { ma: 'attp',      ten: 'Giấy ATTP / công bố', tu: ['attp', 'an toan thuc pham', 'cong bo'] },
+      { ma: 'bao_gia',   ten: 'Báo giá',             tu: ['bao gia'] }
+    ]
+  },
+  nhap_khau: {
+    ten: 'Hồ sơ lô nhập khẩu',
+    can: [
+      { ma: 'to_khai',   ten: 'Tờ khai hải quan',  tu: ['to khai'] },
+      { ma: 'co',        ten: 'C/O xuất xứ',       tu: ['c/o', 'xuat xu', 'co form'] },
+      { ma: 'kiem_dich', ten: 'Kiểm dịch',         tu: ['kiem dich'] },
+      { ma: 'packing',   ten: 'Packing list',      tu: ['packing'] },
+      { ma: 'invoice',   ten: 'Invoice',           tu: ['invoice', 'hoa don thuong mai'] }
+    ]
+  },
+  /* Không bảng kiểm. Cố ý: một bộ không rõ loại thì không có "đủ" hay "thiếu",
+     và bịa ra một bảng kiểm cho nó là bịa ra một con số Sếp sẽ tin. */
+  khac: { ten: 'Hồ sơ khác', can: [] }
+};
+
+export const MA_LOAI_HO_SO = Object.keys(LOAI_HO_SO);
+export const TRANG_THAI_HO_SO = ['dang_dung', 'da_dong'];
+
+/** Bảng kiểm của một loại bộ, đã nở sẵn ca `nhan_su` (dùng lại
+ *  `LOAI_GIAY_NHAN_SU` thay vì chép tay lần thứ hai). */
+export function bangKiemHoSo(loai) {
+  const l = LOAI_HO_SO[loai];
+  if (!l) return [];
+  if (Array.isArray(l.can)) return l.can;
+  return LOAI_GIAY_NHAN_SU.map(g => ({
+    ma: g.ma, ten: g.ten, tu: l.tu_theo_loai_giay[g.ma] || [boDau(g.ten)]
+  }));
+}
+
+/** Bộ này còn thiếu giấy gì — tính trên ĐÚNG những tờ người đang xem THẤY được.
+ *
+ *  ⚠️ NÓI THẲNG GIỚI HẠN: nếu bộ còn giấy người này không được xem thì bảng
+ *  kiểm ở đây có thể báo THIẾU một thứ thật ra ĐÃ CÓ. Máy chủ trả kèm
+ *  `so_bi_chan` để giao diện nói ra điều đó — đếm mà không nói rõ đếm trên cái
+ *  gì thì đó là một con số nói dối (bài học REV-0055 vòng 2 · CAO-A). */
+export function soatBangKiem(loai, dsTaiLieu) {
+  const bang = bangKiemHoSo(loai);
+  if (!bang.length) return [];
+  const moc = (dsTaiLieu || []).map(t => boDau((t.loai || '') + ' ' + (t.tieu_de || '')));
+  return bang.map(m => ({
+    ma: m.ma,
+    ten: m.ten,
+    co: moc.some(s => m.tu.some(k => s.includes(k)))
+  }));
+}
+
 /** Loại giấy người dùng gõ/chọn có phải CCCD không — so bằng TÊN đã bỏ dấu, vì
  *  ô "Loại giấy" là ô chữ tự do (bấm chip điền sẵn tên, nhưng gõ tay cũng được).
  *  Cố tình rộng tay: "cccd", "CCCD/CMND", "Căn cước công dân" đều tính. */
@@ -290,7 +406,7 @@ export function boDau(s) {
  *  CCCD hay mức lương bằng cách gõ mò. Đổi như thế là đúng — muốn đọc ruột
  *  giấy tờ nhạy cảm thì phải MỞ nó ra, và mở là có nhật ký.
  *  Tiêu đề, số hiệu, loại, tên nhóm vẫn tra được bình thường. */
-export function chuoiTimKiem({ tieu_de, so_hieu, loai, nhom, noi_dung }) {
+export function chuoiTimKiem({ tieu_de, so_hieu, loai, nhom, noi_dung, ho_so_ten }) {
   /* Nhóm LẠ → coi như NHẠY CẢM. Fail-open ở đây (nhóm không có trong bảng thì
      `nhomTaiLieuNhayCam` trả false ⇒ ruột vào thẳng ô tìm) là mặc định sai
      chiều cho một chốt bảo vệ dữ liệu cá nhân — REV-0044 · L4. */
@@ -300,6 +416,20 @@ export function chuoiTimKiem({ tieu_de, so_hieu, loai, nhom, noi_dung }) {
      CHIẾU và đã gọt sạch số máy đọc (xem `chuChoOTim`). Truyền thẳng `noi_dung`
      đầy đủ vào là mở lại đúng hai lỗ vừa bịt. */
   const ruot = (laLa || nhomTaiLieuNhayCam(nhom)) ? null : noi_dung;
+  /* ⚠️ TÊN BỘ HỒ SƠ CỐ Ý **KHÔNG** NẰM TRONG CỘT NÀY — PHASE 2, đã cân và bỏ.
+     Bản soát PHASE 1 đề nghị nhét tên bộ vào đây ("một dòng, 0 lượt ghi D1
+     thêm"). Dựng thử rồi bỏ, vì nó đẻ ra đúng lớp lỗi tệ nhất của dự án này —
+     một chuỗi tra cứu mang giá trị ĐÃ CŨ mà không ai thấy:
+       · Sếp đổi tên bộ ⇒ mọi tờ trong bộ còn mang TÊN CŨ trong ô tìm. Gõ tên
+         cũ vẫn ra, gõ tên mới không ra. Đúng kiểu lỗi không ai phát hiện.
+       · Vá bằng một câu `UPDATE ... REPLACE(tim_kiem, ten_cu, ten_moi)` thì
+         KHÔNG chạy: cột này đã BỎ DẤU, còn `ho_so.ten` thì có dấu, và SQLite
+         không có hàm bỏ dấu. Câu vá trông như chạy mà không thay được gì.
+       · Và nó tốn thêm một lượt GHI D1 cho mỗi tờ, mỗi lần đổi tên bộ.
+     Thay vào đó, tìm theo tên bộ được xử ở ĐƯỜNG ĐỌC (`danhSachTaiLieu`): so
+     tên bộ ngay lúc tra, bằng chính `boDau()` này, nên KHÔNG BAO GIỜ cũ.
+     Tham số `ho_so_ten` giữ trong chữ ký để nơi gọi truyền vào cũng vô hại. */
+  void ho_so_ten;
   return boDau([tieu_de, so_hieu, loai, ten, ruot].filter(Boolean).join(' ')).slice(0, 20000);
 }
 
@@ -810,6 +940,31 @@ export async function luuTaiLieu(env, phien, body) {
     tenNguoi = ns.ho_ten || null;
   }
 
+  /* ---- QUÉT THẲNG VÀO MỘT BỘ  ·  PHASE 2 --------------------------------
+     Chỗ RẺ NHẤT để sinh ra quan hệ bộ: ghi `ho_so_id` ngay trong đúng lượt
+     `INSERT` vốn đã có ⇒ **0 lượt ghi D1 thêm**, giữ nguyên bất biến "MỘT lượt
+     quét = ĐÚNG 1 lượt ghi" (REV-0046 #2, REV-0050 Câu 3).
+     Đường "gắn sau" vẫn có (`taiLieuVaoBo`) vì ba tờ giấy đang nằm trên hệ
+     thống phải kéo vào bộ được — nhưng nó là một VIỆC NGƯỜI TA BẤM, tốn lượt
+     ghi của riêng nó, không phải cái giá mặc định của mỗi lượt quét.
+
+     Một lượt ĐỌC D1 để đổi lấy việc không bao giờ có `ho_so_id` trỏ vào hư
+     không. Bộ đã ĐÓNG thì không nhận giấy mới: đóng bộ là một tuyên bố
+     ("pháp nhân này xong rồi"), nhận thêm giấy vào là làm tuyên bố đó thành
+     sai mà không ai thấy. */
+  const hoSoId = chuoi(body.ho_so_id, 64);
+  let tenBo = null;
+  if (hoSoId) {
+    const hs = await env.DB.prepare(
+      'SELECT id, ten, trang_thai FROM ho_so WHERE id = ? AND an = 0').bind(hoSoId).first();
+    if (!hs) return loi('Không có bộ hồ sơ nào mang mã này', 404);
+    if (hs.trang_thai === 'da_dong') {
+      return loi(`Bộ "${hs.ten}" đã đóng — không nhận thêm giấy tờ. ` +
+                 'Mở lại bộ (đổi trạng thái về "Đang dùng") rồi quét lần nữa.');
+    }
+    tenBo = hs.ten;
+  }
+
   /* ---- SỐ CCCD PHẢI ĐỦ 12 CHỮ SỐ ---------------------------------------
      Ô "Số hiệu" của một tờ CCCD chính là số CCCD. CCCD Việt Nam (mẫu từ 2021)
      luôn 12 chữ số; lưu một số 11 chữ số vào hồ sơ lao động không phải lỗi
@@ -975,6 +1130,9 @@ export async function luuTaiLieu(env, phien, body) {
     han_luu: NHOM_TAI_LIEU[nhom].han_luu,
     cua_vao: cuaGhi,
     gan_id: ganId,
+    /* PHASE 2 — bộ hồ sơ. NULL là giá trị bình thường, không phải thiếu sót:
+       tài liệu "chưa vào bộ nào" hiện ở mục riêng, không rơi mất. */
+    ho_so_id: hoSoId,
     so_trang: soTrang,
     kho_nha: luuXong.nha,
     kho_khoa: luuXong.khoa,
@@ -1011,14 +1169,14 @@ export async function luuTaiLieu(env, phien, body) {
     await env.DB.prepare(`
       INSERT INTO tai_lieu
         (id, ma_gui, nhom, loai, tieu_de, so_hieu, tim_kiem,
-         ngay_ban_hanh, ngay_het_han, han_luu, cua_vao, gan_id, so_trang,
+         ngay_ban_hanh, ngay_het_han, han_luu, cua_vao, gan_id, ho_so_id, so_trang,
          kho_nha, kho_khoa, co_byte, noi_dung, ocr_so_trang, ocr_so_trang_neo, ocr_ghi_chu,
          chu_nguon, nhay_cam, dong_y_boi, dong_y_luc, dong_y_muc_dich, nguoi_tao, tao_luc)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     `).bind(
       banGhi.id, banGhi.ma_gui, banGhi.nhom, banGhi.loai, banGhi.tieu_de,
       banGhi.so_hieu, banGhi.tim_kiem, banGhi.ngay_ban_hanh, banGhi.ngay_het_han,
-      banGhi.han_luu, banGhi.cua_vao, banGhi.gan_id, banGhi.so_trang,
+      banGhi.han_luu, banGhi.cua_vao, banGhi.gan_id, banGhi.ho_so_id, banGhi.so_trang,
       banGhi.kho_nha, banGhi.kho_khoa, banGhi.co_byte, banGhi.noi_dung,
       banGhi.ocr_so_trang, banGhi.ocr_so_trang_neo, banGhi.ocr_ghi_chu,
       banGhi.chu_nguon, banGhi.nhay_cam,
@@ -1097,6 +1255,8 @@ export async function luuTaiLieu(env, phien, body) {
     cua_vao: cuaGhi,
     gan_id: ganId,
     gan_ten: tenNguoi,
+    ho_so_id: hoSoId,
+    ho_so_ten: tenBo,
     so_trang: soTrang,
     co_byte: banGhi.co_byte,
     ocr_so_trang: boc.soTrang,
@@ -1142,9 +1302,32 @@ export async function danhSachTaiLieu(env, phien, thamSo) {
                'đốc mở được hồ sơ giấy tờ của người khác.', 403);
   }
 
+  /* ---- CỬA THỨ BA: XEM MỘT BỘ HỒ SƠ  ·  PHASE 2 -------------------------
+     Dùng lại NGUYÊN khuôn `?gan_id=` ở trên — cùng một hàm, cùng một câu SQL,
+     cùng một chốt quyền. Khác đúng một cột trong mệnh đề `WHERE`.
+
+     ⚠️ VÀ ĐÂY LÀ CHỖ DỄ LÀM SAI NHẤT CỦA CẢ TÍNH NĂNG: cửa `?gan_id=` có một
+     chốt quyền riêng ở trên (`duocXemNhomTaiLieu(phien,'nhan_su')`) vì hồ sơ
+     một NGƯỜI là dữ liệu cá nhân. Cửa `?ho_so_id=` **KHÔNG được có chốt tương
+     đương** — bộ không có quyền riêng (Sếp Ngọc chốt 09/09/2026). Một bộ chứa
+     giấy của nhiều nhóm; ai xem được nhóm nào thì thấy đúng giấy của nhóm ấy,
+     và phần bị chặn được ĐẾM RA rồi NÓI THẲNG (`so_bi_chan` ở dưới). Thêm một
+     chốt "được xem bộ hay không" ở đây chính là cấp quyền cho bộ. Đừng thêm. */
+  const hoSoId = String(thamSo.get('ho_so_id') || '').trim().slice(0, 64);
+
   if (!duocXem.length) {
     return json({ ds: [], nhom: [], canh_bao: CANH_BAO_PHAP_LY, tong: 0, bi_cat: false, cat: null,
                   nhom_luu_duoc: [], loai_goi_y: [] });
+  }
+
+  /* Bộ có thật không — hỏi TRƯỚC khi lọc, để mã sai trả 404 chứ không trả một
+     danh sách rỗng trông y như "bộ này chưa có giấy nào". */
+  let bo = null;
+  if (hoSoId) {
+    bo = await env.DB.prepare(
+      'SELECT id, ten, loai, trang_thai, ghi_chu, tao_luc FROM ho_so WHERE id = ? AND an = 0'
+    ).bind(hoSoId).first();
+    if (!bo) return loi('Không có bộ hồ sơ nào mang mã này', 404);
   }
 
   const dieuKien = [`an = 0`];
@@ -1152,6 +1335,15 @@ export async function danhSachTaiLieu(env, phien, thamSo) {
   if (ganId) {
     dieuKien.push(`cua_vao = ? AND gan_id = ?`);
     bien.push('nhan_su', ganId);
+  }
+  if (hoSoId) {
+    dieuKien.push(`ho_so_id = ?`);
+    bien.push(hoSoId);
+  }
+  /* Kho chung: cho lọc ra đúng những tờ CHƯA vào bộ nào. Đây là hàng đợi việc
+     của Sếp ("còn tờ nào chưa xếp vào bộ"), không phải một bộ lọc trang trí. */
+  if (!hoSoId && thamSo.get('chua_vao_bo') === '1') {
+    dieuKien.push(`ho_so_id IS NULL`);
   }
 
   /* Lọc theo nhóm NGAY TRONG CÂU SQL. Cố ý không lấy hết rồi lọc trong JS:
@@ -1171,10 +1363,41 @@ export async function danhSachTaiLieu(env, phien, thamSo) {
      bỏ dấu sẵn. Nhờ vậy "giay attp" và "Giấy ATTP" ra cùng một kết quả mà
      không cần bảng tìm kiếm riêng, không cần lượt ghi nào thêm. */
   const q = boDau(thamSo.get('q') || '');
+  /* ---- TRA THEO TÊN BỘ  ·  PHASE 2 --------------------------------------
+     Đo thật ở PHASE 1: gõ *"hồ sơ pháp lý doanh nghiệp"* trả về **0 kết quả**
+     — chữ "hồ sơ" không nằm trong ô tìm của tờ nào cả. Nay tên bộ được so
+     NGAY LÚC TRA, bằng chính `boDau()` ở trên, nên:
+       · đổi tên bộ xong là tra bằng tên mới ra ngay, tên cũ hết ra ngay;
+       · KHÔNG có chuỗi tra cứu nào phải bảo trì, không lượt ghi D1 nào thêm.
+     `ho_so` là bảng nhỏ (chục dòng), đọc cả bảng rẻ hơn hẳn việc dựng một
+     đường tìm kiếm thứ hai. Chỉ đọc KHI có câu hỏi — 0 đồng cho màn thường. */
+  let boTrung = [];
+  if (q && !hoSoId) {
+    try {
+      const rb = await env.DB.prepare('SELECT id, ten FROM ho_so WHERE an = 0').all();
+      const tuKhoa = q.split(' ').filter(Boolean).slice(0, 6);
+      boTrung = (rb.results || [])
+        .filter(b => { const s = boDau(b.ten); return tuKhoa.every(t => s.includes(t)); })
+        .map(b => b.id);
+    } catch (e) {
+      /* Tra bộ hụt thì tra tài liệu vẫn phải chạy — nhưng KHÔNG im: thiếu kết
+         quả mà không nói là một câu trả lời sai trông y như câu đúng. */
+      console.error('Tra theo tên bộ hồ sơ:', e.message);
+    }
+  }
   if (q) {
-    for (const tu of q.split(' ').filter(Boolean).slice(0, 6)) {
-      dieuKien.push('tim_kiem LIKE ?');
-      bien.push('%' + tu.replace(/[%_]/g, ' ') + '%');
+    const veTu = q.split(' ').filter(Boolean).slice(0, 6)
+      .map(() => 'tim_kiem LIKE ?');
+    const bienTu = q.split(' ').filter(Boolean).slice(0, 6)
+      .map(tu => '%' + tu.replace(/[%_]/g, ' ') + '%');
+    if (boTrung.length) {
+      /* GỘP thành MỘT mệnh đề có ngoặc: `dieuKien` được dùng lại NGUYÊN VĂN
+         cho câu ĐẾM ở `nhanCat` và cho dải đếm ba vế. Đẩy `OR` vào mà không
+         đóng ngoặc là mọi con số đếm đều sai — và sai âm thầm. */
+      dieuKien.push(`((${veTu.join(' AND ')}) OR ho_so_id IN (${boTrung.map(() => '?').join(',')}))`);
+      bien.push(...bienTu, ...boTrung);
+    } else {
+      for (let i = 0; i < veTu.length; i++) { dieuKien.push(veTu[i]); bien.push(bienTu[i]); }
     }
   }
 
@@ -1196,6 +1419,11 @@ export async function danhSachTaiLieu(env, phien, thamSo) {
     SELECT id, nhom, loai, tieu_de, so_hieu, ngay_ban_hanh, ngay_het_han,
            han_luu, so_trang, co_byte, ocr_so_trang, ocr_so_trang_neo, chu_nguon,
            ocr_ghi_chu, nhay_cam, nguoi_tao, tao_luc, cua_vao, gan_id,
+           -- PHASE 2. Chỉ lấy hai cột TRẦN; tên bộ và tên tờ thay thế được
+           -- điền ở dưới bằng ĐÚNG MỘT lượt đọc gộp, không phải câu con nhân
+           -- lên theo từng dòng — và quan trọng hơn: điền ở JS thì mới CHE
+           -- được tên tờ giấy thuộc nhóm người này không xem được.
+           ho_so_id, thay_the_boi_id,
            -- Tên người tờ giấy này thuộc về — để kho chung nói được "của ai"
            -- thay vì bày một mã ns_xxx. Câu con, KHÔNG phải JOIN: dieuKien ở
            -- trên viết cột trần (an, nhom) và được dùng lại NGUYÊN VĂN cho câu
@@ -1220,6 +1448,105 @@ export async function danhSachTaiLieu(env, phien, thamSo) {
   const cat = await nhanCat(env, biCat, GH,
     `SELECT COUNT(*) AS n FROM tai_lieu WHERE ${dieuKien.join(' AND ')}`, bien,
     'Gõ vào ô tìm hoặc chọn một nhóm để thu hẹp lại.');
+
+  /* ---- BỘ HỒ SƠ + QUAN HỆ THAY THẾ, ĐIỀN BẰNG MỘT LƯỢT ĐỌC · PHASE 2 -----
+     Ba nhãn phải hiện trên thẻ, và cả ba đều là chữ của DÒNG KHÁC:
+       ① tờ này thuộc bộ nào          (ho_so.ten)
+       ② tờ này ĐÃ BỊ tờ nào thay thế (tai_lieu.tieu_de của tờ mới)
+       ③ tờ này THAY THẾ cho tờ nào   (chiều ngược, hỏi bằng thay_the_boi_id)
+
+     ⚠️ CHE THEO NHÓM, KHÔNG CHE THEO BỘ. Tên một tờ giấy nhóm `nhan_su` là
+     chữ mà chỉ người xem được nhóm đó mới được đọc — kế toán trưởng thấy tờ
+     `02/2026/PLDN` bị thay thế thì được biết CÓ tờ thay thế, nhưng nếu tờ mới
+     nằm ở nhóm họ không xem được thì chỉ hiện câu "thuộc nhóm bạn không xem
+     được", KHÔNG hiện tên. Che ở đây (JS) chứ không ở SQL vì phải chạy qua
+     đúng hàm `duocXemNhomTaiLieu` — viết lại luật quyền bằng SQL là mở một
+     bản chép tay thứ hai của bảng quyền.
+
+     Một lượt ĐỌC D1 cho cả màn (đọc rẻ hơn ghi cả một bậc), và chỉ chạy khi
+     thật sự có gì để điền — kho chưa dùng bộ thì 0 đồng. */
+  const canBo = [...new Set(ds.map(r => r.ho_so_id).filter(Boolean))];
+  const idTrangHien = ds.map(r => r.id);
+  const canTo = [...new Set(ds.map(r => r.thay_the_boi_id).filter(Boolean))];
+
+  if (canBo.length) {
+    try {
+      const r = await env.DB.prepare(
+        `SELECT id, ten, trang_thai FROM ho_so WHERE id IN (${canBo.map(() => '?').join(',')})`
+      ).bind(...canBo).all();
+      const map = new Map((r.results || []).map(x => [x.id, x]));
+      for (const d of ds) {
+        const b = d.ho_so_id ? map.get(d.ho_so_id) : null;
+        d.ho_so_ten = b ? b.ten : null;
+        d.ho_so_da_dong = b ? (b.trang_thai === 'da_dong' ? 1 : 0) : 0;
+      }
+    } catch (e) {
+      /* Điền hụt thì THÔI — danh sách tài liệu vẫn phải hiện. Nhưng KHÔNG bịa
+         một cái tên: `null` để giao diện im lặng bỏ nhãn bộ. */
+      console.error('Điền tên bộ hồ sơ:', e.message);
+    }
+  }
+
+  if (canTo.length || idTrangHien.length) {
+    try {
+      const dk = [];
+      const bd = [];
+      if (canTo.length) { dk.push(`id IN (${canTo.map(() => '?').join(',')})`); bd.push(...canTo); }
+      if (idTrangHien.length) {
+        dk.push(`thay_the_boi_id IN (${idTrangHien.map(() => '?').join(',')})`);
+        bd.push(...idTrangHien);
+      }
+      const r = await env.DB.prepare(
+        `SELECT id, nhom, tieu_de, so_hieu, thay_the_boi_id FROM tai_lieu
+          WHERE an = 0 AND (${dk.join(' OR ')})`
+      ).bind(...bd).all();
+      const theoId = new Map((r.results || []).map(x => [x.id, x]));
+      const nguoc = new Map();
+      for (const x of (r.results || [])) {
+        if (x.thay_the_boi_id && !nguoc.has(x.thay_the_boi_id)) nguoc.set(x.thay_the_boi_id, x);
+      }
+      /* Một hàm cho cả hai chiều — hai bản chép tay của cùng một chốt che là
+         hai chỗ để một bên quên che. */
+      const nhan = (x) => {
+        if (!x) return null;
+        return duocXemNhomTaiLieu(phien, x.nhom)
+          ? { id: x.id, tieu_de: x.tieu_de, so_hieu: x.so_hieu, xem_duoc: true }
+          : { id: null, tieu_de: null, so_hieu: null, xem_duoc: false };
+      };
+      for (const d of ds) {
+        d.thay_the_boi = d.thay_the_boi_id ? nhan(theoId.get(d.thay_the_boi_id)) : null;
+        d.thay_the_cho = nhan(nguoc.get(d.id));
+      }
+    } catch (e) {
+      console.error('Điền quan hệ thay thế:', e.message);
+    }
+  }
+
+  /* ---- "BỘ NÀY CÓ N GIẤY TỜ BẠN KHÔNG ĐƯỢC XEM"  ·  PHASE 2 -------------
+     ⚠️ SẾP NGỌC CHỐT 09/09/2026, NGUYÊN VĂN YÊU CẦU: *không giấu im, không
+     hiện danh sách rỗng*. Vì bộ KHÔNG có quyền riêng, một bộ hoàn toàn có thể
+     chứa giấy thuộc nhóm người đang xem không mở được — bộ *Hồ sơ pháp lý
+     doanh nghiệp* chứa CCCD người đại diện (nhóm `nhan_su`) là ca thật.
+
+     Chỉ trả về CON SỐ. Không trả tên, không trả nhóm, không trả số hiệu: nói
+     "còn 1 tờ nữa" là đủ để người ta biết đi hỏi ai; nói "còn 1 tờ CCCD của
+     ông X" là đã để họ đọc được thứ họ không có quyền đọc. */
+  let soBiChan = 0;
+  if (hoSoId) {
+    try {
+      const c = await env.DB.prepare(
+        `SELECT COUNT(*) AS n FROM tai_lieu
+          WHERE an = 0 AND ho_so_id = ?
+            AND nhom NOT IN (${duocXem.map(() => '?').join(',')})`
+      ).bind(hoSoId, ...duocXem).first();
+      soBiChan = Number(c?.n) || 0;
+    } catch (e) {
+      /* Đếm hụt thì KHÔNG được im: nói là chưa đếm được, đừng in số 0 trông
+         như đã đếm và không thiếu gì. */
+      console.error('Đếm giấy bị chặn trong bộ:', e.message);
+      soBiChan = -1;
+    }
+  }
 
   /* ---- BA VẾ: TÌM ĐƯỢC · CÓ CHỮ MÀ CHƯA TRA ĐƯỢC · CHỈ XEM ĐƯỢC --------
      Sếp Ngọc cần con số này để biết có phải đi chỉnh máy scan hay không. Một
@@ -1289,7 +1616,366 @@ export async function danhSachTaiLieu(env, phien, thamSo) {
     gan_id: ganId || null,
     loai_goi_y: ganId ? LOAI_GIAY_NHAN_SU : [],
     duoc_quet_nhan_su: duocLuuNhomTaiLieu(phien, NHOM_CUA_NHAN_SU),
+    /* ---- CỬA XEM MỘT BỘ  ·  PHASE 2 ------------------------------------
+       Bảng kiểm tính trên ĐÚNG những tờ người này thấy được, và `so_bi_chan`
+       đi kèm để giao diện nói thẳng rằng chỗ "thiếu" có thể không thiếu thật.
+       Trả một bảng kiểm trơn mà giấu con số bị chặn là bịa ra một kết luận. */
+    ho_so: bo ? {
+      id: bo.id, ten: bo.ten, loai: bo.loai,
+      ten_loai: LOAI_HO_SO[bo.loai]?.ten || bo.loai,
+      trang_thai: bo.trang_thai, ghi_chu: bo.ghi_chu, tao_luc: bo.tao_luc,
+      bang_kiem: soatBangKiem(bo.loai, ds),
+      so_bi_chan: soBiChan
+    } : null,
     canh_bao: CANH_BAO_PHAP_LY + (ganId ? ' ' + CANH_BAO_TRA_GIAY : '')
+  });
+}
+
+/* ==========================================================================
+   5b. HỒ SƠ (BỘ)  —  GET /api/ho-so  ·  POST /api/ho-so/luu
+   ---------------------------------------------------------------------------
+   ⚠️ ĐỌC LẠI MỘT LẦN NỮA TRƯỚC KHI SỬA BẤT CỨ DÒNG NÀO Ở ĐÂY:
+   BỘ KHÔNG CÓ QUYỀN RIÊNG. Ba hàm dưới đây không được gọi bất cứ chốt quyền
+   nào theo BỘ. Chúng chỉ mượn lại đúng hai chốt đã có của kho tài liệu:
+     · `nhomTaiLieuLuuDuoc(phien).length` — lập/sửa bộ là việc văn thư, ai lưu
+       được ít nhất một nhóm giấy thì làm được. Bộ là NHÃN, không phải giấy.
+     · `duocLuuNhomTaiLieu(phien, tl.nhom)` — đưa MỘT TỜ vào/ra bộ là SỬA tờ
+       giấy đó, nên đi đúng chốt của `suaTaiLieu`, không nới một ly.
+   ========================================================================== */
+
+/** Đếm giấy trong từng bộ — CHỈ đếm giấy người này xem được, và nói ra là đã
+ *  lọc. Đếm cả giấy họ không xem được là để họ suy ra kho có gì; đếm rồi im
+ *  lặng là để họ tưởng bộ chỉ có bấy nhiêu. Chọn: đếm phần thấy được + trả
+ *  kèm con số bị chặn ở màn xem một bộ. */
+export async function danhSachHoSo(env, phien) {
+  const duocXem = nhomTaiLieuXemDuoc(phien);
+  const GH = 100;
+  const kq = await env.DB.prepare(`
+    SELECT id, ten, loai, trang_thai, ghi_chu, nguoi_tao, tao_luc
+      FROM ho_so
+     WHERE an = 0
+     ORDER BY (trang_thai = 'da_dong'), ten
+     LIMIT ${GH + 1}`).all();
+  const { ds, biCat } = catBot(kq, GH);
+  const cat = await nhanCat(env, biCat, GH,
+    'SELECT COUNT(*) AS n FROM ho_so WHERE an = 0', [],
+    'Đóng bớt những bộ đã xong để danh sách gọn lại.');
+
+  /* MỘT lượt đọc gộp cho cả màn, không phải một lượt cho mỗi bộ. Kho chưa có
+     bộ nào thì không tốn lượt nào. */
+  if (ds.length && duocXem.length) {
+    try {
+      const r = await env.DB.prepare(`
+        SELECT ho_so_id, COUNT(*) AS n
+          FROM tai_lieu
+         WHERE an = 0 AND ho_so_id IS NOT NULL
+           AND nhom IN (${duocXem.map(() => '?').join(',')})
+         GROUP BY ho_so_id`).bind(...duocXem).all();
+      const dem = new Map((r.results || []).map(x => [x.ho_so_id, Number(x.n) || 0]));
+      for (const b of ds) b.so_giay = dem.get(b.id) || 0;
+    } catch (e) {
+      console.error('Đếm giấy theo bộ:', e.message);
+      for (const b of ds) b.so_giay = null;      // null = CHƯA ĐẾM ĐƯỢC, khác 0
+    }
+  } else {
+    for (const b of ds) b.so_giay = 0;
+  }
+
+  for (const b of ds) {
+    b.ten_loai = LOAI_HO_SO[b.loai]?.ten || b.loai;
+    b.so_can = bangKiemHoSo(b.loai).length;
+  }
+
+  return json({
+    ds, bi_cat: biCat, cat, tran: GH,
+    loai: MA_LOAI_HO_SO.map(m => ({ ma: m, ten: LOAI_HO_SO[m].ten, so_can: bangKiemHoSo(m).length })),
+    /* Giao diện KHÔNG tự đoán ai được lập bộ — máy chủ trả lời, và máy chủ
+       vẫn kiểm lại ở `luuHoSo`. */
+    sua_duoc: nhomTaiLieuLuuDuoc(phien).length > 0,
+    canh_bao: CANH_BAO_PHAP_LY
+  });
+}
+
+/** Lập bộ mới, hoặc đổi tên / đổi loại / đóng–mở một bộ đã có.
+ *  Ghi vết vào SỔ SỬA CHUNG `lich_su_thay_doi_nen` (CTL-0017) — KHÔNG đẻ bảng
+ *  nhật ký thứ hai. */
+export async function luuHoSo(env, phien, body) {
+  if (!nhomTaiLieuLuuDuoc(phien).length) {
+    return loi('Bạn không có quyền lập hoặc sửa bộ hồ sơ. Nhờ HCNS hoặc Admin.', 403);
+  }
+  const id = chuoi(body.id, 64);
+  /* ⚠️ CHỈ NHẬN TRƯỜNG NƠI GỌI THẬT SỰ GỬI (xem khối chú thích ở phần SỬA bên
+     dưới). Nên phép kiểm cũng phải chạy TRÊN ĐÚNG những trường đó: bắt gửi kèm
+     `ten` chỉ để đóng một bộ là ép nơi gọi chép lại giá trị cũ, mà chép lại là
+     một chỗ nữa để chép sai. */
+  const co = (k) => Object.prototype.hasOwnProperty.call(body, k);
+  const ten = chuoi(body.ten, 200);
+  if ((!id || co('ten')) && (!ten || ten.length < 3)) {
+    return loi('Đặt tên cho bộ hồ sơ (ít nhất 3 ký tự) — để trống thì sau này không ai tìm ra nó.');
+  }
+  const loaiBo = chuoi(body.loai, 40) || 'khac';
+  if (co('loai') && !LOAI_HO_SO[loaiBo]) return loi(`Loại hồ sơ "${loaiBo}" không có thật`);
+  const trangThai = chuoi(body.trang_thai, 20) || 'dang_dung';
+  if (co('trang_thai') && !TRANG_THAI_HO_SO.includes(trangThai)) {
+    return loi('Trạng thái bộ hồ sơ không hợp lệ');
+  }
+  const ghiChu = chuoi(body.ghi_chu, 500);
+
+  const nguoiTen = phien.ho_ten || phien.ten_dang_nhap || phien.nhan_su_id || null;
+  const luc = nowVN();
+
+  /* ---- LẬP BỘ MỚI — 1 lượt ghi D1 --------------------------------------- */
+  if (!id) {
+    const idMoi = TIEN_TO_HO_SO + crypto.randomUUID().slice(0, 12);
+    try {
+      await env.DB.prepare(`
+        INSERT INTO ho_so (id, ten, loai, trang_thai, ghi_chu, nguoi_tao, tao_luc, an)
+        VALUES (?,?,?,?,?,?,?,0)`
+      ).bind(idMoi, ten, loaiBo, trangThai, ghiChu, phien.nhan_su_id || null, luc).run();
+    } catch (e) {
+      /* `UNIQUE` ở đây KHÔNG phải sự cố — nó là câu "đã có bộ tên này rồi".
+         Ném nguyên lỗi SQLite ra mặt người dùng là hai lỗi chồng lên nhau. */
+      if (/UNIQUE constraint failed/i.test(String(e?.message || ''))) {
+        return loi(`Đã có một bộ tên "${ten}". Mở bộ đó ra dùng, hoặc đặt tên khác ` +
+                   '(ví dụ thêm tên pháp nhân hoặc năm vào cuối).', 409);
+      }
+      console.error('Lập bộ hồ sơ:', e.message);
+      return loi('Chưa lập được bộ hồ sơ — máy chủ đang trục trặc ở bước ghi dữ liệu.', 500);
+    }
+    return json({ ok: true, id: idMoi, ten, loai: loaiBo, trang_thai: trangThai, luot_ghi_d1: 1 });
+  }
+
+  /* ---- SỬA BỘ ĐÃ CÓ ----------------------------------------------------- */
+  const cu = await env.DB.prepare(
+    'SELECT * FROM ho_so WHERE id = ? AND an = 0').bind(id).first();
+  if (!cu) return loi('Không có bộ hồ sơ nào mang mã này', 404);
+
+  /* ⚠️ CHỈ NHẬN TRƯỜNG NƠI GỌI THẬT SỰ GỬI — cùng luật với `suaTaiLieu`.
+     "Không gửi = không đụng tới", KHÔNG phải "gửi rỗng = xoá trắng". Bàn đo
+     `do-ho-so-bo` ⑥ bắt được đúng ca này: gọi đổi TÊN mà không kèm `ghi_chu`
+     thì bản trước thổi bay luôn ghi chú của bộ, lặng lẽ, và còn tính thêm một
+     lượt ghi lịch sử cho một thay đổi không ai yêu cầu. */
+  const tenCuoi   = co('ten') ? ten : cu.ten;
+  const loaiCuoi  = co('loai') ? loaiBo : cu.loai;
+  const ttCuoi    = co('trang_thai') ? trangThai : cu.trang_thai;
+  const ghiCuoi   = co('ghi_chu') ? ghiChu : (cu.ghi_chu ?? null);
+
+  const doi = [];
+  if (tenCuoi !== cu.ten) doi.push(['ten', cu.ten, tenCuoi]);
+  if (loaiCuoi !== cu.loai) doi.push(['loai', cu.loai, loaiCuoi]);
+  if (ttCuoi !== cu.trang_thai) doi.push(['trang_thai', cu.trang_thai, ttCuoi]);
+  if ((ghiCuoi || '') !== (cu.ghi_chu || '')) doi.push(['ghi_chu', cu.ghi_chu, ghiCuoi]);
+  /* Không đổi gì thì KHÔNG ghi gì — 0 lượt ghi D1, 0 dòng lịch sử rác. */
+  if (!doi.length) return json({ ok: true, khong_doi: true, luot_ghi_d1: 0 });
+
+  const cauLenh = [
+    env.DB.prepare('UPDATE ho_so SET ten = ?, loai = ?, trang_thai = ?, ghi_chu = ? WHERE id = ?')
+      .bind(tenCuoi, loaiCuoi, ttCuoi, ghiCuoi, id)
+  ];
+  for (const [truong, giaCu, giaMoi] of doi) {
+    cauLenh.push(env.DB.prepare(
+      `INSERT INTO lich_su_thay_doi_nen (bang, ban_ghi_id, truong, gia_tri_cu, gia_tri_moi,
+                                         nguoi_id, nguoi_ten, luc)
+       VALUES ('ho_so', ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(id, truong, giaCu ?? null, giaMoi ?? null, phien.nhan_su_id || null, nguoiTen, luc));
+  }
+
+  /* ⚠️ ĐỔI TÊN BỘ KHÔNG PHẢI ĐỘNG VÀO MỘT TỜ GIẤY NÀO.
+     Đây là lý do tên bộ KHÔNG nằm trong cột `tim_kiem` (xem khối chú thích ở
+     `chuoiTimKiem`): tra theo tên bộ được so ngay lúc ĐỌC, nên đổi tên xong là
+     tra bằng tên mới ra ngay, tên cũ hết ra ngay, mà tốn ĐÚNG 0 lượt ghi trên
+     bảng `tai_lieu`. Đổi tên một bộ 200 tờ vẫn là 1 UPDATE + N dòng lịch sử. */
+  await env.DB.batch(cauLenh);
+  return json({
+    ok: true, id, ten: tenCuoi, loai: loaiCuoi, trang_thai: ttCuoi,
+    luot_ghi_d1: cauLenh.length
+  });
+}
+
+/* ==========================================================================
+   5c. ĐƯA MỘT TỜ VÀO BỘ / RÚT RA  —  POST /api/tai-lieu/vao-bo
+   ---------------------------------------------------------------------------
+   ⚠️ VÌ SAO CÓ ĐƯỜNG "GẮN SAU" TRONG KHI REV-0046 #2 ĐÃ CHỐT LÀ KHÔNG NÊN CÓ.
+   Chốt đó nói về giấy NHÂN SỰ: gắn người sau thì tờ giấy mồ côi một quãng dài
+   vô hạn, mà quên gắn thì không ai biết. Bộ hồ sơ khác ở hai chỗ đo được:
+     ① Ba tờ giấy ĐANG NẰM TRÊN HỆ THỐNG (02/2026/PLDN, 03/2026/PLDN,
+        01/2026/ĐL) không có đường nào khác để vào bộ — migration cố ý KHÔNG
+        chạy `UPDATE` nào trên dữ liệu cũ, nên Sếp phải kéo tay.
+     ② "Chưa vào bộ nào" KHÔNG phải trạng thái hỏng: tuyệt đại đa số giấy tờ
+        đời thật không thuộc bộ nào, và kho chung vẫn tra ra chúng bình thường.
+   Nên đường quét thẳng vào bộ vẫn là đường chính (0 lượt ghi thêm), còn đây là
+   một VIỆC NGƯỜI TA BẤM, tốn lượt ghi của riêng nó: 1 UPDATE + 1 dòng lịch sử.
+
+   QUYỀN: đưa một tờ vào/ra bộ là SỬA tờ giấy đó ⇒ đi ĐÚNG chốt của `suaTaiLieu`
+   (`duocLuuNhomTaiLieu` theo NHÓM của tờ giấy). Không có chốt nào theo BỘ.
+   ========================================================================== */
+export async function taiLieuVaoBo(env, phien, body) {
+  const { tl, loi: l } = await layVaKiemQuyen(env, phien, body.id);
+  if (l) return l;
+  if (!duocLuuNhomTaiLieu(phien, tl.nhom)) {
+    return loi(`Bạn không có quyền sửa tài liệu nhóm "${NHOM_TAI_LIEU[tl.nhom]?.ten || tl.nhom}"`, 403);
+  }
+
+  /* `null` (hoặc chuỗi rỗng) = RÚT KHỎI BỘ. Cố ý cho rút: xếp nhầm bộ mà không
+     rút ra được thì người ta quay về thói ẩn tờ giấy đi rồi quét lại. */
+  const boMoi = chuoi(body.ho_so_id, 64);
+  if ((tl.ho_so_id || null) === (boMoi || null)) {
+    return json({ ok: true, khong_doi: true, luot_ghi_d1: 0 });
+  }
+
+  let tenBo = null;
+  if (boMoi) {
+    const hs = await env.DB.prepare(
+      'SELECT id, ten, trang_thai FROM ho_so WHERE id = ? AND an = 0').bind(boMoi).first();
+    if (!hs) return loi('Không có bộ hồ sơ nào mang mã này', 404);
+    if (hs.trang_thai === 'da_dong') {
+      return loi(`Bộ "${hs.ten}" đã đóng — không nhận thêm giấy tờ. ` +
+                 'Mở lại bộ rồi thử lần nữa.');
+    }
+    tenBo = hs.ten;
+  }
+
+  const nguoiTen = phien.ho_ten || phien.ten_dang_nhap || phien.nhan_su_id || null;
+  const luc = nowVN();
+  await env.DB.batch([
+    env.DB.prepare('UPDATE tai_lieu SET ho_so_id = ? WHERE id = ?').bind(boMoi || null, tl.id),
+    /* SỔ SỬA CHUNG của cả ERP (CTL-0017) — KHÔNG đẻ bảng nhật ký thứ hai. */
+    env.DB.prepare(
+      `INSERT INTO lich_su_thay_doi_nen (bang, ban_ghi_id, truong, gia_tri_cu, gia_tri_moi,
+                                         nguoi_id, nguoi_ten, luc)
+       VALUES ('tai_lieu', ?, 'ho_so_id', ?, ?, ?, ?, ?)`
+    ).bind(tl.id, tl.ho_so_id || null, boMoi || null, phien.nhan_su_id || null, nguoiTen, luc)
+  ]);
+
+  return json({ ok: true, id: tl.id, ho_so_id: boMoi || null, ho_so_ten: tenBo, luot_ghi_d1: 2 });
+}
+
+/* ==========================================================================
+   5d. TỜ NÀY ĐÃ BỊ TỜ KIA THAY THẾ  —  POST /api/tai-lieu/thay-the
+   ---------------------------------------------------------------------------
+   🔴 ĐÂY LÀ RỦI RO ĐANG NẰM TRÊN HỆ THỐNG THẬT, KHÔNG PHẢI TIỆN NGHI.
+   Kho có GCN đăng ký doanh nghiệp `02/2026/PLDN` và bản Sửa đổi lần 1
+   `03/2026/PLDN` nằm HAI DÒNG RỜI NHAU. Mở tờ 02 ra, màn hình không nói một
+   chữ nào về chuyện nó đã bị sửa đổi. Ai đó SẼ dùng tờ 02 đi làm thủ tục.
+
+   BA LUẬT, Sếp Ngọc chốt 09/09/2026:
+   ① ĐÁNH DẤU "HẾT HIỆU LỰC" + CHỈ SANG TỜ MỚI. Hai chiều: tờ cũ đeo dải cảnh
+      báo và một đường dẫn sang tờ mới; tờ mới ghi rõ nó thay thế tờ nào.
+   ② CẤM ẨN TỜ CŨ ĐI. SPEC-0005 Mục 7.5 cấm làm mất dấu tài liệu gốc, và bản
+      sửa đổi KHÔNG làm bản gốc vô giá trị — vẫn cần để chứng minh lịch sử
+      pháp nhân. Tờ cũ vẫn mở được, vẫn tải được, vẫn tra ra.
+   ③ NGƯỜI PHẢI BẤM XÁC NHẬN. Máy được phép GỢI Ý (xem `goiYThayThe`) nhưng
+      KHÔNG BAO GIỜ tự nối. Nối sai một cặp là dán nhãn "hết hiệu lực" lên một
+      tờ giấy còn hiệu lực — nguy hơn hẳn cái nó định chữa.
+   ========================================================================== */
+export async function danhDauThayThe(env, phien, body) {
+  const { tl, loi: l } = await layVaKiemQuyen(env, phien, body.id);
+  if (l) return l;
+  if (!duocLuuNhomTaiLieu(phien, tl.nhom)) {
+    return loi(`Bạn không có quyền sửa tài liệu nhóm "${NHOM_TAI_LIEU[tl.nhom]?.ten || tl.nhom}"`, 403);
+  }
+
+  const idMoi = chuoi(body.thay_the_boi_id, 64);   // rỗng = GỠ đánh dấu
+  if ((tl.thay_the_boi_id || null) === (idMoi || null)) {
+    return json({ ok: true, khong_doi: true, luot_ghi_d1: 0 });
+  }
+
+  let toMoi = null;
+  if (idMoi) {
+    if (idMoi === tl.id) return loi('Một tài liệu không thể tự thay thế chính nó.');
+    /* Tờ MỚI cũng phải đi qua chốt XEM: dán một tờ giấy mình không được xem
+       làm "bản thay thế" là mượn tính năng này để dò xem tài liệu nào có thật. */
+    const { tl: moi, loi: l2 } = await layVaKiemQuyen(env, phien, idMoi);
+    if (l2) return l2;
+    /* Vòng lặp hai chiều (A thay B, B thay A) làm cả hai tờ cùng đeo dải "hết
+       hiệu lực" và không tờ nào còn hiệu lực — một kho tự mâu thuẫn. Chặn ngay
+       ở đây, một lượt đọc đã có sẵn. */
+    if (moi.thay_the_boi_id === tl.id) {
+      return loi(`"${moi.tieu_de}" đang được đánh dấu là bị chính tài liệu này ` +
+                 'thay thế. Gỡ đánh dấu bên kia trước đã.');
+    }
+    toMoi = moi;
+  }
+
+  const nguoiTen = phien.ho_ten || phien.ten_dang_nhap || phien.nhan_su_id || null;
+  const luc = nowVN();
+  await env.DB.batch([
+    env.DB.prepare('UPDATE tai_lieu SET thay_the_boi_id = ? WHERE id = ?').bind(idMoi || null, tl.id),
+    env.DB.prepare(
+      `INSERT INTO lich_su_thay_doi_nen (bang, ban_ghi_id, truong, gia_tri_cu, gia_tri_moi,
+                                         nguoi_id, nguoi_ten, luc)
+       VALUES ('tai_lieu', ?, 'thay_the_boi_id', ?, ?, ?, ?, ?)`
+    ).bind(tl.id, tl.thay_the_boi_id || null, idMoi || null, phien.nhan_su_id || null, nguoiTen, luc)
+  ]);
+
+  return json({
+    ok: true, id: tl.id,
+    thay_the_boi_id: idMoi || null,
+    thay_the_boi_ten: toMoi ? toMoi.tieu_de : null,
+    luot_ghi_d1: 2
+  });
+}
+
+/** Máy GỢI Ý cặp nghi ngờ — GET /api/tai-lieu/goi-y-thay-the?id=...
+ *
+ *  Mọi dấu hiệu để nhận ra cặp `02/2026/PLDN` ↔ `03/2026/PLDN` đều có sẵn từ
+ *  ngày đầu: cùng nhóm, cùng loại, số hiệu liền kề, tên chứa "Sửa đổi lần 1".
+ *  Hệ thống chỉ đơn giản là CHƯA BAO GIỜ ĐƯỢC HỎI CÂU ĐÓ.
+ *
+ *  ⚠️ CHỈ GỢI Ý. Không hàm nào ở đây ghi một chữ vào CSDL. Người phải bấm.
+ *  Trả kèm `vi_sao` để người bấm nhìn thấy máy đang dựa vào đâu — một gợi ý
+ *  không nói lý do là một mệnh lệnh trá hình. */
+export async function goiYThayThe(env, phien, id) {
+  const { tl, loi: l } = await layVaKiemQuyen(env, phien, id);
+  if (l) return l;
+
+  const duocXem = nhomTaiLieuXemDuoc(phien);
+  if (!duocXem.length) return json({ ds: [] });
+
+  /* Chỉ soi trong CÙNG NHÓM: một tờ giấy pháp lý không bao giờ bị một tờ hoá
+     đơn thay thế, và giới hạn này giữ câu SQL bám đúng `idx_tai_lieu_nhom`. */
+  const r = await env.DB.prepare(`
+    SELECT id, nhom, loai, tieu_de, so_hieu, ngay_ban_hanh, tao_luc
+      FROM tai_lieu
+     WHERE an = 0 AND id <> ? AND nhom = ?
+       AND nhom IN (${duocXem.map(() => '?').join(',')})
+     ORDER BY tao_luc DESC
+     LIMIT 200`).bind(tl.id, tl.nhom, ...duocXem).all();
+
+  /* Dấu hiệu SỬA ĐỔI nằm ở tên tờ MỚI, không phải tờ cũ. Bỏ dấu để "Sửa đổi"
+     và "sua doi" cùng trúng — dùng lại `boDau()`, không viết bảng chữ thứ hai. */
+  const TU_SUA_DOI = ['sua doi', 'thay the', 'bo sung', 'dieu chinh', 'thay doi lan', 'lan 2', 'lan 3'];
+  const soCua = (s) => {
+    const m = String(s || '').match(/\d+/);
+    return m ? parseInt(m[0], 10) : null;
+  };
+  const soCu = soCua(tl.so_hieu);
+  const duoiCu = boDau(String(tl.so_hieu || '').replace(/^\s*\d+/, ''));   // phần sau con số
+
+  const ds = [];
+  for (const x of (r.results || [])) {
+    const viSao = [];
+    const tenX = boDau(x.tieu_de || '');
+    if (TU_SUA_DOI.some(t => tenX.includes(t))) viSao.push('tên có chữ "sửa đổi / thay thế / bổ sung"');
+    if (tl.loai && x.loai && boDau(tl.loai) === boDau(x.loai)) viSao.push('cùng loại giấy');
+    const soX = soCua(x.so_hieu);
+    const duoiX = boDau(String(x.so_hieu || '').replace(/^\s*\d+/, ''));
+    if (soCu !== null && soX !== null && duoiCu && duoiCu === duoiX && soX > soCu && soX - soCu <= 3) {
+      viSao.push(`số hiệu liền kề (${tl.so_hieu} → ${x.so_hieu})`);
+    }
+    /* Đòi ÍT NHẤT HAI dấu hiệu. Một dấu hiệu đơn lẻ ("cùng loại giấy") đúng với
+       gần như cả nhóm — bày ra là bày một danh sách nhiễu, mà danh sách nhiễu
+       thì người ta bấm bừa. */
+    if (viSao.length >= 2) ds.push({ id: x.id, tieu_de: x.tieu_de, so_hieu: x.so_hieu, vi_sao: viSao });
+  }
+  ds.sort((a, b) => b.vi_sao.length - a.vi_sao.length);
+
+  return json({
+    ds: ds.slice(0, 10),
+    /* Nói thẳng máy đang đoán bằng gì, và nó KHÔNG đọc được ruột giấy — trên
+       kho thật 0/3 tờ bóc được chữ, nên đây thuần tuý là suy từ tên và số hiệu. */
+    dua_vao: 'Máy chỉ suy từ TÊN, SỐ HIỆU và LOẠI GIẤY — không đọc nội dung bên ' +
+             'trong tờ giấy. Nhìn hai tờ rồi mới bấm.'
   });
 }
 
@@ -1359,10 +2045,48 @@ export async function moTaiLieu(env, phien, id) {
   const { tl, loi: l } = await layVaKiemQuyen(env, phien, id);
   if (l) return l;
   await ghiNhatKy(env, tl, phien, 'mo');
+
+  /* ---- BỘ + QUAN HỆ THAY THẾ  ·  PHASE 2 --------------------------------
+     Mở MỘT tờ ra là lúc người ta sắp đem nó đi dùng — nên đây là chỗ câu "tờ
+     này đã hết hiệu lực" phải xuất hiện rõ nhất, không phải chỗ giấu nó đi.
+     Một lượt đọc gộp cho cả ba nhãn; tờ giấy không thuộc bộ và không dính quan
+     hệ thay thế nào thì 0 lượt. */
+  let tenBo = null, boDaDong = 0, toMoi = null, toCu = null;
+  try {
+    if (tl.ho_so_id) {
+      const b = await env.DB.prepare(
+        'SELECT ten, trang_thai FROM ho_so WHERE id = ? AND an = 0').bind(tl.ho_so_id).first();
+      if (b) { tenBo = b.ten; boDaDong = b.trang_thai === 'da_dong' ? 1 : 0; }
+    }
+    /* CHE THEO NHÓM, không theo bộ: tên một tờ giấy nhóm `nhan_su` chỉ người
+       xem được nhóm đó mới được đọc. Người khác vẫn biết CÓ tờ thay thế — đó
+       là thứ họ cần để không đem nhầm giấy đi nộp — nhưng không biết nó là gì. */
+    const nhan = (x) => x
+      ? (duocXemNhomTaiLieu(phien, x.nhom)
+          ? { id: x.id, tieu_de: x.tieu_de, so_hieu: x.so_hieu, xem_duoc: true }
+          : { id: null, tieu_de: null, so_hieu: null, xem_duoc: false })
+      : null;
+    if (tl.thay_the_boi_id) {
+      toMoi = nhan(await env.DB.prepare(
+        'SELECT id, nhom, tieu_de, so_hieu FROM tai_lieu WHERE id = ? AND an = 0')
+        .bind(tl.thay_the_boi_id).first());
+    }
+    toCu = nhan(await env.DB.prepare(
+      'SELECT id, nhom, tieu_de, so_hieu FROM tai_lieu WHERE thay_the_boi_id = ? AND an = 0 LIMIT 1')
+      .bind(tl.id).first());
+  } catch (e) {
+    /* Điền hụt thì KHÔNG bịa: để `null` và giao diện im lặng bỏ nhãn. Nhưng
+       phải kêu lên log — nhãn "hết hiệu lực" biến mất là chuyện đáng biết. */
+    console.error('Điền bộ/quan hệ thay thế khi mở tài liệu:', e.message);
+  }
+
   return json({
     ok: true,
     tai_lieu: {
       id: tl.id, nhom: tl.nhom, ten_nhom: NHOM_TAI_LIEU[tl.nhom]?.ten || tl.nhom,
+      ho_so_id: tl.ho_so_id || null, ho_so_ten: tenBo, ho_so_da_dong: boDaDong,
+      thay_the_boi_id: tl.thay_the_boi_id || null,
+      thay_the_boi: toMoi, thay_the_cho: toCu,
       loai: tl.loai, tieu_de: tl.tieu_de, so_hieu: tl.so_hieu,
       ngay_ban_hanh: tl.ngay_ban_hanh, ngay_het_han: tl.ngay_het_han,
       han_luu: tl.han_luu, so_trang: tl.so_trang, co_byte: tl.co_byte,

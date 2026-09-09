@@ -2845,17 +2845,26 @@
     <section class="view" id="v-khotailieu" hidden>
       <div class="view-head">
         <h3>Kho tài liệu</h3>
-        <p>Giấy tờ quản trị bản cứng quét bằng điện thoại, gộp nhiều trang thành một tài liệu, bóc chữ để tra cứu, lưu trên Google Drive. Có nhắc trước khi giấy hết hạn.</p>
+        <!-- ⚠️ RÚT NGẮN CÓ CHỦ Ý — PHASE 2. Câu cũ dài 3 dòng ở 375px và nó mô
+             tả CÁCH LÀM (quét, gộp trang, bóc chữ, Drive) chứ không nói tab này
+             để làm gì. Ba dòng đó chiếm 117px trên một màn cao 812px, mỗi lần
+             mở tab, mãi mãi. Chi tiết cách làm nằm ngay trên màn quét. -->
+        <p>Giấy tờ quản trị đã quét, xếp thành <b>bộ hồ sơ</b>.</p>
       </div>
 
       <!-- ⚠️ CÂU BẮT BUỘC — CTL-0026 Mục 2. Không có nó là có ngày ai đó dọn
-           kho giấy. Đặt NGAY ĐẦU TAB, trước cả nút quét. -->
-      <div class="tl-luat" id="tl-luat">
-        <b>⚠️ Đây là bản dự phòng để tra cứu. KHÔNG thay bản giấy — đừng huỷ giấy gốc.</b>
+           kho giấy. Đặt NGAY ĐẦU TAB, trước cả nút quét.
+           PHASE 2: CÂU BẮT BUỘC VẪN HIỆN NGUYÊN VĂN, KHÔNG GẬP. Cái gập lại
+           chỉ là đoạn TRÍCH LUẬT giải thích vì sao — đoạn đó chiếm 217px trên
+           điện thoại (26% cả màn) trong khi câu phải đọc nằm gọn ở dòng đầu.
+           Chuỗi `CANH_BAO_PHAP_LY` của máy chủ vẫn khớp từng chữ với dòng <b>
+           dưới đây; phép kiểm tự động soi đúng chuỗi đó, đừng sửa lệch. -->
+      <details class="tl-luat" id="tl-luat">
+        <summary><b>⚠️ Đây là bản dự phòng để tra cứu. KHÔNG thay bản giấy — đừng huỷ giấy gốc.</b></summary>
         <p>Luật Giao dịch điện tử 2023 (hiệu lực 01/7/2024) chỉ công nhận bản số hoá khi
            có ký số và bảo đảm toàn vẹn; quét bằng điện thoại không đạt. Luật Kế toán vẫn
            bắt giữ bản gốc có chữ ký và dấu đỏ, lưu 5 năm / 10 năm / vĩnh viễn tuỳ loại.</p>
-      </div>
+      </details>
 
       <div class="tl-thanh">
         <!-- Ẩn SẴN: chỉ hiện lại khi máy chủ xác nhận người này lưu được ít
@@ -2874,18 +2883,58 @@
              luật). Ô này sinh ra ở nhánh CTL-0026 nên KHÔNG nằm trong 111 ô
              đã vá — vá tay cho đồng bộ, không để lệch một ô. -->
         <input type="search" id="tl-tim" class="tl-tim" maxlength="80" placeholder="Tìm: gõ có dấu hay không dấu đều được">
-        <label class="tl-loc-han"><input type="checkbox" id="tl-sap-het"> Chỉ giấy sắp hết hạn</label>
       </div>
 
-      <div class="tl-nhom-loc" id="tl-nhom-loc"></div>
+      <!-- ⚠️ BỘ LỌC GẬP LẠI — PHASE 2, đo thật ở 375px trước khi sửa:
+           8 chip nhóm xuống 4 hàng = 200px, cộng ô tick "sắp hết hạn" 44px.
+           244px hiện ra MỖI LẦN mở tab, trong khi phần lớn lượt mở là đi tìm
+           một tờ giấy chứ không phải đi lọc. Gập lại còn ĐÚNG MỘT hàng 44px,
+           và dòng tóm tắt NÓI RA bộ lọc đang bật — gập mà giấu mất trạng thái
+           thì người ta ngồi nhìn một danh sách đã lọc và tưởng kho chỉ có thế.
+           KHÔNG đổi sang thanh kéo ngang: luật của Sếp là hạn chế kéo sang. -->
+      <details class="tl-gap" id="tl-gap-loc">
+        <summary class="tl-gap-dau">🔎 Lọc <span class="tl-gap-tom" id="tl-loc-tom">Tất cả</span></summary>
+        <div class="tl-nhom-loc" id="tl-nhom-loc"></div>
+        <div class="tl-gap-hang">
+          <label class="tl-loc-han"><input type="checkbox" id="tl-sap-het"> Chỉ giấy sắp hết hạn</label>
+          <label class="tl-loc-han"><input type="checkbox" id="tl-chua-bo"> Chỉ giấy chưa vào bộ nào</label>
+        </div>
+      </details>
+
+      <!-- ==================================================================
+           BỘ HỒ SƠ — PHASE 2, Sếp Ngọc chốt 09/09/2026
+           Một dòng bộ gập lại thay cho cả một xấp thẻ tài liệu. Đây là chỗ mô
+           hình hồ sơ ăn điểm rõ nhất: 50 tài liệu = 14.089px (≈17 màn vuốt)
+           trên điện thoại, còn 6 bộ = 6 dòng 44px.
+           ⚠️ BỘ KHÔNG CÓ QUYỀN RIÊNG. Quyền vẫn CHỈ do nhóm giấy tờ quyết
+           định. Bộ nào có giấy người này không xem được thì màn hình NÓI
+           THẲNG con số đó — không giấu im, không hiện danh sách rỗng. -->
+      <details class="tl-gap tl-bo-khoi" id="tl-bo-khoi" hidden>
+        <summary class="tl-gap-dau">📁 Bộ hồ sơ <span class="tl-gap-tom" id="tl-bo-tom">—</span></summary>
+        <div class="tl-bo-dau">
+          <button type="button" class="tl-nut-mo" id="tl-bo-them" hidden>+ Lập bộ mới</button>
+        </div>
+        <div id="tl-bo-ds"></div>
+        <div class="dai-cat" id="tl-bo-cat" hidden></div>
+      </details>
+
+      <!-- Khối hộp lập / sửa bộ, ẩn cho tới khi bấm -->
+      <div class="tl-chu" id="tl-bo-hop" hidden></div>
+
+      <!-- Đầu màn XEM MỘT BỘ: tên bộ, bảng kiểm thiếu–đủ, câu "có N giấy bạn
+           không được xem". Rỗng khi đang ở kho chung. -->
+      <div id="tl-bo-mo" hidden></div>
 
       <!-- HAI LOẠI TÀI LIỆU TRONG KHO — CTL-0026 vòng 7. Máy scan ra hai loại
            PDF trông y hệt nhau khi mở lên: loại đã nhận dạng chữ (tìm được
            theo nội dung) và loại chỉ có ảnh (chỉ xem được). Nhìn từng thẻ một
            thì không bao giờ thấy ra TỈ LỆ, mà tỉ lệ mới là thứ quyết định có
            phải đi chỉnh máy scan hay không. Con số do máy chủ đếm trên đúng
-           bộ lọc đang hiện, nên đổi bộ lọc là số đổi theo. -->
-      <p class="tl-dem-chu" id="tl-dem-chu" hidden></p>
+           bộ lọc đang hiện, nên đổi bộ lọc là số đổi theo.
+           PHASE 2: con số VẪN HIỆN NGUYÊN, chỉ đoạn giải thích dài (172px ở
+           375px) gập vào — giấu con số đi thì Sếp không bao giờ biết kho đang
+           0% tra được theo nội dung. -->
+      <details class="tl-dem-chu" id="tl-dem-chu" hidden></details>
 
       <div id="tl-danh-sach"></div>
       <p class="tl-trong" id="tl-trong" hidden>Chưa có tài liệu nào trong kho.</p>

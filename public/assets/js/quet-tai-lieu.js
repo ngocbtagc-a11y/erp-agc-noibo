@@ -307,6 +307,10 @@ function congNam(n) {
    @param {object} t
    @param {string} t.cuaVao       'kho_chung' (Đợt 1) | 'nhan_su' (Đợt 2)
    @param {string} [t.ganId]      nhan_su.id khi cuaVao='nhan_su'
+   @param {string} [t.hoSoId]     ho_so.id — quét thẳng vào một BỘ (PHASE 2).
+                                  Hằng của cả phiên quét, nên cả xấp PDF chọn
+                                  một lượt cùng vào một bộ. Máy chủ kiểm bộ có
+                                  thật và chưa đóng; 0 lượt ghi D1 thêm.
    @param {Array}  t.nhom         [{ma, ten, vi_du, han_luu, nhay_cam}] — CHỈ
                                   các nhóm người này được LƯU (máy chủ vẫn
                                   kiểm lại, đây chỉ là bớt chỗ bấm nhầm)
@@ -333,6 +337,12 @@ function congNam(n) {
 export function moQuetTaiLieu(t) {
   const cuaVao = t.cuaVao || 'kho_chung';
   const ganId = t.ganId || null;
+  /* PHASE 2 — quét THẲNG vào một bộ hồ sơ. Đây là chỗ RẺ NHẤT để sinh ra quan
+     hệ bộ: `ho_so_id` đi kèm đúng lượt `INSERT` vốn đã có ⇒ 0 lượt ghi D1
+     thêm, giữ nguyên bất biến "MỘT lượt quét = ĐÚNG 1 lượt ghi". Cả một xấp
+     PDF chọn một lượt cũng vào chung một bộ, vì `hoSoId` là hằng của cả phiên
+     quét chứ không nằm trong bản nháp từng tờ. */
+  const hoSoId = t.hoSoId || null;
   const dsLoaiGoiY = Array.isArray(t.loaiGoiY) ? t.loaiGoiY.filter(x => x && x.ten) : [];
   const dsNhom = (t.nhom || []).filter(n => n && n.ma);
   if (!dsNhom.length) {
@@ -1772,6 +1782,9 @@ export function moQuetTaiLieu(t) {
            `chon-nguoi` (REV-0046 #2). Máy chủ ghi `cua_vao='nhan_su'` cho mọi
            giấy nhóm nhân sự, nên hai đường về cùng MỘT dạng dòng. */
         gan_id: ganId || hs.ganId || null,
+        /* Bộ hồ sơ (PHASE 2). NULL là bình thường — "chưa vào bộ nào" không
+           phải trạng thái hỏng, kho chung vẫn tra ra tờ giấy đó như cũ. */
+        ho_so_id: hoSoId,
         nhom: hs.nhom,
         tieu_de: hs.tieuDe,
         loai: hs.loai || null,

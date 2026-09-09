@@ -545,6 +545,12 @@ export const API = {
        nhìn qua cửa kho chung, và kho chung thấy CẢ giấy đã quét vào hồ sơ —
        một kho, hai cửa nhìn, không phải hai kho. */
     if (tuyChon.ganId) u.set('gan_id', tuyChon.ganId);
+    /* `hoSoId` = nhìn qua cửa XEM MỘT BỘ (PHASE 2). Cùng một hàm máy chủ, cùng
+       một chốt quyền theo NHÓM — bộ KHÔNG có quyền riêng. Phần bộ có mà người
+       này không xem được sẽ về trong `ho_so.so_bi_chan`, và màn hình PHẢI nói
+       ra con số đó chứ không giấu im. */
+    if (tuyChon.hoSoId) u.set('ho_so_id', tuyChon.hoSoId);
+    if (tuyChon.chuaVaoBo) u.set('chua_vao_bo', '1');
     return goi('/api/tai-lieu' + (u.toString() ? '?' + u : ''));
   },
   tlLuu: (than) => goi('/api/tai-lieu/luu', { method: 'POST', body: JSON.stringify(than) }),
@@ -577,6 +583,27 @@ export const API = {
   tlSua: (du) => goi('/api/tai-lieu/sua', { method: 'POST', body: JSON.stringify(du) }),
   tlLichSu: (id) => goi('/api/tai-lieu/lich-su?id=' + encodeURIComponent(id)),
   tlAn: (id) => goi('/api/tai-lieu/an', { method: 'POST', body: JSON.stringify({ id }) }),
+
+  /* ---- Hồ sơ (bộ) — PHASE 2, Sếp Ngọc chốt 09/09/2026 ------------------
+     Bộ là CÁCH NHÌN, không phải kho thứ hai và không phải nhóm thứ tám: quyền
+     xem vẫn CHỈ do nhóm giấy tờ quyết định. Không hàm nào dưới đây gửi hay
+     nhận một tham số quyền nào. */
+  hsDanhSach: () => goi('/api/ho-so'),
+  hsLuu: (du) => goi('/api/ho-so/luu', { method: 'POST', body: JSON.stringify(du) }),
+  /* Đưa một tờ vào bộ, hoặc rút ra (`hoSoId = null`). Tốn 1 UPDATE + 1 dòng
+     lịch sử — đây là việc người ta BẤM, khác với quét thẳng vào bộ (0 lượt
+     ghi thêm). */
+  tlVaoBo: (id, hoSoId) => goi('/api/tai-lieu/vao-bo', {
+    method: 'POST', body: JSON.stringify({ id, ho_so_id: hoSoId || null })
+  }),
+  /* 🔴 Đánh dấu tờ CŨ đã bị tờ MỚI thay thế. `thayTheBoiId = null` là gỡ dấu.
+     KHÔNG ẩn tờ cũ — SPEC-0005 Mục 7.5 cấm làm mất dấu tài liệu gốc. */
+  tlThayThe: (id, thayTheBoiId) => goi('/api/tai-lieu/thay-the', {
+    method: 'POST', body: JSON.stringify({ id, thay_the_boi_id: thayTheBoiId || null })
+  }),
+  /* Máy chỉ GỢI Ý cặp nghi ngờ (cùng nhóm · cùng loại · số hiệu liền kề · tên
+     có chữ "sửa đổi"). NGƯỜI phải bấm xác nhận — máy không bao giờ tự nối. */
+  tlGoiYThayThe: (id) => goi('/api/tai-lieu/goi-y-thay-the?id=' + encodeURIComponent(id)),
 
   /* ---- Văn phòng ảo: một cửa duy nhất là Hỏi Mây ---- */
   vpTongQuan: () => goi('/api/van-phong/tong-quan'),
