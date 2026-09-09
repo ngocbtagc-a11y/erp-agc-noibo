@@ -178,7 +178,13 @@ const DOI_CHUNG = [
     be: s => s.replace('if (moDunHong) {', 'if (false) {') },
   { ma: 'DC-H', chu: 'lọc ra 0 dòng lại nói câu chung, không nhắc bộ lọc còn bật',
     phai_do: ['loc.noi_ro_con_loc', 'loc.co_nut_xoa_loc', 'loc.nut_xoa_44px', 'loc.xoa_loc_an_duoc'],
-    be: s => s.replace('} else if (k || locTt) {', '} else if (false) {') }
+    /* Bám Ý NGHĨA, không bám mặt chữ. Bản đầu thay đúng chuỗi
+       '} else if (k || locTt) {'. Ngày 09/09/2026 bộ lọc tháng ra đời, điều
+       kiện thành (k || locTt || locThang) — chuỗi hết khớp, phép phá KHÔNG
+       chạy, và ca đối chứng lặng lẽ thôi canh gác. Bàn đo có kêu ("DC-H
+       không bắt được") nên không mù hẳn, nhưng phải sửa để lần sau thêm bộ
+       lọc thứ tư nó vẫn bám được. */
+    be: s => s.replace(/\} else if \(k \|\| locTt[^)]*\) \{/, '} else if (false) {') }
 ];
 
 /* ---- MỘT VÒNG ĐO -------------------------------------------------------- */
