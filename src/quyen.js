@@ -198,16 +198,49 @@ function coTrongTap(chuThe, tap) {
                 viên kho KHÔNG thấy giá — đây là ranh giới cứng, kiểm ở
                 máy chủ chứ không phải ẩn nút.
    Kế toán trưởng xem được tồn + báo cáo + giá vốn nhưng KHÔNG thao tác
-   (không nhập/xuất thay kho). */
+   (không nhập/xuất thay kho).
+
+   ---------------------------------------------------------------------------
+   HAI MỨC MỚI  ·  Sếp Bùi Thị Ngọc chốt 09/09/2026 (C1 · C2)
+   ---------------------------------------------------------------------------
+   - nap_luot   : NẠP TỒN KHO HÀNG LOẠT từ file (và xem/gỡ lại lượt nạp đó).
+   - dieu_chinh : LẬP PHIẾU ĐIỀU CHỈNH tồn (kéo sổ về đúng số đếm được).
+
+   VÌ SAO TÁCH RIÊNG chứ không dùng lại `thao_tac` hay `quan_ly`:
+
+   · `thao_tac` là việc HẰNG NGÀY ở kho — nhập một phiếu, xuất một phiếu, mỗi
+     lần một mã, sai thì thấy ngay ở dòng kế tiếp. Nạp file thì KHÁC HẲN VỀ
+     ĐỘ LỚN: một lần bấm ghi thẳng hàng nghìn dòng vào sổ cái, sai một cột là
+     sai cả bảng mà không ai nhìn ra. Đo trên bản trước bản này: `nhan_vien_kho`
+     có `thao_tac = true`, tức CẢ 17 bạn part-time ở kho đều nạp được file tồn
+     kho hàng loạt (src/index.js batBuocNapDuLieu + src/nap-du-lieu.js ghiThat).
+     Sếp chốt: KHÔNG. Chỉ Quản lý kho và Kế toán trưởng.
+
+   · `quan_ly` là quyền ĐỔI ĐỊNH NGHĨA hàng hoá (thêm/sửa mã hàng, mức tồn tối
+     thiểu) — đó là việc của kho, Kế toán trưởng không dính. Nhưng phiếu điều
+     chỉnh thì Kế toán trưởng PHẢI lập được: chị Hằng là người đối chiếu sổ với
+     số kiểm kê, kéo sổ về đúng số đếm được là việc của chị. Dùng lại `quan_ly`
+     để mở cho Kế toán trưởng là lặng lẽ trao luôn quyền sửa mã hàng và quyền
+     gỡ lượt nạp của người khác — trao nhầm thứ không ai xin.
+
+   AI MẤT GÌ so với bản trước:
+     · nhan_vien_kho : MẤT quyền nạp tồn kho hàng loạt (và xem/gỡ lượt nạp).
+                       Vẫn nhập/xuất kho từng phiếu như cũ — không đụng tới.
+     · nv_test       : MẤT quyền nạp tồn kho hàng loạt. Vai này để bấm thử
+                       luồng đơn hoàn, không phải để ghi hàng nghìn dòng thật.
+     · ke_toan_truong: ĐƯỢC THÊM nạp tồn kho hàng loạt + lập phiếu điều chỉnh.
+     · admin, quan_ly_kho: không đổi gì. */
 const QUYEN_KHO = {
-  admin:          { thao_tac: true,  quan_ly: true,  gia_von: true  },
-  quan_ly_kho:    { thao_tac: true,  quan_ly: true,  gia_von: true  },
-  nhan_vien_kho:  { thao_tac: true,  quan_ly: false, gia_von: false },
-  ke_toan_truong: { thao_tac: false, quan_ly: false, gia_von: true  },
-  nv_test:        { thao_tac: true,  quan_ly: false, gia_von: false }   // test "Đã nhận"/"Cần khiếu nại" ở Kho vận
+  admin:          { thao_tac: true,  quan_ly: true,  gia_von: true,  nap_luot: true,  dieu_chinh: true  },
+  quan_ly_kho:    { thao_tac: true,  quan_ly: true,  gia_von: true,  nap_luot: true,  dieu_chinh: true  },
+  nhan_vien_kho:  { thao_tac: true,  quan_ly: false, gia_von: false, nap_luot: false, dieu_chinh: false },
+  ke_toan_truong: { thao_tac: false, quan_ly: false, gia_von: true,  nap_luot: true,  dieu_chinh: true  },
+  // test "Đã nhận"/"Cần khiếu nại" ở Kho vận — KHÔNG nạp file, KHÔNG điều chỉnh
+  nv_test:        { thao_tac: true,  quan_ly: false, gia_von: false, nap_luot: false, dieu_chinh: false }
 };
 
-const KHONG_QUYEN_KHO = { thao_tac: false, quan_ly: false, gia_von: false };
+const KHONG_QUYEN_KHO = { thao_tac: false, quan_ly: false, gia_von: false,
+                          nap_luot: false, dieu_chinh: false };
 
 /* HỢP hai ô (xem khối "HAI Ô" phía trên): anh Duy = nguoi_dung + quan_ly_kho
    thì phải ra đúng bộ quyền của quan_ly_kho, vì `nguoi_dung` không có mặt
@@ -217,9 +250,11 @@ export function quyenKho(chuThe) {
   if (!ds.length) return KHONG_QUYEN_KHO;
   if (ds.length === 1) return QUYEN_KHO[ds[0]] || KHONG_QUYEN_KHO;
   return {
-    thao_tac: hopCo(chuThe, QUYEN_KHO, 'thao_tac'),
-    quan_ly:  hopCo(chuThe, QUYEN_KHO, 'quan_ly'),
-    gia_von:  hopCo(chuThe, QUYEN_KHO, 'gia_von')
+    thao_tac:   hopCo(chuThe, QUYEN_KHO, 'thao_tac'),
+    quan_ly:    hopCo(chuThe, QUYEN_KHO, 'quan_ly'),
+    gia_von:    hopCo(chuThe, QUYEN_KHO, 'gia_von'),
+    nap_luot:   hopCo(chuThe, QUYEN_KHO, 'nap_luot'),
+    dieu_chinh: hopCo(chuThe, QUYEN_KHO, 'dieu_chinh')
   };
 }
 
@@ -233,6 +268,21 @@ export function duocQuanLyKho(chuThe) {
 
 export function duocXemGiaVon(chuThe) {
   return quyenKho(chuThe).gia_von === true;
+}
+
+/** Được NẠP TỒN KHO HÀNG LOẠT từ file (Sếp chốt 09/09/2026 · C1).
+ *  Chỉ Quản lý kho · Kế toán trưởng · Admin. Cắt ở MÁY CHỦ — cửa thật nằm ở
+ *  `batBuocNapDuLieu` (src/index.js) và `ghiThat` (src/nap-du-lieu.js); ẩn ô
+ *  chọn "Tồn kho" ngoài giao diện chỉ là phép lịch sự, KHÔNG phải chỗ chặn. */
+export function duocNapTonHangLoat(chuThe) {
+  return quyenKho(chuThe).nap_luot === true;
+}
+
+/** Được LẬP PHIẾU ĐIỀU CHỈNH tồn kho (Sếp chốt 09/09/2026 · C2).
+ *  Chỉ Quản lý kho · Kế toán trưởng · Admin. Cửa thật ở `dieuChinhKho`
+ *  (src/kho.js) — gọi thẳng `POST /api/kho/dieu-chinh` vẫn ăn 403. */
+export function duocDieuChinhKho(chuThe) {
+  return quyenKho(chuThe).dieu_chinh === true;
 }
 
 /* ---- Quyền Sản phẩm/SKU — TÁCH RIÊNG khỏi "quan_ly" kho nói chung

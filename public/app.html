@@ -429,6 +429,15 @@
               <option value="moi">Mới giao</option>
               <option value="huy">Đã huỷ</option>
             </select>
+            <!-- LỌC THEO THÁNG — Sếp Ngọc chốt 09/09/2026 (C6).
+                 Danh sách tháng do `khoiDongLichSuViec` đổ vào theo ĐÚNG những
+                 tháng CÓ THẬT trong phần đã tải, không bày sẵn 12 tháng rỗng.
+                 Lọc theo cột "Cập nhật" (`cap_nhat_luc`) — cũng là cột đang
+                 sắp xếp — nên "Tháng 8" ở đây nghĩa là "việc có động đến trong
+                 tháng 8", không phải "việc được giao trong tháng 8". -->
+            <select id="ls-cv-locthang" class="chon-nho" title="Lọc theo tháng cập nhật">
+              <option value="">Tất cả các tháng</option>
+            </select>
           </div>
         </div>
         <div class="table-wrap">
@@ -463,6 +472,16 @@
           </table>
         </div>
         <div class="empty" id="ls-cv-trong" hidden>Không tìm thấy việc nào khớp.</div>
+        <!-- THANH PHÂN TRANG — 10 dòng một trang (Sếp Ngọc chốt 09/09/2026 · C6).
+             Ẩn khi cả danh sách chưa quá 10 dòng: một thanh phân trang cho một
+             trang duy nhất là chiếm chỗ mà không nói thêm điều gì.
+             Hai nút cao 44px theo đúng ngưỡng ngón tay của cả ERP — nhân viên
+             kho bấm bằng ngón cái khi đang bê hàng. -->
+        <nav class="phan-trang" id="ls-cv-trang" hidden aria-label="Phân trang Lịch sử làm việc">
+          <button type="button" class="pt-nut" data-pt="truoc">‹ Trước</button>
+          <span class="pt-chu" id="ls-cv-trang-chu" aria-live="polite"></span>
+          <button type="button" class="pt-nut" data-pt="sau">Sau ›</button>
+        </nav>
         <div class="dai-cat" id="ls-cv-cat" hidden></div>
       </div>
     </section>

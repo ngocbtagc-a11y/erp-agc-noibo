@@ -4221,6 +4221,19 @@ async function khoiDongLichSuViec() {
      mình trước, không phải sổ tra cứu toàn công ty. */
   let LOC_LSV = 'toi';
 
+  /* ---- PHÂN TRANG + LỌC THEO THÁNG · Sếp Ngọc chốt 09/09/2026 (C6) -------
+     10 DÒNG MỘT TRANG. Con số này là QUYẾT ĐỊNH CỦA SẾP, không phải con số
+     rút ra từ phép đo — nếu 10 dòng không lọt một màn thì việc phải làm là
+     BÁO SỐ ĐO cho Sếp, KHÔNG phải tự hạ xuống 8 hay 9.
+
+     Cắt trang Ở TRÌNH DUYỆT, trên phần ĐÃ TẢI — đúng chỗ ô tìm kiếm và ô lọc
+     trạng thái vẫn đang cắt. Không đổi API, không đổi luật quyền. Phần chưa
+     tải về vẫn nằm sau nút "Tải thêm" của dải cắt, và dải đó NÓI RA điều này
+     chứ không để người dùng tự đoán. */
+  const MOI_TRANG = 10;
+  let TRANG = 1;
+  let DS_LOC = [];      // danh sách SAU bộ lọc, TRƯỚC khi cắt trang
+
   const NHAN_LOC = {
     toi:     { trong: 'Chưa ai giao việc gì cho Sếp/bạn cả.',   nut: 'toi' },
     phoihop: { trong: 'Chưa được mời phối hợp việc nào.',        nut: null },
@@ -4253,20 +4266,58 @@ async function khoiDongLichSuViec() {
     return `<span class="${quaHan ? 'canh-bao-chu' : ''}">${ngay}/${thang}/${nam}</span>`;
   }
 
+  /* Tháng của một dòng = 'YYYY-MM' của cột "Cập nhật". Lấy đúng cột đang SẮP
+     XẾP (`cap_nhat_luc DESC`) nên trang 1 luôn là tháng gần nhất, và "Tháng 8"
+     nghĩa là "việc có động đến trong tháng 8". */
+  function thangCuaDong(r) { return String(r.cap_nhat_luc || '').slice(0, 7); }
+
+  function nhanThang(t) { return `Tháng ${t.slice(5)}/${t.slice(0, 4)}`; }
+
+  /* Đổ danh sách tháng theo ĐÚNG những tháng CÓ THẬT trong phần đã tải — bày
+     sẵn 12 tháng là hứa suông, chọn vào ra bảng trống.
+     ⚠️ GIỮ LẠI tháng đang chọn kể cả khi nó không còn dòng nào (đổi phạm vi,
+     tải thêm trang cũ). Tự bỏ chọn giúp người dùng chính là LẶNG LẼ ĐỔI BỘ
+     LỌC của họ — rồi họ nhìn một danh sách khác mà tưởng dữ liệu đổi. */
+  function veOThang() {
+    const o = $('#ls-cv-locthang');
+    if (!o) return;
+    const dangChon = o.value;
+    const co = [...new Set(nguonLoc().ds.map(thangCuaDong))]
+                 .filter(t => /^\d{4}-\d{2}$/.test(t));
+    if (dangChon && !co.includes(dangChon)) co.push(dangChon);
+    co.sort().reverse();
+    o.innerHTML = '<option value="">Tất cả các tháng</option>' +
+      co.map(t => `<option value="${esc(t)}">${esc(nhanThang(t))}</option>`).join('');
+    o.value = dangChon;
+  }
+
   function veBangLsCv() {
+    veOThang();
     const k = boDau(($('#ls-cv-tim').value || '').trim());
     const locTt = $('#ls-cv-loctt').value;
+    const locThang = ($('#ls-cv-locthang') || {}).value || '';
     const { ds: nguon } = nguonLoc();
     const ds = nguon.filter(r =>
       (!locTt || r.trang_thai === locTt) &&
+      (!locThang || thangCuaDong(r) === locThang) &&
       (!k || boDau(`${r.tieu_de} ${r.nguoi_nhan_ten || ''} ${r.nguoi_giao_ten || ''} ${r.muc_tieu_ten || ''}`).includes(k)));
+
+    /* Kẹp số trang vào khoảng còn thật. Lọc bớt dòng xong mà TRANG còn ở số cũ
+       là bảng trống trong khi dữ liệu vẫn còn — đúng kiểu "tưởng mất dữ liệu"
+       mà REV-0048 lỗi #3 đi vá. */
+    DS_LOC = ds;
+    const soTrang = Math.max(1, Math.ceil(ds.length / MOI_TRANG));
+    if (TRANG > soTrang) TRANG = soTrang;
+    if (TRANG < 1) TRANG = 1;
+    const batDau = (TRANG - 1) * MOI_TRANG;
+    const dsTrang = ds.slice(batDau, batDau + MOI_TRANG);
     /* Nút hành động lấy từ mô-đun Trạm Mục Tiêu (`window.CV_HTML_NUT_DONG`) —
        KHÔNG chép lại luật ở đây, vì chép lại đúng là thứ bản gộp này đi xoá.
        Vai không có quyền `congviec` thì móc nối vắng và cột nút rỗng: màn vẫn
        tra cứu được, chỉ không thao tác — đúng quyền họ vốn có. */
     const kieuNut = NHAN_LOC[LOC_LSV].nut;
     const veNut = kieuNut ? layMocNoi('CV_HTML_NUT_DONG', 'congviec') : null;
-    veBang('#ls-cv-bang', ds, r => {
+    veBang('#ls-cv-bang', dsTrang, r => {
       const tt = CV_TRANG_THAI[r.trang_thai] || CV_TRANG_THAI.moi;
       /* Todo cá nhân (tự giao cho mình) — giữ nguyên nhãn 🙋 và chữ
          "— (của tôi)" ở cột Người giao như bảng "Việc cần làm" cũ. */
@@ -4314,9 +4365,10 @@ async function khoiDongLichSuViec() {
     if (moDunHong) {
       oTrong.innerHTML = '<b>Không tải được việc của bạn — đây là LỖI, không phải "chưa ai giao việc gì".</b>' +
         ' Tải lại trang một lần; còn nữa thì báo bộ phận Công nghệ kèm giờ gặp lỗi.';
-    } else if (k || locTt) {
+    } else if (k || locTt || locThang) {
       const dangDat = [];
       if (locTt) dangDat.push('Trạng thái: ' + ((CV_TRANG_THAI[locTt] || {}).chu || locTt));
+      if (locThang) dangDat.push(nhanThang(locThang));
       if (k) dangDat.push('Tìm: "' + ($('#ls-cv-tim').value || '').trim() + '"');
       oTrong.innerHTML = 'Không có việc nào khớp <b>bộ lọc đang đặt</b> (' + esc(dangDat.join(' · ')) +
         '). Dữ liệu vẫn còn nguyên. ' +
@@ -4325,16 +4377,54 @@ async function khoiDongLichSuViec() {
       oTrong.textContent = NHAN_LOC[LOC_LSV].trong;
     }
     oTrong.hidden = ds.length > 0;
+    veThanhTrang(ds.length, soTrang, batDau);
     veDaiCatLsCv();
   }
+
+  /* Thanh phân trang. ẨN khi cả danh sách chưa quá một trang — một thanh phân
+     trang cho đúng một trang là chiếm chỗ mà không nói thêm gì, mà chỗ trên
+     màn này thì đang phải đếm từng chục pixel.
+     Câu chữ nói CẢ HAI con số: đang xem dòng nào tới dòng nào, và tổng bao
+     nhiêu. Chỉ in "trang 2/7" thì người ta vẫn phải tự nhân. */
+  function veThanhTrang(tong, soTrang, batDau) {
+    const box = $('#ls-cv-trang');
+    if (!box) return;
+    box.hidden = tong <= MOI_TRANG;
+    if (box.hidden) return;
+    const oChu = $('#ls-cv-trang-chu');
+    if (oChu) {
+      oChu.textContent = `Dòng ${batDau + 1}–${Math.min(tong, batDau + MOI_TRANG)} ` +
+                         `trong ${tong} việc · trang ${TRANG}/${soTrang}`;
+    }
+    const nutTruoc = box.querySelector('[data-pt="truoc"]');
+    const nutSau = box.querySelector('[data-pt="sau"]');
+    if (nutTruoc) nutTruoc.disabled = TRANG <= 1;
+    if (nutSau) nutSau.disabled = TRANG >= soTrang;
+  }
+
+  /* Đưa bảng về trang 1. Gọi mỗi khi bộ lọc hoặc phạm vi đổi — đứng nguyên ở
+     trang 5 sau khi vừa lọc còn 12 dòng là nhìn thấy bảng trống. */
+  function veTrangDau() { TRANG = 1; }
+
+  $('#ls-cv-trang')?.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-pt]');
+    if (!b || b.disabled) return;
+    TRANG += b.dataset.pt === 'sau' ? 1 : -1;
+    veBangLsCv();
+    /* Sang trang xong mà mắt còn ở cuối bảng cũ thì người ta tưởng không có
+       gì xảy ra — kéo về đầu bảng. */
+    $('#ls-cv-tbl')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
 
   /* Nút "Xoá bộ lọc" của câu ② ở trên. Uỷ quyền trên vùng cha vì `oTrong` bị
      vẽ lại mỗi lần lọc — gắn thẳng vào nút là gắn vào phần tử sắp bị thay. */
   $('#ls-cv-trong').addEventListener('click', (e) => {
     if (!e.target.closest('[data-lscv-xoaloc]')) return;
-    const oTim = $('#ls-cv-tim'), oLoc = $('#ls-cv-loctt');
+    const oTim = $('#ls-cv-tim'), oLoc = $('#ls-cv-loctt'), oThang = $('#ls-cv-locthang');
     if (oLoc) oLoc.value = '';
     if (oTim) oTim.value = '';
+    if (oThang) oThang.value = '';
+    veTrangDau();
     veBangLsCv();
   });
 
@@ -4375,7 +4465,7 @@ async function khoiDongLichSuViec() {
       return veDaiCat('#ls-cv-cat', cat, {
         don_vi: 'việc',
       goi_y: (daBamThemLSCV ? 'Bạn đang xem thêm cả trang cũ. Khi có người đổi dữ liệu, bảng có thể quay về trang đầu — bấm "Tải thêm" lại nếu cần xem tiếp. ' : '') +
-        'Ô tìm kiếm phía trên chỉ tìm trong phần ĐÃ TẢI về máy.',
+        'Ô tìm kiếm, bộ lọc tháng và thanh phân trang phía trên chỉ làm việc trên phần ĐÃ TẢI về máy.',
         nut: { chu: 'Xem đầy đủ ở phạm vi "Toàn công ty"', chay: () => doiLoc('congty') }
       });
     }
@@ -4384,7 +4474,7 @@ async function khoiDongLichSuViec() {
     veDaiCat('#ls-cv-cat', { gioi_han: DS_LSCV.length, tong: TONG_LSCV }, {
       don_vi: 'việc',
       goi_y: (daBamThemLSCV ? 'Bạn đang xem thêm cả trang cũ. Khi có người đổi dữ liệu, bảng có thể quay về trang đầu — bấm "Tải thêm" lại nếu cần xem tiếp. ' : '') +
-        'Ô tìm kiếm phía trên chỉ tìm trong phần ĐÃ TẢI về máy.',
+        'Ô tìm kiếm, bộ lọc tháng và thanh phân trang phía trên chỉ làm việc trên phần ĐÃ TẢI về máy.',
       nut: {
         chu: conLai != null ? `Tải thêm ${Math.min(500, conLai)} việc cũ hơn` : 'Tải thêm việc cũ hơn',
         chay: async (b) => {
@@ -4419,6 +4509,7 @@ async function khoiDongLichSuViec() {
   async function doiLoc(loc) {
     if (!NHAN_LOC[loc]) return;
     LOC_LSV = loc;
+    veTrangDau();          // phạm vi khác = danh sách khác, số trang cũ vô nghĩa
     document.querySelectorAll('#lsv-loc .seg-nut').forEach(b =>
       b.classList.toggle('active', b.dataset.lsv === loc));
     if (loc === 'congty' && DS_LSCV.length === 0 && TRUOC_LSCV === null) await taiLaiLichSuCv();
@@ -4463,23 +4554,40 @@ async function khoiDongLichSuViec() {
      · MO_MAN_VIEC(loc, rowId)   — thay đường cũ MO_DEN_VIEC_CUA_TOI: khối
        "Việc của tôi hôm nay" và các thẻ đếm bấm vào phải rơi đúng phạm vi,
        đúng dòng, và dòng đó phải SÁNG LÊN (`.canh-bao`) như trước. */
+  /* Nhảy tới ĐÚNG TRANG chứa một dòng. Có phân trang rồi thì "cuộn tới dòng"
+     thôi là chưa đủ: dòng cần tìm có thể đang nằm ở trang 4, và bấm vào một
+     cảnh báo mà không thấy gì hiện ra là đúng kiểu nút chết REV-0038 đi vá. */
+  function nhayDenTrangCuaDong(rowId) {
+    if (rowId == null) return;
+    const i = DS_LOC.findIndex(r => String(r.id) === String(rowId));
+    if (i < 0) return;                       // không có trong phần đã tải — chịu
+    const t = Math.floor(i / MOI_TRANG) + 1;
+    if (t === TRANG) return;
+    TRANG = t;
+    veBangLsCv();
+  }
+
   window.MO_DEN_LICHSU_TIM = async (tuKhoa) => {
     moTab('lichsuviec');
     await doiLoc('congty');
-    const oTim = $('#ls-cv-tim'), oLoc = $('#ls-cv-loctt');
+    const oTim = $('#ls-cv-tim'), oLoc = $('#ls-cv-loctt'), oThang = $('#ls-cv-locthang');
     if (oLoc) oLoc.value = '';
+    if (oThang) oThang.value = '';
     if (oTim) { oTim.value = tuKhoa || ''; oTim.dispatchEvent(new Event('input', { bubbles: true })); oTim.focus(); }
     requestAnimationFrame(() => { const b = $('#ls-cv-bang'); if (b) b.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
   };
 
   window.MO_MAN_VIEC = async (loc, rowId) => {
     moTab('lichsuviec');
-    const oTim = $('#ls-cv-tim'), oLoc = $('#ls-cv-loctt');
+    const oTim = $('#ls-cv-tim'), oLoc = $('#ls-cv-loctt'), oThang = $('#ls-cv-locthang');
     // Bộ lọc còn sót từ lần trước là lý do kinh điển khiến "bấm vào không
-    // thấy đâu cả" — xoá trước khi nhảy.
+    // thấy đâu cả" — xoá trước khi nhảy. Từ 09/09/2026 có thêm bộ lọc tháng,
+    // và nó sót lại thì cũng giấu mất dòng y như hai cái kia.
     if (oTim) oTim.value = '';
     if (oLoc) oLoc.value = '';
+    if (oThang) oThang.value = '';
     await doiLoc(loc || 'toi');
+    nhayDenTrangCuaDong(rowId);      // dòng cần xem có thể đang ở trang khác
     requestAnimationFrame(() => {
       const box = $('#lsv-loc');
       if (box) box.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -4490,8 +4598,11 @@ async function khoiDongLichSuViec() {
     });
   };
 
-  $('#ls-cv-tim').addEventListener('input', veBangLsCv);
-  $('#ls-cv-loctt').addEventListener('change', veBangLsCv);
+  /* Đổi bộ lọc là đổi cả danh sách → về trang 1. Không có dòng `veTrangDau()`
+     này thì gõ vào ô tìm lúc đang ở trang 6 ra một bảng trống. */
+  $('#ls-cv-tim').addEventListener('input', () => { veTrangDau(); veBangLsCv(); });
+  $('#ls-cv-loctt').addEventListener('change', () => { veTrangDau(); veBangLsCv(); });
+  $('#ls-cv-locthang')?.addEventListener('change', () => { veTrangDau(); veBangLsCv(); });
 }
 
 /* ==========================================================================
@@ -8224,9 +8335,14 @@ if (TOI.quyen.includes('khovan')) {
    danh mục. `khoiDongNapFile` tự lo chỗ đặt màn: có tab Kho vận thì để
    nguyên, không có thì dời khối màn sang tab Kinh doanh. */
 {
-  const qKhoNap = TOI.kho || { thao_tac: false, quan_ly: false, gia_von: false };
+  const qKhoNap = TOI.kho || { thao_tac: false, quan_ly: false, gia_von: false,
+                               nap_luot: false, dieu_chinh: false };
   const qSpNap  = TOI.san_pham || { sua: false, khoa: false };
-  if (qSpNap.sua || qKhoNap.thao_tac) {
+  /* `nap_luot` chứ KHÔNG còn `thao_tac` (Sếp chốt 09/09/2026 · C1): nhập/xuất
+     từng phiếu không còn kéo theo quyền nạp cả file tồn kho. Soi ĐÚNG cờ máy
+     chủ soi (duocNapTonHangLoat) — lệch một chút là hoặc giấu nhầm người, hoặc
+     hứa suông rồi 403. */
+  if (qSpNap.sua || qKhoNap.nap_luot) {
     try { khoiDongNapFile(qKhoNap, qSpNap); } catch (e) { console.error('Nạp từ file:', e); }
   }
 }
@@ -9766,7 +9882,8 @@ async function khoiDongXepCa() {
 }
 
 async function khoiDongKho() {
-  const qKho = TOI.kho || { thao_tac: false, quan_ly: false, gia_von: false };
+  const qKho = TOI.kho || { thao_tac: false, quan_ly: false, gia_von: false,
+                            nap_luot: false, dieu_chinh: false };
   let DS_SP = [];          // danh sách sản phẩm + tồn, lấy từ máy chủ
   let xemGiaVon = false;
   // Khoá/mở khoá Sản phẩm/SKU giờ CHỈ dành cho Kinh doanh/Admin (chủ sở
@@ -9811,10 +9928,11 @@ async function khoiDongKho() {
   } else {
     document.querySelectorAll('#kvSeg .seg-nut[data-kv="danhmuc"]').forEach(b => b.remove());
   }
-  /* Phiếu ĐIỀU CHỈNH chỉ dành cho quản lý kho (anh Duy + Admin) — máy chủ
-     kiểm `duocQuanLyKho` độc lập trong `kho.js`, giấu nút chỉ để không hứa
-     suông với người bấm vào cũng ăn 403. */
-  if (!qKho.quan_ly) {
+  /* Phiếu ĐIỀU CHỈNH: Quản lý kho (anh Duy) · Kế toán trưởng (chị Hằng) ·
+     Admin — Sếp chốt 09/09/2026 (C2). Máy chủ kiểm `duocDieuChinhKho` độc lập
+     trong `kho.js`; giấu nút chỉ để không hứa suông với người bấm vào cũng ăn
+     403 — KHÔNG phải chỗ chặn. */
+  if (!qKho.dieu_chinh) {
     document.querySelectorAll('#kvSeg .seg-nut[data-kv="dieuchinh"]').forEach(b => b.remove());
   }
   // Không xem được giá vốn → bỏ cột giá trị tồn và ô đơn giá
@@ -9853,9 +9971,15 @@ async function khoiDongKho() {
      vận, mà Kinh doanh (van_hanh_san) — chủ sở hữu danh mục SKU — không có
      tab đó. Nút hiện đúng người nhưng nằm trong căn phòng người đó không mở
      được cửa. Nên `khoiDongNapFile` giờ được gọi từ khối khởi động chung,
-     độc lập với tab Kho vận; ở đây chỉ còn việc dọn nút thừa. */
+     độc lập với tab Kho vận; ở đây chỉ còn việc dọn nút thừa.
+
+     ⚠️ TỒN KHO ĐI THEO `nap_luot`, KHÔNG CÒN THEO `thao_tac` (09/09/2026 · C1).
+     Nhập/xuất từng phiếu (`thao_tac`) và nạp cả một file hàng nghìn dòng là
+     hai việc khác hẳn về độ lớn — Sếp tách hẳn ra, xem `QUYEN_KHO` trong
+     src/quyen.js. Cắt theo `thao_tac` ở đây là bày nút "Nạp từ file" cho 17
+     bạn part-time rồi để máy chủ trả 403 sau khi họ đã chọn xong file. */
   const qSanPham = TOI.san_pham || { sua: false, khoa: false };
-  if (!(qSanPham.sua || qKho.thao_tac)) {
+  if (!(qSanPham.sua || qKho.nap_luot)) {
     document.querySelectorAll('#kvSeg .seg-nut[data-kv="napfile"]').forEach(b => b.remove());
   }
 
@@ -10165,12 +10289,13 @@ async function khoiDongKho() {
     });
   }
 
-  /* ---- Phiếu điều chỉnh tồn (chỉ quản lý kho) — REV-0060 vòng 3 · CHẶN-ⓑ ----
+  /* ---- Phiếu điều chỉnh tồn (Quản lý kho · Kế toán trưởng · Admin) --------
+     REV-0060 vòng 3 · CHẶN-ⓑ; quyền mở thêm cho Kế toán trưởng 09/09/2026 (C2).
      Đây là ĐƯỜNG RA cho ca "nạp nhầm tồn rồi kho đã bán mất một phần": nút Gỡ
      lượt nạp từ chối (đúng — gỡ đi là tồn ÂM), và trước bản vá này câu từ chối
      chỉ sang một cái màn KHÔNG TỒN TẠI, tức là Sếp kẹt vĩnh viễn, lối duy nhất
      là mở CSDL sửa tay. */
-  if (qKho.quan_ly && $('#kvFormDieuChinh')) {
+  if (qKho.dieu_chinh && $('#kvFormDieuChinh')) {
     let dcLoDs = [];
     const dcSpDangChon = () => DS_SP.find(x => x.id === $('#kvDcSP').value) || null;
 
@@ -10421,10 +10546,10 @@ function khoiDongNapFile(qKho, qSanPham) {
      Không có quyền nào thì bỏ hẳn lựa chọn đó khỏi danh sách — thà không
      hiện, còn hơn hiện rồi báo 403 sau khi Sếp đã chọn xong file.
      Hai dòng dưới đây phải soi CÙNG hàm quyền mà máy chủ soi
-     (duocSuaSanPham · duocThaoTacKho) — lệch một chút là hoặc giấu nhầm
+     (duocSuaSanPham · duocNapTonHangLoat) — lệch một chút là hoặc giấu nhầm
      người, hoặc hứa suông rồi 403. */
   if (!qSanPham.sua) { const o = oDich.querySelector('option[value="san_pham"]'); if (o) o.remove(); }
-  if (!qKho.thao_tac) { const o = oDich.querySelector('option[value="ton_kho"]'); if (o) o.remove(); }
+  if (!qKho.nap_luot) { const o = oDich.querySelector('option[value="ton_kho"]'); if (o) o.remove(); }
 
   const MO_TA_DICH = {
     san_pham: 'Nạp mã hàng, tên, nhóm hàng, đơn vị tính. Nạp cái này TRƯỚC — tồn kho và báo cáo đều cần có sản phẩm.',
@@ -10853,9 +10978,11 @@ function khoiDongNapFile(qKho, qSanPham) {
   async function taiLuotNap() {
     const khoi = $('#nap-luot'), oDs = $('#napLuotDs');
     if (!khoi || !oDs) return;
-    /* Chỉ ai THAO TÁC KHO mới thấy — Kinh doanh nạp danh mục thì không dính
-       tới sổ cái kho, hiện ra chỉ tổ rối màn. */
-    if (!qKho.thao_tac) { khoi.hidden = true; return; }
+    /* Chỉ ai NẠP ĐƯỢC TỒN HÀNG LOẠT mới thấy — Kinh doanh nạp danh mục thì
+       không dính tới sổ cái kho, hiện ra chỉ tổ rối màn. Và từ 09/09/2026
+       (C1) máy chủ trả 403 cho `GET /api/kho/nap-luot` với người không có
+       quyền đó, nên soi cờ khác là bày ra một khối luôn rỗng. */
+    if (!qKho.nap_luot) { khoi.hidden = true; return; }
     try {
       const kq = await API.napLuot(10);
       const ds = kq.ds || [];

@@ -16,6 +16,8 @@ import {
 import {
   quyenCua, duocXemTab, duocXemLuong, laAdmin, duocThemNhanSu, duocQuanLyChinhSachCa, duocTaoTaiKhoan, nhomVaiTro,
   quyenKho, quyenShopee, duocThaoTacKho, duocQuanLyKho, duocXemDonHoan, duocThaoTacVanHanh, TEN_VAI_TRO, VAI_TRO_HOP_LE,
+  // Nạp tồn kho hàng loạt — mức quyền RIÊNG, hẹp hơn `thao_tac` (Sếp chốt 09/09/2026 · C1)
+  duocNapTonHangLoat,
   duocDuyetGopY,
   // Hai ô — vai trò hệ thống tách khỏi vị trí công việc (Sếp chốt 04/09/2026)
   VAI_TRO_HE_THONG, VI_TRI_CONG_VIEC, laVaiTroHeThong, laViTriCongViec,
@@ -301,7 +303,10 @@ async function toiLaAi(req, env) {
     // Cờ duyệt góp ý ERP ở cấp cuối — KHÔNG đi theo vai trò (Sếp Ngọc chốt
     // 28/08/2026). Giao diện dùng để vẽ nút; luật thật ở gopYDuyet().
     duyet_gopy: duocDuyetGopY(phien),
-    kho: quyenKho(phien),           // { thao_tac, quan_ly, gia_von } cho tab Kho
+    // { thao_tac, quan_ly, gia_von, nap_luot, dieu_chinh } cho tab Kho.
+    // `nap_luot`/`dieu_chinh` thêm 09/09/2026 (C1 · C2) — giao diện dùng để
+    // KHÔNG bày nút bấm vào là ăn 403; cửa chặn thật vẫn ở máy chủ.
+    kho: quyenKho(phien),
     /* { sua, khoa } cho Sản phẩm/SKU. TÁCH KHỎI `kho` là cố ý: chủ sở hữu
        SKU là Kinh doanh (van_hanh_san) — họ quyết định bán gì — mà vai trò
        đó KHÔNG có mặt trong bảng quyền Kho, nên suy quyền sản phẩm ra từ
@@ -1947,7 +1952,8 @@ async function khoXuat(req, env) {
 
 /* Phiếu điều chỉnh tồn — ĐƯỜNG RA cho ca "nạp nhầm rồi bán mất" (REV-0060
    vòng 3 · CHẶN-ⓑ). Cửa ngoài chỉ kiểm "có tab Kho vận"; ai được LẬP thì
-   `kho.js` tự kiểm `duocQuanLyKho` bên trong — chặn kép như mọi cửa kho. */
+   `kho.js` tự kiểm `duocDieuChinhKho` bên trong — chặn kép như mọi cửa kho.
+   Từ 09/09/2026 (C2): Quản lý kho · Kế toán trưởng · Admin. */
 async function khoDieuChinh(req, env) {
   const { phien, loi: l } = await batBuocXemKho(req, env);
   if (l) return l;
@@ -2041,7 +2047,13 @@ function bocKhungNap(khung) {
 /* Cửa vào chung: đăng nhập + đúng tab + đúng quyền GHI.
    Cắt ở MÁY CHỦ, không cắt ở trình duyệt — gọi thẳng API phải 403. Nạp danh
    mục sản phẩm là việc nặng (đổi định nghĩa hàng hoá của cả công ty), nên
-   xem được tab thôi CHƯA ĐỦ: phải có quyền sửa mã hàng / thao tác kho. */
+   xem được tab thôi CHƯA ĐỦ: phải có quyền sửa mã hàng / nạp tồn hàng loạt.
+
+   ⚠️ TỒN KHO KHÔNG CÒN DÙNG `duocThaoTacKho` (Sếp chốt 09/09/2026 · C1).
+   Nhập/xuất từng phiếu và nạp cả một file là hai việc khác hẳn về độ lớn —
+   xem khối ghi chú ở `QUYEN_KHO` trong src/quyen.js. Bản trước dùng chung một
+   cờ nên cả 17 bạn part-time ở kho (`nhan_vien_kho`) đều nạp được file tồn
+   kho hàng loạt. Nay chỉ Quản lý kho · Kế toán trưởng · Admin. */
 async function batBuocNapDuLieu(req, env, maDich) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return { loi: l };
@@ -2051,8 +2063,16 @@ async function batBuocNapDuLieu(req, env, maDich) {
   if (maDich === 'san_pham' && !duocSuaSanPham(phien)) {
     return { loi: loi('Bạn không có quyền nạp danh mục sản phẩm — việc này cần quyền sửa mã hàng', 403) };
   }
-  if (maDich === 'ton_kho' && !duocThaoTacKho(phien)) {
-    return { loi: loi('Bạn không có quyền nạp tồn kho — việc này cần quyền thao tác kho', 403) };
+  /* 403 NÓI THẲNG LÝ DO, không trả danh sách rỗng và không im lặng bỏ qua —
+     cùng khuôn `danhSachTaiLieu` trong src/tai-lieu.js. Người bị chặn phải
+     biết NGAY là mình thiếu quyền gì và đi hỏi ai, chứ không đi tìm cả buổi. */
+  if (maDich === 'ton_kho' && !duocNapTonHangLoat(phien)) {
+    return { loi: loi(
+      'Bạn không có quyền nạp tồn kho hàng loạt. Sếp Ngọc chốt 09/09/2026: một lần nạp file ' +
+      'ghi thẳng hàng nghìn dòng vào sổ cái, nên chỉ Quản lý kho, Kế toán trưởng và Admin làm được. ' +
+      'Bạn vẫn nhập/xuất kho từng phiếu như thường ngày. ' +
+      'Cần nạp cả file thì gửi file cho anh Phạm Khương Duy (Quản lý kho) hoặc chị Phan Thị Hằng ' +
+      '(Kế toán trưởng) nạp giúp.', 403) };
   }
   return { phien };
 }

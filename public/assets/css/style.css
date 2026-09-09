@@ -3126,6 +3126,65 @@ tr.kd-chiadoi td {
 .dai-cat-nut:hover { background: var(--warn-wash); border-color: var(--warn-dark); }
 
 /* ---------------------------------------------------------------------------
+   THANH PHÂN TRANG (`.phan-trang`) — Sếp Ngọc chốt 09/09/2026 (C6): Lịch sử
+   làm việc 10 dòng một trang.
+   ---------------------------------------------------------------------------
+   BA MÀU, KHÔNG THÊM MÃ MÀU NÀO MỚI (docs/BANG-MAU.md): nền `--card`, viền
+   `--line`, chữ `--text-mute` — họ NÂU. Nút bấm được lấy viền `--cam` + chữ
+   `--cam-text` vì đây là HÀNH ĐỘNG, đúng vai 8% của cam; nút đã cụt đường
+   (trang đầu / trang cuối) rơi về nâu nhạt để không tranh chú ý. Không dùng
+   nền cam đặc — luật ③ "một điểm nhấn cho một khung nhìn".
+
+   CHIỀU CAO LÀ THỨ PHẢI ĐẾM. Màn này ưu tiên "vừa một màn hình, hạn chế kéo
+   sang" nên thanh chỉ cao đúng ngưỡng ngón tay 44px + 10px lề trên, không hơn.
+   --------------------------------------------------------------------------- */
+.phan-trang {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 10px 0 0;
+}
+
+/* Số dòng đứng TRƯỚC hai nút — đọc trái sang phải là "đang xem cái gì" rồi
+   mới tới "đi đâu tiếp". */
+.phan-trang .pt-chu {
+  order: -1;
+  margin-right: auto;
+  font-size: 13px;
+  color: var(--text-mute);
+  line-height: 1.4;
+}
+
+.phan-trang .pt-nut {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 16px;
+  border-radius: 12px;
+  background: var(--card);
+  border: 1px solid var(--cam);
+  color: var(--cam-text);
+  font-size: 13.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: background .14s, border-color .14s, color .14s;
+}
+
+.phan-trang .pt-nut:hover:not(:disabled) { background: var(--cam-wash); border-color: var(--cam-dark); }
+
+/* Cụt đường thì NÓI RA bằng mắt, đừng để người ta bấm vào chỗ không đi được. */
+.phan-trang .pt-nut:disabled {
+  border-color: var(--line);
+  color: var(--text-mute);
+  opacity: .55;
+  cursor: default;
+}
+
+/* ---------------------------------------------------------------------------
    DẢI PHẠM VI (`.cv-pham-vi`) ĐÃ XOÁ HẲN — 29/08/2026, Sếp Ngọc nhắc hai lần
    "gộp vào lịch sử làm việc đi". Dải "Đây chỉ là việc của bạn" + nút "Xem việc
    toàn công ty →" không còn phần tử nào mang lớp này nữa; giữ lại luật CSS là
