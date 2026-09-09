@@ -187,9 +187,23 @@ export function timWrangler() {
   return DUONG_WRANGLER;
 }
 
+/* `--luu-tai DIR` — chạy trên D1 ở một thư mục khác (`wrangler --persist-to`),
+   chỉ đi cùng `--local`. Đây là cách bàn đo `do-quyen-duyet-gopy.mjs` chạy
+   THẬT file này trên một D1 TẠM: nó tự dựng lấy tài khoản thử rồi vứt cả thư
+   mục đi — thay vì đòi một tài khoản `ttb` có sẵn trên D1 của người đang ngồi
+   máy (không script nào trong repo tạo ra nó) rồi đổi mật khẩu ở đó
+   (REV-0064 H2: một cổng đỏ vĩnh viễn với mọi người trừ một máy là một cổng
+   sẽ bị bỏ qua). */
+function luuTai() {
+  const i = process.argv.indexOf('--luu-tai');
+  return i >= 0 ? process.argv[i + 1] : null;
+}
+
 function wrangler(moiTruong, sql, json = false) {
   const args = [timWrangler(), 'd1', 'execute', 'crm-agc', moiTruong, '--command', sql];
   if (json) args.push('--json');
+  const kho = luuTai();
+  if (kho && moiTruong === '--local') args.push('--persist-to', kho);
   // shell: KHÔNG. Đặt lại là hỏng lại — xem khối chú thích ngay trên.
   return execFileSync(process.execPath, args, { encoding: 'utf8' });
 }

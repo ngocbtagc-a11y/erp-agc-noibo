@@ -114,7 +114,15 @@ const MIEN_TRU = [
   { tep: 'src/nap-du-lieu.js', ham: 'huyLuotNap',
     lyDo: 'CÓ CHỦ Ý + ĐÃ NÓI RA: câu từ chối gỡ kê đích danh 5 mã sẽ âm (`LIMIT ${KE_MA_TOI_DA}`) rồi tự nói “…và N mã nữa” bằng một câu COUNT thật — cắt để câu báo đọc được, không phải cắt để giấu. Kê hết 20.000 mã thì không ai đọc.' },
   { tep: 'src/nap-du-lieu.js', ham: 'dsLuotNap',
-    lyDo: 'CÓ CHỦ Ý: 10 lượt nạp GẦN ĐÂY (trần người gọi truyền, ≤50) — nhãn giao diện là “Lượt nạp gần đây”, không phải sổ tra cứu.' }
+    lyDo: 'CÓ CHỦ Ý: 10 lượt nạp GẦN ĐÂY (trần người gọi truyền, ≤50) — nhãn giao diện là “Lượt nạp gần đây”, không phải sổ tra cứu.' },
+  /* Cổng này bắt đúng MỘT chỗ im lặng THẬT lúc gộp 102 commit của main vào
+     nhánh chốt góp ý. Ba trần CÓ hậu quả thật đã được VÁ chứ không miễn trừ:
+       · trần 200 commit   → nay kêu Telegram + trả `cat_commit` trong thân
+       · trần 200 mã góp ý → nay kêu Telegram + trả `cat_ma`
+       · trần 30 góp ý/lượt → đã kêu từ trước (`bi_cat`)
+     Dòng dưới chỉ che ĐÚNG một trần còn lại. */
+  { tep: 'src/index.js', ham: 'gopYDaLenThat',
+    lyDo: 'MÁY GỌI MÁY, KHÔNG PHẢI MÀN HÌNH: cửa webhook GitHub Actions gọi sau deploy — `json()` ở đây trả cho script, không ai đang nhìn một màn hình để bị nói dối. Ba trần có hậu quả đều đã nói ra (`bi_cat` · `cat_commit` · `cat_ma`, kèm Telegram). Trần còn lại là `LIMIT 200` của ĐƯỜNG PHỤ bang_chung_url — đường đó theo REV-0042 C5 KHÔNG BAO GIỜ đổi trạng thái, cùng lắm dựng cờ cho Sếp; tập quét là "góp ý đang mở CÓ link" (cả hệ thống có 8 góp ý ngày 08/09/2026) nên còn rất xa 200.' }
 ];
 
 /* ==========================================================================

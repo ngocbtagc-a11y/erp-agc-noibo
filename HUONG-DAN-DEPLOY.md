@@ -267,3 +267,149 @@ ERP tự phát hiện ca này và bắn Telegram trong vòng 5 phút, nên thư�
 Quyền đẩy code lên `main` = quyền đưa thay đổi lên bản thật cho cả công ty dùng.
 Nên **giới hạn số người** có quyền này (Sếp Ngọc + tối đa 1–2 người tin cậy).
 Luôn có thể **rollback 1 chạm** trên Cloudflare nếu có sự cố, nên rủi ro được kiểm soát.
+
+---
+
+## Deploy xong thì góp ý tự chuyển sang "đã xong" — bật 2 bước, MỘT LẦN
+
+Sếp Ngọc 28/08/2026: *"lỗi nào đã làm xong thì hiện đã xong đi chứ"*.
+Trước bản này, quy trình là góp ý → duyệt → xây → soi → đẩy lên… **rồi hết**.
+Không ai quay lại đổi trạng thái, nên người báo lỗi không bao giờ biết lỗi của
+mình đã được sửa. Nay máy tự làm khâu cuối đó.
+
+**Bước 1 — nạp cột mới vào DB thật** (chạy TRƯỚC khi đẩy code):
+
+```bash
+npm run nap-dalenthat
+```
+
+**Bước 2 — đặt cùng một khoá ở hai nơi** (tự nghĩ ra một chuỗi dài, ngẫu nhiên):
+
+| Đặt ở đâu | Cách đặt |
+|---|---|
+| GitHub | Settings → Secrets and variables → Actions → New secret, tên `DEPLOY_CHOT_KHOA` |
+| Cloudflare | `npx wrangler secret put DEPLOY_CHOT_KHOA` |
+
+Hai bên phải **giống hệt nhau**. Thiếu hoặc lệch một bên thì **không góp ý nào
+bị đổi** — deploy vẫn chạy bình thường, nhưng **Sếp nhận Telegram** báo đường
+này đang hỏng (tối đa 1 tin/ngày) và tab Actions in `::warning::`.
+Mỗi lượt deploy đều gõ cửa ERP một tiếng, **kể cả khi không commit nào nhắc mã
+góp ý** — nên khoá lệch lộ ra ngay hôm nó lệch, không đợi tới hôm có góp ý
+thật bị bỏ rơi (REV-0042 mục 3).
+
+### Từ đó về sau: viết `Vá GY-…` vào thông điệp commit
+
+```
+git commit -m "Vá GY-12: gộp thông báo tin nhắn, không rung 5 lần nữa"
+```
+
+**Từ khoá đóng là đúng một chữ: `Vá`** (có dấu sắc), đặt **ở ĐẦU một dòng** —
+dòng tiêu đề, hoặc một dòng bất kỳ trong thân commit. Không phân biệt hoa
+thường. Không có cách viết thứ hai: `Fix`, `Close`, `Đóng`, `Sửa`, `Va` (không
+dấu) đều **không** tính.
+
+Một `Vá` phủ được **một dãy mã liền nhau**:
+
+```
+Vá GY-12 GY-13: bỏ LIMIT làm cắt mất việc public
+```
+
+Dãy **dừng ngay** khi gặp chữ khác, nên câu dưới đây chỉ đóng GY-7:
+
+```
+Vá GY-7, và GY-6 thì đo lại thấy hết lỗi
+```
+
+#### Vì sao phải có từ khoá — chuyện đã xảy ra thật
+
+Bản trước chỉ đọc *"commit này có NHẮC TÊN mã nào không"* rồi coi đó là *"commit
+này VÁ mã nào"*. Repo này có sẵn một commit chứng minh hai thứ đó khác nhau —
+`f1ab6c9`, đang nằm trên `main`:
+
+> tiêu đề: `GY-0007: Kho tài liệu chết vì TDZ — dời khai báo lên trước khối khởi động`
+> thân: *"GY-0006 (chat máy tính): **ĐO LẠI THẤY ĐÃ HẾT LỖI, không vá gì.**"*
+
+Bản trước **đóng GY-6** và nhắn người báo *"đã được sửa xong"* — trong khi
+chính commit đó nói thẳng bằng tiếng Việt là **không ai đụng vào**. Đo trên 15
+trạng thái mở: **7/15 bị đổi trạng thái, 12/15 bị nhắn**, chỉ vì mã bị nhắc
+tên. Và trong 284 commit gần nhất của `main`, **29% commit nhắc mã là nhắc từ
+2 mã trở lên** — đây là cách repo này viết commit, không phải ca hiếm.
+
+**Nhắc tên mà không có `Vá` thì máy vẫn ghi nhận, chỉ là không đóng:** nó đính
+commit đó làm bằng chứng và dựng cờ cho Sếp trên panel *"Đã lên hệ thống — chờ
+xác nhận"*, nhưng **không đổi trạng thái và không nhắn người gửi**. Quên viết
+`Vá` thì cùng lắm phiếu chậm được đóng vài hôm; đóng nhầm thì mất lòng tin của
+người báo, và họ thôi báo.
+
+Về khuôn mã: chấp nhận `GY-12`, `gy 12`, `GY_12`. **Không** chấp nhận `GY12`
+(dính liền) — cố ý chặt tay để không bắt nhầm một con số trong câu tiếng Anh.
+
+**Có `Vá` cũng chưa đủ.** Máy còn đọc **commit đó đổi những file nào**, và chỉ
+tin khi có file trong `src/` · `public/` · `migrations/`. Một commit chỉ sửa
+tài liệu (`docs/`, `*.md`) thì **không đóng gì cả** — thông điệp commit là lời
+khai, danh sách file mới là bằng chứng.
+
+**Commit gỡ (`Revert`) PHỦ QUYẾT.** Cùng một lượt đẩy mà vừa có bản vá vừa có
+bản gỡ trên cùng một phiếu thì **bản gỡ thắng**: máy không đổi trạng thái,
+không nhắn người báo, chỉ kêu cho Sếp — vì code trên hệ thống thật lúc đó
+**không có** bản vá. Nguyên tắc: *nghi ngờ thì không đóng*.
+
+### Máy làm gì với góp ý đó
+
+Bảng dưới đây chỉ áp dụng khi commit có **`Vá GY-…`**. Nhắc tên không có `Vá`
+thì mọi dòng đều thành: *không đổi trạng thái, không nhắn người gửi, chỉ đính
+bằng chứng + dựng cờ cho Sếp*.
+
+| Góp ý đang ở | Máy làm | Ai nhận tin |
+|---|---|---|
+| Sẵn sàng phát hành | → **Hoàn thành** | người gửi: *"đã sửa xong"* |
+| Đang làm / kiểm tra / cần chỉnh sửa | → **Chờ nghiệm thu** | người gửi: *"đã sửa xong"* |
+| **Đã duyệt — chờ phân tích** | → **Chờ nghiệm thu** | người gửi + Sếp (Telegram) |
+| Mới / đang phân tích / chờ quyết định / bị chặn | **KHÔNG đổi gì** — dựng cờ chờ Sếp | người gửi: *"đã có bản sửa, đang chờ Sếp xác nhận"* + Sếp |
+| Đã hoàn thành / huỷ / từ chối | không đụng | không ai (trừ commit `Revert` → kêu cho Sếp) |
+
+Máy **không bao giờ** tự đưa một góp ý sang "đã xong" khi chưa ai nghiệm thu —
+xa nhất nó đẩy tới **Chờ nghiệm thu**. Báo xong mà chưa xong là mất lòng tin
+của người báo, họ sẽ thôi báo, và đó là mất mát lớn nhất.
+
+Nhưng **im cũng là hỏng**: nỗi đau gốc là *người báo không biết*. Nên góp ý
+chưa qua cổng vẫn được báo — báo đúng thứ máy biết chắc: *đã có bản sửa lên hệ
+thống, đang chờ Sếp xác nhận*. Không bao giờ là "đã xong".
+
+Cái Sếp cần bấm nằm ở panel **"Đã lên hệ thống — chờ xác nhận"** trên màn Góp
+ý: *Đúng, đã xong* / *Không phải góp ý này*. Panel hiện **cả** những góp ý máy
+đã tự đẩy đi, không chỉ những cái nó dựng cờ — nên **mọi thứ máy đụng vào đều
+gỡ lại được**, và *Không phải góp ý này* trả trạng thái về **đúng chỗ cũ**.
+
+### Góp ý không sửa bằng code thì đóng thế nào
+
+Mở góp ý → khối **"Đóng mà không sửa code"** → chọn *đã trả lời bằng hướng dẫn*
+hoặc *quyết định không làm*, viết một câu cho người gửi (bắt buộc, từ 20 ký tự —
+họ đọc đúng câu đó). Trước bản này những góp ý loại này **kẹt**: "Hoàn thành"
+đòi link Pull Request mà không có PR nào tồn tại.
+
+### Đóng lùi những góp ý đã sửa xong TỪ TRƯỚC
+
+Bản vá lên trước hôm nay thì commit không có `Vá GY-…` nào, máy không đọc ra
+được. Dùng dụng cụ chạy tay — nó **in rõ sẽ đổi những gì rồi mới hỏi**:
+
+```bash
+node scripts/dong-lui-gop-y.mjs --remote --tim "thông báo khi có tin nhắn"
+node scripts/dong-lui-gop-y.mjs --remote 12=7bf0e58 15=cc13f89        # xem trước
+node scripts/dong-lui-gop-y.mjs --remote --ghi 12=7bf0e58 15=cc13f89  # ghi thật
+```
+
+Không có cờ `--ghi` thì nó **không ghi một chữ nào**. Có `--ghi` thì vẫn phải
+gõ đúng hai chữ `ĐỒNG Ý`. Chạy xong nó in ra bằng chứng: đã đổi mấy dòng, có
+dòng nào ngoài danh sách không (phải là 0).
+
+> **REV-0064:** dụng cụ này trước đó **chưa từng chạy được một lần nào trên
+> Windows** — `shell: true` cắt vụn câu SQL, chết ngay lệnh đầu ở cả ba chế độ
+> (BH-55). Đã vá. Chạy thật lần đầu còn lộ tiếp một lỗi thứ hai: nó tin
+> `meta.changes` mà `wrangler --local --json` không trả trường đó, nên nó bỏ
+> qua dòng lịch sử và **tin báo cho người gửi** — đóng phiếu trong im lặng.
+> Cũng đã vá. Cổng `npm run do-chot-gopy` nay **spawn thật** file này trên một
+> D1 tạm, đủ bốn đường (tìm · xem trước · huỷ · ghi).
+
+**Kiểm lại bất cứ lúc nào:** `npm run do-chot-gopy` — mỗi phép đo đều có ca đối
+chứng, và bộ này chạy thật cả cửa HTTP của Worker lẫn script đóng lùi.

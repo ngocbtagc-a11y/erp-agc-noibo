@@ -57,7 +57,8 @@
    ========================================================================== */
 
 import { execFileSync, spawnSync } from 'node:child_process';
-import { readFileSync, writeFileSync, mkdirSync, rmSync, readdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, rmSync, readdirSync, mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dungDB, dungEnv, taoPhienThat, goiAPI, goiCron, datDongHo, cacCauSQL,
@@ -1403,39 +1404,75 @@ console.log('\n=== REV-0035 L1: CHẠY THẬT SCRIPT CỨU HỘ TRÊN D1 --local
 {
   const duongScript = path.join(GOC, 'scripts', 'dat-lai-mat-khau.mjs');
   const modS = await import(pathToFileURL(duongScript).href);
-  const TK = 'ttb';                       // tài khoản thử trên D1 bản máy
   const S = { loi: null };
   let BIN = null;
   try { BIN = modS.timWrangler(); } catch (e) { S.loi = e.message; }
 
+  /* ⚠️ CỔNG TỰ DỰNG LẤY FIXTURE CỦA NÓ — REV-0064 H2.
+
+     BẢN TRƯỚC đòi một tài khoản tên `ttb` có sẵn trong D1 bản máy `crm-agc`.
+     `seed.sql` chỉ tạo `0911994696` và `0945923368`; KHÔNG script nào trong
+     repo tạo `ttb`. Câu báo lỗi lại chỉ SAI ĐƯỜNG ("nạp schema.sql + seed.sql
+     trước") — làm đúng như nó bảo vẫn không có `ttb`. Kết quả 183/9: đỏ vĩnh
+     viễn với mọi người trừ đúng một máy. Cổng như thế sẽ bị bỏ qua, và ngày
+     nó đỏ vì lý do THẬT thì không ai phân biệt được — 9 phép đó đang bảo vệ
+     0 người.
+
+     Nó còn SỬA D1 BẢN MÁY CỦA NGƯỜI CHẠY: ALTER TABLE, đổi `mat_khau_hash`,
+     đặt `kich_hoat = 0` ở ca ⑤ — mà câu trả nguyên trạng nằm CUỐI khối `try`,
+     nên ca ⑥ ném lỗi là nhảy thẳng vào `catch` và KHÔNG trả lại: để lại tài
+     khoản bị khoá, mật khẩu đã đổi.
+
+     BẢN NÀY dựng một D1 TẠM (`--persist-to` vào thư mục tạm) từ ĐÚNG
+     schema.sql + migrations của repo, tự tạo tài khoản thử của mình, chạy hết
+     rồi VỨT CẢ THƯ MỤC trong `finally`. Không đòi ai chuẩn bị gì, không đụng
+     một byte nào của người chạy, chạy được trên mọi máy đã `npm ci`. */
+  const TK = 'tk_thu_bando';              // tài khoản dùng-một-lần của chính cổng này
+  const MK_GOC = 'pbkdf2$100000$YmFuZG9nb2M=$Y2h1YWJhb2dpb2hhc2hnb2M=';
+  const kho = S.loi ? null : mkdtempSync(path.join(tmpdir(), 'doquyen-d1-'));
+
   const d1 = (sql) => {
     const raw = execFileSync(process.execPath,
-      [BIN, 'd1', 'execute', 'crm-agc', '--local', '--command', sql, '--json'],
+      [BIN, 'd1', 'execute', 'crm-agc', '--local', '--command', sql, '--json',
+       '--persist-to', kho],
       { encoding: 'utf8', cwd: GOC });
     return JSON.parse(raw.slice(raw.indexOf('[')))[0].results;
   };
+  const napFile = (duong) => execFileSync(process.execPath,
+    [BIN, 'd1', 'execute', 'crm-agc', '--local', '--file', duong, '--persist-to', kho],
+    { encoding: 'utf8', cwd: GOC });
   const doc = () => d1(`SELECT ten_dang_nhap, mat_khau_hash, phai_doi_mk, kich_hoat ` +
                        `FROM tai_khoan WHERE ten_dang_nhap = '${TK}'`)[0];
   const dem = () => d1('SELECT COUNT(*) AS n FROM tai_khoan')[0].n;
   const chay = (script, doiSo, goVao) => {
-    const k = spawnSync(process.execPath, [script, ...doiSo],
+    const k = spawnSync(process.execPath, [script, ...doiSo, '--luu-tai', kho],
       { input: goVao, encoding: 'utf8', cwd: GOC, timeout: 180000 });
     return { ma: k.status, ra: (k.stdout || '') + (k.stderr || '') };
   };
   const layMk = (ra) => (String(ra).match(/Mật khẩu tạm\s*:\s*(\S+)/) || [])[1] || null;
 
   if (!S.loi) try {
-    /* Dựng đúng cái fixture script cần: câu tra cứu của nó đọc `t.duyet_gopy`,
-       cột do `them-quyen-duyet-gopy.sql` thêm. D1 bản máy của người chạy có
-       thể chưa nạp migration đó — thêm đúng một cột, đúng khuôn migration, và
-       nói ra là đã thêm. Bàn đo dựng fixture thì phải khai, không làm lén. */
-    const cot = d1('PRAGMA table_info(tai_khoan)').map(x => x.name);
-    if (!cot.includes('duyet_gopy')) {
-      d1('ALTER TABLE tai_khoan ADD COLUMN duyet_gopy INTEGER NOT NULL DEFAULT 0');
-      console.log('   (bàn đo đã thêm cột duyet_gopy vào D1 bản máy — đúng khuôn them-quyen-duyet-gopy.sql)');
-    }
+    /* Dựng D1 tạm bằng ĐÚNG file của repo — không bịa bảng, không chép SQL.
+       `them-quyen-duyet-gopy.sql` là bắt buộc: câu tra cứu của script đọc
+       `t.duyet_gopy`, cột do đúng migration đó thêm. */
+    const fSQL = path.join(kho, 'dung.sql');
+    writeFileSync(fSQL, ['schema.sql',
+      'migrations/them-schema-migrations.sql',
+      'migrations/them-gopy.sql',           // them-quyen-duyet-gopy ALTER lên bảng này
+      'migrations/them-gopy-tudong.sql',
+      'migrations/them-quyen-duyet-gopy.sql'
+    ].map(f => readFileSync(path.join(GOC, ...f.split('/')), 'utf8')).join('\n'), 'utf8');
+    napFile(fSQL);
+    d1(`INSERT INTO nhan_su (id, ho_ten, viet_tat, chuc_vu, bo_phan, dang_lam)
+          VALUES ('ns_bando','Bùi Thị Ngọc','Ngọc','Giám đốc','Ban giám đốc',1);
+        INSERT INTO tai_khoan (nhan_su_id, ten_dang_nhap, mat_khau_hash, vai_tro,
+                               kich_hoat, phai_doi_mk, duyet_gopy)
+          VALUES ('ns_bando','${TK}','${MK_GOC}','admin',1,0,1);`);
+
     const goc = doc();
-    if (!goc) throw new Error(`D1 bản máy chưa có tài khoản "${TK}" — nạp schema.sql + seed.sql trước.`);
+    if (!goc) throw new Error('Bàn đo dựng D1 TẠM hỏng — không tạo được tài khoản thử. ' +
+                              'Chạy `npm ci` rồi thử lại. Đây KHÔNG phải thứ người chạy ' +
+                              'phải tự chuẩn bị.');
     S.demTruoc = dem();
 
     // ① SỐ KHÔNG TỒN TẠI → dừng, không ghi gì
@@ -1480,12 +1517,22 @@ console.log('\n=== REV-0035 L1: CHẠY THẬT SCRIPT CỨU HỘ TRÊN D1 --local
     S.hongMk = layMk(S.hong.ra);
     rmSync(thuMuc, { recursive: true, force: true });
 
-    // Trả tài khoản thử về nguyên trạng — bàn đo không để lại dấu.
+    /* Trả tài khoản thử về nguyên trạng. Trên D1 tạm thì việc này không còn
+       cần thiết để bảo vệ ai, nhưng GIỮ LẠI làm phép đo: nó chứng minh câu
+       lệnh trả nguyên trạng vẫn chạy được và vẫn đúng. */
     d1(`UPDATE tai_khoan SET mat_khau_hash = '${goc.mat_khau_hash}', ` +
        `phai_doi_mk = ${Number(goc.phai_doi_mk)}, kich_hoat = ${Number(goc.kich_hoat)} ` +
        `WHERE ten_dang_nhap = '${TK}'`);
     S.traLai = doc().mat_khau_hash === goc.mat_khau_hash;
-  } catch (e) { S.loi = e.message; }
+  } catch (e) {
+    S.loi = e.message;
+    // Ca ⑥ ném lỗi thì thư mục đối chứng còn nằm trong repo — dọn cho sạch.
+    rmSync(path.join(GOC, '.dc-script-cuu-ho'), { recursive: true, force: true });
+  } finally {
+    /* ⚠️ `finally`, KHÔNG phải cuối `try` (REV-0064 H2). Ném lỗi ở bất kỳ ca
+       nào cũng phải vứt được D1 tạm — bỏ sót là để lại rác trong %TEMP%. */
+    if (kho) rmSync(kho, { recursive: true, force: true });
+  }
 
   const vi = (x) => S.loi ? `KHÔNG ĐO ĐƯỢC: ${S.loi}` : x;
   ok('Script CHẠY THẬT được: xác nhận đúng (qua ống dẫn) → thoát 0, in ra mật khẩu tạm',

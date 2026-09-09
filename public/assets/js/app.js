@@ -7106,7 +7106,13 @@ async function khoiDongGopY() {
     // đúng sự thật ngay cả trước khi Sếp soát xong (bằng chứng: góp ý #1).
     if (g.trang_thai === 'hoan_thanh' && g.can_xac_minh_lai)
       return '<span class="tag mute" title="Chưa có link PR/commit nào chứng minh">Hoàn thành (cần xác minh lại)</span>';
-    return `<span class="tag ${tt.mau}">${esc(tt.chu)}</span>`;
+    /* Bản vá ĐÃ LÊN HỆ THỐNG THẬT nhưng chưa ai chốt là xong. Nói ra ngay ở
+       nhãn — đây chính là chỗ 28/08 nói dối: một loạt góp ý ghi "Đã duyệt —
+       chờ phân tích" trong khi việc đã sửa xong và đã chạy thật từ lâu. */
+    const daLen = g.deploy_luc && g.trang_thai !== 'hoan_thanh'
+      ? ` <span class="tag mute" title="${esc(g.deploy_tom_tat || 'Đã có commit lên hệ thống thật')}">đã lên hệ thống</span>`
+      : '';
+    return `<span class="tag ${tt.mau}">${esc(tt.chu)}</span>${daLen}`;
   }
 
   /* "đã chờ N ngày" — người gửi hỏi ba câu, câu thứ ba là "bao lâu rồi".
@@ -7197,6 +7203,32 @@ async function khoiDongGopY() {
       `</div></div>`;
   }
 
+  /* Thẻ "ĐÃ LÊN HỆ THỐNG — CHỜ XÁC NHẬN".
+     Máy đọc mã góp ý trong thông điệp commit sau mỗi lần deploy. Với góp ý
+     CHƯA QUA CỔNG DUYỆT nó dừng lại và dựng cờ thay vì tự đóng — báo xong mà
+     chưa xong là mất lòng tin của người báo, và họ sẽ thôi báo.
+
+     Thẻ nói ĐỦ ba thứ Sếp cần để quyết trong 5 giây: ai gửi · máy dựa vào đâu
+     (commit + một câu đã sửa gì) · đang ở trạng thái nào. Hai nút dùng lại
+     `.gy-the-nut` nên đã sẵn min-height 44px, không thêm màu nào ngoài ba màu. */
+  function veTheDaLen(g) {
+    return `<div class="gy-the" data-id="${g.id}">` +
+      `<div class="gy-the-dau"><span class="sm">${gyMa(g)}</span>${gyNhanTrangThai(g)}</div>` +
+      `<div class="nm gy-the-ten" data-gyxem="${g.id}">${esc(g.tieu_de)}</div>` +
+      `<div class="sm">Người gửi: ${esc(g.nguoi_gui_ten || '—')}` +
+        (g.deploy_luc ? ` · lên hệ thống ${thoiGianTruoc(g.deploy_luc)}` : '') + '</div>' +
+      (g.deploy_tom_tat ? `<div class="sm">Máy đọc được: <b>${esc(g.deploy_tom_tat)}</b></div>` : '') +
+      /* Máy đã tự đẩy trạng thái thì NÓI RA nó đẩy từ đâu — Sếp phải thấy cái
+         máy đã làm mới quyết được có gỡ hay không. */
+      (g.deploy_tt_cu && g.deploy_tt_cu !== g.trang_thai
+        ? `<div class="sm">Máy đã đẩy: ${esc((GOPY_TRANG_THAI[g.deploy_tt_cu] || {}).chu || g.deploy_tt_cu)} → ` +
+          `<b>${esc((GOPY_TRANG_THAI[g.trang_thai] || {}).chu || g.trang_thai)}</b></div>` : '') +
+      `<div class="gy-the-nut">` +
+        `<button type="button" class="btn-primary btn-nho" data-gydalen-co="${g.id}">Đúng, đã xong</button>` +
+        `<button type="button" class="btn-phu btn-nho" data-gydalen-khong="${g.id}">Không phải góp ý này</button>` +
+      `</div></div>`;
+  }
+
   /* Ai đang được CHỜ ở bản ghi này — dùng để bật panel "Chờ tôi duyệt".
      Chỉ là gợi ý giao diện; luật thật nằm ở backend (gopYDuyet). */
   function gyDangChoToi(g) {
@@ -7251,6 +7283,17 @@ async function khoiDongGopY() {
     $('#gy-quahan-tieude').textContent = `Quá hạn duyệt (${quaHan.length})`;
     veDs('#gy-quahan-ds', quaHan, false);
 
+    /* ĐÃ LÊN HỆ THỐNG — CHỜ XÁC NHẬN. Chỉ Sếp (cờ duyệt) mới chốt được, nên
+       chỉ Sếp thấy panel: người khác bấm cũng 403, vẽ nút ra là bẫy tay. */
+    /* Hiện CẢ HAI loại (REV-0042 C3): góp ý máy DỰNG CỜ, và góp ý máy đã tự
+       ĐẨY ĐI mà Sếp chưa ngó (`deploy_tt_cu` còn nguyên). Bản trước chỉ hiện
+       loại đầu, nên đúng những ca máy đẩy nhầm thì Sếp không thấy để gỡ. */
+    const daLen = coDuyet
+      ? dsGopY.filter(g => g.deploy_cho_xac_nhan || g.deploy_tt_cu) : [];
+    $('#gy-dalen-panel').hidden = daLen.length === 0;
+    $('#gy-dalen-tieude').textContent = `Đã lên hệ thống — chờ xác nhận (${daLen.length})`;
+    $('#gy-dalen-ds').innerHTML = daLen.map(veTheDaLen).join('');
+
     const xacMinh = laAd ? dsGopY.filter(g => g.can_xac_minh_lai) : [];
     $('#gy-xacminh-panel').hidden = xacMinh.length === 0;
     $('#gy-xacminh-tieude').textContent = `Cần xác minh lại (${xacMinh.length})`;
@@ -7289,6 +7332,50 @@ async function khoiDongGopY() {
       $('#gy-duyet-loi').textContent = err.message || 'Không hoàn tác được.';
       nut.disabled = false;
     }
+  });
+
+  /* ĐƯỜNG SỬA TAY — Sếp chốt hoặc gỡ cái máy đoán.
+     "Đúng, đã xong" đóng góp ý; "Không phải góp ý này" gỡ sạch dấu commit mà
+     KHÔNG đụng trạng thái. Cả hai đều để lại vết trong lịch sử, không lặng lẽ.
+     Hỏi lại một câu trước khi đóng: đây là bước cuối, sau nó người gửi nhận
+     tin "đã sửa xong" — nói sai câu đó là mất lòng tin, không lấy lại được. */
+  document.addEventListener('click', async (e) => {
+    const co = e.target.closest('[data-gydalen-co]');
+    const khong = e.target.closest('[data-gydalen-khong]');
+    const nut = co || khong;
+    if (!nut || $('#v-gopy').hidden) return;
+    const id = parseInt(nut.getAttribute(co ? 'data-gydalen-co' : 'data-gydalen-khong'), 10);
+    if (co && !confirm('Đóng góp ý này và báo cho người gửi là đã sửa xong?\n' +
+                       'Chỉ bấm khi Sếp chắc bản vá thật sự giải quyết được vướng mắc của họ.')) return;
+    nut.disabled = true;
+    $('#gy-dalen-loi').textContent = '';
+    try {
+      await API.gopYXacNhanDaLen(id, !!co);
+      await taiLai();
+    } catch (err) {
+      $('#gy-dalen-loi').textContent = err.message || 'Không lưu được, thử lại nhé.';
+      nut.disabled = false;
+    }
+  });
+
+  // Đóng góp ý KHÔNG sửa bằng code (trả lời bằng hướng dẫn / không làm).
+  $('#gyCtKhongCodeForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const id = parseInt($('#gyChiTietModalNen').dataset.id, 10);
+    if (!id) return;
+    const nut = $('#gyCtNutKhongCode');
+    $('#gyCtKhongCodeLoi').textContent = '';
+    nut.disabled = true;
+    try {
+      await API.gopYDongKhongCode({
+        id, kieu: $('#gyCtKhongCodeKieu').value,
+        ghi_chu: $('#gyCtKhongCodeGhiChu').value.trim()
+      });
+      $('#gyChiTietModalNen').hidden = true;
+      await taiLai();
+    } catch (err) {
+      $('#gyCtKhongCodeLoi').textContent = err.message || 'Không đóng được, thử lại nhé.';
+    } finally { nut.disabled = false; }
   });
 
   // Duyệt hàng loạt — 3 thao tác cho cả lô thay vì 45 thao tác cho 15 việc.
@@ -7414,6 +7501,16 @@ async function khoiDongGopY() {
       $('#gyCtTriageLoi').textContent = '';
       $('#gyCtBangChung').value = g.bang_chung_url || '';
       $('#gyCtBangChungO').hidden = false;
+    }
+
+    /* Đóng mà KHÔNG sửa code — chỉ Sếp, và chỉ khi góp ý còn đang mở. Đây là
+       lối thoát cho những góp ý không cần một dòng code nào; trước bản này
+       chúng kẹt lại vì "Hoàn thành" đòi link Pull Request không tồn tại. */
+    const khongCode = $('#gyCtKhongCodeKhoi');
+    khongCode.hidden = !(coDuyet && !['hoan_thanh', 'da_huy', 'bi_tu_choi'].includes(g.trang_thai));
+    if (!khongCode.hidden) {
+      $('#gyCtKhongCodeGhiChu').value = '';
+      $('#gyCtKhongCodeLoi').textContent = '';
     }
 
     // Đề xuất Hồ Ly (AI, chế độ nháp) — chỉ Admin thấy, chỉ có ý nghĩa khi

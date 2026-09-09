@@ -120,6 +120,11 @@ export const NHOM_DU_LIEU = {
   gopYDoiTrangThai:   ['gop_y', 'thong_bao'],
   gopYDuyet:          ['gop_y', 'thong_bao'],
   gopYHoanTac:        ['gop_y', 'thong_bao'],
+  /* Sếp gật/lắc trên panel "Đã lên hệ thống — chờ xác nhận": đổi trạng thái
+     góp ý và (khi gật) gửi tin "đã sửa xong" cho người báo. */
+  gopYXacNhanDaLen:   ['gop_y', 'thong_bao'],
+  /* Đóng góp ý bằng hướng dẫn / quyết định không làm — cũng ghi thông báo. */
+  gopYDongKhongCode:  ['gop_y', 'thong_bao'],
 
   /* -- Vinh danh -- */
   vdGui:              ['vinh_danh', 'thong_bao'],
