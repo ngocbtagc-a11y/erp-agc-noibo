@@ -727,15 +727,44 @@ input[type="date"].o-ngay-sai { border-color: var(--danger-dark); }
 /* Xếp Ca — kho đọc hằng ngày. #8a6d00 trên nền đầu bảng chỉ 4.04:1. */
 .xc-ngay-tt.du_thua{ color: var(--warn-dark); }
 
+/* Tiêu đề nhóm — nay là NÚT gập/mở, không còn là nhãn chết.
+   Giữ nguyên cỡ chữ, màu và khoảng đệm cũ để thanh bên không đổi dáng. */
 .sb-nhom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
   font-size: 11px;
   font-weight: 600;
   letter-spacing: .04em;
   text-transform: uppercase;
   color: var(--text-mute);   /* 5.30:1 trên thanh bên sáng — xem chú thích .sb-label */
   padding: 16px 11px 4px;
+  border-radius: var(--r-sm);
 }
 .sb-nhom:first-child { padding-top: 4px; }
+.sb-nhom:hover { color: var(--ink); }
+.sb-nhom.mo    { color: var(--ink); }
+
+/* Mũi tên: chỉ sang phải khi gập, chúc xuống khi mở */
+.sb-mui {
+  width: 13px;
+  height: 13px;
+  flex: none;
+  transition: transform .16s ease;
+}
+.sb-nhom.mo .sb-mui { transform: rotate(90deg); }
+
+/* Thân nhóm: gập lại là khuất hẳn, không chiếm chỗ */
+.sb-nhom-con { display: none; }
+.sb-nhom-con.mo { display: block; }
+
+/* Máy nào đặt giảm chuyển động thì thôi xoay mũi tên */
+@media (prefers-reduced-motion: reduce) {
+  .sb-mui { transition: none; }
+}
 
 .sb-item {
   display: flex;
@@ -4955,3 +4984,181 @@ tr.kd-sku-chet td:first-child { font-weight: 600; }
    chung (đụng cả Kho vận/Công việc/Kinh doanh — việc đó cần ERP Owner). */
 #kd-tq-ky .seg-nut { min-height: 44px; }
 #kd-tq-canhbao:not([hidden]), #kd-sku-canhbao:not([hidden]) { margin-bottom: 16px; }
+
+/* ---------------------------------------------------------------------------
+   XEM BẢN QUÉT TRONG CỬA SỔ PHỤ
+   ---------------------------------------------------------------------------
+   Sếp Ngọc 06/09/2026: mở bản quét thì nhảy cửa sổ phụ, đừng mở tab trình duyệt
+   mới. Mở tab mới thì mất mạch: xem xong phải nhớ đóng tab, quay lại tab cũ,
+   tìm lại chỗ đang đứng trong danh sách. Xem vài tờ là có cả chục tab.
+
+   Vẫn giữ nút "Mở tab mới" BÊN TRONG cửa sổ này: nhiều trình duyệt trên điện
+   thoại không hiện được PDF trong khung nhúng, Chrome Android tải file về thay
+   vì mở. Bỏ hẳn đường cũ là biến thứ đang chạy được thành thứ không xem được
+   trên đúng thiết bị Sếp hay dùng.
+   --------------------------------------------------------------------------- */
+.tl-xem-nen {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: rgba(31, 28, 24, .55);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+}
+.tl-xem-nen.mo { display: flex; }
+body.tl-dang-xem { overflow: hidden; }
+
+.tl-xem {
+  background: var(--card, #fff);
+  border-radius: var(--r-lg, 14px);
+  box-shadow: 0 18px 48px rgba(31, 28, 24, .3);
+  width: min(1100px, 100%);
+  height: min(88vh, 100%);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.tl-xem-dau {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--line, #e5e2da);
+}
+.tl-xem-dau b {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tl-xem-nut { display: flex; align-items: center; gap: 8px; flex: none; }
+.tl-xem-dong {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px solid var(--line, #e5e2da);
+  background: none;
+  font-size: 19px;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--text-mute, #6b6459);
+}
+.tl-xem-dong:hover { border-color: #c0603f; color: #c0603f; }
+
+/* Khung xem chiếm hết phần còn lại — PDF cần chiều cao, cắt ngắn là phải cuộn
+   hai lớp lồng nhau, thao tác trên điện thoại thành cực hình. */
+#tlXemKhung { flex: 1; width: 100%; border: 0; background: #f4f2ec; }
+
+@media (max-width: 620px) {
+  .tl-xem-nen { padding: 0; }
+  .tl-xem { height: 100%; border-radius: 0; }
+}
+
+/* ---------------------------------------------------------------------------
+   SƠ ĐỒ TỔ CHỨC KÉO THẢ ĐƯỢC
+   ---------------------------------------------------------------------------
+   Sếp Ngọc 06/09/2026: kéo thả để thiết kế lại sơ đồ tổ chức và tên phòng ban.
+
+   Cây lồng nhau vẽ bằng đường kẻ trái, không bằng thư viện sơ đồ: một cây bốn
+   năm nhánh thì mấy chục dòng CSS là đủ, kéo nguyên một thư viện về để vẽ bốn
+   cái hộp là đổi 200KB lấy thứ mình tự làm được.
+
+   Phòng chưa có ai tô cam đất, không phải đỏ — chỗ cần để mắt, chưa phải sự cố.
+   --------------------------------------------------------------------------- */
+.sodo { padding: 4px 0 2px; }
+
+.sodo-goc {
+  text-align: center;
+  padding: 10px 16px;
+  border-radius: 12px;
+  border: 1px dashed var(--line);
+  background: var(--surface, #faf8f3);
+  font-family: var(--serif);
+  font-size: 15px;
+  color: var(--ink);
+}
+.sodo-goc span {
+  display: block;
+  font-family: var(--sans, inherit);
+  font-size: 11px;
+  color: var(--text-mute);
+  margin-top: 2px;
+}
+.sodo-goc.sap-tha { border-color: var(--sage); background: #eef2e6; }
+
+.sodo-cay, .sodo-con { list-style: none; margin: 0; padding: 0; }
+.sodo-cay { margin-top: 12px; }
+
+/* Nhánh con thụt vào, có đường kẻ dọc nối lên cha */
+.sodo-con {
+  margin-left: 22px;
+  padding-left: 16px;
+  border-left: 2px solid var(--line);
+}
+.sodo-nhanh { margin-bottom: 10px; }
+
+.sodo-o {
+  position: relative;
+  padding: 11px 13px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  border-top: 3px solid var(--sage, #9aab86);
+  background: var(--card, #fff);
+  box-shadow: var(--shadow-sm);
+  cursor: grab;
+  max-width: 460px;
+}
+.sodo-o:active { cursor: grabbing; }
+.sodo-o.dang-keo { opacity: .45; }
+.sodo-o.sap-tha { border-color: var(--sage); box-shadow: 0 0 0 3px rgba(154,171,134,.35); }
+.sodo-o.trong { border-top-color: #c0603f; background: #fdf6f2; }
+
+.sodo-ten {
+  display: block;
+  font-family: var(--serif);
+  font-size: 14px;
+  color: var(--ink);
+  line-height: 1.3;
+  cursor: text;
+}
+.sodo-o-ten {
+  width: 100%;
+  font: inherit;
+  padding: 2px 6px;
+  border: 1px solid var(--sage);
+  border-radius: 6px;
+}
+.sodo-tp { font-size: 12px; color: var(--text); margin-top: 3px; }
+.sodo-tp i { color: var(--text-mute); }
+.sodo-so { font-size: 12px; color: var(--text-mute); margin-top: 2px; }
+
+.sodo-canh {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 0 7px;
+  border-radius: var(--r-pill, 99px);
+  background: #f6e0d6;
+  color: #a04a30;
+  font-size: 10.5px;
+}
+
+.sodo-hanh { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+
+/* Ô chọn "trực thuộc" — đường cho điện thoại, nơi kéo thả không chạy */
+.sodo-chon {
+  font-size: 12px;
+  padding: 3px 8px;
+  border-radius: var(--r-md, 8px);
+  border: 1px solid var(--line);
+  background: var(--card, #fff);
+  max-width: 200px;
+}
+
+@media (max-width: 620px) {
+  .sodo-con { margin-left: 10px; padding-left: 10px; }
+  .sodo-o { max-width: none; }
+}

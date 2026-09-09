@@ -22,6 +22,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/css/style.css">
+<link rel="stylesheet" href="assets/css/vanphong.css">
 </head>
 <body>
 
@@ -31,6 +32,10 @@
 
   <!-- ==================== THANH BÊN ==================== -->
   <aside class="sidebar" id="thanhBen">
+    <!-- Thanh kéo bề ngang menu: kéo để đổi, bấm đúp về mặc định.
+         Nhãn menu tiếng Việt dài hay bị xuống dòng ở 244px. -->
+    <div class="sb-keo" id="sb-keo" role="separator" aria-orientation="vertical"
+         title="Kéo để đổi bề ngang menu · bấm đúp để về mặc định"></div>
     <div class="sb-brand">
       <img class="sb-logo" src="assets/img/logo.png"
            alt="Alpha Green Commerce" width="1109" height="376">
@@ -332,6 +337,62 @@
     <!-- ---------- Lịch sử làm việc — kho lưu trữ TOÀN CỤC mọi việc trong Trạm
          Mục Tiêu, ai làm gì, xong khi nào, kết quả ra sao. Sếp Ngọc yêu cầu
          21/08/2026, mở cho mọi vai trò xem (đúng tinh thần minh bạch MBOs). ---------- -->
+    <!-- ================= TỔNG QUAN CÔNG TY (Giám đốc / Admin) =================
+         Decision First — vấn đề cần quyết trước, không phải biểu đồ đẹp trước
+         (Dashboard Rule D2/D3, xem docs/ERP-CONSTITUTION.md). -->
+    <section class="view" id="v-tqcongty" hidden>
+      <div class="view-head">
+        <h3>Tổng quan công ty</h3>
+        <p>Bức tranh toàn công ty. Số liệu lấy trực tiếp từ các mảng nghiệp vụ — không nhập tay ở đâu cả.</p>
+      </div>
+      <div class="stats" id="tqcongty-the"></div>
+      <div class="panel" id="tqcongty-cb-panel" hidden>
+        <div class="panel-head"><h4>Cần chú ý</h4></div>
+        <div class="panel-body"><div class="list" id="tqcongty-canhbao"></div></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h4>Đi tới phòng ban</h4></div>
+        <div class="panel-body"><div class="list" id="tqcongty-loi-tat"></div></div>
+      </div>
+      <p class="hint" id="tqcongty-ghichu"></p>
+    </section>
+
+    <!-- ============ TỔNG QUAN PHÒNG KINH DOANH & PT THỊ TRƯỜNG ============ -->
+    <section class="view" id="v-tqkinhdoanh" hidden>
+      <div class="view-head">
+        <h3>Tổng quan phòng Kinh doanh &amp; Phát triển thị trường</h3>
+        <p>Marketing – Bán hàng · CSKH và Phát triển cung ứng. Bấm vào thẻ hoặc dòng cảnh báo để sang thẳng chỗ xử lý.</p>
+      </div>
+      <div class="stats" id="tqkinhdoanh-the"></div>
+      <div class="panel" id="tqkinhdoanh-cb-panel" hidden>
+        <div class="panel-head"><h4>Cần chú ý</h4></div>
+        <div class="panel-body"><div class="list" id="tqkinhdoanh-canhbao"></div></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h4>Việc của phòng</h4></div>
+        <div class="panel-body"><div class="list" id="tqkinhdoanh-loi-tat"></div></div>
+      </div>
+      <p class="hint" id="tqkinhdoanh-ghichu"></p>
+    </section>
+
+    <!-- ================ TỔNG QUAN PHÒNG VẬN HÀNH & HỖ TRỢ ================ -->
+    <section class="view" id="v-tqvanhanh" hidden>
+      <div class="view-head">
+        <h3>Tổng quan phòng Vận hành &amp; Hỗ trợ</h3>
+        <p>Kế toán – Tài chính · HCNS – Admin · Kho vận – Sản xuất. Chỉ hiện những mảng bạn được phân quyền.</p>
+      </div>
+      <div class="stats" id="tqvanhanh-the"></div>
+      <div class="panel" id="tqvanhanh-cb-panel" hidden>
+        <div class="panel-head"><h4>Cần chú ý</h4></div>
+        <div class="panel-body"><div class="list" id="tqvanhanh-canhbao"></div></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h4>Việc của phòng</h4></div>
+        <div class="panel-body"><div class="list" id="tqvanhanh-loi-tat"></div></div>
+      </div>
+      <p class="hint" id="tqvanhanh-ghichu"></p>
+    </section>
+
     <section class="view" id="v-lichsuviec" hidden>
       <div class="view-head">
         <h3>Lịch sử làm việc</h3>
@@ -405,6 +466,142 @@
         <div class="dai-cat" id="ls-cv-cat" hidden></div>
       </div>
     </section>
+
+    <!-- ---------- Văn phòng ảo ---------- -->
+    <section class="view" id="v-vanphong" hidden>
+      <div class="view-head">
+        <h3>Văn phòng ảo</h3>
+        <p>Chín trợ lý AI, mỗi người một phòng. Bấm vào cửa để xem hồ sơ năng lực và hỏi việc.
+           Trợ lý tra thẳng dữ liệu thật trong ERP, và mỗi sáng tự đặt việc lên bàn người phụ trách.</p>
+      </div>
+
+      <!-- Băng nhắc khi phần hỏi–đáp chưa bật -->
+      <div class="vp-nhac" id="vp-nhac" hidden></div>
+
+      <div class="vp-bo-cuc">
+        <div>
+          <!-- Tab phụ: mặt bằng để NHÌN, năng suất để ĐO. Hai việc khác nhau,
+               nhét chung một màn thì cái nào cũng chật. -->
+          <!-- Việc đang treo: nằm TRÊN mặt bằng, không phải một cái chuông.
+               Chuông thì bị lờ như mọi cái chuông khác; cái này chắn ngang lối
+               vào nên mỗi lần bước vào văn phòng là thấy. -->
+          <div class="vp-treo" id="vp-treo" hidden></div>
+
+          <div class="vp-tabphu" role="tablist">
+            <button type="button" class="vp-tabphu-nut dang-mo" data-man="matbang">Mặt bằng</button>
+            <button type="button" class="vp-tabphu-nut" data-man="nangsuat">Năng suất</button>
+          </div>
+
+          <div class="vp-man" id="vp-man-matbang">
+          <!-- Mặt bằng văn phòng: KHÔNG phải menu để chọn người.
+               Đây là màn hình theo dõi Mây điều phối — ai đang được giao việc
+               thì chibi người đó sáng lên. -->
+          <div class="vp-san" id="vp-san">
+            <div class="vp-san-nen"></div>
+            <div class="vp-khu-lop" id="vp-khu-lop"></div>
+            <div class="vp-do-lop" id="vp-do-lop"></div>
+            <div class="vp-phong-lop" id="vp-phong-lop"></div>
+            <div class="vp-quay" id="vp-quay"></div>
+          </div>
+          <div class="vp-chugiai">
+            <button type="button" class="vp-thu-tele" id="vp-thu-tele" hidden
+                    title="Gửi thử một thông báo lên điện thoại để biết đường báo có thông">Bắn thử thông báo</button>
+            <span><i class="cg-quay"></i>Đang xử lý ngay lúc này</span>
+            <span><i class="cg-ranh"></i>Rảnh — giao việc được</span>
+            <span><i class="cg-vua"></i>Đang có việc</span>
+            <span><i class="cg-nhieu"></i>Quá tải (từ 5 việc)</span>
+            <span><i class="cg-ngoai"></i>Xưởng ERP — nhận việc qua Trưởng phòng IT, không qua Mây</span>
+          </div>
+        </div>
+
+
+          <div class="vp-man" id="vp-man-nangsuat" hidden>
+            <div class="panel">
+              <div class="panel-head">
+                <h4>Năng suất đội trợ lý ảo</h4>
+                <span class="hint" id="vp-ns-ky"></span>
+              </div>
+              <div class="panel-body">
+                <div class="vp-ns-bang" id="vp-ns-bang"></div>
+                <p class="vp-ns-ghichu" id="vp-ns-ghichu"></p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Thanh kéo chia cột: bấm giữ để đổi bề ngang, bấm đúp để về mặc định -->
+        <div class="vp-keo" id="vp-keo" role="separator" aria-orientation="vertical"
+             title="Kéo để đổi bề ngang · bấm đúp để về mặc định"><span></span></div>
+
+        <!-- Cột phải -->
+        <aside class="vp-ben">
+          <!-- HỎI MÂY — lối vào duy nhất -->
+          <div class="panel vp-hoi-khung">
+            <div class="panel-head">
+              <h4>Hỏi Mây</h4>
+              <span class="hint">Cứ nói tự nhiên, Mây tự tìm đúng người</span>
+            </div>
+            <div class="panel-body">
+              <div class="vp-chat" id="vp-chat"></div>
+              <div class="vp-goi-y" id="vp-goi-y"></div>
+              <!-- Ảnh đính kèm: hiện ngay trên ô nhập, bỏ được trước khi gửi -->
+              <div class="vp-anh-kem" id="vp-anh-kem" hidden>
+                <img id="vp-anh-xem" alt="Ảnh sắp gửi">
+                <button type="button" class="vp-anh-bo" id="vp-anh-bo" title="Bỏ ảnh">×</button>
+              </div>
+              <form class="vp-nhap" id="vp-nhap-form">
+                <input type="file" id="vp-anh-chon" accept="image/*" hidden>
+                <button type="button" class="vp-nhap-anh" id="vp-anh-nut" title="Đính kèm ảnh — dán Ctrl+V hoặc kéo thả cũng được">
+                  <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M3 17l5-4 4 3 4-4 5 4"/></svg>
+                </button>
+                <textarea id="vp-nhap" rows="1"
+                          placeholder="Ví dụ: doanh số tuần này tụt vì sao?"
+                          autocomplete="off"></textarea>
+                <button type="submit" class="btn-primary btn-nho" id="vp-gui">Hỏi</button>
+              </form>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-head">
+              <h4>Việc của tôi</h4>
+              <span class="hint" id="vp-viec-dem"></span>
+            </div>
+            <div class="panel-body">
+              <div class="vp-viec-ds" id="vp-viec-ds"></div>
+              <div class="empty" id="vp-viec-trong" hidden>Chưa có việc nào đang mở.</div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-head">
+              <h4>Đang ở văn phòng</h4>
+              <span class="hint" id="vp-comat-dem"></span>
+            </div>
+            <div class="panel-body"><div class="vp-comat" id="vp-comat"></div></div>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- Hồ sơ năng lực một trợ lý: bấm vào chibi để xem, KHÔNG phải để chat
+         riêng — mọi câu hỏi đều đi qua Mây. -->
+    <div class="modal-nen" id="vpHoSoNen" hidden>
+      <div class="modal vp-hoso-modal">
+        <div class="vp-phong-dau">
+          <div class="vp-phong-chibi" id="vp-hoso-chibi"></div>
+          <div class="vp-phong-ten">
+            <h4 id="vp-hoso-ten">Trợ lý</h4>
+            <p id="vp-hoso-chuc"></p>
+          </div>
+          <button class="vp-dong" id="vp-hoso-dong" aria-label="Đóng">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+        <div class="vp-hoso-than" id="vp-hoso-than"></div>
+      </div>
+    </div>
 
     <!-- ---------- Danh bạ ---------- -->
     <section class="view" id="v-danhba" hidden>
@@ -622,6 +819,16 @@
             <button type="button" class="btn-nho" id="gyCtApDung" style="margin-top:10px">Áp dụng đề xuất vào form dưới</button>
           </div>
         </div>
+        <!-- Kế hoạch thi công do Trưởng phòng IT soạn. Tách khỏi đặc tả của Hồ Ly:
+             đặc tả trả lời "xong là thế nào", kế hoạch trả lời "làm ra sao". -->
+        <div id="gyCtKeHoachKhoi" hidden>
+          <div class="kv-md-muc">🛠️ Kế hoạch thi công — Trưởng phòng IT (văn phòng ảo)</div>
+          <div class="gy-ai-box">
+            <div class="dai sm" id="gyCtKeHoach"></div>
+            <div class="sm" id="gyCtKeHoachLuc" style="margin-top:6px; opacity:.7"></div>
+          </div>
+        </div>
+
         <div class="sm" id="gyCtDeXuatChoXuLy" hidden style="margin:8px 0">🦊 Hồ Ly đang phân tích góp ý này, quay lại sau ít phút…</div>
 
         <!-- ĐƯỜNG TIẾN ĐỘ — cho NGƯỜI GỬI. Gộp 15 trạng thái kỹ thuật thành
@@ -2754,6 +2961,19 @@
       </div>
 
       <div class="kv-pane" id="dln-pane-tochuc" hidden>
+        <!-- SƠ ĐỒ TỔ CHỨC — Sếp Ngọc: "thiết kế thành sơ đồ để tôi dễ làm".
+             Ba danh sách phẳng bên dưới vẫn giữ: đó là chỗ thêm và đổi tên.
+             Sơ đồ là chỗ NHÌN, danh sách là chỗ SỬA. -->
+        <div class="panel" style="margin-bottom:14px">
+          <div class="panel-head">
+            <h4>Sơ đồ tổ chức</h4>
+            <span class="hint" id="dln-sodo-tom"></span>
+          </div>
+          <div class="panel-body">
+            <div class="sodo" id="dln-sodo"></div>
+          </div>
+        </div>
+
         <div class="grid-2">
           <div class="panel">
             <div class="panel-head"><h4>Phòng ban</h4><span class="hint" id="dln-pb-dem"></span></div>

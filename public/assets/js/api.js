@@ -387,6 +387,9 @@ export const API = {
   dlnPhongBan: () => goi('/api/dulieunen/phong-ban'),
   dlnThemPhongBan: (ten, xacNhan) => goi('/api/dulieunen/phong-ban/them', { method: 'POST', body: JSON.stringify({ ten, xac_nhan: !!xacNhan }) }),
   dlnSuaPhongBan: (id, d) => goi('/api/dulieunen/phong-ban/sua', { method: 'POST', body: JSON.stringify({ id, ...d }) }),
+  dlnSapXepPhongBan: (ds) => goi('/api/dulieunen/phong-ban/sap-xep', {
+    method: 'POST', body: JSON.stringify({ ds })
+  }),
   dlnGanTruongPhong: (id, truongPhongId) => goi('/api/dulieunen/phong-ban/gan-truong-phong', { method: 'POST', body: JSON.stringify({ id, truong_phong_id: truongPhongId }) }),
   dlnKhoaPhongBan: (id, trangThai) => goi('/api/dulieunen/phong-ban/khoa', { method: 'POST', body: JSON.stringify({ id, trang_thai: trangThai }) }),
 
@@ -515,7 +518,10 @@ export const API = {
      (xem khối TỔNG QUAN 2 SÀN trong src/index.js). ky = hom_nay|7ngay|30ngay|thang_nay */
   kdTongQuanKenh: (ky) => goi('/api/kinh-doanh/tong-quan-kenh?ky=' + encodeURIComponent(ky || 'hom_nay')),
   kdXepHangSku: (ky) => goi('/api/kinh-doanh/xep-hang-sku?ky=' + encodeURIComponent(ky || 'thang_nay')),
-  kdTachDongHang: () => goi('/api/kinh-doanh/tach-dong-hang', { method: 'POST' }),
+  /* dem = true chỉ dùng cho LÔ ĐẦU, để biết tổng số đơn phải bóc. Các lô sau
+     tự trừ dần — hỏi lại máy chủ sau mỗi lô là bắt nó đếm lại cả bảng. */
+  kdTachDongHang: (dem = false) =>
+    goi('/api/kinh-doanh/tach-dong-hang' + (dem ? '?dem=1' : ''), { method: 'POST' }),
 
   /* ---- Kế toán: đơn hoàn cần tra soát tiền ---- */
   ktCanTraSoat: () => goi('/api/ke-toan/can-tra-soat'),
@@ -579,7 +585,28 @@ export const API = {
      lại, mà quét lại nghĩa là đi tìm lại tờ giấy thật. */
   tlSua: (du) => goi('/api/tai-lieu/sua', { method: 'POST', body: JSON.stringify(du) }),
   tlLichSu: (id) => goi('/api/tai-lieu/lich-su?id=' + encodeURIComponent(id)),
-  tlAn: (id) => goi('/api/tai-lieu/an', { method: 'POST', body: JSON.stringify({ id }) })
+  tlAn: (id) => goi('/api/tai-lieu/an', { method: 'POST', body: JSON.stringify({ id }) }),
+
+  /* ---- Văn phòng ảo: một cửa duy nhất là Hỏi Mây ---- */
+  vpTongQuan: () => goi('/api/van-phong/tong-quan'),
+  vpNangSuat: () => goi('/api/van-phong/nang-suat'),
+  vpThuThongBao: () => goi('/api/van-phong/thu-thong-bao', { method: 'POST' }),
+  vpKyNang: () => goi('/api/van-phong/ky-nang'),
+  vpKyNangDoi: (id, dangDung) => goi('/api/van-phong/ky-nang', {
+    method: 'POST', body: JSON.stringify({ id, dang_dung: dangDung })
+  }),
+
+  /* Báo "tôi còn ở đây" mỗi 20 giây, để người khác thấy mình trong văn phòng */
+  vpCoMat: (dangO) => goi('/api/van-phong/co-mat', {
+    method: 'POST', body: JSON.stringify({ dang_o: dangO || null })
+  }),
+
+  vpHoiThoai: () => goi('/api/van-phong/hoi-thoai'),
+
+  /* KHÔNG truyền id trợ lý — người dùng không phải chọn ai, Mây tự định tuyến */
+  vpHoi: (noiDung, anh) => goi('/api/van-phong/hoi', {
+    method: 'POST', body: JSON.stringify({ noi_dung: noiDung, anh: anh || null })
+  })
   // Bản PDF mở thẳng bằng /api/tai-lieu/tep?id=... (máy chủ trả file kèm kiểm
   // quyền + ghi nhật ký), không qua lớp fetch này.
   // Lưu ý: kết nối Shopee đi thẳng bằng chuyển trang tới /api/shopee/connect

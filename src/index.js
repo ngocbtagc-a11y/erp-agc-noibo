@@ -41,6 +41,9 @@ import * as hopdong from './hopdong.js';
 import * as motacv from './mota-cv.js';
 import * as kynang from './ky-nang.js';
 import { quetNhacNhanSu, thangKeTiep, gioVN } from './nhac-nhan-su.js';
+import * as vanphong from './vanphong.js';
+import { tuDayViecNhe } from './vp-gopy.js';
+import { soanKeHoach, soanKeHoachChanDoan } from './vp-kehoach.js';
 /* CTL-0026 — Kho tài liệu quản trị. Lõi dùng chung với CTL-0025 (quét giấy tờ
    nhân sự): một kho, hai cửa vào. Đợt 1 mở cửa KHO CHUNG. */
 import * as tailieu from './tai-lieu.js';
@@ -48,7 +51,8 @@ import { quetNhacCongViec, soNgayGiua } from './nhac-cong-viec.js';
 import { sinhMa } from './dinh-danh.js';
 /* CTL-0014 — đẩy thông báo lên điện thoại. Mọi chốt chặn chống làm phiền nằm
    trong `day-thong-bao.js`, KHÔNG rải ra đây. */
-import { dayTinNhanChat, dayToiNguoi, donNhatKyCu, kiemTraCaiDatDay, TRAN_NGAY } from './day-thong-bao.js';
+import { dayTinNhanChat, donNhatKyCu, kiemTraCaiDatDay, dayToiNguoi, TRAN_NGAY } from './day-thong-bao.js';
+import * as khoFile from './kho-file.js';
 /* Luật "bản vá đã lên thật thì góp ý nào được đóng" — HÀM THUẦN, tách hẳn ra
    để bàn thử (scripts/do-chot-gop-y-deploy.mjs) soi được mà không cần D1. */
 import { docMaGopY, chotCaLuot } from './chot-gop-y-deploy.js';
@@ -192,6 +196,50 @@ async function dangNhap(req, env) {
   await xoaPhienHetHan(env.DB);
 
   return json({ ok: true }, 200, { 'Set-Cookie': cookieDangNhap(token, hetHan) });
+}
+
+/* ==========================================================================
+   VÀO THẲNG KHI CHẠY THỬ Ở MÁY — KHÔNG CÓ MẬT KHẨU Ở BẤT CỨ FILE NÀO
+   --------------------------------------------------------------------------
+   Sếp Ngọc có quy tắc: bản chạy thử phải vào thẳng được, không bắt gõ đăng nhập.
+
+   Bản cũ làm bằng một trang HTML chứa sẵn số điện thoại và mật khẩu. Sai lầm:
+   .gitignore không chặn được deploy (wrangler đóng gói public/ từ ổ đĩa, không
+   đọc git), nên chỉ cần một lần lỡ tay là mật khẩu quản trị nằm công khai trên
+   Internet. Phải chặn bằng .assetsignore — nhưng thứ đó chặn luôn cả lúc chạy
+   thử, thành ra không ai vào nhanh được nữa.
+
+   Cách này không có mật khẩu ở đâu cả: mở thẳng phiên đăng nhập cho một tài
+   khoản, và chỉ mở khi hội đủ HAI điều kiện độc lập:
+     1. Có biến VAO_THU_TK — biến này chỉ nằm trong .dev.vars, mà .dev.vars thì
+        wrangler KHÔNG BAO GIỜ đưa lên máy chủ, kể cả lỡ tay.
+     2. Yêu cầu đến từ localhost / 127.0.0.1.
+   Thiếu một trong hai thì trả 404 y như route không tồn tại — không báo lỗi,
+   không gợi ý gì cho người dò.
+
+   Hai lớp chứ không phải một: giả sử có ngày ai đó vô tình đặt VAO_THU_TK trên
+   production, điều kiện localhost vẫn chặn. Cửa vào hệ thống thì đừng bao giờ
+   chỉ khoá một lần.
+   ========================================================================== */
+async function vaoThuOMay(req, env) {
+  const tenTK = String(env.VAO_THU_TK || '').trim();
+  if (!tenTK) return new Response('Not found', { status: 404 });
+
+  const host = new URL(req.url).hostname;
+  if (host !== 'localhost' && host !== '127.0.0.1' && host !== '[::1]') {
+    return new Response('Not found', { status: 404 });
+  }
+
+  const tk = await env.DB.prepare(
+    'SELECT id FROM tai_khoan WHERE ten_dang_nhap = ? AND kich_hoat = 1'
+  ).bind(tenTK.replace(/s+/g, '').toLowerCase()).first();
+  if (!tk) return new Response('Không có tài khoản ' + tenTK, { status: 404 });
+
+  const { token, hetHan } = await taoPhien(env.DB, tk.id);
+  return new Response(null, {
+    status: 302,
+    headers: { Location: '/app', 'Set-Cookie': cookieDangNhap(token, hetHan) }
+  });
 }
 
 async function dangXuat(req, env) {
@@ -2190,6 +2238,14 @@ async function dlnThemPhongBan(req, env) {
   let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
   return dulieunen.themPhongBan(env, phien, b);
 }
+/* Nhận kết quả kéo thả sơ đồ tổ chức — cả sơ đồ một lần, không từng thao tác lẻ. */
+async function dlnSapXepPhongBan(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return dulieunen.sapXepPhongBan(env, phien, b);
+}
+
 async function dlnSuaPhongBan(req, env) {
   const { phien, loi: l } = await batBuocXemDuLieuNen(req, env);
   if (l) return l;
@@ -4837,8 +4893,19 @@ async function vdSua(req, env) {
    vô dụng đúng lúc Sếp không đăng nhập được. Mở rộng một tham số của hàm đã
    chạy thật là đường rẻ nhất và ít mặt hỏng nhất. Chi phí 0. */
 async function guiTelegram(env, text, chatId = null) {
-  const token = env.TELEGRAM_BOT_TOKEN;
-  const dich = chatId || env.TELEGRAM_CHAT_ID;
+  /* Cắt khoảng trắng: dán token lẫn dấu cách hoặc xuống dòng cho ra đúng lỗi
+     404 giống hệt token sai, mà hai thứ đó chữa khác nhau. Cắt ở đây thì bớt
+     hẳn một loại nhầm lẫn. */
+  const token = String(env.TELEGRAM_BOT_TOKEN || '').trim();
+  /* Lùi về chat riêng của Sếp khi chưa cấu hình chat chung. Trước bản này,
+     thiếu TELEGRAM_CHAT_ID là hàm lặng lẽ return false — và MỌI cảnh báo của
+     ERP im bặt mà không ai biết: đơn hoàn quá hạn, SLA góp ý, và cảnh báo sắp
+     hết hạn mức ghi D1. Đúng cái cảnh báo lẽ ra đã báo trước khi cả công ty
+     mất truy cập sáng 06/09/2026.
+     Một cảnh báo im lặng nguy hơn không có cảnh báo, vì người ta tưởng mình
+     đang được canh. Không có địa chỉ chung thì gửi về Sếp còn hơn gửi vào hư
+     không. */
+  const dich = String(chatId || env.TELEGRAM_CHAT_ID || env.TELEGRAM_CHAT_ID_SEP || '').trim();   // lui ve chat rieng cua Sep
   if (!token || !dich) return false;
   try {
     const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
@@ -5469,8 +5536,12 @@ async function kdXepHangSku(req, env) {
 }
 
 /* POST /api/kinh-doanh/tach-dong-hang — bóc dòng hàng từ `du_lieu_json` của
-   các đơn cũ, theo lô. Giao diện gọi lại tới khi `con_lai = 0`.
-   Chỉ ĐỌC `du_lieu_json` rồi GHI sang bảng mới — không sửa/xoá dữ liệu đơn. */
+   các đơn cũ, theo lô. Giao diện gọi lại tới khi `con_nua = false`.
+   Chỉ ĐỌC `du_lieu_json` rồi GHI sang bảng mới — không sửa/xoá dữ liệu đơn.
+
+   ?dem=1 thì mới đếm số đơn còn lại. Giao diện chỉ xin đếm ở LÔ ĐẦU rồi tự trừ
+   dần — đếm sau mỗi lô là đếm lại cả bảng, và chính chỗ đó đã làm cạn hạn mức
+   đọc của cả ngày hôm 06/09/2026. */
 async function kdTachDongHang(req, env) {
   const { phien, loi: l } = await batBuocDangNhap(req, env);
   if (l) return l;
@@ -5480,8 +5551,9 @@ async function kdTachDongHang(req, env) {
   }
   try {
     // 100 đơn/lượt: mỗi đơn sinh 1 câu lệnh/dòng hàng + 1 câu đánh dấu, để
-    // 1 lô D1 không phình quá to. Giao diện tự gọi lại tới khi con_lai = 0.
-    return json(await donHangItem.tachBu(env, 100));
+    // 1 lô D1 không phình quá to.
+    const dem = new URL(req.url).searchParams.get('dem') === '1';
+    return json(await donHangItem.tachBu(env, 100, { dem }));
   } catch (e) {
     return loi(e.message, 500);
   }
@@ -6187,6 +6259,10 @@ async function gopYDanhSach(req, env) {
            g.nguoi_gui_id, g.nguoi_phu_trach_id, pt.ho_ten AS nguoi_phu_trach_ten, g.spec_reference,
            g.tao_luc, g.cap_nhat_luc,
            g.de_xuat_loai, g.de_xuat_risk, g.de_xuat_trang_thai, g.de_xuat_ly_do, g.de_xuat_spec,
+           /* Kế hoạch thi công do TP IT (văn phòng ảo) soạn. CHỈ THÊM HAI TÊN CỘT,
+              không đụng logic nào của câu này — vùng gopYDanhSach thuộc SPEC-0002
+              của Hồ Ly, xem docs/ACTIVE-WORK.md. */
+           g.ke_hoach_thi_cong, g.ke_hoach_luc,
            g.risk, g.duyet_cap1_luc, g.duyet_cap1_nguon, g.duyet_owner_luc,
            g.bang_chung_url, g.ly_do_tu_choi, g.so_lan_gui_lai, g.can_xac_minh_lai,
            g.current_owner, g.next_owner,
@@ -7748,10 +7824,207 @@ async function tlAn(req, env) {
   return tailieu.anTaiLieu(env, phien, b);
 }
 
+/* ---- Văn phòng ảo -------------------------------------------------------
+   Tab mở cho mọi vai trò, nhưng CỬA TỪNG PHÒNG kiểm riêng theo vai trò —
+   việc đó nằm trong src/vanphong.js + src/agents-vp.js, không lặp lại ở đây. */
+
+async function vpTongQuan(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  return vanphong.tongQuan(env, phien);
+}
+
+/* Gửi Telegram và NÓI RÕ HỎNG VÌ SAO — chỉ dùng cho nút bắn thử của admin.
+   guiTelegram() thường nuốt lỗi (`return res.ok`) vì nó chạy trong cron, chỗ
+   không ai đọc. Nhưng nút bắn thử mà cũng chỉ nói "không gửi được" thì đúng là
+   cái bệnh im lặng vừa mới chê: người bấm không biết sai chat id, sai token,
+   hay bot bị chặn — ba nguyên nhân đó chữa theo ba cách khác hẳn nhau.
+
+   KHÔNG trả token ra ngoài, chỉ trả mô tả lỗi của Telegram. */
+async function telegramNoiRoLoi(env, text, chatId) {
+  const token = String(env.TELEGRAM_BOT_TOKEN || '').trim();
+  if (!token) return { ok: false, vi_sao: 'Chưa nạp TELEGRAM_BOT_TOKEN' };
+  if (!chatId) return { ok: false, vi_sao: 'Chưa nạp chat id' };
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, text, disable_web_page_preview: true })
+    });
+    const d = await res.json().catch(() => ({}));
+    if (res.ok && d.ok) return { ok: true };
+
+    /* "Not Found" của Telegram nghĩa là không có bot nào ứng với token — chứ
+       không phải "không tìm thấy người nhận" như đa số người đọc sẽ hiểu. Dịch
+       ra tiếng Việt kèm cách chữa, chứ ném nguyên văn tiếng Anh của Telegram
+       thì người bấm vẫn phải đi tra. */
+    const ma = d.error_code || res.status;
+    const goc = d.description || '';
+    let noi = goc;
+    if (ma === 404) noi = 'Token bot sai — Telegram không tìm thấy bot nào ứng với token này. Lấy lại ở @BotFather (/mybots → chọn bot → API Token), dán đủ cả đoạn có dấu hai chấm.';
+    else if (ma === 401) noi = 'Token bot không còn hiệu lực — có thể đã bị thu hồi. Lấy token mới ở @BotFather.';
+    else if (ma === 403) noi = 'Bot chưa được phép nhắn cho Sếp. Mở chat với chính bot này và gõ /start, rồi thử lại.';
+    else if (/chat not found/i.test(goc)) noi = 'Chat id sai. Chat riêng là số DƯƠNG; số bắt đầu bằng dấu trừ là id nhóm.';
+    return { ok: false, ma, vi_sao: noi, goc: goc || null };
+  } catch (e) {
+    return { ok: false, vi_sao: 'Không gọi được Telegram: ' + (e.message || 'lỗi mạng') };
+  }
+}
+
+/* ==========================================================================
+   BA ĐƯỜNG CHẨN ĐOÁN — mở cho localhost, đóng với thế giới
+   --------------------------------------------------------------------------
+   Ba đường thu-google / thu-telegram / thu-ke-hoach đòi đăng nhập Quản trị.
+   Đúng với người dùng thật, nhưng nó khiến người dò lỗi từ xa (kể cả tôi khi
+   chạy `wrangler dev --remote`) không tự kiểm được, và mỗi lần hỏng lại phải
+   nhờ Sếp mở link hộ. Sếp nói thẳng: "cái gì tự làm được thì làm đi chứ."
+
+   Nên: gọi từ localhost thì không cần đăng nhập. Trên production hostname là
+   erp-agc.noiboagc.workers.dev nên điều kiện này KHÔNG BAO GIỜ đúng, đường vẫn
+   đòi Quản trị y như cũ.
+
+   Vì sao chọn cách này thay vì đặt VAO_THU_TK thành khoá production: cái kia mở
+   cả một lối ĐĂNG NHẬP, cái này chỉ mở ba đường CHỈ ĐỌC cấu hình. Cùng một chốt
+   chặn, nhưng nếu chốt hỏng thì thiệt hại khác nhau một trời một vực.
+   ========================================================================== */
+function chayTuMayNoiBo(req) {
+  const h = new URL(req.url).hostname;
+  console.log('[chan-doan] hostname=', h, '| host header=', req.headers.get('host'));
+  return h === 'localhost' || h === '127.0.0.1' || h === '[::1]';
+}
+
+/* Cổng chung cho ba đường chẩn đoán */
+async function cuaChanDoan(req, env) {
+  if (chayTuMayNoiBo(req)) return { ok: true };
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return { loi: l };
+  if (!laAdmin(phien)) return { loi: loi('Chỉ Quản trị được chạy thử.', 403) };
+  return { ok: true };
+}
+
+/* Chẩn đoán kết nối Google Drive — CHỈ ADMIN.
+   Lỗi thật bị đẩy vào console.error (đúng, để không phun kỹ thuật ra mặt người
+   dùng), nhưng console thì không đọc được từ xa. Đường này thử xin vé rồi trả
+   thẳng lý do Google từ chối. KHÔNG trả khoá bí mật ra ngoài. */
+async function vpThuGoogle(req, env) {
+  const cua = await cuaChanDoan(req, env);
+  if (cua.loi) return cua.loi;
+
+  const thieu = [];
+  if (!env.GOOGLE_CLIENT_ID) thieu.push('GOOGLE_CLIENT_ID');
+  if (!env.GOOGLE_CLIENT_SECRET) thieu.push('GOOGLE_CLIENT_SECRET');
+  if (!env.GOOGLE_REFRESH_TOKEN) thieu.push('GOOGLE_REFRESH_TOKEN');
+  if (thieu.length) return json({ ok: false, vi_sao: 'Chưa nạp khoá: ' + thieu.join(', ') });
+
+  try {
+    const res = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: env.GOOGLE_CLIENT_ID,
+        client_secret: env.GOOGLE_CLIENT_SECRET,
+        refresh_token: env.GOOGLE_REFRESH_TOKEN,
+        grant_type: 'refresh_token'
+      })
+    });
+    const d = await res.json().catch(() => ({}));
+    if (res.ok && d.access_token) {
+      /* Xin được vé mới chỉ chứng minh XÁC THỰC tốt. Cái hỏng của Sếp là lúc
+         TẢI FILE LÊN — nên phải thử tải thật một file nhỏ, không dừng ở đây.
+         Đây là chỗ tôi suýt kết luận sớm: "Google cấp vé bình thường" nghe như
+         đã xong, nhưng nó mới là bước một trong ba. */
+      try {
+        const goc = await khoFile.timHoacTaoThuMuc(env, 'tailieu_goc', 'ERP - Kho tài liệu', null);
+        const kq = await khoFile.luuFile(env, {
+          duLieu: new TextEncoder().encode('ERP tu kiem duong tai len - xoa duoc'),
+          tenFile: 'agc-tu-kiem.txt', kieu: 'text/plain', thuMucId: goc
+        });
+        return json({ ok: true, vi_sao: 'Xin vé ĐƯỢC và tải file lên ĐƯỢC — kho ngoài thông cả đường.',
+                      thu_muc: goc, file_thu: kq.khoa });
+      } catch (e) {
+        return json({ ok: false, buoc: 'tai len',
+                      vi_sao: 'Xin vé được nhưng TẢI FILE LÊN hỏng: ' + (e.message || '').slice(0, 400) });
+      }
+    }
+
+    /* Dịch mã lỗi Google sang câu người đọc hiểu và biết phải làm gì. */
+    const ma = d.error || String(res.status);
+    let noi = d.error_description || 'Google từ chối, không rõ lý do';
+    if (ma === 'invalid_grant') {
+      noi = 'Khoá Google đã hết hiệu lực. Hay gặp nhất khi màn hình xin quyền (OAuth consent) còn ở chế độ THỬ NGHIỆM — Google huỷ khoá sau 7 ngày. Cách chữa lâu dài: đưa ứng dụng sang chế độ Đã phát hành (Published). Chữa tạm: cấp lại GOOGLE_REFRESH_TOKEN.';
+    } else if (ma === 'invalid_client') {
+      noi = 'Sai GOOGLE_CLIENT_ID hoặc GOOGLE_CLIENT_SECRET.';
+    }
+    return json({ ok: false, ma, vi_sao: noi });
+  } catch (e) {
+    return json({ ok: false, vi_sao: 'Không gọi được Google: ' + (e.message || 'lỗi mạng') });
+  }
+}
+
+/* Chạy thử soạn kế hoạch — CHỈ ADMIN. Cron nuốt lỗi vào console mà console
+   thì không đọc được từ xa; đường này trả thẳng lý do ra trình duyệt. */
+async function vpThuKeHoach(req, env) {
+  const cua = await cuaChanDoan(req, env);
+  if (cua.loi) return cua.loi;
+  return json(await soanKeHoachChanDoan(env));
+}
+
+/* Bắn thử đường báo Telegram — CHỈ ADMIN. Thứ chỉ chạy mỗi ngày một lần mà
+   không thử được thì hỏng cũng phải mất một ngày mới lộ ra. */
+async function vpThuThongBao(req, env) {
+  const cua = await cuaChanDoan(req, env);
+  if (cua.loi) return cua.loi;
+  const so = await vanphong.nhacSepViecTreo(env, dayToiNguoi, true);
+  return json({ ok: so > 0, da_gui: so,
+    vi_sao: so > 0 ? null : 'Không gửi được. Thường là chưa ai bật thông báo trên điện thoại — vào ERP trên máy đó và cho phép nhận thông báo.' });
+}
+
+/* Kỹ năng đã dạy cho trợ lý ảo — xem lại và tắt bài dạy sai */
+async function vpKyNangDs(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  return vanphong.kyNangDs(env, phien);
+}
+
+async function vpKyNangDoi(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return vanphong.kyNangDoiTrangThai(env, phien, b);
+}
+
+/* Năng suất đội trợ lý ảo — tab phụ trong Văn phòng ảo */
+async function vpNangSuat(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  return vanphong.nangSuat(env, phien);
+}
+
+async function vpCoMat(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { b = {}; }
+  return vanphong.coMat(env, phien, b);
+}
+
+async function vpHoiThoai(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  return vanphong.hoiThoai(env, phien);
+}
+
+async function vpHoi(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return vanphong.hoi(env, phien, b);
+}
+
 /* ---- Bộ định tuyến ------------------------------------------------------ */
 
 const DUONG_DAN = {
   'POST /api/dang-nhap':     dangNhap,
+  'GET  /api/vao-thu':       vaoThuOMay,   // chỉ sống khi chạy ở máy — xem vaoThuOMay()
   'POST /api/dang-xuat':     dangXuat,
   'GET  /api/toi-la-ai':     toiLaAi,
   'POST /api/doi-mat-khau':  doiMatKhau,
@@ -7821,7 +8094,10 @@ const DUONG_DAN = {
   'POST /api/kho/nap-mo':           khoNapMo,
   'POST /api/kho/nap-xem':          khoNapXem,
   'POST /api/kho/nap-ghi':          khoNapGhi,
-  'GET /api/kho/nap-luot':          khoNapLuot,
+  /* HAI dấu cách sau GET: khoá bảng đường ghép bằng method.padEnd(4)
+     rồi mới tới dấu cách phân cách, nên 'GET' hoá 'GET '. Viết một dấu cách là
+     đường chết lặng — 404 chứ không phải 401, tìm mỏi mắt. */
+  'GET  /api/kho/nap-luot':          khoNapLuot,
   'POST /api/kho/nap-huy':          khoNapHuy,
   'POST /api/kho/nhap':          khoNhap,
   'POST /api/kho/xuat':          khoXuat,
@@ -7832,6 +8108,7 @@ const DUONG_DAN = {
   'GET  /api/dulieunen/phong-ban':      dlnDanhSachPhongBan,
   'POST /api/dulieunen/phong-ban/them': dlnThemPhongBan,
   'POST /api/dulieunen/phong-ban/sua':  dlnSuaPhongBan,
+  'POST /api/dulieunen/phong-ban/sap-xep': dlnSapXepPhongBan,
   'POST /api/dulieunen/phong-ban/khoa': dlnKhoaPhongBan,
   'POST /api/dulieunen/phong-ban/gan-truong-phong': dlnGanTruongPhong,
   'GET  /api/dulieunen/chuc-danh':      dlnDanhSachChucDanh,
@@ -7955,7 +8232,21 @@ const DUONG_DAN = {
   'GET  /api/tai-lieu/nhat-ky':  tlNhatKy,
   'GET  /api/tai-lieu/lich-su':  tlLichSu,
   'POST /api/tai-lieu/sua':      tlSua,
-  'POST /api/tai-lieu/an':       tlAn
+  'POST /api/tai-lieu/an':       tlAn,
+  /* ---- Văn phòng ảo: 9 trợ lý AI ---- */
+  'GET  /api/van-phong/tong-quan': vpTongQuan,
+  'GET  /api/van-phong/nang-suat': vpNangSuat,
+  'POST /api/van-phong/thu-thong-bao': vpThuThongBao,
+  /* Mở được bằng cách DÁN LINK vào trình duyệt: khi giao diện còn kẹt bản
+     JS cũ trong bộ nhớ đệm, đây là đường xem lý do hỏng không qua JavaScript. */
+  'GET  /api/van-phong/thu-thong-bao': vpThuThongBao,
+  'GET  /api/van-phong/thu-ke-hoach': vpThuKeHoach,
+  'GET  /api/van-phong/thu-google':   vpThuGoogle,
+  'GET  /api/van-phong/ky-nang':   vpKyNangDs,
+  'POST /api/van-phong/ky-nang':   vpKyNangDoi,
+  'POST /api/van-phong/co-mat':    vpCoMat,
+  'GET  /api/van-phong/hoi-thoai': vpHoiThoai,
+  'POST /api/van-phong/hoi':       vpHoi
 };
 
 export default {
@@ -7968,8 +8259,16 @@ export default {
     // token khi sắp hết hạn — nên Sếp không phải bấm tay, không phải nối lại.
     ctx.waitUntil((async () => {
       // --- MỖI 5 PHÚT (nhẹ, cần tươi cho luồng đơn hoàn) ---
-      try { await shopee.dongBoNen(env); } catch (e) { console.error('Cron Shopee:', e.message); }
-      try { await tiktok.dongBoNen(env); } catch (e) { console.error('Cron TikTok:', e.message); }
+      /* Lượt thường chỉ ghi đơn thật sự mới/đổi (batLoc). Mỗi ngày một lượt
+         ĐỐI SOÁT lúc 3h sáng giờ VN thì ghi đè tất, để vá trường hợp hi hữu
+         sàn đổi dữ liệu mà không đổi cả update_time lẫn trạng thái.
+         KHÔNG thêm lịch thứ hai vào wrangler.toml — chỉ là một điều kiện giờ
+         trên đúng cron 5 phút đang có. */
+      const _vnCron = new Date(Date.now() + 7 * 3600 * 1000);
+      const doiSoatNgay = _vnCron.getUTCHours() === 3 && _vnCron.getUTCMinutes() < 5;
+      const _dongBo = { batLoc: !doiSoatNgay };
+      try { await shopee.dongBoNen(env, _dongBo); } catch (e) { console.error('Cron Shopee:', e.message); }
+      try { await tiktok.dongBoNen(env, _dongBo); } catch (e) { console.error('Cron TikTok:', e.message); }
       try { await kiemTraCanhBaoHoan(env); } catch (e) { console.error('Cron cảnh báo:', e.message); }
       try { await kiemTraLyDoNghiemTrong(env); } catch (e) { console.error('Cron cảnh báo nghiêm trọng:', e.message); }
       try { await hoLyTuDongTriage(env); } catch (e) { console.error('Cron Hồ Ly triage:', e.message); }
@@ -7979,6 +8278,26 @@ export default {
          tin/loại/người/ngày. Truyền thẳng `guiThongBao` đang chạy vào để
          không sinh ra bản sao thứ hai của cơ chế gửi. */
       try { await quetNhacNhanSu(env, guiThongBao); } catch (e) { console.error('Cron nhắc nhân sự:', e.message); }
+      /* VĂN PHÒNG ẢO — đội trợ lý tự soi dữ liệu rồi đặt việc lên bàn người
+         phụ trách. ĐÚNG MỘT DÒNG thêm vào cron đã có, wrangler.toml KHÔNG đổi,
+         KHÔNG có lịch thứ hai. Hàm tự đóng cửa ngoài khung 8h sáng giờ VN nên
+         gọi mỗi 5 phút vẫn đúng 1 lượt/ngày. Phần này chạy bằng LUẬT SQL,
+         không gọi AI, không tốn tiền. */
+      try {
+        /* GIAI ĐOẠN GOLIVE DẦN — MẶC ĐỊNH TẮT (Sếp Ngọc chốt 06/09/2026).
+           Tab văn phòng ảo hiện chỉ Sếp thấy, nhưng cron thì không nhìn tab: nó
+           ghi thẳng đầu việc vào hàng việc của TẤT CẢ nhân sự. Nhân sự nhận việc
+           từ một hệ thống họ còn chưa biết là có, do máy tự đẻ ra, thì rất khó
+           gỡ — họ sẽ đi làm thật.
+           BẬT KHI SẴN SÀNG (không cần deploy):
+               npx wrangler secret put VP_NHAC_VIEC     → nhập 1
+           Bật thử một phòng trước thì sửa luật lọc trong vanphong.quetNhacViec. */
+        const _vp = new Date(Date.now() + 7 * 3600 * 1000);
+        if (env.VP_NHAC_VIEC === '1' && _vp.getUTCHours() === 8 && _vp.getUTCMinutes() < 5) {
+          const so = await vanphong.quetNhacViec(env);
+          if (so) console.log('Văn phòng ảo: đội trợ lý giao ' + so + ' việc mới');
+        }
+      } catch (e) { console.error('Cron văn phòng ảo:', e.message); }
       /* Nhắc việc Trạm Mục Tiêu (SPEC-0004) — ĐÚNG MỘT DÒNG thêm vào cron đã
          có, `wrangler.toml` KHÔNG đổi, không có lịch thứ hai. Hàm tự đóng cửa
          ngoài 8h–18h và Chủ nhật (ADR-0013 — thứ Bảy vẫn nhắc), tự gộp một
@@ -8014,6 +8333,23 @@ export default {
       // SLA cổng duyệt góp ý (SPEC-0002) — thêm 1 hàm vào chuỗi cron đã có,
       // KHÔNG tạo cron mới. Lỗi ở đây không được chặn các việc nền khác.
       try { await gopYNhacSla(env); } catch (e) { console.error('Cron SLA góp ý:', e.message); }
+      /* Văn phòng ảo tự cho phiếu RỦI RO THẤP đi tiếp — Sếp Ngọc chốt: việc
+         nhẹ thì nhân viên ảo tự làm, đừng bắt Sếp bấm từng cái. Phiếu rủi ro
+         trung bình/cao vẫn dừng chờ Sếp. */
+      /* Phiếu đã duyệt thì Trưởng phòng IT soạn sẵn kế hoạch thi công — khi
+         người bắt tay vào làm thì phần suy nghĩ đã xong. */
+      try { const k = await soanKeHoach(env);
+            if (k) console.log('TP IT soạn kế hoạch cho ' + k + ' phiếu'); }
+      catch (e) { console.error('Cron soạn kế hoạch:', e.message); }
+      try { const n = await tuDayViecNhe(env);
+            if (n) console.log('Văn phòng ảo tự đẩy ' + n + ' góp ý rủi ro thấp'); }
+      catch (e) { console.error('Cron tự đẩy góp ý:', e.message); }
+      /* Nhắc Sếp qua Telegram những việc đang chờ CHÍNH SẾP quyết — chủ yếu
+         là đề xuất máy đã phân tích xong mà chưa ai bấm áp dụng. Hàm tự đóng
+         cửa ngoài khung 8h sáng nên gọi mỗi 5 phút vẫn đúng 1 tin/ngày, và tự
+         im nếu chưa nạp khoá Telegram. */
+      try { await vanphong.nhacSepViecTreo(env, dayToiNguoi); }
+      catch (e) { console.error('Cron nhắc Sếp việc treo:', e.message); }
 
       // KHÔNG CÒN AI DUYỆT ĐƯỢC GÓP Ý — tự phát hiện, tối đa 1 tin/ngày.
       // Ca thật đã lường (REV-0030): khôi phục một bản sao lưu CSV chụp TRƯỚC

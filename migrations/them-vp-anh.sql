@@ -1,0 +1,15 @@
+-- ===========================================================================
+-- ẢNH ĐÍNH KÈM TRONG HỘI THOẠI VỚI MÂY
+-- ---------------------------------------------------------------------------
+-- Lưu thẳng vào cột dạng data URL đã nén, giống cách module Góp ý đang làm với
+-- ảnh chụp màn hình. Ảnh nhỏ (đã nén dưới ~300KB) thì để D1 gọn hơn hẳn so với
+-- dựng thêm R2 — mà R2 hiện còn CHƯA bật trên tài khoản này (xem wrangler.toml).
+--
+-- ⚠️ MÂY KHÔNG XEM ĐƯỢC ẢNH. Model đang chạy văn phòng ảo
+-- (@cf/meta/llama-3.3-70b-instruct-fp8-fast) chỉ đọc chữ. Ảnh lưu ở đây là để
+-- NGƯỜI xem lại và để đính kèm khi giao việc ra người thật — trợ lý được báo
+-- rõ "có ảnh nhưng tôi không xem được" chứ không đoán mò nội dung trong ảnh.
+-- Muốn trợ lý thật sự đọc được ảnh thì phải gọi thêm một model nhìn ảnh, và đó
+-- là quyết định riêng vì nó tốn thêm lượt gọi và đọc sai tiếng Việt khá nhiều.
+-- ===========================================================================
+ALTER TABLE vp_tin_nhan ADD COLUMN anh TEXT;

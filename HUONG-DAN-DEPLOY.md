@@ -43,6 +43,40 @@ Sau khi đã thiết lập 1 lần (xem mục "Thiết lập" bên dưới), quy
 
 ---
 
+## ⛔ TRƯỚC KHI DEPLOY TAY: KIỂM NHÁNH — nếu không sẽ XOÁ việc của người khác
+
+Worker `erp-agc` chỉ có **MỘT** bản chạy. `wrangler deploy` đẩy **nguyên trạng
+thái thư mục bạn đang đứng**, nó KHÔNG gộp gì cả. Máy này có nhiều worktree cùng
+một repo, mỗi worktree một nhánh — deploy từ nhánh chưa gộp là **xoá sạch** việc
+của nhánh khác trên bản thật.
+
+Ngày 08/09/2026 chuyện này đã xảy ra thật: nhánh văn phòng ảo chưa gộp lên main,
+một lượt deploy từ nhánh nạp-file đã xoá toàn bộ văn phòng ảo khỏi bản thật —
+`chibi.js` 404, `/api/van-phong/*` 404. Không ai biết cho tới khi Sếp mở ERP ở
+máy công ty và không thấy văn phòng ảo đâu.
+
+Vì vậy, trước MỌI lần deploy tay:
+
+```
+git fetch origin
+git log --oneline HEAD..origin/main     # PHẢI TRỐNG
+```
+
+Còn dòng nào in ra là nhánh bạn **thiếu** việc của người khác. Gộp trước rồi mới
+deploy:
+
+```
+git merge origin/main
+```
+
+Deploy xong, kiểm chéo bằng `curl` chính những đường của **CẢ HAI** mảng việc.
+Nhớ: **404 = bị ghi đè** (đường không tồn tại), **401 = sống, chỉ cần đăng nhập**.
+
+> Cách an toàn nhất vẫn là **Cách 1**: đẩy lên `main` rồi để GitHub tự deploy.
+> Một cửa duy nhất thì không ai đè lên ai.
+
+---
+
 ## Cách 2 — Thủ công (dự phòng, khi cần deploy từ máy có cài sẵn)
 
 Dùng khi Cách 1 chưa thiết lập, hoặc cần deploy gấp từ máy đã cấu hình. Người deploy cần **quyền vào tài khoản Cloudflare của công ty**.

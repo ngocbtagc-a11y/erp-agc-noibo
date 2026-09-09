@@ -75,3 +75,76 @@ export function locDoi(bang, cot, them = []) {
   if (!ve.length) throw new Error('locDoi: danh sách cột rỗng — sẽ KHÔNG BAO GIỜ ghi, mất cập nhật');
   return 'WHERE ' + ve.join('\n           OR ');
 }
+
+/* ==========================================================================
+   ĐỪNG GỬI CẢ LỆNH GHI KHI BIẾT CHẮC KHÔNG CÓ GÌ ĐỔI  (đo 06/09/2026)
+   --------------------------------------------------------------------------
+   `locDoi` ở trên đã chặn được việc GHI thừa — đó là vá đúng, và số liệu ghi
+   đã về mức lành. Nhưng nó chặn ở trong lòng câu lệnh: lệnh vẫn được gửi đi,
+   database vẫn phải tra khoá và đọc dòng cũ ra để so, rồi mới quyết định
+   không ghi. Phần ĐỌC đó vẫn bị tính tiền.
+
+   Đo bằng `wrangler d1 insights` (7 ngày tính tới 06/09/2026):
+       INSERT INTO don_hoan ... ON CONFLICT ...
+       chạy 201.015 lần · mỗi lần đọc 10 dòng · tổng 2.211.017 lượt đọc
+   Tức khoảng 28.700 lệnh mỗi ngày, trong khi số đơn hoàn THẬT SỰ đổi chỉ
+   khoảng 60 mỗi ngày (con số đo được ghi ở đầu file này). Hơn 99% số lệnh gửi
+   đi chỉ để nhận về câu trả lời "không có gì đổi".
+
+   VÌ SAO KHÔNG MÂU THUẪN VỚI ADR-0006. Phần đầu file này bác bỏ cách "SELECT
+   toàn bộ về rồi so ở JS", vì hồi đó mục tiêu là giảm GHI, mà làm vậy chỉ là
+   đổi lượt ghi lấy lượt đọc. Ở đây mục tiêu là giảm ĐỌC, và phép tính đảo
+   chiều: MỘT câu SELECT hai cột cho cả lô (đọc ~523 dòng, đi thẳng theo khoá
+   chính) rẻ hơn hẳn 523 lệnh INSERT mỗi lệnh đọc 10 dòng. Cùng một dữ liệu,
+   một lần đọc thay vì năm nghìn.
+
+   RANH GIỚI CỨNG VẪN GIỮ NGUYÊN — KHÔNG ĐƯỢC LÀM MẤT CẬP NHẬT:
+     · So bằng `cap_nhat_shopee` (update_time của sàn) VÀ `trang_thai`. Chỉ cần
+       một trong hai khác là ghi. Trạng thái nằm trong đó là có chủ ý: mốc đếm
+       12 giờ của Kho vận dựa vào `trang_thai = 'BUYER_SHIPPED_ITEM'`, nên đơn
+       đổi trạng thái luôn đi qua được bộ lọc này, không bao giờ bị giữ lại.
+     · Đơn CHƯA CÓ trong database thì luôn ghi.
+     · Đọc lỗi thì trả về "ghi tất" — hỏng bộ lọc phải nghiêng về phía ghi thừa,
+       tuyệt đối không nghiêng về phía bỏ sót.
+     · Người bấm nút "Đồng bộ" và lượt quét đối soát hằng ngày đều chạy với
+       batLoc = false, tức ghi đè tất, để vá mọi trường hợp hi hữu sàn đổi dữ
+       liệu mà không đổi cả update_time lẫn trạng thái.
+   ========================================================================== */
+
+/** D1 giới hạn số tham số mỗi câu lệnh; chia lô cho chắc, 200 là thừa an toàn. */
+const LO_HOI = 200;
+
+/**
+ * Lọc ra những đơn hoàn thật sự cần gửi lệnh ghi.
+ * @param {*} env
+ * @param {{rsn:string, up:string|null, st:string|null}[]} ds  danh sách đơn vừa lấy từ sàn
+ * @param {{batLoc?: boolean}} tuyChon  batLoc=false → ghi tất (nút bấm tay, quét đối soát)
+ * @returns {Promise<boolean[]>} mảng cùng thứ tự với ds: true = cần ghi
+ */
+export async function locDonHoanCanGhi(env, ds, { batLoc = true } = {}) {
+  if (!batLoc || !ds.length) return ds.map(() => true);
+
+  const dangCo = new Map();
+  try {
+    for (let i = 0; i < ds.length; i += LO_HOI) {
+      const lo = ds.slice(i, i + LO_HOI);
+      const cho = lo.map(() => '?').join(',');
+      const { results } = await env.DB.prepare(
+        `SELECT return_sn, cap_nhat_shopee, trang_thai
+           FROM don_hoan WHERE return_sn IN (${cho})`
+      ).bind(...lo.map(d => d.rsn)).all();
+      for (const r of results || []) dangCo.set(String(r.return_sn), r);
+    }
+  } catch (e) {
+    // Hỏng bộ lọc thì ghi tất — thà tốn thêm một lượt còn hơn nuốt mất cập nhật.
+    console.error('locDonHoanCanGhi: đọc lỗi, ghi tất cho chắc:', e.message);
+    return ds.map(() => true);
+  }
+
+  const nhu = v => (v === null || v === undefined ? '' : String(v));
+  return ds.map(d => {
+    const cu = dangCo.get(d.rsn);
+    if (!cu) return true;
+    return nhu(cu.cap_nhat_shopee) !== nhu(d.up) || nhu(cu.trang_thai) !== nhu(d.st);
+  });
+}

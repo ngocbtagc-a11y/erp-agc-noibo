@@ -18,7 +18,7 @@
    (enforced ở src/index.js, không phải ở đây — tab mở nghĩa là "vào được
    trang", còn dữ liệu bên trong lọc theo laAdmin() để phân Employee/
    Reviewer, xem nsTrangThaiHD-style pattern). */
-export const TAB = ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'nhansu', 'kinhdoanh', 'khovan', 'donhoan', 'ketoan', 'dulieunen', 'quantri', 'taisan', 'xepca', 'khotailieu', 'gopy'];
+export const TAB = ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'nhansu', 'kinhdoanh', 'khovan', 'donhoan', 'ketoan', 'dulieunen', 'quantri', 'taisan', 'xepca', 'khotailieu', 'gopy', 'vanphong'];
 
 /* Vai trò → được xem mảng nào và làm được gì.
    Danh bạ VÀ Chat nội bộ mở cho tất cả (Sếp Ngọc yêu cầu: ai cũng tra được
@@ -29,12 +29,48 @@ export const TAB = ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'nha
    - them_nhan_su : thêm nhân sự vào hồ sơ (KHÔNG đụng tới lương, KHÔNG cấp
                     được tài khoản). HCNS có mức này.
    - xem_luong    : xem cột lương. HCNS KHÔNG có — đây là ranh giới cứng. */
+/* ---------------------------------------------------------------------------
+   VĂN PHÒNG ẢO ('vanphong') — GIAI ĐOẠN 1: CHỈ ADMIN
+   ---------------------------------------------------------------------------
+   Sếp Ngọc chốt 06/09/2026: golive dần. Vòng đầu chỉ Sếp thấy tab này.
+
+   ĐÂY LÀ CÓ CHỦ Ý, KHÔNG PHẢI SÓT. Mây trả lời bằng AI dựa trên dữ liệu ERP
+   thật; nếu nó hiểu sai câu hỏi hoặc đọc nhầm số thì nhân sự có thể hành động
+   theo trước khi ai kịp phát hiện. Cho Sếp chạy thật vài ngày, đối chiếu câu
+   trả lời với số trên dashboard, rồi mới mở rộng.
+
+   MỞ RỘNG THẾ NÀO: thêm chuỗi 'vanphong' vào mảng tab của vai trò cần mở.
+   Danh sách vai trò từng được mở trong bản nháp: admin_backup, ke_toan_truong,
+   van_hanh_san, cskh, quan_ly_kho, nhan_vien_kho, hcns, nguoi_dung, nv_test.
+   Mở theo thứ tự nào là quyết định của Sếp, không phải mở lại hết một lượt.
+   --------------------------------------------------------------------------- */
+/* ---------------------------------------------------------------------------
+   GÓP Ý ERP ('gopy') — SẼ RÚT KHỎI MENU, NHƯNG CHƯA PHẢI BÂY GIỜ
+   ---------------------------------------------------------------------------
+   Sếp Ngọc 06/09/2026: "bỏ phần góp ý ERP, người dùng có góp ý thì vào văn
+   phòng ảo nói với Mây."
+
+   Đường mới ĐÃ DỰNG XONG và chạy được (xem src/vp-gopy.js + nhánh GOP_Y_ERP
+   trong src/vp-may.js): người dùng nói với Mây → Mây phân loại → chuyển Trưởng
+   phòng IT → Tuấn bóc câu nói thành phiếu đủ bốn phần → phiếu vào bảng gop_y ở
+   trạng thái 'moi' → từ đó chạy đúng quy trình cũ: Hồ Ly phân tích, Khỉ Đột dựng.
+
+   NHƯNG TAB CŨ VẪN Ở LẠI, có lý do:
+   Văn phòng ảo đang chỉ mở cho vai trò `admin` (giai đoạn golive dần — xem ghi
+   chú ở tab 'vanphong'). Rút tab Góp ý ngay bây giờ thì 13 người còn lại vừa
+   mất tab cũ, vừa chưa vào được chỗ nói với Mây — tức là KHÔNG CÒN ĐƯỜNG NÀO
+   báo lỗi ERP. Sếp Ngọc chốt giữ lại, chạy thử đường Mây vài ngày trước.
+
+   RÚT KHI NÀO: sau khi 'vanphong' được mở cho các vai trò khác. Lúc đó xoá
+   'gopy' khỏi mảng tab của từng vai trò, giữ lại cho admin để còn nhìn hàng đợi.
+   Làm ngược thứ tự là để cả công ty câm trong mấy ngày.
+   --------------------------------------------------------------------------- */
 const QUYEN_THEO_VAI_TRO = {
   // ---- Vai trò HỆ THỐNG (nhomVaiTro='he_thong') — Sếp chốt 23/08/2026 ----
   // Admin = toàn quyền (gộp Giám đốc + Phó Giám đốc + Admin hệ thống cũ
   // thành 1 vai trò hệ thống duy nhất — chức danh thật của người đó vẫn ở
   // hồ sơ nhân sự (chuc_vu), KHÔNG còn gắn cứng vào vai trò đăng nhập).
-  admin:           { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'nhansu', 'kinhdoanh', 'khovan', 'donhoan', 'ketoan', 'dulieunen', 'quantri', 'taisan', 'xepca', 'khotailieu', 'gopy'], xem_luong: true,  admin: true,  them_nhan_su: true  },
+  admin:           { tab: ['tongquan', 'danhba', 'chat', 'congviec', 'lichsuviec', 'nhansu', 'kinhdoanh', 'khovan', 'donhoan', 'ketoan', 'dulieunen', 'quantri', 'taisan', 'xepca', 'khotailieu', 'gopy', 'vanphong'], xem_luong: true,  admin: true,  them_nhan_su: true  },
   // Admin backup = "quyền tạo tài khoản, phân quyền" — KHÔNG phải toàn
   // quyền Admin (không unlock dữ liệu khoá, không khoá/xoá tài khoản người
   // khác, không xem lương). Dùng khi Admin vắng mặt cần người tạo gấp tài

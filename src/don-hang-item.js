@@ -129,7 +129,7 @@ export async function coBangDong(env) {
    không cần đối chiếu tổng nữa. Thứ đáng đếm là DÒNG KHÔNG CÓ SKU: dòng đó biến
    mất khỏi bảng xếp hạng, nên phải báo ra để người ta còn đi gắn mã trên sàn.
    -------------------------------------------------------------------------- */
-export async function tachBu(env, gioiHan = 200) {
+export async function tachBu(env, gioiHan = 200, { dem = false } = {}) {
   const { results } = await env.DB.prepare(`
     SELECT order_sn, nguon, tong_tien, tao_luc_san, du_lieu_json
       FROM don_hang
@@ -156,11 +156,29 @@ export async function tachBu(env, gioiHan = 200) {
   }
   if (lenh.length) await env.DB.batch(lenh);
 
-  const conLai = await env.DB.prepare('SELECT COUNT(*) AS n FROM don_hang WHERE da_tach_dong = 0').first();
+  const daXuLy = (results || []).length;
+
+  /* Còn việc nữa hay không thì KHÔNG cần hỏi database: lô này lấy được ít hơn
+     mức xin, nghĩa là đã vét sạch. Đây là chỗ trước đây đốt hạn mức nặng nhất
+     — câu COUNT(*) chạy sau MỖI lô, mỗi lần đếm lại cả bảng 24.089 dòng, 196
+     lô là 4,7 triệu lượt đọc chỉ để hiện một con số lên màn hình. */
+  const conNua = daXuLy === gioiHan;
+
+  /* Chỉ đếm khi người gọi thật sự cần con số (giao diện chỉ xin ở lô ĐẦU để
+     biết tổng việc, rồi tự trừ dần). Đã vét sạch thì khỏi đếm, chắc chắn là 0. */
+  let conLai = conNua ? null : 0;
+  if (conNua && dem) {
+    const d = await env.DB.prepare(
+      'SELECT COUNT(*) AS n FROM don_hang WHERE da_tach_dong = 0'
+    ).first();
+    conLai = (d && d.n) || 0;
+  }
+
   return {
-    da_xu_ly: (results || []).length, so_dong: soDong,
+    da_xu_ly: daXuLy, so_dong: soDong,
     thieu_sku: thieuSku, khong_doc_duoc: khongDoc, khong_co_dong: khongCoDong,
-    con_lai: (conLai && conLai.n) || 0
+    con_nua: conNua,      // dùng cái này để quyết định gọi lô tiếp
+    con_lai: conLai       // null = chưa đếm (còn việc, nhưng không hỏi cho đỡ tốn)
   };
 }
 

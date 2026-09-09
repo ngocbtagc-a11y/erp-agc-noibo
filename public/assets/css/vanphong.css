@@ -1,0 +1,1320 @@
+/* ==========================================================================
+   VĂN PHÒNG ẢO — mặt bằng, chibi và phòng trò chuyện
+   ---------------------------------------------------------------------------
+   Để riêng khỏi style.css vì đây là một module lớn và đứng độc lập: gỡ tab
+   Văn phòng ảo ra khỏi hệ thống thì bỏ đúng một file, không phải đi dò xem
+   dòng nào của bảng màu chung còn ai dùng.
+
+   Bảng màu và bo góc vẫn lấy từ biến của style.css (--sage, --r-md...), nên
+   sau này đổi tông màu công ty thì văn phòng ảo tự đổi theo.
+
+   Mặt bằng vẽ bằng CSS thuần, không dùng ảnh nền nào: sàn là ba lớp gradient
+   chồng nhau, mỗi phòng là một nút đặt theo toạ độ phần trăm do máy chủ quy
+   định (src/agents.js). Muốn kê lại bàn ghế trong văn phòng thì sửa hai con
+   số toạ độ, không phải mở phần mềm vẽ.
+   ========================================================================== */
+
+.vp-nhac {
+  display: flex;
+  gap: 10px;
+  font-size: 13px;
+  line-height: 1.55;
+  background: var(--warn-wash);
+  border: 1px solid #e8d5b0;
+  border-radius: var(--r-md);
+  padding: 13px 16px;
+  margin-bottom: 18px;
+}
+.vp-nhac b { color: #6d5325; }
+
+.vp-bo-cuc {
+  display: grid;
+  /* Ba cột: mặt bằng · thanh kéo · chat. Bề ngang cột chat nằm trong một biến
+     để thanh kéo đổi được ngay bằng JS, và nhớ theo máy — mỗi người một màn
+     hình, một thói quen; ép chung một con số thì ai cũng thấy hơi sai. */
+  grid-template-columns: minmax(0, 1fr) 7px var(--vp-chat-rong, 300px);
+  gap: 18px;
+  align-items: start;
+}
+
+/* ---- Mặt bằng ----------------------------------------------------------- */
+
+.vp-san {
+  position: relative;
+  /* Ba hàng buồng làm việc phải nằm gọn trong sàn. Thẻ cao ~150px, ba hàng
+     cộng khoảng hở cần tối thiểu ~545px — sàn thấp hơn thì hàng dưới leo lên
+     đè hàng giữa (đã dính đúng lỗi đó lúc dựng, đo ra chồng 38px). */
+  /* Bốn hàng: Điều hành 13% · Trưởng phòng 38% và 63% · quầy lễ tân 88%.
+     Thẻ cao 163px nên bốn hàng cộng khoảng hở cần tối thiểu ~684px. */
+  /* Bốn hàng thẻ ~115px + khoảng hở. Trước để 820px vì thẻ cao 163px; thu nhỏ
+     thẻ rồi mà giữ 820 là chừa một khoảng trống vô ích, bắt người dùng cuộn
+     xuống mới thấy ô chat. */
+  /* TRẦN chiều cao là thứ quan trọng nhất ở đây. Chỉ đặt aspect-ratio thì màn
+     hình càng rộng sàn càng cao — đo ra 800px trên cửa sổ 985px, và người dùng
+     lại phải cuộn. Trần 660px giữ cả mặt bằng lẫn ô chat trong một màn. */
+  /* KHÔNG dùng aspect-ratio kèm trần chiều cao. Đặt cả hai thì trình duyệt
+     rút BỀ NGANG lại cho khớp tỉ lệ — sàn chỉ rộng 812px trong khi cột trái
+     rộng 1400px, chừa một mảng trắng to đùng bên phải. Ghim thẳng chiều cao,
+     bề ngang cứ để nó ăn hết cột. */
+  height: 660px;
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-sm);
+  background: var(--sage-wash);
+}
+
+/* Sàn nhà: vạch kẻ mờ gợi cảm giác lát gạch. Cố ý để rất nhạt — sàn mà nổi
+   hơn nhân vật thì mắt không biết nhìn vào đâu. */
+.vp-san-nen {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, #f4f6ef 0%, #e7ecdd 55%, #dfe6d2 100%),
+    repeating-linear-gradient(90deg, rgba(63,77,51,.05) 0 1px, transparent 1px 76px),
+    repeating-linear-gradient(0deg, rgba(63,77,51,.05) 0 1px, transparent 1px 76px);
+}
+
+.vp-phong-lop { position: absolute; inset: 0; }
+
+.vp-phong {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: grid;
+  justify-items: center;
+  gap: 7px;
+  padding: 0;
+  background: none;
+  border: none;
+  transition: transform .18s ease;
+}
+.vp-phong:hover { transform: translate(-50%, -53%); }
+.vp-phong:active { transform: translate(-50%, -50%); }
+
+/* Buồng làm việc: bo tròn phía trên, chân đậm hơn để có cảm giác đứng trên sàn */
+.vp-phong-khung {
+  position: relative;
+  width: 96px;
+  min-height: 70px;
+  display: grid;
+  align-items: end;
+  justify-items: center;
+  padding: 8px 6px 6px;
+  border-radius: 16px 16px 10px 10px;
+  background: linear-gradient(180deg, var(--card) 0%, #f7f7f4 100%);
+  border: 1px solid var(--line);
+  border-bottom: 3px solid var(--sage-pale);
+  box-shadow: var(--shadow-md);
+}
+
+/* Phòng không có quyền vào: vẫn thấy cửa, nhưng xám và không bấm được. Giấu
+   hẳn đi thì người ta tưởng hệ thống thiếu chức năng, còn để mờ thì hiểu ngay
+   là có phòng đó mà mình không phận sự. */
+.vp-phong.khoa { cursor: not-allowed; }
+.vp-phong.khoa .vp-phong-khung { opacity: .5; filter: grayscale(.6); }
+.vp-phong.khoa:hover { transform: translate(-50%, -50%); }
+
+.vp-phong-nguoi { width: 46px; }
+.vp-phong-nguoi .chibi { width: 100%; height: auto; display: block; }
+
+/* Đồng nghiệp đang đứng trong phòng, xếp chồng nhau ở góc như ảnh nhóm */
+.vp-phong-khach {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  display: flex;
+}
+.vp-phong-khach .vp-tihon { margin-left: -10px; }
+
+.vp-tihon { width: 30px; display: inline-block; vertical-align: middle; }
+.vp-tihon .chibi { width: 100%; height: auto; display: block; }
+
+/* Huy hiệu số việc trợ lý đang giao mà chưa ai làm xong */
+.vp-huyhieu {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 7px;
+  border-radius: var(--r-pill);
+  background: var(--danger);
+  color: var(--white);
+  font-size: 12px;
+  font-weight: 600;
+  display: grid;
+  place-items: center;
+  box-shadow: var(--shadow-sm);
+}
+
+/* Biển tên treo trước cửa phòng */
+/* Biển tên phải CAO BẰNG NHAU ở mọi phòng. Chức danh dài ngắn khác nhau —
+   "Trưởng phòng IT" một dòng, "Trưởng phòng Kế toán - Tài chính" hai dòng —
+   nên nếu thả tự do thì thẻ cao 154px chỗ này, 192px chỗ kia, và mặt bằng đặt
+   theo phần trăm sẽ chỗ hở chỗ chồng tuỳ chức danh. Đã dính đúng lỗi đó.
+   Ghim đúng hai dòng: ngắn thì thừa chỗ, dài thì cắt bằng ba chấm. */
+.vp-bien {
+  text-align: center;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  padding: 3px 9px;
+  box-shadow: var(--shadow-sm);
+  width: 108px;
+  max-width: 108px;
+  box-sizing: border-box;
+}
+.vp-bien span {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 9.5px;
+  line-height: 1.25;
+  min-height: 24px;
+}
+.vp-bien b {
+  display: block;
+  font-family: var(--serif);
+  font-size: 12px;
+  color: var(--ink);
+  line-height: 1.2;
+}
+.vp-bien span { font-size: 11px; color: var(--text-mute); }
+
+/* Hành lang giữa: chỗ đứng của người đang mở tab mà chưa vào phòng nào.
+   Đặt ở giữa hai dãy phòng đúng như hành lang văn phòng thật, và cũng vì đó
+   là dải trống duy nhất không đè lên phòng nào. */
+.vp-sanh {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(72%, 540px);
+  min-height: 48px;
+  border-radius: var(--r-md);
+  background: rgba(255,255,255,.62);
+  border: 1px dashed var(--sage-pale);
+  display: grid;
+  place-items: center;
+  gap: 2px;
+  padding: 8px;
+}
+.vp-sanh-nhan {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--text-mute);
+}
+.vp-sanh-nguoi { display: flex; flex-wrap: wrap; justify-content: center; gap: 2px; }
+.vp-sanh-nguoi .vp-tihon { width: 38px; }
+
+/* ---- Cột phải ----------------------------------------------------------- */
+
+.vp-ben { display: grid; gap: 16px; }
+
+.vp-viec-ds { display: grid; gap: 12px; }
+
+.vp-viec {
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--sage-pale);
+  border-radius: var(--r-sm);
+  padding: 12px 13px;
+  background: var(--surface);
+}
+.vp-viec.dang-lam { border-left-color: var(--sage-dark); background: var(--sage-wash); }
+
+.vp-viec-dau { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.vp-viec-tu { font-size: 11.5px; color: var(--text-mute); }
+.vp-viec-ten { font-size: 14px; color: var(--ink); font-weight: 500; line-height: 1.4; }
+.vp-viec-mo-ta { font-size: 12.5px; color: var(--text); margin-top: 4px; line-height: 1.5; }
+.vp-viec-nut { display: flex; gap: 7px; margin-top: 10px; flex-wrap: wrap; }
+
+.vp-comat { display: grid; gap: 11px; }
+.vp-comat-dong { display: flex; align-items: center; gap: 10px; }
+.vp-comat-dong .nm { font-size: 13.5px; color: var(--ink); }
+.vp-comat-dong .sm { font-size: 11.5px; color: var(--text-mute); }
+
+/* ==========================================================================
+   PHÒNG TRÒ CHUYỆN
+   ========================================================================== */
+
+.vp-phong-modal {
+  max-width: 620px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  max-height: min(86vh, 760px);
+}
+
+.vp-phong-dau {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--line);
+}
+.vp-phong-chibi { width: 52px; flex: none; }
+.vp-phong-chibi .chibi { width: 100%; height: auto; display: block; }
+.vp-phong-ten { flex: 1; min-width: 0; }
+.vp-phong-ten h4 { margin-bottom: 1px; font-size: 19px; }
+.vp-phong-ten p { font-size: 12.5px; color: var(--text-mute); }
+
+.vp-dong {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--text-mute);
+  flex: none;
+}
+.vp-dong:hover { background: var(--surface-2); color: var(--ink); }
+
+.vp-chat {
+  flex: 1;
+  overflow-y: auto;
+  padding: 18px;
+  display: grid;
+  gap: 12px;
+  align-content: start;
+  min-height: 220px;
+  background: var(--surface);
+}
+
+.vp-tin { display: grid; gap: 4px; max-width: 88%; }
+.vp-tin.nguoi { justify-self: end; justify-items: end; }
+.vp-tin.agent { justify-self: start; }
+
+.vp-tin-noi {
+  padding: 10px 14px;
+  border-radius: 16px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.vp-tin.nguoi .vp-tin-noi {
+  background: var(--sage);
+  color: var(--white);
+  border-bottom-right-radius: 5px;
+}
+.vp-tin.agent .vp-tin-noi {
+  background: var(--card);
+  border: 1px solid var(--line);
+  color: var(--text);
+  border-bottom-left-radius: 5px;
+}
+
+/* Dòng "đã tra" — chỗ này quan trọng hơn vẻ ngoài của nó: nó cho người đọc
+   biết câu trả lời dựa trên dữ liệu nào, thay vì phải tin suông vào máy. */
+.vp-datra {
+  font-size: 11px;
+  color: var(--text-mute);
+  padding-left: 4px;
+}
+
+.vp-chao {
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-mute);
+  padding: 26px 16px;
+  line-height: 1.6;
+}
+.vp-chao b { color: var(--ink); font-family: var(--serif); font-size: 16px; }
+.vp-chao span { display: block; margin-top: 3px; }
+
+.vp-dangtai, .vp-loi { font-size: 13px; color: var(--text-mute); padding: 20px; text-align: center; }
+.vp-loi { color: var(--danger); }
+.vp-tin .vp-loi { text-align: left; padding: 10px 14px; }
+
+/* Ba chấm khi trợ lý đang tra cứu */
+.vp-cham {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 4px;
+  border-radius: 50%;
+  background: var(--sage);
+  animation: vpNhay 1.1s infinite;
+}
+.vp-cham:nth-child(2) { animation-delay: .2s; }
+.vp-cham:nth-child(3) { animation-delay: .4s; margin-right: 0; }
+
+@keyframes vpNhay {
+  0%, 60%, 100% { opacity: .28; transform: translateY(0); }
+  30%           { opacity: 1;   transform: translateY(-3px); }
+}
+
+/* Người ngại máy móc thường không biết mở lời thế nào — mấy câu mồi này để
+   họ bấm một cái là có ngay câu trả lời có ích, rồi tự khắc hỏi tiếp. */
+.vp-goi-y { display: flex; flex-wrap: wrap; gap: 7px; padding: 0 18px; }
+.vp-goi-y:empty { display: none; }
+
+.vp-chip {
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  background: var(--sage-wash);
+  border: 1px solid var(--sage-pale);
+  border-radius: var(--r-pill);
+  padding: 6px 13px;
+}
+.vp-chip:hover { background: var(--sage-pale); }
+
+.vp-nhap {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+  padding: 14px 18px 18px;
+  border-top: 1px solid var(--line);
+}
+.vp-nhap textarea {
+  flex: 1;
+  resize: none;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 10px 13px;
+  background: var(--surface);
+  line-height: 1.5;
+  max-height: 120px;
+}
+.vp-nhap textarea:focus { outline: none; border-color: var(--sage); background: var(--card); }
+.vp-nhap .btn-nho { flex: none; }
+
+/* Người dùng đặt máy ở chế độ giảm chuyển động thì tắt hết nhấp nháy */
+@media (prefers-reduced-motion: reduce) {
+  .vp-phong, .vp-cham { transition: none; animation: none; }
+  .chibi-nghi animate { display: none; }
+}
+
+/* ---- Màn hình hẹp -------------------------------------------------------
+   Kho và Vận hành sàn dùng ERP này trên điện thoại, nên mặt bằng phải co lại
+   được mà vẫn bấm trúng cửa phòng. */
+
+/* Ngưỡng 900px chứ không 980: ở 980 thì cửa sổ cỡ vừa đã bị xếp một cột, đẩy ô
+   chat xuống dưới mặt bằng và bắt cuộn. */
+@media (max-width: 900px) {
+  .vp-bo-cuc { grid-template-columns: 1fr; }
+  /* 520px chứ không phải 430: ba hàng thẻ ở khổ này cao ~135px, cộng khoảng
+     hở thì hàng dưới cùng tràn khỏi sàn nếu thấp hơn. */
+  .vp-san { height: 620px; }
+  .vp-phong-khung { width: 92px; min-height: 66px; }
+  .vp-phong-nguoi { width: 44px; }
+  .vp-bien { max-width: 132px; padding: 4px 10px; }
+  .vp-bien b { font-size: 12px; }
+  .vp-bien span { font-size: 10px; }
+}
+
+/* Trên điện thoại, mặt bằng bị bóp còn hơn 340px thì năm cái phòng chen nhau
+   và ngón tay bấm trượt. Nên ở khổ này bỏ hẳn lối đặt theo toạ độ, xếp các
+   phòng thành lưới hai cột — mất cảm giác nhìn từ trên xuống, nhưng đổi lại
+   bấm trúng ngay lần đầu. Kho và Vận hành sàn dùng ERP này bằng điện thoại
+   giữa lúc đang làm việc, bấm trúng quan trọng hơn đẹp. */
+@media (max-width: 620px) {
+  .vp-san {
+    aspect-ratio: auto;
+    min-height: 0;
+    padding: 16px;
+  }
+  .vp-phong-lop {
+    position: relative;
+    inset: auto;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px 12px;
+    justify-items: center;
+  }
+  .vp-phong {
+    position: static;
+    transform: none;
+    width: 100%;
+  }
+  .vp-phong:hover, .vp-phong:active { transform: none; }
+  .vp-phong-khung { width: 100%; min-height: 96px; padding: 10px 6px 7px; }
+  .vp-phong-nguoi { width: 58px; }
+  .vp-bien { max-width: 100%; padding: 4px 10px; }
+  .vp-bien b { font-size: 12px; }
+
+  .vp-sanh {
+    position: relative;
+    inset: auto;
+    transform: none;
+    width: 100%;
+    margin-top: 16px;
+  }
+
+  .vp-tin { max-width: 94%; }
+  .vp-phong-modal { max-height: 92vh; }
+}
+
+/* ---------------------------------------------------------------------------
+   BIÊN BẢN HỌP — gấp lại mặc định
+   Người hỏi cần câu trả lời, không cần đọc lại ba vòng tranh luận. Nhưng khi
+   họ nghi ngờ kết luận thì phải mở ra xem được vì sao lại chốt như vậy: phòng
+   nào đề xuất, phòng nào phản đối, chỗ nào bị sửa. Đó là khác biệt giữa tin
+   và tin suông.
+   --------------------------------------------------------------------------- */
+.vp-bienban {
+  margin: 6px 0 2px 4px;
+  font-size: 12px;
+  border-left: 2px solid var(--line);
+  padding-left: 10px;
+}
+.vp-bienban > summary {
+  cursor: pointer;
+  color: var(--text-mute);
+  font-size: 11px;
+  list-style: none;
+  user-select: none;
+}
+.vp-bienban > summary::-webkit-details-marker { display: none; }
+.vp-bienban > summary::before { content: '▸ '; }
+.vp-bienban[open] > summary::before { content: '▾ '; }
+.vp-bienban > summary:hover { color: var(--ink); }
+
+.vp-bb-luot { margin-top: 9px; }
+.vp-bb-ai {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-mute);
+  margin-bottom: 2px;
+}
+.vp-bb-noi { color: var(--text); line-height: 1.55; }
+
+/* ---------------------------------------------------------------------------
+   NỘI THẤT — lớp nền
+   Nằm giữa sàn nhà và các buồng làm việc: thấy được, nhưng không bao giờ che
+   mặt nhân vật. Làm mờ nhẹ để mắt vẫn biết đâu là đồ đạc, đâu là người.
+   --------------------------------------------------------------------------- */
+.vp-do-lop { position: absolute; inset: 0; pointer-events: none; }
+
+.vp-do {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  opacity: .82;
+}
+.vp-do svg { width: 100%; height: auto; display: block; }
+
+/* ---------------------------------------------------------------------------
+   QUẦY LỄ TÂN CỦA MÂY
+   ---------------------------------------------------------------------------
+   Trước đây khối này có markup mà KHÔNG có một dòng CSS nào — Mây vẫn được vẽ
+   ra nhưng trôi về góc sàn, không ai nhìn thấy. Đúng nghĩa là lối vào duy nhất
+   của cả văn phòng mà lại vô hình.
+
+   Mây phải trông khác chín trưởng phòng: to hơn một chút, có quầy đứng, có
+   biển "LỄ TÂN". Nhìn một cái là biết vào đây thì hỏi ai.
+   --------------------------------------------------------------------------- */
+.vp-quay {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 140px;
+  z-index: 3;
+}
+
+.vp-may {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+}
+
+/* Người đứng sau quầy: chibi nằm dưới, quầy vẽ đè lên nửa thân dưới */
+.vp-may-nguoi {
+  width: 52px;
+  margin-bottom: -24px;
+  position: relative;
+  z-index: 1;
+  transition: transform .18s ease;
+}
+.vp-may-nguoi .chibi { width: 100%; height: auto; display: block; }
+
+.vp-quay-ban {
+  width: 100%;
+  height: auto;
+  display: block;
+  position: relative;
+  z-index: 2;
+  filter: drop-shadow(0 3px 6px rgba(63, 77, 51, .18));
+}
+
+.vp-may:hover .vp-may-nguoi { transform: translateY(-4px); }
+
+.vp-bien-may {
+  margin-top: 5px;
+  width: 124px;
+  max-width: 124px;
+  border-color: var(--sage-pale);
+  background: linear-gradient(180deg, var(--card) 0%, #f4f6ef 100%);
+}
+.vp-bien-may b { font-size: 13px; }
+
+/* Khổ hẹp: quầy co lại cho vừa, vẫn giữ dáng quầy */
+@media (max-width: 980px) {
+  .vp-quay { width: 156px; }
+  .vp-may-nguoi { width: 64px; margin-bottom: -28px; }
+  .vp-bien-may { width: 130px; max-width: 130px; }
+}
+
+/* Điện thoại: mặt bằng đã chuyển sang lưới hai cột, quầy trả về dòng chảy
+   bình thường và nằm trên cùng — Mây là chỗ hỏi, phải thấy trước tiên. */
+@media (max-width: 620px) {
+  .vp-quay {
+    position: static;
+    transform: none;
+    width: 100%;
+    max-width: 260px;
+    margin: 0 auto 18px;
+  }
+  .vp-do-lop { display: none; }
+}
+
+/* ---------------------------------------------------------------------------
+   KHU VỰC — vách mềm
+   Viền đứt chứ không phải nét liền: nét liền đọc ra là "ô bảng tính", nét đứt
+   đọc ra là "ranh giới khu vực". Nằm dưới cùng, dưới cả nội thất.
+   --------------------------------------------------------------------------- */
+.vp-khu-lop { position: absolute; inset: 0; pointer-events: none; }
+
+.vp-khu {
+  position: absolute;
+  border: 1.5px dashed;
+  border-radius: 14px;
+}
+.vp-khu-ten {
+  position: absolute;
+  /* Ngồi HẲN TRÊN đường viền khu, như cái tai của bìa hồ sơ. Để nhãn nằm bên
+     trong khu thì nó luôn dính vào bóng đổ của hàng thẻ phía trên — đo ra thì
+     không chồng, nhưng nhìn vẫn bị lem. Khe giữa hai khu là 3%, đủ chỗ. */
+  top: -9px;
+  left: 13px;
+  font-size: 10.5px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--text-mute);
+  background: #f2f4ec;
+  padding: 1px 8px;
+  border-radius: var(--r-pill);
+}
+
+@media (max-width: 620px) {
+  .vp-khu-lop { display: none; }
+}
+
+/* ---------------------------------------------------------------------------
+   MÀU THEO KHỐI
+   ---------------------------------------------------------------------------
+   Một bảng màu duy nhất, dùng chung cho vách khu và cho thẻ nhân sự đứng trong
+   khu đó. Khai hai chỗ thì sớm muộn cũng lệch nhau, rồi ai đó sửa một bên và
+   mặt bằng thành nửa nọ nửa kia.
+
+   Bốn khối + sảnh lễ tân. Giữ tông trầm của ERP: đủ khác nhau để nhận ra từ xa,
+   không sặc sỡ tới mức lấn mất nhân vật.
+   --------------------------------------------------------------------------- */
+.vp-san {
+  --k-dieuhanh:  #8c7ba0;
+  --k-kinhdoanh: #c07a5a;
+  --k-vanhanh:   #6b7f9e;
+  --k-hotro:     #7d8f68;
+  --k-letan:     #b8863b;
+}
+
+.vp-khu[data-khoi="dieuhanh"]  { --k: var(--k-dieuhanh); }
+.vp-khu[data-khoi="kinhdoanh"] { --k: var(--k-kinhdoanh); }
+.vp-khu[data-khoi="vanhanh"]   { --k: var(--k-vanhanh); }
+.vp-khu[data-khoi="hotro"]     { --k: var(--k-hotro); }
+.vp-khu[data-khoi="letan"]     { --k: var(--k-letan); }
+
+.vp-khu {
+  border-color: color-mix(in srgb, var(--k) 38%, transparent);
+  background: color-mix(in srgb, var(--k) 8%, transparent);
+}
+.vp-khu-ten { color: color-mix(in srgb, var(--k) 72%, #3f4d33); }
+
+/* Thẻ nhân sự: viền trái dày theo màu khối + chân thẻ cùng tông. Chỉ tô viền
+   chứ không tô nền — tô nền thì bốn màu đánh nhau, mặt bằng thành cái cầu vồng
+   và mắt không còn biết nhìn vào đâu. */
+.vp-phong[data-khoi="dieuhanh"]  { --k: var(--k-dieuhanh); }
+.vp-phong[data-khoi="kinhdoanh"] { --k: var(--k-kinhdoanh); }
+.vp-phong[data-khoi="vanhanh"]   { --k: var(--k-vanhanh); }
+.vp-phong[data-khoi="hotro"]     { --k: var(--k-hotro); }
+
+.vp-phong[data-khoi] .vp-phong-khung {
+  border-bottom-color: color-mix(in srgb, var(--k) 62%, transparent);
+  border-left: 3px solid color-mix(in srgb, var(--k) 52%, transparent);
+}
+.vp-phong[data-khoi] .vp-bien {
+  border-color: color-mix(in srgb, var(--k) 34%, var(--line));
+}
+.vp-phong[data-khoi] .vp-bien b {
+  color: color-mix(in srgb, var(--k) 55%, var(--ink));
+}
+
+/* Hai trợ lý cấp trên ngồi hàng đầu — thẻ nhỉnh hơn một chút để cấp bậc đọc
+   được ngay từ kích thước, không phải đọc chức danh mới biết. */
+.vp-phong[data-khoi="dieuhanh"] .vp-phong-khung {
+  width: 104px;
+  min-height: 78px;
+  box-shadow: var(--shadow-lg, 0 6px 18px rgba(63, 77, 51, .16));
+}
+.vp-phong[data-khoi="dieuhanh"] .vp-phong-nguoi { width: 54px; }
+
+/* ---------------------------------------------------------------------------
+   XƯỞNG ERP — Hồ Ly + Khỉ Đột đứng chung một buồng
+   --------------------------------------------------------------------------- */
+.vp-xuong-khung { padding-top: 10px; }
+.vp-xuong-doi { display: flex; align-items: flex-end; justify-content: center; gap: 2px; }
+.vp-xuong-nguoi { width: 50px; }
+.vp-xuong-nguoi .chibi { width: 100%; height: auto; display: block; }
+.vp-xuong .vp-bien span { font-size: 10.5px; }
+
+/* Lưu ý trong hồ sơ xưởng — chỗ nói thẳng "hỏi ở đây hai bạn không nghe thấy" */
+.vp-hoso-luu-y {
+  margin-top: 14px;
+  padding: 11px 13px;
+  border-radius: var(--r-md);
+  background: #fdf6e8;
+  border: 1px solid #e8d9b4;
+  color: #7a5f2a;
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+.vp-hoso-nguoi { display: flex; gap: 14px; margin-bottom: 18px; }
+.vp-hoso-anh { width: 76px; flex: none; }
+.vp-hoso-anh .chibi { width: 100%; height: auto; display: block; }
+
+/* ---------------------------------------------------------------------------
+   AI ĐANG LÀM, AI ĐANG RẢNH
+   ---------------------------------------------------------------------------
+   Sếp Ngọc 06/09/2026: cần nhìn phát biết ai đang bận để còn giao việc.
+
+   Hai tín hiệu KHÁC NHAU, cố ý không gộp:
+   · VÒNG TRÒN QUAY = đang xử lý một việc NGAY LÚC NÀY. Có chuyển động, hút mắt.
+   · CHẤM TRẠNG THÁI = tải việc đang mở của phòng đó. Đứng yên, liếc qua là biết.
+
+   Gộp hai thứ vào một dấu hiệu thì mất khả năng phân biệt "đang bận tay lúc này"
+   với "đang ôm 5 đầu việc" — mà hai cái đó dẫn tới hai quyết định giao việc
+   hoàn toàn khác nhau.
+   --------------------------------------------------------------------------- */
+.vp-vong {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--k, var(--sage)) 26%, transparent);
+  border-top-color: var(--k, var(--sage));
+  opacity: 0;
+  transition: opacity .2s ease;
+  pointer-events: none;
+}
+.vp-phong.dang-lam .vp-vong,
+.vp-may.dang-nghi .vp-vong {
+  opacity: 1;
+  animation: vp-quay 0.75s linear infinite;
+}
+@keyframes vp-quay { to { transform: rotate(360deg); } }
+
+/* Thẻ đang làm việc thì nhô lên và đậm viền — vòng tròn nhỏ quá, cần thêm một
+   tín hiệu nhìn được từ xa. */
+.vp-phong.dang-lam .vp-phong-khung {
+  box-shadow: 0 8px 20px rgba(63, 77, 51, .22);
+  transform: translateY(-3px);
+  border-color: color-mix(in srgb, var(--k, var(--sage)) 55%, var(--line));
+}
+.vp-phong .vp-phong-khung { transition: transform .2s ease, box-shadow .2s ease; }
+
+/* Vừa tham gia xử lý xong — nháy nhẹ vài giây rồi tắt, đủ để mắt kịp thấy
+   "à, mấy phòng này vừa cùng làm việc đó". */
+.vp-phong.vua-lam .vp-phong-khung { animation: vp-nhay 1.1s ease-out 3; }
+@keyframes vp-nhay {
+  0%, 100% { box-shadow: var(--shadow-md); }
+  50%      { box-shadow: 0 0 0 4px color-mix(in srgb, var(--k, var(--sage)) 24%, transparent); }
+}
+
+/* Chấm trạng thái tải việc */
+.vp-cham {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1.5px solid var(--card);
+}
+.vp-phong[data-ban="ranh"]  .vp-cham { background: #5f9a5f; }   /* rảnh */
+.vp-phong[data-ban="vua"]   .vp-cham { background: #d9a334; }   /* có việc */
+.vp-phong[data-ban="nhieu"] .vp-cham { background: #c0603f; }   /* quá tải */
+
+/* Chú thích dưới mặt bằng — không ai đoán ra màu chấm nghĩa gì nếu không nói */
+.vp-chugiai {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: center;
+  margin-top: 10px;
+  padding: 0 4px;
+  font-size: 11.5px;
+  color: var(--text-mute);
+}
+.vp-chugiai i {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  margin-right: 5px;
+  vertical-align: -1px;
+}
+.vp-chugiai .cg-ranh  { background: #5f9a5f; }
+.vp-chugiai .cg-vua   { background: #d9a334; }
+.vp-chugiai .cg-nhieu { background: #c0603f; }
+.vp-chugiai .cg-quay {
+  width: 11px; height: 11px; border-radius: 50%;
+  border: 2px solid rgba(122,143,104,.28); border-top-color: #7a8f68;
+  animation: vp-quay .75s linear infinite;
+}
+
+/* ---------------------------------------------------------------------------
+   XƯỞNG ERP — PHẢI TRÔNG KHÁC, VÌ NÓ KHÁC THẬT
+   ---------------------------------------------------------------------------
+   Hồ Ly và Khỉ Đột chạy NGOÀI ERP này (Claude Code / GitHub Actions). Hỏi qua
+   Mây thì họ không nghe thấy.
+
+   Trước đây cảnh báo đó chỉ nằm trong hồ sơ, phải bấm vào mới thấy — mà trên
+   mặt bằng thẻ Xưởng trông y hệt chín phòng kia. Người dùng đọc mặt bằng bằng
+   MẮT chứ không bằng cách bấm thử từng cái: thấy giống nhau thì đinh ninh là
+   hỏi được như nhau, gõ câu hỏi, rồi chưng hửng.
+
+   Nên viền đứt (khác hẳn viền liền của các phòng nhận việc) + một nhãn "ngoài
+   ERP" ngay trên thẻ. Nhìn là biết, không cần bấm.
+   --------------------------------------------------------------------------- */
+.vp-xuong .vp-phong-khung {
+  border-style: dashed;
+  border-left-style: dashed;
+  background: repeating-linear-gradient(
+    135deg, var(--card) 0 9px, #f4f4f0 9px 18px);
+}
+
+.vp-ngoai {
+  position: absolute;
+  top: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 9.5px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: #7a5f2a;
+  background: #fdf1d8;
+  border: 1px solid #e8d2a4;
+  border-radius: var(--r-pill);
+  padding: 1px 8px;
+  white-space: nowrap;
+}
+.vp-chugiai .cg-ngoai {
+  background: #fdf1d8;
+  border: 1px dashed #c9a860;
+  border-radius: 2px;
+}
+
+/* ---------------------------------------------------------------------------
+   THỨ TỰ LỚP TRÊN MẶT BẰNG — đặt tường minh
+   ---------------------------------------------------------------------------
+   Trước đây bốn lớp đều z-index auto, tức là ai khai sau nằm trên. Kết quả:
+   cái bảng trắng (lớp nội thất) đè lên biển tên "KHỐI HỖ TRỢ" (lớp khu vực),
+   che mất một nửa chữ. Loại lỗi này sẽ quay lại mỗi lần thêm một món đồ mới,
+   vì nó phụ thuộc vào thứ tự khai báo chứ không vào ý đồ.
+
+   Từ dưới lên: nội thất → vách khu và biển tên → các buồng làm việc → quầy Mây.
+   Người luôn nằm trên đồ đạc; chữ luôn đọc được.
+   --------------------------------------------------------------------------- */
+.vp-do-lop    { z-index: 0; }
+.vp-khu-lop   { z-index: 1; }
+.vp-phong-lop { z-index: 2; }
+.vp-quay      { z-index: 3; }
+
+/* Vách khu chỉ là mảng nền — không được che đồ đạc bên dưới. Riêng biển tên thì
+   phải đục hẳn ra, vì chữ mà mờ thì thà đừng ghi. */
+.vp-khu     { pointer-events: none; }
+.vp-khu-ten { position: absolute; z-index: 1; }
+
+/* ---------------------------------------------------------------------------
+   ĐƯỜNG TRỰC THUỘC — phòng IT chỉ huy Xưởng ERP
+   ---------------------------------------------------------------------------
+   Sếp Ngọc 06/09/2026: "2 đứa erp kia phải nhận nhiệm vụ qua Tuấn".
+
+   Nhãn cũ chỉ ghi "ngoài ERP — không nhận việc qua Mây": nói được vế CẤM mà
+   không nói vế ĐI ĐƯỜNG NÀO, đọc xong vẫn tắc. Giờ nhãn ghi thẳng "nhận việc
+   qua Tuấn", và có một sợi dây nối buồng IT sang Xưởng.
+
+   Không có sợi dây này thì Xưởng trông như một phòng độc lập tình cờ đứng cạnh
+   phòng IT, chứ không phải đội quân của phòng IT.
+   --------------------------------------------------------------------------- */
+.vp-day-tructhuoc {
+  position: absolute;
+  transform: translateY(-50%);
+  height: 0;
+  border-top: 2px dashed color-mix(in srgb, var(--k-hotro) 46%, transparent);
+  pointer-events: none;
+  z-index: 0;
+}
+.vp-day-tructhuoc span {
+  position: absolute;
+  left: 50%;
+  top: -8px;
+  transform: translateX(-50%);
+  font-size: 9.5px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--text-mute);
+  background: #f2f4ec;
+  padding: 0 6px;
+  white-space: nowrap;
+}
+
+/* Mũi tên chỉ chiều: việc chảy TỪ phòng IT SANG Xưởng, không phải ngược lại */
+.vp-day-tructhuoc::after {
+  content: '';
+  position: absolute;
+  right: -1px;
+  top: -4px;
+  border-left: 7px solid color-mix(in srgb, var(--k-hotro) 46%, transparent);
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+}
+
+@media (max-width: 620px) { .vp-day-tructhuoc { display: none; } }
+
+/* ---------------------------------------------------------------------------
+   HỎI MÂY — CỘT PHẢI, CAO CỐ ĐỊNH, CUỘN BÊN TRONG
+   ---------------------------------------------------------------------------
+   Sếp Ngọc 06/09/2026: "giao diện to quá cứ phải cuộn xuống dưới, thu nhỏ bớt
+   và cho chat sang bên phải".
+
+   Nguyên nhân thật đo được: khung chat cao 4.842px. Danh sách hội thoại không
+   có trần chiều cao nên nó dài thêm theo TỪNG tin nhắn — hỏi càng nhiều thì cả
+   trang càng dài, và mặt bằng bị đẩy tuột lên trên.
+
+   Chữa đúng chỗ: khung chat cao bằng mặt bằng, phần hội thoại cuộn BÊN TRONG
+   nó. Ô nhập luôn dính đáy, không bao giờ phải cuộn đi tìm.
+   --------------------------------------------------------------------------- */
+.vp-ben > .vp-hoi-khung {
+  display: flex;
+  flex-direction: column;
+  height: 660px;
+  max-height: calc(100vh - 150px);
+  position: sticky;
+  top: 12px;
+}
+.vp-ben > .vp-hoi-khung > .panel-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;          /* thiếu dòng này thì flex con không chịu co, và cuộn không bao giờ xuất hiện */
+  gap: 8px;
+}
+.vp-ben > .vp-hoi-khung #vp-chat {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scroll-behavior: smooth;
+  padding-right: 4px;
+}
+.vp-ben > .vp-hoi-khung .vp-nhap { flex: none; }
+.vp-ben > .vp-hoi-khung .vp-goi-y { flex: none; }
+
+/* Cột phải rộng hơn: 300px đủ cho danh sách việc, nhưng câu trả lời của trợ lý
+   thường dài — đọc trong ống 300px thì mỗi dòng được vài chữ, mỏi mắt. */
+@media (min-width: 901px) {
+  .vp-bo-cuc { grid-template-columns: minmax(0, 1fr) 7px var(--vp-chat-rong, 380px); }
+}
+
+/* Khổ hẹp: xếp một cột, chat vẫn giới hạn chiều cao chứ không thả cho dài vô tận */
+@media (max-width: 900px) {
+  .vp-ben > .vp-hoi-khung {
+    height: auto;
+    max-height: none;
+    position: static;
+  }
+  .vp-ben > .vp-hoi-khung #vp-chat { max-height: 420px; overflow-y: auto; }
+}
+
+/* ---------------------------------------------------------------------------
+   TAB PHỤ — Mặt bằng | Năng suất
+   ---------------------------------------------------------------------------
+   Mặt bằng trả lời "đang xảy ra gì", năng suất trả lời "đã làm được gì". Hai
+   câu hỏi khác nhau, nhét chung một màn thì cái nào cũng chật.
+   --------------------------------------------------------------------------- */
+.vp-tabphu {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+.vp-tabphu-nut {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 7px 14px 9px;
+  font-size: 13px;
+  color: var(--text-mute);
+  cursor: pointer;
+  font-family: inherit;
+}
+.vp-tabphu-nut:hover { color: var(--ink); }
+.vp-tabphu-nut.dang-mo {
+  color: var(--ink);
+  font-weight: 600;
+  border-bottom-color: var(--sage);
+}
+
+/* ---- Bảng năng suất ----------------------------------------------------- */
+.vp-ns-dong {
+  display: grid;
+  grid-template-columns: 190px minmax(60px, 1fr);
+  gap: 4px 14px;
+  align-items: center;
+  padding: 11px 4px;
+  border-bottom: 1px solid var(--line);
+}
+.vp-ns-dong:last-child { border-bottom: none; }
+
+.vp-ns-ai { display: flex; align-items: center; gap: 9px; grid-row: span 2; }
+.vp-ns-anh { width: 40px; flex: none; }
+.vp-ns-anh .chibi { width: 100%; height: auto; display: block; }
+.vp-ns-ai b { display: block; font-family: var(--serif); font-size: 14px; color: var(--ink); }
+.vp-ns-ai span { display: block; font-size: 11px; color: var(--text-mute); line-height: 1.3; }
+
+/* Thanh so sánh: chỉ để mắt bắt được ai đang gánh nhiều, KHÔNG kèm số thứ hạng
+   — đánh số là biến bảng đếm thành bảng thi đua, mà "ít ai hỏi tới mảng đó"
+   không phải lỗi của trợ lý. */
+.vp-ns-thanh {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--line);
+  overflow: hidden;
+}
+.vp-ns-thanh i {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--k, var(--sage));
+  min-width: 2px;
+}
+.vp-ns-dong[data-khoi="dieuhanh"]  { --k: var(--k-dieuhanh, #8c7ba0); }
+.vp-ns-dong[data-khoi="kinhdoanh"] { --k: var(--k-kinhdoanh, #c07a5a); }
+.vp-ns-dong[data-khoi="vanhanh"]   { --k: var(--k-vanhanh, #6b7f9e); }
+.vp-ns-dong[data-khoi="hotro"]     { --k: var(--k-hotro, #7d8f68); }
+.vp-ns-dong[data-khoi="letan"]     { --k: var(--k-letan, #b8863b); }
+
+.vp-ns-so { display: flex; flex-wrap: wrap; gap: 4px 18px; }
+.vp-ns-so span { display: flex; align-items: baseline; gap: 5px; }
+.vp-ns-so b { font-size: 15px; color: var(--ink); font-variant-numeric: tabular-nums; }
+.vp-ns-so b.tot { color: #4a7a4a; }        /* chặn lại là điểm cộng, tô xanh */
+.vp-ns-so em { font-style: normal; font-size: 11px; color: var(--text-mute); }
+
+.vp-ns-ghichu {
+  margin-top: 14px;
+  padding: 10px 12px;
+  border-radius: var(--r-md);
+  background: var(--sage-wash);
+  border: 1px solid var(--line);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-mute);
+}
+
+@media (max-width: 620px) {
+  .vp-ns-dong { grid-template-columns: 1fr; }
+  .vp-ns-ai { grid-row: auto; }
+}
+
+/* ---------------------------------------------------------------------------
+   KỸ NĂNG SẾP DẠY THÊM — hiện trong hồ sơ từng trợ lý
+   ---------------------------------------------------------------------------
+   Đặt trong hồ sơ chứ không phải một màn riêng: người ta chỉ thắc mắc "sao trợ
+   lý này tư vấn thế" ngay lúc đang đọc về trợ lý đó. Bắt họ đi tìm ở màn khác
+   là gần như không ai tìm.
+
+   Bài đã tắt vẫn hiện, chỉ mờ đi — xoá hẳn khỏi mắt thì mất luôn manh mối
+   "hôm đó Sếp dạy gì mà ra kết luận này".
+   --------------------------------------------------------------------------- */
+.vp-kn-muc { margin-top: 6px; }
+
+.vp-kn {
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--sage);
+  border-radius: var(--r-md);
+  padding: 10px 12px;
+  margin-bottom: 9px;
+  background: var(--card);
+}
+.vp-kn[data-tat="1"] {
+  opacity: .5;
+  border-left-color: var(--line);
+  background: #f6f6f3;
+}
+
+.vp-kn-dau {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 5px;
+}
+.vp-kn-dau b { font-family: var(--serif); font-size: 13.5px; color: var(--ink); }
+
+.vp-kn-nut {
+  flex: none;
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  padding: 2px 10px;
+  font-size: 11px;
+  color: var(--text-mute);
+  cursor: pointer;
+  font-family: inherit;
+}
+.vp-kn-nut:hover { border-color: var(--sage); color: var(--ink); }
+.vp-kn-nut:disabled { opacity: .5; cursor: wait; }
+
+.vp-kn-noi { font-size: 12.5px; line-height: 1.6; color: var(--text); }
+.vp-kn-chan { margin-top: 6px; font-size: 10.5px; color: var(--text-mute); }
+
+/* ---------------------------------------------------------------------------
+   ẢNH ĐÍNH KÈM TRONG HỘI THOẠI VỚI MÂY
+   ---------------------------------------------------------------------------
+   ⚠️ Mây KHÔNG xem được ảnh — model chạy văn phòng ảo chỉ đọc chữ. Ảnh ở đây
+   để NGƯỜI xem lại và đi kèm khi việc được giao ra người thật. Trợ lý được báo
+   rõ điều đó nên nó hỏi lại Sếp mô tả, chứ không bình luận về thứ chưa nhìn.
+   --------------------------------------------------------------------------- */
+.vp-anh-kem {
+  position: relative;
+  margin-bottom: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 6px;
+  background: var(--card);
+}
+.vp-anh-kem img {
+  display: block;
+  width: 100%;
+  max-height: 150px;
+  object-fit: contain;
+  border-radius: 6px;
+}
+.vp-anh-bo {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--text-mute);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+.vp-anh-bo:hover { color: #c0603f; border-color: #c0603f; }
+
+/* Nút đính kèm nằm trong ô nhập, cạnh nút Hỏi */
+.vp-nhap-anh {
+  flex: none;
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 6px 8px;
+  color: var(--text-mute);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+.vp-nhap-anh:hover { color: var(--ink); border-color: var(--sage); }
+
+/* Ảnh trong bong bóng đã gửi */
+.vp-tin-anh { display: block; margin-bottom: 6px; }
+.vp-tin-anh img {
+  display: block;
+  max-width: 100%;
+  max-height: 220px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+}
+
+/* Kéo ảnh vào khung chat — viền sáng lên để biết thả được */
+.vp-hoi-khung.dang-keo {
+  outline: 2px dashed var(--sage);
+  outline-offset: -4px;
+}
+
+/* ---------------------------------------------------------------------------
+   THANH KÉO CHIA CỘT
+   ---------------------------------------------------------------------------
+   Mỗi người một màn hình và một thói quen: người hay nhìn mặt bằng thì muốn nó
+   rộng, người hay hỏi Mây thì muốn ô chat rộng. Ép chung một con số thì ai cũng
+   thấy hơi sai một chút.
+
+   Vùng bấm rộng hơn vạch nhìn thấy: vạch 2px thì phải rê chuột đúng 2px mới
+   tóm được, bực hơn là không có. Vạch mảnh cho đẹp, vùng bắt 7px cho dễ trúng.
+   --------------------------------------------------------------------------- */
+.vp-keo {
+  position: relative;
+  cursor: col-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: none;
+  user-select: none;
+}
+.vp-keo span {
+  display: block;
+  width: 2px;
+  height: 46px;
+  border-radius: 2px;
+  background: var(--line);
+  transition: background .15s ease, height .15s ease;
+}
+.vp-keo:hover span,
+.vp-keo.dang-keo span { background: var(--sage); height: 84px; }
+
+/* Trong lúc kéo: khoá con trỏ và tắt chọn chữ toàn trang, không thì rê qua ô
+   chat là bôi đen cả đoạn hội thoại. */
+body.vp-dang-keo { cursor: col-resize; user-select: none; }
+
+@media (max-width: 900px) { .vp-keo { display: none; } }
+
+/* Lễ tân đo bằng thước khác — nói rõ vì sao không có sáu cột kia, thay vì để
+   sáu số 0 nằm đó cho người đọc tự hiểu nhầm là "Mây làm kém". */
+.vp-ns-khongdo {
+  font-size: 11px;
+  color: var(--text-mute);
+  font-style: italic;
+  line-height: 1.5;
+  max-width: 420px;
+}
+
+/* ---------------------------------------------------------------------------
+   VIỆC ĐANG TREO
+   ---------------------------------------------------------------------------
+   Cố ý KHÔNG làm thành cái chuông. Chuông thì bị lờ như mọi cái chuông khác,
+   và bốn phiếu vừa rồi treo tám ngày chính vì không ai biết nó đang chờ mình.
+   Khối này chắn ngang đầu tab: bước vào văn phòng là thấy.
+
+   Màu hổ phách chứ không đỏ: đây là việc đang chờ, không phải sự cố. Đỏ dùng
+   cho thứ đang cháy, dùng sai màu vài lần là người ta hết sợ màu đỏ.
+   --------------------------------------------------------------------------- */
+.vp-treo {
+  margin-bottom: 14px;
+  border: 1px solid #e8d2a4;
+  border-left: 3px solid #d9a334;
+  border-radius: var(--r-md);
+  background: #fdf6e8;
+  padding: 12px 14px;
+}
+.vp-treo-muc + .vp-treo-muc {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed #e8d2a4;
+}
+.vp-treo-dau {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.vp-treo-dau b { font-family: var(--serif); font-size: 14px; color: #7a5f2a; }
+.vp-treo-dem { font-size: 11.5px; color: #9a7c3a; }
+.vp-treo-cua { font-size: 12px; color: #8a6c2f; margin-top: 2px; }
+
+.vp-treo-ds { margin: 7px 0 0; padding-left: 18px; }
+.vp-treo-ds li { font-size: 12.5px; color: var(--text); line-height: 1.7; }
+.vp-treo-ds b { font-variant-numeric: tabular-nums; color: #7a5f2a; }
+.vp-treo-ds em { font-style: normal; font-size: 11px; color: var(--text-mute); }
+
+/* Nút bắn thử Telegram — nhỏ, nằm cuối hàng chú giải, chỉ Quản trị thấy */
+.vp-thu-tele {
+  margin-left: auto;
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  padding: 3px 11px;
+  font-size: 11px;
+  color: var(--text-mute);
+  cursor: pointer;
+  font-family: inherit;
+}
+.vp-thu-tele:hover { border-color: var(--sage); color: var(--ink); }
+.vp-thu-tele:disabled { opacity: .6; cursor: wait; }
+
+/* ---------------------------------------------------------------------------
+   THANH KÉO BỀ NGANG MENU
+   ---------------------------------------------------------------------------
+   Một thanh kéo, cả ERP linh hoạt — vì --sidebar-w là biến duy nhất dùng cho
+   mọi màn. Đây là chỗ DUY NHẤT trong ERP có bố cục "hai vùng cạnh tranh nhau
+   chỗ" ngoài văn phòng ảo; các màn khác chỉ có một bảng chiếm hết bề ngang,
+   gắn thanh kéo vào đó là thêm thứ để bấm nhầm chứ không thêm giá trị.
+
+   Nó chữa một khó chịu thấy được ngay: nhãn menu tiếng Việt dài
+   ("Kinh doanh & Phát triển thị trường", "Sản phẩm & Nguồn cung") bị xuống
+   dòng ở bề ngang mặc định 244px.
+
+   Nằm ĐÈ lên mép phải thanh bên chứ không chiếm chỗ: thanh bên là `position:
+   fixed` nên thêm một cột vào đó là phải tính lại margin của cả vùng nội dung.
+   --------------------------------------------------------------------------- */
+.sb-keo {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  width: 7px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 41;
+  touch-action: none;
+}
+.sb-keo::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 2px;
+  width: 2px;
+  height: 46px;
+  margin-top: -23px;
+  border-radius: 2px;
+  background: transparent;
+  transition: background .15s ease, height .15s ease;
+}
+.sb-keo:hover::before,
+.sb-keo.dang-keo::before {
+  background: var(--sage);
+  height: 84px;
+  margin-top: -42px;
+}
+
+@media (max-width: 900px) { .sb-keo { display: none; } }
+/* Nút bắn thử khi hỏng: nới rộng để đọc được nguyên câu lý do, không cắt cụt */
+.vp-thu-tele.vp-thu-loi {
+  border-color: #c0603f;
+  color: #a04a30;
+  white-space: normal;
+  max-width: 460px;
+  text-align: left;
+  line-height: 1.4;
+}
+
+/* ---------------------------------------------------------------------------
+   MÀU THEO PHÒNG BAN THẬT
+   ---------------------------------------------------------------------------
+   Trước đây màu gắn cứng vào tên khối tôi tự đặt (dieuhanh, kinhdoanh...).
+   Nhưng khu vực nay dựng từ bảng phong_ban thật, mà tên phòng thì Sếp đổi lúc
+   nào cũng được — nên màu phải bám THỨ TỰ phòng, không bám tên. k0..k4 là năm
+   ô màu quay vòng; thêm phòng thứ sáu thì nó dùng lại màu đầu, chấp nhận được
+   vì mặt bằng cùng lúc hiếm khi quá năm hàng.
+   --------------------------------------------------------------------------- */
+.vp-khu[data-khoi="k0"],  .vp-phong[data-khoi="k0"]  { --k: var(--k-dieuhanh); }
+.vp-khu[data-khoi="k1"],  .vp-phong[data-khoi="k1"]  { --k: var(--k-hotro); }
+.vp-khu[data-khoi="k2"],  .vp-phong[data-khoi="k2"]  { --k: var(--k-kinhdoanh); }
+.vp-khu[data-khoi="k3"],  .vp-phong[data-khoi="k3"]  { --k: var(--k-vanhanh); }
+.vp-khu[data-khoi="k4"],  .vp-phong[data-khoi="k4"]  { --k: var(--k-letan); }
