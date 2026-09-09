@@ -21,7 +21,16 @@ jobs:
           # Cần đủ lịch sử để đọc được CÁC COMMIT TRONG LƯỢT ĐẨY NÀY
           # (github.event.before..github.sha). Nông quá thì git log không thấy
           # commit cũ, và bước chốt góp ý bên dưới tự lùi về "chỉ commit cuối".
-          fetch-depth: 50
+          #
+          # ⚠️ TỪ 50 LÊN 0 — REV-0064 H1. Máy chủ có trần 200 commit VÀ kêu
+          # Telegram khi cắt; nhưng `fetch-depth: 50` cắt TRƯỚC ĐÓ, ở ngưỡng
+          # thấp hơn bốn lần, và cắt IM LẶNG: `git cat-file -e` hỏng, phamVi()
+          # lùi về đúng một commit cuối, in một dòng console thường — không
+          # `::warning::`, không Telegram. Trần 200 không bao giờ chạm tới.
+          # Nhánh này vừa gộp 102 commit của main: đúng cỡ lượt đẩy kích hoạt.
+          # `0` = lấy đủ lịch sử; và nhánh lùi trong bao-deploy-len-erp.mjs nay
+          # CÓ KÊU (::warning:: cho Actions + Telegram qua ERP) — hai lớp.
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 20

@@ -137,13 +137,13 @@ const cacTin = (db, ns) =>
 
 /* ---- Gọi ĐÚNG cửa HTTP thật của Worker ---------------------------------- */
 async function goiDeploy(worker, db, cacCommit, { khoa = KHOA, kyBang = KHOA, luc = new Date().toISOString(),
-                                                  env = {} } = {}) {
+                                                  env = {}, them = {} } = {}) {
   /* Từ REV-0042, bản tin mang thêm DANH SÁCH FILE BỊ ĐỔI — máy chủ đòi bằng
      chứng chứ không tin lời khai trong thông điệp commit. Ca nào không nói rõ
      thì mặc định là một bản vá code thật, để mọi phép đo cũ vẫn đo đúng thứ nó
      định đo; ca nào cần soi chốt bằng chứng thì khai `cac_tep` tường minh. */
   const than = JSON.stringify({ luc, cac_commit: cacCommit.map(c =>
-    ('cac_tep' in c ? c : { ...c, cac_tep: ['src/index.js'] })) });
+    ('cac_tep' in c ? c : { ...c, cac_tep: ['src/index.js'] })), ...them });
   const req = new Request('https://x/api/gop-y/da-len-that', {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-erp-chu-ky': 'sha256=' + createHmac('sha256', kyBang).update(than).digest('hex') },
@@ -1277,6 +1277,64 @@ async function main() {
     const sotGia = [...cot].filter(c => !thieuMot.has(c));
     ok('ĐỐI CHỨNG bỏ 1 cột khỏi danh sách → phép đo chỉ ĐÚNG cột đó',
       sotGia.length === 1 && sotGia[0] === 'ke_hoach_thi_cong', sotGia.join(',') || '(không bắt được)');
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════
+     ⑱b REV-0064 H1 — LỊCH SỬ GIT BỊ CẮT THÌ PHẢI KÊU, KHÔNG ĐƯỢC NUỐT
+     ----------------------------------------------------------------------
+     `fetch-depth: 50` cắt im lặng ở ngưỡng THẤP HƠN BỐN LẦN trần 200 của máy
+     chủ, nên chuông của trần 200 không bao giờ kêu. Hai lớp vá: fetch-depth: 0
+     ở workflow, và cờ `lich_su_bi_cat` đi cùng bản tin để ERP gõ Telegram.
+     ════════════════════════════════════════════════════════════════════ */
+  console.log('\n⑱b H1: lịch sử git bị cắt ở phía GitHub');
+  {
+    /* `guiTelegram()` gọi thẳng `fetch` nên chặn ở đó — đo câu THẬT gửi đi,
+       không đo một hàm giả cắm vào env. */
+    const batTelegram = async (viec) => {
+      const that = globalThis.fetch;
+      const tin = [];
+      globalThis.fetch = async (u, o) => {
+        if (String(u).includes('api.telegram.org')) {
+          try { tin.push(JSON.parse(o.body).text); } catch { tin.push(String(o && o.body)); }
+          return new Response('{"ok":true}', { status: 200 });
+        }
+        return that(u, o);
+      };
+      try { return { kq: await viec(), tin }; } finally { globalThis.fetch = that; }
+    };
+    const TG = { TELEGRAM_BOT_TOKEN: 'x', TELEGRAM_CHAT_ID: 'y' };
+
+    const db = dungDB(); idTiep = 1;
+    const A = themGopY(db, { trang_thai: 'da_duyet' });
+    const r1 = await batTelegram(() => goiDeploy(worker, db,
+      [{ sha: 'a'.repeat(40), tieu_de: `Vá GY-${A}` }],
+      { env: TG, them: { lich_su_bi_cat: true } }));
+    ok('lịch sử bị cắt → CÓ kêu Telegram', r1.tin.length >= 1, r1.tin.length + ' tin');
+    ok('  và câu kêu chỉ đúng cách sửa (fetch-depth)',
+      r1.tin.some(t => /fetch-depth/.test(t)),
+      JSON.stringify(String(r1.tin[0] || '').slice(0, 110)));
+    ok('  và NÓI RA trong thân trả về (đường thứ hai khi Telegram hỏng)',
+      r1.kq.than.lich_su_bi_cat === true, JSON.stringify(r1.kq.than).slice(0, 110));
+    ok('  nhưng KHÔNG chặn việc chốt: commit đọc được vẫn xử bình thường',
+      xem(db, A).trang_thai === 'cho_nghiem_thu', xem(db, A).trang_thai);
+
+    // ĐỐI CHỨNG: lượt đẩy bình thường → KHÔNG kêu, không dựng cờ giả.
+    const db2 = dungDB(); idTiep = 1;
+    const A2 = themGopY(db2, { trang_thai: 'da_duyet' });
+    const r2 = await batTelegram(() => goiDeploy(worker, db2,
+      [{ sha: 'b'.repeat(40), tieu_de: `Vá GY-${A2}` }], { env: TG }));
+    ok('ĐỐI CHỨNG lượt bình thường → 0 tin kêu về lịch sử, cờ = false',
+      !r2.tin.some(t => /fetch-depth/.test(t)) && r2.kq.than.lich_su_bi_cat === false,
+      `${r2.tin.length} tin · cờ=${r2.kq.than.lich_su_bi_cat}`);
+
+    /* Và đo thẳng vào workflow. Bỏ dòng chú thích trước khi khớp — khối chú
+       thích ở đó có nhắc lại con số cũ để giải thích vì sao nó nguy hiểm. */
+    const yml = doc('.github/workflows/deploy.yml')
+      .split('\n').filter(d => !/^\s*#/.test(d)).join('\n');
+    ok('workflow lấy đủ lịch sử (fetch-depth: 0)', /fetch-depth:\s*0\b/.test(yml),
+      (yml.match(/fetch-depth:\s*\d+/) || ['(không có)'])[0]);
+    ok('  ĐỐI CHỨNG: không còn fetch-depth nông nào sót lại',
+      !/fetch-depth:\s*(?!0\b)\d+/.test(yml));
   }
 
   /* ══════════════════════════════════════════════════════════════════════

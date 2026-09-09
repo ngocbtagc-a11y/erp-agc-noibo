@@ -35,13 +35,34 @@ function git(...args) {
   return execFileSync('git', args, { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 });
 }
 
+/* ⚠️ CẮT LỊCH SỬ THÌ PHẢI KÊU — REV-0064 H1.
+   Bản trước lùi về "chỉ commit cuối" rồi in MỘT DÒNG console thường: không
+   `::warning::`, không Telegram, không nằm trong thân bản tin. Máy chủ dựng
+   trần 200 commit kèm chuông Telegram để chặn đúng chuyện này — nhưng
+   `fetch-depth: 50` cắt trước ở ngưỡng thấp hơn bốn lần, nên chuông kia không
+   bao giờ kêu. Hỏng theo chiều an toàn (bỏ sót, không đóng nhầm) NHƯNG IM
+   LẶNG — mà im lặng chính là thứ làm Sếp phải hỏi lần thứ ba.
+   Hai lớp bây giờ: `fetch-depth: 0` ở workflow, VÀ cờ này. */
+let LICH_SU_BI_CAT = false;
+
 /** Khoảng commit của lượt đẩy này — hoặc đúng commit cuối nếu không đọc được. */
 function phamVi() {
   if (TRUOC && TRUOC !== KHONG) {
     try { git('cat-file', '-e', `${TRUOC}^{commit}`); return [`${TRUOC}..${NAY}`]; }
-    catch { /* commit trước không có trong bản checkout nông */ }
+    catch {
+      /* Có mốc trước NHƯNG không đọc được — đây đúng là ca bị cắt lịch sử,
+         khác hẳn ca "lượt đẩy đầu tiên" bên dưới. */
+      LICH_SU_BI_CAT = true;
+      console.log(`::warning::KHÔNG ĐỌC ĐƯỢC LỊCH SỬ GIT của lượt đẩy này ` +
+        `(${String(TRUOC).slice(0, 7)}..${String(NAY).slice(0, 7)} — bản checkout quá nông). ` +
+        'Máy CHỈ XÉT ĐÚNG COMMIT CUỐI: mọi commit khác trong lượt đẩy có tuyên bố ' +
+        '"Vá GY-…" đều KHÔNG được chốt và người báo KHÔNG được báo. ' +
+        'Sửa: đặt fetch-depth: 0 ở .github/workflows/deploy.yml.');
+      return ['-1', NAY];
+    }
   }
-  console.log('Không đọc được commit trước lượt đẩy — chỉ xét đúng commit cuối.');
+  // Lượt đẩy đầu tiên / chạy tay: không có mốc trước là ĐÚNG, không phải cắt.
+  console.log('Không có mốc commit trước (lượt đầu hoặc chạy tay) — chỉ xét đúng commit cuối.');
   return ['-1', NAY];
 }
 
@@ -98,7 +119,10 @@ async function main() {
   }
 
   const cacCommit = docCommit();
-  const banTin = JSON.stringify({ luc: new Date().toISOString(), cac_commit: cacCommit });
+  /* `lich_su_bi_cat` đi CÙNG bản tin để ERP gõ chuông Telegram — nhật ký
+     Actions không ai đọc mỗi ngày, `::warning::` một mình là chưa đủ. */
+  const banTin = JSON.stringify({ luc: new Date().toISOString(), cac_commit: cacCommit,
+                                  lich_su_bi_cat: LICH_SU_BI_CAT });
   console.log(`Có ${cacCommit.length} commit trong lượt đẩy này.`);
 
   // In ra ĐÚNG những mã góp ý đọc được, để nhật ký Actions tự nó là bằng chứng.
@@ -119,7 +143,8 @@ async function main() {
      nó đã hỏng từ lâu. Bản tin rỗng: máy chủ xác thực chữ ký rồi trả ngay ở
      `khong_co_commit`, KHÔNG đọc, KHÔNG ghi một câu D1 nào. */
   const than = ma.length ? banTin
-    : JSON.stringify({ luc: new Date().toISOString(), cac_commit: [], chao_hoi: true });
+    : JSON.stringify({ luc: new Date().toISOString(), cac_commit: [], chao_hoi: true,
+                       lich_su_bi_cat: LICH_SU_BI_CAT });
   await chaoHoi(than);
 }
 

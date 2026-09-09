@@ -267,10 +267,15 @@ kq.F2_o_rong_cao = await cr.chay(`(() => {
   }
   return ra;
 })()`);
-const SO_O_NHIEU_DONG = 32;   /* 12 ô đợt đầu + 19 ô nhóm chữ dài (REV-0047/L1-L2)
-                                 + 1 ô nhận xét việc (GY-0005). Sàn này phải
-                                 nhích theo mỗi ô mới, nếu không thì thêm ô mà
-                                 quên gắn `.o-nhieu-dong` sẽ lọt im lặng. */
+const SO_O_NHIEU_DONG = 34;   /* 12 ô đợt đầu + 19 ô nhóm chữ dài (REV-0047/L1-L2)
+                                 + 1 ô nhận xét việc (GY-0005)
+                                 + 1 ô của main (đếm lại 09/09: main có 33)
+                                 + 1 ô #gyCtKhongCodeGhiChu của nhánh này.
+                                 Sàn này phải nhích theo mỗi ô mới, nếu không
+                                 thì thêm ô mà quên gắn `.o-nhieu-dong` sẽ lọt
+                                 im lặng — REV-0064 H4 bắt được đúng chỗ này:
+                                 nhánh thêm ô thứ 34 mà để sàn nguyên 32, nên
+                                 từ đó ai quên gắn lớp cho HAI ô vẫn xanh. */
 for (const o of kq.F2_o_rong_cao)
   if (o.cao > 48) doVi.push(`ô "${o.id}" lúc RỖNG cao ${o.cao}px (min-height ${o.min}) — ăn bớt dòng trên màn hẹp`);
 if (kq.F2_o_rong_cao.length < SO_O_NHIEU_DONG)

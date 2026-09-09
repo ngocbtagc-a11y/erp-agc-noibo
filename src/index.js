@@ -7083,6 +7083,18 @@ async function gopYDaLenThat(req, env) {
   const lech = Math.abs(Date.now() - Date.parse(b.luc || '')) / 60000;
   if (!(lech <= DEPLOY_HAN_PHUT)) return loi('Bản tin deploy quá cũ hoặc thiếu mốc thời gian', 401);
 
+  /* ✂️ LỊCH SỬ GIT BỊ CẮT Ở PHÍA GITHUB — REV-0064 H1. `fetch-depth` nông thì
+     bao-deploy-len-erp.mjs chỉ đọc được ĐÚNG COMMIT CUỐI, và trần 200 commit
+     bên dưới không bao giờ chạm tới nên chuông của nó không kêu. Cắt IM LẶNG
+     là thứ luật ab92afc cấm, nên cắt ở đâu cũng phải kêu ở đó. */
+  const lichSuBiCat = b.lich_su_bi_cat === true;
+  if (lichSuBiCat)
+    guiTelegram(env, '[Góp ý ERP] ⚠️ Lượt deploy này KHÔNG ĐỌC ĐƯỢC LỊCH SỬ GIT — GitHub ' +
+      'lấy bản checkout quá nông, nên máy CHỈ XÉT ĐÚNG COMMIT CUỐI. Mọi commit khác ' +
+      'trong lượt đẩy có tuyên bố "Vá GY-…" đều KHÔNG được chốt và người báo KHÔNG ' +
+      'được báo. Sửa: đặt fetch-depth: 0 ở .github/workflows/deploy.yml, rồi đẩy lại ' +
+      'một lượt hoặc chạy scripts/dong-lui-gop-y.mjs.').catch(() => {});
+
   /* `cac_tep` = danh sách file commit đó ĐỔI THẬT. Đây là bằng chứng; thông
      điệp commit chỉ là lời khai (REV-0042 C1). Thiếu hẳn trường này (script
      cũ, hoặc git không đọc được) → để `null`, KHÔNG phải `[]`: hai thứ khác
@@ -7105,7 +7117,8 @@ async function gopYDaLenThat(req, env) {
     guiTelegram(env, `[Góp ý ERP] Lượt deploy này mang ${guiLen.length} commit — máy chỉ đọc ` +
       `${DEPLOY_TOI_DA_COMMIT} cái đầu. Commit sau đó có nhắc mã góp ý thì KHÔNG được chốt. ` +
       'Đẩy thêm một lượt nữa hoặc chạy scripts/dong-lui-gop-y.mjs.').catch(() => {});
-  if (!cacCommit.length) return json({ ok: true, da_doi: 0, chi_tiet: [], ly_do: 'khong_co_commit' });
+  if (!cacCommit.length) return json({ ok: true, da_doi: 0, chi_tiet: [], ly_do: 'khong_co_commit',
+                                       lich_su_bi_cat: lichSuBiCat });
 
   /* Chỉ ĐỌC những góp ý thật sự được nhắc tên — không quét cả bảng. */
   const ma = new Set();
@@ -7265,7 +7278,7 @@ async function gopYDaLenThat(req, env) {
 
   return json({ ok: true, da_doi: daDoi, canh_bao: canhBao,
                 bi_cat: biCat, cat_commit: catCommit, cat_ma: catMa,
-                tong_nhac_toi: tatCa.length, chi_tiet: chiTiet });
+                tong_nhac_toi: tatCa.length, lich_su_bi_cat: lichSuBiCat, chi_tiet: chiTiet });
 }
 
 /* ---- ĐƯỜNG SỬA TAY ① — Sếp chốt hoặc gỡ cái máy đoán --------------------
