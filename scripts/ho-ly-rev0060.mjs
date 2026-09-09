@@ -582,36 +582,63 @@ console.log('\n══ D. QUYỀN ══');
 {
   const vai = ['admin', 'admin_backup', 'nguoi_dung', 'ke_toan_truong', 'quan_ly_kho',
                'nhan_vien_kho', 'van_hanh_san', 'hcns', 'nv_test'];
-  console.log('  vai trò          | tab khovan | tab kinhdoanh | sua SP | thao tác kho | nạp SP | nạp tồn');
+  /* ⚠️ HỎI ĐÚNG HÀM MÁY CHỦ ĐANG DÙNG, KHÔNG DỰNG LẠI LUẬT BẰNG TAY.
+     Bản trước tính `napTon = (tab) && duocThaoTacKho(p)` — tức CHÉP LẠI luật
+     của `batBuocNapDuLieu` vào bàn đo. Ngày 09/09/2026 Sếp đổi luật (chỉ Quản
+     lý kho + Kế toán trưởng nạp được, cờ riêng `duocNapTonHangLoat`), mã sản
+     phẩm đổi theo, mà bàn đo vẫn đọc cờ CŨ nên nó khai `nhan_vien_kho` VẪN
+     nạp được trong khi máy chủ đã trả 403 thật. Bàn đo chép tay luật là bàn
+     đo sẽ nói dối đúng vào ngày luật đổi. Nay hỏi thẳng hàm. */
+  console.log('  vai trò          | tab khovan | tab kinhdoanh | sua SP | thao tác kho | nạp SP | nạp tồn | điều chỉnh');
   const bang = [];
   for (const v of vai) {
     const p = { vai_tro: v };
     const t1 = quyen.duocXemTab(p, 'khovan'), t2 = quyen.duocXemTab(p, 'kinhdoanh');
     const sua = quyen.duocSuaSanPham(p), thao = quyen.duocThaoTacKho(p);
-    const napSP = (t1 || t2) && sua, napTon = (t1 || t2) && thao;
-    bang.push({ v, t1, t2, sua, thao, napSP, napTon });
-    console.log(`  ${v.padEnd(16)} | ${String(t1).padEnd(10)} | ${String(t2).padEnd(13)} | ${String(sua).padEnd(6)} | ${String(thao).padEnd(12)} | ${String(napSP).padEnd(6)} | ${napTon}`);
+    const napSP = (t1 || t2) && sua;
+    const napTon = (t1 || t2) && quyen.duocNapTonHangLoat(p);
+    const dieuChinh = t1 && quyen.duocDieuChinhKho(p);
+    bang.push({ v, t1, t2, sua, thao, napSP, napTon, dieuChinh });
+    console.log(`  ${v.padEnd(16)} | ${String(t1).padEnd(10)} | ${String(t2).padEnd(13)} | ${String(sua).padEnd(6)} | ${String(thao).padEnd(12)} | ${String(napSP).padEnd(6)} | ${String(napTon).padEnd(7)} | ${dieuChinh}`);
   }
   const g = n => bang.find(b => b.v === n);
-  ok('ke_toan_truong KHÔNG nạp được gì', !g('ke_toan_truong').napSP && !g('ke_toan_truong').napTon);
+  /* Sếp Ngọc chốt 09/09/2026 (C1): Kế toán trưởng NAY nạp được tồn kho hàng
+     loạt — chị Hằng là người đối chiếu sổ với số kiểm kê. Vẫn KHÔNG nạp được
+     danh mục sản phẩm (đó là của Kinh doanh). */
+  ok('ke_toan_truong nạp được TỒN KHO nhưng KHÔNG nạp danh mục (C1)',
+     g('ke_toan_truong').napTon && !g('ke_toan_truong').napSP);
   ok('van_hanh_san (Kinh doanh) nạp được DANH MỤC', g('van_hanh_san').napSP);
   ok('van_hanh_san KHÔNG nạp được TỒN KHO', !g('van_hanh_san').napTon);
   ok('quan_ly_kho (anh Duy) nạp được cả hai', g('quan_ly_kho').napSP && g('quan_ly_kho').napTon);
   ok('nguoi_dung thường không nạp được gì', !g('nguoi_dung').napSP && !g('nguoi_dung').napTon);
-  ok('nhan_vien_kho KHÔNG nạp hàng loạt được tồn kho', !g('nhan_vien_kho').napTon,
+  ok('nhan_vien_kho KHÔNG nạp hàng loạt được tồn kho (C1 — Sếp chốt 09/09/2026)',
+     !g('nhan_vien_kho').napTon,
      g('nhan_vien_kho').napTon ? 'NẠP ĐƯỢC — 17 bạn part-time ở kho đều ghi được thẳng vào sổ cái' : '');
+  ok('nv_test cũng KHÔNG nạp hàng loạt được (vai để bấm thử luồng, không để ghi thật)',
+     !g('nv_test').napTon);
+  /* C2 — phiếu điều chỉnh: Quản lý kho + Kế toán trưởng + Admin, không ai khác. */
+  ok('Phiếu điều chỉnh CHỈ mở cho Quản lý kho · Kế toán trưởng · Admin (C2)',
+     bang.filter(b => b.dieuChinh).map(b => b.v).sort().join(',') ===
+     'admin,ke_toan_truong,quan_ly_kho',
+     bang.filter(b => b.dieuChinh).map(b => b.v).join(', ') || '(không ai)');
 
   /* Luật giao diện lấy từ app.js, phải TRÙNG luật máy chủ */
   const js = readFileSync(path.join(GOC, 'public', 'assets', 'js', 'app.js'), 'utf8');
-  ok('Giao diện cắt nút bằng ĐÚNG hai cờ máy chủ gửi xuống (san_pham.sua · kho.thao_tac)',
-     /qSanPham\.sua \|\| qKho\.thao_tac/.test(js) &&
+  ok('Giao diện cắt nút bằng ĐÚNG hai cờ máy chủ gửi xuống (san_pham.sua · kho.nap_luot)',
+     /qSanPham\.sua \|\| qKho\.nap_luot/.test(js) &&
      /if \(!qSanPham\.sua\)[\s\S]{0,120}san_pham/.test(js) &&
-     /if \(!qKho\.thao_tac\)[\s\S]{0,120}ton_kho/.test(js));
+     /if \(!qKho\.nap_luot\)[\s\S]{0,120}ton_kho/.test(js));
+  ok('Giao diện cắt tab "Điều chỉnh" bằng đúng cờ `kho.dieu_chinh`',
+     /if \(!qKho\.dieu_chinh\)[\s\S]{0,200}dieuchinh/.test(js));
 
-  /* Ai THẤY nút mà gọi bị chặn? Ai KHÔNG thấy nút mà gọi lại được? */
+  /* Ai THẤY nút mà gọi bị chặn? Ai KHÔNG thấy nút mà gọi lại được?
+     `thayNut` phải dựng bằng ĐÚNG hai cờ `khoiDongNapFile` đang soi
+     (`san_pham.sua` · `kho.nap_luot`) — dùng `thao_tac` như bản cũ là so hai
+     luật khác nhau rồi kết luận "khớp". */
   let lech = [];
   for (const b of bang) {
-    const thayNut = (b.t1 || b.t2) && (b.sua || b.thao);  // khoiDongKho chỉ chạy khi có tab khovan
+    const napTonDuoc = quyen.duocNapTonHangLoat({ vai_tro: b.v });
+    const thayNut = (b.t1 || b.t2) && (b.sua || napTonDuoc);
     if (thayNut !== (b.napSP || b.napTon)) lech.push(b.v);
   }
   ok('Không vai trò nào lệch giữa "thấy nút" và "gọi được"', lech.length === 0, lech.join(', '));

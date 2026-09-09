@@ -28,6 +28,14 @@ import { fileURLToPath } from 'node:url';
 import { dungMayGia, moChrome, GOC, TOI_ID } from './lib/ban-do-chrome.mjs';
 
 const nap = await import(new URL('file:///' + path.join(GOC, 'src', 'nap-du-lieu.js').replace(/\\/g, '/')));
+/* ⚠️ BỘ CỜ QUYỀN LẤY TỪ CHÍNH `src/quyen.js`, KHÔNG GÕ TAY.
+   Ổ giả `/api/toi-la-ai` trước đây gõ tay `{ thao_tac, quan_ly, gia_von }`.
+   Ngày máy chủ thêm cờ thứ tư (`nap_luot`, Sếp chốt 09/09/2026 · C1) thì ổ giả
+   thiếu nó ⇒ giao diện gỡ luôn ô chọn "Tồn kho đầu kỳ" ⇒ cả luồng nạp không
+   chạy ⇒ bàn đo ngã ở `.get().ban_ghi_id` của một lượt nạp chưa từng xảy ra.
+   Đỏ vì Ổ GIẢ LỆCH HỢP ĐỒNG MÁY CHỦ, không vì sản phẩm — đúng lớp lỗi Ⓔ mà
+   `do-man-mo-ra-xem-duoc` sinh ra để canh. Hỏi thẳng hàm thì hết lệch. */
+const quyen = await import(new URL('file:///' + path.join(GOC, 'src', 'quyen.js').replace(/\\/g, '/')));
 
 let dat = 0, truot = 0; const hong = [];
 function ok(ten, dung, ct = '') {
@@ -109,9 +117,7 @@ const apiRieng = (duong, u, traJson, req) => {
       quyen: VAI_KINH_DOANH
         ? ['tongquan', 'lichsuviec', 'danhba', 'chat', 'gopy', 'kinhdoanh']
         : ['tongquan', 'lichsuviec', 'danhba', 'chat', 'gopy', 'nhansu', 'khovan', 'kinhdoanh'],
-      kho: VAI_KINH_DOANH
-        ? { thao_tac: false, quan_ly: false, gia_von: false }
-        : { thao_tac: true, quan_ly: true, gia_von: true },
+      kho: quyen.quyenKho({ vai_tro: VAI_KINH_DOANH ? 'van_hanh_san' : 'quan_ly_kho' }),
       san_pham: { sua: true, khoa: true }
     });
     return true;

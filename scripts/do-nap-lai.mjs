@@ -317,8 +317,13 @@ console.log('\n══ ĐƯỜNG LÙI — GỠ MỘT LƯỢT NẠP ══');
   ok('Gỡ lần hai bị chặn, không xoá lan sang dữ liệu khác', go2.ma === 409, String(go2.ma));
   const go3 = await nap.huyLuotNap(env, PHIEN, 'pn_tay_01');
   ok('KHÔNG gỡ được phiếu nhập tay qua cửa này', go3.ma === 404, String(go3.ma));
-  const go4 = await nap.huyLuotNap(env, { nhan_su_id: 'X', vai_tro: 'ke_toan_truong' }, kq.phieu_id);
-  ok('Người không có quyền thao tác kho thì không gỡ được (403)', go4.ma === 403, String(go4.ma));
+  /* ⚠️ Vai đo đổi từ `ke_toan_truong` sang `nhan_vien_kho` (C1, 09/09/2026).
+     Kế toán trưởng NAY có quyền nạp tồn hàng loạt nên qua được cửa quyền —
+     và vì lượt này đã bị gỡ ở trên, chị sẽ ăn 409 "đã gỡ rồi" chứ không phải
+     403. Ca đo sẽ vẫn "đỏ" nhưng đỏ vì lý do khác hẳn cái nó định canh: đúng
+     kiểu phép đo trỏ nhầm chỗ. Vai KHÔNG có quyền nạp nay là `nhan_vien_kho`. */
+  const go4 = await nap.huyLuotNap(env, { nhan_su_id: 'X', vai_tro: 'nhan_vien_kho' }, kq.phieu_id);
+  ok('Người không có quyền NẠP TỒN HÀNG LOẠT thì không gỡ được (403)', go4.ma === 403, String(go4.ma));
 
   // Gỡ rồi thì nạp lại chính file đó phải trôi, không bị coi là trùng nữa
   const lai = await ghi(env, csvTon(20), GHEP_TON, 'ton_kho', 'TonDauKy.csv');
@@ -760,8 +765,11 @@ console.log('\n══ ⑥ KINH DOANH CÓ ĐƯỜNG VÀO MÀN NẠP ══');
 
   /* Lời gọi khởi động màn nạp phải nằm NGOÀI `khoiDongKho` và cắt theo đúng
      hai cờ máy chủ dùng, không cắt theo tab. */
+  /* Cờ tồn kho đổi từ `thao_tac` sang `nap_luot` (C1, 09/09/2026) — xem
+     `QUYEN_KHO` trong src/quyen.js. Giữ regex cũ là bàn đo canh một luật đã
+     bị thay, tức nó sẽ đỏ mãi mà không nói được là vì sao. */
   const goiNgoai = /khoiDongNapFile\(qKhoNap, qSpNap\)/.test(js) &&
-                   /qSpNap\.sua \|\| qKhoNap\.thao_tac/.test(js);
+                   /qSpNap\.sua \|\| qKhoNap\.nap_luot/.test(js);
   ok('khoiDongNapFile được gọi ĐỘC LẬP với tab Kho vận', goiNgoai);
   ok('Bên trong khoiDongKho KHÔNG còn gọi khoiDongNapFile nữa',
      !/if \(qSanPham\.sua \|\| qKho\.thao_tac\) khoiDongNapFile/.test(js));
@@ -908,13 +916,34 @@ console.log('\n⑦ b. AI ĐƯỢC GỠ LƯỢT NẠP CỦA NGƯỜI KHÁC (CHẶ
   tin(`phiên nhan_vien_kho gỡ lượt của Sếp Ngọc → ${g.ok ? 'GỠ ĐƯỢC ' + g.da_go_dong + ' dòng' : g.ma}`);
   ok('nhan_vien_kho KHÔNG gỡ được lượt nạp của Sếp', g.ma === 403, String(g.ma));
   ok('Và không một dòng nào bị xoá', tonCua(db) === tonSauNap, `${tonSauNap} → ${tonCua(db)}`);
-  ok('Câu từ chối nói rõ AI đã nạp và AI gỡ được',
-     /Bùi Thị Ngọc/.test(g.loi || '') && /quản lý kho/i.test(g.loi || ''), String(g.loi).slice(0, 120));
+  /* Part-time nay dừng ở CỬA THỨ NHẤT (không có quyền nạp tồn hàng loạt — C1),
+     nên câu họ nhận là câu của cửa đó. Câu "do ai nạp, ai gỡ được" nằm ở CỬA
+     THỨ HAI, chỉ ai qua được cửa một mới đọc tới — đo bằng đúng một người như
+     thế: Kế toán trưởng nạp được, nhưng không phải người đã nạp lượt này và
+     cũng không có quyền quản lý kho. Gộp hai câu làm một là mất phép đo cho
+     cửa thứ hai mà không ai nhận ra. */
+  ok('Câu 403 cho part-time nói thẳng lý do C1',
+     /nạp tồn kho hàng loạt/i.test(g.loi || ''), String(g.loi).slice(0, 100));
+  const hangNgoai = { nhan_su_id: 'NS-HANG2', ho_ten: 'Phan Thị Hằng', vai_tro: 'ke_toan_truong' };
+  const gH = await nap.huyLuotNap(env, hangNgoai, k.phieu_id);
+  ok('Người CÓ quyền nạp nhưng không phải người đã nạp: vẫn 403 ở cửa thứ hai',
+     gH.ma === 403, String(gH.ma));
+  ok('Câu từ chối của cửa thứ hai nói rõ AI đã nạp và AI gỡ được',
+     /Bùi Thị Ngọc/.test(gH.loi || '') && /quản lý kho/i.test(gH.loi || ''), String(gH.loi).slice(0, 120));
+  ok('Và vẫn không một dòng nào bị xoá', tonCua(db) === tonSauNap, `${tonSauNap} → ${tonCua(db)}`);
 
-  // Danh sách lượt nạp phải nói trước cho giao diện biết ai gỡ được
+  /* Danh sách lượt nạp phải nói trước cho giao diện biết ai gỡ được.
+     ⚠️ ĐỔI LUẬT 09/09/2026 (C1): part-time nay KHÔNG nạp được tồn hàng loạt,
+     nên cũng không xem được danh sách lượt nạp — `dsLuotNap` trả thẳng 403.
+     Chặt hơn hẳn bản cũ (bản cũ vẫn cho xem, chỉ tắt cái nút). Kiểm CẢ HAI vế:
+     đúng 403, và KHÔNG kèm một danh sách rỗng giả vờ — trả rỗng là nói dối về
+     dữ liệu để che quyền, đúng thứ `src/tai-lieu.js` đã cấm. */
   const dsPT = await nap.dsLuotNap(env, partTime, 10);
   const dsSep = await nap.dsLuotNap(env, PHIEN, 10);
-  ok('Danh sách lượt nạp: part-time KHÔNG thấy nút gỡ', dsPT.ds[0].go_duoc === false);
+  ok('Danh sách lượt nạp: part-time bị chặn 403, KHÔNG trả danh sách rỗng',
+     dsPT.ma === 403 && !Array.isArray(dsPT.ds), `ma=${dsPT.ma} ds=${JSON.stringify(dsPT.ds)}`);
+  ok('Câu 403 của danh sách lượt nạp nói thẳng lý do',
+     /nạp tồn kho hàng loạt/i.test(dsPT.loi || ''), String(dsPT.loi).slice(0, 100));
   ok('Danh sách lượt nạp: người đã nạp THẤY nút gỡ', dsSep.ds[0].go_duoc === true);
 
   // Quản lý kho (anh Duy) gỡ được lượt của người khác — đúng kênh Sếp đã chốt
@@ -926,15 +955,23 @@ console.log('\n⑦ b. AI ĐƯỢC GỠ LƯỢT NẠP CỦA NGƯỜI KHÁC (CHẶ
      gDuy.ok ? String(tonCua(db)) : String(gDuy.ma));
 }
 {
-  // Người đã nạp tự gỡ lượt của mình — đường thường ngày, không được chặn oan
+  /* Người đã nạp tự gỡ lượt của mình — đường thường ngày, không được chặn oan.
+     ⚠️ Vai dùng ở đây đổi từ `nhan_vien_kho` sang `ke_toan_truong` (C1,
+     09/09/2026): part-time không còn nạp được nên không còn là "người đã nạp"
+     bao giờ nữa — dựng ca bằng vai đó là dựng một cảnh KHÔNG CÓ THẬT.
+     Kế toán trưởng là vai ĐÚNG để đo nhánh này: nạp được, nhưng KHÔNG có
+     `duocQuanLyKho`, nên chị chỉ qua được cửa nhờ vế "chính người đã nạp" —
+     tức đúng cái vế câu lệnh `ok` bên dưới đang khẳng định. */
   const db = dungCsdl(), env = dungD1(db);
-  db.prepare(`INSERT OR IGNORE INTO nhan_su (id, ho_ten) VALUES ('NS-PT','Bạn part-time kho')`).run();
-  const pt = { nhan_su_id: 'NS-PT', ho_ten: 'Bạn part-time kho', vai_tro: 'nhan_vien_kho' };
+  db.prepare(`INSERT OR IGNORE INTO nhan_su (id, ho_ten) VALUES ('NS-HANG','Phan Thị Hằng')`).run();
+  const hang = { nhan_su_id: 'NS-HANG', ho_ten: 'Phan Thị Hằng', vai_tro: 'ke_toan_truong' };
   await ghi(env, csvSP(10), GHEP_SP);
-  const k = await ghi(env, csvTon(10), GHEP_TON, 'ton_kho', 'PT_nap.csv', { phien: pt });
-  const g = await nap.huyLuotNap(env, pt, k.phieu_id);
-  ok('Chính người đã nạp thì tự gỡ được lượt của mình', !!g.ok && tonCua(db) === 0,
-     g.ok ? String(tonCua(db)) : String(g.ma));
+  const k = await ghi(env, csvTon(10), GHEP_TON, 'ton_kho', 'KTT_nap.csv', { phien: hang });
+  ok('Kế toán trưởng NẠP ĐƯỢC tồn kho hàng loạt (C1 — Sếp mở thêm 09/09/2026)',
+     !!k.phieu_id, k.phieu_id ? String(k.phieu_id) : `bị chặn ${k.ma}: ${String(k.loi).slice(0, 80)}`);
+  const g = await nap.huyLuotNap(env, hang, k.phieu_id);
+  ok('Chính người đã nạp thì tự gỡ được lượt của mình (dù KHÔNG có quyền quản lý kho)',
+     !!g.ok && tonCua(db) === 0, g.ok ? String(tonCua(db)) : String(g.ma));
 }
 
 console.log('\n⑦ c. GỠ NGÃ GIỮA CHỪNG (CAO-③)');

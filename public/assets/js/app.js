@@ -4278,6 +4278,7 @@ async function khoiDongLichSuViec() {
      ⚠️ GIỮ LẠI tháng đang chọn kể cả khi nó không còn dòng nào (đổi phạm vi,
      tải thêm trang cũ). Tự bỏ chọn giúp người dùng chính là LẶNG LẼ ĐỔI BỘ
      LỌC của họ — rồi họ nhìn một danh sách khác mà tưởng dữ liệu đổi. */
+  let CHU_KY_THANG = null;   // chữ ký danh sách tháng đã vẽ, để khỏi vẽ lại thừa
   function veOThang() {
     const o = $('#ls-cv-locthang');
     if (!o) return;
@@ -4286,6 +4287,15 @@ async function khoiDongLichSuViec() {
                  .filter(t => /^\d{4}-\d{2}$/.test(t));
     if (dangChon && !co.includes(dangChon)) co.push(dangChon);
     co.sort().reverse();
+    /* ⚠️ CHỈ DỰNG LẠI KHI DANH SÁCH THÁNG THẬT SỰ ĐỔI.
+       `veBangLsCv()` chạy theo TỪNG PHÍM gõ vào ô tìm. Ghi đè `innerHTML` mỗi
+       lượt là mỗi lượt đập đi dựng lại cái `<select>` — người đang mở danh
+       sách tháng ra chọn thì nó đóng sập ngay dưới ngón tay, và trên điện
+       thoại là cả bảng chọn của hệ điều hành biến mất. Chữ ký rẻ (một chuỗi
+       vài chục ký tự) mà cắt được toàn bộ lượt vẽ thừa. */
+    const chuKy = co.join(',');
+    if (chuKy === CHU_KY_THANG) { o.value = dangChon; return; }
+    CHU_KY_THANG = chuKy;
     o.innerHTML = '<option value="">Tất cả các tháng</option>' +
       co.map(t => `<option value="${esc(t)}">${esc(nhanThang(t))}</option>`).join('');
     o.value = dangChon;
