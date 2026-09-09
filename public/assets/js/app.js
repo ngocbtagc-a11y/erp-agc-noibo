@@ -197,6 +197,20 @@ const MOI_MAN = [...new Set(TAB.map(manCuaMuc))];
 // biến mất luôn, không có đường quay lại). Chỗ nào đổ DROPDOWN để CHỌN
 // (Thêm/Sửa Nhân sự, Thêm/Sửa Sản phẩm...) thì tự lọc .hoat_dong ngay tại chỗ dùng.
 let DS_PHONG_BAN = [], DS_CHUC_DANH = [], DS_DON_VI = [];
+/* Tóm tắt nhân sự cho SƠ ĐỒ TỔ CHỨC — tổng người ĐANG LÀM đếm thẳng trên
+   `nhan_su`, cùng ba danh sách người đang thiếu dữ liệu. KHÔNG suy ra được
+   từ `DS_PHONG_BAN`: ai không có `phong_ban_id` thì không nằm trong bất kỳ
+   phòng nào để mà cộng. Xem `tomTatNhanSuSoDo` ở src/dulieunen.js. */
+let TOM_TAT_SO_DO = null;
+/* Nhãn của ba cấp trong sơ đồ tổ chức. Một nguồn duy nhất cho hàm vẽ.
+   ⚠️ PHẢI KHAI Ở ĐÂY, KHÔNG PHẢI CẠNH HÀM VẼ Ở CUỐI TỆP. `khoiDongDuLieuNen()`
+   chạy ở khoảng dòng 8500, tức TRƯỚC khi thân tệp chạy tới dòng 14500 — một
+   `const` đặt cạnh hàm vẽ vẫn còn trong vùng chết (TDZ) lúc đó, và cả sơ đồ
+   chết câm với `ReferenceError: Cannot access 'SODO_CAP' before initialization`
+   nuốt gọn trong `try/catch` của khối khởi động. Đúng cái bẫy đã giết chat ở
+   `7bf0e58` và đã ghi lại trong `lib/ban-do-chrome.mjs`. Bản nháp đầu của bản
+   vá này đạp trúng nó, bàn đo bắt được ngay lượt chạy đầu. */
+const SODO_CAP = { cong_ty: 'Công ty', phong: 'Phòng', nhom: 'Nhóm' };
 // Dữ liệu nhân sự đầy đủ (chỉ nạp cho HCNS/Admin qua qtDanhSach) — dùng
 // chung cho cả bảng Nhân sự (hồ sơ) lẫn Quản trị (tài khoản), 1 API duy
 // nhất thay vì mỗi tab tự gọi riêng.
@@ -255,6 +269,7 @@ const taiDanhMucNen = ngheDuLieu('du_lieu_nen', async function taiDanhMucNen() {
     API.dlnDonVi().catch(() => ({ ds: [] }))
   ]);
   DS_PHONG_BAN = pb.ds || [];
+  TOM_TAT_SO_DO = pb.tom_tat || null;
   DS_CHUC_DANH = cd.ds || [];
   DS_DON_VI = dv.ds || [];
 });
@@ -8665,7 +8680,7 @@ async function khoiDongDuLieuNen() {
        việc hằng ngày của ai. Muốn bỏ thì phải bỏ KÈM bàn đo. */
     await taiDanhMucNen();   // làm mới cache dùng chung (Nhân sự/Kho vận cũng đọc từ đây)
     /* Vẽ sơ đồ TRƯỚC danh sách: đây là thứ Sếp nhìn đầu tiên khi mở tab. */
-    veSoDoToChuc(DS_PHONG_BAN);
+    veSoDoToChuc(DS_PHONG_BAN, TOM_TAT_SO_DO);
     veDanhMuc('#dln-pb-list', '#dln-pb-dem', '#dln-pb-trong', DS_PHONG_BAN,
       (id, ten) => API.dlnSuaPhongBan(id, { ten }), (id, hd) => API.dlnSuaPhongBan(id, { hoat_dong: hd }),
       (id, tt) => API.dlnKhoaPhongBan(id, tt),
@@ -14450,29 +14465,67 @@ function tenRieng(t) {
   return (l && td && l !== td) ? td : '';
 }
 /* ==========================================================================
-   SƠ ĐỒ TỔ CHỨC KÉO THẢ ĐƯỢC
+   SƠ ĐỒ TỔ CHỨC BA TẦNG — VẼ LẠI THEO BẢN SẾP BAN HÀNH 09/09/2026
    ---------------------------------------------------------------------------
-   Sếp Ngọc 06/09/2026: "kéo thả là cho phép thiết kế lại sơ đồ tổ chức, tên
-   phòng ban..."
+   Sếp Bùi Thị Ngọc: *"tôi cần thiết kế lại toàn bộ nên đập đi xây lại cũng
+   được, công ty đang ban hành cơ cấu tổ chức như này cơ"*. Bản cũ vẽ cây lồng
+   nhau thụt lề — đúng cho một cây tuỳ ý, nhưng KHÔNG phải hình Sếp ban hành,
+   và nó hỏng ở hai chỗ nặng hơn nhiều so với hình thức:
 
-   Ba việc làm được ngay trên sơ đồ:
-     · KÉO một hộp thả lên hộp khác  → phòng đó trực thuộc phòng kia
-     · KÉO thả vào dải "Cấp cao nhất" → tách ra khỏi phòng cha
-     · BẤM ĐÚP vào tên            → sửa tên tại chỗ, Enter là lưu
+   ① Ô GỐC ĐẾM SAI. Bản cũ lấy tổng người bằng cách CỘNG `so_nguoi` của các
+      phòng: 17 + 3 + 2 + 0 = 22. Đang làm thật là 24. Hai người chưa có
+      `phong_ban_id` (Nguyễn Thị Huyền, Vũ Lan Hương) không thuộc phòng nào
+      nên không lọt vào phép cộng và BIẾN MẤT khỏi sơ đồ — màn hình trông đầy
+      đủ, con số trông hợp lý, người bị bỏ quên thì im lặng. Nay tổng lấy từ
+      `TOM_TAT_SO_DO.tong_dang_lam`, đếm thẳng trên `nhan_su`, và ai rơi ra
+      ngoài thì hiện thành KHỐI CẢNH BÁO ĐẾM ĐƯỢC có tên đầy đủ.
+   ② KHÔNG DÙNG `quan_ly_id` MỘT DÒNG NÀO. Cột "ai báo cáo cho ai" đã điền
+      23/24 hồ sơ mà sơ đồ chưa từng đọc tới — nên chuyện Kế toán trưởng đang
+      báo cáo cho Quản lý kho nằm trong CSDL suốt mà không màn nào nói ra.
 
-   GỬI CẢ SƠ ĐỒ MỘT LẦN, không gửi từng thao tác: kéo một hộp thường làm đổi
-   thứ tự mấy hộp bên cạnh; gửi lẻ thì nửa chừng rớt mạng là sơ đồ mắc kẹt dở
-   dang mà không ai biết đúng sai.
+   BA TẦNG, KHÔNG PHẢI CÂY TUỲ Ý. Cấp đọc từ cột `cap` ('cong_ty' | 'phong' |
+   'nhom'), KHÔNG suy theo độ sâu — độ sâu là thứ một cú kéo thả đổi được
+   trong một giây, còn cấp là quyết định của Sếp.
 
-   CÓ ĐƯỜNG CHO ĐIỆN THOẠI. HTML5 drag KHÔNG chạy trên màn cảm ứng — kho vận
-   dùng ERP bằng điện thoại, làm mỗi kéo thả là cắt họ khỏi tính năng. Nên mỗi
-   hộp có thêm ô chọn "Trực thuộc" làm đúng việc đó bằng một cú chạm.
+   LUẬT MÀN HÌNH — 5 NHÓM NẰM NGANG LÀ TRÀN Ở 375px. Mỗi hàng con là một
+   `grid` `auto-fit minmax()`: rộng thì các hộp tự nằm ngang đúng như hình
+   Sếp vẽ, hẹp thì TỰ XUỐNG DÒNG thành cột dọc. KHÔNG có `overflow-x: auto`
+   ở đâu trong khối này — thanh kéo ngang là cách giấu mất nửa sơ đồ.
+
+   GIỮ NGUYÊN BA VIỆC LÀM ĐƯỢC TRÊN SƠ ĐỒ (bản cũ đã có, không có lý do bỏ):
+     · KÉO một hộp thả lên hộp khác   → hộp đó trực thuộc hộp kia
+     · Ô CHỌN "Trực thuộc"            → đường cho điện thoại, nơi HTML5 drag
+       KHÔNG chạy; kho vận dùng ERP bằng điện thoại
+     · BẤM ĐÚP vào tên                → sửa tên tại chỗ, Enter là lưu
+   Bỏ dải "Thả vào đây để tách ra cấp cao nhất": trong cơ cấu ba tầng, tách
+   một hộp ra thành cấp cao nhất thứ hai là dựng thêm một công ty nữa. Ô chọn
+   "Trực thuộc" vẫn còn mục "— Cấp cao nhất —" cho ai thật sự cần.
+
+   `phu_trach_id` KHÔNG SỬA ĐƯỢC TRÊN MÀN. Ai trực tiếp phụ trách một Phòng
+   là quyết định cấp Ban Giám đốc, đặt bằng file migration Sếp đọc từng dòng
+   rồi chạy — không phải một ô chọn bấm nhầm được.
    ========================================================================== */
-function veSoDoToChuc(dsPhongBan) {
+
+/* Chức vụ RÚT GỌN cho dòng "… trực tiếp phụ trách".
+   Hồ sơ thật đang ghi "Giám đốc kiêm TP. Kinh doanh - MKT" và "Phó Giám đốc
+   kiêm TP. Support" — chức vụ kiêm nhiệm của thời còn hai pháp nhân. In cả
+   cụm vào sơ đồ ra câu "Giám đốc kiêm TP. Kinh doanh - MKT trực tiếp phụ
+   trách: Nguyễn Duy Phong", vừa dài vừa nói sai vai: ở hộp này ông ấy đứng
+   với tư cách GIÁM ĐỐC. Cắt tại chữ " kiêm " lấy chức chính.
+   KHÔNG sửa dữ liệu — hồ sơ nhân sự là việc của Sếp, đây chỉ là cách HIỂN
+   THỊ; ngày Sếp bỏ phần kiêm nhiệm thì hàm này tự khắc không cắt gì nữa. */
+function chucVuGon(cv) {
+  const s = String(cv || '').trim();
+  if (!s) return 'Người';
+  return s.split(/\s+kiêm\s+/i)[0].trim() || s;
+}
+
+function veSoDoToChuc(dsPhongBan, tomTat) {
   const o = document.getElementById('dln-sodo');
   const tom = document.getElementById('dln-sodo-tom');
   if (!o) return;
 
+  const tt = tomTat || TOM_TAT_SO_DO || null;
   const ds = (dsPhongBan || []).filter(p => p.hoat_dong !== 0);
   if (!ds.length) {
     o.innerHTML = '<div class="empty">Chưa có phòng ban nào — thêm ở ô bên dưới.</div>';
@@ -14480,19 +14533,14 @@ function veSoDoToChuc(dsPhongBan) {
     return;
   }
 
-  const tongNguoi = ds.reduce((m, p) => m + (Number(p.so_nguoi) || 0), 0);
-  const chuaTruong = ds.filter(p => !p.truong_phong_ten).length;
-  if (tom) {
-    tom.textContent = ds.length + ' phòng · ' + tongNguoi + ' người'
-      + (chuaTruong ? ' · ' + chuaTruong + ' phòng chưa có trưởng' : '')
-      + ' · kéo hộp để xếp lại, bấm đúp vào tên để sửa';
-  }
-
-  const conCua = (chaId) => ds
+  const soCua = p => Number(p.so_nguoi) || 0;
+  const conCua = chaId => ds
     .filter(p => (p.cha_id == null ? null : Number(p.cha_id)) === chaId)
     .sort((a, b) => (a.thu_tu || 0) - (b.thu_tu || 0));
 
-  const oChon = (p) => '<select class="sodo-chon" data-cha-cua="' + esc(p.id) + '">'
+  /* ---- Ô chọn "Trực thuộc" — đường cho màn cảm ứng ---------------------- */
+  const oChon = p => '<select class="sodo-chon" data-cha-cua="' + esc(p.id) + '"'
+    + ' aria-label="Hộp ' + esc(p.ten) + ' trực thuộc đâu">'
     + '<option value="">— Cấp cao nhất —</option>'
     + ds.filter(x => Number(x.id) !== Number(p.id))
         .map(x => '<option value="' + esc(x.id) + '"'
@@ -14500,38 +14548,167 @@ function veSoDoToChuc(dsPhongBan) {
         .join('')
     + '</select>';
 
-  const veHop = (p) => {
-    const so = Number(p.so_nguoi) || 0;
-    return '<li class="sodo-nhanh">'
-      + '<div class="sodo-o' + (so === 0 ? ' trong' : '') + '" draggable="true" data-pb="' + esc(p.id) + '">'
-      +   '<b class="sodo-ten" data-sua-ten="' + esc(p.id) + '" title="Bấm đúp để sửa tên">' + esc(p.ten) + '</b>'
-      +   '<div class="sodo-tp">'
-      +     (p.truong_phong_ten ? 'Trưởng phòng: <b>' + esc(p.truong_phong_ten) + '</b>'
-                                : '<i>Chưa có trưởng phòng</i>')
-      +   '</div>'
-      +   '<div class="sodo-so">' + so + ' người'
-      +     (so === 0 ? ' <span class="sodo-canh">chưa ai được gán</span>' : '') + '</div>'
-      +   '<div class="sodo-hanh">'
-      +     '<button type="button" class="btn-nho sodo-nut" data-gan-truong="' + esc(p.id) + '">'
-      +       (p.truong_phong_ten ? 'Đổi trưởng phòng' : 'Gán trưởng phòng') + '</button>'
-      +     oChon(p)
-      +   '</div>'
+  /* ---- Một hộp ---------------------------------------------------------- */
+  /* `capThat` đọc từ cột, KHÔNG suy từ độ sâu. Hộp nào cột `cap` rỗng (chưa
+     nạp migration `them-phongban-ba-tang.sql`) thì vẫn VẼ RA — hộp lạ phải
+     nhìn thấy được, không được im lặng biến mất — và bị đếm vào cảnh báo. */
+  const veHop = (p, capThat) => {
+    const so = soCua(p);
+    const laNhom = capThat === 'nhom';
+    const laCty  = capThat === 'cong_ty';
+    /* Dòng "ai trực tiếp phụ trách" — ô dữ liệu RIÊNG, không phải trưởng
+       phòng. Gạch chân đúng như bản Sếp ban hành. */
+    const dongPhuTrach = p.phu_trach_ten
+      ? '<div class="sodo-phutrach">' + esc(chucVuGon(p.phu_trach_chuc_vu)) + ' trực tiếp phụ trách: '
+        + '<b>' + esc(p.phu_trach_ten) + '</b></div>'
+      : '';
+    /* Trưởng nhóm chỉ có nghĩa ở cấp Nhóm. Phòng trong cơ cấu mới KHÔNG có
+       trưởng phòng — chính Giám đốc / Phó Giám đốc phụ trách. */
+    const dongTruong = laNhom
+      ? '<div class="sodo-tp">' + (p.truong_phong_ten
+          ? 'Trưởng nhóm: <b>' + esc(p.truong_phong_ten) + '</b>'
+          : '<i>Chưa có trưởng nhóm</i>') + '</div>'
+      : (p.truong_phong_ten && !laCty
+          ? '<div class="sodo-tp">Trưởng: <b>' + esc(p.truong_phong_ten) + '</b></div>' : '');
+    const dongMoTa = p.mo_ta
+      ? '<div class="sodo-mota">' + esc(p.mo_ta).split(' · ')
+          .map(d => '<span>' + d + '</span>').join('') + '</div>'
+      : '';
+    /* Ô gốc in TỔNG NGƯỜI ĐANG LÀM (đếm thẳng trên nhan_su), KHÔNG phải tổng
+       cộng theo phòng — xem lỗi ① ở đầu khối. Hộp Phòng/Nhóm in số người
+       thuộc chính nó. */
+    const dongSo = laCty
+      ? (tt && Number.isFinite(Number(tt.tong_dang_lam))
+          ? '<div class="sodo-tong" data-tong-nguoi="' + Number(tt.tong_dang_lam) + '">'
+            + Number(tt.tong_dang_lam) + ' người đang làm</div>'
+          : '<div class="sodo-tong sodo-tong-thieu" data-tong-nguoi="">Chưa đếm được tổng người</div>')
+      : '<div class="sodo-so" data-so-nguoi="' + so + '">' + so + ' người'
+        + (so === 0 ? ' <span class="sodo-canh">chưa ai được gán</span>' : '') + '</div>';
+
+    return '<div class="sodo-o cap-' + esc(capThat || 'la') + (so === 0 && !laCty ? ' trong' : '') + '"'
+      + (laCty ? '' : ' draggable="true"')
+      + ' data-pb="' + esc(p.id) + '" data-cap="' + esc(capThat || 'la') + '">'
+      + '<span class="sodo-nhan">' + esc(SODO_CAP[capThat] || 'Chưa xếp cấp') + '</span>'
+      + '<b class="sodo-ten" data-sua-ten="' + esc(p.id) + '" title="Bấm đúp để sửa tên">' + esc(p.ten) + '</b>'
+      + dongPhuTrach + dongTruong + dongMoTa + dongSo
+      + '<div class="sodo-hanh">'
+      /* Nhãn nút bám đúng CẤP: hộp Nhóm nói "trưởng nhóm", hộp Phòng nói
+         "trưởng phòng". Cơ cấu mới không đặt trưởng phòng nào (Giám đốc và
+         Phó Giám đốc trực tiếp phụ trách), nhưng nút vẫn để đó cho ngày Sếp
+         quyết bổ nhiệm — chỉ là nó phải gọi đúng tên chức. */
+      +   (laCty ? '' : '<button type="button" class="btn-nho sodo-nut" data-gan-truong="' + esc(p.id) + '">'
+            + (p.truong_phong_ten ? 'Đổi ' : 'Gán ') + (laNhom ? 'trưởng nhóm' : 'trưởng phòng') + '</button>')
+      +   (laCty ? '' : oChon(p))
       + '</div>'
-      + veCon(Number(p.id))
-      + '</li>';
+      + '</div>';
   };
 
-  const veCon = (chaId) => {
-    const con = conCua(chaId);
-    return con.length ? '<ul class="sodo-con">' + con.map(veHop).join('') + '</ul>' : '';
+  /* ---- Một nhánh: hộp + đường nối xuống + hàng con ---------------------- */
+  const veNhanh = (p, capThat) => {
+    const con = conCua(Number(p.id));
+    const capCon = capThat === 'cong_ty' ? 'phong' : capThat === 'phong' ? 'nhom' : null;
+    return '<div class="sodo-nhanh">'
+      + veHop(p, capThat)
+      + (con.length ? '<div class="sodo-noi" aria-hidden="true"></div>'
+          + '<div class="sodo-hang hang-' + esc(capCon || 'la') + '">'
+          + con.map(c => veNhanh(c, c.cap || capCon)).join('') + '</div>' : '')
+      + '</div>';
   };
 
-  o.innerHTML =
-    '<div class="sodo-goc" data-tha-goc="1">Alpha Green Commerce · ' + tongNguoi + ' người'
-    + '<span>Thả một hộp vào đây để tách nó ra cấp cao nhất</span></div>'
-    + '<ul class="sodo-cay">' + conCua(null).map(veHop).join('') + '</ul>';
+  /* ---- Gốc: hộp cấp `cong_ty`. Không có = cây phẳng, phải KÊU TO -------- */
+  const goc = ds.filter(p => p.cap === 'cong_ty');
+  const moCoi = ds.filter(p => p.cap !== 'cong_ty'
+    && (p.cha_id == null || !ds.some(x => Number(x.id) === Number(p.cha_id))));
+
+  let than = '';
+  if (!goc.length) {
+    /* CHƯA NẠP MIGRATION, hoặc ai đó vừa kéo hộp công ty xuống làm con.
+       KHÔNG âm thầm vẽ phẳng như bản cũ: vẽ phẳng trông vẫn "chạy được" nên
+       không ai đi nạp migration, và cơ cấu Sếp ban hành nằm mãi trên giấy. */
+    than = '<div class="sodo-loi-phang" data-loi="cay-phang">'
+      + '<b>Sơ đồ đang PHẲNG — chưa có hộp cấp Công ty.</b>'
+      + '<span>' + ds.length + ' hộp đang nằm cùng một tầng. Cơ cấu ba tầng cần cột '
+      + '<code>cap</code>: nạp <code>them-phongban-ba-tang.sql</code> rồi '
+      + '<code>xep-lai-co-cau-2026-09.sql</code> (đúng thứ tự đó).</span></div>'
+      + '<div class="sodo-hang hang-phong">'
+      + ds.sort((a, b) => (a.thu_tu || 0) - (b.thu_tu || 0))
+          .map(p => veNhanh(p, p.cap || null)).join('')
+      + '</div>';
+  } else {
+    than = goc.map(p => veNhanh(p, 'cong_ty')).join('')
+      /* Hộp mồ côi: có cấp nhưng không nối được vào cây nào. Vẫn phải hiện —
+         hộp không vẽ ra là hộp không ai sửa. */
+      + (moCoi.length ? '<div class="sodo-loi-phang" data-loi="mo-coi">'
+          + '<b>' + moCoi.length + ' hộp chưa nối vào cây</b>'
+          + '<span>' + moCoi.map(p => esc(p.ten)).join(' · ') + '</span></div>'
+          + '<div class="sodo-hang hang-phong">'
+          + moCoi.map(p => veNhanh(p, p.cap || null)).join('') + '</div>' : '');
+  }
+
+  o.innerHTML = '<div class="sodo-khung">' + than + '</div>' + veCanhBaoNhanSu(ds, tt);
+
+  if (tom) {
+    const nhom = ds.filter(p => p.cap === 'nhom').length;
+    const phong = ds.filter(p => p.cap === 'phong').length;
+    tom.textContent = phong + ' phòng · ' + nhom + ' nhóm'
+      + (tt ? ' · ' + tt.tong_dang_lam + ' người đang làm' : '')
+      + ' · kéo hộp để xếp lại, bấm đúp vào tên để sửa';
+  }
 
   ganKeoThaSoDo(o, ds);
+}
+
+/* ==========================================================================
+   KHỐI CẢNH BÁO — NGƯỜI VÀ Ô TRỐNG SƠ ĐỒ ĐANG ĐÁNH RƠI
+   ---------------------------------------------------------------------------
+   Luật của khối này: MỌI thứ thiếu đều có MỘT CON SỐ ĐẾM ĐƯỢC và tên người
+   đứng ngay cạnh. "Có 2 người chưa vào sơ đồ" mà không nói là ai thì không ai
+   sửa được; mà không hiện gì thì còn tệ hơn — đó chính là cách bản cũ làm
+   mất Nguyễn Thị Huyền và Vũ Lan Hương.
+
+   Sạch hết thì khối này vẫn hiện, một dòng xanh lá xác nhận — im lặng và
+   "đã kiểm, không có gì" là hai thứ khác nhau trên màn hình.
+   ========================================================================== */
+function veCanhBaoNhanSu(ds, tt) {
+  const muc = [];
+  const ten = ng => (ng || []).map(x => esc(x.ho_ten)).join(' · ');
+
+  if (!tt) {
+    return '<div class="sodo-thieu" data-canh-bao-so="-1">'
+      + '<b class="sodo-thieu-dau">Chưa đọc được số nhân sự</b>'
+      + '<span>Máy chủ không trả về khối <code>tom_tat</code> — tổng người ở ô gốc '
+      + 'và các cảnh báo bên dưới đang TRỐNG, không phải đang SẠCH.</span></div>';
+  }
+
+  if (tt.khong_phong?.length)
+    muc.push(['khong-phong', tt.khong_phong.length, 'người chưa vào sơ đồ',
+      'không thuộc phòng/nhóm nào nên không nằm trong hộp nào ở trên', ten(tt.khong_phong)]);
+  if (tt.khong_quan_ly?.length)
+    muc.push(['khong-quan-ly', tt.khong_quan_ly.length, 'người chưa có quản lý trực tiếp',
+      'không biết báo cáo cho ai — riêng Giám đốc là đỉnh cây, không tính', ten(tt.khong_quan_ly)]);
+  if (tt.trong_chuc_vu?.length)
+    muc.push(['trong-chuc-vu', tt.trong_chuc_vu.length, 'người trống chức vụ',
+      'xếp nhóm cho họ là đang đoán', ten(tt.trong_chuc_vu)]);
+  if (tt.trong_chuc_danh?.length)
+    muc.push(['trong-chuc-danh', tt.trong_chuc_danh.length, 'người trống chức danh',
+      'chưa nối được vào bảng lương và mô tả công việc', ten(tt.trong_chuc_danh)]);
+
+  const nhomChuaTruong = ds.filter(p => p.cap === 'nhom' && !p.truong_phong_ten);
+  if (nhomChuaTruong.length)
+    muc.push(['nhom-chua-truong', nhomChuaTruong.length, 'nhóm chưa có trưởng nhóm',
+      'chưa ai cam kết đầu ra của nhóm', nhomChuaTruong.map(p => esc(p.ten)).join(' · ')]);
+
+  if (!muc.length) {
+    return '<div class="sodo-thieu du" data-canh-bao-so="0">'
+      + '<b class="sodo-thieu-dau">Đủ người, đủ ô — cả ' + Number(tt.tong_dang_lam)
+      + ' người đang làm đều nằm trong sơ đồ, mỗi nhóm đều có trưởng nhóm.</b></div>';
+  }
+  return '<div class="sodo-thieu" data-canh-bao-so="' + muc.length + '">'
+    + '<b class="sodo-thieu-dau">Sơ đồ chưa nhận đủ — ' + muc.length + ' việc cần Sếp chốt</b>'
+    + '<ul>' + muc.map(([ma, n, nhan, vi, dsTen]) =>
+        '<li data-thieu="' + ma + '" data-so="' + n + '">'
+        + '<b>' + n + ' ' + nhan + '</b> — <i>' + vi + '</i>'
+        + '<span>' + dsTen + '</span></li>').join('') + '</ul></div>';
 }
 
 
@@ -14572,21 +14749,12 @@ function ganKeoThaSoDo(goc, ds) {
     });
   });
 
-  /* Thả vào hộp công ty = tách ra cấp cao nhất */
-  const oGoc = goc.querySelector('[data-tha-goc]');
-  if (oGoc) {
-    oGoc.addEventListener('dragover', e => {
-      if (!dangKeo) return;
-      e.preventDefault();
-      oGoc.classList.add('sap-tha');
-    });
-    oGoc.addEventListener('dragleave', () => oGoc.classList.remove('sap-tha'));
-    oGoc.addEventListener('drop', async e => {
-      e.preventDefault();
-      oGoc.classList.remove('sap-tha');
-      if (dangKeo) await doiCha(ds, dangKeo, null);
-    });
-  }
+  /* KHÔNG CÒN "thả vào đây để tách ra cấp cao nhất" ------------------------
+     Bản cũ có một dải nhận thả để đưa một hộp lên cấp cao nhất. Trong cơ cấu
+     ba tầng Sếp ban hành, "cấp cao nhất thứ hai" nghĩa là công ty thứ hai —
+     một thao tác kéo nhầm dựng ra thứ không tồn tại ngoài đời. Ai thật sự
+     cần vẫn làm được bằng ô chọn "Trực thuộc → — Cấp cao nhất —", nơi phải
+     chọn có ý thức chứ không phải trượt tay. */
 
   /* ---- Đường cho điện thoại: ô chọn "trực thuộc" -------------------------
      HTML5 drag KHÔNG chạy trên màn cảm ứng. Kho vận dùng ERP bằng điện thoại,
@@ -14656,7 +14824,9 @@ async function doiCha(ds, conId, chaId) {
        làm mới cả tab và không phải lúc nào cũng chạm tới sơ đồ, nên người kéo
        xong thấy y như cũ và tưởng thao tác trượt. */
     const kq = await API.dlnPhongBan();
-    veSoDoToChuc(kq.ds || []);
+    DS_PHONG_BAN = kq.ds || DS_PHONG_BAN;
+    if (kq.tom_tat) TOM_TAT_SO_DO = kq.tom_tat;
+    veSoDoToChuc(kq.ds || [], kq.tom_tat);
     lamMoiManVuaMo();
   } catch (e) {
     alert('Không lưu được sơ đồ: ' + e.message);

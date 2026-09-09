@@ -163,12 +163,67 @@ export const danhSachPhongBan = async (env) => {
               Kinh Doanh - MKT 0 người, thứ không ai thấy khi đọc danh sách phẳng. */
            (SELECT COUNT(*) FROM nhan_su n
              WHERE n.phong_ban_id = pb.id AND n.dang_lam = 1) AS so_nguoi,
-           pb.thu_tu, pb.cha_id
-      FROM phong_ban pb LEFT JOIN nhan_su ns ON ns.id = pb.truong_phong_id
+           pb.thu_tu, pb.cha_id,
+           /* Cơ cấu 09/09/2026: cấp của hộp, ai TRỰC TIẾP PHỤ TRÁCH (khác
+              trưởng phòng), và hai dòng chức năng in dưới hộp Nhóm. */
+           pb.cap, pb.mo_ta, pb.phu_trach_id,
+           pt.ho_ten AS phu_trach_ten, pt.chuc_vu AS phu_trach_chuc_vu
+      FROM phong_ban pb
+      LEFT JOIN nhan_su ns ON ns.id = pb.truong_phong_id
+      LEFT JOIN nhan_su pt ON pt.id = pb.phu_trach_id
      ORDER BY pb.hoat_dong DESC, COALESCE(pb.thu_tu, 9999), pb.ten
   `).all();
-  return json({ ds: results || [] });
+  return json({ ds: results || [], tom_tat: await tomTatNhanSuSoDo(env) });
 };
+
+/* ==========================================================================
+   TỔNG NGƯỜI THẬT + NHỮNG NGƯỜI SƠ ĐỒ ĐANG ĐÁNH RƠI
+   ---------------------------------------------------------------------------
+   VÌ SAO PHẢI CÓ. Sơ đồ cũ lấy tổng người bằng cách CỘNG `so_nguoi` của các
+   phòng. Đo thật 09/09/2026: cộng ra 22, mà đang làm là 24 — hai người
+   (Nguyễn Thị Huyền, Vũ Lan Hương) chưa có `phong_ban_id` nên không thuộc
+   phòng nào, không lọt vào phép cộng, và BIẾN MẤT khỏi sơ đồ. Không dòng nào
+   trên màn hình nói rằng họ tồn tại.
+
+   Đó là kiểu hỏng tệ nhất: màn hình trông đầy đủ, con số trông hợp lý, và
+   người bị bỏ quên thì im lặng. Nên tổng ở ô gốc PHẢI đếm thẳng
+   `nhan_su WHERE dang_lam = 1`, không bao giờ cộng theo phòng; còn ba nhóm
+   thiếu dữ liệu thì trả về CÓ TÊN để sơ đồ in ra thành khối cảnh báo đếm
+   được, không phải một con số cụt.
+
+   `quan_ly_id` là cột ERP đã điền 23/24 mà sơ đồ cũ KHÔNG dùng một dòng nào.
+   Người duy nhất được phép trống là Giám đốc (đỉnh cây) — nên ở đây loại
+   đúng những người đang là `phu_trach_id` của hộp cấp công ty, còn lại mà
+   trống thì là thiếu thật.
+   ========================================================================== */
+async function tomTatNhanSuSoDo(env) {
+  const { results } = await env.DB.prepare(`
+    SELECT n.id, n.ho_ten, n.chuc_vu, n.phong_ban_id, n.quan_ly_id, n.chuc_danh_id
+      FROM nhan_su n WHERE n.dang_lam = 1 ORDER BY n.ho_ten
+  `).all();
+  const nguoi = results || [];
+
+  /* Ai đứng đầu cây: người được gán phụ trách hộp cấp `cong_ty`. Chỉ những
+     người này mới được phép trống `quan_ly_id`. */
+  const { results: dinh } = await env.DB.prepare(
+    `SELECT phu_trach_id, truong_phong_id FROM phong_ban WHERE cap = 'cong_ty'`
+  ).all();
+  const dinhCay = new Set();
+  for (const d of dinh || []) {
+    if (d.phu_trach_id) dinhCay.add(d.phu_trach_id);
+    if (d.truong_phong_id) dinhCay.add(d.truong_phong_id);
+  }
+
+  const gon = n => ({ id: n.id, ho_ten: n.ho_ten, chuc_vu: n.chuc_vu || '' });
+  return {
+    tong_dang_lam: nguoi.length,
+    dinh_cay: [...dinhCay],
+    khong_phong:    nguoi.filter(n => n.phong_ban_id == null).map(gon),
+    khong_quan_ly:  nguoi.filter(n => !n.quan_ly_id && !dinhCay.has(n.id)).map(gon),
+    trong_chuc_vu:  nguoi.filter(n => !String(n.chuc_vu || '').trim()).map(gon),
+    trong_chuc_danh: nguoi.filter(n => n.chuc_danh_id == null).map(gon)
+  };
+}
 export const themPhongBan = (env, phien, body) =>
   batBuocToChuc(phien) || themDanhMuc(env, 'phong_ban', body, 'tên phòng ban');
 export const suaPhongBan = (env, phien, body) =>

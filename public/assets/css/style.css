@@ -5234,65 +5234,162 @@ body.tl-dang-xem { overflow: hidden; }
   .tl-xem-nen { padding: 0; }
   .tl-xem { height: 100%; border-radius: 0; }
 }
-
 /* ---------------------------------------------------------------------------
-   SƠ ĐỒ TỔ CHỨC KÉO THẢ ĐƯỢC
+   SƠ ĐỒ TỔ CHỨC BA TẦNG — bản Sếp Ngọc ban hành 09/09/2026
    ---------------------------------------------------------------------------
-   Sếp Ngọc 06/09/2026: kéo thả để thiết kế lại sơ đồ tổ chức và tên phòng ban.
+   Bản cũ vẽ cây lồng nhau thụt lề bằng đường kẻ trái. Đúng cho một cây tuỳ ý,
+   nhưng KHÔNG phải hình Sếp ban hành: hình đó là ba TẦNG, hộp con nằm NGANG
+   dưới hộp cha, có mũi tên xuống.
 
-   Cây lồng nhau vẽ bằng đường kẻ trái, không bằng thư viện sơ đồ: một cây bốn
-   năm nhánh thì mấy chục dòng CSS là đủ, kéo nguyên một thư viện về để vẽ bốn
-   cái hộp là đổi 200KB lấy thứ mình tự làm được.
+   LUẬT MÀN HÌNH — THỨ QUYẾT ĐỊNH TOÀN BỘ CÁCH DÀN Ở ĐÂY.
+   Sếp 29/08/2026: *"ưu tiên hiển thị trên 1 trang, hạn chế kéo trang như này"*.
+   Cơ cấu mới có 5 Nhóm. Năm hộp nằm ngang ở 375px là mỗi hộp 60px — không đọc
+   được — hoặc tràn ra ngoài. Hai cách chữa sai mà ai cũng nghĩ tới trước:
+     · `overflow-x: auto`  → giấu mất nửa sơ đồ sau một thanh kéo mà người
+       dùng không biết mình đang thiếu gì. ĐÃ CẤM ở `do-bang-vua-man.mjs`.
+     · bóp cỡ chữ          → Sếp cấm thẳng: nhân viên kho đọc điện thoại ngoài
+       nắng.
+   Cách ở đây: mỗi hàng con là một `grid` `auto-fit` + `minmax(min(Xpx,100%),
+   1fr)`. Rộng thì các hộp TỰ nằm ngang đúng như hình vẽ; hẹp thì TỰ xuống
+   dòng thành cột dọc. Không một thuộc tính `overflow-x` nào trong khối này.
 
-   Phòng chưa có ai tô cam đất, không phải đỏ — chỗ cần để mắt, chưa phải sự cố.
+   ⚠️ `min(Xpx, 100%)` KHÔNG PHẢI CHO ĐẸP, VÀ ĐỪNG RÚT GỌN THÀNH `minmax(Xpx,
+   1fr)`. `minmax(300px, 1fr)` với `auto-fit`: khi khung chỉ còn 280px, rãnh
+   vẫn giữ đúng 300px và TRÀN — tức đúng cái bệnh đang chữa, xuất hiện lại ở
+   chính chỗ ta tưởng đã chữa. `min(300px, 100%)` cho rãnh co xuống bằng khung.
+
+   BA MÀU, KHÔNG HƠN (docs/BANG-MAU.md §4 — Nâu · Xanh lá · Cam). Khối này
+   KHÔNG khai một mã màu mới nào: tất cả đi qua biến đã có. Cấp Công ty dùng
+   xanh lá (gốc, vững), cấp Phòng dùng nâu–kem (thân), cấp Nhóm dùng cam
+   (nhánh làm việc). Hộp trống người và khối cảnh báo dùng cam — cam là
+   "để mắt vào đây", KHÔNG phải đỏ; đỏ để dành cho sự cố thật.
    --------------------------------------------------------------------------- */
 .sodo { padding: 4px 0 2px; }
 
-.sodo-goc {
-  text-align: center;
-  padding: 10px 16px;
-  border-radius: 12px;
-  border: 1px dashed var(--line);
-  background: var(--surface, #faf8f3);
-  font-family: var(--serif);
-  font-size: 15px;
-  color: var(--ink);
+/* Khung ngoài: mọi thứ xếp thành cột, căn giữa như hình Sếp vẽ. `min-width:0`
+   là chốt chống tràn của flex/grid — thiếu nó thì một cái tên phòng dài tự
+   nong rãnh ra rộng hơn khung và cả trang có thanh kéo ngang. */
+.sodo-khung {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
 }
-.sodo-goc span {
-  display: block;
-  font-family: var(--sans, inherit);
-  font-size: 11px;
-  color: var(--text-mute);
-  margin-top: 2px;
+
+/* Một nhánh = hộp + đường nối + hàng con của nó */
+.sodo-nhanh {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
+  width: 100%;
 }
-.sodo-goc.sap-tha { border-color: var(--sage); background: #eef2e6; }
 
-.sodo-cay, .sodo-con { list-style: none; margin: 0; padding: 0; }
-.sodo-cay { margin-top: 12px; }
-
-/* Nhánh con thụt vào, có đường kẻ dọc nối lên cha */
-.sodo-con {
-  margin-left: 22px;
-  padding-left: 16px;
-  border-left: 2px solid var(--line);
+/* Hàng con. `align-items: start` để hộp ngắn không bị kéo cao bằng hộp dài. */
+.sodo-hang {
+  display: grid;
+  gap: 10px;
+  width: 100%;
+  align-items: start;
+  justify-items: stretch;
+  min-width: 0;
 }
-.sodo-nhanh { margin-bottom: 10px; }
+.sodo-hang.hang-phong { grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); }
+/* 168px — con số ĐO RA, không chọn cho tròn: ở màn 1440px khung sơ đồ rộng
+   1094px, mỗi cột Phòng được ~542px, và 168px là mức vừa đủ cho CẢ BA Nhóm
+   của Phòng Vận hành nằm chung một hàng. Để 190px thì nhóm thứ ba rơi xuống
+   hàng dưới, cả khối cao thêm ~150px và trượt khỏi một màn 900px. */
+.sodo-hang.hang-nhom  { grid-template-columns: repeat(auto-fit, minmax(min(168px, 100%), 1fr)); }
+.sodo-hang.hang-la    { grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); }
 
+/* Cuống nối từ hàng cha xuống từng hộp con — mỗi hộp một cuống, nên khi hàng
+   tự xuống dòng thành cột dọc thì các cuống vẫn nối đúng, không trơ ra một
+   đoạn kẻ ngang treo lơ lửng. */
+.sodo-hang > .sodo-nhanh { position: relative; padding-top: 14px; }
+.sodo-hang > .sodo-nhanh::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 50%;
+  width: 2px; height: 14px;
+  margin-left: -1px;
+  background: var(--line);
+}
+
+/* Mũi tên xuống dưới mỗi hộp có con.
+   ⚠️ Ô này rộng 12px chứ KHÔNG phải 2px, dù nét kẻ chỉ 2px. Bản đầu để
+   `width: 2px` rồi vẽ mũi tên bằng `::after` rộng 10px: mũi tên thò ra khỏi ô
+   chứa nó, `scrollWidth` lớn hơn `clientWidth` đúng 4px, và bàn đo báo TRÀN
+   NGANG ở CẢ 1440 lẫn 375. Tràn 4px thì mắt không thấy — nhưng nới thước cho
+   qua một lần thì lần sau tràn 40px cũng qua nốt. Nới Ô, không nới THƯỚC. */
+.sodo-noi {
+  position: relative;
+  width: 12px;
+  height: 18px;
+  flex: 0 0 auto;
+}
+.sodo-noi::before {
+  content: '';
+  position: absolute;
+  left: 50%; top: 0;
+  margin-left: -1px;
+  width: 2px; height: 12px;
+  background: var(--line);
+}
+.sodo-noi::after {
+  content: '';
+  position: absolute;
+  left: 50%; bottom: 0;
+  margin-left: -5px;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 7px solid var(--line);
+}
+
+/* ---- HỘP ---------------------------------------------------------------- */
 .sodo-o {
   position: relative;
-  padding: 11px 13px;
+  width: 100%;
+  min-width: 0;
+  padding: 10px 12px;
   border-radius: 12px;
   border: 1px solid var(--line);
-  border-top: 3px solid var(--sage, #9aab86);
-  background: var(--card, #fffcf4);
+  border-top: 3px solid var(--line);
+  background: var(--card);
   box-shadow: var(--shadow-sm);
   cursor: grab;
-  max-width: 460px;
+  text-align: center;
 }
 .sodo-o:active { cursor: grabbing; }
 .sodo-o.dang-keo { opacity: .45; }
 .sodo-o.sap-tha { border-color: var(--sage); box-shadow: 0 0 0 3px rgba(154,171,134,.35); }
-.sodo-o.trong { border-top-color: #c0603f; background: #fdf6f2; }
+
+/* Cấp CÔNG TY — hộp gốc. Hẹp lại cho ra dáng đỉnh cây, nhưng không cố định
+   bề ngang: `max-width` + `width:100%` để ở 375px nó vẫn co theo khung. */
+.sodo-o.cap-cong_ty {
+  max-width: 460px;
+  border-top-color: var(--sage);
+  background: var(--sage-wash);
+  cursor: default;
+}
+.sodo-o.cap-phong { border-top-color: var(--cam); background: var(--surface); }
+.sodo-o.cap-nhom  { border-top-color: var(--cam-dark); }
+/* Hộp chưa xếp cấp — chưa nạp migration, hoặc ai đó vừa thêm phòng bằng tay.
+   Viền đứt để nhìn phát ra ngay là hộp này chưa vào cơ cấu. */
+.sodo-o.cap-la { border: 1px dashed var(--cam-dark); border-top-width: 3px; }
+
+/* Hộp không có ai — cam đất, chỗ cần để mắt, chưa phải sự cố. */
+.sodo-o.trong { background: var(--cam-wash); }
+
+/* Nhãn cấp — chữ nhỏ in hoa ở góc, để đọc một hộp là biết ngay nó là Phòng
+   hay Nhóm mà không phải đếm tầng. */
+.sodo-nhan {
+  display: block;
+  font-size: 10px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--text-mute);
+  margin-bottom: 2px;
+}
 
 .sodo-ten {
   display: block;
@@ -5301,6 +5398,7 @@ body.tl-dang-xem { overflow: hidden; }
   color: var(--ink);
   line-height: 1.3;
   cursor: text;
+  overflow-wrap: anywhere;   /* tên dài xuống dòng, KHÔNG nong rãnh ra */
 }
 .sodo-o-ten {
   width: 100%;
@@ -5309,33 +5407,139 @@ body.tl-dang-xem { overflow: hidden; }
   border: 1px solid var(--sage);
   border-radius: 6px;
 }
-.sodo-tp { font-size: 12px; color: var(--text); margin-top: 3px; }
+
+/* Dòng "ai TRỰC TIẾP PHỤ TRÁCH" — gạch chân đúng như bản Sếp ban hành, và
+   là ô dữ liệu RIÊNG (`phu_trach_id`), không phải trưởng phòng. */
+.sodo-phutrach {
+  font-size: 11.5px;
+  color: var(--text);
+  margin-top: 3px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  overflow-wrap: anywhere;
+}
+.sodo-tp { font-size: 12px; color: var(--text); margin-top: 3px; overflow-wrap: anywhere; }
 .sodo-tp i { color: var(--text-mute); }
-.sodo-so { font-size: 12px; color: var(--text-mute); margin-top: 2px; }
+
+/* Hai dòng chức năng dưới hộp Nhóm */
+.sodo-mota { margin-top: 5px; }
+.sodo-mota span {
+  display: block;
+  font-size: 11px;
+  color: var(--text-mute);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.sodo-so { font-size: 12px; color: var(--text-mute); margin-top: 4px; }
+/* Tổng người ở ô gốc — đếm thẳng trên `nhan_su`, KHÔNG cộng theo phòng. */
+.sodo-tong {
+  font-size: 13px;
+  color: var(--sage-dark);
+  font-weight: 600;
+  margin-top: 5px;
+}
+.sodo-tong-thieu { color: var(--cam-text); }
 
 .sodo-canh {
   display: inline-block;
   margin-left: 4px;
   padding: 0 7px;
   border-radius: var(--r-pill, 99px);
-  background: #f6e0d6;
-  color: #a04a30;
+  background: var(--cam-wash);
+  color: var(--cam-text);
   font-size: 10.5px;
 }
 
-.sodo-hanh { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+.sodo-hanh {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  justify-content: center;
+  margin-top: 8px;
+}
 
-/* Ô chọn "trực thuộc" — đường cho điện thoại, nơi kéo thả không chạy */
+/* Ô chọn "trực thuộc" — đường cho điện thoại, nơi kéo thả không chạy.
+   `max-width: 100%` chứ KHÔNG phải một số px cố định: `<select>` tự nong theo
+   `<option>` dài nhất, mà tên phòng mới nhất luôn có thể dài hơn hôm nay. */
 .sodo-chon {
   font-size: 12px;
   padding: 3px 8px;
   border-radius: var(--r-md, 8px);
   border: 1px solid var(--line);
-  background: var(--card, #fffcf4);
-  max-width: 200px;
+  background: var(--card);
+  max-width: 100%;
+  min-width: 0;
+}
+
+/* ---- KHỐI CẢNH BÁO — người sơ đồ đang đánh rơi -------------------------- */
+/* Khối này là lý do tồn tại của cả bản vá: bản cũ để hai người không có
+   phòng biến mất khỏi màn hình mà không một dòng nào nói ra. Nên nó KHÔNG
+   được là chữ mờ ở góc — cam đậm, có số, có tên. */
+.sodo-thieu {
+  margin-top: 16px;
+  padding: 11px 13px;
+  border-radius: 12px;
+  border: 1px solid var(--cam);
+  border-left: 4px solid var(--cam);
+  background: var(--cam-wash);
+}
+.sodo-thieu.du {
+  border-color: var(--sage-pale);
+  border-left-color: var(--sage);
+  background: var(--sage-wash);
+}
+.sodo-thieu-dau {
+  display: block;
+  font-size: 13px;
+  color: var(--cam-text);
+  margin-bottom: 6px;
+}
+.sodo-thieu.du .sodo-thieu-dau { color: var(--sage-dark); margin-bottom: 0; }
+.sodo-thieu ul { list-style: none; margin: 0; padding: 0; }
+.sodo-thieu li {
+  font-size: 12px;
+  color: var(--text);
+  padding: 5px 0;
+  border-top: 1px solid var(--line);
+}
+.sodo-thieu li:first-child { border-top: 0; }
+.sodo-thieu li i { color: var(--text-mute); font-style: normal; }
+.sodo-thieu li span {
+  display: block;
+  font-size: 11.5px;
+  color: var(--text-mute);
+  margin-top: 2px;
+  overflow-wrap: anywhere;
+}
+
+/* Cây phẳng / hộp mồ côi — chưa nạp migration thì phải KÊU TO, vì vẽ phẳng
+   êm ru là cách chắc chắn nhất để không ai đi nạp. */
+.sodo-loi-phang {
+  width: 100%;
+  margin: 12px 0 4px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px dashed var(--cam-dark);
+  background: var(--cam-wash);
+  color: var(--cam-text);
+  font-size: 12.5px;
+}
+.sodo-loi-phang span {
+  display: block;
+  font-size: 11.5px;
+  color: var(--text);
+  margin-top: 3px;
+}
+.sodo-loi-phang code {
+  font-size: 11px;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: var(--surface-2);
 }
 
 @media (max-width: 620px) {
-  .sodo-con { margin-left: 10px; padding-left: 10px; }
-  .sodo-o { max-width: none; }
+  .sodo-hang { gap: 8px; }
+  .sodo-o { padding: 9px 10px; }
 }

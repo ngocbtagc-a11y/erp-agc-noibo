@@ -158,7 +158,13 @@
     "do-mo-ra-xem-duoc-ca-D": "node scripts/do-man-mo-ra-xem-duoc.mjs --ca D",
     "do-o-ngay": "node scripts/do-o-ngay-nhanxet.mjs",
     "do-o-ngay-may": "node scripts/do-o-ngay-nhanxet.mjs --rong 1440",
-    "do-thu-tu-luat": "node scripts/do-thu-tu-luat-prompt.mjs"
+    "do-thu-tu-luat": "node scripts/do-thu-tu-luat-prompt.mjs",
+    "do-so-do-to-chuc": "node scripts/do-so-do-to-chuc.mjs",
+    "do-so-do-to-chuc-sql": "node scripts/do-so-do-to-chuc.mjs --chi-sql",
+    "nap-sodo-batang-may": "node scripts/chay-migration.mjs them-phongban-ba-tang.sql",
+    "nap-sodo-batang": "node scripts/chay-migration.mjs them-phongban-ba-tang.sql --remote",
+    "nap-xepcocau-may": "node scripts/chay-migration.mjs xep-lai-co-cau-2026-09.sql",
+    "nap-xepcocau": "node scripts/chay-migration.mjs xep-lai-co-cau-2026-09.sql --remote"
   },
   "devDependencies": {
     "wrangler": "^4.0.0"
