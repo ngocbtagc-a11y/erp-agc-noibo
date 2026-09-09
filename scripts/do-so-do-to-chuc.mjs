@@ -4,6 +4,8 @@
    CHẠY:
      node scripts/do-so-do-to-chuc.mjs              → đo đủ (SQL + Chrome)
      node scripts/do-so-do-to-chuc.mjs --chi-sql    → chỉ phần migration
+     node scripts/do-so-do-to-chuc.mjs --tu-kiem-san→ BH-16 cho chính cái sàn:
+       chạy mỗi phần SQL mà vẫn đòi sàn đủ. PHẢI ĐỎ. Không đỏ thì sàn là đồ trang trí.
      node scripts/do-so-do-to-chuc.mjs --bang-ke    → in thêm số đo từng bề ngang
      node scripts/do-so-do-to-chuc.mjs --truoc <sha>→ đo thêm BẢN CŨ để có số "trước"
      node scripts/do-so-do-to-chuc.mjs --chup <thư mục> → lưu ảnh 1440 và 375
@@ -47,8 +49,43 @@ import { dungMayGia, moChrome } from './lib/ban-do-chrome.mjs';
 import { ok, tongKet } from './ban-thu-d1.mjs';
 
 const GOC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+
+/* ==========================================================================
+   SÀN SỐ PHÉP — chống ca "bàn đo XANH vì nó KHÔNG ĐO GÌ CẢ"
+   ---------------------------------------------------------------------------
+   BẮT ĐƯỢC 09/09/2026, NGAY TRONG LƯỢT DỰNG CHÍNH BÀN ĐO NÀY. Bản đầu của
+   `chayFileSql` dùng `/^(--[^\n]*\n?)+$/` — lượng từ lồng nhau, quay lui theo
+   cấp số nhân trên khối chú thích 50 dòng của file migration. Bàn đo TREO,
+   in đúng một dòng tiêu đề, rồi THOÁT VỚI MÃ 0.
+
+   Vì sao mã 0: `tongKet()` trả `truot === 0`, mà `truot` BẰNG 0 khi KHÔNG
+   PHÉP NÀO CHẠY. Xanh vì RỖNG, không phải xanh vì ĐÚNG — đúng loại lỗi nặng
+   nhất trong nghề này: thước đo báo sạch trong khi thứ nó đo đang hỏng. Trong
+   một dây chuyền tự động, `exit 0` đó đi thẳng qua cổng và không ai biết.
+
+   Nên `kt()` ĐẾM số phép đã chạy, và cuối file đòi phải đạt SÀN. Thiếu phép
+   là ĐỎ, dù không phép nào trượt. Thêm phép mới thì NÂNG sàn — để sàn thấp
+   hơn thực tế là lời hứa suông.
+   ========================================================================== */
+let SO_PHEP = 0;
+function kt(nhan, dieuKien, chiTiet = '') {
+  SO_PHEP++;
+  return ok(nhan, dieuKien, chiTiet);
+}
+/* ĐẾM THẬT bằng cách chạy, không bằng cách nhẩm: 14 phép SQL · 19 phép × 2
+   màn · 8 ca đối chứng = 60. (Bản nháp đầu tôi nhẩm ra 63 và đặt sàn 62 — bàn
+   đo đỏ ngay, đúng như phải thế: sàn đặt bằng phép nhẩm thì hoặc đỏ oan, hoặc
+   tệ hơn, thấp quá và không đỡ ai. Đổi sàn thì phải CHẠY LẠI rồi chép số.)
+   Sàn đặt ĐÚNG BẰNG số hiện có, không nới: thêm phép mới thì NÂNG sàn. */
+const SAN_PHEP = { du: 60, chi_sql: 14 };
+
 const dso = process.argv;
-const CHI_SQL = dso.includes('--chi-sql');
+/* CA ĐỐI CHỨNG CỦA CHÍNH CÁI SÀN (BH-16 áp lên hàng rào, không chỉ lên phép
+   đo). `--tu-kiem-san` chạy MỖI phần SQL nhưng vẫn đòi sàn ĐỦ — bàn đo PHẢI
+   thoát mã 1 kèm dòng "CHỈ CHẠY 14/60". Không chứng minh được thì cái sàn
+   cũng chỉ là một lời hứa nữa. */
+const TU_KIEM_SAN = dso.includes('--tu-kiem-san');
+const CHI_SQL = dso.includes('--chi-sql') || TU_KIEM_SAN;
 const BANG_KE = dso.includes('--bang-ke');
 const TRUOC = (i => i > 0 ? dso[i + 1] : null)(dso.indexOf('--truoc'));
 const CHUP  = (i => i > 0 ? dso[i + 1] : null)(dso.indexOf('--chup'));
@@ -162,56 +199,56 @@ function doSql() {
     const b = chayFileSql(db, 'xep-lai-co-cau-2026-09.sql');
     if (BANG_KE) console.log(`      ${a} câu lược đồ · ${b} câu dữ liệu`);
   } catch (e) { chayDuoc = false; loi = e.message; }
-  ok('Hai file migration chạy trót lọt', chayDuoc, loi);
+  kt('Hai file migration chạy trót lọt', chayDuoc, loi);
   if (!chayDuoc) return;
 
   const pb = db.prepare(`SELECT id, ten, cap, cha_id, truong_phong_id, phu_trach_id, mo_ta FROM phong_ban ORDER BY id`).all();
   const capCua = c => pb.filter(p => p.cap === c);
 
-  ok('Đúng 1 hộp cấp Công ty', capCua('cong_ty').length === 1,
+  kt('Đúng 1 hộp cấp Công ty', capCua('cong_ty').length === 1,
     capCua('cong_ty').map(p => p.ten).join(', '));
-  ok('Đúng 2 Phòng, cả hai treo dưới hộp Công ty',
+  kt('Đúng 2 Phòng, cả hai treo dưới hộp Công ty',
     capCua('phong').length === 2 && capCua('phong').every(p => p.cha_id === 1),
     capCua('phong').map(p => `${p.ten}←${p.cha_id}`).join(' · '));
-  ok('Đúng 5 Nhóm, cả năm treo dưới một Phòng',
+  kt('Đúng 5 Nhóm, cả năm treo dưới một Phòng',
     capCua('nhom').length === 5 && capCua('nhom').every(p => [2, 3].includes(p.cha_id)),
     capCua('nhom').map(p => `${p.ten}←${p.cha_id}`).join(' · '));
-  ok('Không hàng nào bị xoá — vẫn còn cả 4 id cũ',
+  kt('Không hàng nào bị xoá — vẫn còn cả 4 id cũ',
     [1, 2, 3, 4].every(id => pb.some(p => p.id === id)));
-  ok('Mọi Nhóm đều có hai dòng chức năng (`mo_ta`)',
+  kt('Mọi Nhóm đều có hai dòng chức năng (`mo_ta`)',
     capCua('nhom').every(p => (p.mo_ta || '').includes(' · ')),
     capCua('nhom').filter(p => !(p.mo_ta || '').includes(' · ')).map(p => p.ten).join(', ') || '—');
-  ok('Hai Phòng đều có người TRỰC TIẾP PHỤ TRÁCH, và KHÔNG có trưởng phòng',
+  kt('Hai Phòng đều có người TRỰC TIẾP PHỤ TRÁCH, và KHÔNG có trưởng phòng',
     capCua('phong').every(p => p.phu_trach_id && !p.truong_phong_id));
 
   const ns = db.prepare(`SELECT id, ho_ten, phong_ban_id, quan_ly_id FROM nhan_su WHERE dang_lam = 1`).all();
-  ok(`Đủ ${TONG_DANG_LAM} người đang làm`, ns.length === TONG_DANG_LAM, `đếm được ${ns.length}`);
+  kt(`Đủ ${TONG_DANG_LAM} người đang làm`, ns.length === TONG_DANG_LAM, `đếm được ${ns.length}`);
   const roiNgoai = ns.filter(n => n.phong_ban_id == null);
-  ok('KHÔNG còn ai rơi ra ngoài sơ đồ (`phong_ban_id` rỗng)', roiNgoai.length === 0,
+  kt('KHÔNG còn ai rơi ra ngoài sơ đồ (`phong_ban_id` rỗng)', roiNgoai.length === 0,
     roiNgoai.map(n => n.ho_ten).join(', ') || '—');
   const khongQL = ns.filter(n => !n.quan_ly_id);
-  ok('Đúng 1 người không có quản lý — Giám đốc, đỉnh cây',
+  kt('Đúng 1 người không có quản lý — Giám đốc, đỉnh cây',
     khongQL.length === 1 && khongQL[0].id === 'ns_admin2',
     khongQL.map(n => n.ho_ten).join(', '));
 
   const hang = ns.find(n => n.id === 'ns_nv010014');
-  ok('🔴 SỬA XONG: Phan Thị Hằng báo cáo cho Phó Giám đốc, không phải Quản lý kho',
+  kt('🔴 SỬA XONG: Phan Thị Hằng báo cáo cho Phó Giám đốc, không phải Quản lý kho',
     hang && hang.quan_ly_id === 'ns_admin1', `quan_ly_id = ${hang && hang.quan_ly_id}`);
 
   const kho = ns.filter(n => n.phong_ban_id === 4);
-  ok('17 người kho vận GIỮ NGUYÊN phòng id 4 — không hồ sơ nào phải chuyển',
+  kt('17 người kho vận GIỮ NGUYÊN phòng id 4 — không hồ sơ nào phải chuyển',
     kho.length === 17, `${kho.length} người ở id 4`);
 
   /* --- Ca đối chứng ⑤: cột `cap` phải là RÀNG BUỘC, không phải chú thích --- */
   let bịChan = false, viec = '';
   try { db.exec(`UPDATE phong_ban SET cap = 'phòng' WHERE id = 3`); }
   catch (e) { bịChan = true; viec = e.message.slice(0, 60); }
-  ok('ĐỐI CHỨNG — CHECK chặn `cap` viết sai ("phòng" có dấu)', bịChan, viec);
+  kt('ĐỐI CHỨNG — CHECK chặn `cap` viết sai ("phòng" có dấu)', bịChan, viec);
 
   let bịChan2 = false;
   try { db.exec(`INSERT INTO phong_ban (id, ten, cap) VALUES (99, 'Hộp lạ', 'ban')`); }
   catch { bịChan2 = true; }
-  ok('ĐỐI CHỨNG — CHECK chặn hàng mới mang cấp lạ ("ban")', bịChan2);
+  kt('ĐỐI CHỨNG — CHECK chặn hàng mới mang cấp lạ ("ban")', bịChan2);
 
   db.close();
 }
@@ -497,58 +534,58 @@ if (!CHI_SQL) {
   for (const man of MAN) {
     console.log(`\n─── MÀN ${man.rong}×${man.cao} ───`);
     const k = await doMotMan(SAU, man);
-    if (!ok('Vẽ được sơ đồ', k.co)) continue;
-    ok('Không một lỗi console / ngoại lệ nào khi vẽ', (k.loi || []).length === 0,
+    if (!kt('Vẽ được sơ đồ', k.co)) continue;
+    kt('Không một lỗi console / ngoại lệ nào khi vẽ', (k.loi || []).length === 0,
       (k.loi || []).join(' | ').slice(0, 200) || '—');
 
     /* ① TỔNG NGƯỜI Ở Ô GỐC */
-    ok(`① Ô gốc in ĐÚNG ${TONG_DANG_LAM} người đang làm`, k.tongIn === TONG_DANG_LAM,
+    kt(`① Ô gốc in ĐÚNG ${TONG_DANG_LAM} người đang làm`, k.tongIn === TONG_DANG_LAM,
       `in ra "${k.chuTong}"`);
-    ok('① Con số đó KHÔNG phải tổng cộng theo phòng',
+    kt('① Con số đó KHÔNG phải tổng cộng theo phòng',
       k.tongIn !== SAU.ds.reduce((m, p) => m + (p.cap === 'cong_ty' ? 0 : p.so_nguoi), 0)
       || TONG_DANG_LAM === SAU.ds.reduce((m, p) => m + (p.cap === 'nhom' ? p.so_nguoi : 0), 0),
       `cộng theo Nhóm = ${SAU.ds.filter(p => p.cap === 'nhom').reduce((m, p) => m + p.so_nguoi, 0)}`);
 
     /* ③ BA TẦNG */
-    ok('③ Cây đúng BA TẦNG', k.tang === 3, `đo được ${k.tang} tầng`);
-    ok('③ Không có báo động cây phẳng', !k.cayPhang);
-    ok('③ Đủ 1 Công ty · 2 Phòng · 5 Nhóm, không hộp nào lạc cấp',
+    kt('③ Cây đúng BA TẦNG', k.tang === 3, `đo được ${k.tang} tầng`);
+    kt('③ Không có báo động cây phẳng', !k.cayPhang);
+    kt('③ Đủ 1 Công ty · 2 Phòng · 5 Nhóm, không hộp nào lạc cấp',
       k.soHopTheoCap.cong_ty === 1 && k.soHopTheoCap.phong === 2
       && k.soHopTheoCap.nhom === 5 && k.soHopTheoCap.la === 0,
       JSON.stringify(k.soHopTheoCap));
-    ok('③ Mỗi Nhóm có hai dòng chức năng, số người và dòng trưởng nhóm',
+    kt('③ Mỗi Nhóm có hai dòng chức năng, số người và dòng trưởng nhóm',
       k.soNhomCoMoTa === 5 && k.soNhomCoSoNguoi === 5 && k.soNhomCoTruong === 5,
       `mô tả ${k.soNhomCoMoTa} · số ${k.soNhomCoSoNguoi} · trưởng ${k.soNhomCoTruong}`);
-    ok('③ Có dòng "trực tiếp phụ trách" gạch chân ở hộp Công ty và 2 Phòng',
+    kt('③ Có dòng "trực tiếp phụ trách" gạch chân ở hộp Công ty và 2 Phòng',
       k.coPhuTrachGachChan >= 3, `${k.coPhuTrachGachChan} dòng`);
     /* Chức vụ trong hồ sơ thật là "Giám đốc kiêm TP. Kinh doanh - MKT". Sơ đồ
        phải in đúng vai ông ấy đứng ở hộp này — "Giám đốc" — chứ không kéo cả
        cụm kiêm nhiệm vào. */
-    ok('③ Dòng phụ trách in ĐÚNG chức chính, không kéo theo phần "kiêm"',
+    kt('③ Dòng phụ trách in ĐÚNG chức chính, không kéo theo phần "kiêm"',
       (k.chuPhuTrach || []).some(c => c.startsWith('Giám đốc trực tiếp phụ trách: Nguyễn Duy Phong'))
       && (k.chuPhuTrach || []).some(c => c.startsWith('Phó Giám đốc trực tiếp phụ trách: Bùi Thị Ngọc'))
       && !(k.chuPhuTrach || []).some(c => /kiêm/i.test(c)),
       (k.chuPhuTrach || []).join(' | '));
-    ok('③ Có mũi tên nối xuống giữa các tầng', k.coMuiTen >= 3, `${k.coMuiTen} mũi tên`);
+    kt('③ Có mũi tên nối xuống giữa các tầng', k.coMuiTen >= 3, `${k.coMuiTen} mũi tên`);
 
     /* ② KHỐI CẢNH BÁO */
-    ok('② Có khối cảnh báo đếm được', k.coKhoiCanhBao && k.soMucCanhBao !== null,
+    kt('② Có khối cảnh báo đếm được', k.coKhoiCanhBao && k.soMucCanhBao !== null,
       `${k.soMucCanhBao} mục`);
-    ok('② Hai người trống chức vụ được kêu tên', k.muc['trong-chuc-vu'] === 2,
+    kt('② Hai người trống chức vụ được kêu tên', k.muc['trong-chuc-vu'] === 2,
       JSON.stringify(k.muc));
-    ok('② Bốn người trống chức danh được kêu tên', k.muc['trong-chuc-danh'] === 4);
-    ok('② Ba nhóm chưa có trưởng nhóm được kêu tên', k.muc['nhom-chua-truong'] === 3);
+    kt('② Bốn người trống chức danh được kêu tên', k.muc['trong-chuc-danh'] === 4);
+    kt('② Ba nhóm chưa có trưởng nhóm được kêu tên', k.muc['nhom-chua-truong'] === 3);
 
     /* ④ KHÔNG TRÀN NGANG */
-    ok(`④ Sơ đồ không thò ra ngoài khung (${man.rong}px)`, k.thoRa.length === 0,
+    kt(`④ Sơ đồ không thò ra ngoài khung (${man.rong}px)`, k.thoRa.length === 0,
       k.thoRa.map(x => `${x.lop} +${x.lech}px`).join(' · ') || '—');
-    ok('④ Không phần tử nào phải cuộn ngang', k.cuonNgang.length === 0,
+    kt('④ Không phần tử nào phải cuộn ngang', k.cuonNgang.length === 0,
       k.cuonNgang.join(' · ') || '—');
-    ok('④ Cả trang không có thanh kéo ngang', k.rongTrang <= k.rongMan,
+    kt('④ Cả trang không có thanh kéo ngang', k.rongTrang <= k.rongMan,
       `trang ${k.rongTrang}px / màn ${k.rongMan}px`);
 
     /* GIỮ ĐƯỢC THÌ GIỮ */
-    ok('Giữ: sửa tên tại chỗ · kéo thả · ô chọn trực thuộc · gán trưởng nhóm',
+    kt('Giữ: sửa tên tại chỗ · kéo thả · ô chọn trực thuộc · gán trưởng nhóm',
       k.giuSuaTen === 8 && k.giuKeoTha === 7 && k.giuOChon === 7 && k.giuNutTruong === 7,
       `sửa ${k.giuSuaTen} · kéo ${k.giuKeoTha} · chọn ${k.giuOChon} · gán ${k.giuNutTruong}`);
 
@@ -567,7 +604,7 @@ if (!CHI_SQL) {
     const cu = JSON.parse(JSON.stringify(duLieuSauMigration()));
     cu.tom_tat.tong_dang_lam = 22;
     const k = await doMotMan(cu, M);
-    ok('ĐỐI CHỨNG ① — bắt được tổng 22 thay vì 24', k.co && k.tongIn !== TONG_DANG_LAM,
+    kt('ĐỐI CHỨNG ① — bắt được tổng 22 thay vì 24', k.co && k.tongIn !== TONG_DANG_LAM,
       `bàn đo đọc ${k.tongIn}`);
   }
 
@@ -577,16 +614,16 @@ if (!CHI_SQL) {
       ten === 'assets/js/app.js'
         ? s.replace('+ veCanhBaoNhanSu(ds, tt)', "+ ''")
         : s);
-    ok('ĐỐI CHỨNG ② — bắt được khi khối cảnh báo bị gỡ', k.co && !k.coKhoiCanhBao,
+    kt('ĐỐI CHỨNG ② — bắt được khi khối cảnh báo bị gỡ', k.co && !k.coKhoiCanhBao,
       k.coKhoiCanhBao ? 'khối vẫn còn — BÀN ĐO MÙ' : 'khối biến mất, bàn đo thấy');
   }
 
   // ② (b) hai người không phòng: phải hiện ra, có tên, đếm được
   {
     const k = await doMotMan(CHUA_XEP, M);
-    ok('ĐỐI CHỨNG ②b — 2 người không phòng HIỆN RA thành cảnh báo, không biến mất',
+    kt('ĐỐI CHỨNG ②b — 2 người không phòng HIỆN RA thành cảnh báo, không biến mất',
       k.co && k.muc['khong-phong'] === 2, JSON.stringify(k.muc));
-    ok('ĐỐI CHỨNG ②b — mà ô gốc vẫn in đủ 24 người', k.tongIn === TONG_DANG_LAM,
+    kt('ĐỐI CHỨNG ②b — mà ô gốc vẫn in đủ 24 người', k.tongIn === TONG_DANG_LAM,
       `in ra "${k.chuTong}"`);
   }
 
@@ -597,8 +634,8 @@ if (!CHI_SQL) {
      được số người, chứ không im lặng để người đọc tưởng đã sạch. */
   {
     const k = await doMotMan(duLieuHienTrang(), M);
-    ok('ĐỐI CHỨNG ②c — dữ liệu hiện trạng: bản mới KÊU cây phẳng', k.co && k.cayPhang);
-    ok('ĐỐI CHỨNG ②c — và nói rõ chưa đếm được người, không im lặng',
+    kt('ĐỐI CHỨNG ②c — dữ liệu hiện trạng: bản mới KÊU cây phẳng', k.co && k.cayPhang);
+    kt('ĐỐI CHỨNG ②c — và nói rõ chưa đếm được người, không im lặng',
       k.soMucCanhBao === -1 && k.tongIn !== TONG_DANG_LAM,
       `ô gốc in "${k.chuTong}" · khối cảnh báo ${k.soMucCanhBao}`);
   }
@@ -608,7 +645,7 @@ if (!CHI_SQL) {
     const phang = duLieuSauMigration();
     for (const p of phang.ds) { delete p.cap; p.cha_id = null; }
     const k = await doMotMan(phang, M);
-    ok('ĐỐI CHỨNG ③ — bắt được cây phẳng và KÊU TO', k.co && k.cayPhang && k.tang < 3,
+    kt('ĐỐI CHỨNG ③ — bắt được cây phẳng và KÊU TO', k.co && k.cayPhang && k.tang < 3,
       `${k.tang} tầng · báo động ${k.cayPhang}`);
   }
 
@@ -617,10 +654,20 @@ if (!CHI_SQL) {
     const CHEN = `<style id="doi-chung-tran">.sodo-hang.hang-nhom{grid-template-columns:repeat(5,240px) !important}</style>`;
     const k = await doMotMan(duLieuSauMigration(), M, (s, ten) =>
       ten === 'app.html' ? s.replace('</head>', CHEN + '</head>') : s);
-    ok('ĐỐI CHỨNG ④ — bắt được tràn ngang khi ép 5 Nhóm nằm ngang ở 375px',
+    kt('ĐỐI CHỨNG ④ — bắt được tràn ngang khi ép 5 Nhóm nằm ngang ở 375px',
       k.co && (k.thoRa.length > 0 || k.cuonNgang.length > 0 || k.rongTrang > k.rongMan),
       k.thoRa.map(x => `${x.lop} +${x.lech}px`).join(' · ') || `trang ${k.rongTrang}/${k.rongMan}`);
   }
 }
 
-process.exit(tongKet() ? 0 : 1);
+/* SÀN TRƯỚC, TỔNG KẾT SAU. `tongKet()` chỉ biết "có phép nào trượt không";
+   nó KHÔNG biết "có phép nào chạy không". Hỏi câu thứ hai ở đây. */
+const san = (CHI_SQL && !TU_KIEM_SAN) ? SAN_PHEP.chi_sql : SAN_PHEP.du;
+const xanh = tongKet();
+if (SO_PHEP < san) {
+  console.log(`\n❌ BÀN ĐO CHỈ CHẠY ${SO_PHEP}/${san} PHÉP — ĐỎ, dù không phép nào trượt.`);
+  console.log('   Bàn đo dừng giữa chừng (ngoại lệ nuốt mất, treo, hay ai đó xoá phép đi).');
+  console.log('   "Không phép nào trượt" và "đã đo xong" là hai chuyện khác nhau.');
+  process.exit(1);
+}
+process.exit(xanh ? 0 : 1);

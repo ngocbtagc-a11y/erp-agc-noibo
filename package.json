@@ -164,7 +164,8 @@
     "nap-sodo-batang-may": "node scripts/chay-migration.mjs them-phongban-ba-tang.sql",
     "nap-sodo-batang": "node scripts/chay-migration.mjs them-phongban-ba-tang.sql --remote",
     "nap-xepcocau-may": "node scripts/chay-migration.mjs xep-lai-co-cau-2026-09.sql",
-    "nap-xepcocau": "node scripts/chay-migration.mjs xep-lai-co-cau-2026-09.sql --remote"
+    "nap-xepcocau": "node scripts/chay-migration.mjs xep-lai-co-cau-2026-09.sql --remote",
+    "do-so-do-to-chuc-tu-kiem": "node scripts/do-so-do-to-chuc.mjs --tu-kiem-san"
   },
   "devDependencies": {
     "wrangler": "^4.0.0"
