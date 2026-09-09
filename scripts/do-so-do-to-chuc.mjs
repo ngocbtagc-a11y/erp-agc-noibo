@@ -72,12 +72,12 @@ function kt(nhan, dieuKien, chiTiet = '') {
   SO_PHEP++;
   return ok(nhan, dieuKien, chiTiet);
 }
-/* ĐẾM THẬT bằng cách chạy, không bằng cách nhẩm: 14 phép SQL · 19 phép × 2
-   màn · 8 ca đối chứng = 60. (Bản nháp đầu tôi nhẩm ra 63 và đặt sàn 62 — bàn
+/* ĐẾM THẬT bằng cách chạy, không bằng cách nhẩm: 15 phép SQL · 19 phép × 2
+   màn · 8 ca đối chứng = 61. (Bản nháp đầu tôi nhẩm ra 63 và đặt sàn 62 — bàn
    đo đỏ ngay, đúng như phải thế: sàn đặt bằng phép nhẩm thì hoặc đỏ oan, hoặc
    tệ hơn, thấp quá và không đỡ ai. Đổi sàn thì phải CHẠY LẠI rồi chép số.)
    Sàn đặt ĐÚNG BẰNG số hiện có, không nới: thêm phép mới thì NÂNG sàn. */
-const SAN_PHEP = { du: 60, chi_sql: 14 };
+const SAN_PHEP = { du: 61, chi_sql: 15 };
 
 const dso = process.argv;
 /* CA ĐỐI CHỨNG CỦA CHÍNH CÁI SÀN (BH-16 áp lên hàng rào, không chỉ lên phép
@@ -178,10 +178,26 @@ function dungDbThat() {
    `/^(--[^\n]*\n?)+$/` để nhận ra khối toàn chú thích: hai file này có khối
    chú thích 50 dòng, và biểu thức đó quay lui theo cấp số nhân — bàn đo TREO
    hẳn, không in nổi một dòng nào. Treo im lặng còn khó tìm hơn đỏ.
-   An toàn vì trong hai file này không chuỗi nào chứa `--` hay `;`. */
+   An toàn vì trong hai file này không chuỗi nào chứa `--` hay `;`.
+
+   ⚠️⚠️ CHUẨN HOÁ `\r\n` → `\n` TRƯỚC KHI LÀM GÌ HẾT. ĐỪNG BỎ DÒNG ĐÓ.
+   Bắt được 09/09/2026 khi chạy bàn đo trên một cây vừa lấy ra từ git (kho này
+   trả CRLF trên Windows), trong khi cây làm việc của tôi đang là LF:
+     · `.` trong regex JS KHÔNG khớp `\r` — CR là một ký tự kết thúc dòng, y
+       như `\n`. Nên với dòng `"-- ghi chú\r"`, `.*` dừng TRƯỚC `\r`, còn `$`
+       (không cờ `m`) đòi hết CHUỖI — hết chuỗi lại nằm SAU `\r`. Không khớp.
+       CẢ 200 DÒNG CHÚ THÍCH ĐI THẲNG VÀO SQLITE, và lỗi hiện ra dưới dạng
+       `near "ba": syntax error` — một câu không dẫn tới đâu cả.
+     · Bàn đo vẫn "xanh" ở máy tôi và ĐỎ ở máy người khác. Loại lỗi đó tệ hơn
+       đỏ đều: nó dạy người ta rằng bàn đo hay đỏ vớ vẩn.
+   Chuẩn hoá xuống LF là xong, và ca đối chứng ⑥ ở `doSql()` bơm hẳn một bản
+   CRLF vào để chứng minh chỗ này không mù lại. */
 function chayFileSql(db, ten) {
-  const raw = readFileSync(path.join(GOC, 'migrations', ten), 'utf8');
-  const sach = raw.split('\n')
+  return chayChuoiSql(db, readFileSync(path.join(GOC, 'migrations', ten), 'utf8'));
+}
+function chayChuoiSql(db, raw) {
+  const sach = String(raw).replace(/\r\n?/g, '\n')   // ⚠️ xem chú thích ở trên
+    .split('\n')
     .map(d => d.replace(/\s*--.*$/, ''))     // bỏ chú thích cuối dòng và cả dòng
     .join('\n');
   const cau = sach.split(';').map(s => s.trim()).filter(Boolean);
@@ -244,6 +260,24 @@ function doSql() {
   try { db.exec(`UPDATE phong_ban SET cap = 'phòng' WHERE id = 3`); }
   catch (e) { bịChan = true; viec = e.message.slice(0, 60); }
   kt('ĐỐI CHỨNG — CHECK chặn `cap` viết sai ("phòng" có dấu)', bịChan, viec);
+
+  /* --- Ca đối chứng ⑥: BÀN ĐO PHẢI ĐỌC ĐƯỢC FILE KẾT THÚC DÒNG CRLF ---------
+     Kho này trả CRLF khi lấy ra trên Windows, còn cây làm việc của tôi đang là
+     LF — nên bản đầu "xanh" ở đây và ĐỎ ở mọi máy khác (xem chú thích dài ở
+     `chayChuoiSql`). Ca này bơm hẳn một bản CRLF của CHÍNH hai file migration
+     vào một CSDL sạch: ra đúng số câu như bản LF thì mới coi là đọc được. */
+  let crlfDuoc = false, crlfViec = '';
+  try {
+    const doiCRLF = t => t.replace(/\r\n?/g, '\n').replace(/\n/g, '\r\n');
+    const db2 = dungDbThat();
+    const a = chayChuoiSql(db2, doiCRLF(readFileSync(path.join(GOC, 'migrations', 'them-phongban-ba-tang.sql'), 'utf8')));
+    const b = chayChuoiSql(db2, doiCRLF(readFileSync(path.join(GOC, 'migrations', 'xep-lai-co-cau-2026-09.sql'), 'utf8')));
+    const n = db2.prepare(`SELECT COUNT(*) AS n FROM phong_ban WHERE cap = 'nhom'`).get().n;
+    crlfDuoc = a === 4 && b === 29 && n === 5;
+    crlfViec = `${a} câu lược đồ · ${b} câu dữ liệu · ${n} Nhóm`;
+    db2.close();
+  } catch (e) { crlfViec = e.message.slice(0, 80); }
+  kt('ĐỐI CHỨNG — đọc được file kết thúc dòng CRLF y như LF', crlfDuoc, crlfViec);
 
   let bịChan2 = false;
   try { db.exec(`INSERT INTO phong_ban (id, ten, cap) VALUES (99, 'Hộp lạ', 'ban')`); }
