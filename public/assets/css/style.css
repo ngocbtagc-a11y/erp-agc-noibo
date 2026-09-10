@@ -5432,6 +5432,12 @@ body.tl-dang-xem { overflow: hidden; }
 }
 
 .sodo-so { font-size: 12px; color: var(--text-mute); margin-top: 4px; }
+/* Số CẢ NHÁNH đứng trước và đậm hơn — đó là con số người đọc đang đi tìm khi
+   nhìn một hộp Phòng. Số THUỘC THẲNG xuống dòng, nhỏ hơn, và luôn kèm chữ
+   giải nghĩa: một con số trần đứng dưới tên phòng chính là thứ vừa làm Sếp
+   hiểu nhầm "Phòng Vận hành · 1 người" trong khi dưới đó có 20 người. */
+.sodo-so b { color: var(--text); font-weight: 700; }
+.sodo-so-phu { display: block; font-size: 11px; opacity: .8; }
 /* Tổng người ở ô gốc — đếm thẳng trên `nhan_su`, KHÔNG cộng theo phòng. */
 .sodo-tong {
   font-size: 13px;

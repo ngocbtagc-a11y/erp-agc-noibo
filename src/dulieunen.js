@@ -173,8 +173,62 @@ export const danhSachPhongBan = async (env) => {
       LEFT JOIN nhan_su pt ON pt.id = pb.phu_trach_id
      ORDER BY pb.hoat_dong DESC, COALESCE(pb.thu_tu, 9999), pb.ten
   `).all();
-  return json({ ds: results || [], tom_tat: await tomTatNhanSuSoDo(env) });
+  return json({ ds: await ganSoCaNhanh(env, results || []),
+                tom_tat: await tomTatNhanSuSoDo(env) });
 };
+
+/* ==========================================================================
+   ĐẾM CẢ NHÁNH — vì một con số không gánh được hai nghĩa
+   ---------------------------------------------------------------------------
+   Sếp Ngọc 10/09/2026, nhìn sơ đồ ba tầng vừa dựng xong: hộp "Phòng Vận hành
+   và Hỗ trợ" in **1 người**, trong khi ba Nhóm dưới nó có 2 + 1 + 17 = 20
+   người nữa. Hộp "Phòng Kinh doanh" in **0 người** trong khi hai Nhóm dưới nó
+   mỗi nhóm một người.
+
+   `so_nguoi` KHÔNG sai — nó đếm đúng người gán THẲNG vào hộp đó. Cái sai là
+   để một con số duy nhất đứng một mình dưới tên phòng: ai đọc cũng hiểu đó là
+   "phòng này có bao nhiêu người", và hiểu thế là sai. Cùng lớp với `#ls-dem`
+   in "500/500" và với dòng "N việc đang mở" ở Văn phòng ảo — con số trông
+   chắc nịch mà sai NGHĨA, không sai phép tính.
+
+   Nên trả về CẢ HAI, để giao diện nói rõ từng cái là gì. KHÔNG đổi nghĩa của
+   `so_nguoi`: đổi nghĩa một khoá đang dùng là làm hỏng âm thầm mọi chỗ khác
+   đang đọc nó.
+
+   ⚠️ CHẶN VÒNG LẶP. `cha_id` sửa được bằng ô xổ trên màn, nên A-thuộc-B-thuộc-A
+   là chuyện người dùng tạo ra được trong ba cú bấm. Truy hồi không chặn thì
+   câu lệnh chạy mãi và D1 hết giờ — màn Quản trị chết trắng, mà nguyên nhân
+   nằm ở một ô xổ bấm nhầm từ hôm trước. `sau < 8` là trần cứng: cơ cấu Sếp
+   ban hành có 3 tầng; tám tầng đã là thứ cần xem lại chứ không phải thứ cần
+   đếm cho xong.
+   ========================================================================== */
+async function ganSoCaNhanh(env, ds) {
+  if (!ds.length) return ds;
+  try {
+    const { results } = await env.DB.prepare(`
+      WITH RECURSIVE cay(goc, id, sau) AS (
+        SELECT id, id, 0 FROM phong_ban
+        UNION ALL
+        SELECT c.goc, p.id, c.sau + 1
+          FROM phong_ban p JOIN cay c ON p.cha_id = c.id
+         WHERE c.sau < 8
+      )
+      SELECT cay.goc AS goc, COUNT(n.id) AS so
+        FROM cay
+        LEFT JOIN nhan_su n ON n.phong_ban_id = cay.id AND n.dang_lam = 1
+       GROUP BY cay.goc
+    `).all();
+    const theo = new Map((results || []).map(r => [String(r.goc), Number(r.so) || 0]));
+    for (const p of ds) p.so_nguoi_ca_nhanh = theo.get(String(p.id)) ?? (Number(p.so_nguoi) || 0);
+  } catch (e) {
+    /* Hỏng theo chiều AN TOÀN: thiếu số cả nhánh thì giao diện quay về in mỗi
+       số thuộc-thẳng, chứ KHÔNG in một con số bịa. Kèm một dòng log để còn lần
+       ra, vì im lặng ở đây đúng là cái lỗi đang vá. */
+    console.warn('[ERP] Không đếm được số người cả nhánh:', e?.message || e);
+    for (const p of ds) p.so_nguoi_ca_nhanh = null;
+  }
+  return ds;
+}
 
 /* ==========================================================================
    TỔNG NGƯỜI THẬT + NHỮNG NGƯỜI SƠ ĐỒ ĐANG ĐÁNH RƠI

@@ -14852,6 +14852,30 @@ function veSoDoToChuc(dsPhongBan, tomTat) {
   /* `capThat` đọc từ cột, KHÔNG suy từ độ sâu. Hộp nào cột `cap` rỗng (chưa
      nạp migration `them-phongban-ba-tang.sql`) thì vẫn VẼ RA — hộp lạ phải
      nhìn thấy được, không được im lặng biến mất — và bị đếm vào cảnh báo. */
+  /* MỘT CON SỐ KHÔNG GÁNH ĐƯỢC HAI NGHĨA.
+     Sếp Ngọc bắt được 10/09/2026: hộp "Phòng Vận hành và Hỗ trợ" in `1 người`
+     trong khi ba Nhóm dưới nó có 20 người. Con số ấy đếm ĐÚNG — nó đếm người
+     gán THẲNG vào hộp — nhưng ai đọc "Phòng X · 1 người" cũng hiểu thành "cả
+     phòng có 1 người", và hiểu thế là sai. Cùng lớp với `#ls-dem` in "500/500"
+     và dòng "N việc đang mở" ở Văn phòng ảo: sai NGHĨA chứ không sai phép tính.
+
+     Nên in cả hai, mỗi số gọi đúng tên nó, và CHỈ khi hai số khác nhau — hộp
+     Nhóm không có con thì hai số bằng nhau, in thêm một dòng nữa chỉ tổ rườm.
+     Máy chủ không đếm được cả nhánh (`null`) thì quay về in mỗi số thuộc-thẳng,
+     KHÔNG bịa ra con số nào. */
+  const veDongSoNguoi = (p, so) => {
+    const caNhanh = Number.isFinite(Number(p.so_nguoi_ca_nhanh))
+      ? Number(p.so_nguoi_ca_nhanh) : null;
+    if (caNhanh !== null && caNhanh !== so) {
+      return '<div class="sodo-so" data-so-nguoi="' + so + '" data-ca-nhanh="' + caNhanh + '">'
+        + '<b>' + caNhanh + ' người</b> trong cả nhánh'
+        + '<span class="sodo-so-phu">' + so + ' người thuộc thẳng '
+        + (p.cap === 'nhom' ? 'nhóm' : 'phòng') + '</span></div>';
+    }
+    return '<div class="sodo-so" data-so-nguoi="' + so + '">' + so + ' người'
+      + (so === 0 ? ' <span class="sodo-canh">chưa ai được gán</span>' : '') + '</div>';
+  };
+
   const veHop = (p, capThat) => {
     const so = soCua(p);
     const laNhom = capThat === 'nhom';
@@ -14882,8 +14906,7 @@ function veSoDoToChuc(dsPhongBan, tomTat) {
           ? '<div class="sodo-tong" data-tong-nguoi="' + Number(tt.tong_dang_lam) + '">'
             + Number(tt.tong_dang_lam) + ' người đang làm</div>'
           : '<div class="sodo-tong sodo-tong-thieu" data-tong-nguoi="">Chưa đếm được tổng người</div>')
-      : '<div class="sodo-so" data-so-nguoi="' + so + '">' + so + ' người'
-        + (so === 0 ? ' <span class="sodo-canh">chưa ai được gán</span>' : '') + '</div>';
+      : veDongSoNguoi(p, so);
 
     return '<div class="sodo-o cap-' + esc(capThat || 'la') + (so === 0 && !laCty ? ' trong' : '') + '"'
       + (laCty ? '' : ' draggable="true"')
