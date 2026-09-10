@@ -72,12 +72,15 @@ function kt(nhan, dieuKien, chiTiet = '') {
   SO_PHEP++;
   return ok(nhan, dieuKien, chiTiet);
 }
-/* ĐẾM THẬT bằng cách chạy, không bằng cách nhẩm: 15 phép SQL · 19 phép × 2
-   màn · 8 ca đối chứng = 61. (Bản nháp đầu tôi nhẩm ra 63 và đặt sàn 62 — bàn
+/* ĐẾM THẬT bằng cách chạy, không bằng cách nhẩm: 15 phép SQL · 23 phép × 2
+   màn · 8 ca đối chứng = 69. (Bản nháp đầu tôi nhẩm ra 63 và đặt sàn 62 — bàn
    đo đỏ ngay, đúng như phải thế: sàn đặt bằng phép nhẩm thì hoặc đỏ oan, hoặc
    tệ hơn, thấp quá và không đỡ ai. Đổi sàn thì phải CHẠY LẠI rồi chép số.)
-   Sàn đặt ĐÚNG BẰNG số hiện có, không nới: thêm phép mới thì NÂNG sàn. */
-const SAN_PHEP = { du: 61, chi_sql: 15 };
+   Sàn đặt ĐÚNG BẰNG số hiện có, không nới: thêm phép mới thì NÂNG sàn.
+   10/09/2026: 19 → 23 phép mỗi màn. Phép "Giữ được thì giữ" tách làm bốn khi
+   ô chọn "Trực thuộc" và nút gán trưởng nhóm chuyển vào cửa "Sửa" — hỏi ĐÚNG
+   CHỖ MỚI, không bỏ phép. */
+const SAN_PHEP = { du: 69, chi_sql: 15 };
 
 const dso = process.argv;
 /* CA ĐỐI CHỨNG CỦA CHÍNH CÁI SÀN (BH-16 áp lên hàng rào, không chỉ lên phép
@@ -391,7 +394,17 @@ function apiRieng(du) {
     if (duong === '/api/dulieunen/don-vi')    { traJson({ ds: [] }); return true; }
     if (duong === '/api/dulieunen/tinh-trang') { traJson({ muc: [], viec_tiep_theo: [] }); return true; }
     if (duong === '/api/quan-tri/danh-sach') {
-      traJson({ nhan_su: [], vai_tro: [], vai_tro_he_thong: [], vi_tri_cong_viec: [], co_cot_vi_tri: true });
+      /* TRẢ ĐỦ 24 NGƯỜI THẬT, không trả mảng rỗng như bản trước. Cửa "Sửa"
+         (10/09/2026) dựng danh sách gán người từ đúng khối này; đưa mảng rỗng
+         là bàn đo tự làm cho cửa trông trống rồi khỏi phải đo gì. */
+      traJson({
+        nhan_su: NHAN_SU_THAT.map(([id, ho_ten, chuc_vu, pb, quan_ly_id, chuc_danh_id]) => ({
+          id, ho_ten, viet_tat: ho_ten.slice(0, 2), chuc_vu, bo_phan: null,
+          phong_ban_id: pb, chuc_danh_id, quan_ly_id, dang_lam: 1,
+          ma_nv: null, trang_thai: 'da_ky', co_anh: 0
+        })),
+        vai_tro: [], vai_tro_he_thong: [], vi_tri_cong_viec: [], co_cot_vi_tri: true
+      });
       return true;
     }
     /* Ổ trả lời cho các tab tự khởi động — thiếu khoá là TIẾNG ĐỘNG CỦA BÀN
@@ -488,6 +501,43 @@ async function doMotMan(du, { rong, cao }, suaTep = null) {
        `ReferenceError` do vùng chết (TDZ), bị `try/catch` của khối khởi động
        nuốt gọn và chỉ hiện ra ở console. Không kéo console về đây thì bàn đo
        biết "hỏng" mà không biết "hỏng ở đâu". */
+    /* ---- BA VIỆC CŨ NAY NẰM TRONG CỬA "SỬA", KHÔNG PHƠI TRÊN HỘP ---------
+       10/09/2026: Sếp Ngọc kêu màn này KHÓ ĐIỀU CHỈNH, và một phần lý do là
+       hộp nào cũng đeo sẵn một nút + một ô xổ. Chúng gom vào cửa "Sửa" mở ra
+       từ chính hộp đó.
+       BÀN ĐO KHÔNG ĐƯỢC BỎ PHÉP NÀY, chỉ đổi CHỖ HỎI: mở cửa rồi đếm. "Việc
+       cũ vẫn làm được" và "nút cũ vẫn nằm chỗ cũ" là hai câu khác nhau — câu
+       thứ nhất mới là thứ đáng canh. Đo SAU khi đã đo xong bố cục, để lần mở
+       cửa không xê dịch số đo tràn ngang ở trên. */
+    kq.cua = await cr.chay(`(async () => {
+      const nen = document.getElementById('sodoSuaNen');
+      const doc = async (boChon) => {
+        const nut = document.querySelector(boChon);
+        if (!nut) return null;
+        nut.click();
+        await new Promise(r => setTimeout(r, 600));
+        const d = {
+          moDuoc: !!(nen && !nen.hidden),
+          coOChonCha: !!document.getElementById('sodoSua-cha'),
+          coChonTruong: !!document.getElementById('sodoSua-truong'),
+          soNguoiGanDuoc: document.querySelectorAll('#sodoSua-nguoi [data-nguoi]').length,
+          coThemNhomCon: !!document.getElementById('sodoSua-themcon'),
+          coAnHop: !!document.getElementById('sodoSua-an')
+        };
+        document.getElementById('sodoSua-dong')?.click();
+        await new Promise(r => setTimeout(r, 250));
+        return d;
+      };
+      /* Đo TRÊN MỘT HỘP PHÒNG, không phải hộp gốc: hộp cấp Công ty cố tình
+         KHÔNG có nút "Ẩn hộp" (ẩn đỉnh cây là bỏ cả cây), nên lấy nó làm mẫu
+         là bàn đo tự bắt lỗi một thứ đang đúng. */
+      const phong = await doc('#dln-sodo .sodo-o.cap-phong [data-sua-hop]');
+      const goc   = await doc('#dln-sodo .sodo-o.cap-cong_ty [data-sua-hop]');
+      /* ĐÓNG LẠI TRƯỚC KHI RỜI ĐI. Ảnh chụp cho Sếp xem lấy ngay sau đây —
+         để cửa mở là đưa Sếp xem ảnh một hộp thoại thay vì ảnh sơ đồ. */
+      return { soNutSua: document.querySelectorAll('#dln-sodo [data-sua-hop]').length,
+               ...(phong || { moDuoc: false }), goc };
+    })()`);
     kq.loi = [...cr.ngoaiLe, ...cr.loiConsole].slice(0, 4);
     /* Ảnh để Sếp chấm bằng mắt — số đo nói "không tràn", ảnh nói "trông ra
        sao". Hai thứ khác nhau, cần cả hai. */
@@ -618,10 +668,28 @@ if (!CHI_SQL) {
     kt('④ Cả trang không có thanh kéo ngang', k.rongTrang <= k.rongMan,
       `trang ${k.rongTrang}px / màn ${k.rongMan}px`);
 
-    /* GIỮ ĐƯỢC THÌ GIỮ */
-    kt('Giữ: sửa tên tại chỗ · kéo thả · ô chọn trực thuộc · gán trưởng nhóm',
-      k.giuSuaTen === 8 && k.giuKeoTha === 7 && k.giuOChon === 7 && k.giuNutTruong === 7,
-      `sửa ${k.giuSuaTen} · kéo ${k.giuKeoTha} · chọn ${k.giuOChon} · gán ${k.giuNutTruong}`);
+    /* GIỮ ĐƯỢC THÌ GIỮ — nhưng hỏi ĐÚNG CHỖ.
+       Sửa tên tại chỗ và kéo–thả vẫn nằm trên hộp. Ô chọn "Trực thuộc" và nút
+       gán trưởng nhóm chuyển vào cửa "Sửa" (10/09/2026, xem chú thích ở
+       `doMotMan`) — nên phép này đếm chúng TRONG cửa, và đòi thêm một điều
+       bản cũ không có: mỗi hộp đúng MỘT nút, không đeo thêm nút nào. */
+    kt('Giữ: sửa tên tại chỗ trên hộp · kéo thả trên hộp',
+      k.giuSuaTen === 8 && k.giuKeoTha === 7,
+      `sửa tên ${k.giuSuaTen} · kéo thả ${k.giuKeoTha}`);
+    kt('Mỗi hộp đúng MỘT nút "Sửa" — không nút nào phơi thêm trên hộp',
+      k.cua && k.cua.soNutSua === 8 && k.giuOChon === 0 && k.giuNutTruong === 0,
+      `${k.cua && k.cua.soNutSua} nút Sửa · ${k.giuOChon} ô xổ · ${k.giuNutTruong} nút trưởng trên hộp`);
+    kt('Giữ: ô chọn "Trực thuộc" và gán trưởng nhóm — nay nằm TRONG cửa "Sửa"',
+      k.cua && k.cua.moDuoc && k.cua.coOChonCha && k.cua.coChonTruong,
+      JSON.stringify(k.cua));
+    kt('Cửa "Sửa" có thêm ba việc bản cũ KHÔNG làm được: gán người · thêm Nhóm con · ẩn hộp',
+      k.cua && k.cua.soNguoiGanDuoc === NHAN_SU_THAT.length && k.cua.coThemNhomCon && k.cua.coAnHop,
+      `gán được ${k.cua && k.cua.soNguoiGanDuoc} người · thêm nhóm con ${k.cua && k.cua.coThemNhomCon}`
+      + ` · ẩn hộp ${k.cua && k.cua.coAnHop}`);
+    /* Đỉnh cây KHÔNG được có nút ẩn — ẩn hộp Công ty là cất cả sơ đồ đi. */
+    kt('Hộp cấp Công ty KHÔNG có nút "Ẩn hộp" — không cất được đỉnh cây',
+      k.cua && k.cua.goc && k.cua.goc.moDuoc && k.cua.goc.coAnHop === false,
+      JSON.stringify(k.cua && k.cua.goc));
 
     if (BANG_KE) console.log(`      khung ${k.rongKhung}px · nội dung ${k.rongNoiDung}px · cao sơ đồ ${k.caoSoDo}px`);
   }

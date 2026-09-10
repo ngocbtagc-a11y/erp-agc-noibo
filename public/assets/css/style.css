@@ -5466,18 +5466,13 @@ body.tl-dang-xem { overflow: hidden; }
   margin-top: 8px;
 }
 
-/* Ô chọn "trực thuộc" — đường cho điện thoại, nơi kéo thả không chạy.
-   `max-width: 100%` chứ KHÔNG phải một số px cố định: `<select>` tự nong theo
-   `<option>` dài nhất, mà tên phòng mới nhất luôn có thể dài hơn hôm nay. */
-.sodo-chon {
-  font-size: 12px;
-  padding: 3px 8px;
-  border-radius: var(--r-md, 8px);
-  border: 1px solid var(--line);
-  background: var(--card);
-  max-width: 100%;
-  min-width: 0;
-}
+/* `.sodo-chon` ĐÃ XOÁ (10/09/2026). Ô chọn "Trực thuộc" không còn phơi trên
+   từng hộp — nó vào cửa "Sửa" và ăn luật `.sodo-cua-muc select` ở cuối tệp.
+   Xoá hẳn thay vì để lại: một luật CSS không còn phần tử nào khớp là một cái
+   bẫy im lặng cho người sau, họ sửa nó rồi không hiểu vì sao màn hình không
+   đổi. Luật mới giữ nguyên hai chốt chống tràn của luật cũ — `max-width:100%`
+   và `min-width:0` — vì `<select>` tự nong theo `<option>` dài nhất, mà tên
+   phòng mới nhất luôn có thể dài hơn hôm nay. */
 
 /* ---- KHỐI CẢNH BÁO — người sơ đồ đang đánh rơi -------------------------- */
 /* Khối này là lý do tồn tại của cả bản vá: bản cũ để hai người không có
@@ -5549,3 +5544,188 @@ body.tl-dang-xem { overflow: hidden; }
   .sodo-hang { gap: 8px; }
   .sodo-o { padding: 9px 10px; }
 }
+
+/* ==========================================================================
+   DỄ ĐIỀU CHỈNH — THANH HOÀN TÁC + CỬA "SỬA" CỦA MỘT HỘP
+   ---------------------------------------------------------------------------
+   Sếp Ngọc 10/09/2026: *"chỉnh lại chỗ này cho dễ điều chỉnh đi"*.
+   VẪN BA MÀU (docs/BANG-MAU.md §4): khối này KHÔNG khai một mã màu mới nào,
+   tất cả đi qua biến đã có. Xanh lá = "vừa xong, lùi được"; cam = "để mắt vào
+   đây" (ẩn hộp, người đang ở hộp khác); nâu–kem là nền.
+   --------------------------------------------------------------------------- */
+
+/* Thanh hoàn tác — nằm TRÊN sơ đồ, ngay tầm mắt sau khi vừa bấm xong. */
+.sodo-lui {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--sage-pale);
+  border-left: 4px solid var(--sage);
+  background: var(--sage-wash);
+  font-size: 12.5px;
+  color: var(--text);
+}
+.sodo-lui b { color: var(--ink); }
+
+/* Nút duy nhất trên mỗi hộp. 44px chiều cao — ngón tay ở kho vận bấm được,
+   và vẫn NGẮN HƠN bản cũ vốn có một nút CỘNG một ô xổ xếp thành hai hàng. */
+.btn-nho.sodo-nut {
+  box-sizing: border-box;
+  min-height: 44px;
+  min-width: 64px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ---- Cửa "Sửa" ---------------------------------------------------------
+   `max-height` + cuộn DỌC: cửa chứa cả danh sách người nên nó dài, mà dài thì
+   phải cuộn dọc trong CHÍNH nó — không đẩy cả trang dài ra, và tuyệt đối
+   không sinh thanh kéo NGANG (`overflow-x: hidden` chốt luôn). */
+.modal.sodo-cua {
+  max-width: 620px;
+  max-height: min(86vh, 760px);
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+.sodo-cua-muc { margin-bottom: 12px; min-width: 0; }
+.sodo-cua-muc > label {
+  display: block;
+  font-size: 12px;
+  color: var(--text-mute);
+  margin-bottom: 4px;
+}
+.sodo-cua-muc input[type="text"],
+.sodo-cua-muc input[type="search"],
+.sodo-cua-muc input:not([type]),
+.sodo-cua-muc select {
+  box-sizing: border-box;
+  width: 100%;
+  /* `max-width` + `min-width: 0` là hai chốt chống tràn, không phải một:
+     `<select>` tự nong theo `<option>` dài nhất ("Thuộc P. Support (Kế toán -
+     Nhân sự - Admin)"), và trong lưới thì `min-width: auto` mặc định cho phép
+     ô nong rộng hơn cả rãnh chứa nó. */
+  max-width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  padding: 8px 10px;
+  font-size: 13.5px;
+  border-radius: var(--r-md, 8px);
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--text);
+}
+.sodo-cua-muc select:disabled { background: var(--surface-2); color: var(--text-mute); }
+.sodo-cua-vi {
+  display: block;
+  margin-top: 4px;
+  font-size: 11.5px;
+  color: var(--text-mute);
+  line-height: 1.45;
+}
+.sodo-cua-vi code {
+  font-size: 11px; padding: 0 4px; border-radius: 4px; background: var(--surface-2);
+}
+/* Hai ô "Cấp" và "Trực thuộc" đứng cạnh nhau khi có chỗ, TỰ XUỐNG DÒNG khi
+   hẹp — `auto-fit minmax` chứ không phải hai cột cứng, đúng luật đang dùng
+   cho hàng Nhóm ở trên: hẹp thì xếp dọc, không bao giờ đẩy ra thanh kéo ngang. */
+.sodo-cua-doi {
+  display: grid;
+  gap: 0 12px;
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+  min-width: 0;
+}
+.sodo-cua-hang {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+.sodo-cua-hang input { flex: 1 1 180px; }
+
+.sodo-cua-dem {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 0 7px;
+  border-radius: var(--r-pill, 99px);
+  background: var(--sage-wash);
+  color: var(--sage-dark);
+  font-size: 10.5px;
+}
+
+/* Danh sách người — cuộn DỌC trong khung riêng. Kho vận 17 người là đủ dài để
+   nếu không kẹp lại thì nút "Lưu" bị đẩy khỏi màn điện thoại. */
+.sodo-nguoi-ds {
+  max-height: 240px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  margin-top: 6px;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md, 8px);
+  background: var(--surface);
+  min-width: 0;
+}
+.sodo-nguoi {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  /* 44px chiều cao mỗi dòng — tích tên bằng ngón tay, không bằng đầu bút chì. */
+  min-height: 44px;
+  padding: 6px 2px;
+  border-top: 1px solid var(--line);
+  font-size: 12.5px;
+  color: var(--text);
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.sodo-nguoi:first-of-type { border-top: 0; }
+.sodo-nguoi input { margin-top: 4px; flex: 0 0 auto; width: 18px; height: 18px; }
+.sodo-nguoi i { color: var(--text-mute); font-style: normal; }
+.sodo-nguoi.trong-hop { color: var(--ink); }
+.sodo-dang-o { color: var(--cam-text); font-weight: 600; }
+.sodo-cua-nhom-dau {
+  margin: 8px 0 2px;
+  font-size: 11px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--text-mute);
+}
+
+.sodo-cua-nut {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+.sodo-cua-nut button { width: auto; min-height: 44px; }
+
+/* Hai việc KHÔNG phải "sửa hộp này" — tách hẳn xuống dưới một đường kẻ để
+   không bấm nhầm sang khi đang định bấm "Lưu". */
+.sodo-cua-khac {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.sodo-cua-nguy {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 10px;
+  padding: 9px 11px;
+  border-radius: 12px;
+  border: 1px solid var(--cam);
+  border-left: 4px solid var(--cam);
+  background: var(--cam-wash);
+}
+.sodo-cua-nguy span { flex: 1 1 200px; font-size: 11.5px; color: var(--cam-text); line-height: 1.45; }
+.sodo-cua-nguy button { min-height: 44px; }

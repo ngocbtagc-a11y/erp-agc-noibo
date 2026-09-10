@@ -82,7 +82,11 @@ async function danhSachDanhMuc(env, bang, cotThem = '') {
   return json({ ds: results || [] });
 }
 
-async function themDanhMuc(env, bang, body, tenLoi) {
+/* `themCot` — mảng [tênCột, giáTrị] ghi kèm NGAY LÚC TẠO. Có mặt vì "Thêm một
+   Nhóm con ngay dưới một Phòng" phải là MỘT thao tác: tạo hộp rỗng rồi lại đi
+   tìm nó ở ô danh sách phía dưới để gán cha là đúng cái vòng vèo Sếp đang kêu
+   khó. Danh mục nào không truyền thì hàm chạy y hệt bản cũ. */
+async function themDanhMuc(env, bang, body, tenLoi, themCot = []) {
   const ten = String(body?.ten || '').trim();
   if (ten.length < 2) return loi(`Vui lòng nhập ${tenLoi}`);
 
@@ -92,7 +96,11 @@ async function themDanhMuc(env, bang, body, tenLoi) {
     return json({ canh_bao: true, giong: ganGiong.map(g => g.ten) }, 200);
   }
 
-  const r = await env.DB.prepare(`INSERT INTO ${bang} (ten) VALUES (?)`).bind(ten).run();
+  const cot = ['ten', ...themCot.map(c => c[0])];
+  const giaTri = [ten, ...themCot.map(c => c[1])];
+  const r = await env.DB.prepare(
+    `INSERT INTO ${bang} (${cot.join(', ')}) VALUES (${cot.map(() => '?').join(', ')})`
+  ).bind(...giaTri).run();
   return json({ ok: true, id: r.meta.last_row_id });
 }
 
@@ -153,8 +161,22 @@ function batBuocHangHoa(phien) {
 /* ==========================================================================
    PHÒNG BAN
    ========================================================================== */
+/* ⚠️ BA CỘT NÀY CÓ THỂ CHƯA TỒN TẠI — HỎNG THEO CHIỀU AN TOÀN (khuôn
+   `src/auth.js:191-215`).
+   `cap`, `mo_ta`, `phu_trach_id` do `migrations/them-phongban-ba-tang.sql`
+   thêm vào, mà `deploy.yml` KHÔNG tự chạy migration. Bản trước SELECT thẳng
+   ba cột đó: thiếu một cột là câu này ném, `/api/dulieunen/phong-ban` trả 500,
+   và CẢ MÀN Cơ cấu tổ chức trắng — không sơ đồ, không danh sách phòng ban,
+   không một dòng nào nói vì sao. Đúng lớp lỗi REV-0027 L4 đã trả giá một lần.
+   Nay thiếu cột thì bỏ dần từng cột rồi chạy lại: sơ đồ mất phần ba tầng
+   (hộp về cấp "chưa xếp"), nhưng màn hình vẫn dùng được và khối "Sơ đồ đang
+   PHẲNG" đã sẵn sàng chỉ đúng file migration cần nạp.
+   `co_cot_cap` trả kèm để giao diện KHÔNG mời Sếp bấm "Đổi cấp" trong một CSDL
+   chưa có chỗ ghi cấp — mời rồi báo lỗi tệ hơn là không mời. */
+const COT_BA_TANG = ['cap', 'mo_ta', 'phu_trach_id'];
+
 export const danhSachPhongBan = async (env) => {
-  const { results } = await env.DB.prepare(`
+  const cauPhongBan = (coCot) => `
     SELECT pb.id, pb.ten, pb.hoat_dong, pb.trang_thai, pb.truong_phong_id,
            ns.ho_ten AS truong_phong_ten,
            /* Số người ĐANG LÀM của phòng — sơ đồ tổ chức mà không có con số thì
@@ -166,15 +188,36 @@ export const danhSachPhongBan = async (env) => {
            pb.thu_tu, pb.cha_id,
            /* Cơ cấu 09/09/2026: cấp của hộp, ai TRỰC TIẾP PHỤ TRÁCH (khác
               trưởng phòng), và hai dòng chức năng in dưới hộp Nhóm. */
-           pb.cap, pb.mo_ta, pb.phu_trach_id,
+           ${coCot.has('cap') ? 'pb.cap' : "NULL AS cap"},
+           ${coCot.has('mo_ta') ? 'pb.mo_ta' : 'NULL AS mo_ta'},
+           ${coCot.has('phu_trach_id') ? 'pb.phu_trach_id' : 'NULL AS phu_trach_id'},
            pt.ho_ten AS phu_trach_ten, pt.chuc_vu AS phu_trach_chuc_vu
       FROM phong_ban pb
       LEFT JOIN nhan_su ns ON ns.id = pb.truong_phong_id
-      LEFT JOIN nhan_su pt ON pt.id = pb.phu_trach_id
+      LEFT JOIN nhan_su pt ON pt.id = ${coCot.has('phu_trach_id') ? 'pb.phu_trach_id' : 'NULL'}
      ORDER BY pb.hoat_dong DESC, COALESCE(pb.thu_tu, 9999), pb.ten
-  `).all();
-  return json({ ds: await ganSoCaNhanh(env, results || []),
-                tom_tat: await tomTatNhanSuSoDo(env) });
+  `;
+  const coCot = new Set(COT_BA_TANG);
+  let results = null;
+  for (let lan = 0; lan <= COT_BA_TANG.length; lan++) {
+    try { ({ results } = await env.DB.prepare(cauPhongBan(coCot)).all()); break; }
+    catch (e) {
+      const tin = String(e && e.message);
+      if (!/no such column/i.test(tin)) throw e;      // lỗi khác — lỗi thật, không nuốt
+      const thieu = COT_BA_TANG.find(c => coCot.has(c) && new RegExp(c).test(tin));
+      if (!thieu) throw e;
+      coCot.delete(thieu);
+      /* IM LẶNG VĨNH VIỄN LÀ LỖI THỨ HAI (REV-0030 lỗi 5) — `[observability]`
+         đang bật trong wrangler.toml nên dòng này đọc được trên Workers Logs. */
+      console.warn(`[ERP] Thiếu cột phong_ban.${thieu} — sơ đồ tổ chức đang chạy ở mức `
+        + 'chưa-có-ba-tầng. Nạp migrations/them-phongban-ba-tang.sql rồi deploy lại.');
+    }
+  }
+  return json({
+    ds: await ganSoCaNhanh(env, results || []),
+    co_cot_cap: coCot.has('cap'),
+    tom_tat: await tomTatNhanSuSoDo(env, coCot.has('cap'))
+  });
 };
 
 /* ==========================================================================
@@ -250,7 +293,7 @@ async function ganSoCaNhanh(env, ds) {
    đúng những người đang là `phu_trach_id` của hộp cấp công ty, còn lại mà
    trống thì là thiếu thật.
    ========================================================================== */
-async function tomTatNhanSuSoDo(env) {
+async function tomTatNhanSuSoDo(env, coCotCap = true) {
   const { results } = await env.DB.prepare(`
     SELECT n.id, n.ho_ten, n.chuc_vu, n.phong_ban_id, n.quan_ly_id, n.chuc_danh_id
       FROM nhan_su n WHERE n.dang_lam = 1 ORDER BY n.ho_ten
@@ -258,9 +301,13 @@ async function tomTatNhanSuSoDo(env) {
   const nguoi = results || [];
 
   /* Ai đứng đầu cây: người được gán phụ trách hộp cấp `cong_ty`. Chỉ những
-     người này mới được phép trống `quan_ly_id`. */
+     người này mới được phép trống `quan_ly_id`.
+     CHƯA CÓ CỘT `cap` thì đỉnh cây là hộp KHÔNG CÓ CHA — suy được từ `cha_id`,
+     không phải đoán bừa. Thiếu chốt này thì cả câu ném và tóm tắt mất sạch. */
   const { results: dinh } = await env.DB.prepare(
-    `SELECT phu_trach_id, truong_phong_id FROM phong_ban WHERE cap = 'cong_ty'`
+    coCotCap
+      ? `SELECT phu_trach_id, truong_phong_id FROM phong_ban WHERE cap = 'cong_ty'`
+      : `SELECT NULL AS phu_trach_id, truong_phong_id FROM phong_ban WHERE cha_id IS NULL AND hoat_dong = 1`
   ).all();
   const dinhCay = new Set();
   for (const d of dinh || []) {
@@ -278,12 +325,214 @@ async function tomTatNhanSuSoDo(env) {
     trong_chuc_danh: nguoi.filter(n => n.chuc_danh_id == null).map(gon)
   };
 }
-export const themPhongBan = (env, phien, body) =>
-  batBuocToChuc(phien) || themDanhMuc(env, 'phong_ban', body, 'tên phòng ban');
-export const suaPhongBan = (env, phien, body) =>
-  batBuocToChuc(phien) || suaDanhMuc(env, phien, 'phong_ban', body, 'tên phòng ban');
+/* ==========================================================================
+   BA VIỆC MỚI TRÊN SƠ ĐỒ — THÊM NHÓM CON · ĐỔI CẤP · ẨN HỘP
+   ---------------------------------------------------------------------------
+   Sếp Ngọc 10/09/2026: *"chỉnh lại chỗ này cho dễ điều chỉnh đi — tao thấy
+   khó điều chỉnh quá"*. Không phải chê xấu, chê KHÓ SỬA.
+
+   MỌI ĐƯỜNG GHI DƯỚI ĐÂY CHẶN Ở MÁY CHỦ, không phải ẩn nút. Giao diện có ẩn
+   nút hay không là chuyện tiện tay; gọi thẳng API vẫn phải bị chặn — đây là
+   nơi cơ cấu tổ chức và hồ sơ nhân sự thật bị đổi.
+   ========================================================================== */
+
+const CAP_HOP = ['cong_ty', 'phong', 'nhom'];
+
+/* Cột `cap` có tồn tại không — hỏi CSDL, không đoán. Dùng cho hai đường ghi
+   dưới đây: CSDL cũ chưa nạp `them-phongban-ba-tang.sql` thì "Đổi cấp" và
+   "Thêm Nhóm con" phải TỪ CHỐI KÈM LÝ DO, chứ không ghi bừa vào một cột không
+   có rồi ném 500 không ai đọc được. */
+async function coCotCap(env) {
+  try { await env.DB.prepare('SELECT cap FROM phong_ban LIMIT 1').all(); return true; }
+  catch (e) {
+    if (/no such column/i.test(String(e && e.message))) return false;
+    throw e;
+  }
+}
+
+/* THÊM HỘP — nhận thêm `cap` và `cha_id` để "Thêm một Nhóm con ngay dưới
+   Phòng này" xong trong MỘT lần bấm. Trước bản này chỉ nhận `ten`, nên dựng
+   một Nhóm con là 3 chặng: cuộn xuống ô "Phòng ban" rời phía dưới → gõ tên →
+   quay lên sơ đồ tìm hộp mới → đổi ô xổ "Thuộc …". */
+export async function themPhongBan(env, phien, body) {
+  const chan = batBuocToChuc(phien);
+  if (chan) return chan;
+
+  const capMuon = body?.cap == null || body.cap === '' ? null : String(body.cap);
+  const chaMuon = body?.cha_id == null || body.cha_id === '' ? null : parseInt(body.cha_id, 10);
+
+  if (capMuon !== null && !CAP_HOP.includes(capMuon)) return loi('Cấp của hộp không hợp lệ');
+  if (chaMuon !== null && !Number.isInteger(chaMuon)) return loi('Mã hộp cấp trên không hợp lệ');
+  if (chaMuon !== null) {
+    const cha = await env.DB.prepare('SELECT id FROM phong_ban WHERE id = ?').bind(chaMuon).first();
+    if (!cha) return loi('Không tìm thấy hộp cấp trên', 404);
+  }
+  if (capMuon !== null && !(await coCotCap(env))) {
+    return loi('CSDL chưa có cột `cap` — nạp migrations/them-phongban-ba-tang.sql rồi thử lại', 409);
+  }
+
+  const themCot = [];
+  if (capMuon !== null) themCot.push(['cap', capMuon]);
+  if (chaMuon !== null) themCot.push(['cha_id', chaMuon]);
+  return themDanhMuc(env, 'phong_ban', body, 'tên phòng ban', themCot);
+}
+
+/* SỬA HỘP — đổi tên (như cũ), ĐỔI CẤP (mới), ẨN/HIỆN có cảnh báo (mới).
+   Tách khỏi `suaDanhMuc` chung vì hai việc mới chỉ có nghĩa với phòng ban;
+   nhét vào hàm dùng chung là bắt bốn danh mục kia gánh luật không phải của
+   chúng. Phần đổi tên vẫn gọi thẳng `suaDanhMuc` để không có luật thứ hai. */
+export async function suaPhongBan(env, phien, body) {
+  const chan = batBuocToChuc(phien);
+  if (chan) return chan;
+
+  const id = parseInt(body?.id, 10) || 0;
+  if (!id) return loi('Thiếu id');
+  const hienCo = await env.DB.prepare(
+    'SELECT id, ten, trang_thai, hoat_dong FROM phong_ban WHERE id = ?'
+  ).bind(id).first();
+  if (!hienCo) return loi('Không tìm thấy', 404);
+
+  /* ---- ĐỔI CẤP (Phòng ⇄ Nhóm) ---------------------------------------- */
+  if (body.cap != null && body.cap !== '') {
+    const cap = String(body.cap);
+    if (!CAP_HOP.includes(cap)) return loi('Cấp của hộp không hợp lệ');
+    if (!(await coCotCap(env))) {
+      return loi('CSDL chưa có cột `cap` — nạp migrations/them-phongban-ba-tang.sql rồi thử lại', 409);
+    }
+    const chanKhoa = batBuocDuocSuaKhoa(phien, hienCo);
+    if (chanKhoa) return chanKhoa;
+    const cu = await env.DB.prepare('SELECT cap FROM phong_ban WHERE id = ?').bind(id).first();
+    await env.DB.prepare('UPDATE phong_ban SET cap = ? WHERE id = ?').bind(cap, id).run();
+    /* Ghi vết là việc PHỤ — bảng lịch sử hỏng/chưa nạp thì không được kéo theo
+       việc chính (đúng nếp `qtSuaNhanSu` đang dùng). */
+    try { await ghiLichSuThayDoi(env, phien, 'phong_ban', id, { cap: [cu ? cu.cap : null, cap] }); }
+    catch { /* chưa nạp them-khoa-danhmuc-nen.sql — bỏ qua */ }
+  }
+
+  /* ---- ẨN HỘP — KHÔNG XOÁ CỨNG, VÀ PHẢI NÓI RÕ CÒN BAO NHIÊU NGƯỜI ----
+     `nhan_su.phong_ban_id` đang có 22 hàng trỏ vào các hộp này. Xoá cứng là
+     mất dấu lịch sử, nên cả ERP chỉ có ẩn. Nhưng ẩn ÊM RU cũng đủ hỏng: hộp
+     biến khỏi sơ đồ trong khi 17 người kho vận vẫn mang `phong_ban_id` trỏ
+     vào nó — họ rơi khỏi mọi hộp mà không dòng nào nói ra, đúng cái bệnh
+     ① mà khối cảnh báo sinh ra để chữa.
+     Nên: đếm ở MÁY CHỦ, và không có `xac_nhan` thì TỪ CHỐI kèm con số. Đếm ở
+     trình duyệt rồi tin là đủ thì gọi thẳng API vẫn ẩn được. */
+  if (body.hoat_dong != null) {
+    const muonAn = !body.hoat_dong;
+    if (muonAn) {
+      const dem = await env.DB.prepare(`
+        SELECT (SELECT COUNT(*) FROM nhan_su n WHERE n.phong_ban_id = ? AND n.dang_lam = 1) AS so_nguoi,
+               (SELECT COUNT(*) FROM phong_ban c WHERE c.cha_id = ? AND c.hoat_dong = 1) AS so_con
+      `).bind(id, id).first();
+      const soNguoi = Number(dem?.so_nguoi || 0), soCon = Number(dem?.so_con || 0);
+      if ((soNguoi > 0 || soCon > 0) && !body.xac_nhan) {
+        return json({
+          can_xac_nhan: true, so_nguoi: soNguoi, so_con: soCon,
+          thong_diep: `Hộp "${hienCo.ten}" còn ${soNguoi} người đang thuộc về nó`
+            + (soCon ? ` và ${soCon} hộp con` : '')
+            + '. Ẩn đi thì họ rơi khỏi sơ đồ nhưng hồ sơ vẫn trỏ vào hộp này.'
+        }, 200);
+      }
+    }
+    await env.DB.prepare('UPDATE phong_ban SET hoat_dong = ? WHERE id = ?')
+      .bind(muonAn ? 0 : 1, id).run();
+    try {
+      await ghiLichSuThayDoi(env, phien, 'phong_ban', id,
+        { hoat_dong: [String(hienCo.hoat_dong), muonAn ? '0' : '1'] });
+    } catch { /* chưa nạp them-khoa-danhmuc-nen.sql — bỏ qua */ }
+  }
+
+  /* ---- ĐỔI TÊN — vẫn đi qua đúng hàm dùng chung, không viết luật thứ hai */
+  if (body.ten != null) {
+    return suaDanhMuc(env, phien, 'phong_ban', { id, ten: body.ten, xac_nhan: body.xac_nhan },
+      'tên phòng ban');
+  }
+  return json({ ok: true });
+}
+
 export const khoaPhongBan = (env, phien, body) =>
   batBuocToChuc(phien) || khoaDanhMuc(env, phien, 'phong_ban', body);
+
+/* ==========================================================================
+   GÁN NGƯỜI VÀO HỘP — VIỆC TỐN CÔNG NHẤT KHI DỰNG LẠI CƠ CẤU
+   ---------------------------------------------------------------------------
+   Trước bản này: muốn xếp 17 người kho vận vào một Nhóm thì phải sang màn
+   Nhân sự, mở TỪNG hồ sơ, đổi ô "Phòng ban", lưu — 17 lần, mỗi lần 5 bước.
+   Nay: mở cửa "Sửa" của hộp, tích tên, Lưu.
+
+   ĐÂY LÀ ĐƯỜNG GHI VÀO HỒ SƠ NHÂN SỰ THẬT, nên ba chốt ĐỀU Ở MÁY CHỦ:
+     ① quyền `duocThemNhanSu` — đúng cửa mà màn Nhân sự đang dùng để sửa
+        `phong_ban_id` (`qtSuaNhanSu` → `batBuocThemNhanSu`). Không mở cửa
+        rộng hơn chỉ vì đi lối khác.
+     ② điều kiện lọc NẰM TRONG SQL, không lọc bằng JS sau khi lấy hết ra
+        (khuôn `src/tai-lieu.js` d.1358 — `nhom IN (…)` dựng thẳng vào câu):
+        `WHERE id IN (…) AND dang_lam = 1` nên id người đã nghỉ gửi lên thì
+        UPDATE khớp 0 hàng, không cần tin vào danh sách trình duyệt gửi.
+     ③ `bo_phan` (tên phòng ghi thẳng trong hồ sơ) cập nhật CÙNG một lượt —
+        để lệch là hai màn cùng đọc `nhan_su` mà nói hai chuyện khác nhau.
+   ========================================================================== */
+export async function ganNguoiVaoPhongBan(env, phien, body) {
+  const chan = batBuocToChuc(phien);
+  if (chan) return chan;
+
+  const id = parseInt(body?.id, 10) || 0;
+  if (!id) return loi('Thiếu id phòng ban');
+  const pb = await env.DB.prepare('SELECT id, ten FROM phong_ban WHERE id = ?').bind(id).first();
+  if (!pb) return loi('Không tìm thấy phòng ban', 404);
+
+  const locId = v => [...new Set((Array.isArray(v) ? v : [])
+    .map(x => String(x || '').trim()).filter(Boolean))].slice(0, 300);
+  const them = locId(body.them);
+  const bo = locId(body.bo);
+  if (!them.length && !bo.length) return loi('Không có ai để gán hay gỡ');
+  const trung = them.filter(x => bo.includes(x));
+  if (trung.length) return loi('Cùng một người vừa được gán vừa bị gỡ — không rõ ý, không ghi');
+
+  /* Đọc TRƯỚC để ghi lịch sử "đổi phòng ban" đúng giá trị cũ; điều kiện
+     `dang_lam = 1` nằm ngay trong câu, không lọc sau. */
+  const dsId = [...them, ...bo];
+  const { results: nguoi } = await env.DB.prepare(
+    `SELECT id, ho_ten, bo_phan, phong_ban_id FROM nhan_su
+      WHERE id IN (${dsId.map(() => '?').join(',')}) AND dang_lam = 1`
+  ).bind(...dsId).all();
+  const coThat = new Set((nguoi || []).map(n => n.id));
+  const themThat = them.filter(x => coThat.has(x));
+  const boThat = bo.filter(x => coThat.has(x));
+
+  const lenh = [];
+  if (themThat.length) lenh.push(env.DB.prepare(
+    `UPDATE nhan_su SET phong_ban_id = ?, bo_phan = ?
+      WHERE id IN (${themThat.map(() => '?').join(',')}) AND dang_lam = 1`
+  ).bind(id, pb.ten, ...themThat));
+  /* GỠ = trả về "chưa xếp hộp nào", KHÔNG phải xoá người. Họ hiện ngay ở khối
+     cảnh báo "người chưa vào sơ đồ" — có tên, đếm được.
+     ⚠️ `bo_phan = ''` CHỨ KHÔNG PHẢI `NULL`: `schema.sql` d.21 khai
+     `bo_phan TEXT NOT NULL`. Bản nháp đầu ghi NULL và cả lệnh gỡ ném
+     "NOT NULL constraint failed" — bàn đo bắt ngay lượt chạy đầu. Chuỗi rỗng
+     cũng đúng nếp `qtSuaNhanSu` đang dùng cho hồ sơ không có phòng ban. */
+  if (boThat.length) lenh.push(env.DB.prepare(
+    `UPDATE nhan_su SET phong_ban_id = NULL, bo_phan = ''
+      WHERE id IN (${boThat.map(() => '?').join(',')}) AND phong_ban_id = ? AND dang_lam = 1`
+  ).bind(...boThat, id));
+  if (lenh.length) await env.DB.batch(lenh);
+
+  /* Dấu vết trên hồ sơ từng người — cùng loại sự kiện `doi_phong_ban` mà màn
+     Nhân sự đang ghi, để "Lịch sử hồ sơ" không có hai giọng kể.
+     Bọc try/catch: chưa nạp `them-nhansu-lichsu.sql` thì bỏ qua êm, không
+     chặn việc chính (đúng nếp đang dùng ở `qtSuaNhanSu`). */
+  try {
+    const ghi = [...themThat, ...boThat].map(nid => {
+      const n = (nguoi || []).find(x => x.id === nid);
+      return env.DB.prepare(`
+        INSERT INTO nhan_su_lich_su (nhan_su_id, loai_su_kien, gia_tri_cu, gia_tri_moi, nguoi_thuc_hien_id, luc)
+        VALUES (?, 'doi_phong_ban', ?, ?, ?, datetime('now','+7 hours'))
+      `).bind(nid, n ? n.bo_phan : null, themThat.includes(nid) ? pb.ten : null, phien.nhan_su_id || null);
+    });
+    if (ghi.length) await env.DB.batch(ghi);
+  } catch { /* chưa nạp migration lịch sử — bỏ qua, không chặn việc gán */ }
+
+  return json({ ok: true, da_gan: themThat.length, da_go: boThat.length });
+}
 
 /* Gán trưởng phòng — TÁCH riêng khỏi suaPhongBan (chỉ đổi tên) vì đây là
    quyết định cấp Ban Giám đốc, không phải sửa danh mục thường; cho phép gán

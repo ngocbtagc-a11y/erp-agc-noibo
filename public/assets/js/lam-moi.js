@@ -179,6 +179,10 @@ export const NHOM_DU_LIEU = {
   dlnSuaPhongBan:         ['du_lieu_nen', 'nhan_su'],
   dlnKhoaPhongBan:        ['du_lieu_nen', 'nhan_su'],
   dlnGanTruongPhong:      ['du_lieu_nen', 'nhan_su'],
+  /* Thêm hộp / gán người vào hộp — đổi thẳng `nhan_su.phong_ban_id`, nên mọi
+     màn đang đọc phòng ban của người phải vẽ lại, không chỉ sơ đồ. */
+  dlnThemHopSoDo:         ['du_lieu_nen', 'nhan_su'],
+  dlnGanNguoiVaoPhongBan: ['du_lieu_nen', 'nhan_su'],
   dlnThemChucDanh:        ['du_lieu_nen', 'nhan_su'],
   dlnSuaChucDanh:         ['du_lieu_nen', 'nhan_su'],
   dlnKhoaChucDanh:        ['du_lieu_nen', 'nhan_su'],

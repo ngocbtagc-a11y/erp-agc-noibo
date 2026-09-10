@@ -2291,6 +2291,17 @@ async function dlnGanTruongPhong(req, env) {
   let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
   return dulieunen.ganTruongPhong(env, phien, b);
 }
+/* Gán/gỡ người vào một hộp của sơ đồ — ĐỔI HỒ SƠ NHÂN SỰ THẬT
+   (`nhan_su.phong_ban_id` + `bo_phan`). Hai cửa chồng nhau, cố ý: xem được tab
+   Dữ liệu nền ở đây, rồi `duocThemNhanSu` bên trong
+   `dulieunen.ganNguoiVaoPhongBan` — đúng cửa màn Nhân sự dùng để sửa chính hai
+   ô ấy. Đi lối sơ đồ KHÔNG được rộng cửa hơn đi lối hồ sơ. */
+async function dlnGanNguoiVaoPhongBan(req, env) {
+  const { phien, loi: l } = await batBuocXemDuLieuNen(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return dulieunen.ganNguoiVaoPhongBan(env, phien, b);
+}
 
 async function dlnDanhSachChucDanh(req, env) {
   const { loi: l } = await batBuocXemDuLieuNen(req, env);
@@ -8104,6 +8115,7 @@ const DUONG_DAN = {
   'POST /api/dulieunen/phong-ban/sap-xep': dlnSapXepPhongBan,
   'POST /api/dulieunen/phong-ban/khoa': dlnKhoaPhongBan,
   'POST /api/dulieunen/phong-ban/gan-truong-phong': dlnGanTruongPhong,
+  'POST /api/dulieunen/phong-ban/gan-nguoi': dlnGanNguoiVaoPhongBan,
   'GET  /api/dulieunen/chuc-danh':      dlnDanhSachChucDanh,
   'POST /api/dulieunen/chuc-danh/them': dlnThemChucDanh,
   'POST /api/dulieunen/chuc-danh/sua':  dlnSuaChucDanh,
