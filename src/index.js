@@ -45,6 +45,13 @@ import * as kynang from './ky-nang.js';
 import { quetNhacNhanSu, thangKeTiep, gioVN } from './nhac-nhan-su.js';
 import * as vanphong from './vanphong.js';
 import { tuDayViecNhe } from './vp-gopy.js';
+/* Cửa duyệt góp ý — MỘT nhánh quyết định cho MỌI đường tạo phiếu (người tự bấm
+   gửi ở đây, và Mây bóc câu nói ở src/vp-gopy.js). Tách ra module riêng vì
+   vp-gopy.js không import ngược sang index.js được (vòng tròn module). */
+import {
+  GOPY_OWNER_THEO_TT, GOPY_SQL_QL1, nguoiDuyetCap1,
+  taoPhieuGopYChung, gopYGhiLichSu, gopYDongDauChoDuyet
+} from './gopy-cua-duyet.js';
 import { soanKeHoach, soanKeHoachChanDoan } from './vp-kehoach.js';
 /* CTL-0026 — Kho tài liệu quản trị. Lõi dùng chung với CTL-0025 (quét giấy tờ
    nhân sự): một kho, hai cửa vào. Đợt 1 mở cửa KHO CHUNG. */
@@ -5872,27 +5879,12 @@ const CONG_DUYET_BAT = true;
 
 /* Ai đang cầm việc. KHÔNG nhồi vào nguoi_phu_trach_id (cột đó trỏ nhân sự
    thật — nhồi 'HOLY'/'KHIDOT' vào là phải tạo hồ sơ nhân sự giả, hỏng Danh
-   bạ/Chấm công/bảng lương, Rule 9). */
+   bạ/Chấm công/bảng lương, Rule 9).
+
+   `GOPY_OWNER_THEO_TT` nay ở src/gopy-cua-duyet.js (import ở đầu file): Văn
+   phòng ảo cũng cần đúng bảng đó, mà vp-gopy.js không import ngược được sang
+   index.js. */
 const GOPY_OWNER_HOP_LE = new Set(['NGUOI_GUI', 'QL_CAP1', 'OWNER', 'GAO', 'HOLY', 'KHIDOT', 'RUNNER', 'NONE']);
-// [current_owner, next_owner] backend TỰ TÍNH sau mỗi lần chuyển — client
-// KHÔNG được gửi hai cột này lên.
-const GOPY_OWNER_THEO_TT = {
-  moi:                 ['NGUOI_GUI', 'QL_CAP1'],
-  bi_tu_choi:          ['NGUOI_GUI', 'NGUOI_GUI'],
-  cho_quyet_dinh:      ['OWNER',     'OWNER'],
-  cho_phan_tich:       ['HOLY',      'HOLY'],
-  dang_phan_tich:      ['HOLY',      'OWNER'],
-  da_duyet:            ['OWNER',     'KHIDOT'],
-  dang_lam:            ['KHIDOT',    'KHIDOT'],
-  dang_kiem_tra:       ['KHIDOT',    'HOLY'],
-  can_chinh_sua:       ['KHIDOT',    'KHIDOT'],
-  cho_nghiem_thu:      ['NGUOI_GUI', 'NGUOI_GUI'],
-  nghiem_thu_chua_dat: ['KHIDOT',    'KHIDOT'],
-  san_sang_phat_hanh:  ['OWNER',     'OWNER'],
-  hoan_thanh:          ['NONE',      'NONE'],
-  da_huy:              ['NONE',      'NONE'],
-  bi_chan:             ['OWNER',     'OWNER']
-};
 const GOPY_RISK_BAC = { LOW: 1, MEDIUM: 2, HIGH: 3 };
 const GOPY_RISK_NHAN = { LOW: 'Thấp', MEDIUM: 'Trung bình', HIGH: 'Cao' };
 const GOPY_SLA_NHAC_NGAY    = 3;   // ADR-0006 B3 — nhắc lại ở ngày thứ 3
@@ -5900,37 +5892,12 @@ const GOPY_SLA_LEN_SEP_NGAY = 5;   // ADR-0006 B3 — im lặng 5 ngày thì t�
 const GOPY_SLA_NGHIEM_THU_NGAY = 7;
 const GOPY_GUI_LAI_LEN_SEP  = 3;   // gửi lại lần thứ 3 trở đi thì lên thẳng Sếp
 
-/* Ai là người duyệt cấp 1 của người gửi — viết MỘT LẦN dưới dạng biểu thức
-   SQL để danh sách, cổng duyệt và SLA dùng chung đúng một luật (Rule 1: một
-   sự thật, một nguồn). Cần bí danh bảng `n` là nhan_su của NGƯỜI GỬI.
-
-   ADR-0006 B1: nhan_su.quan_ly_id THẮNG; phong_ban.truong_phong_id chỉ là
-   đường lui khi quan_ly_id trống.
-
-   ĐƯỜNG LUI NỐI BẰNG KHOÁ, KHÔNG NỐI BẰNG TÊN (REV-0016 mục 1 · BH-32):
-   nhan_su CÓ cột phong_ban_id (migrations/them-danhmuc-nen.sql:34; chính file
-   này đã dùng ở :493 và :554). Bản trước khai nhầm là "không có" vì chỉ đọc
-   schema.sql — phải grep migrations/ mới thấy đủ.
-
-   Vì sao nối theo TÊN là hỏng: dulieunen.js đổi tên phòng ban chỉ chạy
-   UPDATE phong_ban SET ten = ?, KHÔNG cập nhật lại nhan_su.bo_phan. Đổi tên
-   một phòng là cả phòng đó mất quản lý cấp 1 → rơi hết lên Sếp duyệt, đúng
-   thứ cổng này sinh ra để tránh.
-
-   Lớp 3 là ĐƯỜNG LUI CÓ KHAI BÁO cho người còn phong_ban_id NULL (bản thật
-   28/08: 2/24 người, ví dụ Vũ Lan Hương). Nó CHỈ chạy khi phong_ban_id NULL,
-   nên người đã có id thì tên phòng lệch cũng không kéo nhầm ai. */
-const GOPY_SQL_QL1 = `COALESCE(
-    (SELECT q.id FROM nhan_su q
-      WHERE q.id = n.quan_ly_id AND q.dang_lam = 1 AND q.id <> n.id),
-    (SELECT pb.truong_phong_id FROM phong_ban pb
-      WHERE pb.hoat_dong = 1 AND pb.truong_phong_id IS NOT NULL AND pb.truong_phong_id <> n.id
-        AND n.phong_ban_id IS NOT NULL AND pb.id = n.phong_ban_id LIMIT 1),
-    (SELECT pb.truong_phong_id FROM phong_ban pb
-      WHERE pb.hoat_dong = 1 AND pb.truong_phong_id IS NOT NULL AND pb.truong_phong_id <> n.id
-        AND n.phong_ban_id IS NULL
-        AND LOWER(TRIM(pb.ten)) = LOWER(TRIM(n.bo_phan)) LIMIT 1)
-  )`;
+/* `GOPY_SQL_QL1` — biểu thức SQL "ai là người duyệt cấp 1 của người gửi" —
+   nay ở src/gopy-cua-duyet.js cùng với nhánh quyết định dùng chung. Vì sao
+   dời: cả hai đường tạo phiếu (người tự bấm gửi · Mây bóc câu nói) đều phải
+   hỏi cùng một câu đó, mà vp-gopy.js không import ngược sang index.js được.
+   Nội dung biểu thức, cả ba lớp COALESCE lẫn phần giải thích BH-32, chép
+   nguyên sang file mới — không sửa một ký tự. */
 const GOPY_LOAI_HOP_LE = ['loi', 'cai_tien_trai_nghiem', 'cai_tien_quy_trinh', 'tinh_nang_moi', 'du_lieu_sai', 'loi_phan_quyen', 'loi_ket_noi'];
 const GOPY_TAN_SUAT_HOP_LE = ['lan_dau', 'thinh_thoang', 'thuong_xuyen', 'lien_tuc'];
 const GOPY_DINH_KEM_TOI_DA = 800 * 1024;   // giống ẢNH_DAI_DIEN_TOI_DA — 1 ảnh, không video Phase 1 (D1 không hợp cho file lớn)
@@ -6084,109 +6051,24 @@ async function gopYGui(req, env) {
     dinhKem = raw;
   }
 
-  /* ---- VIỆC 7 — KHÔNG AI DUYỆT GÓP Ý CỦA CHÍNH MÌNH --------------------
-     Sếp Ngọc 28/08/2026, sau khi dùng thật: "lỗi của tôi tự góp ý mà vẫn bắt
-     tôi duyệt, bị ngu à :))))". Đúng: một cái cổng bắt người ta gật với chính
-     mình thì không phải cổng duyệt, chỉ là một cú bấm thừa mỗi ngày.
+  /* ---- MỘT NHÁNH QUYẾT ĐỊNH DUY NHẤT, DÙNG CHUNG VỚI VĂN PHÒNG ẢO ------
+     Toàn bộ luật "trạng thái + người cầm việc + dấu duyệt khi người gửi được
+     miễn" nằm ở `taoPhieuGopYChung()` trong src/gopy-cua-duyet.js. Đường này
+     và đường Mây bóc câu nói (`taoPhieuGopY` ở src/vp-gopy.js) gọi CÙNG một
+     hàm — trước 10/09/2026 mỗi đường một luật và đường Mây không biết luật
+     miễn duyệt, nên phiếu của chính Sếp cũng rơi vào hàng chờ.
 
-       · NGƯỜI GIỮ CỜ DUYỆT (Sếp) gửi → vào thẳng 'cho_phan_tich', không qua
-         cửa nào. Không có ai ở trên để duyệt, và tự gật với mình thì không
-         thêm được sự thật nào.
-       · KHÔNG CÓ AI Ở CẤP 1 (điển hình là quản lý phòng / trưởng phòng —
-         GOPY_SQL_QL1 đã loại chính mình bằng `<> n.id`) → bỏ qua cổng 1, đi
-         thẳng lên Sếp. Trước bản vá việc này nằm ở next_owner='QL_CAP1' chờ
-         một người KHÔNG TỒN TẠI, và chỉ thoát ra được nhờ SLA sau 5 ngày.
-       · Nhân viên thường → nguyên như cũ: quản lý cấp 1 rồi mới tới Sếp.
+     Ba ca (Việc 7 · Sếp Ngọc 28/08/2026 "lỗi của tôi tự góp ý mà vẫn bắt tôi
+     duyệt, bị ngu à :))))", cộng luật Ban Giám đốc 10/09/2026) và cả phần ghi
+     một dòng lịch sử giải thích vì sao phiếu không có dấu duyệt — xem chú
+     thích đầy đủ trong file đó. */
+  const phieu = await taoPhieuGopYChung(env, {
+    nguoiGuiId: phien.nhan_su_id,
+    tieuDe, boiCanh, vuongODau, mongMuon, tanSuat, khuVuc, dinhKem
+  });
+  if (!phieu) return loi('Không ghi được góp ý, thử lại giúp tôi', 500);
 
-     BỎ QUA NHƯNG KHÔNG ÂM THẦM: mỗi ca bỏ qua ghi MỘT DÒNG lịch sử nói rõ vì
-     sao, để sau này không ai phải đoán vì sao góp ý đó không có dấu duyệt.
-
-     VÒNG LẶP (Sếp vừa giữ cờ, vừa là quản lý cấp 1 của chính mình): nhánh cờ
-     xét TRƯỚC và `return` luôn, nên không có đường nào chạy hai nhánh. Ở tầng
-     dưới, GOPY_SQL_QL1 cũng đã cấm một người làm quản lý cấp 1 của chính mình. */
-  const nguoiGuiGiuCo = duocDuyetGopY(phien);
-  const ql1 = await nguoiDuyetCap1(env, phien.nhan_su_id);
-  // Người giữ cờ: chốt luôn mức rủi ro theo đề xuất máy (chưa có thì MEDIUM,
-  // đúng sàn an toàn của cổng duyệt) — nếu không thì việc này kẹt ở bước
-  // 'da_duyet' vì `canRisk` mà không còn cổng nào để chốt rủi ro nữa.
-  const tt = nguoiGuiGiuCo ? 'cho_phan_tich' : 'moi';
-  const [cur, nxt] = nguoiGuiGiuCo ? GOPY_OWNER_THEO_TT.cho_phan_tich
-                   : (!ql1.id ? ['NGUOI_GUI', 'OWNER'] : GOPY_OWNER_THEO_TT.moi);
-
-  const r = await env.DB.prepare(`
-    INSERT INTO gop_y (nguoi_gui_id, tieu_de, boi_canh, vuong_o_dau, mong_muon, tan_suat, khu_vuc, dinh_kem,
-                       trang_thai, current_owner, next_owner, tao_luc,
-                       risk, risk_chot_boi_id, risk_chot_luc,
-                       duyet_cap1_boi_id, duyet_cap1_luc, duyet_cap1_nguon,
-                       duyet_owner_boi_id, duyet_owner_luc)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', '+7 hours'),
-            ?, ?, ${nguoiGuiGiuCo ? "datetime('now', '+7 hours')" : 'NULL'},
-            ?, ${nguoiGuiGiuCo ? "datetime('now', '+7 hours')" : 'NULL'}, ?,
-            ?, ${nguoiGuiGiuCo ? "datetime('now', '+7 hours')" : 'NULL'})
-  `).bind(phien.nhan_su_id, tieuDe, boiCanh, vuongODau, mongMuon, tanSuat, khuVuc, dinhKem,
-          tt, cur, nxt,
-          nguoiGuiGiuCo ? 'MEDIUM' : null, nguoiGuiGiuCo ? phien.nhan_su_id : null,
-          nguoiGuiGiuCo ? phien.nhan_su_id : null, nguoiGuiGiuCo ? 'TU_DUYET_OWNER' : null,
-          nguoiGuiGiuCo ? phien.nhan_su_id : null).run();
-
-  const id = r.meta.last_row_id;
-  // Đồng hồ hàng chờ bắt đầu chạy TỪ ĐÂY (cửa 14).
-  await gopYDongDauChoDuyet(env, id);
-  if (nguoiGuiGiuCo) {
-    await gopYGhiLichSu(env, id, 'moi', 'cho_phan_tich', {
-      nguoiDoiId: phien.nhan_su_id,
-      ghiChu: 'Bỏ qua cả hai cổng duyệt vì người gửi cũng là người duyệt cấp cuối — không ai duyệt góp ý của chính mình. Rủi ro tạm ghi Trung bình.'
-    });
-  } else if (!ql1.id) {
-    await gopYGhiLichSu(env, id, 'moi', 'moi', {
-      nguoiDoiId: phien.nhan_su_id,
-      ghiChu: `Bỏ qua cổng duyệt cấp 1 vì người gửi không có ai duyệt cấp trên (${ql1.nguon}) — chuyển thẳng lên ERP Owner.`
-    });
-  }
-
-  return json({ ok: true, id, trang_thai: tt, next_owner: nxt });
-}
-
-/* Người duyệt cấp 1 của một nhân sự (ADR-0006 B1). Trả kèm `nguon` để ĐÓNG
-   BĂNG vào gop_y.duyet_cap1_nguon lúc duyệt — sau này HCNS đổi quan_ly_id
-   thì hồ sơ duyệt cũ vẫn đọc đúng ai duyệt, với tư cách gì (Rule 10).
-
-   Không tìm được ai thì PHẢI NÓI RÕ VÌ SAO, không im lặng gộp làm một
-   (REV-0016 mục 1). Hai lý do khác hẳn nhau, việc phải làm cũng khác:
-     KHONG_CO_QUAN_LY    — đã xếp phòng ban rồi mà phòng chưa có trưởng phòng,
-                           hoặc chính người này là trưởng phòng. Việc của Sếp.
-     CHUA_XEP_PHONG_BAN  — hồ sơ nhân sự còn thiếu phong_ban_id (bản thật
-                           28/08: 2/24 người). Việc của HCNS, sửa hồ sơ là hết. */
-async function nguoiDuyetCap1(env, nhanSuId) {
-  const r = await env.DB.prepare(`
-    SELECT ${GOPY_SQL_QL1} AS ql_id,
-           (n.quan_ly_id IS NOT NULL AND EXISTS
-              (SELECT 1 FROM nhan_su q WHERE q.id = n.quan_ly_id AND q.dang_lam = 1 AND q.id <> n.id)) AS theo_quan_ly,
-           (n.phong_ban_id IS NULL) AS chua_xep_phong
-      FROM nhan_su n WHERE n.id = ?
-  `).bind(nhanSuId).first();
-  if (!r || !r.ql_id)
-    return { id: null, nguon: (r && r.chua_xep_phong) ? 'CHUA_XEP_PHONG_BAN' : 'KHONG_CO_QUAN_LY' };
-  return { id: r.ql_id, nguon: r.theo_quan_ly ? 'QUAN_LY_ID' : 'TRUONG_PHONG_ID' };
-}
-
-/* Ghi 1 dòng nhật ký. Đây là CỬA DUY NHẤT để ghi gop_y_lich_su.
-   - Người bấm  → truyền nguoiDoiId, KHÔNG truyền tacNhan.
-   - Máy chạy   → truyền tacNhan ('SLA'/'RUNNER'/...), nguoi_doi_id để NULL,
-                  kèm uyQuyenBoiId = người đã cho phép chuỗi tự động này.
-   CHECK ở tầng DB chặn mọi kiểu mạo danh kể cả khi hàm này bị gọi sai. */
-async function gopYGhiLichSu(env, gopYId, tu, den, o = {}) {
-  const laMay = !!o.tacNhan;
-  await env.DB.prepare(`
-    INSERT INTO gop_y_lich_su (gop_y_id, tu_trang_thai, den_trang_thai, nguoi_doi_id,
-                               nguoi_thuc_hien_loai, tac_nhan, uy_quyen_boi_id, job_id, ghi_chu, luc)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', '+7 hours'))
-  `).bind(gopYId, tu, den,
-          laMay ? null : (o.nguoiDoiId || null),
-          laMay ? (o.loai || 'he_thong') : 'nguoi',
-          laMay ? o.tacNhan : null,
-          o.uyQuyenBoiId || null, o.jobId || null,
-          (o.ghiChu || null)).run();
+  return json({ ok: true, id: phieu.id, trang_thai: phieu.trang_thai, next_owner: phieu.next_owner });
 }
 
 /* ---- ĐỒNG HỒ SLA — CỬA THỨ 14 (REV-0030 lỗi 1) --------------------------
@@ -6207,17 +6089,10 @@ async function gopYGhiLichSu(env, gopYId, tu, den, o = {}) {
 
    PHÒNG THỦ như L4: chưa nạp migration thì nuốt đúng lỗi "no such column" —
    đồng hồ lùi về `cap_nhat_luc` như cũ, chứ không 500 khi gửi góp ý. */
-async function gopYDongDauChoDuyet(env, id) {
-  if (!id) return false;
-  try {
-    await env.DB.prepare(
-      `UPDATE gop_y SET cho_duyet_tu_luc = datetime('now', '+7 hours') WHERE id = ?`).bind(id).run();
-    return true;
-  } catch (e) {
-    if (!/no such column/i.test(String(e && e.message))) throw e;
-    return false;
-  }
-}
+/* THÂN HÀM nay ở src/gopy-cua-duyet.js (import ở đầu file) — đường tạo phiếu
+   của Văn phòng ảo cũng phải đóng dấu đồng hồ này, không thì phiếu Mây tạo ra
+   nằm ngoài SLA. Chú thích cửa 14 ở trên giữ nguyên tại chỗ vì nó giải thích
+   luật, không phải giải thích mã. */
 
 /* CỬA THỨ 17 (REV-0032 L1) — HOÀN TÁC PHẢI TRẢ LẠI CẢ ĐỒNG HỒ.
 

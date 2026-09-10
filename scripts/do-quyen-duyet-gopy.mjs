@@ -1749,18 +1749,22 @@ const DC2 = [
     (d) => !d.maAn.every(x => x === 200) || !d.maSep.every(x => x === 200),
     'thiếu cột duyet_gopy làm sập đăng nhập toàn hệ thống (L4)'],
 
-  ['I-van-bat-sep-tu-duyet', (f, s) => f === 'index.js'
-    ? s.replace("const tt = nguoiGuiGiuCo ? 'cho_phan_tich' : 'moi';", "const tt = 'moi';")
-       .replace('const [cur, nxt] = nguoiGuiGiuCo ? GOPY_OWNER_THEO_TT.cho_phan_tich',
-                'const [cur, nxt] = false ? GOPY_OWNER_THEO_TT.cho_phan_tich') : s,
+  /* NEO CẬP NHẬT 10/09/2026 — nhánh quyết định của Việc 7 đã DỜI khỏi
+     `gopYGui()` trong index.js sang `quyetDinhCuaDuyet()` trong
+     src/gopy-cua-duyet.js, vì Văn phòng ảo phải đi CÙNG một nhánh (trước đó
+     nó viết cứng 'moi' và không biết luật miễn duyệt). Khiếm khuyết TIÊM VÀO
+     KHÔNG ĐỔI — vẫn đúng hai chiều cũ: DC-I tắt hẳn vế miễn duyệt theo cờ,
+     DC-K bật miễn duyệt cho mọi người. Chỉ đổi ĐỊA CHỈ neo.
+     Neo trần vào tên biến `mien` sẽ găm nhầm nhiều chỗ; neo cả câu lệnh. */
+  ['I-van-bat-sep-tu-duyet', (f, s) => f === 'gopy-cua-duyet.js'
+    ? s.replace('if (duocDuyetGopY(hoSo)) mien = LY_DO_MIEN_DUYET.CO_DUYET_GOPY;',
+                'if (false) mien = LY_DO_MIEN_DUYET.CO_DUYET_GOPY;') : s,
     doViec7,
     (d) => d.sepGopY?.trang_thai !== 'cho_phan_tich' || d.phongGopY?.next_owner !== 'OWNER',
     'vẫn bắt người gửi tự duyệt góp ý của chính mình (Việc 7)'],
 
-  ['K-bo-qua-nham-ca-nhan-vien', (f, s) => f === 'index.js'
-    ? s.replace("const tt = nguoiGuiGiuCo ? 'cho_phan_tich' : 'moi';", "const tt = 'cho_phan_tich';")
-       .replace('const [cur, nxt] = nguoiGuiGiuCo ? GOPY_OWNER_THEO_TT.cho_phan_tich',
-                'const [cur, nxt] = true ? GOPY_OWNER_THEO_TT.cho_phan_tich') : s,
+  ['K-bo-qua-nham-ca-nhan-vien', (f, s) => f === 'gopy-cua-duyet.js'
+    ? s.replace('  let mien = null;', '  let mien = LY_DO_MIEN_DUYET.CO_DUYET_GOPY;') : s,
     doViec7,
     (d) => d.anGopY?.trang_thai !== 'moi' || d.anGopY?.next_owner !== 'QL_CAP1',
     'góp ý của nhân viên thường cũng bỏ qua cả hai cổng (cắt quá tay)'],
