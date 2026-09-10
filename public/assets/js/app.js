@@ -7595,7 +7595,12 @@ async function khoiDongGopY() {
         // Sếp, cái dưới là hồ sơ nhân sự còn thiếu — HCNS bổ sung là hết.
         CHUA_XEP_PHONG_BAN: 'hồ sơ chưa xếp phòng ban — HCNS bổ sung giúp',
         OWNER_VUOT_CAP: 'Sếp duyệt VƯỢT CẤP', TU_DUYET_OWNER: 'Sếp tự gửi, tự duyệt',
-        QUA_HAN_LEN_OWNER: 'quá hạn ở cấp quản lý — Sếp duyệt thay'
+        QUA_HAN_LEN_OWNER: 'quá hạn ở cấp quản lý — Sếp duyệt thay',
+        // Sếp Ngọc chốt 10/09/2026: "Các yêu cầu của ban giám đốc thì không
+        // cần duyệt đâu". Miễn theo CƠ CẤU (hồ sơ nhân sự nói người đó ở đâu,
+        // chức gì), không theo cờ phải nhớ bật từng tài khoản — vị từ ở
+        // src/gopy-cua-duyet.js.
+        BAN_GIAM_DOC: 'Ban Giám đốc — miễn duyệt theo cơ cấu'
       };
       buoc.push(`✓ Cấp 1: ${esc(g.duyet_cap1_ten || '—')} (${NGUON[g.duyet_cap1_nguon] || g.duyet_cap1_nguon})`);
     }

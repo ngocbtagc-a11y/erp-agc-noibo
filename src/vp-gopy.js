@@ -11,23 +11,26 @@
    đó là dẫm lên việc người khác đang làm dở và gần như chắc chắn xung đột lúc
    merge.
 
-   ⚠️ NỢ KỸ THUẬT CÓ CHỦ Ý — ghi ra đây để người sau không tưởng là sót:
-   phần dựng câu INSERT dưới đây trùng ý với `gopYGui`. Khi nhánh
-   `feature/gopy-paste-anh` merge xong thì GỘP hai chỗ lại thành một hàm tạo
-   phiếu duy nhất (Rule 5: Reuse → Extend → Create). Để hai chỗ lâu dài thì sớm
-   muộn một bên đổi cột mà bên kia không biết.
+   ⚠️ NỢ KỸ THUẬT ĐÃ TRẢ — 10/09/2026. Bản trước dựng câu INSERT riêng, trùng
+   ý với `gopYGui` trong index.js, và nó đã nổ đúng như chú thích cũ cảnh báo:
+   index.js biết luật miễn duyệt cho người giữ cờ `duyet_gopy`, chỗ này KHÔNG.
+   Đo được trên bản thật: Sếp Ngọc có `duyet_gopy = 1` mà hai phiếu Sếp tạo
+   qua Mây (GY-0011, GY-0012) vẫn rơi vào hàng chờ duyệt của anh Phong.
+   Nay cả hai đường cùng gọi `taoPhieuGopYChung()` trong src/gopy-cua-duyet.js
+   — một luật, một chỗ (Rule 5: Reuse → Extend → Create).
 
-   PHIẾU TỪ VĂN PHÒNG ẢO VÀO Ở TRẠNG THÁI 'moi' — giống hệt người tự bấm gửi,
-   KHÔNG tự duyệt giúp. Mây nghe được câu nói không có nghĩa là câu nói đó đã
-   được ai duyệt; cho vào thẳng 'cho_phan_tich' là lặng lẽ bỏ qua cửa duyệt cấp
-   1 mà quy trình đang có.
+   PHIẾU TỪ VĂN PHÒNG ẢO KHÔNG ĐƯỢC TỰ DUYỆT GIÚP. Mây nghe được câu nói không
+   có nghĩa là câu nói đó đã được ai duyệt. Nó chỉ đi thẳng đúng khi CHÍNH
+   NGƯỜI GỬI được miễn duyệt theo luật chung — cùng đúng một nhánh quyết định
+   với đường người tự bấm gửi, không có ngoại lệ riêng cho Văn phòng ảo.
    ========================================================================== */
 
-/* Nguồn sự thật của cặp owner là GOPY_OWNER_THEO_TT trong src/index.js. Chép
-   đúng một dòng 'moi' ở đây vì index.js không export được sang (vanphong.js đã
-   được index.js import — import ngược lại là vòng tròn). */
-const OWNER_MOI = ['NGUOI_GUI', 'QL_CAP1'];
+import { taoPhieuGopYChung } from './gopy-cua-duyet.js';
 
+/* `nguoiGuiId` chứ không phải phiên đăng nhập: Mây tạo phiếu THAY NGƯỜI KHÁC
+   được (vp-may.js truyền `nguoi.nhan_su_id`, người đang nói chuyện). Quyền
+   miễn duyệt phải bám người ghi trên phiếu, nên `taoPhieuGopYChung()` tự tra
+   lại hồ sơ từ chính id này. */
 export async function taoPhieuGopY(env, { nguoiGuiId, tieuDe, boiCanh, vuongODau, mongMuon, khuVuc }) {
   const cat = (s, n) => String(s || '').trim().slice(0, n);
 
@@ -37,15 +40,10 @@ export async function taoPhieuGopY(env, { nguoiGuiId, tieuDe, boiCanh, vuongODau
   const mm = cat(mongMuon, 2000);
   if (!td || !bc || !vo || !mm) return null;
 
-  const r = await env.DB.prepare(`
-    INSERT INTO gop_y (nguoi_gui_id, tieu_de, boi_canh, vuong_o_dau, mong_muon,
-                       khu_vuc, trang_thai, current_owner, next_owner, tao_luc)
-    VALUES (?, ?, ?, ?, ?, ?, 'moi', ?, ?, datetime('now', '+7 hours'))
-  `).bind(nguoiGuiId, td, bc, vo, mm, cat(khuVuc, 80) || null,
-          OWNER_MOI[0], OWNER_MOI[1]).run();
-
-  const id = r?.meta?.last_row_id;
-  return id ? { id, tieu_de: td } : null;
+  return await taoPhieuGopYChung(env, {
+    nguoiGuiId, tieuDe: td, boiCanh: bc, vuongODau: vo, mongMuon: mm,
+    khuVuc: cat(khuVuc, 80) || null
+  });
 }
 
 /* ==========================================================================
