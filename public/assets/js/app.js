@@ -7327,10 +7327,23 @@ async function khoiDongGopY() {
       // việc bị dừng. Không bắt mở modal mới biết.
       gyDaCho(g) + gyLyDo(g) +
       (coCotNguoiGui || coNut ? `<div class="sm">${esc(g.nguoi_gui_ten)}${g.nguoi_gui_bo_phan ? ' — ' + esc(g.nguoi_gui_bo_phan) : ''}</div>` : '') +
+      /* HAI NGẢ PHẢI CÂN NHAU.
+         Trước 10/09/2026 thẻ này chỉ có một nút cho việc thuận: "Duyệt" là MỘT
+         cú bấm, còn không duyệt thì phải bấm "Xem / Chưa duyệt", đọc hiểu đó là
+         nút mở màn chi tiết, rồi mới tìm thấy nút "Chưa duyệt" bên trong. Sếp
+         Ngọc 10/09/2026: "cái này tôi muốn hủy nhưng ở chỗ người duyệt ko có ô
+         hủy". Không phải Sếp nhìn sót — một nhãn ghi hai việc thì người ta đọc
+         được một việc, và cách bố trí ấy đẩy người duyệt về phía bấm Duyệt.
+
+         Nay hai ngả ngang hàng. "Chưa duyệt" vẫn phải qua một bước hỏi lý do —
+         KHÔNG cho từ chối một-cú-bấm: máy chủ bắt buộc có lý do (index.js:6384),
+         và người gửi cần biết đường sửa chứ không cần một chữ "không".
+         Xem chi tiết: bấm vào TÊN góp ý, vốn đã là đường mở sẵn từ trước. */
       (coNut
         ? `<div class="gy-the-nut">` +
             `<button type="button" class="btn-primary btn-nho" data-gyduyet="${g.id}">Duyệt</button>` +
-            `<button type="button" class="btn-phu btn-nho" data-gyxem="${g.id}">Xem / Chưa duyệt</button></div>`
+            `<button type="button" class="btn-phu btn-nho" data-gytuchoi="${g.id}">Chưa duyệt</button>` +
+            `<button type="button" class="btn-phu btn-nho" data-gyxem="${g.id}">Xem</button></div>`
         : '') +
       `</div>`;
   }
@@ -7465,6 +7478,32 @@ async function khoiDongGopY() {
       $('#gy-duyet-loi').textContent = err.message || 'Không duyệt được, thử lại nhé.';
       nut.disabled = false;
     }
+  });
+
+  /* CHƯA DUYỆT ngay từ thẻ — ngả đối xứng với nút Duyệt bên cạnh.
+     Có một bước hỏi lý do, và đó là CỐ Ý: máy chủ bắt buộc phải có lý do
+     (index.js:6384), còn người gửi thì cần biết đường sửa chứ không cần một
+     chữ "không". Dùng lại `moHopNhap` chứ không dựng hộp thoại thứ hai. */
+  document.addEventListener('click', (e) => {
+    const nut = e.target.closest('[data-gytuchoi]');
+    if (!nut || $('#v-gopy').hidden) return;
+    const id = parseInt(nut.getAttribute('data-gytuchoi'), 10);
+    const g = dsGopY.find(x => x.id === id);
+    $('#gy-duyet-loi').textContent = '';
+    moHopNhap({
+      tieuDe: `Chưa duyệt — ${gyMa(g || { id })}${g ? ': ' + g.tieu_de : ''}`,
+      loai: 'textarea',
+      nhan: 'Vì sao chưa duyệt? Người gửi đọc đúng câu này để biết đường sửa.',
+      placeholder: 'Ví dụ: việc này chờ hợp nhất hai pháp nhân xong đã, làm bây giờ phải sửa lại.',
+      xuLyLuu: async (val) => {
+        const lyDo = String(val || '').trim();
+        /* Chặn ở đây CHỈ để đỡ một lượt gọi mạng — luật thật vẫn nằm ở máy
+           chủ, không phải ở câu này. */
+        if (!lyDo) throw new Error('Hãy ghi rõ lý do chưa duyệt để người gửi biết đường sửa.');
+        await API.gopYDuyet({ id, quyet_dinh: 'tu_choi', ly_do: lyDo, ghi_chu: lyDo });
+        await taiLai();
+      }
+    });
   });
 
   // Hoàn tác — cũng 1 chạm, cũng tự tải lại danh sách, không reload trang.
