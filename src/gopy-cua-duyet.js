@@ -174,8 +174,23 @@ const CHUC_VU_BAN_GIAM_DOC = new Set([
   'giam doc', 'pho giam doc'         // bản không dấu — hồ sơ cũ nhập vội
 ]);
 
+/* CẮT PHẦN KIÊM NHIỆM TRƯỚC KHI SO.
+   Hồ sơ thật ngày 10/09/2026 ghi "Giám đốc kiêm TP. Kinh doanh - MKT" và
+   "Phó Giám đốc kiêm TP. Support" — chức kiêm nhiệm thời còn hai pháp nhân.
+   Khớp TRỌN chuỗi thì không cái nào trúng: Giám đốc còn lọt nhờ vế phòng ban,
+   nhưng Phó Giám đốc trượt CẢ HAI vế và chỉ còn sống nhờ cờ `duyet_gopy` đặt
+   tay trên tài khoản — đúng thứ "luật phải nhớ" mà vị từ này sinh ra để bỏ đi.
+   Xoá cờ đó một cái là luật Sếp vừa chốt thôi phủ tới Phó Giám đốc, mà không
+   ai biết, vì ai cũng đã tin luật chạy theo cơ cấu rồi.
+
+   Cắt tại " kiêm ", KHÔNG nới thành so-có-chứa: so-có-chứa thì "Trợ lý Giám
+   đốc" cũng được miễn duyệt. Phần đầu vẫn phải khớp TRỌN.
+
+   ⚠️ Còn sót: "Phó Giám đốc điều hành" vẫn trượt. Đường sạch là buộc chức vụ
+   vào danh mục `chuc_danh` đóng thay cho ô chữ HCNS gõ tay — việc riêng. */
 function chuanHoaChucVu(s) {
-  return String(s == null ? '' : s).toLowerCase().replace(/\s+/g, ' ').trim();
+  const t = String(s == null ? '' : s).toLowerCase().replace(/\s+/g, ' ').trim();
+  return t.split(/ ki[êe]m /)[0].trim();
 }
 
 /* Hộp phòng ban này có phải Ban Giám đốc không — CHẠY ĐÚNG Ở CẢ HAI QUÃNG.
