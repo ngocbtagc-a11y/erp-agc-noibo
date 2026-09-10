@@ -146,13 +146,25 @@ async function khoaDanhMuc(env, phien, bang, body) {
   return json({ ok: true });
 }
 
-/* Phòng ban/Chức danh: chủ sở hữu HCNS + Admin (đúng cờ đã dùng cho "Thêm
-   nhân sự" — duocThemNhanSu). Đơn vị tính: chủ sở hữu Quản lý kho + Admin
-   (đúng cờ đã dùng cho "Thêm mã hàng" — duocQuanLyKho). Xem danh sách thì
-   ai có tab "Dữ liệu nền" cũng xem được — không kiểm ở đây, kiểm ở tầng
-   router (index.js) theo tab, giống cách Kho vận đang làm. */
+/* Phòng ban/Chức danh: CHỈ ADMIN — Sếp Ngọc chốt 10/09/2026 "tạm thời chỉ
+   admin".
+   ---------------------------------------------------------------------------
+   TRƯỚC ĐÓ: `duocThemNhanSu` — HCNS + Admin, cùng cờ với "Thêm nhân sự".
+   Vì sao siết: từ 10/09/2026 màn Cơ cấu tổ chức không còn chỉ đổi tên hộp nữa
+   mà GÁN NGƯỜI vào nhóm, ĐỔI CẤP hộp, ẨN hộp — tức sửa được hồ sơ của cả 24
+   người trong vài cú bấm. Cờ `them_nhan_su` hôm nay đang nằm ở chị Vũ Lan
+   Hương (HCNS), người Sếp nói còn chưa có kinh nghiệm và đang trong giai đoạn
+   được kèm cặp. Trao một tay cầm nặng như thế cho người đang học là đặt lỗi
+   vào chỗ khó lần ra nhất: hồ sơ ai cũng đúng định dạng, chỉ sai chỗ ngồi.
+
+   "TẠM THỜI" là chữ của Sếp — mở lại cho HCNS đúng một dòng dưới đây, đổi
+   `laAdmin` về `duocThemNhanSu`. Đừng đi nới ở chỗ khác.
+
+   Đơn vị tính: chủ sở hữu Quản lý kho + Admin (`duocQuanLyKho`) — KHÔNG đổi,
+   đó là danh mục hàng hoá, không phải cơ cấu tổ chức. Xem danh sách thì ai có
+   tab "Dữ liệu nền" cũng xem được — kiểm ở tầng router theo tab. */
 function batBuocToChuc(phien) {
-  return duocThemNhanSu(phien) ? null : loi('Bạn không có quyền sửa Phòng ban/Chức danh', 403);
+  return laAdmin(phien) ? null : loi('Chỉ Admin được sửa Cơ cấu tổ chức (Phòng ban/Chức danh)', 403);
 }
 function batBuocHangHoa(phien) {
   return duocQuanLyKho(phien) ? null : loi('Bạn không có quyền sửa Đơn vị tính', 403);

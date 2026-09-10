@@ -260,7 +260,12 @@ async function doMayChu(thuMucSrc) {
     };
     kq.khongXeDich = JSON.stringify(anhChup) === JSON.stringify(kq.sauChan);
 
-    /* --- HCNS (có `them_nhan_su`) VẪN LÀM ĐƯỢC — không siết nhầm --------- */
+    /* --- HCNS nay BỊ CHẶN — Sếp Ngọc chốt 10/09/2026 "tạm thời chỉ admin"
+       Phép này trước đây khẳng định điều NGƯỢC LẠI ("HCNS vẫn gán người được
+       — không siết nhầm"). Luật đổi thì thước phải đổi theo, và phải đổi ở
+       ĐÚNG chỗ đang khẳng định, chứ không thêm một phép mới rồi để phép cũ
+       nằm đó tự chỏi. Hai phép chỏi nhau thì một trong hai luôn đỏ, và người
+       ta học cách bỏ qua màu đỏ. */
     kq.hcnsGan = await dang(worker, env, '/api/dulieunen/phong-ban/gan-nguoi', the.LAN,
       { id: 3, them: ['ns_a81898a3-f7b'], bo: [] });
   } finally { Object.assign(console, that); db.close(); }
@@ -579,8 +584,11 @@ console.log('\n─── MÁY CHỦ: NĂM VIỆC MỚI + QUYỀN ───');
       `HTTP ${r.status} · ${r.than && (r.than.loi || r.than.thong_diep || '')}`.slice(0, 90));
   }
   kt('④ Và CSDL không xê dịch một hàng nào sau 6 lượt gọi trộm', k.khongXeDich);
-  kt('Không siết nhầm: HCNS (`them_nhan_su`) vẫn gán người được',
-    k.hcnsGan.status === 200, `HTTP ${k.hcnsGan.status}`);
+  /* Sếp Ngọc chốt 10/09/2026 "tạm thời chỉ admin" — HCNS nay bị chặn ở MÁY
+     CHỦ, không phải ẩn nút. Phép này trước đây khẳng định ngược lại; đổi luật
+     thì đổi thước ở đúng chỗ đang khẳng định. */
+  kt('Chỉ Admin: HCNS (`them_nhan_su`) BỊ CHẶN 403 khi gán người',
+    k.hcnsGan.status === 403, `HTTP ${k.hcnsGan.status}`);
 }
 
 console.log('\n─── MÁY CHỦ: CSDL CŨ CHƯA CÓ CỘT `cap` — HỎNG THEO CHIỀU AN TOÀN ───');
