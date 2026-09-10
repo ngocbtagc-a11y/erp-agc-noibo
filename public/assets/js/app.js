@@ -211,6 +211,14 @@ let TOM_TAT_SO_DO = null;
    `7bf0e58` và đã ghi lại trong `lib/ban-do-chrome.mjs`. Bản nháp đầu của bản
    vá này đạp trúng nó, bàn đo bắt được ngay lượt chạy đầu. */
 const SODO_CAP = { cong_ty: 'Công ty', phong: 'Phòng', nhom: 'Nhóm' };
+/* ⚠️ HAI BIẾN DƯỚI ĐÂY KHAI Ở ĐÂY VÌ ĐÚNG CÁI BẪY VỪA CHÉP Ở TRÊN.
+   `taiDanhMucNen()` đọc `SODO_CO_COT_CAP` và nó chạy từ khối khởi động ở
+   khoảng dòng 8500; để cạnh hàm vẽ ở cuối tệp là lại một `ReferenceError`
+   nuốt gọn trong `try/catch`, sơ đồ trắng mà không ai biết vì sao.
+   · SODO_HOAN_TAC   — MỘT bước lùi, và chỉ một (xem khối "CỬA SỬA").
+   · SODO_CO_COT_CAP — CSDL đã nạp `them-phongban-ba-tang.sql` chưa. */
+let SODO_HOAN_TAC = null;
+let SODO_CO_COT_CAP = true;
 // Dữ liệu nhân sự đầy đủ (chỉ nạp cho HCNS/Admin qua qtDanhSach) — dùng
 // chung cho cả bảng Nhân sự (hồ sơ) lẫn Quản trị (tài khoản), 1 API duy
 // nhất thay vì mỗi tab tự gọi riêng.
@@ -270,6 +278,10 @@ const taiDanhMucNen = ngheDuLieu('du_lieu_nen', async function taiDanhMucNen() {
   ]);
   DS_PHONG_BAN = pb.ds || [];
   TOM_TAT_SO_DO = pb.tom_tat || null;
+  /* Máy chủ nói thẳng CSDL có cột `cap` chưa. Thiếu cờ này thì cửa "Sửa" mời
+     Sếp đổi cấp trong một CSDL không có chỗ ghi cấp — mời rồi báo lỗi tệ hơn
+     là không mời. `!== undefined` để bản máy chủ cũ không tự tắt tính năng. */
+  if (pb.co_cot_cap !== undefined) SODO_CO_COT_CAP = !!pb.co_cot_cap;
   DS_CHUC_DANH = cd.ds || [];
   DS_DON_VI = dv.ds || [];
 });
@@ -8682,7 +8694,21 @@ async function khoiDongDuLieuNen() {
     /* Vẽ sơ đồ TRƯỚC danh sách: đây là thứ Sếp nhìn đầu tiên khi mở tab. */
     veSoDoToChuc(DS_PHONG_BAN, TOM_TAT_SO_DO);
     veDanhMuc('#dln-pb-list', '#dln-pb-dem', '#dln-pb-trong', DS_PHONG_BAN,
-      (id, ten) => API.dlnSuaPhongBan(id, { ten }), (id, hd) => API.dlnSuaPhongBan(id, { hoat_dong: hd }),
+      (id, ten) => API.dlnSuaPhongBan(id, { ten }),
+      /* ⚠️ ẨN PHÒNG BAN NAY CÓ THỂ BỊ MÁY CHỦ TỪ CHỐI LƯỢT ĐẦU (10/09/2026):
+         hộp còn người thì trả `can_xac_nhan` kèm con số thay vì ẩn luôn. Lối
+         này PHẢI đọc câu trả lời đó — không đọc thì nút "Ẩn" ở danh sách bấm
+         xong im ru, danh sách vẽ lại y như cũ, và người dùng tưởng ERP treo.
+         Cùng luật với cửa "Sửa" trên sơ đồ, chỉ khác chỗ đứng. */
+      async (id, hd) => {
+        if (hd) return API.dlnSuaPhongBan(id, { hoat_dong: 1 });
+        const kq = await API.dlnSuaPhongBan(id, { hoat_dong: 0 });
+        if (kq && kq.can_xac_nhan) {
+          if (!confirm(kq.thong_diep + '\n\nVẫn ẩn phòng ban này chứ?')) return kq;
+          return API.dlnSuaPhongBan(id, { hoat_dong: 0, xac_nhan: true });
+        }
+        return kq;
+      },
       (id, tt) => API.dlnKhoaPhongBan(id, tt),
       m => `<div class="sm">Trưởng phòng: ${m.truong_phong_ten ? esc(m.truong_phong_ten) : '— Chưa gán —'} ` +
            `<button type="button" class="btn-nho" data-gan-truong="${m.id}" style="margin-left:6px">Đổi</button></div>`,
@@ -14820,6 +14846,41 @@ function chucVuGon(cv) {
   return s.split(/\s+kiêm\s+/i)[0].trim() || s;
 }
 
+/* ==========================================================================
+   CỬA "SỬA" — MỖI HỘP LÀ MỘT CHỖ LÀM VIỆC
+   ---------------------------------------------------------------------------
+   Sếp Ngọc 10/09/2026: *"chỉnh lại chỗ này cho dễ điều chỉnh đi — tao thấy
+   khó điều chỉnh quá"*. Chê KHÓ SỬA, không chê xấu.
+
+   VÌ SAO MỘT NÚT CHỨ KHÔNG PHẢI NĂM. Bài học `agc-hoso`: thêm 2 nút lên mỗi
+   thẻ làm trang dài thêm 2.397px ở bề ngang 375px. Sơ đồ có 8 hộp, mỗi hộp
+   thêm 4 nút là cùng một cái bẫy. Nên mọi thao tác gom vào MỘT cửa mở ra:
+   trên hộp chỉ còn một nút "Sửa", và bản thân hộp NGẮN ĐI so với bản cũ (bản
+   cũ có nút "Đổi trưởng phòng" + ô xổ "Thuộc …" nằm sẵn trên từng hộp).
+
+   Ô XỔ "TRỰC THUỘC" KHÔNG MẤT, nó CHUYỂN VÀO CỬA — vẫn là đường bàn phím /
+   điện thoại tương đương kéo–thả, đúng luật ③: kho vận dùng ERP bằng điện
+   thoại, HTML5 drag không chạy ở đó. Kéo–thả trên máy tính giữ nguyên.
+
+   🔴 CÒN MỘT LỖI ÂM THẦM ĐƯỢC VÁ Ở ĐÂY: nút "Đổi trưởng phòng" trên hộp sơ đồ
+   TỪ TRƯỚC TỚI NAY KHÔNG LÀM GÌ CẢ. Bộ bắt sự kiện `[data-gan-truong]` nằm
+   trong `veDanhMuc()` và chỉ gắn vào ô `#dln-pb-list` phía dưới; hộp sơ đồ
+   nằm trong `#dln-sodo`, không ai nghe. Bấm vào im lặng — đúng nghĩa đen của
+   "khó điều chỉnh".
+   ========================================================================== */
+
+/* `SODO_HOAN_TAC` — MỘT bước hoàn tác duy nhất, và chỉ một. Chồng nhiều bước
+   thì phải tự dựng sổ lịch sử ở trình duyệt, mà bản chụp ở trình duyệt luôn
+   cũ hơn CSDL — đã trả giá đúng chuyện đó ở `doiCha()`. Một bước là thứ luôn
+   đúng: vừa làm xong, chưa ai kịp đổi gì khác.
+   `SODO_CO_COT_CAP` — CSDL đã có cột `cap` chưa; chưa thì "Đổi cấp" và "Thêm
+   Nhóm con" TẮT KÈM LÝ DO, không mời bấm rồi báo lỗi.
+   Cả hai KHAI Ở ĐẦU TỆP cạnh `SODO_CAP` — xem chú thích TDZ ở đó. */
+
+function datHoanTacSoDo(moTa, chay) {
+  SODO_HOAN_TAC = { mo_ta: moTa, chay };
+}
+
 function veSoDoToChuc(dsPhongBan, tomTat) {
   const o = document.getElementById('dln-sodo');
   const tom = document.getElementById('dln-sodo-tom');
@@ -14838,15 +14899,10 @@ function veSoDoToChuc(dsPhongBan, tomTat) {
     .filter(p => (p.cha_id == null ? null : Number(p.cha_id)) === chaId)
     .sort((a, b) => (a.thu_tu || 0) - (b.thu_tu || 0));
 
-  /* ---- Ô chọn "Trực thuộc" — đường cho màn cảm ứng ---------------------- */
-  const oChon = p => '<select class="sodo-chon" data-cha-cua="' + esc(p.id) + '"'
-    + ' aria-label="Hộp ' + esc(p.ten) + ' trực thuộc đâu">'
-    + '<option value="">— Cấp cao nhất —</option>'
-    + ds.filter(x => Number(x.id) !== Number(p.id))
-        .map(x => '<option value="' + esc(x.id) + '"'
-          + (Number(p.cha_id) === Number(x.id) ? ' selected' : '') + '>Thuộc ' + esc(x.ten) + '</option>')
-        .join('')
-    + '</select>';
+  /* Ô xổ "Trực thuộc" KHÔNG còn nằm sẵn trên từng hộp — nó vào cửa "Sửa"
+     (`oChonChaTrongCua`, cuối tệp). 8 ô xổ phơi trên màn 375px là 8 lần chiều
+     cao mà 7/8 lần không ai động tới. Vẫn đúng ô xổ ấy, đúng luật ③ (điện
+     thoại và bàn phím có đường tương đương kéo–thả), chỉ đổi chỗ đứng. */
 
   /* ---- Một hộp ---------------------------------------------------------- */
   /* `capThat` đọc từ cột, KHÔNG suy từ độ sâu. Hộp nào cột `cap` rỗng (chưa
@@ -14891,20 +14947,26 @@ function veSoDoToChuc(dsPhongBan, tomTat) {
       + '<span class="sodo-nhan">' + esc(SODO_CAP[capThat] || 'Chưa xếp cấp') + '</span>'
       + '<b class="sodo-ten" data-sua-ten="' + esc(p.id) + '" title="Bấm đúp để sửa tên">' + esc(p.ten) + '</b>'
       + dongPhuTrach + dongTruong + dongMoTa + dongSo
+      /* MỘT NÚT, MỞ RA MỘT CỬA. Bản cũ để hai thứ nằm sẵn trên mỗi hộp — nút
+         "Đổi trưởng phòng" (vốn KHÔNG có ai nghe, bấm vào im lặng) và ô xổ
+         "Trực thuộc". Cả hai vào cửa "Sửa", cùng năm việc trước đây KHÔNG
+         làm được ở đâu cả: thêm Nhóm con, đổi cấp, gán người, ẩn hộp, hoàn
+         tác. Hộp vì thế NGẮN ĐI chứ không dài ra. */
       + '<div class="sodo-hanh">'
-      /* Nhãn nút bám đúng CẤP: hộp Nhóm nói "trưởng nhóm", hộp Phòng nói
-         "trưởng phòng". Cơ cấu mới không đặt trưởng phòng nào (Giám đốc và
-         Phó Giám đốc trực tiếp phụ trách), nhưng nút vẫn để đó cho ngày Sếp
-         quyết bổ nhiệm — chỉ là nó phải gọi đúng tên chức. */
-      +   (laCty ? '' : '<button type="button" class="btn-nho sodo-nut" data-gan-truong="' + esc(p.id) + '">'
-            + (p.truong_phong_ten ? 'Đổi ' : 'Gán ') + (laNhom ? 'trưởng nhóm' : 'trưởng phòng') + '</button>')
-      +   (laCty ? '' : oChon(p))
+      +   '<button type="button" class="btn-nho sodo-nut" data-sua-hop="' + esc(p.id) + '"'
+      +     ' aria-label="Sửa hộp ' + esc(p.ten) + '">Sửa</button>'
       + '</div>'
       + '</div>';
   };
 
-  /* ---- Một nhánh: hộp + đường nối xuống + hàng con ---------------------- */
+  /* ---- Một nhánh: hộp + đường nối xuống + hàng con ----------------------
+     ĐẾM THẬT SỐ HỘP ĐÃ VẼ. Dòng tóm tắt bên dưới lấy con số TỪ ĐÂY, không
+     nhẩm lại theo `ds` — hai phép đếm song song là hai cơ hội lệch nhau, và
+     lệch nhau đúng là chuyện đã xảy ra: màn hiện 6 hộp mà tóm tắt ghi
+     "4 phòng · 0 nhóm". */
+  let daVe = 0;
   const veNhanh = (p, capThat) => {
+    daVe++;
     const con = conCua(Number(p.id));
     const capCon = capThat === 'cong_ty' ? 'phong' : capThat === 'phong' ? 'nhom' : null;
     return '<div class="sodo-nhanh">'
@@ -14925,14 +14987,30 @@ function veSoDoToChuc(dsPhongBan, tomTat) {
     /* CHƯA NẠP MIGRATION, hoặc ai đó vừa kéo hộp công ty xuống làm con.
        KHÔNG âm thầm vẽ phẳng như bản cũ: vẽ phẳng trông vẫn "chạy được" nên
        không ai đi nạp migration, và cơ cấu Sếp ban hành nằm mãi trên giấy. */
+    /* 🔴 VÁ LỖI VẼ MỖI HỘP HAI LẦN.
+       Bản trước đưa TOÀN BỘ `ds` vào hàng phẳng, trong khi `veNhanh()` tự vẽ
+       luôn cây con của hộp nó nhận. Nên hộp NÀO CÓ CHA bị vẽ hai lượt: một
+       lượt đứng riêng trong hàng phẳng, một lượt nữa nằm dưới hộp cha.
+       Đo trên bản sản xuất 10/09/2026: `phong_ban` có đúng 4 hàng (id 2 và 3
+       cha_id = 1), màn hình hiện 6 HỘP. Sếp bấm vào một cái tên xuất hiện hai
+       chỗ thì không biết mình đang sửa hộp nào — đó là một phần của chuyện
+       "khó điều chỉnh".
+       Vá: hàng phẳng CHỈ nhận hộp không có cha TRONG DANH SÁCH, để `veNhanh()`
+       lo phần con — giống hệt nhánh chính bên dưới.
+       ⚠️ `[...ds].sort` chứ không `ds.sort`: `Array.sort` xếp TẠI CHỖ, bản cũ
+       đảo luôn thứ tự mảng mà mọi đoạn phía dưới (kể cả ô xổ "Trực thuộc" và
+       dòng tóm tắt) đang dùng chung. */
+    const goiPhang = [...ds]
+      .filter(p => p.cha_id == null || !ds.some(x => Number(x.id) === Number(p.cha_id)))
+      .sort((a, b) => (a.thu_tu || 0) - (b.thu_tu || 0));
     than = '<div class="sodo-loi-phang" data-loi="cay-phang">'
       + '<b>Sơ đồ đang PHẲNG — chưa có hộp cấp Công ty.</b>'
-      + '<span>' + ds.length + ' hộp đang nằm cùng một tầng. Cơ cấu ba tầng cần cột '
-      + '<code>cap</code>: nạp <code>them-phongban-ba-tang.sql</code> rồi '
-      + '<code>xep-lai-co-cau-2026-09.sql</code> (đúng thứ tự đó).</span></div>'
+      + '<span>' + ds.length + ' hộp, trong đó ' + goiPhang.length + ' hộp đang nằm ở tầng trên cùng. '
+      + 'Cơ cấu ba tầng cần cột <code>cap</code>: nạp <code>them-phongban-ba-tang.sql</code> rồi '
+      + '<code>xep-lai-co-cau-2026-09.sql</code> (đúng thứ tự đó). '
+      + 'Trong lúc chờ, mở cửa <b>Sửa</b> trên từng hộp vẫn xếp lại cha con được.</span></div>'
       + '<div class="sodo-hang hang-phong">'
-      + ds.sort((a, b) => (a.thu_tu || 0) - (b.thu_tu || 0))
-          .map(p => veNhanh(p, p.cap || null)).join('')
+      + goiPhang.map(p => veNhanh(p, p.cap || null)).join('')
       + '</div>';
   } else {
     than = goc.map(p => veNhanh(p, 'cong_ty')).join('')
@@ -14945,17 +15023,44 @@ function veSoDoToChuc(dsPhongBan, tomTat) {
           + moCoi.map(p => veNhanh(p, p.cap || null)).join('') + '</div>' : '');
   }
 
-  o.innerHTML = '<div class="sodo-khung">' + than + '</div>' + veCanhBaoNhanSu(ds, tt);
+  o.innerHTML = veThanhHoanTac() + '<div class="sodo-khung">' + than + '</div>'
+    + veCanhBaoNhanSu(ds, tt);
 
+  /* ---- DÒNG TÓM TẮT KHÔNG ĐƯỢC NÓI DỐI --------------------------------
+     Bản trước đếm theo cột `cap` (`phong` + `nhom`) trong khi màn hình vẽ ra
+     một con số khác hẳn: 4 hàng trong CSDL → 6 hộp trên màn → dòng tóm tắt
+     ghi "4 phòng · 0 nhóm". Ba con số, không con số nào nói về hai con số
+     kia. Nay tóm tắt bắt đầu bằng SỐ HỘP THẬT ĐÃ VẼ (`daVe`, đếm ngay trong
+     `veNhanh`), rồi mới tách theo cấp; và nếu số hộp vẽ ra khác số hàng nhận
+     được thì NÓI THẲNG ra chứ không lặng lẽ chọn một con số. */
   if (tom) {
     const nhom = ds.filter(p => p.cap === 'nhom').length;
     const phong = ds.filter(p => p.cap === 'phong').length;
-    tom.textContent = phong + ' phòng · ' + nhom + ' nhóm'
+    const cty = ds.filter(p => p.cap === 'cong_ty').length;
+    const chuaXep = ds.length - nhom - phong - cty;
+    const theoCap = [
+      cty ? cty + ' công ty' : '', phong ? phong + ' phòng' : '',
+      nhom ? nhom + ' nhóm' : '', chuaXep ? chuaXep + ' chưa xếp cấp' : ''
+    ].filter(Boolean).join(' · ');
+    tom.textContent = daVe + ' hộp' + (theoCap ? ' (' + theoCap + ')' : '')
+      + (daVe !== ds.length ? ' ⚠ nhận ' + ds.length + ' hàng mà vẽ ra ' + daVe + ' hộp' : '')
       + (tt ? ' · ' + tt.tong_dang_lam + ' người đang làm' : '')
-      + ' · kéo hộp để xếp lại, bấm đúp vào tên để sửa';
+      + ' · bấm "Sửa" trên hộp để đổi mọi thứ, kéo hộp để xếp lại';
+    tom.dataset.soHop = String(daVe);
+    tom.dataset.soHang = String(ds.length);
   }
 
-  ganKeoThaSoDo(o, ds);
+  ganKeoThaSoDo(o, ds, tt);
+}
+
+/* Thanh hoàn tác — hiện đúng khi vừa có một thao tác lùi lại được. Luật ②:
+   việc nhẹ thì làm luôn rồi cho lùi, việc nặng thì hỏi trước. */
+function veThanhHoanTac() {
+  if (!SODO_HOAN_TAC) return '';
+  return '<div class="sodo-lui" data-lui="1">'
+    + '<span>Vừa xong: <b>' + esc(SODO_HOAN_TAC.mo_ta) + '</b></span>'
+    + '<button type="button" class="btn-nho sodo-nut" data-hoan-tac="1">↩ Hoàn tác</button>'
+    + '</div>';
 }
 
 /* ==========================================================================
@@ -15018,8 +15123,30 @@ function veCanhBaoNhanSu(ds, tt) {
    Tách khỏi hàm vẽ để hàm vẽ chỉ lo dựng HTML. Gắn lại sau mỗi lần vẽ vì
    innerHTML thay hết phần tử cũ — bộ bắt sự kiện cũ chết theo.
    ========================================================================== */
-function ganKeoThaSoDo(goc, ds) {
+function ganKeoThaSoDo(goc, ds, tt) {
   let dangKeo = null;
+
+  /* ---- Nút "Sửa" trên từng hộp → mở cửa làm việc của hộp đó ------------- */
+  goc.querySelectorAll('[data-sua-hop]').forEach(b => {
+    b.addEventListener('click', () => {
+      const p = ds.find(x => String(x.id) === b.dataset.suaHop);
+      if (p) moCuaSuaHop(p, ds, tt);
+    });
+  });
+
+  /* ---- Hoàn tác một bước ------------------------------------------------ */
+  goc.querySelectorAll('[data-hoan-tac]').forEach(b => {
+    b.addEventListener('click', async () => {
+      const buoc = SODO_HOAN_TAC;
+      if (!buoc) return;
+      b.disabled = true;
+      /* Xoá TRƯỚC khi chạy: lùi xong mà thanh vẫn còn thì bấm phát nữa là lùi
+         lại lần lùi, và không ai đoán nổi mình đang ở đâu. */
+      SODO_HOAN_TAC = null;
+      try { await buoc.chay(); await taiLaiSoDo(); }
+      catch (e) { alert('Không hoàn tác được: ' + e.message); await taiLaiSoDo(); }
+    });
+  });
 
   /* ---- Kéo bằng chuột ---------------------------------------------------- */
   goc.querySelectorAll('.sodo-o[draggable="true"]').forEach(hop => {
@@ -15058,10 +15185,10 @@ function ganKeoThaSoDo(goc, ds) {
 
   /* ---- Đường cho điện thoại: ô chọn "trực thuộc" -------------------------
      HTML5 drag KHÔNG chạy trên màn cảm ứng. Kho vận dùng ERP bằng điện thoại,
-     làm mỗi kéo thả là cắt họ khỏi tính năng này. */
-  goc.querySelectorAll('.sodo-chon').forEach(o => {
-    o.addEventListener('change', () => doiCha(ds, o.dataset.chaCua, o.value || null));
-  });
+     làm mỗi kéo thả là cắt họ khỏi tính năng này.
+     Ô xổ nay nằm TRONG cửa "Sửa" (`.sodo-chon-cua`) chứ không phơi sẵn trên
+     từng hộp — vẫn đúng một đường tương đương kéo–thả, chỉ đỡ 8 lần chiều cao
+     ở màn 375px. Bộ bắt sự kiện của nó gắn ở `moCuaSuaHop()`. */
 
   /* ---- Bấm đúp để sửa tên tại chỗ ---------------------------------------- */
   goc.querySelectorAll('[data-sua-ten]').forEach(b => {
@@ -15076,8 +15203,11 @@ function ganKeoThaSoDo(goc, ds) {
         if (!moi || moi === cu) { b.textContent = cu; return; }
         try {
           await API.dlnSuaPhongBan(b.dataset.suaTen, { ten: moi });
-          b.textContent = moi;
-          lamMoiManVuaMo();
+          /* Đổi tên là việc NHẸ — làm luôn, rồi cho lùi lại (luật ②). */
+          const id = b.dataset.suaTen;
+          datHoanTacSoDo('đổi tên "' + cu + '" → "' + moi + '"',
+            () => API.dlnSuaPhongBan(id, { ten: cu, xac_nhan: true }));
+          await taiLaiSoDo();
         } catch (e) {
           b.textContent = cu;
           alert('Không đổi được tên: ' + e.message);
@@ -15117,18 +15247,318 @@ async function doiCha(ds, conId, chaId) {
      trong bộ nhớ trình duyệt cũ hơn database, nên đổi một phòng lại ghi đè cấp
      cha của phòng khác. Máy chủ tự đọc cây thật để soi vòng lặp. */
   const moi = [{ id: con, cha_id: cha }];
+  const nut = ds.find(x => Number(x.id) === con);
+  const chaCu = nut && nut.cha_id != null ? Number(nut.cha_id) : null;
+  const tenCua = id => (ds.find(x => Number(x.id) === Number(id)) || {}).ten || 'cấp cao nhất';
 
   try {
     await API.dlnSapXepPhongBan(moi);
-    /* Vẽ lại NGAY bằng dữ liệu vừa lấy về, không đợi bộ làm mới chung: bộ đó
-       làm mới cả tab và không phải lúc nào cũng chạm tới sơ đồ, nên người kéo
-       xong thấy y như cũ và tưởng thao tác trượt. */
-    const kq = await API.dlnPhongBan();
-    DS_PHONG_BAN = kq.ds || DS_PHONG_BAN;
-    if (kq.tom_tat) TOM_TAT_SO_DO = kq.tom_tat;
-    veSoDoToChuc(kq.ds || [], kq.tom_tat);
-    lamMoiManVuaMo();
+    datHoanTacSoDo('xếp "' + (nut ? nut.ten : con) + '" vào ' + tenCua(cha),
+      () => API.dlnSapXepPhongBan([{ id: con, cha_id: chaCu }]));
+    await taiLaiSoDo();
   } catch (e) {
     alert('Không lưu được sơ đồ: ' + e.message);
   }
+}
+
+/* Lấy lại sơ đồ từ máy chủ rồi vẽ lại NGAY, không đợi bộ làm mới chung: bộ
+   đó làm mới cả tab và không phải lúc nào cũng chạm tới sơ đồ, nên người vừa
+   thao tác xong thấy y như cũ và tưởng trượt tay.
+   Tách thành hàm riêng vì nay có SÁU đường ghi cùng cần nó (kéo thả, đổi tên,
+   đổi cấp, thêm nhóm con, gán người, ẩn hộp) — chép sáu lần là sáu chỗ để
+   quên `TOM_TAT_SO_DO`. */
+async function taiLaiSoDo() {
+  const kq = await API.dlnPhongBan();
+  DS_PHONG_BAN = kq.ds || DS_PHONG_BAN;
+  if (kq.tom_tat) TOM_TAT_SO_DO = kq.tom_tat;
+  if (kq.co_cot_cap !== undefined) SODO_CO_COT_CAP = !!kq.co_cot_cap;
+  veSoDoToChuc(kq.ds || [], kq.tom_tat);
+  lamMoiManVuaMo();
+}
+
+/* ==========================================================================
+   CỬA "SỬA" CỦA MỘT HỘP — SÁU VIỆC TRONG MỘT CHỖ
+   ---------------------------------------------------------------------------
+   ① Đổi tên  ② Đổi cấp (Phòng ⇄ Nhóm)  ③ Trực thuộc  ④ Trưởng phòng/nhóm
+   ⑤ Gán người vào hộp  ⑥ Thêm Nhóm con  ⑦ Ẩn hộp
+
+   ① → ⑤ đi chung MỘT nút "Lưu": dựng lại cơ cấu là đổi mấy thứ cùng lúc trên
+   cùng một hộp, bắt bấm lưu năm lần là đúng cái vòng vèo đang phải chữa. ⑥ và
+   ⑦ có nút riêng vì chúng KHÔNG phải sửa hộp này — một cái đẻ ra hộp mới, một
+   cái cất hộp này đi.
+
+   LUẬT ②: việc nhẹ làm luôn + cho hoàn tác; việc nặng hỏi lại. Ẩn hộp là việc
+   nặng NHẤT ở màn này — nó cất đi chỗ mà 17 hồ sơ đang trỏ vào — nên máy chủ
+   đếm người rồi TỪ CHỐI lượt đầu, giao diện in đúng con số đó ra rồi mới hỏi.
+   ========================================================================== */
+async function moCuaSuaHop(p, ds, tt) {
+  const nen = document.getElementById('sodoSuaNen');
+  const than = document.getElementById('sodoSua-than');
+  if (!nen || !than) return;
+
+  const laCty = p.cap === 'cong_ty';
+  const capHienTai = p.cap || '';
+  /* Danh sách người: ưu tiên kho của màn Quản trị (có `phong_ban_id`), không
+     có thì hỏi Danh bạ — đúng lối `veDanhMuc` đang dùng cho nút trưởng phòng. */
+  let dsNguoi = DS_NHAN_SU_QT.length
+    ? DS_NHAN_SU_QT
+    : ((await API.danhBa().catch(() => ({ danh_ba: [] }))).danh_ba || []);
+  dsNguoi = dsNguoi.filter(n => n.dang_lam !== 0);
+
+  const trongHop = dsNguoi.filter(n => String(n.phong_ban_id || '') === String(p.id));
+  const chuaXep = dsNguoi.filter(n => !n.phong_ban_id);
+  const hopKhac = dsNguoi.filter(n => n.phong_ban_id && String(n.phong_ban_id) !== String(p.id));
+  const tenHopCua = id => (ds.find(x => String(x.id) === String(id)) || {}).ten || 'hộp khác';
+
+  const dongNguoi = (n, dangTrong) =>
+    '<label class="sodo-nguoi' + (dangTrong ? ' trong-hop' : '') + '">'
+    + '<input type="checkbox" data-nguoi="' + esc(n.id) + '"' + (dangTrong ? ' checked' : '') + '>'
+    + '<span>' + esc(n.ho_ten)
+    + (n.chuc_vu ? ' <i>' + esc(n.chuc_vu) + '</i>' : '')
+    + (!dangTrong && n.phong_ban_id
+        ? ' <b class="sodo-dang-o">đang ở ' + esc(tenHopCua(n.phong_ban_id)) + '</b>' : '')
+    + '</span></label>';
+
+  const capChonDuoc = SODO_CO_COT_CAP && !laCty;
+  than.innerHTML =
+    '<div class="sodo-cua-muc">'
+    +   '<label for="sodoSua-ten">Tên hộp</label>'
+    +   '<input id="sodoSua-ten" maxlength="60" value="' + esc(p.ten) + '">'
+    + '</div>'
+    + '<div class="sodo-cua-doi">'
+    +   '<div class="sodo-cua-muc">'
+    +     '<label for="sodoSua-cap">Cấp</label>'
+    +     '<select id="sodoSua-cap"' + (capChonDuoc ? '' : ' disabled') + '>'
+    +       '<option value=""' + (capHienTai ? '' : ' selected') + '>— Chưa xếp cấp —</option>'
+    +       '<option value="cong_ty"' + (capHienTai === 'cong_ty' ? ' selected' : '') + '>Công ty</option>'
+    +       '<option value="phong"' + (capHienTai === 'phong' ? ' selected' : '') + '>Phòng</option>'
+    +       '<option value="nhom"' + (capHienTai === 'nhom' ? ' selected' : '') + '>Nhóm</option>'
+    +     '</select>'
+    +     (SODO_CO_COT_CAP
+          ? (laCty ? '<span class="sodo-cua-vi">Hộp gốc của cây — hạ cấp hộp này là bỏ đỉnh cây, '
+              + 'việc đó làm bằng file migration Sếp đọc từng dòng.</span>' : '')
+          : '<span class="sodo-cua-vi">CSDL chưa có cột <code>cap</code> — nạp '
+            + '<code>them-phongban-ba-tang.sql</code> rồi mới đổi cấp được.</span>')
+    +   '</div>'
+    +   '<div class="sodo-cua-muc">'
+    +     '<label for="sodoSua-cha">Trực thuộc</label>'
+    +     (laCty
+          ? '<select id="sodoSua-cha" disabled><option>— Cấp cao nhất —</option></select>'
+            + '<span class="sodo-cua-vi">Hộp gốc không trực thuộc hộp nào.</span>'
+          : oChonChaTrongCua(p, ds))
+    +   '</div>'
+    + '</div>'
+    + '<div class="sodo-cua-muc">'
+    +   '<label for="sodoSua-truong">' + (p.cap === 'nhom' ? 'Trưởng nhóm' : 'Trưởng phòng') + '</label>'
+    +   '<select id="sodoSua-truong">'
+    +     '<option value="">— Chưa gán —</option>'
+    +     dsNguoi.map(n => '<option value="' + esc(n.id) + '"'
+          + (String(p.truong_phong_id || '') === String(n.id) ? ' selected' : '') + '>'
+          + esc(nhanNhanSu(n)) + '</option>').join('')
+    +   '</select>'
+    + '</div>'
+    /* ---- GÁN NGƯỜI — việc tốn công nhất khi dựng lại cơ cấu ------------- */
+    + '<div class="sodo-cua-muc">'
+    +   '<label for="sodoSua-tim">Người trong hộp này'
+    +     ' <span class="sodo-cua-dem" data-dem-nguoi="' + trongHop.length + '">'
+    +     trongHop.length + ' người</span></label>'
+    +   '<input id="sodoSua-tim" type="search" maxlength="60" placeholder="Gõ tên để lọc nhanh...">'
+    +   '<div class="sodo-nguoi-ds" id="sodoSua-nguoi">'
+    +     (trongHop.length ? trongHop.map(n => dongNguoi(n, true)).join('')
+          : '<p class="sodo-cua-vi">Chưa ai thuộc hộp này.</p>')
+    +     (chuaXep.length ? '<p class="sodo-cua-nhom-dau">Chưa xếp hộp nào ('
+          + chuaXep.length + ')</p>' + chuaXep.map(n => dongNguoi(n, false)).join('') : '')
+    +     (hopKhac.length ? '<p class="sodo-cua-nhom-dau">Đang ở hộp khác ('
+          + hopKhac.length + ') — tích là CHUYỂN họ sang đây</p>'
+          + hopKhac.map(n => dongNguoi(n, false)).join('') : '')
+    +   '</div>'
+    + '</div>'
+    + '<div class="form-loi" id="sodoSua-loi"></div>'
+    + '<div class="sodo-cua-nut">'
+    +   '<button type="button" class="btn-phu" id="sodoSua-dong">Đóng</button>'
+    +   '<button type="button" class="btn-primary" id="sodoSua-luu">Lưu thay đổi</button>'
+    + '</div>'
+    /* ---- HAI VIỆC KHÔNG PHẢI "SỬA HỘP NÀY" ----------------------------- */
+    + '<div class="sodo-cua-khac">'
+    +   (p.cap === 'nhom'
+        ? '<p class="sodo-cua-vi">Hộp cấp Nhóm là tầng cuối — không thêm hộp con dưới nó.</p>'
+        : '<div class="sodo-cua-muc">'
+          + '<label for="sodoSua-nhomcon">Thêm một Nhóm con ngay dưới hộp này</label>'
+          + '<div class="sodo-cua-hang">'
+          + '<input id="sodoSua-nhomcon" maxlength="60" placeholder="VD: Nhóm Kế toán – Tài chính">'
+          + '<button type="button" class="btn-nho btn-primary" id="sodoSua-themcon">+ Thêm Nhóm con</button>'
+          + '</div></div>')
+    +   (laCty ? '' : '<div class="sodo-cua-nguy">'
+        + '<button type="button" class="btn-nho" id="sodoSua-an">Ẩn hộp này</button>'
+        + '<span>Không xoá cứng bao giờ — ' + Number(p.so_nguoi || 0) + ' hồ sơ đang trỏ vào hộp này, '
+        + 'xoá là mất dấu lịch sử. Ẩn thì cất khỏi sơ đồ, hiện lại được.</span></div>')
+    + '</div>';
+
+  document.getElementById('sodoSua-tieude').textContent = 'Sửa hộp — ' + p.ten;
+  nen.hidden = false;
+  document.getElementById('sodoSua-ten').focus();
+
+  const oLoi = document.getElementById('sodoSua-loi');
+  /* Ba đường ra: nút "Đóng", bấm ra nền, và phím Escape. Bộ bắt phím GỠ ĐI
+     khi đóng — để lại là mỗi lần mở cửa lại chồng thêm một bộ, và sau mười
+     lượt sửa thì một phím Escape chạy mười hàm. */
+  const thoatBangPhim = e => { if (e.key === 'Escape') dong(); };
+  const dong = () => {
+    nen.hidden = true;
+    than.innerHTML = '';
+    document.removeEventListener('keydown', thoatBangPhim);
+  };
+  document.addEventListener('keydown', thoatBangPhim);
+  document.getElementById('sodoSua-dong').addEventListener('click', dong);
+  nen.onclick = e => { if (e.target === nen) dong(); };
+
+  /* Lọc nhanh danh sách người — 24 người hôm nay, nhưng danh sách chỉ có tăng. */
+  const oTim = document.getElementById('sodoSua-tim');
+  oTim.addEventListener('input', () => {
+    const tu = boDau(oTim.value.trim());
+    document.querySelectorAll('#sodoSua-nguoi .sodo-nguoi').forEach(l => {
+      l.hidden = !!tu && !boDau(l.textContent).includes(tu);
+    });
+  });
+
+  /* ---- ⑥ THÊM NHÓM CON — một lần bấm, xong cả cấp lẫn cha -------------- */
+  const nutThem = document.getElementById('sodoSua-themcon');
+  if (nutThem) nutThem.addEventListener('click', async () => {
+    const ten = document.getElementById('sodoSua-nhomcon').value.trim();
+    oLoi.textContent = '';
+    if (ten.length < 2) { oLoi.textContent = 'Nhập tên Nhóm con đã.'; return; }
+    nutThem.disabled = true;
+    try {
+      let kq = await API.dlnThemHopSoDo(ten, 'nhom', p.id, false);
+      if (kq && kq.canh_bao) {
+        if (!confirm('Đã có hộp tên gần giống: ' + (kq.giong || []).join(', ')
+          + '\nVẫn tạo Nhóm mới chứ?')) { nutThem.disabled = false; return; }
+        kq = await API.dlnThemHopSoDo(ten, 'nhom', p.id, true);
+      }
+      const idMoi = kq && kq.id;
+      /* Hoàn tác một hộp VỪA TẠO = ẩn nó đi, KHÔNG xoá cứng (ràng buộc cứng:
+         không xoá hàng nào của `phong_ban`). Hộp rỗng nên `xac_nhan` không
+         cần, nhưng gửi kèm để lượt lùi không bao giờ vướng cửa hỏi lại. */
+      if (idMoi) datHoanTacSoDo('thêm Nhóm "' + ten + '"',
+        () => API.dlnSuaPhongBan(idMoi, { hoat_dong: 0, xac_nhan: true }));
+      dong();
+      await taiLaiSoDo();
+    } catch (e) { oLoi.textContent = e.message || 'Không thêm được.'; nutThem.disabled = false; }
+  });
+
+  /* ---- ⑦ ẨN HỘP — việc nặng, máy chủ đếm người rồi mới cho -------------- */
+  const nutAn = document.getElementById('sodoSua-an');
+  if (nutAn) nutAn.addEventListener('click', async () => {
+    oLoi.textContent = '';
+    nutAn.disabled = true;
+    try {
+      /* Lượt một KHÔNG gửi `xac_nhan`: máy chủ đếm người + hộp con rồi trả về
+         `can_xac_nhan` kèm con số THẬT. Đếm ở trình duyệt rồi tự tin là đủ thì
+         gọi thẳng API vẫn ẩn được hộp còn 17 người mà không ai cảnh báo. */
+      const kq = await API.dlnSuaPhongBan(p.id, { hoat_dong: 0 });
+      if (kq && kq.can_xac_nhan) {
+        if (!confirm(kq.thong_diep + '\n\nVẫn ẩn hộp này chứ?')) { nutAn.disabled = false; return; }
+        await API.dlnSuaPhongBan(p.id, { hoat_dong: 0, xac_nhan: true });
+      }
+      datHoanTacSoDo('ẩn hộp "' + p.ten + '"',
+        () => API.dlnSuaPhongBan(p.id, { hoat_dong: 1 }));
+      dong();
+      await taiLaiSoDo();
+    } catch (e) { oLoi.textContent = e.message || 'Không ẩn được.'; nutAn.disabled = false; }
+  });
+
+  /* ---- ① → ⑤ LƯU MỘT LẦN ---------------------------------------------- */
+  const nutLuu = document.getElementById('sodoSua-luu');
+  nutLuu.addEventListener('click', async () => {
+    oLoi.textContent = '';
+    nutLuu.disabled = true;
+    const tenMoi = document.getElementById('sodoSua-ten').value.trim();
+    const capMoi = capChonDuoc ? document.getElementById('sodoSua-cap').value : capHienTai;
+    const oCha = document.getElementById('sodoSua-cha');
+    const chaMoi = laCty ? null : (oCha.value === '' ? null : Number(oCha.value));
+    const truongMoi = document.getElementById('sodoSua-truong').value || null;
+    const chaCu = p.cha_id == null ? null : Number(p.cha_id);
+
+    const dangTich = [...document.querySelectorAll('#sodoSua-nguoi input[data-nguoi]')]
+      .filter(x => x.checked).map(x => x.dataset.nguoi);
+    const them = dangTich.filter(id => !trongHop.some(n => String(n.id) === id));
+    const bo = trongHop.map(n => String(n.id)).filter(id => !dangTich.includes(id));
+
+    /* Mỗi việc một lời hoàn tác riêng; lưu nhiều thứ cùng lúc thì lấy việc
+       CUỐI CÙNG ghi được — nói dối rằng lùi được cả năm thứ còn tệ hơn không
+       có nút lùi. Câu mô tả nói rõ nó lùi cái nào. */
+    let luiCuoi = null;
+    try {
+      if (tenMoi && tenMoi !== p.ten) {
+        /* KHÔNG gửi `xac_nhan` ở lượt đầu: máy chủ còn phải được nói câu
+           "đã có hộp tên gần giống" (Search Before Create). Bỏ qua cửa đó cho
+           gọn là lặng lẽ tháo một chốt đang chạy. Trùng HẲN thì máy chủ chặn
+           cứng dù có `xac_nhan` hay không. */
+        let r = await API.dlnSuaPhongBan(p.id, { ten: tenMoi });
+        if (r && r.canh_bao) {
+          if (!confirm('Đã có hộp tên gần giống: ' + (r.giong || []).join(', ')
+            + '\nVẫn đổi tên chứ?')) { nutLuu.disabled = false; return; }
+          r = await API.dlnSuaPhongBan(p.id, { ten: tenMoi, xac_nhan: true });
+        }
+        luiCuoi = ['đổi tên thành "' + tenMoi + '"',
+          () => API.dlnSuaPhongBan(p.id, { ten: p.ten, xac_nhan: true })];
+      }
+      if (capChonDuoc && capMoi && capMoi !== capHienTai) {
+        await API.dlnSuaPhongBan(p.id, { cap: capMoi });
+        luiCuoi = ['đổi cấp hộp "' + p.ten + '"',
+          () => API.dlnSuaPhongBan(p.id, { cap: capHienTai || 'phong' })];
+      }
+      if (chaMoi !== chaCu) {
+        await API.dlnSapXepPhongBan([{ id: Number(p.id), cha_id: chaMoi }]);
+        luiCuoi = ['xếp lại chỗ của "' + p.ten + '"',
+          () => API.dlnSapXepPhongBan([{ id: Number(p.id), cha_id: chaCu }])];
+      }
+      if (String(truongMoi || '') !== String(p.truong_phong_id || '')) {
+        await API.dlnGanTruongPhong(p.id, truongMoi);
+        luiCuoi = ['đổi người đứng đầu "' + p.ten + '"',
+          () => API.dlnGanTruongPhong(p.id, p.truong_phong_id || null)];
+      }
+      if (them.length || bo.length) {
+        await API.dlnGanNguoiVaoPhongBan(p.id, them, bo);
+        /* Lùi = đảo đúng hai danh sách vừa gửi. `bo` quay lại hộp này, `them`
+           quay về "chưa xếp hộp nào" — KHÔNG cố đoán hộp cũ của họ, đoán sai
+           là ghi bừa vào hồ sơ người thật. Câu mô tả nói rõ điều đó. */
+        luiCuoi = [(them.length ? 'gán ' + them.length + ' người vào ' : '')
+          + (them.length && bo.length ? '· ' : '')
+          + (bo.length ? 'gỡ ' + bo.length + ' người khỏi ' : '') + '"' + p.ten + '"'
+          + (them.length ? ' (lùi thì họ về "chưa xếp hộp nào")' : ''),
+          () => API.dlnGanNguoiVaoPhongBan(p.id, bo, them)];
+      }
+      if (!luiCuoi) { dong(); return; }
+      datHoanTacSoDo(luiCuoi[0], luiCuoi[1]);
+      dong();
+      await taiLaiSoDo();
+    } catch (e) {
+      oLoi.textContent = e.message || 'Không lưu được.';
+      nutLuu.disabled = false;
+      await taiLaiSoDo();
+    }
+  });
+}
+
+/* Ô xổ "Trực thuộc" trong cửa Sửa. Cùng luật chặn vòng tròn với ô xổ cũ trên
+   hộp — không mời một lựa chọn mà máy chủ chắc chắn từ chối. */
+function oChonChaTrongCua(p, ds) {
+  const laConChau = (goc, ung) => {
+    let x = ung, daQua = new Set();
+    while (x != null && !daQua.has(Number(x))) {
+      if (Number(x) === Number(goc)) return true;
+      daQua.add(Number(x));
+      const nut = ds.find(k => Number(k.id) === Number(x));
+      x = nut && nut.cha_id != null ? Number(nut.cha_id) : null;
+    }
+    return false;
+  };
+  return '<select id="sodoSua-cha" class="sodo-chon-cua" data-cha-cua="' + esc(p.id) + '">'
+    + '<option value="">— Cấp cao nhất —</option>'
+    + ds.filter(x => Number(x.id) !== Number(p.id) && !laConChau(p.id, x.id))
+        .map(x => '<option value="' + esc(x.id) + '"'
+          + (Number(p.cha_id) === Number(x.id) ? ' selected' : '') + '>Thuộc ' + esc(x.ten) + '</option>')
+        .join('')
+    + '</select>';
 }

@@ -398,6 +398,15 @@ export const API = {
   /* ---- Dữ liệu nền: Phòng ban / Chức danh / Đơn vị tính ---- */
   dlnPhongBan: () => goi('/api/dulieunen/phong-ban'),
   dlnThemPhongBan: (ten, xacNhan) => goi('/api/dulieunen/phong-ban/them', { method: 'POST', body: JSON.stringify({ ten, xac_nhan: !!xacNhan }) }),
+  /* Thêm hộp CÓ SẴN cấp và cha — "Thêm Nhóm con ngay dưới Phòng này" xong
+     trong một lần bấm, không phải tạo rời rồi đi gán cha. */
+  dlnThemHopSoDo: (ten, cap, chaId, xacNhan) => goi('/api/dulieunen/phong-ban/them', {
+    method: 'POST', body: JSON.stringify({ ten, cap, cha_id: chaId, xac_nhan: !!xacNhan })
+  }),
+  /* Gán/gỡ người vào một hộp. `them`/`bo` là hai mảng id nhân sự. */
+  dlnGanNguoiVaoPhongBan: (id, them, bo) => goi('/api/dulieunen/phong-ban/gan-nguoi', {
+    method: 'POST', body: JSON.stringify({ id, them, bo })
+  }),
   dlnSuaPhongBan: (id, d) => goi('/api/dulieunen/phong-ban/sua', { method: 'POST', body: JSON.stringify({ id, ...d }) }),
   dlnSapXepPhongBan: (ds) => goi('/api/dulieunen/phong-ban/sap-xep', {
     method: 'POST', body: JSON.stringify({ ds })
