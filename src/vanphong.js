@@ -23,8 +23,7 @@
    ========================================================================== */
 
 import {
-  AGENTS, agentTheoId, agentChoVaiTro, duocVaoPhong, hoSoCongKhai, ghepPrompt,
-  DOI_IT, CACH_GOI_DOI_IT
+  AGENTS, agentTheoId, agentChoVaiTro, duocVaoPhong, hoSoCongKhai, ghepPrompt
 } from './agents-vp.js';
 import { congCuCuaAgent, chayCongCu } from './vp-cong-cu.js';
 import { MAY } from './agents-vp.js';
@@ -69,43 +68,6 @@ const CON_TRONG_PHONG = '-60 seconds';
 /* ==========================================================================
    TỔNG QUAN — vẽ mặt bằng văn phòng
    ========================================================================== */
-/* ==========================================================================
-   TẢI VIỆC CỦA XƯỞNG ERP
-   --------------------------------------------------------------------------
-   Sếp Ngọc 06/09/2026: việc vẫn tới Hồ Ly và Khỉ Đột, chỉ là đi vòng qua
-   Trưởng phòng IT — nên hai bạn cũng phải có cảnh báo bận như mọi phòng khác.
-
-   Hàng đợi thật của họ KHÔNG nằm ở bảng cong_viec mà ở bảng gop_y: mỗi phiếu
-   góp ý ERP đi qua một chuỗi trạng thái, và src/index.js đã khai sẵn trạng thái
-   nào đang thuộc tay ai (GOPY_OWNER_THEO_TT). Lấy đúng nguồn đó chứ không tự
-   nghĩ ra một thước đo mới — hai chỗ đếm hai kiểu thì sớm muộn cũng lệch nhau,
-   rồi không ai biết tin cái nào.
-
-   Chỉ ĐỌC gop_y, không ghi. Vùng gop_y đang có phiên khác làm dở.
-   ========================================================================== */
-const TAI_XUONG_THEO_TT = {
-  holy:   ['cho_phan_tich', 'dang_phan_tich'],
-  khidot: ['dang_lam', 'dang_kiem_tra', 'can_chinh_sua', 'nghiem_thu_chua_dat']
-};
-
-async function taiCuaXuong(env) {
-  const ra = { holy: 0, khidot: 0 };
-  try {
-    const { results } = await env.DB.prepare(
-      'SELECT trang_thai, COUNT(*) AS so FROM gop_y GROUP BY trang_thai'
-    ).all();
-    for (const d of results || []) {
-      for (const [ai, ds] of Object.entries(TAI_XUONG_THEO_TT)) {
-        if (ds.includes(d.trang_thai)) ra[ai] += Number(d.so) || 0;
-      }
-    }
-  } catch (e) {
-    // Thiếu bảng gop_y thì coi như rảnh, KHÔNG làm hỏng cả mặt bằng vì một cái chấm.
-    console.error('Đếm tải Xưởng ERP lỗi:', e.message);
-  }
-  return ra;
-}
-
 
 /* ==========================================================================
    VIỆC ĐANG TREO — văn phòng ảo tự rà và thúc
@@ -168,7 +130,7 @@ async function viecDangTreo(env) {
         so: dung.length,
         lau_nhat: Math.max(...dung.map(g => g.so_ngay || 0)),
         tieu_de: 'Phiếu đã duyệt, đang chờ dựng',
-        viec_cua: 'Xưởng ERP — chạy bằng tay, chưa có tự động',
+        viec_cua: 'Đội dựng ERP (Claude Code) — chạy bằng tay, chưa có tự động',
         chi_tiet: dung.slice(0, 5).map(g => ({ id: g.id, tieu_de: g.tieu_de, so_ngay: g.so_ngay }))
       });
     }
@@ -261,10 +223,6 @@ export async function tongQuan(env, phien) {
   `).all();
   const dem = Object.fromEntries(demViec.map(r => [String(r.nguoi_giao_id).slice(3), r.so]));
 
-  // Tải của Xưởng ERP đếm từ hàng đợi góp ý, không phải từ cong_viec —
-  // xem chú thích ở taiCuaXuong().
-  const taiXuong = await taiCuaXuong(env);
-
   /* Khu vực và chỗ ngồi tính từ bảng phong_ban THẬT, không viết cứng toạ độ —
      đổi cơ cấu trong ERP thì mặt bằng tự đúng theo. Xem src/vp-mat-bang.js. */
   const matBang = await xepChoTheoCoCau(env, AGENTS, MAY);
@@ -307,15 +265,6 @@ export async function tongQuan(env, phien) {
     viec_cua_toi: viecCuaToi,
     hoi_dap_bat_chua: !!env.AI,
     may: { ...MAY, vi_tri: matBang.vi_tri[MAY.id] || MAY.vi_tri },
-    /* Đội dựng ERP: hiện trên mặt bằng ở Xưởng ERP cạnh phòng IT. Gửi kèm cả
-       CACH_GOI để giao diện nói thẳng "hỏi ở đây hai bạn không nghe thấy" —
-       thấy mặt mà tưởng hỏi được thì còn tệ hơn không hiện. */
-    doi_it: DOI_IT.map(a => ({
-      id: a.id, ten: a.ten, chuc_danh: a.chuc_danh, phong: a.phong,
-      mo_ta: a.mo_ta, chibi: a.chibi, nang_luc: a.nang_luc, truc_thuoc: a.truc_thuoc,
-      viec_dang_mo: taiXuong[a.id] || 0
-    })),
-    doi_it_cach_goi: CACH_GOI_DOI_IT,
     khu: matBang.khu,
     viec_treo: await viecDangTreo(env)
   });

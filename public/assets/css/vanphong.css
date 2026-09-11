@@ -661,30 +661,6 @@
 .vp-phong[data-khoi="dieuhanh"] .vp-phong-nguoi { width: 54px; }
 
 /* ---------------------------------------------------------------------------
-   XƯỞNG ERP — Hồ Ly + Khỉ Đột đứng chung một buồng
-   --------------------------------------------------------------------------- */
-.vp-xuong-khung { padding-top: 10px; }
-.vp-xuong-doi { display: flex; align-items: flex-end; justify-content: center; gap: 2px; }
-.vp-xuong-nguoi { width: 50px; }
-.vp-xuong-nguoi .chibi { width: 100%; height: auto; display: block; }
-.vp-xuong .vp-bien span { font-size: 10.5px; }
-
-/* Lưu ý trong hồ sơ xưởng — chỗ nói thẳng "hỏi ở đây hai bạn không nghe thấy" */
-.vp-hoso-luu-y {
-  margin-top: 14px;
-  padding: 11px 13px;
-  border-radius: var(--r-md);
-  background: #fdf6e8;
-  border: 1px solid #e8d9b4;
-  color: #7a5f2a;
-  font-size: 12.5px;
-  line-height: 1.55;
-}
-.vp-hoso-nguoi { display: flex; gap: 14px; margin-bottom: 18px; }
-.vp-hoso-anh { width: 76px; flex: none; }
-.vp-hoso-anh .chibi { width: 100%; height: auto; display: block; }
-
-/* ---------------------------------------------------------------------------
    AI ĐANG LÀM, AI ĐANG RẢNH
    ---------------------------------------------------------------------------
    Sếp Ngọc 06/09/2026: cần nhìn phát biết ai đang bận để còn giao việc.
@@ -777,48 +753,6 @@
 }
 
 /* ---------------------------------------------------------------------------
-   XƯỞNG ERP — PHẢI TRÔNG KHÁC, VÌ NÓ KHÁC THẬT
-   ---------------------------------------------------------------------------
-   Hồ Ly và Khỉ Đột chạy NGOÀI ERP này (Claude Code / GitHub Actions). Hỏi qua
-   Mây thì họ không nghe thấy.
-
-   Trước đây cảnh báo đó chỉ nằm trong hồ sơ, phải bấm vào mới thấy — mà trên
-   mặt bằng thẻ Xưởng trông y hệt chín phòng kia. Người dùng đọc mặt bằng bằng
-   MẮT chứ không bằng cách bấm thử từng cái: thấy giống nhau thì đinh ninh là
-   hỏi được như nhau, gõ câu hỏi, rồi chưng hửng.
-
-   Nên viền đứt (khác hẳn viền liền của các phòng nhận việc) + một nhãn "ngoài
-   ERP" ngay trên thẻ. Nhìn là biết, không cần bấm.
-   --------------------------------------------------------------------------- */
-.vp-xuong .vp-phong-khung {
-  border-style: dashed;
-  border-left-style: dashed;
-  background: repeating-linear-gradient(
-    135deg, var(--card) 0 9px, #f4f4f0 9px 18px);
-}
-
-.vp-ngoai {
-  position: absolute;
-  top: -8px;
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 9.5px;
-  letter-spacing: .04em;
-  text-transform: uppercase;
-  color: #7a5f2a;
-  background: #fdf1d8;
-  border: 1px solid #e8d2a4;
-  border-radius: var(--r-pill);
-  padding: 1px 8px;
-  white-space: nowrap;
-}
-.vp-chugiai .cg-ngoai {
-  background: #fdf1d8;
-  border: 1px dashed #c9a860;
-  border-radius: 2px;
-}
-
-/* ---------------------------------------------------------------------------
    THỨ TỰ LỚP TRÊN MẶT BẰNG — đặt tường minh
    ---------------------------------------------------------------------------
    Trước đây bốn lớp đều z-index auto, tức là ai khai sau nằm trên. Kết quả:
@@ -838,53 +772,6 @@
    phải đục hẳn ra, vì chữ mà mờ thì thà đừng ghi. */
 .vp-khu     { pointer-events: none; }
 .vp-khu-ten { position: absolute; z-index: 1; }
-
-/* ---------------------------------------------------------------------------
-   ĐƯỜNG TRỰC THUỘC — phòng IT chỉ huy Xưởng ERP
-   ---------------------------------------------------------------------------
-   Sếp Ngọc 06/09/2026: "2 đứa erp kia phải nhận nhiệm vụ qua Tuấn".
-
-   Nhãn cũ chỉ ghi "ngoài ERP — không nhận việc qua Mây": nói được vế CẤM mà
-   không nói vế ĐI ĐƯỜNG NÀO, đọc xong vẫn tắc. Giờ nhãn ghi thẳng "nhận việc
-   qua Tuấn", và có một sợi dây nối buồng IT sang Xưởng.
-
-   Không có sợi dây này thì Xưởng trông như một phòng độc lập tình cờ đứng cạnh
-   phòng IT, chứ không phải đội quân của phòng IT.
-   --------------------------------------------------------------------------- */
-.vp-day-tructhuoc {
-  position: absolute;
-  transform: translateY(-50%);
-  height: 0;
-  border-top: 2px dashed color-mix(in srgb, var(--k-hotro) 46%, transparent);
-  pointer-events: none;
-  z-index: 0;
-}
-.vp-day-tructhuoc span {
-  position: absolute;
-  left: 50%;
-  top: -8px;
-  transform: translateX(-50%);
-  font-size: 9.5px;
-  letter-spacing: .04em;
-  text-transform: uppercase;
-  color: var(--text-mute);
-  background: #f2f4ec;
-  padding: 0 6px;
-  white-space: nowrap;
-}
-
-/* Mũi tên chỉ chiều: việc chảy TỪ phòng IT SANG Xưởng, không phải ngược lại */
-.vp-day-tructhuoc::after {
-  content: '';
-  position: absolute;
-  right: -1px;
-  top: -4px;
-  border-left: 7px solid color-mix(in srgb, var(--k-hotro) 46%, transparent);
-  border-top: 4px solid transparent;
-  border-bottom: 4px solid transparent;
-}
-
-@media (max-width: 620px) { .vp-day-tructhuoc { display: none; } }
 
 /* ---------------------------------------------------------------------------
    HỎI MÂY — CỘT PHẢI, CAO CỐ ĐỊNH, CUỘN BÊN TRONG

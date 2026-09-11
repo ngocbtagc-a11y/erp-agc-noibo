@@ -13804,60 +13804,6 @@ async function khoiDongVanPhong() {
       o.addEventListener('click', () => moHoSo(a));
       lopPhong.appendChild(o);
     });
-
-    /* ---- Xưởng ERP: Hồ Ly + Khỉ Đột, trực thuộc phòng IT ----------------
-       Hai bạn này dựng chính cái ERP đang chạy. Cho hiện mặt để người dùng
-       biết ai làm ra thứ mình đang dùng — nhưng phải ghi rõ HỎI Ở ĐÂY HỌ
-       KHÔNG NGHE THẤY, vì họ chạy ngoài ERP (Claude Code / GitHub Actions),
-       không phải qua Mây. Thấy mặt mà tưởng hỏi được thì tệ hơn không hiện. */
-    const doiIT = duLieu.doi_it || [];
-    if (doiIT.length) {
-      const x = el('button', 'vp-phong vp-xuong');
-      x.style.left = '88%';
-      x.style.top  = '65%';
-      x.dataset.agent = 'xuong';
-      x.dataset.khoi = 'hotro';
-      /* Đường trực thuộc IT → Xưởng. Không có nó thì Xưởng trông như một phòng
-         độc lập đứng cạnh phòng IT, chứ không phải đội quân của phòng IT. */
-      const day = el('div', 'vp-day-tructhuoc');
-      day.style.left = '63%';
-      day.style.top  = '65%';
-      day.style.width = '25%';
-      day.innerHTML = '<span>trực thuộc</span>';
-      lopPhong.appendChild(day);
-      x.innerHTML =
-        `<div class="vp-phong-khung vp-xuong-khung">
-           <span class="vp-ngoai" title="Hồ Ly và Khỉ Đột nhận việc từ Trưởng phòng IT (Tuấn), không nhận trực tiếp qua Mây">nhận việc qua Tuấn</span>
-           <div class="vp-xuong-doi">
-             ${doiIT.map(a => `<div class="vp-xuong-nguoi" title="${esc(a.ten)} — ${esc(a.chuc_danh)}">${veChibi(a.chibi)}</div>`).join('')}
-           </div>
-         </div>
-         <div class="vp-bien"><b>Xưởng ERP</b><span>${doiIT.map(a => esc(a.ten)).join(' · ')}</span></div>`;
-      x.title = 'Đội dựng ERP — trực thuộc Trưởng phòng IT. Cần sửa hay thêm gì trên ERP thì nói với Mây, Mây chuyển cho Tuấn, Tuấn giao xuống đây. Bấm để xem họ làm gì.';
-      x.addEventListener('click', () => moHoSoXuong(doiIT, duLieu.doi_it_cach_goi));
-      lopPhong.appendChild(x);
-    }
-  }
-
-  /* Hồ sơ của cả xưởng — một khối, vì hai bạn này luôn làm việc theo cặp:
-     Hồ Ly viết đặc tả rồi soi lỗi, Khỉ Đột dựng theo đặc tả đó. */
-  function moHoSoXuong(doi, cachGoi) {
-    const than = doi.map(a => `
-      <div class="vp-hoso-nguoi">
-        <div class="vp-hoso-anh">${veChibi(a.chibi)}</div>
-        <div>
-          <h4>${esc(a.ten)}</h4>
-          <p class="vp-hoso-chuc">${esc(a.chuc_danh)}</p>
-          <p class="vp-hoso-mota">${esc(a.mo_ta)}</p>
-          <p class="vp-hoso-nhan">Làm được</p>
-          <ul>${(a.nang_luc?.lam_duoc || []).map(v => `<li>${esc(v)}</li>`).join('')}</ul>
-          <p class="vp-hoso-nhan vp-hoso-nhan-do">Không làm</p>
-          <ul>${(a.nang_luc?.khong_lam || []).map(v => `<li>${esc(v)}</li>`).join('')}</ul>
-        </div>
-      </div>`).join('');
-
-    moHoSoTho('Xưởng ERP', 'Đội dựng phần mềm, trực thuộc Trưởng phòng IT',
-      than + `<div class="vp-hoso-luu-y">${esc(cachGoi || '')}</div>`);
   }
 
   /* Ba mức tải, ngưỡng đặt theo quy mô thật của Alpha Green: 15 người, mỗi
@@ -13880,16 +13826,6 @@ async function khoiDongVanPhong() {
   }
 
   /* ---- Hồ sơ năng lực --------------------------------------------------- */
-
-  /* Mở hộp hồ sơ với nội dung tự do — dùng cho Xưởng ERP, nơi một hộp phải
-     chứa hai người chứ không phải một. */
-  function moHoSoTho(ten, chuc, thanHtml) {
-    $('#vp-hoso-ten').textContent = ten;
-    $('#vp-hoso-chuc').textContent = chuc;
-    $('#vp-hoso-chibi').innerHTML = '';
-    $('#vp-hoso-than').innerHTML = thanHtml;
-    hoSoNen.hidden = false;
-  }
 
   function moHoSo(a) {
     const nl = a.nang_luc || { lam_duoc: [], khong_lam: [], hoi_thu: [] };
@@ -14045,13 +13981,12 @@ async function khoiDongVanPhong() {
       const m = nut.dataset.man2;
       document.querySelectorAll('.vp-tab2-nut').forEach(n =>
         n.classList.toggle('dang-mo', n === nut));
-      ['kynang', 'quytac', 'huongdan', 'chat', 'lichsu'].forEach(t => {
+      ['kynang', 'quytac', 'huongdan', 'lichsu'].forEach(t => {
         const o = $('#vp-man2-' + t);
         if (o) o.hidden = t !== m;
       });
       if (m === 'quytac')   veQuyTac();
       if (m === 'huongdan') veFormHuongDan();
-      if (m === 'chat')     veChatDaoTao();
       if (m === 'lichsu')   veLichSuLuat();
     });
   });
@@ -14282,51 +14217,7 @@ async function khoiDongVanPhong() {
     nut.disabled = false;
   });
 
-  /* ---- ④ CHAT VỚI NHÂN SỰ ẢO --------------------------------------------
-     KHÔNG dựng hội thoại thứ hai, KHÔNG dựng đường ghi thứ hai. Đây là CÙNG
-     mạch `vp_hoi_thoai`/`vp_tin_nhan` của ô Hỏi Mây bên phải, vẽ bằng CÙNG hàm
-     `bongBong()`, và ô nhập ở đây đẩy thẳng vào chính form bên kia.
-     Hai bảng hội thoại cho một cuộc trò chuyện là cách một bảng chết âm thầm. */
-  async function veChatDaoTao() {
-    const o = $('#vp-dt-chat');
-    if (!o) return;
-    o.innerHTML = '<div class="empty">Đang tải mạch trò chuyện…</div>';
-    try {
-      const kq = await API.vpHoiThoai();
-      o.innerHTML =
-        '<p class="vp-hd-nhac" style="margin-bottom:12px">Đây là <b>cùng một mạch</b> với ô ' +
-        '“Hỏi Mây”, không phải hội thoại thứ hai. Muốn dạy nghề thì cứ nói tự nhiên — ' +
-        'ví dụ “anh Tuấn cần học cách kiểm phiếu nhập trước khi ký”.</p>' +
-        '<div class="vp-chat" id="vp-dt-chat-mach">' +
-          (kq.tin_nhan.length
-            ? kq.tin_nhan.map(t => bongBong(t.vai, t.noi_dung,
-                t.cong_cu ? JSON.parse(t.cong_cu) : null, t.anh)).join('')
-            : '<div class="vp-chao"><b>Mây</b> đang trực quầy lễ tân.</div>') +
-        '</div>' +
-        '<form class="vp-hd-form" id="vp-dt-chat-form">' +
-          '<textarea id="vp-dt-chat-nhap" rows="3" ' +
-            'placeholder="Ví dụ: anh Tuấn cần học cách kiểm phiếu nhập trước khi ký"></textarea>' +
-          '<button type="submit" class="btn-primary btn-nho" style="margin-top:10px">Gửi cho Mây</button>' +
-        '</form>';
-
-      $('#vp-dt-chat-form').addEventListener('submit', ev => {
-        ev.preventDefault();
-        const chu = $('#vp-dt-chat-nhap').value.trim();
-        if (!chu) return;
-        $('#vp-dt-chat-nhap').value = '';
-        /* Đẩy vào ĐÚNG form đang có. Viết một đường gửi thứ hai ở đây là nhân
-           đôi mọi thứ quanh nó: chống gửi trùng, đính ảnh, nhịp tim, báo lỗi. */
-        oNhap.value = chu;
-        $('#vp-nhap-form').requestSubmit();
-        /* Quay về mặt bằng để thấy Mây đang chạy — trả lời hiện ở ô bên phải. */
-        document.querySelector('.vp-tabphu-nut[data-man="matbang"]')?.click();
-      });
-    } catch (e) {
-      o.innerHTML = '<div class="empty">Chưa tải được mạch trò chuyện.</div>';
-    }
-  }
-
-  /* ---- ⑤ LỊCH SỬ --------------------------------------------------------- */
+  /* ---- ④ LỊCH SỬ --------------------------------------------------------- */
   async function veLichSuLuat() {
     const o = $('#vp-ls-ds');
     if (!o) return;
@@ -14620,9 +14511,6 @@ async function khoiDongVanPhong() {
         .concat((kq.agent_phu || []).map(x => x.id))
         .concat((kq.bien_ban || []).map(b => b.agent))
         .filter(Boolean);
-      /* Tuấn tham gia thì Xưởng cũng nháy: việc tới Hồ Ly và Khỉ Đột đi qua
-         tay Trưởng phòng IT, nên anh ấy động vào là xưởng có liên quan. */
-      if (daThamGia.includes('it')) daThamGia.push('xuong');
       lopPhong.querySelectorAll('.vp-phong').forEach(o => {
         o.classList.toggle('vua-lam', daThamGia.includes(o.dataset.agent));
       });

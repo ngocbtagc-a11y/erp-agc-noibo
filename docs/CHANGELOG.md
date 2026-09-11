@@ -8,6 +8,12 @@ Format: `Date | Feature | Domain | Decision | Migration | Breaking impact | Stat
 
 ---
 
+## 2026-09-11
+
+| Feature | Domain | Decision | Migration | Breaking impact | Status |
+|---|---|---|---|---|---|
+| **Văn phòng ảo — dọn gọn: bỏ Xưởng ERP và khung chat thứ hai** (`src/agents-vp.js` · `src/vanphong.js` · `public/assets/js/app.js` · `public/app.html` · `public/assets/css/vanphong.css`) | Văn phòng ảo | Sếp Ngọc chốt 11/09/2026 "dọn gọn trên nền đang chạy" sau bản rà soát toàn văn phòng ảo. **Bỏ Xưởng ERP** (chibi Hồ Ly/Khỉ Đột · `DOI_IT` · `CACH_GOI_DOI_IT` · `taiCuaXuong` · đường "trực thuộc" · chú giải "ngoài ERP"): hai bạn thật chạy ngoài ERP bằng Claude Code, hỏi ở đây không nghe thấy — trùng tên với đội thật mà không làm được gì, nhìn mặt bằng thì tưởng máy đang dựng. Mở mặt bằng bớt luôn một câu `SELECT … FROM gop_y GROUP BY trang_thai`. **Bỏ tab con "Chat" trong khu Đào tạo & Luật**: nó là CÙNG mạch với ô Hỏi Mây và gửi qua đúng form đó — thừa ở giao diện, dữ liệu không đổi. **CỐ Ý GIỮ — đã đo, không đoán:** ① bốn nguồn luật (hiến pháp · hồ sơ vai trò · thứ bậc luật · luật mềm): prompt 14.384 ký tự, **0 dòng lặp nguyên văn**, ghép ở đúng một hàm `ghepPrompt`, `do-thu-tu-luat` khoá thứ tự — gộp tệp là phá thiết kế mà không bớt chữ nào. ② Tuấn soạn kế hoạch: **6 phiếu đã có kế hoạch** trên bản thật (bản rà soát ghi "chưa sinh được" là SAI — dựa số liệu 08/09). ③ Tự đẩy góp ý rủi ro thấp: đã chạy 6 lần (GY-4, 5, 6, 7, 8, 10) và đi vòng qua cấp duyệt 1 của ADR-0015 → là **chính sách, chờ Sếp quyết**, không phải việc dọn. ④ Hai bảng `*_luu_2026*`: `migrations/lui/*` và `do-khu-dao-tao` còn đọc. ⑤ 47 script `ho-ly-*`/`holy-*`: 15 cái còn bị `package.json` hoặc script khác gọi, dời đi là gãy đường dẫn tương đối. Bản nháp ngoài repo `_ban-nhap-van-phong-ao` dời vào `D:ERP-AGC-LINK_luu-tru` (không xoá). | Không | Không — `GET /api/van-phong/tong-quan` bớt hai trường `doi_it`, `doi_it_cach_goi`; chỉ giao diện văn phòng ảo đọc chúng | done |
+
 ## 2026-09-09
 
 | Feature | Domain | Decision | Migration | Breaking impact | Status |
