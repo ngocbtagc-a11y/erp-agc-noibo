@@ -7,7 +7,9 @@
    xem docs/DATA_OWNERSHIP_MATRIX.md). Vì vậy TÁI DÙNG đúng 2 hàm quyền đã
    có của Sản phẩm thay vì đẻ quyền mới (KHÔNG sửa src/quyen.js):
      - duocSuaSanPham()  -> tạo/sửa dự án, tick bước, chuyển giai đoạn
-     - duocKhoaSanPham() -> cổng Duyệt ra mắt (Go/No-Go) + quyền bỏ qua cổng
+     - duocKhoaSanPham() -> bỏ qua việc bắt buộc + huỷ dự án
+     - laBanGiamDoc()    -> cổng Duyệt ra mắt (Go/No-Go) — CHỈ Ban Giám đốc
+                            (Sếp Ngọc chốt 11/09/2026)
    XEM thì chặn ở index.js theo tab 'kinhdoanh' (chặn kép giống taisan.js).
 
    Vòng đời 1 dự án — 12 giai đoạn cố định, đi tuần tự:
@@ -23,6 +25,9 @@
 
 import { duocSuaSanPham, duocKhoaSanPham } from './quyen.js';
 import { sinhMa } from './dinh-danh.js';
+/* Định nghĩa Ban Giám đốc DÙNG CHUNG với cổng duyệt góp ý — chức vụ (cắt phần
+   "kiêm …") hoặc hộp phòng ban cấp công ty. Không đẻ định nghĩa thứ hai. */
+import { laBanGiamDoc } from './gopy-cua-duyet.js';
 
 function json(d, status = 200) {
   return new Response(JSON.stringify(d), {
@@ -220,7 +225,9 @@ export async function danhSachDuAn(env, phien) {
     giai_doan: GIAI_DOAN,
     quyen: {
       sua: duocSuaSanPham(phien),
-      duyet: duocKhoaSanPham(phien)
+      duyet: duocKhoaSanPham(phien),
+      // Cổng Duyệt ra mắt chỉ Ban Giám đốc — giao diện dùng cờ này để ẩn nút.
+      duyet_ra_mat: await laBanGiamDoc(env, phien)
     },
     toi_id: phien.nhan_su_id
   });
@@ -428,9 +435,10 @@ export async function chuyenGiaiDoan(env, phien, body) {
   const keTiep = giaiDoanKe(du_an.giai_doan);
   if (!keTiep) return loi('Đây đã là giai đoạn cuối — dùng "Hoàn thành dự án"');
 
-  // Cổng duyệt Go/No-Go: chỉ Kinh doanh/Admin (quyền khoá SKU) mới qua được.
-  if (du_an.giai_doan === GIAI_DOAN_CAN_DUYET && !duocKhoaSanPham(phien)) {
-    return loi('Chỉ Kinh doanh/Admin mới được duyệt ra mắt sản phẩm', 403);
+  // Cổng duyệt Go/No-Go: CHỈ Ban Giám đốc (Sếp Ngọc chốt 11/09/2026). Admin
+  // KHÔNG tự động được duyệt — quyền hệ thống không phải chức danh điều hành.
+  if (du_an.giai_doan === GIAI_DOAN_CAN_DUYET && !(await laBanGiamDoc(env, phien))) {
+    return loi('Chỉ Ban Giám đốc mới được duyệt ra mắt sản phẩm', 403);
   }
 
   const { results: conThieu } = await env.DB.prepare(`

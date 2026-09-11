@@ -7305,7 +7305,9 @@ async function khoiDongRnD() {
     const dangLam = d.trang_thai === 'dang_lam';
     const dungHan = ['dang_lam', 'tam_dung'].includes(d.trang_thai);
     const hien = (sel, dk) => { $(sel).hidden = !dk; };
-    hien('#rndCtNutTien', quyenRnD.sua && dangLam && !cuoi);
+    // Cổng Duyệt ra mắt: chỉ Ban Giám đốc thấy nút — máy chủ vẫn chặn 403 thật.
+    const choBgd = d.giai_doan === 'duyet_ra_mat' && !quyenRnD.duyet_ra_mat;
+    hien('#rndCtNutTien', quyenRnD.sua && dangLam && !cuoi && !choBgd);
     hien('#rndCtNutLui', quyenRnD.sua && dangLam && soHienTai > 1);
     hien('#rndCtNutGanSku', quyenRnD.sua && dungHan && soHienTai >= 11);
     hien('#rndCtNutTamDung', quyenRnD.sua && dangLam);
@@ -7316,6 +7318,7 @@ async function khoiDongRnD() {
     $('#rndCtNutTien').textContent = d.giai_doan === 'duyet_ra_mat'
       ? '✅ Duyệt ra mắt →' : 'Sang giai đoạn sau →';
     $('#rndCtLoi').textContent = '';
+    if (choBgd && dangLam) $('#rndCtLoi').textContent = 'Đang chờ Ban Giám đốc duyệt ra mắt.';
 
     $('#rndCtLichSu').innerHTML = (lich_su || []).map(ls =>
       `<div class="rnd-ls"><div>` +

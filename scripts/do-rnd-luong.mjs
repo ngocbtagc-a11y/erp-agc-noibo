@@ -25,9 +25,9 @@ const { db, d1 } = dungDB();
 const env = dungEnv(d1);
 
 /* ---- Bốn người, bốn kiểu quyền ------------------------------------------ */
-function taoNguoi(id, ten, vaiTro, viTri) {
+function taoNguoi(id, ten, vaiTro, viTri, chucVu = 'Nhân viên') {
   db.prepare(`INSERT INTO nhan_su (id, ho_ten, viet_tat, chuc_vu, bo_phan, quan_ly_id, dang_lam)
-              VALUES (?, ?, ?, ?, ?, NULL, 1)`).run(id, ten, ten.slice(0, 2).toUpperCase(), 'Nhân viên', 'Thử');
+              VALUES (?, ?, ?, ?, ?, NULL, 1)`).run(id, ten, ten.slice(0, 2).toUpperCase(), chucVu, 'Thử');
   db.prepare(`INSERT INTO tai_khoan (nhan_su_id, ten_dang_nhap, mat_khau_hash, vai_tro, kich_hoat, vi_tri_cong_viec)
               VALUES (?, ?, 'x', ?, 1, ?)`).run(id, 'tk_' + id, vaiTro, viTri);
   return db.prepare('SELECT id FROM tai_khoan WHERE ten_dang_nhap = ?').get('tk_' + id).id;
@@ -36,9 +36,12 @@ const tkAdmin = taoNguoi('ns_ad', 'Quản trị', 'admin', null);
 const tkVhs   = taoNguoi('ns_vh', 'Vận hành sàn', 'nguoi_dung', 'van_hanh_san');
 const tkCskh  = taoNguoi('ns_cs', 'Chăm sóc KH', 'nguoi_dung', 'cskh');
 const tkKho   = taoNguoi('ns_kh', 'Nhân viên kho', 'nguoi_dung', 'nhan_vien_kho');
+// Phó Giám đốc thật ghi chức vụ kèm "kiêm …" — đúng ca đã làm trượt cổng góp ý ngày 10/09
+const tkBgd   = taoNguoi('ns_gd', 'Phó Giám đốc', 'admin', null, 'Phó Giám đốc kiêm TP. Support');
 
 const [tAdmin, tVhs, tCskh, tKho] = await Promise.all(
   [tkAdmin, tkVhs, tkCskh, tkKho].map(id => taoPhienThat(env, id)));
+const tBgd = await taoPhienThat(env, tkBgd);
 const POST = (than) => ({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(than) });
 
 /* ---- ① Vì sao phải truyền cả phiên, không phải riêng vai_tro ------------- */
@@ -103,5 +106,23 @@ ok('sổ cái ghi đủ: tạo → từng bước → chuyển giai đoạn',
 
 const tao2 = await goiAPI(worker, env, '/api/rnd/tao', tAdmin, POST({ ten: 'Hạt dinh dưỡng mix 5 loại' }));
 ok('dự án thứ hai (Admin tạo) nhận mã RD0002', tao2.than?.ma_rnd === 'RD0002', 'nhận ' + tao2.than?.ma_rnd);
+
+/* ---- ④ Cổng Duyệt ra mắt — CHỈ Ban Giám đốc (Sếp Ngọc chốt 11/09/2026) ---- */
+console.log('\n④ Duyệt ra mắt');
+const qVhs = (await goiAPI(worker, env, '/api/rnd', tVhs)).than?.quyen;
+const qBgd = (await goiAPI(worker, env, '/api/rnd', tBgd)).than?.quyen;
+ok('Vận hành sàn: quyen.duyet_ra_mat = false (nút duyệt ẩn)', qVhs?.duyet_ra_mat === false, JSON.stringify(qVhs));
+ok('Phó Giám đốc (chức vụ kèm "kiêm TP. Support"): quyen.duyet_ra_mat = true', qBgd?.duyet_ra_mat === true, JSON.stringify(qBgd));
+// Đưa dự án thẳng tới cổng và làm xong việc bắt buộc ở đó — chỉ còn đúng câu hỏi "ai được duyệt"
+db.prepare(`UPDATE rnd_du_an SET giai_doan = 'duyet_ra_mat' WHERE id = ?`).run(idDuAn);
+db.prepare(`UPDATE rnd_buoc SET trang_thai = 'xong' WHERE du_an_id = ? AND giai_doan = 'duyet_ra_mat'`).run(idDuAn);
+const duyetVhs = await goiAPI(worker, env, '/api/rnd/chuyen-giai-doan', tVhs, POST({ id: idDuAn }));
+ok('Vận hành sàn bấm duyệt ra mắt → máy chủ chặn 403', duyetVhs.status === 403, 'nhận ' + duyetVhs.status + ' ' + JSON.stringify(duyetVhs.than));
+const duyetAd = await goiAPI(worker, env, '/api/rnd/chuyen-giai-doan', tAdmin, POST({ id: idDuAn }));
+ok('Admin KHÔNG giữ chức Ban Giám đốc → cũng bị chặn 403', duyetAd.status === 403, 'nhận ' + duyetAd.status);
+const duyetBgd = await goiAPI(worker, env, '/api/rnd/chuyen-giai-doan', tBgd, POST({ id: idDuAn }));
+ok('Ban Giám đốc duyệt → sang giai đoạn Ra mắt', duyetBgd.status === 200 && duyetBgd.than?.giai_doan === 'ra_mat', 'nhận ' + duyetBgd.status + ' ' + JSON.stringify(duyetBgd.than));
+const cuoi = db.prepare(`SELECT loai_su_kien, nguoi_thuc_hien FROM rnd_lich_su WHERE du_an_id = ? ORDER BY id DESC LIMIT 1`).get(idDuAn);
+ok('sổ cái ghi "duyet_ra_mat" đúng người duyệt', cuoi?.loai_su_kien === 'duyet_ra_mat' && cuoi?.nguoi_thuc_hien === 'ns_gd', JSON.stringify(cuoi));
 
 tongKet();
