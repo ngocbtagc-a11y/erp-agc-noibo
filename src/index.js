@@ -44,7 +44,6 @@ import * as motacv from './mota-cv.js';
 import * as kynang from './ky-nang.js';
 import { quetNhacNhanSu, thangKeTiep, gioVN } from './nhac-nhan-su.js';
 import * as vanphong from './vanphong.js';
-import { tuDayViecNhe } from './vp-gopy.js';
 /* Cửa duyệt góp ý — MỘT nhánh quyết định cho MỌI đường tạo phiếu (người tự bấm
    gửi ở đây, và Mây bóc câu nói ở src/vp-gopy.js). Tách ra module riêng vì
    vp-gopy.js không import ngược sang index.js được (vòng tròn module). */
@@ -8348,17 +8347,16 @@ export default {
       // SLA cổng duyệt góp ý (SPEC-0002) — thêm 1 hàm vào chuỗi cron đã có,
       // KHÔNG tạo cron mới. Lỗi ở đây không được chặn các việc nền khác.
       try { await gopYNhacSla(env); } catch (e) { console.error('Cron SLA góp ý:', e.message); }
-      /* Văn phòng ảo tự cho phiếu RỦI RO THẤP đi tiếp — Sếp Ngọc chốt: việc
-         nhẹ thì nhân viên ảo tự làm, đừng bắt Sếp bấm từng cái. Phiếu rủi ro
-         trung bình/cao vẫn dừng chờ Sếp. */
       /* Phiếu đã duyệt thì Trưởng phòng IT soạn sẵn kế hoạch thi công — khi
          người bắt tay vào làm thì phần suy nghĩ đã xong. */
       try { const k = await soanKeHoach(env);
             if (k) console.log('TP IT soạn kế hoạch cho ' + k + ' phiếu'); }
       catch (e) { console.error('Cron soạn kế hoạch:', e.message); }
-      try { const n = await tuDayViecNhe(env);
-            if (n) console.log('Văn phòng ảo tự đẩy ' + n + ' góp ý rủi ro thấp'); }
-      catch (e) { console.error('Cron tự đẩy góp ý:', e.message); }
+      /* Văn phòng ảo KHÔNG tự cho phiếu góp ý đi tiếp nữa — Sếp Ngọc tắt ngày
+         11/09/2026. Bản cũ (tuDayViecNhe) đã đẩy 6 phiếu rủi ro thấp sang 'da_duyet'
+         mà không qua quản lý cấp 1 (ADR-0015), có phiếu còn chưa rõ ảnh hưởng tới
+         đâu. Phiếu rủi ro thấp giờ đi đúng cổng: quản lý cấp 1 gật là đủ.
+         ĐỪNG nối lại một lượt tự duyệt nào ở đây khi Sếp chưa đổi luật duyệt. */
       /* Nhắc Sếp qua Telegram những việc đang chờ CHÍNH SẾP quyết — chủ yếu
          là đề xuất máy đã phân tích xong mà chưa ai bấm áp dụng. Hàm tự đóng
          cửa ngoài khung 8h sáng nên gọi mỗi 5 phút vẫn đúng 1 tin/ngày, và tự
