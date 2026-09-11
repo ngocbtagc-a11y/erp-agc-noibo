@@ -476,6 +476,17 @@ export const API = {
   taiSanBaoTriXong: (d) => goi('/api/tai-san/bao-tri-xong', { method: 'POST', body: JSON.stringify(d) }),
   taiSanThanhLy: (d) => goi('/api/tai-san/thanh-ly', { method: 'POST', body: JSON.stringify(d) }),
 
+  /* ---- R&D sản phẩm (Kinh doanh) — xem docs/FEATURE-SPEC-RND-SANPHAM.md ---- */
+  rndDanhSach: () => goi('/api/rnd'),
+  rndChiTiet: (id) => goi('/api/rnd/chi-tiet?id=' + encodeURIComponent(id)),
+  rndTao: (d) => goi('/api/rnd/tao', { method: 'POST', body: JSON.stringify(d) }),
+  rndSua: (d) => goi('/api/rnd/sua', { method: 'POST', body: JSON.stringify(d) }),
+  rndBuoc: (d) => goi('/api/rnd/buoc', { method: 'POST', body: JSON.stringify(d) }),
+  rndChuyenGiaiDoan: (d) => goi('/api/rnd/chuyen-giai-doan', { method: 'POST', body: JSON.stringify(d) }),
+  rndQuayLai: (d) => goi('/api/rnd/quay-lai', { method: 'POST', body: JSON.stringify(d) }),
+  rndDoiTrangThai: (d) => goi('/api/rnd/doi-trang-thai', { method: 'POST', body: JSON.stringify(d) }),
+  rndGanSanPham: (d) => goi('/api/rnd/gan-san-pham', { method: 'POST', body: JSON.stringify(d) }),
+
   /* ---- Đón nhân sự mới (ảnh CCCD) ---- */
   nsDocCCCD: (anhBase64) => goi('/api/nhan-su/doc-cccd', {
     method: 'POST', body: JSON.stringify({ anh: anhBase64 })

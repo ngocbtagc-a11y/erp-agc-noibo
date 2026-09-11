@@ -38,6 +38,7 @@ import * as dulieunen from './dulieunen.js';
 import * as taisan from './taisan.js';
 import * as saoLuu from './sao-luu.js';
 import * as ca from './ca.js';
+import * as rnd from './rnd.js';
 import * as donHangItem from './don-hang-item.js';
 import * as hopdong from './hopdong.js';
 import * as motacv from './mota-cv.js';
@@ -2525,6 +2526,76 @@ async function tsThanhLy(req, env) {
   if (l) return l;
   let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
   return taisan.thanhLyTaiSan(env, phien, b);
+}
+
+/* ==========================================================================
+   R&D SẢN PHẨM — New Product Development (xem docs/FEATURE-SPEC-RND-SANPHAM.md)
+   ---------------------------------------------------------------------------
+   Nghiệp vụ nằm trong src/rnd.js. Chặn kép giống Tài sản: ở đây chặn XEM
+   theo tab 'kinhdoanh' (Kinh doanh/CSKH/Admin/NV test), còn quyền SỬA/DUYỆT
+   thì rnd.js tự kiểm bằng duocSuaSanPham()/duocKhoaSanPham() — cùng bộ quyền
+   với Sản phẩm/SKU vì cùng một Data Owner (Kinh doanh quyết định bán gì).
+   ========================================================================== */
+
+async function batBuocXemRnD(req, env) {
+  const { phien, loi: l } = await batBuocDangNhap(req, env);
+  if (l) return { loi: l };
+  if (!duocXemTab(phien, 'kinhdoanh')) return { loi: loi('Bạn không có quyền xem R&D', 403) };
+  return { phien };
+}
+
+async function rndDanhSach(req, env) {
+  const { phien, loi: l } = await batBuocXemRnD(req, env);
+  if (l) return l;
+  return rnd.danhSachDuAn(env, phien);
+}
+async function rndChiTiet(req, env) {
+  const { loi: l } = await batBuocXemRnD(req, env);
+  if (l) return l;
+  const url = new URL(req.url);
+  return rnd.chiTietDuAn(env, url.searchParams.get('id'));
+}
+async function rndTao(req, env) {
+  const { phien, loi: l } = await batBuocXemRnD(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return rnd.taoDuAn(env, phien, b);
+}
+async function rndSua(req, env) {
+  const { phien, loi: l } = await batBuocXemRnD(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return rnd.suaDuAn(env, phien, b);
+}
+async function rndBuoc(req, env) {
+  const { phien, loi: l } = await batBuocXemRnD(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return rnd.capNhatBuoc(env, phien, b);
+}
+async function rndChuyenGiaiDoan(req, env) {
+  const { phien, loi: l } = await batBuocXemRnD(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return rnd.chuyenGiaiDoan(env, phien, b);
+}
+async function rndQuayLai(req, env) {
+  const { phien, loi: l } = await batBuocXemRnD(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return rnd.quayLaiGiaiDoan(env, phien, b);
+}
+async function rndDoiTrangThai(req, env) {
+  const { phien, loi: l } = await batBuocXemRnD(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return rnd.doiTrangThai(env, phien, b);
+}
+async function rndGanSanPham(req, env) {
+  const { phien, loi: l } = await batBuocXemRnD(req, env);
+  if (l) return l;
+  let b; try { b = await req.json(); } catch { return loi('Dữ liệu gửi lên không hợp lệ'); }
+  return rnd.ganSanPham(env, phien, b);
 }
 
 /* ==========================================================================
@@ -8149,6 +8220,15 @@ const DUONG_DAN = {
   'POST /api/tai-san/bao-hong':   tsBaoHong,
   'POST /api/tai-san/bao-tri-xong': tsBaoTriXong,
   'POST /api/tai-san/thanh-ly':   tsThanhLy,
+  'GET  /api/rnd':                    rndDanhSach,
+  'GET  /api/rnd/chi-tiet':           rndChiTiet,
+  'POST /api/rnd/tao':                rndTao,
+  'POST /api/rnd/sua':                rndSua,
+  'POST /api/rnd/buoc':               rndBuoc,
+  'POST /api/rnd/chuyen-giai-doan':   rndChuyenGiaiDoan,
+  'POST /api/rnd/quay-lai':           rndQuayLai,
+  'POST /api/rnd/doi-trang-thai':     rndDoiTrangThai,
+  'POST /api/rnd/gan-san-pham':       rndGanSanPham,
   'GET  /api/ca/mau-ca':          caDanhSachMauCa,
   'POST /api/ca/mau-ca/them':     caThemMauCa,
   'POST /api/ca/mau-ca/sua':      caSuaMauCa,

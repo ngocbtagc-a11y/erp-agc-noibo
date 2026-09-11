@@ -5736,3 +5736,107 @@ body.tl-dang-xem { overflow: hidden; }
 }
 .sodo-cua-nguy span { flex: 1 1 200px; font-size: 11.5px; color: var(--cam-text); line-height: 1.45; }
 .sodo-cua-nguy button { min-height: 44px; }
+
+/* ==========================================================================
+   R&D SAN PHAM — duong di 12 giai doan + checklist tung buoc
+   Xem docs/FEATURE-SPEC-RND-SANPHAM.md. Duong di cuon ngang tren dien thoai
+   thay vi xuong dong lung tung — ERP la PWA, Sep xem ca tren may lan dien thoai.
+   ========================================================================== */
+.rnd-duong {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+  -webkit-overflow-scrolling: touch;
+}
+.rnd-gd {
+  flex: none;
+  min-width: 132px;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--white);
+  text-align: left;
+  transition: border-color .12s, background .12s;
+}
+.rnd-gd:hover { border-color: var(--sage); background: var(--sage-wash); }
+.rnd-gd .so {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--text-mute);
+  letter-spacing: .04em;
+}
+.rnd-gd .nm {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+  line-height: 1.3;
+  margin-top: 1px;
+}
+.rnd-gd .dem {
+  display: inline-block;
+  margin-top: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-mute);
+  font-variant-numeric: tabular-nums;
+}
+.rnd-gd.co-viec { border-color: var(--sage); }
+.rnd-gd.co-viec .dem { color: var(--ink); }
+.rnd-gd.chon { border-color: var(--sage-dark); background: var(--sage-wash); box-shadow: var(--shadow-sm); }
+
+/* Ban gon trong modal chi tiet: chi danh dau da qua / dang o / chua toi */
+.rnd-duong-nho .rnd-gd { min-width: 92px; padding: 6px 9px; cursor: default; }
+.rnd-duong-nho .rnd-gd:hover { border-color: var(--line); background: var(--white); }
+.rnd-duong-nho .rnd-gd .nm { font-size: 11px; }
+.rnd-gd.da-qua { background: var(--sage-wash); border-color: var(--sage-pale); }
+.rnd-gd.da-qua .nm { color: var(--ink-soft); }
+.rnd-gd.dang-o { border-color: var(--sage-dark); border-width: 2px; background: var(--white); }
+.rnd-gd.chua-toi { opacity: .5; }
+
+/* ---- Checklist tung buoc ---- */
+.rnd-buoc {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+.rnd-buoc:last-child { border-bottom: none; }
+.rnd-buoc .noi-dung { flex: 1; min-width: 0; }
+.rnd-buoc .ten { font-size: 13.5px; color: var(--ink); line-height: 1.45; }
+.rnd-buoc .kq {
+  font-size: 12px;
+  color: var(--text-mute);
+  margin-top: 3px;
+  white-space: pre-wrap;
+}
+.rnd-buoc .nut { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.rnd-buoc.xong .ten { color: var(--text-mute); text-decoration: line-through; }
+.rnd-buoc.bo-qua .ten { color: var(--text-mute); font-style: italic; }
+.rnd-buoc .cham {
+  flex: none;
+  width: 18px; height: 18px;
+  margin-top: 1px;
+  border-radius: 50%;
+  border: 2px solid var(--line);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700;
+  /* Chu trang CHI o trang thai co nen dam (xong / bo qua). Mac dinh nen trang
+     nen chu xam — trang tren trang la 1.00:1, cong tuong phan danh truot. */
+  color: var(--text-mute);
+  background: var(--white);
+}
+/* --ok qua nhat cho dau tick trang 11px (3.55:1) — dung sage-dark cho dat 4.5:1 */
+.rnd-buoc.xong .cham { background: var(--sage-dark); border-color: var(--sage-dark); color: var(--white); }
+.rnd-buoc.bo-qua .cham { background: var(--text-mute); border-color: var(--text-mute); color: var(--white); }
+.rnd-buoc.can-lam .cham { border-color: var(--warn); }
+
+/* Dong lich su — nhe hon .list-item vi chi la 1 dong chu + thoi diem */
+.rnd-ls {
+  display: flex; justify-content: space-between; gap: 12px;
+  padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 13px;
+}
+.rnd-ls:last-child { border-bottom: none; }
+.rnd-ls .luc { color: var(--text-mute); font-size: 12px; white-space: nowrap; }

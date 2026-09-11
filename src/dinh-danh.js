@@ -22,7 +22,11 @@ const CAU_HINH_MA = {
   // sinh theo 'nhan_su_' + loai_lao_dong, thiếu cấu hình thì sinhMa() ném lỗi
   // và KHÔNG thêm được người khoán việc nào.
   nhan_su_khoan_viec:     { prefix: '04-', so_chu_so: 4 },   // 04-0001
-  tai_san: { prefix: 'TS', so_chu_so: 4 }    // TS0001
+  tai_san: { prefix: 'TS', so_chu_so: 4 },   // TS0001
+
+  // Dự án R&D sản phẩm (xem src/rnd.js) — RD0001. Dự án đi qua 12 giai
+  // đoạn nhưng mã sinh 1 lần lúc tạo và không đổi theo giai đoạn.
+  rnd_du_an: { prefix: 'RD', so_chu_so: 4 }  // RD0001
 };
 
 /* Tăng bộ đếm và trả mã mới trong 1 câu lệnh (RETURNING) — tránh 2 người

@@ -42,6 +42,7 @@ trong `quyen.js`), Approval Core, Process/Workflow Core tổng quát.
 | Danh mục nền (Phòng ban/Chức danh/Đơn vị tính/NCC/Kho) | Ban Giám đốc (Phòng ban, Chức danh) / P. Kho Vận-Sản Xuất (còn lại) | `src/dulieunen.js` | `/api/dulieunen/*` | `phong_ban`, `chuc_danh`, `don_vi_tinh`, `nha_cung_cap`, `kho` | PRODUCTION | — | — |
 | Chat nội bộ | Toàn công ty | trong `index.js` | `/api/chat/*` | `tin_nhan_chat` | PRODUCTION | Employee Core | `nhan_su` |
 | Vinh danh | Toàn công ty | trong `index.js` | `/api/vinh-danh/*` | (bảng vinh danh) | PRODUCTION | Employee Core | `nhan_su` |
+| R&D sản phẩm (NPD) | P. Kinh Doanh-MKT | `src/rnd.js` | `/api/rnd/*` | `rnd_du_an`, `rnd_buoc`, `rnd_lich_su` | **PILOT** (dựng 06/09/2026, lên main 11/09/2026, chưa đi trọn 1 vòng A→Z bằng dự án thật) | Employee Core, Product/SKU Master | `nhan_su`, `san_pham` |
 | Góp ý & Cải tiến ERP | Toàn công ty (Admin triage) | trong `index.js` | `/api/gop-y/*` | `gop_y`, `gop_y_lich_su` | PILOT (25/08/2026, mới) | Employee Core, Notification, Telegram (tuỳ chọn) | `nhan_su`, `thong_bao` |
 
 ---

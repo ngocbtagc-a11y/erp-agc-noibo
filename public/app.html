@@ -1731,12 +1731,136 @@
         </div>
       </div>
 
+      <!-- ---------- R&D sản phẩm — quy trình phát triển sản phẩm thực phẩm A→Z.
+           12 giai đoạn cố định + checklist bắt buộc từng giai đoạn; chưa xong
+           việc bắt buộc thì MÁY CHỦ chặn chuyển giai đoạn (không chỉ ẩn nút).
+           Spec: docs/FEATURE-SPEC-RND-SANPHAM.md — nghiệp vụ: src/rnd.js ---------- -->
       <div class="kv-pane" id="kd-pane-rnd" hidden>
+
+        <div class="stats" id="rnd-thongke"></div>
+
         <div class="panel">
-          <div class="panel-head"><h4>R&amp;D — Nghiên cứu &amp; phát triển sản phẩm</h4></div>
-          <div class="panel-body">
-            <div class="empty">Khu vực R&amp;D đang chờ nội dung. Sếp cho tôi biết cần theo dõi gì ở đây (ý tưởng sản phẩm mới, mẫu đang thử, kết quả test, tiến độ ra mắt…) là tôi dựng tiếp.</div>
+          <div class="panel-head">
+            <h4>Đường đi của sản phẩm mới</h4>
+            <span class="hint">Bấm 1 giai đoạn để lọc danh sách bên dưới</span>
           </div>
+          <div class="panel-body" style="padding-bottom:14px">
+            <div class="rnd-duong" id="rnd-duong"></div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <h4>Dự án R&amp;D</h4>
+            <span class="hint" id="rnd-dem"></span>
+          </div>
+
+          <div class="panel-body" style="padding-bottom:0">
+            <div class="dh-timkiem">
+              <div class="search">
+                <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                  <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+                </svg>
+                <input type="search" id="rnd-tim" placeholder="Tìm: tên sản phẩm · mã dự án · nhóm hàng · người phụ trách">
+              </div>
+              <select id="rnd-loc-giaidoan" class="chon-nho" title="Lọc theo giai đoạn">
+                <option value="">Mọi giai đoạn</option>
+              </select>
+              <select id="rnd-loc-trangthai" class="chon-nho" title="Lọc theo trạng thái">
+                <option value="dang_lam">Đang làm</option>
+                <option value="">Tất cả</option>
+                <option value="tam_dung">Tạm dừng</option>
+                <option value="hoan_thanh">Đã ra mắt xong</option>
+                <option value="huy">Đã huỷ</option>
+              </select>
+              <button type="button" class="btn-phu" id="rnd-nut-mo-form" hidden style="width:auto">+ Dự án mới</button>
+            </div>
+          </div>
+
+          <!-- Form tạo dự án — chỉ hiện cho người có quyền sửa Sản phẩm/SKU -->
+          <div class="panel-body" id="rnd-panel-them" hidden>
+            <form id="rndForm" class="form-luoi" autocomplete="off">
+              <div class="field field-rong">
+                <label>Tên sản phẩm dự kiến *</label>
+                <input type="text" id="rnd-ten" required placeholder="VD: Bột ăn dặm yến mạch hạt sen 200g">
+              </div>
+              <div class="field">
+                <label>Nhóm hàng</label>
+                <input type="text" id="rnd-nhomhang" placeholder="VD: Bột ăn dặm">
+              </div>
+              <div class="field">
+                <label>Dành cho</label>
+                <select id="rnd-doituong">
+                  <option value="nguoi_lon">Người lớn</option>
+                  <option value="me_be">Mẹ &amp; bé (ăn dặm)</option>
+                  <option value="ca_hai">Cả hai</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>Kênh bán dự kiến</label>
+                <select id="rnd-kenh">
+                  <option value="ca_hai">Cả Shopee &amp; TikTok</option>
+                  <option value="shopee">Shopee</option>
+                  <option value="tiktok">TikTok Shop</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>Người phụ trách</label>
+                <div class="combo1" id="rndPhuTrachCombo">
+                  <button type="button" class="combo1-hienthi rong" id="rndPhuTrachHienThi">
+                    <span>Chọn người phụ trách...</span>
+                    <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+                  </button>
+                  <div class="combo1-panel" id="rndPhuTrachPanel" hidden>
+                    <input type="search" id="rndPhuTrachTim" placeholder="Tìm theo tên hoặc mã nhân viên...">
+                    <div class="ql-goiy" id="rndPhuTrachGoiY"></div>
+                  </div>
+                </div>
+                <input type="hidden" id="rnd-phutrach">
+              </div>
+              <div class="field">
+                <label>Hạn ra mắt dự kiến</label>
+                <input type="date" id="rnd-han">
+              </div>
+              <div class="field">
+                <label>Mức ưu tiên</label>
+                <select id="rnd-uutien">
+                  <option value="cao">Cao</option>
+                  <option value="trung_binh" selected>Trung bình</option>
+                  <option value="thap">Thấp</option>
+                </select>
+              </div>
+              <div class="field field-rong">
+                <label>Ý tưởng &amp; lý do nên làm</label>
+                <textarea id="rnd-ytuong" rows="2" placeholder="Khách hỏi nhiều? Đối thủ đang bán chạy? Tận dụng nguồn nguyên liệu sẵn có?"></textarea>
+              </div>
+              <div class="field field-nut" style="display:flex; gap:10px">
+                <button type="submit" class="btn-primary" id="rnd-nutluu" style="width:auto">+ Tạo dự án R&amp;D</button>
+                <button type="button" class="btn-phu" id="rnd-nuthuy" style="width:auto">Đóng</button>
+              </div>
+            </form>
+            <p class="hint" style="margin:2px 0 0">Tạo xong hệ thống tự dựng sẵn đủ <b>12 giai đoạn</b> và toàn bộ checklist việc phải làm — không phải gõ tay.</p>
+            <div class="form-loi" id="rnd-loi"></div>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Sản phẩm dự kiến</th>
+                  <th>Mã</th>
+                  <th>Giai đoạn</th>
+                  <th>Tiến độ</th>
+                  <th>Phụ trách</th>
+                  <th>Hạn ra mắt</th>
+                  <th>Trạng thái</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="rnd-bang"></tbody>
+            </table>
+          </div>
+          <div class="empty" id="rnd-trong" hidden></div>
         </div>
       </div>
 
@@ -4397,6 +4521,115 @@
       </div>
     </form>
     <div class="form-loi" id="doiVaiTroLoi"></div>
+  </div>
+</div>
+
+<!-- ---------- R&D: chi tiết 1 dự án — nơi làm việc hằng ngày (tick việc,
+     chuyển giai đoạn). Xem docs/FEATURE-SPEC-RND-SANPHAM.md ---------- -->
+<div class="modal-nen" id="rndCtModalNen" hidden>
+  <div class="modal modal-rong">
+    <div class="ts-ct-dau">
+      <div>
+        <h4 id="rndCtTen"></h4>
+        <div class="sm" id="rndCtMa"></div>
+      </div>
+    </div>
+    <div id="rndCtTag" style="margin:10px 0"></div>
+
+    <!-- Đường đi 12 giai đoạn của riêng dự án này -->
+    <div class="rnd-duong rnd-duong-nho" id="rndCtDuong"></div>
+
+    <div class="bar-row" style="margin:12px 0 4px">
+      <div class="bar" style="flex:1"><i id="rndCtBar"></i></div>
+      <span class="pct" id="rndCtPct"></span>
+    </div>
+
+    <div class="ts-ct-info" id="rndCtThongTin" style="margin-top:12px"></div>
+
+    <div class="mt-nhom-nhan" style="margin-top:18px">
+      Việc phải làm — <span id="rndCtGiaiDoanTen"></span>
+    </div>
+    <p class="hint" id="rndCtGiaiDoanNhac" style="margin:2px 0 8px"></p>
+    <div id="rndCtBuoc"></div>
+
+    <div class="ts-ct-nhom" id="rndCtNhomNut" style="display:flex; gap:8px; flex-wrap:wrap; margin:16px 0 0">
+      <button type="button" class="btn-nho btn-primary" id="rndCtNutTien">Sang giai đoạn sau →</button>
+      <button type="button" class="btn-nho" id="rndCtNutLui">← Quay lại giai đoạn trước</button>
+      <button type="button" class="btn-nho" id="rndCtNutGanSku">Gắn mã hàng (SKU)</button>
+      <button type="button" class="btn-nho" id="rndCtNutTamDung">Tạm dừng</button>
+      <button type="button" class="btn-nho" id="rndCtNutTiepTuc">Tiếp tục</button>
+      <button type="button" class="btn-nho" id="rndCtNutXong">Hoàn thành dự án</button>
+      <button type="button" class="btn-nho" id="rndCtNutSua">Sửa thông tin</button>
+      <button type="button" class="btn-nho" id="rndCtNutHuy">Huỷ dự án</button>
+    </div>
+    <div class="form-loi" id="rndCtLoi"></div>
+
+    <div class="mt-nhom-nhan" style="margin-top:18px">Lịch sử</div>
+    <div id="rndCtLichSu"></div>
+
+    <div class="field field-nut" style="margin-top:14px">
+      <button type="button" class="btn-phu" id="rndCtDong" style="width:auto">Đóng</button>
+    </div>
+  </div>
+</div>
+
+<!-- ---------- R&D: sửa thông tin chung của dự án ---------- -->
+<div class="modal-nen" id="rndSuaModalNen" hidden>
+  <div class="modal">
+    <h4>Sửa thông tin dự án R&amp;D</h4>
+    <form id="rndSuaForm" class="form-luoi" autocomplete="off">
+      <input type="hidden" id="rndSuaId">
+      <div class="field field-rong"><label>Tên sản phẩm dự kiến *</label><input type="text" id="rndSuaTen" required></div>
+      <div class="field"><label>Nhóm hàng</label><input type="text" id="rndSuaNhomHang"></div>
+      <div class="field">
+        <label>Dành cho</label>
+        <select id="rndSuaDoiTuong">
+          <option value="nguoi_lon">Người lớn</option>
+          <option value="me_be">Mẹ &amp; bé (ăn dặm)</option>
+          <option value="ca_hai">Cả hai</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Kênh bán dự kiến</label>
+        <select id="rndSuaKenh">
+          <option value="ca_hai">Cả Shopee &amp; TikTok</option>
+          <option value="shopee">Shopee</option>
+          <option value="tiktok">TikTok Shop</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Người phụ trách</label>
+        <div class="combo1" id="rndSuaPhuTrachCombo">
+          <button type="button" class="combo1-hienthi rong" id="rndSuaPhuTrachHienThi">
+            <span>Chọn người phụ trách...</span>
+            <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+          <div class="combo1-panel" id="rndSuaPhuTrachPanel" hidden>
+            <input type="search" id="rndSuaPhuTrachTim" placeholder="Tìm theo tên hoặc mã nhân viên...">
+            <div class="ql-goiy" id="rndSuaPhuTrachGoiY"></div>
+          </div>
+        </div>
+        <input type="hidden" id="rndSuaPhuTrach">
+      </div>
+      <div class="field"><label>Hạn ra mắt dự kiến</label><input type="date" id="rndSuaHan"></div>
+      <div class="field">
+        <label>Mức ưu tiên</label>
+        <select id="rndSuaUuTien">
+          <option value="cao">Cao</option>
+          <option value="trung_binh">Trung bình</option>
+          <option value="thap">Thấp</option>
+        </select>
+      </div>
+      <div class="field"><label>Giá vốn dự kiến (đ)</label><input type="number" id="rndSuaGiaVon" min="0" step="1000"></div>
+      <div class="field"><label>Giá bán dự kiến (đ)</label><input type="number" id="rndSuaGiaBan" min="0" step="1000"></div>
+      <div class="field field-rong"><label>Ý tưởng &amp; lý do nên làm</label><textarea id="rndSuaYTuong" rows="2"></textarea></div>
+      <div class="field field-rong"><label>Ghi chú</label><textarea id="rndSuaGhiChu" rows="2"></textarea></div>
+      <div class="field field-nut" style="display:flex; gap:10px">
+        <button type="submit" class="btn-primary" id="rndSuaNut" style="width:auto">Lưu</button>
+        <button type="button" class="btn-phu" id="rndSuaHuy" style="width:auto">Hủy</button>
+      </div>
+    </form>
+    <div class="form-loi" id="rndSuaLoi"></div>
   </div>
 </div>
 
