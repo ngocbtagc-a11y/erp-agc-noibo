@@ -160,6 +160,7 @@
     "do-o-ngay-may": "node scripts/do-o-ngay-nhanxet.mjs --rong 1440",
     "do-thu-tu-luat": "node scripts/do-thu-tu-luat-prompt.mjs",
     "do-rnd": "node scripts/do-rnd-luong.mjs",
+    "do-bien-che": "node scripts/do-bien-che-vp.mjs",
     "do-so-do-to-chuc": "node scripts/do-so-do-to-chuc.mjs",
     "do-so-do-to-chuc-sql": "node scripts/do-so-do-to-chuc.mjs --chi-sql",
     "nap-sodo-batang-may": "node scripts/chay-migration.mjs them-phongban-ba-tang.sql",

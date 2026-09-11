@@ -264,7 +264,7 @@ export const AGENTS = [
   {
     id: 'kinhdoanh',
     ten: 'Doanh',
-    chuc_danh: 'Trưởng phòng Kinh doanh',
+    chuc_danh: 'Báo cáo bán hàng hằng ngày',
     phong: 'Phòng Kinh doanh',
     mo_ta: 'Doanh số hai sàn, đơn hàng, hàng bán chạy và bán kém.',
     phong_ban_id: 3, vi_tri: { x: 12, y: 41 },
@@ -400,7 +400,7 @@ Chuyện luật lao động chi tiết (mức phạt, điều khoản) thì đ�
   {
     id: 'it',
     ten: 'Tuấn',
-    chuc_danh: 'Trưởng phòng IT',
+    chuc_danh: 'Đội xây dựng · Trưởng phòng IT',
     phong: 'Phòng IT',
     mo_ta: 'Hệ thống ERP, tài khoản, dữ liệu, sự cố kỹ thuật.',
     phong_ban_id: 2, vi_tri: { x: 63, y: 65 },
@@ -705,6 +705,39 @@ export const MAY = {
     ]
   }
 };
+
+/* ==========================================================================
+   BIÊN CHẾ — ai đang làm, ai tạm tắt, ai nghỉ (chốt 11/09/2026)
+   ---------------------------------------------------------------------------
+   Theo bảng kiểm kê Documents/VAN-PHONG-AO-ALPHAGREEN/BANG-KIEM-KE-AGENT.md:
+   văn phòng tuyển theo CHỨC DANH chứ không theo VIỆC, nên cả 10 bạn đứng im.
+   Giữ đúng một bạn có việc thật lặp lại mỗi ngày.
+     dang_lam — hiện trên mặt bằng, nhận câu hỏi, lên bảng Năng suất
+     xay_dung — hiện trên mặt bằng, KHÔNG nhận câu hỏi, KHÔNG lên bảng Năng suất
+     cho_xet  — ẩn, bật lại khi đủ 5 điều kiện (xem bảng kiểm kê)
+     nghi     — ẩn
+   Chỉ ẨN, không xoá: định nghĩa, hội thoại, kỹ năng, lịch sử giữ nguyên.
+   Bật lại một bạn = đổi đúng một chữ ở bảng dưới.
+
+   KHÔNG đi theo biên chế: việc NHẮC TỰ ĐỘNG bằng luật SQL (quetNhacViec —
+   hàng cận hạn, hồ sơ nhân sự thiếu…). Nó không gọi AI, và tắt theo Khang
+   là kho mất cảnh báo hàng cận date — mất tiền thật.
+   ========================================================================== */
+export const BIEN_CHE = {
+  kinhdoanh: 'dang_lam',
+  it:        'xay_dung',
+  mkt:       'cho_xet',
+  khovan:    'cho_xet',
+  ketoan:    'cho_xet',
+  phapche:   'nghi',
+  hcns:      'nghi',
+  trolygd:   'nghi',
+  trolypgd:  'nghi',
+  may:       'nghi'
+};
+export const bienCheCua = id => BIEN_CHE[id] || 'dang_lam';
+export const hienTrenMatBang = a => !!a && ['dang_lam', 'xay_dung'].includes(bienCheCua(a.id));
+export const nhanCauHoi = a => !!a && bienCheCua(a.id) === 'dang_lam';
 
 /* Tra nhanh theo id */
 export function agentTheoId(id) {

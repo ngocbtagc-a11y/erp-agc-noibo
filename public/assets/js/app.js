@@ -14335,18 +14335,40 @@ async function khoiDongVanPhong() {
     if (lopDo) lopDo.innerHTML = veNoiThat();
 
     // Mây đứng sau quầy, giữa hàng dưới, ngay chỗ người ta bước vào.
-    oQuay.style.left = may.vi_tri.x + '%';
-    oQuay.style.top  = may.vi_tri.y + '%';
-    oQuay.innerHTML =
-      `<div class="vp-may" id="vp-may" title="Xem hồ sơ của Mây">
-         <span class="vp-vong"></span>
-         <div class="vp-may-nguoi">${veChibi(may.chibi)}</div>
-         ${veQuayLeTan()}
-         <div class="vp-bien vp-bien-may">
-           <b>${esc(may.ten)}</b><span>${esc(may.chuc_danh)}</span>
-         </div>
-       </div>`;
-    oQuay.querySelector('#vp-may').addEventListener('click', () => moHoSo(may));
+    // Mây đang nghỉ (biên chế 11/09/2026) thì máy chủ trả may = null → cất quầy.
+    oQuay.hidden = !may;
+    if (may) {
+      oQuay.style.left = may.vi_tri.x + '%';
+      oQuay.style.top  = may.vi_tri.y + '%';
+      oQuay.innerHTML =
+        `<div class="vp-may" id="vp-may" title="Xem hồ sơ của Mây">
+           <span class="vp-vong"></span>
+           <div class="vp-may-nguoi">${veChibi(may.chibi)}</div>
+           ${veQuayLeTan()}
+           <div class="vp-bien vp-bien-may">
+             <b>${esc(may.ten)}</b><span>${esc(may.chuc_danh)}</span>
+           </div>
+         </div>`;
+      oQuay.querySelector('#vp-may').addEventListener('click', () => moHoSo(may));
+    } else {
+      oQuay.innerHTML = '';
+    }
+
+    // Ô hỏi mang tên người đang thật sự nhận câu hỏi, không để chữ "Mây" treo đó.
+    const nguoiNhan = may || (duLieu.agent || []).find(a => a.nhan_cau_hoi);
+    const tieuDeHoi = document.querySelector('.vp-hoi-khung .panel-head h4');
+    const nhacHoi = document.querySelector('.vp-hoi-khung .panel-head .hint');
+    if (nguoiNhan && tieuDeHoi) tieuDeHoi.textContent = 'Hỏi ' + nguoiNhan.ten;
+    if (nguoiNhan && nhacHoi) nhacHoi.textContent = may
+      ? 'Cứ nói tự nhiên, Mây tự tìm đúng người'
+      : 'Doanh số, đơn hàng hai sàn — số lấy thẳng từ ERP';
+
+    const oChuGiai = document.querySelector('.vp-chugiai');
+    if (oChuGiai) {
+      oChuGiai.querySelector('.cg-choxet')?.remove();
+      if ((duLieu.cho_xet || []).length) oChuGiai.insertAdjacentHTML('beforeend',
+        `<span class="cg-choxet">Tạm tắt, chờ xét: ${duLieu.cho_xet.map(esc).join(' · ')}</span>`);
+    }
 
     lopPhong.innerHTML = '';
     duLieu.agent.forEach(a => {
@@ -15072,7 +15094,7 @@ async function khoiDongVanPhong() {
     oChat.insertAdjacentHTML('beforeend',
       `<div class="vp-tin agent" id="vp-dangnghi"><div class="vp-tin-noi">` +
       `<span class="vp-cham"></span><span class="vp-cham"></span><span class="vp-cham"></span>` +
-      ` <i>Mây đang tìm đúng người…</i></div></div>`);
+      ` <i>Đang tra số…</i></div></div>`);
     sangDen(null, true);
     xuongCuoi();
 
@@ -15185,10 +15207,13 @@ async function khoiDongVanPhong() {
     oChat.innerHTML = kq.tin_nhan.length
       ? kq.tin_nhan.map(t => bongBong(t.vai, t.noi_dung,
           t.cong_cu ? JSON.parse(t.cong_cu) : null, t.anh)).join('')
-      : `<div class="vp-chao"><b>Mây</b> đang trực quầy lễ tân.
-           <span>Cứ hỏi tự nhiên, tôi tự tìm đúng người trong văn phòng.</span></div>`;
+      : (kq.may
+          ? `<div class="vp-chao"><b>Mây</b> đang trực quầy lễ tân.
+               <span>Cứ hỏi tự nhiên, tôi tự tìm đúng người trong văn phòng.</span></div>`
+          : `<div class="vp-chao"><b>${esc(kq.le_tan?.ten || '')}</b> — ${esc(kq.le_tan?.chuc_danh || '')}.
+               <span>Hỏi thẳng về doanh số, đơn hàng hai sàn — số lấy từ ERP.</span></div>`);
     if (!kq.tin_nhan.length) {
-      $('#vp-goi-y').innerHTML = (kq.may?.nang_luc?.hoi_thu || [])
+      $('#vp-goi-y').innerHTML = ((kq.may || kq.le_tan)?.nang_luc?.hoi_thu || [])
         .map(g => `<button type="button" class="vp-chip">${esc(g)}</button>`).join('');
     }
     xuongCuoi();

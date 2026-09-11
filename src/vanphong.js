@@ -23,7 +23,8 @@
    ========================================================================== */
 
 import {
-  AGENTS, agentTheoId, agentChoVaiTro, duocVaoPhong, hoSoCongKhai, ghepPrompt
+  AGENTS, agentTheoId, agentChoVaiTro, duocVaoPhong, hoSoCongKhai, ghepPrompt,
+  bienCheCua, hienTrenMatBang, nhanCauHoi
 } from './agents-vp.js';
 import { congCuCuaAgent, chayCongCu } from './vp-cong-cu.js';
 import { MAY } from './agents-vp.js';
@@ -225,7 +226,9 @@ export async function tongQuan(env, phien) {
 
   /* Khu vực và chỗ ngồi tính từ bảng phong_ban THẬT, không viết cứng toạ độ —
      đổi cơ cấu trong ERP thì mặt bằng tự đúng theo. Xem src/vp-mat-bang.js. */
-  const matBang = await xepChoTheoCoCau(env, AGENTS, MAY);
+  // Chỉ bạn còn trong biên chế mới có ghế (xem BIEN_CHE trong agents-vp.js).
+  const dsHien = AGENTS.filter(hienTrenMatBang);
+  const matBang = await xepChoTheoCoCau(env, dsHien, MAY);
 
   // Việc của chính người đang xem — kể cả việc do người khác giao, để họ nhìn
   // một chỗ là thấy hết, không phải mở hai nơi.
@@ -254,9 +257,10 @@ export async function tongQuan(env, phien) {
     /* Gửi cả trợ lý không được gặp, kèm cờ vao_duoc = false: thấy cửa phòng
        đóng thì người ta hiểu là có phòng đó mà mình không phận sự, đỡ hơn là
        phòng biến mất không lời giải thích. */
-    agent: AGENTS.map(a => ({
+    agent: dsHien.map(a => ({
       ...hoSoCongKhai(a),
       vao_duoc: cuaToi.some(x => x.id === a.id),
+      nhan_cau_hoi: nhanCauHoi(a),
       viec_dang_mo: dem[a.id] || 0,
       vi_tri: matBang.vi_tri[a.id] || a.vi_tri
     })),
@@ -264,7 +268,9 @@ export async function tongQuan(env, phien) {
     cat_viec: catViec,
     viec_cua_toi: viecCuaToi,
     hoi_dap_bat_chua: !!env.AI,
-    may: { ...MAY, vi_tri: matBang.vi_tri[MAY.id] || MAY.vi_tri },
+    // Mây đang nghỉ thì trả null — giao diện cất quầy lễ tân đi.
+    may: hienTrenMatBang(MAY) ? { ...MAY, vi_tri: matBang.vi_tri[MAY.id] || MAY.vi_tri } : null,
+    cho_xet: AGENTS.filter(a => bienCheCua(a.id) === 'cho_xet').map(a => a.ten),
     khu: matBang.khu,
     viec_treo: await viecDangTreo(env)
   });
@@ -349,7 +355,9 @@ export async function nangSuat(env, phien) {
   const soTiepNhan = (results || []).length;
 
   const dong = [...AGENTS, MAY]
-    .filter(a => a.id === 'may' || duocVaoPhong(phien.vai_tro, a.id))
+    // Bảng Năng suất chỉ đo bạn ĐANG LÀM. Đội xây dựng (Tuấn) đo bằng thước khác,
+    // bạn nghỉ/chờ xét không lên bảng — lịch sử của họ vẫn nằm nguyên trong vp_tin_nhan.
+    .filter(a => nhanCauHoi(a) && (a.id === 'may' || duocVaoPhong(phien.vai_tro, a.id)))
     .map(a => ({
       id: a.id, ten: a.ten, chuc_danh: a.chuc_danh, khoi: a.khoi, chibi: a.chibi,
       la_le_tan: a.id === 'may',
@@ -653,7 +661,10 @@ export async function hoiThoai(env, phien) {
   `).bind(ht.id).all();
 
   return json({
-    may: MAY,
+    may: hienTrenMatBang(MAY) ? MAY : null,
+    // Mây nghỉ thì lời chào và câu gợi ý lấy của bạn đang nhận câu hỏi.
+    le_tan: hienTrenMatBang(MAY) ? MAY
+      : (AGENTS.find(nhanCauHoi) ? hoSoCongKhai(AGENTS.find(nhanCauHoi)) : null),
     hoi_dap_bat_chua: !!env.AI,
     tin_nhan: results.reverse()
   });

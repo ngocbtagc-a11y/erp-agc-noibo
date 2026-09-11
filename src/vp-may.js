@@ -33,7 +33,7 @@
    thay Owner, không tự đổi trạng thái yêu cầu rủi ro cao.
    ========================================================================== */
 
-import { AGENTS, agentTheoId, agentChoVaiTro, ghepPrompt, ghepPromptNgan } from './agents-vp.js';
+import { AGENTS, agentTheoId, agentChoVaiTro, ghepPrompt, ghepPromptNgan, nhanCauHoi, hienTrenMatBang } from './agents-vp.js';
 import { congCuCuaAgent, chayCongCu, CONG_CU } from './vp-cong-cu.js';
 import { taoPhieuGopY } from './vp-gopy.js';
 import { docLuat, kiemTruocKhiGhi } from './vp-luat.js';
@@ -462,7 +462,8 @@ function mayBaoLai({ agent, dsPhuTen, soVong, coOwnerGate, noiDung, nguoiDuyet }
   if (nguoiDuyet) dan.push(`, rồi **${nguoiDuyet}** duyệt lại`);
   dan.push('. Đây là kết quả:');
 
-  const dau = `_${dan.join('')}_\n\n`;
+  // Mây đang nghỉ thì không có ai "chuyển việc" — người trả lời nói thẳng.
+  const dau = hienTrenMatBang({ id: 'may' }) ? `_${dan.join('')}_\n\n` : '';
   const cuoi = coOwnerGate
     ? '\n\n---\n_Việc này em không tự chốt được, đang chờ Sếp quyết. Sếp bảo một câu là em cho chạy tiếp._'
     : '\n\n---\n_Cần em hỏi rõ thêm chỗ nào thì Sếp cứ nhắn tiếp ạ._';
@@ -770,7 +771,9 @@ export async function hoiMay({ env, phien, cauHoi, lichSu = [], homNay, coAnhKem
   /* Chỉ đưa cho Mây những chuyên gia mà NGƯỜI NÀY được gặp. Mây không được
      route sang phòng người ta không có quyền vào — chặn ngay từ khâu chọn,
      chứ không để chọn xong rồi mới từ chối. */
-  const duocGap = agentChoVaiTro(phien.vai_tro);
+  // Chỉ bạn ĐANG LÀM mới nhận câu hỏi (BIEN_CHE trong agents-vp.js). Còn một
+  // bạn thì bước phân loại vẫn chạy — nó là chỗ chọn công cụ tra số cho bạn đó.
+  const duocGap = agentChoVaiTro(phien.vai_tro).filter(nhanCauHoi);
   if (!duocGap.length) {
     return {
       loai: 'CHAT', agent: null, tra_loi:
