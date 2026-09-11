@@ -4175,7 +4175,9 @@ details.kv-ton-nhac[open] > summary { margin-bottom: 2px; }
   color: var(--text-mute); overflow-wrap: anywhere;
 }
 .gy-td-chang.day .gy-td-ten { font-weight: 700; color: var(--ink); }
-.gy-td-chang.hong .gy-td-ten { font-weight: 700; color: var(--danger); }
+/* Chữ `--danger-dark` (5.13:1 trên --surface-2), chấm vẫn `--danger`:
+   `--danger` làm chữ cỡ 11px chỉ đạt 4.22:1. */
+.gy-td-chang.hong .gy-td-ten { font-weight: 700; color: var(--danger-dark); }
 /* Câu trả lời "ai đang giữ · bao lâu rồi", ngay dưới đường tiến độ */
 .gy-td-chu { font-size: 13px; line-height: 1.45; }
 .gy-td-canh {
@@ -4662,9 +4664,12 @@ details.kv-ton-nhac[open] > summary { margin-bottom: 2px; }
 .tlq-the.dang-keo { opacity: .45; cursor: grabbing; }
 .tlq-the.dich { border-color: var(--cam); box-shadow: inset 0 0 0 1px var(--cam); }
 
+/* Nền `--cam-dark`, KHÔNG phải `--cam`: chữ kem trên cam logo #eb7c17 chỉ
+   2.76:1 — nút bấm nhiều nhất của màn quét mà đọc không ra ngoài nắng.
+   `--cam-dark` cho 4.79:1, vẫn đúng họ cam, vẫn là MỘT nút cam đậm. */
 .tlq-nut-chinh {
   display: block; width: 100%; min-height: 52px; cursor: pointer; margin-bottom: 10px;
-  border: 0; border-radius: var(--r-pill); background: var(--cam); color: var(--white);
+  border: 0; border-radius: var(--r-pill); background: var(--cam-dark); color: var(--white);
   font: inherit; font-size: 16px; font-weight: 700; box-shadow: var(--shadow-cam);
 }
 .tlq-nut-chinh:disabled { background: var(--surface-2); color: var(--text-mute); box-shadow: none; }
@@ -5224,7 +5229,9 @@ body.tl-dang-xem { overflow: hidden; }
   cursor: pointer;
   color: var(--text-mute, #6b6459);
 }
-.tl-xem-dong:hover { border-color: #c0603f; color: #c0603f; }
+/* `--cam-text` thay mã dán cứng #c0603f (3.45:1). Nút đóng không phải báo
+   lỗi nên không dùng họ đỏ — đỏ phải hiếm. 4.59:1 trên tầng tối nhất. */
+.tl-xem-dong:hover { border-color: var(--cam-text); color: var(--cam-text); }
 
 /* Khung xem chiếm hết phần còn lại — PDF cần chiều cao, cắt ngắn là phải cuộn
    hai lớp lồng nhau, thao tác trên điện thoại thành cực hình. */
