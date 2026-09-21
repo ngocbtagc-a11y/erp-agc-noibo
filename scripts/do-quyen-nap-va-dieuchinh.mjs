@@ -79,9 +79,10 @@ function moi(db) {
     'INSERT INTO nhan_su (id, ho_ten, viet_tat, chuc_vu, bo_phan, dang_lam) VALUES (?,?,?,?,?,1)');
   const coCotViTri = db.prepare("SELECT COUNT(*) AS n FROM pragma_table_info('tai_khoan') WHERE name='vi_tri_cong_viec'")
                        .get().n > 0;
+  // phai_doi_mk = 0 ghi rõ: schema mặc định 1 (mật khẩu tạm) — từ 21/09/2026 máy chủ chặn thật.
   const tk = coCotViTri
-    ? db.prepare('INSERT INTO tai_khoan (id, nhan_su_id, ten_dang_nhap, mat_khau_hash, vai_tro, vi_tri_cong_viec) VALUES (?,?,?,?,?,?)')
-    : db.prepare('INSERT INTO tai_khoan (id, nhan_su_id, ten_dang_nhap, mat_khau_hash, vai_tro) VALUES (?,?,?,?,?)');
+    ? db.prepare('INSERT INTO tai_khoan (id, nhan_su_id, ten_dang_nhap, mat_khau_hash, vai_tro, vi_tri_cong_viec, phai_doi_mk) VALUES (?,?,?,?,?,?,0)')
+    : db.prepare('INSERT INTO tai_khoan (id, nhan_su_id, ten_dang_nhap, mat_khau_hash, vai_tro, phai_doi_mk) VALUES (?,?,?,?,?,0)');
   NGUOI.forEach(([id, ten, cv, o1, o2], i) => {
     ns.run(id, ten, id.slice(0, 2), cv, 'Thử');
     if (coCotViTri) tk.run(i + 1, id, 'tk' + id.toLowerCase(), 'h', o1, o2);

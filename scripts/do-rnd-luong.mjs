@@ -28,8 +28,9 @@ const env = dungEnv(d1);
 function taoNguoi(id, ten, vaiTro, viTri, chucVu = 'Nhân viên') {
   db.prepare(`INSERT INTO nhan_su (id, ho_ten, viet_tat, chuc_vu, bo_phan, quan_ly_id, dang_lam)
               VALUES (?, ?, ?, ?, ?, NULL, 1)`).run(id, ten, ten.slice(0, 2).toUpperCase(), chucVu, 'Thử');
-  db.prepare(`INSERT INTO tai_khoan (nhan_su_id, ten_dang_nhap, mat_khau_hash, vai_tro, kich_hoat, vi_tri_cong_viec)
-              VALUES (?, ?, 'x', ?, 1, ?)`).run(id, 'tk_' + id, vaiTro, viTri);
+  // phai_doi_mk = 0 ghi rõ: schema mặc định 1 (mật khẩu tạm) — từ 21/09/2026 máy chủ chặn thật.
+  db.prepare(`INSERT INTO tai_khoan (nhan_su_id, ten_dang_nhap, mat_khau_hash, vai_tro, kich_hoat, vi_tri_cong_viec, phai_doi_mk)
+              VALUES (?, ?, 'x', ?, 1, ?, 0)`).run(id, 'tk_' + id, vaiTro, viTri);
   return db.prepare('SELECT id FROM tai_khoan WHERE ten_dang_nhap = ?').get('tk_' + id).id;
 }
 const tkAdmin = taoNguoi('ns_ad', 'Quản trị', 'admin', null);

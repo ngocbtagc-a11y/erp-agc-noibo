@@ -123,8 +123,9 @@ async function themNguoi(ten, id, boPhan = 'Kho vận') {
   const vietTat = ten.split(' ').slice(-2).map(w => w[0]).join('').toUpperCase();
   db.prepare(`INSERT INTO nhan_su (id, ho_ten, viet_tat, chuc_vu, bo_phan, trang_thai, dang_lam)
               VALUES (?, ?, ?, 'Nhân viên', ?, 'da_ky', 1)`).run(id, ten, vietTat, boPhan);
-  const r = db.prepare(`INSERT INTO tai_khoan (nhan_su_id, ten_dang_nhap, mat_khau_hash, vai_tro, tao_luc)
-              VALUES (?, ?, 'x', 'nhan_vien', datetime('now'))`).run(id, id);
+  // phai_doi_mk = 0 ghi rõ: schema mặc định 1 (mật khẩu tạm) — từ 21/09/2026 máy chủ chặn thật.
+  const r = db.prepare(`INSERT INTO tai_khoan (nhan_su_id, ten_dang_nhap, mat_khau_hash, vai_tro, tao_luc, phai_doi_mk)
+              VALUES (?, ?, 'x', 'nhan_vien', datetime('now'), 0)`).run(id, id);
   const taiKhoanId = Number(r.lastInsertRowid);
   const token = await taoPhienThat(env, taiKhoanId);
   NGUOI[ten] = { nhanSuId: id, taiKhoanId, token, ten };

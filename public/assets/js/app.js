@@ -1489,7 +1489,10 @@ try {
   throw new Error('Chưa đăng nhập');
 }
 
-/* Chưa đổi mật khẩu lần đầu thì phải đổi xong mới được vào */
+/* Chưa đổi mật khẩu lần đầu thì phải đổi xong mới được vào.
+   Đây chỉ là lối đi cho THUẬN MẮT — hàng rào thật nằm ở máy chủ
+   (batBuocDangNhap trong src/index.js chặn mọi đường API khác bằng 403
+   `PHAI_DOI_MAT_KHAU`, và api.js gặp mã đó cũng đưa về đúng trang này). */
 if (TOI.phai_doi_mk) {
   window.location.replace('index.html');
   throw new Error('Phải đổi mật khẩu trước');

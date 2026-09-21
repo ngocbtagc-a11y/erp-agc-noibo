@@ -80,8 +80,9 @@ function dungCongTy({ boQuaVa = false, nguoi = NGUOI } = {}) {
   for (const n of nguoi) {
     db.prepare(`INSERT INTO nhan_su (id, ho_ten, viet_tat, chuc_vu, bo_phan, quan_ly_id, dang_lam)
                 VALUES (?, ?, ?, ?, ?, ?, 1)`).run(n.id, n.ten, n.id, 'NV', n.bp, n.ql);
-    db.prepare(`INSERT INTO tai_khoan (nhan_su_id, ten_dang_nhap, mat_khau_hash, vai_tro, kich_hoat)
-                VALUES (?, ?, 'x', ?, 1)`).run(n.id, n.id.toLowerCase(), n.vt);
+    // phai_doi_mk = 0 ghi rõ: schema mặc định 1 (mật khẩu tạm) — từ 21/09/2026 máy chủ chặn thật.
+    db.prepare(`INSERT INTO tai_khoan (nhan_su_id, ten_dang_nhap, mat_khau_hash, vai_tro, kich_hoat, phai_doi_mk)
+                VALUES (?, ?, 'x', ?, 1, 0)`).run(n.id, n.id.toLowerCase(), n.vt);
   }
   for (const t of [...new Set(nguoi.map(n => n.bp))]) {
     db.prepare('INSERT OR IGNORE INTO phong_ban (ten) VALUES (?)').run(t);

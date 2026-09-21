@@ -20,8 +20,9 @@ const env = dungEnv(d1);
 
 db.prepare(`INSERT INTO nhan_su (id, ho_ten, viet_tat, chuc_vu, bo_phan, quan_ly_id, dang_lam)
             VALUES ('ns_gd', 'Phó Giám đốc', 'PG', 'Phó Giám đốc', 'BGĐ', NULL, 1)`).run();
-db.prepare(`INSERT INTO tai_khoan (nhan_su_id, ten_dang_nhap, mat_khau_hash, vai_tro, kich_hoat)
-            VALUES ('ns_gd', 'tk_gd', 'x', 'admin', 1)`).run();
+// phai_doi_mk = 0 ghi rõ: schema mặc định 1 (mật khẩu tạm) — từ 21/09/2026 máy chủ chặn thật.
+db.prepare(`INSERT INTO tai_khoan (nhan_su_id, ten_dang_nhap, mat_khau_hash, vai_tro, kich_hoat, phai_doi_mk)
+            VALUES ('ns_gd', 'tk_gd', 'x', 'admin', 1, 0)`).run();
 const token = await taoPhienThat(env, db.prepare(`SELECT id FROM tai_khoan WHERE ten_dang_nhap = 'tk_gd'`).get().id);
 
 /* ---- ① Bảng biên chế ---------------------------------------------------- */

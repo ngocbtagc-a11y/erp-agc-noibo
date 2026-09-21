@@ -120,6 +120,17 @@ export function layCoThieuCotViTri() {
   return c;
 }
 
+/* Cùng cơ chế, cho cột `phai_doi_mk` (cờ "mật khẩu tạm, phải đổi ngay").
+   Từ 21/09/2026 máy chủ CHẶN mọi đường API của phiên đang phải đổi mật khẩu
+   (xem DUONG_CHO_PHEP_KHI_PHAI_DOI_MK ở src/index.js), nên cột này thành cột
+   docPhien phải đọc được — thiếu thì phải kêu, không được im. */
+let thieuCotPhaiDoiMk = false;
+export function layCoThieuCotPhaiDoiMk() {
+  const c = thieuCotPhaiDoiMk;
+  thieuCotPhaiDoiMk = false;
+  return c;
+}
+
 /* ĐÃ CÓ CỘT `vi_tri_cong_viec` CHƯA — cho các câu SQL KHÁC (danh bạ, danh
    sách tài khoản, cron nhắc HCNS) phải chọn giữa hai bản câu lệnh. docPhien
    ở trên tự lùi được vì nó chỉ có một câu; những chỗ kia thì hỏi hàm này.
@@ -205,9 +216,23 @@ export async function docPhien(db, token) {
   // thiếu ĐỒNG THỜI. Vòng lặp dưới đây bỏ dần từng cột thiếu rồi chạy lại —
   // viết lồng hai try/catch thì ca "thiếu cả hai" rơi vào nhánh ném lỗi và
   // cả công ty mất đăng nhập, đúng loại lỗi REV-0027 L4 đã trả giá.
-  const cauPhien = (cotDuyet, cotViTri) => `
+  //
+  // phai_doi_mk — CỘT TUỲ CHỌN THỨ BA (21/09/2026). Trước đây đọc thẳng
+  // `t.phai_doi_mk`: thiếu cột là docPhien ném → CẢ CÔNG TY mất đăng nhập.
+  // Nay máy chủ dùng cờ này để CHẶN mọi đường API (src/index.js), nên phải
+  // chọn rõ thiếu cột thì hỏng theo chiều nào:
+  //   · Chiều "đóng" (coi như MỌI người phải đổi mật khẩu) = khoá cả hệ thống
+  //     vì thiếu một cột — 9 tài khoản đang dùng bình thường bỗng không làm
+  //     được gì, đúng loại sự cố REV-0027 L4 đã trả giá. KHÔNG CHỌN.
+  //   · Chiều "mở" (coi như KHÔNG ai phải đổi, `0 AS phai_doi_mk`) = ERP chạy
+  //     tiếp như trước bản vá. ĐÃ CHỌN chiều này, vì: thiếu cột thì CSDL cũng
+  //     không lưu được mật khẩu tạm nào (tạo tài khoản / đặt lại mật khẩu đều
+  //     GHI vào cột này và sẽ hỏng), nên không có phiên "mật khẩu tạm" nào để
+  //     mà lọt. Rủi ro còn lại được KÊU LÊN: console.warn ngay + một tin
+  //     Telegram/ngày (canhBaoThieuCotPhaiDoiMk ở src/index.js).
+  const cauPhien = (cotDuyet, cotViTri, cotDoiMk) => `
     SELECT p.tai_khoan_id, p.het_han,
-           t.ten_dang_nhap, t.vai_tro, t.kich_hoat, t.phai_doi_mk, ${cotDuyet}, ${cotViTri},
+           t.ten_dang_nhap, t.vai_tro, t.kich_hoat, ${cotDoiMk}, ${cotDuyet}, ${cotViTri},
            n.id AS nhan_su_id, n.ho_ten, n.viet_tat, n.chuc_vu, n.phong_ban_id
       FROM phien p
       JOIN tai_khoan t ON t.id = p.tai_khoan_id
@@ -215,12 +240,14 @@ export async function docPhien(db, token) {
      WHERE p.token_hash = ?
   `;
   const bam = await bamToken(token);
-  let coDuyet = true, coViTri = true, d = null;
-  for (let lan = 0; lan < 3; lan++) {
+  let coDuyet = true, coViTri = true, coDoiMk = true, d = null;
+  // Mỗi lượt bỏ tối đa một cột thiếu ⇒ cần (số cột tuỳ chọn + 1) lượt.
+  for (let lan = 0; lan < 4; lan++) {
     try {
       d = await db.prepare(cauPhien(
         coDuyet ? 't.duyet_gopy' : '0 AS duyet_gopy',
-        coViTri ? 't.vi_tri_cong_viec' : 'NULL AS vi_tri_cong_viec'
+        coViTri ? 't.vi_tri_cong_viec' : 'NULL AS vi_tri_cong_viec',
+        coDoiMk ? 't.phai_doi_mk' : '0 AS phai_doi_mk'
       )).bind(bam).first();
       break;
     } catch (e) {
@@ -248,6 +275,13 @@ export async function docPhien(db, token) {
         thieuCotViTri = true;
         console.warn('[ERP] Thiếu cột tai_khoan.vi_tri_cong_viec — vị trí công việc chưa có tác dụng, ' +
                      'quyền đang đúng bằng bản cũ. Nạp migrations/them-vi-tri-cong-viec.sql rồi deploy lại.');
+        continue;
+      }
+      if (coDoiMk && /phai_doi_mk/i.test(tin)) {
+        coDoiMk = false;
+        thieuCotPhaiDoiMk = true;
+        console.warn('[ERP] Thiếu cột tai_khoan.phai_doi_mk — cửa chặn mật khẩu tạm ở máy chủ đang TẮT ' +
+                     '(không ai bị khoá). Nạp lại cột theo schema.sql rồi kiểm lại.');
         continue;
       }
       throw e;   // thiếu một cột KHÁC — đó là lỗi thật, không nuốt

@@ -11,7 +11,8 @@ import {
   dangBiKhoa, ghiNhanSai, xoaLanSai,
   cookieDangNhap, cookieDangXuat, layTokenTuCookie, layCoThieuCotDuyetGopY,
   bangNhauAnToan,
-  layCoThieuCotViTri, coCotViTri
+  layCoThieuCotViTri, coCotViTri,
+  layCoThieuCotPhaiDoiMk
 } from './auth.js';
 
 import {
@@ -89,13 +90,72 @@ function loi(thongDiep, status = 400) {
 
 /* ---- Bắt buộc đăng nhập ------------------------------------------------- */
 
+/* ==========================================================================
+   MẬT KHẨU TẠM PHẢI ĐỔI NGAY — CHẶN Ở MÁY CHỦ, KHÔNG CHỈ ẨN MÀN HÌNH
+   --------------------------------------------------------------------------
+   Trước bản vá này luật "tài khoản có mật khẩu tạm phải đổi mật khẩu ngay
+   lần đăng nhập đầu" CHỈ nằm ở trình duyệt (public/assets/js/app.js — thấy
+   `phai_doi_mk` thì chuyển trang). Người cầm mật khẩu tạm gọi thẳng API thì
+   làm được mọi việc mà không cần đổi. Mật khẩu tạm đi qua Zalo, tin nhắn
+   Zalo tồn tại mãi ⇒ mỗi tin nhắn là một chìa khoá dùng được vĩnh viễn.
+
+   CÁCH CHẶN: phiên của tài khoản đang `phai_doi_mk = 1` thì MỌI đường API đi
+   qua cửa `batBuocDangNhap()` đều trả 403 `PHAI_DOI_MAT_KHAU` — TRỪ đúng các
+   đường trong DANH SÁCH TRẮNG dưới đây. Đây là danh sách TRẮNG, không phải
+   danh sách đen: đường API thêm sau này tự động bị chặn, không ai phải nhớ
+   thêm nó vào đâu cả. Muốn mở thêm một đường cho người chưa đổi mật khẩu thì
+   phải thêm TẬN TAY vào đây kèm lý do.
+
+   VÌ SAO CHẶN Ở `batBuocDangNhap()` MÀ KHÔNG Ở BỘ ĐỊNH TUYẾN: đây là chỗ
+   DUY NHẤT trong cả máy chủ đọc phiên từ cookie (docPhien chỉ được gọi ở
+   đây). Mọi đường cần biết "anh là ai" đều phải đi qua cửa này, nên chặn ở
+   đây là chặn đủ — mà không tốn thêm một lượt đọc D1 nào cho mỗi yêu cầu.
+   Các đường KHÔNG đi qua cửa này (đăng nhập, cửa máy gọi bằng HMAC…) vốn
+   không dùng phiên, người cầm mật khẩu tạm gọi chúng cũng chẳng hơn một
+   người lạ chưa đăng nhập.
+
+   Khoá so khớp viết ĐÚNG khuôn khoá của bảng DUONG_DAN (method.padEnd(4) +
+   dấu cách + đường dẫn) — tức 'GET ' có HAI dấu cách phía sau. */
+const DUONG_CHO_PHEP_KHI_PHAI_DOI_MK = Object.freeze({
+  // Đường thoát duy nhất: đổi xong thì cờ về 0 trong CÙNG câu UPDATE với
+  // mật khẩu mới (xem doiMatKhau), phiên cũ bị huỷ, đăng nhập lại là xong.
+  'POST /api/doi-mat-khau': 'Đổi mật khẩu — chính là việc người dùng đang bị bắt phải làm.',
+  // Màn đăng nhập (public/index.html) và app.js hỏi đường này để biết "tôi
+  // là ai / tôi có phải đổi mật khẩu không" rồi mới hiện màn đổi mật khẩu,
+  // kèm độ dài tối thiểu. Chặn nó thì chính màn đổi mật khẩu không hiện ra.
+  'GET  /api/toi-la-ai':    'Giao diện cần biết "tôi có phải đổi mật khẩu không" để hiện đúng màn đổi mật khẩu.',
+  // Hiện dangXuat() KHÔNG gọi batBuocDangNhap (xoá phiên thẳng), nên đường
+  // này vốn không bị chặn. Vẫn ghi vào đây để sau này có ai bọc nó qua cửa
+  // đăng nhập thì người dùng vẫn luôn thoát ra được — không bao giờ được
+  // nhốt người ta trong một phiên không làm gì được.
+  'POST /api/dang-xuat':    'Đăng xuất — người dùng luôn phải thoát ra được, kể cả khi chưa đổi mật khẩu.'
+});
+
+/* KHÔNG `export` hằng này: index.js là module chính của Worker, mọi tên xuất
+   ra ở đây Cloudflare đọc thành một entrypoint. Giao diện (api.js) so đúng
+   chuỗi này — đổi một bên nhớ đổi bên kia. */
+const MA_PHAI_DOI_MAT_KHAU = 'PHAI_DOI_MAT_KHAU';
+
+function khoaDuong(req) {
+  return `${req.method.padEnd(4)} ${new URL(req.url).pathname}`;
+}
+
 async function batBuocDangNhap(req, env) {
   const phien = await docPhien(env.DB, layTokenTuCookie(req));
   // LẤY CỜ TRƯỚC KHI RETURN — kể cả khi phiên không hợp lệ. Lấy là xoá, nên
   // bỏ sót một nhánh là kẹt cờ sang lượt sau và cảnh báo lệch người.
   if (layCoThieuCotDuyetGopY()) await canhBaoThieuCotDuyetGopY(env);
   if (layCoThieuCotViTri()) await canhBaoThieuCotViTri(env);
+  if (layCoThieuCotPhaiDoiMk()) await canhBaoThieuCotPhaiDoiMk(env);
   if (!phien) return { loi: json({ loi: 'Chưa đăng nhập' }, 401) };
+  // Mật khẩu tạm chưa đổi ⇒ chỉ được đi đúng các đường trong danh sách trắng.
+  // D1 trả số 0/1; NULL (dòng cũ chưa có giá trị) coi như 0.
+  if (phien.phai_doi_mk && !Object.hasOwn(DUONG_CHO_PHEP_KHI_PHAI_DOI_MK, khoaDuong(req))) {
+    return { loi: json({
+      loi: 'Tài khoản đang dùng mật khẩu tạm. Bạn phải đổi mật khẩu trước khi dùng ERP.',
+      ma: MA_PHAI_DOI_MAT_KHAU
+    }, 403) };
+  }
   return { phien };
 }
 
@@ -167,6 +227,17 @@ async function canhBaoThieuCotViTri(env) {
     'Hệ thống vẫn chạy bình thường và KHÔNG ai mất quyền — nhưng ô "Vị trí công việc" ' +
     'chưa có tác dụng, nên ai đang là "Người dùng" thì vẫn chưa mở được tab của bộ phận mình.\n\n' +
     'Cách sửa: node scripts/chay-migration.mjs them-vi-tri-cong-viec.sql --remote');
+}
+
+/* Cùng khuôn, cho cờ `phai_doi_mk`. Thiếu cột thì docPhien coi mọi phiên là
+   "không phải đổi mật khẩu" (xem chú thích ở src/auth.js) — ERP vẫn chạy,
+   nhưng cửa chặn mật khẩu tạm đang TẮT, nên phải kêu lên chứ không im. */
+async function canhBaoThieuCotPhaiDoiMk(env) {
+  return canhBaoMotLanMoiNgay(env, 'thieu-cot-phai-doi-mk',
+    '🔴 [ERP] THIẾU CỘT tai_khoan.phai_doi_mk trong CSDL.\n\n' +
+    'Hệ thống vẫn chạy và KHÔNG ai bị khoá — nhưng cửa "mật khẩu tạm phải đổi ngay" ' +
+    'đang KHÔNG có tác dụng ở máy chủ. Đừng cấp mật khẩu tạm cho ai cho tới khi sửa xong.\n\n' +
+    'Cách sửa: nạp lại cột phai_doi_mk theo schema.sql (bảng tai_khoan) rồi kiểm lại.');
 }
 
 /* ---- Các đầu việc ------------------------------------------------------- */

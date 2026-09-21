@@ -44,6 +44,16 @@ async function goi(duongDan, tuyChon = {}, tuDongVeDangNhap = true) {
   let duLieu = null;
   try { duLieu = await res.json(); } catch { /* không phải JSON */ }
 
+  /* Mật khẩu tạm chưa đổi → máy chủ chặn MỌI đường ngoài danh sách trắng
+     (src/index.js · DUONG_CHO_PHEP_KHI_PHAI_DOI_MK) và trả mã riêng này.
+     Đưa thẳng về index.html — ở đó /api/toi-la-ai (được phép) báo
+     `phai_doi_mk` và màn đổi mật khẩu tự hiện. Cùng cờ `tuDongVeDangNhap`
+     với ca 401, vì chính màn đăng nhập tắt cờ đó để không tự đá mình. */
+  if (res.status === 403 && tuDongVeDangNhap && duLieu && duLieu.ma === 'PHAI_DOI_MAT_KHAU') {
+    window.location.replace('index.html');
+    throw new Error('Phải đổi mật khẩu trước');
+  }
+
   if (!res.ok) {
     const e = new Error((duLieu && duLieu.loi) || 'Máy chủ gặp sự cố');
     /* Mang theo NGUYÊN thân lỗi. Nhiều cửa từ chối cần nói rõ HƠN một câu —

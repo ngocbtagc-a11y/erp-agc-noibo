@@ -169,6 +169,8 @@
     "nap-xepcocau": "node scripts/chay-migration.mjs xep-lai-co-cau-2026-09.sql --remote",
     "do-so-do-to-chuc-tu-kiem": "node scripts/do-so-do-to-chuc.mjs --tu-kiem-san",
     "do-mien-duyet-bgd": "node scripts/do-mien-duyet-ban-giam-doc.mjs",
+    "do-chan-mk-tam": "node scripts/do-chan-mat-khau-tam.mjs",
+    "do-chan-mk-tam-truoc": "node scripts/do-chan-mat-khau-tam.mjs --truoc ba93bac",
     "tha-gopy-11-12-may": "node scripts/chay-migration.mjs tha-gopy-11-12-ban-giam-doc.sql",
     "tha-gopy-11-12": "node scripts/chay-migration.mjs tha-gopy-11-12-ban-giam-doc.sql --remote"
   },

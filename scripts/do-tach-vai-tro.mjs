@@ -431,8 +431,14 @@ async function doThieuCot(thuMucSrc) {
   db.exec('ALTER TABLE tai_khoan DROP COLUMN vi_tri_cong_viec');
   db.exec('DELETE FROM phien; DELETE FROM tai_khoan; DELETE FROM nhan_su;');
   const ns = db.prepare('INSERT INTO nhan_su (id, ho_ten, viet_tat, chuc_vu, bo_phan, dang_lam) VALUES (?,?,?,?,?,1)');
+  /* phai_doi_mk = 0 GHI RÕ (21/09/2026): schema.sql để mặc định 1 = "mật khẩu
+     tạm, phải đổi ngay". Bỏ trống cột này thì hai tài khoản mồi thành tài
+     khoản mật khẩu tạm, và từ khi máy chủ chặn thật (do-chan-mat-khau-tam.mjs)
+     chúng ăn 403 PHAI_DOI_MAT_KHAU — phép đo "thiếu cột vị trí thì không 500"
+     sẽ đỏ vì một lý do chẳng liên quan. Mồi đúng là tài khoản đang dùng bình
+     thường, như mồi ở đầu file (moi()). */
   const tk = db.prepare(
-    'INSERT INTO tai_khoan (id, nhan_su_id, ten_dang_nhap, mat_khau_hash, vai_tro, duyet_gopy) VALUES (?,?,?,?,?,?)');
+    'INSERT INTO tai_khoan (id, nhan_su_id, ten_dang_nhap, mat_khau_hash, vai_tro, duyet_gopy, phai_doi_mk) VALUES (?,?,?,?,?,?,0)');
   ns.run('SEP', 'Bùi Thị Ngọc', 'TN', 'GĐ', 'BGĐ'); tk.run(1, 'SEP', 'tksep', 'h', 'admin', 1);
   ns.run('DUY', 'Phạm Khương Duy', 'KD', 'TP Kho', 'Kho vận'); tk.run(2, 'DUY', 'tkduy', 'h', 'quan_ly_kho', 0);
 

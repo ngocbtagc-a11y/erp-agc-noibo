@@ -56,8 +56,9 @@ for (const [id, ten] of [['huong', 'Vũ Lan Hương'], ['ngoc', 'Bùi Thị Ng�
   db.prepare(`INSERT INTO nhan_su (id, ho_ten, viet_tat, chuc_vu, bo_phan, quan_ly_id, dang_lam)
               VALUES (?, ?, ?, 'NV', 'HCNS', NULL, 1)`).run(id, ten, id);
 }
-db.prepare(`INSERT INTO tai_khoan (nhan_su_id, ten_dang_nhap, mat_khau_hash, vai_tro, kich_hoat)
-            VALUES ('huong', 'huong', 'x', 'hcns', 1)`).run();
+// phai_doi_mk = 0 ghi rõ: schema mặc định 1 (mật khẩu tạm) — từ 21/09/2026 máy chủ chặn thật.
+db.prepare(`INSERT INTO tai_khoan (nhan_su_id, ten_dang_nhap, mat_khau_hash, vai_tro, kich_hoat, phai_doi_mk)
+            VALUES ('huong', 'huong', 'x', 'hcns', 1, 0)`).run();
 
 const TONG_VIEC = 700;
 for (let i = 1; i <= TONG_VIEC; i++) {

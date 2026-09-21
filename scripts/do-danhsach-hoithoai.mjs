@@ -25,8 +25,9 @@ for (const [id, ten, vt] of [['ngoc', 'Bùi Thị Ngọc', 'BN'],
   db.prepare(`INSERT INTO nhan_su (id, ho_ten, viet_tat, chuc_vu, bo_phan, quan_ly_id, dang_lam)
               VALUES (?, ?, ?, 'NV', 'Kho vận', NULL, 1)`).run(id, ten, vt);
 }
-db.prepare(`INSERT INTO tai_khoan (nhan_su_id, ten_dang_nhap, mat_khau_hash, vai_tro, kich_hoat)
-            VALUES ('ngoc', 'ngoc', 'x', 'admin', 1)`).run();
+// phai_doi_mk = 0 ghi rõ: schema mặc định 1 (mật khẩu tạm) — từ 21/09/2026 máy chủ chặn thật.
+db.prepare(`INSERT INTO tai_khoan (nhan_su_id, ten_dang_nhap, mat_khau_hash, vai_tro, kich_hoat, phai_doi_mk)
+            VALUES ('ngoc', 'ngoc', 'x', 'admin', 1, 0)`).run();
 
 /* Kênh chung: 2 tin của người khác. Chat riêng: anh Duy 3 tin, chị Hằng 1. */
 const tin = (gui, nhan, chu, luc) => db.prepare(
