@@ -351,6 +351,16 @@ ok('GET /api/toi-la-ai → 200 và báo phai_doi_mk = true',
    `HTTP ${k.tamToiLaAi.status} · phai_doi_mk=${k.tamToiLaAi.than?.phai_doi_mk}`);
 ok('toi-la-ai vẫn trả độ dài mật khẩu tối thiểu cho màn đổi mật khẩu',
    Number.isInteger(k.tamToiLaAi.than?.mat_khau_dai_toi_thieu), String(k.tamToiLaAi.than?.mat_khau_dai_toi_thieu));
+/* TẢI LẠI TRANG GIỮA CHỪNG ĐỔI MẬT KHẨU (21/09/2026).
+   Màn đổi mật khẩu tự đăng nhập lại bằng ô số điện thoại TRÊN MÀN. Tải lại
+   trang thì ô đó trống — đổi mật khẩu THÀNH CÔNG mà màn lại báo lỗi, người
+   dùng tưởng đổi hỏng, thử đổi lại bằng mật khẩu cũ (lúc này đã sai) và rối
+   thêm một vòng. Rơi đúng vào 10 bạn bán thời gian đăng nhập lần đầu trên
+   điện thoại. Máy chủ BIẾT số điện thoại của phiên này — phải trả nó về để
+   màn hình không phải dựa vào một ô nhập có thể đã bị xoá. */
+ok('toi-la-ai trả số điện thoại đăng nhập của CHÍNH phiên đó (tải lại trang vẫn đăng nhập lại được)',
+   k.tamToiLaAi.than?.ten_dang_nhap === '0900000002',
+   String(k.tamToiLaAi.than?.ten_dang_nhap));
 ok('POST /api/doi-mat-khau → 200', k.doiMk.status === 200, 'HTTP ' + k.doiMk.status);
 ok('Đổi xong: cờ phai_doi_mk về 0 và mật khẩu đổi — cùng một lượt ghi', k.coSauDoi === 0 && k.hashDoi,
    `phai_doi_mk=${k.coSauDoi} · hash đổi=${k.hashDoi}`);

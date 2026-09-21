@@ -360,6 +360,11 @@ async function toiLaAi(req, env) {
     ten: phien.ho_ten,
     viet_tat: phien.viet_tat,
     chuc_vu: phien.chuc_vu || moTaVaiTro(phien.vai_tro, phien.vi_tri_cong_viec) || '',
+    /* Số điện thoại đăng nhập của CHÍNH phiên này — chỉ trả về cho chính chủ.
+       Màn đổi mật khẩu lần đầu cần nó để tự đăng nhập lại sau khi đổi: trước
+       21/09/2026 màn đó đọc ô nhập trên trang, mà tải lại trang thì ô ấy trống
+       — đổi mật khẩu THÀNH CÔNG mà màn lại báo lỗi. */
+    ten_dang_nhap: phien.ten_dang_nhap || null,
     vai_tro: phien.vai_tro,
     // Ô 2 — vị trí công việc. null nghĩa là chưa gán (hoặc DB chưa nạp
     // migration them-vi-tri-cong-viec.sql); giao diện chỉ hiển thị, chặn thật

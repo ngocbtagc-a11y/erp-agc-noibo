@@ -172,7 +172,8 @@
     "do-chan-mk-tam": "node scripts/do-chan-mat-khau-tam.mjs",
     "do-chan-mk-tam-truoc": "node scripts/do-chan-mat-khau-tam.mjs --truoc ba93bac",
     "tha-gopy-11-12-may": "node scripts/chay-migration.mjs tha-gopy-11-12-ban-giam-doc.sql",
-    "tha-gopy-11-12": "node scripts/chay-migration.mjs tha-gopy-11-12-ban-giam-doc.sql --remote"
+    "tha-gopy-11-12": "node scripts/chay-migration.mjs tha-gopy-11-12-ban-giam-doc.sql --remote",
+    "do-doi-mk-tai-lai": "node scripts/do-doi-mk-tai-lai-trang.mjs"
   },
   "devDependencies": {
     "wrangler": "^4.0.0"

@@ -146,10 +146,18 @@ function hienKhoiDoiMatKhau(doDaiToiThieu) {
   }
 }
 
+/* Số điện thoại dùng để TỰ ĐĂNG NHẬP LẠI sau khi đổi mật khẩu lần đầu.
+   Lấy từ MÁY CHỦ, không đọc từ ô nhập trên trang: tải lại trang giữa chừng
+   thì ô đó trống, còn máy chủ thì vẫn biết phiên này là của ai. */
+let tenDangNhapCuaPhien = '';
+
 /* Đã đăng nhập sẵn thì vào thẳng, khỏi bắt gõ lại */
 try {
   const toi = await API.toiLaAi();
-  if (toi && toi.phai_doi_mk) hienKhoiDoiMatKhau(toi.mat_khau_dai_toi_thieu);
+  if (toi && toi.phai_doi_mk) {
+    tenDangNhapCuaPhien = toi.ten_dang_nhap || '';
+    hienKhoiDoiMatKhau(toi.mat_khau_dai_toi_thieu);
+  }
   else if (toi) window.location.replace('app.html');
 } catch { /* chưa đăng nhập — bình thường, hiện form */ }
 
@@ -167,6 +175,7 @@ $('#formDangNhap').addEventListener('submit', async e => {
     const toi = await API.toiLaAi();
 
     if (toi.phai_doi_mk) {
+      tenDangNhapCuaPhien = toi.ten_dang_nhap || $('#tenDangNhap').value.trim();
       hienKhoiDoiMatKhau(toi.mat_khau_dai_toi_thieu);
       $('#mkCu').value = $('#matKhau').value;
       $('#mkMoi').focus();
@@ -191,13 +200,36 @@ $('#formDoiMatKhau').addEventListener('submit', async e => {
     return;
   }
 
+  /* HAI BƯỚC, HAI KIỂU LỖI KHÁC NHAU — đừng gộp chung một câu báo lỗi.
+     Trước 21/09/2026 cả hai bước nằm chung một try: đổi mật khẩu THÀNH CÔNG
+     nhưng tự đăng nhập lại hỏng thì màn vẫn báo lỗi, người dùng tưởng đổi
+     hỏng, thử đổi lại bằng mật khẩu cũ — mà lúc này mật khẩu cũ đã hết hiệu
+     lực. Người mới dùng lần đầu trên điện thoại gặp cảnh đó là quay về nhắn
+     Zalo. Nên: bước đổi hỏng thì báo lỗi; bước đổi ĐÃ XONG thì dù đăng nhập
+     lại có trục trặc cũng phải nói thẳng "đã đổi thành công". */
   try {
     await API.doiMatKhau($('#mkCu').value, $('#mkMoi').value);
-    // Đổi xong, máy chủ huỷ hết phiên cũ → đăng nhập lại bằng mật khẩu mới
-    await API.dangNhap($('#tenDangNhap').value.trim(), $('#mkMoi').value);
-    window.location.replace('app.html');
   } catch (err) {
     baoLoi($('#loiDoi'), err.message);
+    return;
+  }
+
+  // Đổi xong, máy chủ huỷ hết phiên cũ → tự đăng nhập lại bằng mật khẩu mới.
+  const tenDn = tenDangNhapCuaPhien || $('#tenDangNhap').value.trim();
+  try {
+    await API.dangNhap(tenDn, $('#mkMoi').value);
+    window.location.replace('app.html');
+  } catch {
+    // Mật khẩu ĐÃ đổi. Đưa về màn đăng nhập, điền sẵn số điện thoại, nói rõ.
+    // Đảo đúng cặp khối mà hienKhoiDoiMatKhau() đã đảo — `khoiDangNhap`, không
+    // phải `formDangNhap` nằm bên trong nó (hiện form mà khối bọc vẫn ẩn là
+    // màn trắng trơn).
+    $('#khoiDoiMatKhau').hidden = true;
+    $('#khoiDangNhap').hidden = false;
+    if (tenDn) $('#tenDangNhap').value = tenDn;
+    $('#matKhau').value = '';
+    $('#matKhau').focus();
+    baoLoi($('#loi'), 'Đã đổi mật khẩu thành công. Mời bạn đăng nhập bằng mật khẩu mới.');
   }
 });
 
